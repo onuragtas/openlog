@@ -51,6 +51,7 @@ Otomatik güncelleme, filo, TLS ve M1 kalanları birleştirildikten sonra, sıf�
 ## M2 — Alarm, entegrasyonlar, APM başlangıcı (paralel, ~6 hafta)
 
 - `openlog-alert`: eşik kuralları, incident, Slack/e-posta/webhook
+  - ✅ (D-030, `docs/contracts/alerting.md`): metrik/log/veri yok/keşif/APM kural tipleri, lease ile kural paylaşımı (lease sahibi öldürülünce 22,8 sn'de devir, tek incident), outbox + idempotent teslim, Slack/e-posta (STARTTLS)/HMAC imzalı webhook/Teams, susturma, önizleme grafiği, "bu metrikten alarm oluştur" kısayolu; e2e'de tek açılış + tek kapanış bildirimi doğrulandı. Kalan: değerlendirme özetlerinin ClickHouse'a yazılması, tekrarlayan susturma takvimi, "APM servisi raporlamayı bıraktı" kuralı
 - Agent entegrasyonları: nginx, Redis, MySQL, PostgreSQL, Docker (keşif ile otomatik açılma)
   - ✅ (D-031): keşifle yaşam döngüsü, uç nokta türetme, `env:`/`file:` kimlik bilgileri, gerçek durum (`enabled`/`needs_configuration`/`error` + ipucu), OTel Collector receiver isimleriyle nginx (4), Redis (28), MySQL/MariaDB (28), PostgreSQL (21) metrik; gerçek container'larda doğru/eksik/yanlış parola senaryoları doğrulandı. Docker: OTel'de motor seviyesi metrik adı olmadığı için yalnızca erişilebilirlik.
   - Güvenlik düzeltmesi: komut satırı maskeleme `--requirepass`/`--masterauth` gibi sonu parola kelimesiyle biten bayrakları kaçırıyordu → düzeltildi, test + sözleşme §3.5 güncellendi.
@@ -60,7 +61,9 @@ Otomatik güncelleme, filo, TLS ve M1 kalanları birleştirildikten sonra, sıf�
   - Kalan: `make stack-demo`'ya APM eklenmesi, 10 dk'dan geç gelen span'ların eşleştirilmemesi, APM saklama süresinin ayarlanabilir olması, otelsql bağlantı span'larının DB sorgusu gibi görünmesi
 - Go ve PHP agent geliştirmelerinin başlaması
   - Go agent (`agents/go`, D-033) ✅: `openlog.Start`, HTTP/SQL/slog/gRPC/chi/gin/echo, runtime metrikleri, infra agent ile aynı `host.id`, canlı ortamda span/log/metrik doğrulandı. Kalan: APM servis listesinde gösterim, uzak parent'tan `sampling.ratio` aktarımı, container içindeki uygulamalarda host eşleşmesi, release'te modül tag'leri
-  - Backend hatası (Go agent testi buldu): processor, `host.id` taşıyan uygulama kaynaklarından da `hosts` satırı yazıyor ve agent adı/sürümünü boşla eziyor → yalnızca `openlog.entity.type=host` kaynaklarından yazılmalı (APM işine atandı)
+  - Backend hatası (Go agent testi buldu): processor uygulama kaynaklarından da `hosts` satırı yazıyordu → ✅ düzeltildi, yalnızca `openlog.entity.type=host` kaynakları yazıyor
+  - PHP agent (D-035–D-038): karşılaştırmalı ölçüm yapıldı (`agents/php/docs/decision.md`); karar: kendi C extension'ımız, PHP 7.1+, fonksiyon seviyesi ayrıntı, forwarder infra agent içinde. Infra agent `php_forwarder` modülü ✅ (unix datagram, doğrulama, parça birleştirme, host bağlantısı, kesintide disk buffer; paylaşılan openlog'da `php-shop` servisi ve trace'leri görüldü). Extension (`agents/php/ext`, 7.1–8.4) geliştiriliyor.
+- Entegrasyon panelleri ve önerilen alarm şablonları (UI) — geliştiriliyor
 
 ## M3 — APM GA ve sorgu dili
 

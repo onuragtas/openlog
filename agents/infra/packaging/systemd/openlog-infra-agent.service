@@ -55,6 +55,10 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources @mount @reboot @swap @raw-io @module @debug @cpu-emulation @obsolete
+# php_forwarder sets the group of php.sock (chown to a group the agent user belongs to; @chown is part of @privileged).
+SystemCallFilter=@chown
+# A filtered syscall must fail with EPERM instead of killing the agent with SIGSYS (the agent handles the error).
+SystemCallErrorNumber=EPERM
 # ProcSubset/ProtectProc are intentionally not set: the agent needs all of /proc.
 # The -self-test child of an update runs inside these limits too.
 MemoryMax=100M
