@@ -21,6 +21,7 @@ import (
 
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 )
 
 // fakeSender records delivered payloads and can simulate an outage (503 with
@@ -70,6 +71,12 @@ func (f *fakeSender) Send(ctx context.Context, signal exporter.Signal, data []by
 				f.logs = append(f.logs, sl.LogRecords...)
 			}
 		}
+	case exporter.SignalTraces:
+		var td tracepb.TracesData
+		if err := proto.Unmarshal(data, &td); err != nil {
+			return err
+		}
+		f.traces = append(f.traces, &td)
 	}
 	return nil
 }
