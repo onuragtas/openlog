@@ -44,6 +44,11 @@ const (
 	ActReadAudit         Action = "audit.read"
 	ActReadFleet         Action = "fleet.read"
 	ActManageFleet       Action = "fleet.manage"
+	// Alerting (docs/contracts/alerting.md §7): members write their own rules and mutes and work on incidents;
+	// admins change any rule or mute and manage channels.
+	ActReadAlerts   Action = "alerts.read"
+	ActWriteAlerts  Action = "alerts.write"
+	ActManageAlerts Action = "alerts.manage"
 )
 
 // minRole is the permission matrix (docs/contracts/api.md "Roles").
@@ -62,6 +67,9 @@ var minRole = map[Action]Role{
 	ActReadAudit:         RoleAdmin,
 	ActReadFleet:         RoleViewer,
 	ActManageFleet:       RoleAdmin,
+	ActReadAlerts:        RoleViewer,
+	ActWriteAlerts:       RoleMember,
+	ActManageAlerts:      RoleAdmin,
 }
 
 // Can reports whether role r may perform a. Unknown actions are denied.

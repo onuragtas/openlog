@@ -1,0 +1,53 @@
+# 2-shard ClickHouse cluster for the APM integration test (build tag `integration`):
+#
+#   go test -tags integration -count=1 -run TestAPMSharded ./internal/apm
+#
+# Same topology as internal/processor/testdata/shardtest (shard 1: 2 replicas, shard 2: 1 replica,
+# standalone Keeper) on its own project and host ports (192xx), so both tests can run side by side.
+name: openlog-apmshard
+
+x-clickhouse: &clickhouse
+  image: clickhouse/clickhouse-server:25.8
+  environment: &chenv
+    CLICKHOUSE_USER: openlog
+    CLICKHOUSE_PASSWORD: openlog
+    CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+  ulimits:
+    nofile: { soft: 262144, hard: 262144 }
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping >/dev/null || exit 1"]
+    interval: 2s
+    timeout: 3s
+    retries: 60
+  depends_on:
+    keeper:
+      condition: service_started
+
+services:
+  keeper:
+    image: clickhouse/clickhouse-server:25.8
+    hostname: keeper
+    entrypoint: ["/usr/bin/clickhouse", "keeper", "--config-file=/etc/clickhouse-keeper/keeper.xml"]
+    volumes:
+      - ./keeper.xml:/etc/clickhouse-keeper/keeper.xml:ro
+
+  ch-s1r1:
+    <<: *clickhouse
+    hostname: ch-s1r1
+    environment: { <<: *chenv, SHARD: "01", REPLICA: ch-s1r1 }
+    volumes: [./cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro]
+    ports: ["127.0.0.1:19201:9000", "127.0.0.1:19211:8123"]
+
+  ch-s1r2:
+    <<: *clickhouse
+    hostname: ch-s1r2
+    environment: { <<: *chenv, SHARD: "01", REPLICA: ch-s1r2 }
+    volumes: [./cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro]
+    ports: ["127.0.0.1:19202:9000", "127.0.0.1:19212:8123"]
+
+  ch-s2r1:
+    <<: *clickhouse
+    hostname: ch-s2r1
+    environment: { <<: *chenv, SHARD: "02", REPLICA: ch-s2r1 }
+    volumes: [./cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro]
+    ports: ["127.0.0.1:19203:9000", "127.0.0.1:19213:8123"]

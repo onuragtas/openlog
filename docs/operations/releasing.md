@@ -81,7 +81,7 @@ Delete `openlog-release-key-1.env` from any online machine after step 2.
 ## Cutting a release
 
 ```sh
-# main is green (ci.yml, incl. "release dry run")
+# master is green (ci.yml, incl. "release dry run")
 git tag -s v0.4.0 -m "openlog 0.4.0"      # v0.5.0-beta.1 → channel beta, GitHub pre-release
 git push origin v0.4.0
 ```
@@ -100,6 +100,19 @@ git push origin v0.4.0
    default index URL) serves the latest *stable* release.
 
 Nothing is published if any step fails; a failed draft can be deleted and the tag re-pushed.
+
+### Go agent modules (not yet automated in `release.yml`)
+
+The Go agent (`agents/go`) is a set of Go modules, so it is released by **Go module tags on the same
+commit** as the product tag (D-025):
+
+1. `make -C agents/go set-version VERSION=X.Y.Z` (Go libraries cannot use `-ldflags`; this updates
+   `agents/go/version.go`).
+2. In that commit, rewrite local `replace`d requires of the submodules (`instrumentation/*`, `examples`)
+   from `v0.0.0` to `vX.Y.Z` and drop the `replace` directives.
+3. Tag the core module first, then the submodules: `agents/go/vX.Y.Z`,
+   `agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z` (optionally `agents/go/examples/vX.Y.Z`).
+4. If the product version ever reaches `v2`, Go module paths need a `/v2` suffix (e.g. `agents/go/v2`).
 
 ## Verifying a release
 

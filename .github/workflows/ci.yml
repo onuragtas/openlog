@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 permissions:
@@ -42,6 +42,24 @@ jobs:
           go vet ./...
           GOOS=linux GOARCH=arm64 go vet ./...
           go test ./...
+
+  go-agent:
+    name: go (agents/go + instrumentation modules)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agents/go
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agents/go/go.mod
+          cache-dependency-path: agents/go/**/go.sum
+      - name: gofmt + vet + test (every module)
+        run: make fmt-check vet test
+      - name: race
+        run: go test -race ./...
 
   web:
     runs-on: ubuntu-24.04
@@ -114,7 +132,7 @@ jobs:
         run: packaging/test/install.sh dist "$DRYRUN_VERSION"
 
   e2e:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [go]
     runs-on: ubuntu-24.04
     timeout-minutes: 60

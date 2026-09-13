@@ -26,7 +26,10 @@ tags:
   - name: inventory
   - name: logs
   - name: traces
+  - name: apm
+    description: Application performance monitoring derived from traces (apm.md)
   - name: fleet
+  - name: alerts
 
 paths:
   /api/v1/hosts:
@@ -300,6 +303,340 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Internal" }
         "504": { $ref: "#/components/responses/Timeout" }
+
+  # ---------------------------------------------------------------- apm (apm.md)
+  /api/v1/apm/services:
+    get:
+      tags: [apm]
+      operationId: listApmServices
+      summary: Services with spans since `from`, with RED metrics, Apdex and a throughput sparkline
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/ApmStep"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - { name: q, in: query, description: Case-insensitive substring of the service name, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services, step]
+                properties:
+                  step: { type: string, example: 60s }
+                  services:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmService" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/apm/services/{service_name}:
+    get:
+      tags: [apm]
+      operationId: getApmService
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+      responses:
+        "200":
+          description: Service identity, instances (namespace/environment), hosts and Apdex T
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmServiceDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/services/{service_name}/overview:
+    get:
+      tags: [apm]
+      operationId: getApmServiceOverview
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/ApmStep"
+        - { name: transaction, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/ApmTransactionType" } }
+      responses:
+        "200":
+          description: Totals and timeseries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmOverview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/transactions:
+    get:
+      tags: [apm]
+      operationId: listApmTransactions
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: sort, in: query, schema: { type: string, enum: [time, throughput, slowest, errors], default: time } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/ApmTransactionType" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transactions, apdex_t_ms]
+                properties:
+                  apdex_t_ms: { type: number }
+                  transactions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmTransaction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/transaction:
+    get:
+      tags: [apm]
+      operationId: getApmTransaction
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - { name: name, in: query, required: true, schema: { type: string } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/ApmTransactionType" } }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/ApmStep"
+      responses:
+        "200":
+          description: Totals, timeseries, latency histogram and the slowest traces
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmTransactionDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/errors:
+    get:
+      tags: [apm]
+      operationId: listApmErrorGroups
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/ApmStep"
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+      responses:
+        "200":
+          description: Error groups with occurrences in the range, most frequent first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups, step]
+                properties:
+                  step: { type: string }
+                  groups:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmErrorGroup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/errors/{group_id}:
+    get:
+      tags: [apm]
+      operationId: getApmErrorGroup
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - { name: group_id, in: path, required: true, schema: { type: string, pattern: "^[0-9a-fA-F]{16}$" } }
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/ApmStep"
+      responses:
+        "200":
+          description: Group detail with stack trace, series and sample error spans
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmErrorGroupDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/services/{service_name}/databases:
+    get:
+      tags: [apm]
+      operationId: listApmDatabaseQueries
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, slowest, errors], default: time } }
+        - { name: db_system, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+      responses:
+        "200":
+          description: Normalized database statements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queries]
+                properties:
+                  queries:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmDbQuery" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/hosts:
+    get:
+      tags: [apm]
+      operationId: listApmServiceHosts
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+      responses:
+        "200":
+          description: Hosts whose resources carried host.id for this service
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hosts]
+                properties:
+                  hosts:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmServiceHost" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/settings:
+    get:
+      tags: [apm]
+      operationId: getApmServiceSettings
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+      responses:
+        "200":
+          description: Effective settings (default when no row applies)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    put:
+      tags: [apm]
+      operationId: putApmServiceSettings
+      description: Signed-in admin or owner; audit event apm.service_settings.update. Not available in static auth mode (404).
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApmSettingsInput" }
+      responses:
+        "200":
+          description: Stored settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/hosts/{host_id}/services:
+    get:
+      tags: [apm]
+      operationId: listApmHostServices
+      parameters:
+        - $ref: "#/components/parameters/HostID"
+        - { name: from, in: query, description: Default 24h ago, schema: { type: string } }
+      responses:
+        "200":
+          description: Services running on the host
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmHostService" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/map:
+    get:
+      tags: [apm]
+      operationId: getApmServiceMap
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: service, in: query, description: Only edges touching this service, schema: { type: string } }
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+      responses:
+        "200":
+          description: Service map
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmMap" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/traces:
+    get:
+      tags: [apm]
+      operationId: searchApmTraces
+      description: |
+        Entry spans in the range. `attr.<key>=<value>` (not listed as a parameter) filters on span attributes
+        (at most 10, exact match).
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: service, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - { name: transaction, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/ApmTransactionType" } }
+        - { name: min_duration_ms, in: query, schema: { type: number, minimum: 0 } }
+        - { name: max_duration_ms, in: query, schema: { type: number, minimum: 0 } }
+        - { name: error, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [timestamp, duration], default: timestamp } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+      responses:
+        "200":
+          description: Matching entry spans
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [traces]
+                properties:
+                  traces:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmTraceResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
 
   # ---------------------------------------------------------------- auth
   /api/v1/version:
@@ -972,6 +1309,493 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  # ---- Alerting (docs/contracts/alerting.md) ----
+  /api/v1/alerts/rule-types:
+    get:
+      tags: [alerts]
+      operationId: listAlertRuleTypes
+      responses:
+        "200":
+          description: Rule types and whether they can be used
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertRuleTypeInfo" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/alerts/rules:
+    get:
+      tags: [alerts]
+      operationId: listAlertRules
+      parameters:
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/AlertRuleType" } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Rules of the organization ordered by name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rules]
+                properties:
+                  rules:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertRule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [alerts]
+      operationId: createAlertRule
+      description: Member or higher (signed-in user).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRuleInput" }
+      responses:
+        "201":
+          description: Created rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/rules/preview:
+    post:
+      tags: [alerts]
+      operationId: previewAlertRule
+      description: |
+        Evaluates a rule definition (not stored) over the last `hours` hours and returns every series with the
+        states it would have had. Read access to telemetry is enough (viewer). Windows longer than the step are
+        combined from step buckets; percentiles are then approximate (`approximate: true`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRulePreviewRequest" }
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRulePreview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/alerts/rules/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [alerts]
+      operationId: getAlertRule
+      responses:
+        "200":
+          description: Rule with the state of its non-ok series
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRuleDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [alerts]
+      operationId: updateAlertRule
+      description: |
+        Full replacement. Members may change only rules they created. Changing `type` or `condition` resolves open
+        incidents (reason rule_changed). With `version` set, a stale version returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRuleInput" }
+      responses:
+        "200":
+          description: Stored rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [alerts]
+      operationId: deleteAlertRule
+      description: Resolves open incidents (reason rule_deleted); incidents are kept.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/rules/{id}/enable:
+    post:
+      tags: [alerts]
+      operationId: enableAlertRule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/rules/{id}/disable:
+    post:
+      tags: [alerts]
+      operationId: disableAlertRule
+      description: Resolves open incidents (reason rule_disabled).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRule" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/incidents:
+    get:
+      tags: [alerts]
+      operationId: listAlertIncidents
+      parameters:
+        - name: state
+          in: query
+          description: Comma-separated states (default all)
+          schema: { type: string, example: "open,acknowledged" }
+        - { name: rule_id, in: query, schema: { type: string } }
+        - { name: severity, in: query, schema: { $ref: "#/components/schemas/AlertSeverity" } }
+        - { name: limit, in: query, description: "Default 50, max 500.", schema: { type: integer, minimum: 1 } }
+        - { name: cursor, in: query, description: next_cursor of the previous page, schema: { type: string } }
+      responses:
+        "200":
+          description: Incidents, newest opened first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [incidents, next_cursor, counts]
+                properties:
+                  incidents:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertIncident" }
+                  next_cursor: { type: [string, "null"] }
+                  counts:
+                    type: object
+                    description: All incidents of the organization by state (resolved = last 7 days)
+                    required: [open, acknowledged, resolved]
+                    properties:
+                      open: { type: integer }
+                      acknowledged: { type: integer }
+                      resolved: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/alerts/incidents/{id}:
+    get:
+      tags: [alerts]
+      operationId: getAlertIncident
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Incident with timeline and notifications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertIncidentDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/incidents/{id}/acknowledge:
+    post:
+      tags: [alerts]
+      operationId: acknowledgeAlertIncident
+      description: Member or higher. Idempotent; 409 when resolved. Stops re-notifications.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Incident
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertIncident" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/incidents/{id}/resolve:
+    post:
+      tags: [alerts]
+      operationId: resolveAlertIncident
+      description: Member or higher. Sends resolve notifications; a still-breaching series may open a new incident.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, maxLength: 4000 }
+      responses:
+        "200":
+          description: Incident
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertIncident" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/incidents/{id}/notes:
+    post:
+      tags: [alerts]
+      operationId: addAlertIncidentNote
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        "201":
+          description: Timeline event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertIncidentEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/channels:
+    get:
+      tags: [alerts]
+      operationId: listAlertChannels
+      responses:
+        "200":
+          description: Channels ordered by name (secrets masked)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channels, secrets_configured]
+                properties:
+                  channels:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertChannel" }
+                  secrets_configured: { type: boolean, description: "false: OPENLOG_SECRETS_KEY is not set, channels cannot be saved" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [alerts]
+      operationId: createAlertChannel
+      description: Admin or owner. 409 when OPENLOG_SECRETS_KEY is not configured.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertChannelInput" }
+      responses:
+        "201":
+          description: Created channel; generated_secrets is shown only here
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertChannel" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/channels/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [alerts]
+      operationId: getAlertChannel
+      responses:
+        "200":
+          description: Channel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertChannel" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [alerts]
+      operationId: updateAlertChannel
+      description: Admin or owner. Secret fields left out keep their stored values. The type cannot change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertChannelInput" }
+      responses:
+        "200":
+          description: Channel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertChannel" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [alerts]
+      operationId: deleteAlertChannel
+      description: Admin or owner. Removes the channel from rules; pending notifications fail.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/channels/{id}/test:
+    post:
+      tags: [alerts]
+      operationId: testAlertChannel
+      description: Admin or owner. Sends a test notification synchronously (no retries) and records it in the delivery log.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Result (success false when the receiver failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertChannelTestResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/mutes:
+    get:
+      tags: [alerts]
+      operationId: listAlertMutes
+      parameters:
+        - { name: include_expired, in: query, description: "Default false: mutes that ended more than 7 days ago are omitted", schema: { type: boolean } }
+      responses:
+        "200":
+          description: Mute windows, latest end first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mutes]
+                properties:
+                  mutes:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertMute" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [alerts]
+      operationId: createAlertMute
+      description: Member or higher.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertMuteInput" }
+      responses:
+        "201":
+          description: Mute
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertMute" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/alerts/mutes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [alerts]
+      operationId: updateAlertMute
+      description: Members may change only mutes they created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertMuteInput" }
+      responses:
+        "200":
+          description: Mute
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertMute" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [alerts]
+      operationId: deleteAlertMute
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/alerts/deliveries:
+    get:
+      tags: [alerts]
+      operationId: listAlertDeliveries
+      parameters:
+        - { name: channel_id, in: query, schema: { type: string } }
+        - { name: incident_id, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/AlertNotificationStatus" } }
+        - { name: limit, in: query, description: "Default 100, max 500.", schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Delivery log (notifications with their attempts), newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertDelivery" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
 components:
   securitySchemes:
     session:
@@ -1011,6 +1835,27 @@ components:
       description: Default 100, capped by OPENLOG_API_MAX_ROWS.
       schema: { type: integer, minimum: 1 }
 
+    ApmServiceName:
+      name: service_name
+      in: path
+      required: true
+      description: service.name (URL-encoded)
+      schema: { type: string, minLength: 1, maxLength: 512 }
+    ApmNamespace:
+      name: namespace
+      in: query
+      description: service.namespace; omitted = all namespaces, present (also empty) = exact match
+      schema: { type: string }
+    ApmEnvironment:
+      name: environment
+      in: query
+      description: deployment.environment(.name); omitted = all environments, present (also empty) = exact match
+      schema: { type: string }
+    ApmStep:
+      name: step
+      in: query
+      description: Go duration >= 60s (default ~60 points), rounded up to whole minutes
+      schema: { type: string, example: 5m }
   responses:
     BadRequest:
       description: invalid_argument
@@ -1289,6 +2134,284 @@ components:
           items: { $ref: "#/components/schemas/Span" }
 
     # ------------------------------------------------------------ auth & management
+    # ---- APM (apm.md) ----
+    ApmNullableNumber:
+      type: [number, "null"]
+    ApmRed:
+      type: object
+      description: Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
+      required: [requests, throughput, errors, error_rate, avg_ms, p50_ms, p95_ms, p99_ms, apdex]
+      properties:
+        requests: { type: number }
+        throughput: { type: number, description: Requests per minute }
+        errors: { type: number }
+        error_rate: { type: number, minimum: 0, maximum: 1 }
+        avg_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        p50_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        p95_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        p99_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        apdex: { $ref: "#/components/schemas/ApmNullableNumber" }
+    ApmTransactionType:
+      type: string
+      enum: [web, rpc, messaging, other]
+    ApmService:
+      allOf:
+        - $ref: "#/components/schemas/ApmRed"
+        - type: object
+          required: [service_name, service_namespace, environment, language, version, last_seen, apdex_t_ms, sparkline]
+          properties:
+            service_name: { type: string }
+            service_namespace: { type: string }
+            environment: { type: string }
+            language: { type: string, description: telemetry.sdk.language }
+            version: { type: string, description: service.version }
+            last_seen: { $ref: "#/components/schemas/Timestamp" }
+            apdex_t_ms: { type: number }
+            sparkline:
+              type: array
+              description: "[unix ms, requests per minute]"
+              items: { $ref: "#/components/schemas/MetricPoint" }
+    ApmServiceInstance:
+      type: object
+      required: [service_namespace, environment, first_seen, last_seen, version, language, sdk_name, resource_attributes]
+      properties:
+        service_namespace: { type: string }
+        environment: { type: string }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        version: { type: string }
+        language: { type: string }
+        sdk_name: { type: string }
+        resource_attributes: { $ref: "#/components/schemas/StringMap" }
+    ApmServiceHost:
+      type: object
+      required: [host_id, host_name, first_seen, last_seen, known]
+      properties:
+        host_id: { type: string }
+        host_name: { type: string }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        known: { type: boolean, description: "The host has a host record (GET /hosts/{host_id})" }
+    ApmServiceDetail:
+      type: object
+      required: [service_name, instances, hosts, apdex_t_ms, apdex_t_default]
+      properties:
+        service_name: { type: string }
+        instances:
+          type: array
+          items: { $ref: "#/components/schemas/ApmServiceInstance" }
+        hosts:
+          type: array
+          items: { $ref: "#/components/schemas/ApmServiceHost" }
+        apdex_t_ms: { type: number }
+        apdex_t_default: { type: boolean }
+    ApmPoint:
+      allOf:
+        - $ref: "#/components/schemas/ApmRed"
+        - type: object
+          required: [t]
+          properties:
+            t: { type: integer, description: Bucket start, unix ms }
+    ApmOverview:
+      type: object
+      required: [step, apdex_t_ms, totals, series]
+      properties:
+        step: { type: string }
+        apdex_t_ms: { type: number }
+        totals: { $ref: "#/components/schemas/ApmRed" }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/ApmPoint" }
+    ApmTransaction:
+      allOf:
+        - $ref: "#/components/schemas/ApmRed"
+        - type: object
+          required: [transaction_type, transaction_name, time_consumed_ms, time_share, max_ms]
+          properties:
+            transaction_type: { type: string }
+            transaction_name: { type: string }
+            time_consumed_ms: { type: number }
+            time_share: { type: number, minimum: 0, maximum: 1 }
+            max_ms: { type: number }
+    ApmHistogramBin:
+      type: object
+      required: [from_ms, to_ms, count]
+      properties:
+        from_ms: { type: number }
+        to_ms: { type: number }
+        count: { type: number }
+    ApmTraceSample:
+      type: object
+      required: [trace_id, span_id, timestamp, duration_ms, is_error, http_status_code, service_name, transaction_name]
+      properties:
+        trace_id: { type: string }
+        span_id: { type: string }
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        duration_ms: { type: number }
+        is_error: { type: boolean }
+        http_status_code: { type: integer }
+        service_name: { type: string }
+        transaction_name: { type: string }
+    ApmTransactionDetail:
+      type: object
+      required: [transaction_name, transaction_type, step, apdex_t_ms, totals, max_ms, series, histogram, slowest]
+      properties:
+        transaction_name: { type: string }
+        transaction_type: { type: string }
+        step: { type: string }
+        apdex_t_ms: { type: number }
+        totals: { $ref: "#/components/schemas/ApmRed" }
+        max_ms: { type: number }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/ApmPoint" }
+        histogram:
+          type: array
+          items: { $ref: "#/components/schemas/ApmHistogramBin" }
+        slowest:
+          type: array
+          items: { $ref: "#/components/schemas/ApmTraceSample" }
+    ApmErrorGroup:
+      type: object
+      required: [group_id, error_type, message, count, total_count, first_seen, last_seen, last_trace_id, last_span_name, sparkline]
+      properties:
+        group_id: { type: string, description: 16 hex digits }
+        error_type: { type: string }
+        message: { type: string, description: Normalized message }
+        count: { type: number, description: Occurrences in the range (weighted) }
+        total_count: { type: number, description: Occurrences within retention }
+        first_seen: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_seen: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_trace_id: { type: string }
+        last_span_name: { type: string }
+        sparkline:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPoint" }
+    ApmErrorSample:
+      type: object
+      required: [trace_id, span_id, timestamp, span_name, transaction_name, duration_ms, message]
+      properties:
+        trace_id: { type: string }
+        span_id: { type: string }
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        span_name: { type: string }
+        transaction_name: { type: string }
+        duration_ms: { type: number }
+        message: { type: string }
+    ApmErrorGroupDetail:
+      type: object
+      required: [group_id, error_type, message, count, total_count, first_seen, last_seen, last_message, stacktrace,
+        last_trace_id, last_span_id, last_span_name, step, series, samples]
+      properties:
+        group_id: { type: string }
+        error_type: { type: string }
+        message: { type: string }
+        count: { type: number }
+        total_count: { type: number }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_message: { type: string }
+        stacktrace: { type: string }
+        last_trace_id: { type: string }
+        last_span_id: { type: string }
+        last_span_name: { type: string }
+        step: { type: string }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPoint" }
+        samples:
+          type: array
+          items: { $ref: "#/components/schemas/ApmErrorSample" }
+    ApmDbQuery:
+      type: object
+      required: [db_system, db_name, db_operation, statement, calls, throughput, errors, error_rate, avg_ms, p95_ms, max_ms, time_consumed_ms, time_share]
+      properties:
+        db_system: { type: string }
+        db_name: { type: string }
+        db_operation: { type: string }
+        statement: { type: string, description: Normalized statement (apm.md §7) }
+        calls: { type: number }
+        throughput: { type: number }
+        errors: { type: number }
+        error_rate: { type: number }
+        avg_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        p95_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        max_ms: { type: number }
+        time_consumed_ms: { type: number }
+        time_share: { type: number }
+    ApmHostService:
+      type: object
+      required: [service_name, service_namespace, environment, first_seen, last_seen]
+      properties:
+        service_name: { type: string }
+        service_namespace: { type: string }
+        environment: { type: string }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+    ApmSettings:
+      type: object
+      required: [service_name, service_namespace, environment, apdex_t_ms, is_default, updated_at, updated_by_email]
+      properties:
+        service_name: { type: string }
+        service_namespace: { type: string }
+        environment: { type: string }
+        apdex_t_ms: { type: number }
+        is_default: { type: boolean }
+        updated_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        updated_by_email: { type: string }
+    ApmSettingsInput:
+      type: object
+      required: [apdex_t_ms]
+      properties:
+        apdex_t_ms: { type: integer, minimum: 1, maximum: 600000 }
+    ApmMapNode:
+      type: object
+      required: [id, type, name, service_namespace, environment, requests, throughput, error_rate, avg_ms, p95_ms, apdex]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [service, db, external, messaging] }
+        name: { type: string }
+        service_namespace: { type: string }
+        environment: { type: string }
+        requests: { type: number }
+        throughput: { type: number }
+        error_rate: { type: number }
+        avg_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        p95_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        apdex: { $ref: "#/components/schemas/ApmNullableNumber" }
+    ApmMapEdge:
+      type: object
+      required: [id, source, target, target_type, calls, throughput, errors, error_rate, avg_ms, p95_ms]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        target: { type: string }
+        target_type: { type: string, enum: [service, db, external, messaging] }
+        calls: { type: number }
+        throughput: { type: number }
+        errors: { type: number }
+        error_rate: { type: number }
+        avg_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+        p95_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
+    ApmMap:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/ApmMapNode" }
+        edges:
+          type: array
+          items: { $ref: "#/components/schemas/ApmMapEdge" }
+    ApmTraceResult:
+      allOf:
+        - $ref: "#/components/schemas/ApmTraceSample"
+        - type: object
+          required: [service_namespace, environment, transaction_type]
+          properties:
+            service_namespace: { type: string }
+            environment: { type: string }
+            transaction_type: { type: string }
     Role:
       type: string
       enum: [owner, admin, member, viewer]
@@ -1758,3 +2881,440 @@ components:
           enum: [offer, no_catalog, mode_off, notify_only, invalid_version, hold, not_capable, no_rollout, rollout_paused, rollout_halted,
             rollout_outdated, not_in_rollout, up_to_date, not_in_wave, target_unavailable, incompatible, already_failed, no_artifact, outside_window]
         status_target: { type: [string, "null"] }
+
+    # ---- Alerting (docs/contracts/alerting.md) ----
+    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm] }
+    AlertSeverity: { type: string, enum: [critical, warning, info] }
+    AlertOperator: { type: string, enum: [gt, gte, lt, lte] }
+    AlertSeriesStateName: { type: string, enum: [ok, pending, firing] }
+    AlertIncidentState: { type: string, enum: [open, acknowledged, resolved] }
+    AlertResolveReason: { type: string, enum: [recovered, manual, no_data, expired, rule_disabled, rule_deleted, rule_changed] }
+    AlertChannelType: { type: string, enum: [slack, email, webhook, teams] }
+    AlertNotificationKind: { type: string, enum: [opened, resolved, renotify, test] }
+    AlertNotificationStatus: { type: string, enum: [pending, sending, delivered, failed, suppressed] }
+    AlertLabels:
+      type: object
+      additionalProperties: { type: string }
+
+    AlertRuleTypeInfo:
+      type: object
+      required: [type, available, reason]
+      properties:
+        type: { $ref: "#/components/schemas/AlertRuleType" }
+        available: { type: boolean }
+        reason: { type: string, description: Why the type is not available (empty when available) }
+
+    AlertFilter:
+      type: object
+      required: [field, op, values]
+      properties:
+        field: { type: string, description: "host.id, host.name, service.name, attr.<key>, resource.<key>", example: resource.env }
+        op: { type: string, enum: [eq, neq, in, not_in, contains] }
+        values:
+          type: array
+          items: { type: string }
+
+    AlertCondition:
+      type: object
+      description: |
+        Type-specific condition (alerting.md §2.2–2.5). metric_threshold: metric, aggregation, series_aggregation,
+        window_seconds, filters, group_by, operator, threshold, recovery_threshold, missing_data. log_match: query,
+        severity_min, filters, group_by, window_seconds, operator, threshold, recovery_threshold. no_data: signal,
+        metric, filters, group_by, window_seconds, lookback_seconds. discovery: event, filters, match, window_seconds,
+        lookback_seconds. apm: service_name, service_namespace, environment, transaction_type, transaction_name,
+        metric (throughput, error_rate, errors, avg_ms, p50_ms, p95_ms, p99_ms, apdex), group_by (environment,
+        transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
+      properties:
+        metric: { type: string }
+        service_name: { type: string }
+        service_namespace: { type: [string, "null"] }
+        environment: { type: [string, "null"] }
+        transaction_type: { type: string }
+        transaction_name: { type: string }
+        min_requests: { type: number }
+        aggregation: { type: string, enum: [avg, min, max, sum, last, count, rate, p50, p95, p99] }
+        series_aggregation: { type: string, enum: [avg, sum, min, max] }
+        window_seconds: { type: integer }
+        lookback_seconds: { type: integer }
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/AlertFilter" }
+        group_by:
+          type: array
+          items: { type: string, description: "host, service, attr.<key>, resource.<key>" }
+        operator: { $ref: "#/components/schemas/AlertOperator" }
+        threshold: { type: number }
+        recovery_threshold: { type: [number, "null"] }
+        missing_data: { type: string, enum: [keep, ok, breach] }
+        query: { type: string }
+        severity_min: { type: string }
+        signal: { type: string, enum: [host, metric, log] }
+        event: { type: string, enum: [service_disappeared, port_opened] }
+        match: { type: string }
+
+    AlertFlapping:
+      type: object
+      required: [enabled, transitions, window_seconds, hold_seconds]
+      properties:
+        enabled: { type: boolean }
+        transitions: { type: integer, minimum: 2, maximum: 20 }
+        window_seconds: { type: integer, minimum: 300, maximum: 86400 }
+        hold_seconds: { type: integer, minimum: 60, maximum: 86400 }
+
+    AlertRuleInput:
+      type: object
+      required: [name, type, condition]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        type: { $ref: "#/components/schemas/AlertRuleType" }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        enabled: { type: boolean }
+        interval_seconds: { type: integer, minimum: 10, maximum: 3600 }
+        for_seconds: { type: integer, minimum: 0, maximum: 86400 }
+        recovery_for_seconds: { type: integer, minimum: 0, maximum: 86400 }
+        condition: { $ref: "#/components/schemas/AlertCondition" }
+        channel_ids:
+          type: array
+          items: { type: string }
+        renotify_interval_seconds: { type: integer, minimum: 0 }
+        flapping: { $ref: "#/components/schemas/AlertFlapping" }
+        runbook_url: { type: string }
+        labels: { $ref: "#/components/schemas/AlertLabels" }
+        version: { type: integer, description: "PUT only: optimistic concurrency" }
+
+    AlertRuleStatus:
+      type: object
+      required: [state, series_pending, series_firing, open_incidents, last_evaluated_at, last_result, last_error, last_duration_ms, next_evaluation_at, owner]
+      properties:
+        state: { type: string, enum: [disabled, unknown, ok, pending, firing, error] }
+        series_pending: { type: integer }
+        series_firing: { type: integer }
+        open_incidents: { type: integer }
+        last_evaluated_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_result: { type: string }
+        last_error: { type: string }
+        last_duration_ms: { type: integer }
+        next_evaluation_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        owner: { type: [string, "null"], description: Evaluator instance holding the lease }
+
+    AlertRule:
+      type: object
+      required: [id, name, description, type, severity, enabled, interval_seconds, for_seconds, recovery_for_seconds, condition, channel_ids,
+        renotify_interval_seconds, flapping, runbook_url, labels, version, created_by_user_id, created_by_email, created_at, updated_at, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        type: { $ref: "#/components/schemas/AlertRuleType" }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        enabled: { type: boolean }
+        interval_seconds: { type: integer }
+        for_seconds: { type: integer }
+        recovery_for_seconds: { type: integer }
+        condition: { $ref: "#/components/schemas/AlertCondition" }
+        channel_ids:
+          type: array
+          items: { type: string }
+        renotify_interval_seconds: { type: integer }
+        flapping: { $ref: "#/components/schemas/AlertFlapping" }
+        runbook_url: { type: string }
+        labels: { $ref: "#/components/schemas/AlertLabels" }
+        version: { type: integer }
+        created_by_user_id: { type: [string, "null"] }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        status: { $ref: "#/components/schemas/AlertRuleStatus" }
+
+    AlertSeriesState:
+      type: object
+      required: [series_key, labels, state, value, pending_since, firing_since, recovering_since, incident_id, flapping, updated_at]
+      properties:
+        series_key: { type: string }
+        labels: { $ref: "#/components/schemas/AlertLabels" }
+        state: { $ref: "#/components/schemas/AlertSeriesStateName" }
+        value: { type: [number, "null"] }
+        pending_since: { $ref: "#/components/schemas/NullableTimestamp" }
+        firing_since: { $ref: "#/components/schemas/NullableTimestamp" }
+        recovering_since: { $ref: "#/components/schemas/NullableTimestamp" }
+        incident_id: { type: [string, "null"] }
+        flapping: { type: boolean }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    AlertRuleDetail:
+      allOf:
+        - { $ref: "#/components/schemas/AlertRule" }
+        - type: object
+          required: [series]
+          properties:
+            series:
+              type: array
+              items: { $ref: "#/components/schemas/AlertSeriesState" }
+
+    AlertRulePreviewRequest:
+      type: object
+      required: [rule]
+      properties:
+        rule: { $ref: "#/components/schemas/AlertRuleInput" }
+        hours: { type: integer, minimum: 1, maximum: 24, description: Default 6 }
+
+    AlertPreviewSeries:
+      type: object
+      required: [key, labels, points, transitions, incidents]
+      properties:
+        key: { type: string }
+        labels: { $ref: "#/components/schemas/AlertLabels" }
+        points:
+          type: array
+          description: "[unix ms, value or null] per evaluation step"
+          items:
+            type: array
+            prefixItems: [{ type: integer }, { type: [number, "null"] }]
+            minItems: 2
+            maxItems: 2
+        transitions:
+          type: array
+          items:
+            type: object
+            required: [at, state, value]
+            properties:
+              at: { $ref: "#/components/schemas/Timestamp" }
+              state: { $ref: "#/components/schemas/AlertSeriesStateName" }
+              value: { type: [number, "null"] }
+        incidents:
+          type: array
+          items:
+            type: object
+            required: [opened_at, resolved_at, peak]
+            properties:
+              opened_at: { $ref: "#/components/schemas/Timestamp" }
+              resolved_at: { $ref: "#/components/schemas/NullableTimestamp" }
+              peak: { type: [number, "null"] }
+
+    AlertRulePreview:
+      type: object
+      required: [from, to, step_seconds, operator, threshold, recovery_threshold, unit, series, truncated, approximate]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        step_seconds: { type: integer }
+        operator: { type: [string, "null"], description: "null for no_data/discovery (breach = value >= threshold)" }
+        threshold: { type: [number, "null"] }
+        recovery_threshold: { type: [number, "null"] }
+        unit: { type: string }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/AlertPreviewSeries" }
+        truncated: { type: boolean, description: More series matched than returned }
+        approximate: { type: boolean }
+
+    AlertIncident:
+      type: object
+      required: [id, rule_id, rule_name, rule_type, severity, state, series_key, labels, summary, value, last_value, threshold, flapping, muted,
+        opened_at, acknowledged_at, acknowledged_by_email, resolved_at, resolved_by_email, resolve_reason, channel_ids]
+      properties:
+        id: { type: string }
+        rule_id: { type: [string, "null"], description: null when the rule was deleted }
+        rule_name: { type: string }
+        rule_type: { $ref: "#/components/schemas/AlertRuleType" }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        state: { $ref: "#/components/schemas/AlertIncidentState" }
+        series_key: { type: string }
+        labels: { $ref: "#/components/schemas/AlertLabels" }
+        summary: { type: string }
+        value: { type: [number, "null"] }
+        last_value: { type: [number, "null"] }
+        threshold: { type: [number, "null"] }
+        flapping: { type: boolean }
+        muted: { type: boolean }
+        opened_at: { $ref: "#/components/schemas/Timestamp" }
+        acknowledged_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        acknowledged_by_email: { type: [string, "null"] }
+        resolved_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        resolved_by_email: { type: [string, "null"], description: null = resolved automatically }
+        resolve_reason:
+          anyOf: [{ $ref: "#/components/schemas/AlertResolveReason" }, { type: "null" }]
+        channel_ids:
+          type: array
+          items: { type: string }
+
+    AlertIncidentEvent:
+      type: object
+      required: [id, at, kind, actor_email, message, details]
+      properties:
+        id: { type: integer }
+        at: { $ref: "#/components/schemas/Timestamp" }
+        kind:
+          type: string
+          enum: [opened, flapping, acknowledged, note, renotified, resolved, notification_delivered, notification_failed, notification_suppressed, notification_muted]
+        actor_email: { type: [string, "null"] }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+
+    AlertIncidentDetail:
+      allOf:
+        - { $ref: "#/components/schemas/AlertIncident" }
+        - type: object
+          required: [events, deliveries]
+          properties:
+            events:
+              type: array
+              items: { $ref: "#/components/schemas/AlertIncidentEvent" }
+            deliveries:
+              type: array
+              items: { $ref: "#/components/schemas/AlertDelivery" }
+
+    AlertChannelConfig:
+      type: object
+      description: "Non-secret settings. email: to (required), smtp (optional override)"
+      properties:
+        to:
+          type: array
+          items: { type: string }
+        smtp:
+          type: object
+          properties:
+            host: { type: string }
+            port: { type: integer }
+            username: { type: string }
+            from: { type: string }
+            tls: { type: string, enum: [starttls, tls, none] }
+
+    AlertChannelSecrets:
+      type: object
+      description: "Write-only. slack/teams/webhook: url; webhook: hmac_secret; email: smtp_password"
+      properties:
+        url: { type: string }
+        hmac_secret: { type: string }
+        smtp_password: { type: string }
+
+    AlertChannelInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: "#/components/schemas/AlertChannelType" }
+        enabled: { type: boolean }
+        config: { $ref: "#/components/schemas/AlertChannelConfig" }
+        secrets: { $ref: "#/components/schemas/AlertChannelSecrets" }
+
+    AlertChannel:
+      type: object
+      required: [id, name, type, enabled, config, secret_hints, created_by_email, created_at, updated_at, last_delivery]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/AlertChannelType" }
+        enabled: { type: boolean }
+        config: { $ref: "#/components/schemas/AlertChannelConfig" }
+        secret_hints:
+          type: object
+          description: 'Masked secret values, e.g. {"url": "https://hooks.slack.com/…/•••f3a9"}'
+          additionalProperties: { type: string }
+        generated_secrets:
+          type: object
+          description: Create response only (webhook without hmac_secret)
+          additionalProperties: { type: string }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        last_delivery:
+          anyOf:
+            - type: object
+              required: [at, status, error]
+              properties:
+                at: { $ref: "#/components/schemas/Timestamp" }
+                status: { $ref: "#/components/schemas/AlertNotificationStatus" }
+                error: { type: string }
+            - { type: "null" }
+
+    AlertChannelTestResult:
+      type: object
+      required: [success, status_code, error, duration_ms, notification_id]
+      properties:
+        success: { type: boolean }
+        status_code: { type: integer, description: HTTP status or SMTP reply code (0 = no response) }
+        error: { type: string }
+        duration_ms: { type: integer }
+        notification_id: { type: string }
+
+    AlertMuteMatcher:
+      type: object
+      required: [label, op, value]
+      properties:
+        label: { type: string, example: host.name }
+        op: { type: string, enum: [eq, neq, contains] }
+        value: { type: string }
+
+    AlertMuteInput:
+      type: object
+      required: [name, starts_at, ends_at]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        comment: { type: string, maxLength: 2000 }
+        starts_at: { type: string, description: RFC3339 or unix ms }
+        ends_at: { type: string, description: "RFC3339 or unix ms; after starts_at, at most 90 days later" }
+        rule_ids:
+          type: array
+          description: Empty = every rule
+          items: { type: string }
+        matchers:
+          type: array
+          items: { $ref: "#/components/schemas/AlertMuteMatcher" }
+
+    AlertMute:
+      type: object
+      required: [id, name, comment, starts_at, ends_at, rule_ids, matchers, active, created_by_user_id, created_by_email, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        comment: { type: string }
+        starts_at: { $ref: "#/components/schemas/Timestamp" }
+        ends_at: { $ref: "#/components/schemas/Timestamp" }
+        rule_ids:
+          type: array
+          items: { type: string }
+        matchers:
+          type: array
+          items: { $ref: "#/components/schemas/AlertMuteMatcher" }
+        active: { type: boolean }
+        created_by_user_id: { type: [string, "null"] }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    AlertDeliveryAttempt:
+      type: object
+      required: [attempt, at, duration_ms, success, status_code, error]
+      properties:
+        attempt: { type: integer }
+        at: { $ref: "#/components/schemas/Timestamp" }
+        duration_ms: { type: integer }
+        success: { type: boolean }
+        status_code: { type: integer }
+        error: { type: string }
+
+    AlertDelivery:
+      type: object
+      required: [id, incident_id, rule_id, rule_name, channel_id, channel_name, channel_type, kind, status, attempts, idempotency_key,
+        created_at, finished_at, next_attempt_at, last_error, attempt_log]
+      properties:
+        id: { type: string, description: Notification id }
+        incident_id: { type: [string, "null"] }
+        rule_id: { type: [string, "null"] }
+        rule_name: { type: string }
+        channel_id: { type: [string, "null"] }
+        channel_name: { type: string }
+        channel_type: { $ref: "#/components/schemas/AlertChannelType" }
+        kind: { $ref: "#/components/schemas/AlertNotificationKind" }
+        status: { $ref: "#/components/schemas/AlertNotificationStatus" }
+        attempts: { type: integer }
+        idempotency_key: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        finished_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        next_attempt_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_error: { type: string }
+        attempt_log:
+          type: array
+          items: { $ref: "#/components/schemas/AlertDeliveryAttempt" }

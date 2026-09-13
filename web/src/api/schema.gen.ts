@@ -169,6 +169,220 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apm/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Services with spans since `from`, with RED metrics, Apdex and a throughput sparkline */
+        get: operations["listApmServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApmService"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApmServiceOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/transaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApmTransaction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmErrorGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/errors/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApmErrorGroup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/databases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmDatabaseQueries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmServiceHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApmServiceSettings"];
+        /** @description Signed-in admin or owner; audit event apm.service_settings.update. Not available in static auth mode (404). */
+        put: operations["putApmServiceSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/hosts/{host_id}/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmHostServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApmServiceMap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Entry spans in the range. `attr.<key>=<value>` (not listed as a parameter) filters on span attributes
+         *     (at most 10, exact match).
+         */
+        get: operations["searchApmTraces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -652,6 +866,304 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/rule-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertRuleTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertRules"];
+        put?: never;
+        /** @description Member or higher (signed-in user). */
+        post: operations["createAlertRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Evaluates a rule definition (not stored) over the last `hours` hours and returns every series with the
+         *     states it would have had. Read access to telemetry is enough (viewer). Windows longer than the step are
+         *     combined from step buckets; percentiles are then approximate (`approximate: true`).
+         */
+        post: operations["previewAlertRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAlertRule"];
+        /**
+         * @description Full replacement. Members may change only rules they created. Changing `type` or `condition` resolves open
+         *     incidents (reason rule_changed). With `version` set, a stale version returns 409.
+         */
+        put: operations["updateAlertRule"];
+        post?: never;
+        /** @description Resolves open incidents (reason rule_deleted); incidents are kept. */
+        delete: operations["deleteAlertRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/rules/{id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enableAlertRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/rules/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Resolves open incidents (reason rule_disabled). */
+        post: operations["disableAlertRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertIncidents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/incidents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAlertIncident"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/incidents/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Member or higher. Idempotent; 409 when resolved. Stops re-notifications. */
+        post: operations["acknowledgeAlertIncident"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/incidents/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Member or higher. Sends resolve notifications; a still-breaching series may open a new incident. */
+        post: operations["resolveAlertIncident"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/incidents/{id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addAlertIncidentNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertChannels"];
+        put?: never;
+        /** @description Admin or owner. 409 when OPENLOG_SECRETS_KEY is not configured. */
+        post: operations["createAlertChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/channels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAlertChannel"];
+        /** @description Admin or owner. Secret fields left out keep their stored values. The type cannot change. */
+        put: operations["updateAlertChannel"];
+        post?: never;
+        /** @description Admin or owner. Removes the channel from rules; pending notifications fail. */
+        delete: operations["deleteAlertChannel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/channels/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admin or owner. Sends a test notification synchronously (no retries) and records it in the delivery log. */
+        post: operations["testAlertChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/mutes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertMutes"];
+        put?: never;
+        /** @description Member or higher. */
+        post: operations["createAlertMute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/mutes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Members may change only mutes they created. */
+        put: operations["updateAlertMute"];
+        post?: never;
+        delete: operations["deleteAlertMute"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -809,6 +1321,216 @@ export interface components {
         Trace: {
             trace_id: string;
             spans: components["schemas"]["Span"][];
+        };
+        ApmNullableNumber: number | null;
+        /** @description Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests. */
+        ApmRed: {
+            requests: number;
+            /** @description Requests per minute */
+            throughput: number;
+            errors: number;
+            error_rate: number;
+            avg_ms: components["schemas"]["ApmNullableNumber"];
+            p50_ms: components["schemas"]["ApmNullableNumber"];
+            p95_ms: components["schemas"]["ApmNullableNumber"];
+            p99_ms: components["schemas"]["ApmNullableNumber"];
+            apdex: components["schemas"]["ApmNullableNumber"];
+        };
+        /** @enum {string} */
+        ApmTransactionType: "web" | "rpc" | "messaging" | "other";
+        ApmService: components["schemas"]["ApmRed"] & {
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+            /** @description telemetry.sdk.language */
+            language: string;
+            /** @description service.version */
+            version: string;
+            last_seen: components["schemas"]["Timestamp"];
+            apdex_t_ms: number;
+            /** @description [unix ms, requests per minute] */
+            sparkline: components["schemas"]["MetricPoint"][];
+        };
+        ApmServiceInstance: {
+            service_namespace: string;
+            environment: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            version: string;
+            language: string;
+            sdk_name: string;
+            resource_attributes: components["schemas"]["StringMap"];
+        };
+        ApmServiceHost: {
+            host_id: string;
+            host_name: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description The host has a host record (GET /hosts/{host_id}) */
+            known: boolean;
+        };
+        ApmServiceDetail: {
+            service_name: string;
+            instances: components["schemas"]["ApmServiceInstance"][];
+            hosts: components["schemas"]["ApmServiceHost"][];
+            apdex_t_ms: number;
+            apdex_t_default: boolean;
+        };
+        ApmPoint: components["schemas"]["ApmRed"] & {
+            /** @description Bucket start */
+            t: number;
+        };
+        ApmOverview: {
+            step: string;
+            apdex_t_ms: number;
+            totals: components["schemas"]["ApmRed"];
+            series: components["schemas"]["ApmPoint"][];
+        };
+        ApmTransaction: components["schemas"]["ApmRed"] & {
+            transaction_type: string;
+            transaction_name: string;
+            time_consumed_ms: number;
+            time_share: number;
+            max_ms: number;
+        };
+        ApmHistogramBin: {
+            from_ms: number;
+            to_ms: number;
+            count: number;
+        };
+        ApmTraceSample: {
+            trace_id: string;
+            span_id: string;
+            timestamp: components["schemas"]["Timestamp"];
+            duration_ms: number;
+            is_error: boolean;
+            http_status_code: number;
+            service_name: string;
+            transaction_name: string;
+        };
+        ApmTransactionDetail: {
+            transaction_name: string;
+            transaction_type: string;
+            step: string;
+            apdex_t_ms: number;
+            totals: components["schemas"]["ApmRed"];
+            max_ms: number;
+            series: components["schemas"]["ApmPoint"][];
+            histogram: components["schemas"]["ApmHistogramBin"][];
+            slowest: components["schemas"]["ApmTraceSample"][];
+        };
+        ApmErrorGroup: {
+            /** @description 16 hex digits */
+            group_id: string;
+            error_type: string;
+            /** @description Normalized message */
+            message: string;
+            /** @description Occurrences in the range (weighted) */
+            count: number;
+            /** @description Occurrences within retention */
+            total_count: number;
+            first_seen: components["schemas"]["NullableTimestamp"];
+            last_seen: components["schemas"]["NullableTimestamp"];
+            last_trace_id: string;
+            last_span_name: string;
+            sparkline: components["schemas"]["MetricPoint"][];
+        };
+        ApmErrorSample: {
+            trace_id: string;
+            span_id: string;
+            timestamp: components["schemas"]["Timestamp"];
+            span_name: string;
+            transaction_name: string;
+            duration_ms: number;
+            message: string;
+        };
+        ApmErrorGroupDetail: {
+            group_id: string;
+            error_type: string;
+            message: string;
+            count: number;
+            total_count: number;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            last_message: string;
+            stacktrace: string;
+            last_trace_id: string;
+            last_span_id: string;
+            last_span_name: string;
+            step: string;
+            series: components["schemas"]["MetricPoint"][];
+            samples: components["schemas"]["ApmErrorSample"][];
+        };
+        ApmDbQuery: {
+            db_system: string;
+            db_name: string;
+            db_operation: string;
+            /** @description Normalized statement (apm.md §7) */
+            statement: string;
+            calls: number;
+            throughput: number;
+            errors: number;
+            error_rate: number;
+            avg_ms: components["schemas"]["ApmNullableNumber"];
+            p95_ms: components["schemas"]["ApmNullableNumber"];
+            max_ms: number;
+            time_consumed_ms: number;
+            time_share: number;
+        };
+        ApmHostService: {
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        ApmSettings: {
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+            apdex_t_ms: number;
+            is_default: boolean;
+            updated_at: components["schemas"]["NullableTimestamp"];
+            updated_by_email: string;
+        };
+        ApmSettingsInput: {
+            apdex_t_ms: number;
+        };
+        ApmMapNode: {
+            id: string;
+            /** @enum {string} */
+            type: "service" | "db" | "external" | "messaging";
+            name: string;
+            service_namespace: string;
+            environment: string;
+            requests: number;
+            throughput: number;
+            error_rate: number;
+            avg_ms: components["schemas"]["ApmNullableNumber"];
+            p95_ms: components["schemas"]["ApmNullableNumber"];
+            apdex: components["schemas"]["ApmNullableNumber"];
+        };
+        ApmMapEdge: {
+            id: string;
+            source: string;
+            target: string;
+            /** @enum {string} */
+            target_type: "service" | "db" | "external" | "messaging";
+            calls: number;
+            throughput: number;
+            errors: number;
+            error_rate: number;
+            avg_ms: components["schemas"]["ApmNullableNumber"];
+            p95_ms: components["schemas"]["ApmNullableNumber"];
+        };
+        ApmMap: {
+            nodes: components["schemas"]["ApmMapNode"][];
+            edges: components["schemas"]["ApmMapEdge"][];
+        };
+        ApmTraceResult: components["schemas"]["ApmTraceSample"] & {
+            service_namespace: string;
+            environment: string;
+            transaction_type: string;
         };
         /** @enum {string} */
         Role: "owner" | "admin" | "member" | "viewer";
@@ -1167,6 +1889,350 @@ export interface components {
             status: "offer" | "no_catalog" | "mode_off" | "notify_only" | "invalid_version" | "hold" | "not_capable" | "no_rollout" | "rollout_paused" | "rollout_halted" | "rollout_outdated" | "not_in_rollout" | "up_to_date" | "not_in_wave" | "target_unavailable" | "incompatible" | "already_failed" | "no_artifact" | "outside_window";
             status_target: string | null;
         };
+        /** @enum {string} */
+        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm";
+        /** @enum {string} */
+        AlertSeverity: "critical" | "warning" | "info";
+        /** @enum {string} */
+        AlertOperator: "gt" | "gte" | "lt" | "lte";
+        /** @enum {string} */
+        AlertSeriesStateName: "ok" | "pending" | "firing";
+        /** @enum {string} */
+        AlertIncidentState: "open" | "acknowledged" | "resolved";
+        /** @enum {string} */
+        AlertResolveReason: "recovered" | "manual" | "no_data" | "expired" | "rule_disabled" | "rule_deleted" | "rule_changed";
+        /** @enum {string} */
+        AlertChannelType: "slack" | "email" | "webhook" | "teams";
+        /** @enum {string} */
+        AlertNotificationKind: "opened" | "resolved" | "renotify" | "test";
+        /** @enum {string} */
+        AlertNotificationStatus: "pending" | "sending" | "delivered" | "failed" | "suppressed";
+        AlertLabels: {
+            [key: string]: string;
+        };
+        AlertRuleTypeInfo: {
+            type: components["schemas"]["AlertRuleType"];
+            available: boolean;
+            /** @description Why the type is not available (empty when available) */
+            reason: string;
+        };
+        AlertFilter: {
+            /**
+             * @description host.id, host.name, service.name, attr.<key>, resource.<key>
+             * @example resource.env
+             */
+            field: string;
+            /** @enum {string} */
+            op: "eq" | "neq" | "in" | "not_in" | "contains";
+            values: string[];
+        };
+        /**
+         * @description Type-specific condition (alerting.md §2.2–2.5). metric_threshold: metric, aggregation, series_aggregation,
+         *     window_seconds, filters, group_by, operator, threshold, recovery_threshold, missing_data. log_match: query,
+         *     severity_min, filters, group_by, window_seconds, operator, threshold, recovery_threshold. no_data: signal,
+         *     metric, filters, group_by, window_seconds, lookback_seconds. discovery: event, filters, match, window_seconds,
+         *     lookback_seconds. apm: service_name, service_namespace, environment, transaction_type, transaction_name,
+         *     metric (throughput, error_rate, errors, avg_ms, p50_ms, p95_ms, p99_ms, apdex), group_by (environment,
+         *     transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
+         */
+        AlertCondition: {
+            metric?: string;
+            service_name?: string;
+            service_namespace?: string | null;
+            environment?: string | null;
+            transaction_type?: string;
+            transaction_name?: string;
+            min_requests?: number;
+            /** @enum {string} */
+            aggregation?: "avg" | "min" | "max" | "sum" | "last" | "count" | "rate" | "p50" | "p95" | "p99";
+            /** @enum {string} */
+            series_aggregation?: "avg" | "sum" | "min" | "max";
+            window_seconds?: number;
+            lookback_seconds?: number;
+            filters?: components["schemas"]["AlertFilter"][];
+            group_by?: string[];
+            operator?: components["schemas"]["AlertOperator"];
+            threshold?: number;
+            recovery_threshold?: number | null;
+            /** @enum {string} */
+            missing_data?: "keep" | "ok" | "breach";
+            query?: string;
+            severity_min?: string;
+            /** @enum {string} */
+            signal?: "host" | "metric" | "log";
+            /** @enum {string} */
+            event?: "service_disappeared" | "port_opened";
+            match?: string;
+        };
+        AlertFlapping: {
+            enabled: boolean;
+            transitions: number;
+            window_seconds: number;
+            hold_seconds: number;
+        };
+        AlertRuleInput: {
+            name: string;
+            description?: string;
+            type: components["schemas"]["AlertRuleType"];
+            severity?: components["schemas"]["AlertSeverity"];
+            enabled?: boolean;
+            interval_seconds?: number;
+            for_seconds?: number;
+            recovery_for_seconds?: number;
+            condition: components["schemas"]["AlertCondition"];
+            channel_ids?: string[];
+            renotify_interval_seconds?: number;
+            flapping?: components["schemas"]["AlertFlapping"];
+            runbook_url?: string;
+            labels?: components["schemas"]["AlertLabels"];
+            /** @description PUT only: optimistic concurrency */
+            version?: number;
+        };
+        AlertRuleStatus: {
+            /** @enum {string} */
+            state: "disabled" | "unknown" | "ok" | "pending" | "firing" | "error";
+            series_pending: number;
+            series_firing: number;
+            open_incidents: number;
+            last_evaluated_at: components["schemas"]["NullableTimestamp"];
+            last_result: string;
+            last_error: string;
+            last_duration_ms: number;
+            next_evaluation_at: components["schemas"]["NullableTimestamp"];
+            /** @description Evaluator instance holding the lease */
+            owner: string | null;
+        };
+        AlertRule: {
+            id: string;
+            name: string;
+            description: string;
+            type: components["schemas"]["AlertRuleType"];
+            severity: components["schemas"]["AlertSeverity"];
+            enabled: boolean;
+            interval_seconds: number;
+            for_seconds: number;
+            recovery_for_seconds: number;
+            condition: components["schemas"]["AlertCondition"];
+            channel_ids: string[];
+            renotify_interval_seconds: number;
+            flapping: components["schemas"]["AlertFlapping"];
+            runbook_url: string;
+            labels: components["schemas"]["AlertLabels"];
+            version: number;
+            created_by_user_id: string | null;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            status: components["schemas"]["AlertRuleStatus"];
+        };
+        AlertSeriesState: {
+            series_key: string;
+            labels: components["schemas"]["AlertLabels"];
+            state: components["schemas"]["AlertSeriesStateName"];
+            value: number | null;
+            pending_since: components["schemas"]["NullableTimestamp"];
+            firing_since: components["schemas"]["NullableTimestamp"];
+            recovering_since: components["schemas"]["NullableTimestamp"];
+            incident_id: string | null;
+            flapping: boolean;
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        AlertRuleDetail: components["schemas"]["AlertRule"] & {
+            series: components["schemas"]["AlertSeriesState"][];
+        };
+        AlertRulePreviewRequest: {
+            rule: components["schemas"]["AlertRuleInput"];
+            /** @description Default 6 */
+            hours?: number;
+        };
+        AlertPreviewSeries: {
+            key: string;
+            labels: components["schemas"]["AlertLabels"];
+            /** @description [unix ms, value or null] per evaluation step */
+            points: [
+                number,
+                number | null
+            ][];
+            transitions: {
+                at: components["schemas"]["Timestamp"];
+                state: components["schemas"]["AlertSeriesStateName"];
+                value: number | null;
+            }[];
+            incidents: {
+                opened_at: components["schemas"]["Timestamp"];
+                resolved_at: components["schemas"]["NullableTimestamp"];
+                peak: number | null;
+            }[];
+        };
+        AlertRulePreview: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            step_seconds: number;
+            /** @description null for no_data/discovery (breach = value >= threshold) */
+            operator: string | null;
+            threshold: number | null;
+            recovery_threshold: number | null;
+            unit: string;
+            series: components["schemas"]["AlertPreviewSeries"][];
+            /** @description More series matched than returned */
+            truncated: boolean;
+            approximate: boolean;
+        };
+        AlertIncident: {
+            id: string;
+            /** @description null when the rule was deleted */
+            rule_id: string | null;
+            rule_name: string;
+            rule_type: components["schemas"]["AlertRuleType"];
+            severity: components["schemas"]["AlertSeverity"];
+            state: components["schemas"]["AlertIncidentState"];
+            series_key: string;
+            labels: components["schemas"]["AlertLabels"];
+            summary: string;
+            value: number | null;
+            last_value: number | null;
+            threshold: number | null;
+            flapping: boolean;
+            muted: boolean;
+            opened_at: components["schemas"]["Timestamp"];
+            acknowledged_at: components["schemas"]["NullableTimestamp"];
+            acknowledged_by_email: string | null;
+            resolved_at: components["schemas"]["NullableTimestamp"];
+            /** @description null = resolved automatically */
+            resolved_by_email: string | null;
+            resolve_reason: components["schemas"]["AlertResolveReason"] | null;
+            channel_ids: string[];
+        };
+        AlertIncidentEvent: {
+            id: number;
+            at: components["schemas"]["Timestamp"];
+            /** @enum {string} */
+            kind: "opened" | "flapping" | "acknowledged" | "note" | "renotified" | "resolved" | "notification_delivered" | "notification_failed" | "notification_suppressed" | "notification_muted";
+            actor_email: string | null;
+            message: string;
+            details: {
+                [key: string]: unknown;
+            };
+        };
+        AlertIncidentDetail: components["schemas"]["AlertIncident"] & {
+            events: components["schemas"]["AlertIncidentEvent"][];
+            deliveries: components["schemas"]["AlertDelivery"][];
+        };
+        /** @description Non-secret settings. email: to (required), smtp (optional override) */
+        AlertChannelConfig: {
+            to?: string[];
+            smtp?: {
+                host?: string;
+                port?: number;
+                username?: string;
+                from?: string;
+                /** @enum {string} */
+                tls?: "starttls" | "tls" | "none";
+            };
+        };
+        /** @description Write-only. slack/teams/webhook: url; webhook: hmac_secret; email: smtp_password */
+        AlertChannelSecrets: {
+            url?: string;
+            hmac_secret?: string;
+            smtp_password?: string;
+        };
+        AlertChannelInput: {
+            name: string;
+            type: components["schemas"]["AlertChannelType"];
+            enabled?: boolean;
+            config?: components["schemas"]["AlertChannelConfig"];
+            secrets?: components["schemas"]["AlertChannelSecrets"];
+        };
+        AlertChannel: {
+            id: string;
+            name: string;
+            type: components["schemas"]["AlertChannelType"];
+            enabled: boolean;
+            config: components["schemas"]["AlertChannelConfig"];
+            /** @description Masked secret values, e.g. {"url": "https://hooks.slack.com/…/•••f3a9"} */
+            secret_hints: {
+                [key: string]: string;
+            };
+            /** @description Create response only (webhook without hmac_secret) */
+            generated_secrets?: {
+                [key: string]: string;
+            };
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            last_delivery: {
+                at: components["schemas"]["Timestamp"];
+                status: components["schemas"]["AlertNotificationStatus"];
+                error: string;
+            } | null;
+        };
+        AlertChannelTestResult: {
+            success: boolean;
+            /** @description HTTP status or SMTP reply code (0 = no response) */
+            status_code: number;
+            error: string;
+            duration_ms: number;
+            notification_id: string;
+        };
+        AlertMuteMatcher: {
+            /** @example host.name */
+            label: string;
+            /** @enum {string} */
+            op: "eq" | "neq" | "contains";
+            value: string;
+        };
+        AlertMuteInput: {
+            name: string;
+            comment?: string;
+            /** @description RFC3339 or unix ms */
+            starts_at: string;
+            /** @description RFC3339 or unix ms; after starts_at, at most 90 days later */
+            ends_at: string;
+            /** @description Empty = every rule */
+            rule_ids?: string[];
+            matchers?: components["schemas"]["AlertMuteMatcher"][];
+        };
+        AlertMute: {
+            id: string;
+            name: string;
+            comment: string;
+            starts_at: components["schemas"]["Timestamp"];
+            ends_at: components["schemas"]["Timestamp"];
+            rule_ids: string[];
+            matchers: components["schemas"]["AlertMuteMatcher"][];
+            active: boolean;
+            created_by_user_id: string | null;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        AlertDeliveryAttempt: {
+            attempt: number;
+            at: components["schemas"]["Timestamp"];
+            duration_ms: number;
+            success: boolean;
+            status_code: number;
+            error: string;
+        };
+        AlertDelivery: {
+            /** @description Notification id */
+            id: string;
+            incident_id: string | null;
+            rule_id: string | null;
+            rule_name: string;
+            channel_id: string | null;
+            channel_name: string;
+            channel_type: components["schemas"]["AlertChannelType"];
+            kind: components["schemas"]["AlertNotificationKind"];
+            status: components["schemas"]["AlertNotificationStatus"];
+            attempts: number;
+            idempotency_key: string;
+            created_at: components["schemas"]["Timestamp"];
+            finished_at: components["schemas"]["NullableTimestamp"];
+            next_attempt_at: components["schemas"]["NullableTimestamp"];
+            last_error: string;
+            attempt_log: components["schemas"]["AlertDeliveryAttempt"][];
+        };
     };
     responses: {
         /** @description invalid_argument */
@@ -1259,6 +2325,14 @@ export interface components {
         To: string;
         /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
         Limit: number;
+        /** @description service.name (URL-encoded) */
+        ApmServiceName: string;
+        /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+        ApmNamespace: string;
+        /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+        ApmEnvironment: string;
+        /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+        ApmStep: string;
     };
     requestBodies: never;
     headers: never;
@@ -1551,6 +2625,507 @@ export interface operations {
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listApmServices: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+                step?: components["parameters"]["ApmStep"];
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description Case-insensitive substring of the service name */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 60s */
+                        step: string;
+                        services: components["schemas"]["ApmService"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getApmService: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service identity, instances (namespace/environment), hosts and Apdex T */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmServiceDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getApmServiceOverview: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+                step?: components["parameters"]["ApmStep"];
+                transaction?: string;
+                type?: components["schemas"]["ApmTransactionType"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Totals and timeseries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listApmTransactions: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                sort?: "time" | "throughput" | "slowest" | "errors";
+                type?: components["schemas"]["ApmTransactionType"];
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        apdex_t_ms: number;
+                        transactions: components["schemas"]["ApmTransaction"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getApmTransaction: {
+        parameters: {
+            query: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                name: string;
+                type?: components["schemas"]["ApmTransactionType"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+                step?: components["parameters"]["ApmStep"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Totals, timeseries, latency histogram and the slowest traces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmTransactionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listApmErrorGroups: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+                step?: components["parameters"]["ApmStep"];
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Error groups with occurrences in the range, most frequent first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        step: string;
+                        groups: components["schemas"]["ApmErrorGroup"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getApmErrorGroup: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+                step?: components["parameters"]["ApmStep"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Group detail with stack trace, series and sample error spans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmErrorGroupDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listApmDatabaseQueries: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                sort?: "time" | "calls" | "slowest" | "errors";
+                db_system?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Normalized database statements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queries: components["schemas"]["ApmDbQuery"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listApmServiceHosts: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hosts whose resources carried host.id for this service */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hosts: components["schemas"]["ApmServiceHost"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getApmServiceSettings: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective settings (default when no row applies) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmSettings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    putApmServiceSettings: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApmSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Stored settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listApmHostServices: {
+        parameters: {
+            query?: {
+                /** @description Default 24h ago */
+                from?: string;
+            };
+            header?: never;
+            path: {
+                host_id: components["parameters"]["HostID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Services running on the host */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        services: components["schemas"]["ApmHostService"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getApmServiceMap: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Only edges touching this service */
+                service?: string;
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service map */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmMap"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    searchApmTraces: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                service?: string;
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                transaction?: string;
+                type?: components["schemas"]["ApmTransactionType"];
+                min_duration_ms?: number;
+                max_duration_ms?: number;
+                error?: boolean;
+                sort?: "timestamp" | "duration";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching entry spans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        traces: components["schemas"]["ApmTraceResult"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
         };
     };
     getVersion: {
@@ -2498,6 +4073,696 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listAlertRuleTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule types and whether they can be used */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        types: components["schemas"]["AlertRuleTypeInfo"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAlertRules: {
+        parameters: {
+            query?: {
+                type?: components["schemas"]["AlertRuleType"];
+                enabled?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules of the organization ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rules: components["schemas"]["AlertRule"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Created rule */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    previewAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRulePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRulePreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule with the state of its non-ok series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Stored rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enableAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    disableAlertRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAlertIncidents: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated states (default all) */
+                state?: string;
+                rule_id?: string;
+                severity?: components["schemas"]["AlertSeverity"];
+                /** @description Default 50, max 500. */
+                limit?: number;
+                /** @description next_cursor of the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incidents, newest opened first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        incidents: components["schemas"]["AlertIncident"][];
+                        next_cursor: string | null;
+                        /** @description All incidents of the organization by state (resolved = last 7 days) */
+                        counts: {
+                            open: number;
+                            acknowledged: number;
+                            resolved: number;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAlertIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incident with timeline and notifications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertIncidentDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acknowledgeAlertIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incident */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertIncident"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    resolveAlertIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Incident */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertIncident"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    addAlertIncidentNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Timeline event */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertIncidentEvent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAlertChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Channels ordered by name (secrets masked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        channels: components["schemas"]["AlertChannel"][];
+                        /** @description false: OPENLOG_SECRETS_KEY is not set, channels cannot be saved */
+                        secrets_configured: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelInput"];
+            };
+        };
+        responses: {
+            /** @description Created channel; generated_secrets is shown only here */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Channel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannel"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelInput"];
+            };
+        };
+        responses: {
+            /** @description Channel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result (success false when the receiver failed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannelTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAlertMutes: {
+        parameters: {
+            query?: {
+                /** @description Default false: mutes that ended more than 7 days ago are omitted */
+                include_expired?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mute windows, latest end first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        mutes: components["schemas"]["AlertMute"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAlertMute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertMuteInput"];
+            };
+        };
+        responses: {
+            /** @description Mute */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertMute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateAlertMute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertMuteInput"];
+            };
+        };
+        responses: {
+            /** @description Mute */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertMute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAlertMute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAlertDeliveries: {
+        parameters: {
+            query?: {
+                channel_id?: string;
+                incident_id?: string;
+                status?: components["schemas"]["AlertNotificationStatus"];
+                /** @description Default 100, max 500. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delivery log (notifications with their attempts), newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deliveries: components["schemas"]["AlertDelivery"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
 }

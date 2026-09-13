@@ -1,6 +1,10 @@
 package processor
 
-import "time"
+import (
+	"time"
+
+	"github.com/onuragtas/openlog/internal/apm"
+)
 
 // Table names (Distributed tables, unqualified).
 const (
@@ -26,7 +30,11 @@ var Columns = map[string][]string{
 		"resource_attributes", "scope_name", "attributes"},
 	TableSpans: {"tenant_id", "timestamp", "duration_ns", "trace_id", "span_id", "parent_span_id", "trace_state",
 		"name", "kind", "status_code", "status_message", "service_name", "host_id", "resource_attributes",
-		"scope_name", "attributes", "events_timestamp", "events_name", "events_attributes", "links_trace_id", "links_span_id"},
+		"scope_name", "attributes", "events_timestamp", "events_name", "events_attributes", "links_trace_id", "links_span_id",
+		// APM (docs/contracts/apm.md §8)
+		"service_namespace", "deployment_environment", "is_entry", "transaction_type", "transaction_name", "is_error",
+		"http_status_code", "sample_weight", "peer_type", "peer_name", "db_system", "db_name", "db_operation",
+		"db_statement_normalized", "error_group_id", "error_type", "error_message"},
 	TableHosts: {"tenant_id", "host_id", "host_name", "os_type", "os_description", "arch", "agent_name",
 		"agent_version", "resource_attributes", "last_seen"},
 	TableInventoryItems:     {"tenant_id", "host_id", "snapshot_id", "snapshot_time", "category", "item_key", "data"},
@@ -116,14 +124,20 @@ type SpanRow struct {
 	EventsAttributes   []map[string]string
 	LinksTraceID       []string
 	LinksSpanID        []string
+	// APM holds the derived APM columns (internal/apm.Derive).
+	APM apm.Derived
 }
 
 // Values implements row.
 func (r *SpanRow) Values() []any {
+	a := &r.APM
 	return []any{r.TenantID, r.Timestamp, r.DurationNs, r.TraceID, r.SpanID, r.ParentSpanID, r.TraceState,
 		r.Name, r.Kind, r.StatusCode, r.StatusMessage, r.ServiceName, r.HostID, r.ResourceAttributes,
 		r.ScopeName, r.Attributes, nonNil(r.EventsTimestamp), nonNil(r.EventsName), nonNil(r.EventsAttributes),
-		nonNil(r.LinksTraceID), nonNil(r.LinksSpanID)}
+		nonNil(r.LinksTraceID), nonNil(r.LinksSpanID),
+		a.ServiceNamespace, a.Environment, a.IsEntry, a.TransactionType, a.TransactionName, a.IsError,
+		a.HTTPStatusCode, a.SampleWeight, a.PeerType, a.PeerName, a.DBSystem, a.DBName, a.DBOperation,
+		a.DBStatementNormalized, a.ErrorGroupID, a.ErrorType, a.ErrorMessage}
 }
 
 // HostRow is a host upsert.

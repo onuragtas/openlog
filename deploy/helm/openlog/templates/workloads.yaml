@@ -1,6 +1,6 @@
-{{- range $component := list "ingest" "processor" "api" }}
+{{- range $component := list "ingest" "processor" "api" "alert" }}
 {{- $v := index $.Values $component }}
-{{- if $v.enabled }}
+{{- if and $v.enabled (or (ne $component "alert") (include "openlog.postgres.enabled" $)) }}
 {{- $ctx := dict "root" $ "component" $component "values" $v }}
 ---
 apiVersion: apps/v1
@@ -31,7 +31,7 @@ spec:
         {{- end }}
       annotations:
         {{- if not $.Values.auth.existingSecret }}
-        checksum/credentials: {{ printf "%s|%s|%s" $.Values.auth.licenseKeys $.Values.clickhouse.password $.Values.postgres.external.dsn | sha256sum }}
+        checksum/credentials: {{ printf "%s|%s|%s|%s|%s" $.Values.auth.licenseKeys $.Values.clickhouse.password $.Values.postgres.external.dsn $.Values.alert.secretsKey $.Values.alert.secretsKeyPrevious | sha256sum }}
         {{- end }}
         {{- if $.Values.metrics.podAnnotations }}
         prometheus.io/scrape: "true"

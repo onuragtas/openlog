@@ -81,8 +81,13 @@ the browser prefers it; the choice is stored in `localStorage["openlog.lang"]`.
 (`bg-card`, `text-muted-foreground`, …), never raw colors. Charts read `--chart-axis`/`--chart-grid`.
 
 **Charts.** `TimeSeriesChart` takes `ChartSeriesInput[]` (label + `[ms, value]` points); transforms live in
-`lib/series.ts` and are unit-tested. Only uPlot is used today; add ECharts/React Flow/CodeMirror when a
-screen needs them.
+`lib/series.ts` and are unit-tested. uPlot draws time series; the APM service map uses React Flow
+(`@xyflow/react`, MIT) with a dagre layout (`@dagrejs/dagre`, MIT) computed in `lib/apm-map.ts`; small APM
+graphics (sparklines, latency histogram) are plain SVG/DOM in `components/apm/Charts.tsx`.
+
+**APM.** `routes/apm.tsx` (services list, service page with tabs, service map), tab components in
+`components/apm/`, query factories in `api/apm.ts`, pure helpers in `lib/apm.ts`, mocks in `mocks/apm.ts`.
+Definitions: `docs/contracts/apm.md`.
 
 **Accessibility.** Every input has a label, icon-only buttons have `aria-label`, toggles use `aria-pressed`
 / `aria-expanded`, interactive rows are reachable by keyboard (links/buttons inside rows).

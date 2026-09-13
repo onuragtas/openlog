@@ -23,7 +23,7 @@ const HeartbeatInterval = 30 * time.Second
 // heartbeatServices are the long-running services that must be counted before a contract
 // migration may run (docs/contracts/releases-updates.md §6).
 var heartbeatServices = map[string]bool{
-	"openlog-ingest": true, "openlog-processor": true, "openlog-api": true, "openlog-allinone": true,
+	"openlog-ingest": true, "openlog-processor": true, "openlog-api": true, "openlog-allinone": true, "openlog-alert": true,
 }
 
 // startHeartbeat records this process in component_heartbeats every HeartbeatInterval when

@@ -67,8 +67,47 @@ logs:
     units: []                    # e.g. [nginx.service]; empty = all
     priority: ""                 # e.g. warning (emerg..debug or 0..7); empty = all
 
+integrations:                    # metric integrations bound to discovered services (semantic-conventions §6)
+  enabled: true                  # master switch (needs discovery.enabled)
+  interval: 30s                  # default collection interval per instance (min 5s)
+  timeout: 10s                   # per collection (connect + queries), <= interval
+  max_concurrent: 4              # collections running at the same time
+  max_instances: 32              # further instances report not_available
+  # Credentials: password: env:NAME | file:/absolute/path | literal (warned). They are never logged or sent;
+  # env/file references are re-read on every connection. Per-instance "instances" override the defaults for
+  # discovered services matching all given match fields: port, endpoint, unit, container (name or id prefix), instance.
+  nginx:
+    enabled: true                # stub_status is probed on discovered ports (/nginx_status, /stub_status, /status, …)
+    # instances:
+    #   - match: { port: 8080 }
+    #     endpoint: http://127.0.0.1:8080/nginx_status
+  redis:
+    enabled: true                # INFO without AUTH unless a password is set
+    # username: openlog          # ACL user (Redis 6+)
+    # password: env:OPENLOG_REDIS_PASSWORD
+    # tls: { enabled: false, insecure_skip_verify: false, ca_file: "", server_name: "" }
+  mysql:
+    enabled: true                # needs credentials: GRANT PROCESS, REPLICATION CLIENT ON *.*; GRANT SELECT ON performance_schema.*
+    # username: openlog
+    # password: file:/etc/openlog-infra-agent/mysql.password
+    # top_n_tables: 50           # tables/indexes with io-wait series
+    # instances:
+    #   - match: { port: 3307 }
+    #     endpoint: unix:/run/mysqld/mysqld2.sock
+    #     password: env:OPENLOG_MYSQL2_PASSWORD
+  postgresql:
+    enabled: true                # needs credentials: GRANT pg_monitor TO openlog
+    # username: openlog
+    # password: env:OPENLOG_POSTGRESQL_PASSWORD
+    # database: postgres         # initial database
+    # databases: []              # empty = every database that accepts connections (max 32)
+    # exclude_databases: []
+    # top_n_tables: 20           # largest tables and indexes per database
+  docker:
+    enabled: true                # reports Docker Engine API access; container.* metrics come from containers
+
 update:
-  enabled: true                  # apply signed updates ordered by the backend (sync/version reporting runs regardless)
+  enabled: true                 # apply signed updates ordered by the backend (sync/version reporting runs regardless)
   install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user
 
 release:

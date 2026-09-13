@@ -20,6 +20,13 @@ func TestCmdline(t *testing.T) {
 		{"credential", "", "tool --credential=a", "tool --credential=***"},
 		{"credentials", "", "tool --credentials a", "tool --credentials ***"},
 		{"compound flag", "", "tool --auth-token=abc", "tool --auth-token=***"},
+		{"redis requirepass", "/usr/bin/redis-server", "redis-server *:6379 --requirepass s3cr3t --port 6379", "redis-server *:6379 --requirepass *** --port 6379"},
+		{"redis masterauth", "/usr/bin/redis-server", "redis-server --masterauth s3cr3t", "redis-server --masterauth ***"},
+		{"prefixed password", "", "app --db-password hunter2", "app --db-password ***"},
+		{"keypass", "", "keytool -keypass changeit -alias x", "keytool -keypass *** -alias x"},
+		{"passive kept", "", "ftp --passive yes", "ftp --passive yes"},
+		{"auth-mode kept", "", "app --auth-mode md5", "app --auth-mode md5"},
+		{"token-file kept", "", "app --token-file /run/secrets/t", "app --token-file /run/secrets/t"},
 
 		// -p<value> only for MySQL/MariaDB clients (by exe or argv[0] basename).
 		{"mysql -p", "/usr/bin/mysql", "mysql -uroot -psecret db", "mysql -uroot -p*** db"},

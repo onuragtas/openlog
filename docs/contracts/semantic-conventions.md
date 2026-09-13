@@ -120,6 +120,9 @@ Cumulative container counters carry no start time.
 | `openlog.agent.collection.interval` | Gauge | `s` | — (current metrics interval; rises above the configured value when the CPU budget check backs off) |
 | `openlog.agent.update.state` | Gauge | `1` | `state` = `idle`,`downloading`,`verifying`,`staged`,`restarting`,`confirming`,`succeeded`,`failed`,`rolled_back` (one point, value 1, attribute = current self-update state; see releases-updates.md §3) |
 | `openlog.agent.update.attempts` | Sum, cumulative, monotonic | `{attempt}` | `result` = `succeeded`,`failed`,`rolled_back` (since agent start; a rollback performed at startup is counted by the next process) |
+| `openlog.agent.integration.collections` | Sum, cumulative, monotonic | `{collection}` | `integration` = integration id (§6); every collection attempt of every instance |
+| `openlog.agent.integration.errors` | Sum, cumulative, monotonic | `{error}` | `integration`; failed collections (status `error` or `needs_configuration`; partial collections are not counted) |
+| `openlog.agent.integration.duration` | Gauge | `s` | `integration`; duration of the latest collection of any instance of the integration |
 
 ## 3. Inventory and discovery (OTLP logs)
 
@@ -190,10 +193,36 @@ Unknown fields must be ignored by consumers; missing fields are allowed.
 }
 ```
 
-`integration.status` ∈ `enabled`, `needs_configuration`, `not_available`:
-- rule has no integration → `{"status": "not_available"}` (no `id`)
-- integration with `auto_enable: true` and no unmet `requires` → `enabled`. In M0 this means "would be enabled"; integrations run from M2.
-- otherwise (`auto_enable: false`, or `requires` not satisfied) → `needs_configuration`
+`integration` object (M2, reflects the running integration, §6):
+
+| Field | Presence | Meaning |
+|---|---|---|
+| `id` | when the rule declares an integration | integration id (`nginx`, `redis`, `mysql`, `postgresql`, `docker`, …) |
+| `status` | always | `enabled`, `needs_configuration`, `error`, `not_available` |
+| `error` | optional | sanitized reason, ≤ 256 bytes, never contains credentials (see below) |
+| `hint` | optional, with `needs_configuration` | multi-line `config.yaml` snippet (YAML, `#` comments) that configures the instance; UI shows it verbatim |
+| `endpoint` | optional | endpoint of the last successful collection: `host:port`, `unix:<path>` or the nginx status URL; never contains credentials |
+
+Status values:
+- `not_available`: the rule has no integration (`{"status": "not_available"}`, no `id`); the agent has no implementation of `id` (`hint` explains);
+  integrations are disabled (`integrations.enabled` / `integrations.<id>.enabled` false or the instance override `enabled: false`; `error` says which);
+  or `integrations.max_instances` is reached.
+- `needs_configuration`: the rule `requires: ["credentials"]` and neither `username` nor `password` is configured (no connection is attempted);
+  the server demands authentication that is not configured (Redis `NOAUTH`, MySQL `1045` without password, PostgreSQL `28P01`/`28000` without password);
+  a configured `env:`/`file:` secret is empty or missing; no endpoint can be derived; nginx has no `stub_status` page on any discovered port
+  (or `auto_enable: false`); the Docker socket is not accessible. `error` describes the reason; `hint` is set.
+- `error`: the last collection failed for another reason: wrong credentials (`authentication failed: …`), unreachable endpoints
+  (`no endpoint reachable (127.0.0.1:6379): …`), missing privileges on the base query, protocol errors, timeouts.
+- `enabled`: the last collection succeeded. `error` may still be present for a **partial** collection (e.g. `replica status: permission denied: …`):
+  metrics were sent, some optional query failed. Before the first collection of a new instance (the first snapshot after start) the status is
+  `enabled` without `endpoint`; a new snapshot is sent as soon as every instance has a first result, and afterwards at most once per minute
+  when a status, error or endpoint changes (in addition to the regular snapshot triggers).
+
+Sanitizing of `error`: configured secret values are replaced by `***`, URL userinfo (`scheme://user:***@`), DSN userinfo (`user:***@tcp(`),
+`password=…`/`password: …` and the §3.5 patterns are masked, whitespace is collapsed, the text is cut at 256 bytes. User names, hosts and
+server messages (e.g. `Access denied for user 'openlog'@'172.18.0.1' (using password: YES)`) are kept.
+
+`-once` runs one collection of every integration before printing, so its `discovered_services` show real statuses.
 
 `apm_hint`, when present: `{"language": "php", "agent": "openlog-agent-php"}`.
 
@@ -209,7 +238,7 @@ Processes whose exe is unreadable but whose parent belongs to an instance join t
 ### 3.5 Masking rules (agent-side, mandatory)
 
 In `cmdline` and `exec_start`, values are replaced with `***` for:
-- arguments matching `(?i)--?(password|passwd|pwd|secret|token|api[-_]?key|auth|credentials?)(=|\s+)\S+`
+- arguments matching `(?i)--?[A-Za-z0-9_.\-]*?(password|passwd|pass|pwd|secret|token|api[-_]?key|auth|credentials?)(=|\s+)\S+` — the flag name must **end** in a secret word, so `--requirepass x`, `--masterauth x` (Redis), `--db-password x` and `-keypass x` are masked while `--passive yes`, `--auth-mode md5` and `--token-file /path` stay readable
 - `-p<value>` directly attached — **only** when the executable basename matches `^(mysql|mysqldump|mysqladmin|mysqlimport|mysqlcheck|mysqlpump|mariadb.*)$` (so `ssh -p22` and `docker -p 8080:80` stay readable)
 - `KEY=value` pairs whose key matches `(?i)(pass|secret|token|key|auth)`, **except** keys ending in `file`, `path` or `dir` (e.g. `--keyfile=/etc/x.pem` stays readable)
 - URL userinfo: `scheme://user:pass@` → `scheme://user:***@`
@@ -273,3 +302,207 @@ Delivery is at-least-once: file offsets and the journal cursor are committed aft
 | `logs.parse_severity` | `true` | file severity heuristic |
 | `logs.mask_secrets` | `false` | apply §3.5 masking to log bodies |
 | `logs.poll_interval` | `1s` | file poll and batch flush interval |
+
+## 6. Integrations (infra agent, M2, D-031)
+
+Integrations collect service metrics for discovered services (§3.4). An instance exists per `discovered_service` whose rule declares an
+implemented `integration.id`; it starts when the service is discovered and stops when it disappears (inventory snapshot cadence, host change
+fingerprint). Each instance collects on its own schedule (`integrations.interval`, default 30 s, first collection within 2 s), with a per-collection
+timeout (`integrations.timeout`, 10 s), at most `integrations.max_concurrent` collections at once and exponential backoff after failures
+(interval · 2ⁿ, max 5 min). The latest sample of every instance is sent with the next metrics payload. Metric names, types, units and attribute keys
+are those of the OpenTelemetry Collector contrib receivers (`nginxreceiver`, `redisreceiver`, `mysqlreceiver`, `postgresqlreceiver`, checked
+against their `metadata.yaml` on `main`, 2026-09-13), so data collected by an OTel Collector with these receivers matches the same panels.
+Metrics that are disabled by default in the receiver but emitted by openlog are marked *(opt-in in OTel)*.
+
+### 6.1 Resource
+
+Every instance (and every entity of §6.5 PostgreSQL) is a separate OTLP `ResourceMetrics`. Its attributes are all host attributes of §1, then:
+
+| Attribute | Value |
+|---|---|
+| `openlog.discovery.id` | `rule_id` of the discovered service (e.g. `mariadb`) |
+| `openlog.discovery.instance` | `instance` of the discovered service; `<openlog.discovery.id>:<openlog.discovery.instance>` is the `discovered_service` key (§3.4) |
+| `openlog.integration.id` | `nginx`, `redis`, `mysql`, `postgresql` |
+| `service.instance.id` | `host:port` of the endpoint; loopback hosts are replaced by `host.name` (`web-1:6379`); unix sockets: `<host.name>:<socket path>`. MySQL overrides it with the receiver's UUIDv5 (§6.4) |
+| `server.address` | endpoint host (IP as dialed, e.g. `127.0.0.1`, `172.18.0.5`), or the socket path for unix sockets |
+| `server.port` | int, endpoint port (absent for unix sockets) |
+| integration attributes | see the integration sections (`redis.version`, `mysql.instance.endpoint`, `postgresql.database.name`, …) |
+
+Instrumentation scope: `name` = `openlog-infra-agent/integrations/<id>`, `version` = agent version.
+Cumulative sums carry `start_time_unix_nano` = server start (now − uptime) for Redis and MySQL; nginx and PostgreSQL sums carry no start time.
+The resource does **not** set `service.name` (the backend `service_name` column stays empty for integration metrics).
+Join for UI panels: `host.id` + `openlog.discovery.id` + `openlog.discovery.instance` (service card) or `openlog.integration.id` (panel type).
+
+Endpoint derivation (in order, at most 8 candidates, the first that answers is used and preferred afterwards):
+1. `endpoint` from configuration (only candidate);
+2. TCP listening ports of the service (integration default port first; `0.0.0.0` → `127.0.0.1`, `::` → `::1`; non-protocol ports skipped: MySQL 33060/33062, Redis 16379);
+3. well-known unix sockets that exist under `host.root_path` (Redis `/run/redis/redis-server.sock`, …; MySQL `/run/mysqld/mysqld.sock`, `/var/lib/mysql/mysql.sock`, …; PostgreSQL `/var/run/postgresql/.s.PGSQL.5432`, …);
+4. container services: published ports on `127.0.0.1:<public port>`, then container IP addresses (Docker `NetworkSettings`) with the container's private ports and the default port.
+
+### 6.2 Configuration keys
+
+| Key | Default | Meaning |
+|---|---|---|
+| `integrations.enabled` | `true` | master switch (requires `discovery.enabled`) |
+| `integrations.interval` / `timeout` | `30s` / `10s` | default collection interval (≥ 5 s) and per-collection timeout (≤ interval) |
+| `integrations.max_concurrent` / `max_instances` | `4` / `32` | concurrency limit; instance limit (later instances: `not_available`) |
+| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `redis`, `mysql`, `postgresql`, `docker`) |
+| `integrations.<id>.interval` | — | overrides the default interval |
+| `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql) or the `http(s)://…` stub_status URL (nginx) |
+| `integrations.<id>.username` / `password` | — | redis, mysql, postgresql. `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
+| `integrations.<id>.tls` | — | `{enabled, insecure_skip_verify, ca_file, server_name}`; PostgreSQL without `tls` uses `sslmode=prefer` over TCP |
+| `integrations.postgresql.database` | `postgres` | initial database |
+| `integrations.postgresql.databases` / `exclude_databases` | `[]` | database allow/deny lists (default: every non-template database with `datallowconn`, max 32) |
+| `integrations.{mysql,postgresql}.top_n_tables` | `50` / `20` | cardinality guard: largest tables/indexes (PostgreSQL, per database) or tables/indexes with most io wait time (MySQL) |
+| `integrations.<id>.instances[]` | `[]` | overrides for services matching **all** given `match` fields: `port` (listening, private or published), `endpoint` (derived candidate), `unit`, `container` (name or ≥ 12-char id prefix), `instance`; plus any setting above and `enabled` |
+
+Unknown keys and settings an integration does not support (e.g. `integrations.nginx.password`) are configuration errors. Credentials are never
+logged, never included in inventory, statuses or metrics, and never sent to the backend. A hard cap of 20 000 data points per collection applies;
+dropped points turn the collection partial (`error`: `cardinality guard: N data points dropped`).
+
+### 6.3 nginx (`stub_status`)
+
+Source: `ngx_http_stub_status_module` page. With `auto_enable: true` (nginx rule) the paths `/nginx_status`, `/stub_status`, `/status`,
+`/basic_status`, `/server_status` are probed on every candidate endpoint over `http`, then `https` without certificate verification; the first
+page that parses as `stub_status` is used. No credentials. Resource: §6.1 only.
+
+| Metric | Type | Unit | Attributes |
+|---|---|---|---|
+| `nginx.requests` | Sum, cumulative, monotonic, int | `{requests}` | — |
+| `nginx.connections_accepted` | Sum, cumulative, monotonic, int | `{connections}` | — |
+| `nginx.connections_handled` | Sum, cumulative, monotonic, int | `{connections}` | — |
+| `nginx.connections_current` | Sum, cumulative, non-monotonic, int | `{connections}` | `state` = `active`, `reading`, `writing`, `waiting` |
+
+### 6.4 Redis (`INFO`) and MySQL/MariaDB
+
+**Redis** — `INFO` (default sections) over TCP, TLS or a unix socket; `AUTH <password>` or `AUTH <username> <password>` when configured.
+Required: nothing without `requirepass`; with ACLs the user needs `+info` (e.g. `ACL SETUSER openlog on >… +info +ping`).
+Resource attribute: `redis.version` (`redis_version`, `unknown` when missing).
+
+| Metric | Type | Unit | Attributes | INFO field |
+|---|---|---|---|---|
+| `redis.clients.connected` | Sum, non-monotonic, int | `{client}` | — | `connected_clients` |
+| `redis.clients.blocked` | Sum, non-monotonic, int | `{client}` | — | `blocked_clients` |
+| `redis.clients.max_input_buffer` | Gauge, int | `By` | — | `client_recent_max_input_buffer` |
+| `redis.clients.max_output_buffer` | Gauge, int | `By` | — | `client_recent_max_output_buffer` |
+| `redis.commands` | Gauge, int | `{ops}/s` | — | `instantaneous_ops_per_sec` |
+| `redis.commands.processed` | Sum, monotonic, int | `{command}` | — | `total_commands_processed` |
+| `redis.connections.received` | Sum, monotonic, int | `{connection}` | — | `total_connections_received` |
+| `redis.connections.rejected` | Sum, monotonic, int | `{connection}` | — | `rejected_connections` |
+| `redis.cpu.time` | Sum, monotonic, double | `s` | `state` = `sys`, `sys_children`, `sys_main_thread`, `user`, `user_children`, `user_main_thread` | `used_cpu_*` |
+| `redis.db.keys` | Gauge, int | `{key}` | `db` (`"0"`, `"1"`, …) | `db<N>: keys` |
+| `redis.db.expires` | Gauge, int | `{key}` | `db` | `db<N>: expires` |
+| `redis.db.avg_ttl` | Gauge, int | `ms` | `db` | `db<N>: avg_ttl` |
+| `redis.keys.evicted` | Sum, monotonic, int | `{key}` | — | `evicted_keys` |
+| `redis.keys.expired` | Sum, monotonic, int | `{event}` | — | `expired_keys` |
+| `redis.keyspace.hits` | Sum, monotonic, int | `{hit}` | — | `keyspace_hits` |
+| `redis.keyspace.misses` | Sum, monotonic, int | `{miss}` | — | `keyspace_misses` |
+| `redis.latest_fork` | Gauge, int | `us` | — | `latest_fork_usec` |
+| `redis.memory.used` / `.peak` / `.rss` / `.lua` | Gauge, int | `By` | — | `used_memory`, `used_memory_peak`, `used_memory_rss`, `used_memory_lua` |
+| `redis.memory.fragmentation_ratio` | Gauge, double | `1` | — | `mem_fragmentation_ratio` |
+| `redis.maxmemory` *(opt-in in OTel)* | Gauge, int | `By` | — | `maxmemory` |
+| `redis.net.input` / `redis.net.output` | Sum, monotonic, int | `By` | — | `total_net_input_bytes`, `total_net_output_bytes` |
+| `redis.rdb.changes_since_last_save` | Sum, non-monotonic, int | `{change}` | — | `rdb_changes_since_last_save` |
+| `redis.replication.offset` | Gauge, int | `By` | — | `master_repl_offset` |
+| `redis.replication.backlog_first_byte_offset` | Gauge, int | `By` | — | `repl_backlog_first_byte_offset` |
+| `redis.replication.replica_offset` *(opt-in in OTel)* | Gauge, int | `By` | — | `slave_repl_offset` (replicas) |
+| `redis.role` *(opt-in in OTel)* | Sum, non-monotonic, int | `{role}` | `role` = `primary`, `replica` (value 1) | `role` |
+| `redis.slaves.connected` | Sum, non-monotonic, int | `{replica}` | — | `connected_slaves` |
+| `redis.uptime` | Sum, monotonic, int | `s` | — | `uptime_in_seconds` |
+
+**MySQL / MariaDB** (rules `mysql` and `mariadb`, integration id `mysql`) — native protocol, `mysql_native_password` and
+`caching_sha2_password` (RSA key exchange without TLS). Queries: `SHOW GLOBAL STATUS`, `SELECT @@innodb_buffer_pool_size`,
+top-N `performance_schema.table_io_waits_summary_by_table` / `…_by_index_usage` (ordered by `SUM_TIMER_WAIT`), `SHOW REPLICA STATUS`
+(`SHOW SLAVE STATUS` on older servers). Required privileges: `PROCESS`, `REPLICATION CLIENT` (MariaDB ≥ 10.5.9: `REPLICA MONITOR` or `SLAVE MONITOR`
+for replica status), `SELECT ON performance_schema.*`. Missing performance_schema/replica privileges make a collection partial.
+Resource attributes: `mysql.instance.endpoint` (endpoint display form, e.g. `127.0.0.1:3306`, `unix:/run/mysqld/mysqld.sock`);
+`service.instance.id` = UUIDv5 (namespace `4d63009a-8d0f-11ee-aad7-4c796ed8e320`) of the §6.1 `host:port` value, as mysqlreceiver.
+
+All MySQL metrics are int. Attribute keys are the receiver's `name_override` values.
+
+| Metric | Type | Unit | Attributes (values) |
+|---|---|---|---|
+| `mysql.buffer_pool.data_pages` | Sum, non-monotonic | `1` | `status` = `dirty`, `clean` (pages_data − pages_dirty) |
+| `mysql.buffer_pool.limit` | Sum, non-monotonic | `By` | — |
+| `mysql.buffer_pool.operations` | Sum, monotonic | `1` | `operation` = `read_ahead_rnd`, `read_ahead`, `read_ahead_evicted`, `read_requests`, `reads`, `wait_free`, `write_requests` |
+| `mysql.buffer_pool.page_flushes` | Sum, monotonic | `1` | — |
+| `mysql.buffer_pool.pages` | Sum, non-monotonic | `1` | `kind` = `data`, `free`, `misc`, `total` (`misc` skipped when out of range) |
+| `mysql.buffer_pool.usage` | Sum, non-monotonic | `By` | `status` = `dirty`, `clean` |
+| `mysql.commands` *(opt-in in OTel)* | Sum, monotonic | `1` | `command` = `alter_table`, `create_index`, `create_table`, `delete`, `delete_multi`, `insert`, `optimize`, `select`, `update`, `update_multi` |
+| `mysql.connection.count` *(opt-in in OTel)* | Sum, monotonic | `1` | — (`Connections`) |
+| `mysql.connection.errors` *(opt-in in OTel)* | Sum, monotonic | `1` | `error` = `accept`, `internal`, `max_connections`, `peer_address`, `select`, `tcpwrap`, `aborted`, `aborted_clients`, `locked` |
+| `mysql.double_writes` | Sum, monotonic | `1` | `kind` = `pages_written`, `writes` |
+| `mysql.handlers` | Sum, monotonic | `1` | `kind` = `commit`, `delete`, `discover`, `external_lock`, `mrr_init`, `prepare`, `read_first`, `read_key`, `read_last`, `read_next`, `read_prev`, `read_rnd`, `read_rnd_next`, `rollback`, `savepoint`, `savepoint_rollback`, `update`, `write` |
+| `mysql.index.io.wait.count` | Sum, monotonic | `1` | `operation` = `delete`, `fetch`, `insert`, `update`; `table`, `schema`, `index` (`NONE` for no index) |
+| `mysql.index.io.wait.time` | Sum, monotonic | `ns` | same |
+| `mysql.locks` | Sum, monotonic | `1` | `kind` = `immediate`, `waited` |
+| `mysql.log_operations` | Sum, monotonic | `1` | `operation` = `waits`, `write_requests`, `writes`, `fsyncs` |
+| `mysql.max_used_connections` *(opt-in in OTel)* | Sum, non-monotonic | `1` | — |
+| `mysql.mysqlx_connections` | Sum, monotonic | `1` | `status` = `accepted`, `closed`, `rejected` (MySQL only) |
+| `mysql.opened_resources` | Sum, monotonic | `1` | `kind` = `file`, `table`, `table_definition` |
+| `mysql.operations` | Sum, monotonic | `1` | `operation` = `fsyncs`, `reads`, `writes` |
+| `mysql.page_operations` | Sum, monotonic | `1` | `operation` = `created`, `read`, `written` |
+| `mysql.prepared_statements` | Sum, monotonic | `1` | `command` = `execute`, `close`, `fetch`, `prepare`, `reset`, `send_long_data` |
+| `mysql.query.count` / `mysql.query.client.count` / `mysql.query.slow.count` *(opt-in in OTel)* | Sum, monotonic | `1` | — (`Queries`, `Questions`, `Slow_queries`) |
+| `mysql.replica.time_behind_source` *(opt-in in OTel)* | Sum, non-monotonic | `s` | — (replicas only; absent while `NULL`) |
+| `mysql.replica.sql_delay` *(opt-in in OTel)* | Sum, non-monotonic | `s` | — (replicas only) |
+| `mysql.row_locks` | Sum, monotonic | `1` | `kind` = `waits`, `time` (`Innodb_row_lock_time`, ms as reported) |
+| `mysql.row_operations` | Sum, monotonic | `1` | `operation` = `deleted`, `inserted`, `read`, `updated` |
+| `mysql.sorts` | Sum, monotonic | `1` | `kind` = `merge_passes`, `range`, `rows`, `scan` |
+| `mysql.table.io.wait.count` | Sum, monotonic | `1` | `operation`, `table`, `schema` |
+| `mysql.table.io.wait.time` | Sum, monotonic | `ns` | `operation`, `table`, `schema` |
+| `mysql.threads` | Sum, non-monotonic | `1` | `kind` = `cached`, `connected`, `created`, `running` |
+| `mysql.tmp_resources` | Sum, monotonic | `1` | `resource` = `disk_tables`, `files`, `tables` |
+| `mysql.uptime` | Sum, monotonic | `s` | — |
+
+### 6.5 PostgreSQL (`pg_stat_*`)
+
+pgx protocol client (`sslmode=prefer`, simple query protocol, `application_name=openlog-infra-agent`). One connection to `database` is kept;
+per-database connections are opened for each collection and closed. Required: `GRANT pg_monitor TO openlog` (or `SELECT` on the
+`pg_stat_*` views plus `pg_read_all_stats` for replication lag) and `CONNECT` on the collected databases. Failing per-database queries make the
+collection partial. Queries follow postgresqlreceiver (relations holding a granted `AccessExclusiveLock` are skipped). Resources follow the receiver's
+default mode (feature gates `separateSchemaAttr` and `useOTelSemconv` off): server metrics on the instance resource (§6.1 only), then one resource
+per database, per table and per index with these additional attributes:
+
+| Resource | Extra attributes |
+|---|---|
+| instance | — |
+| database | `postgresql.database.name` |
+| table | `postgresql.database.name`, `postgresql.table.name` = `<schema>.<table>` |
+| index | `postgresql.database.name`, `postgresql.table.name` = `<table>` (no schema, as the receiver), `postgresql.index.name` |
+
+| Metric | Resource | Type | Unit | Attributes |
+|---|---|---|---|---|
+| `postgresql.bgwriter.buffers.allocated` | instance | Sum, monotonic, int | `{buffers}` | — |
+| `postgresql.bgwriter.buffers.writes` | instance | Sum, monotonic, int | `{buffers}` | `source` = `bgwriter`, `checkpoints`, `backend`, `backend_fsync` (the last two only before PostgreSQL 17) |
+| `postgresql.bgwriter.checkpoint.count` | instance | Sum, monotonic, int | `{checkpoints}` | `type` = `requested`, `scheduled` |
+| `postgresql.bgwriter.duration` | instance | Sum, monotonic, double | `ms` | `type` = `write`, `sync` |
+| `postgresql.bgwriter.maxwritten` | instance | Sum, monotonic, int | `1` | — |
+| `postgresql.connection.max` | instance | Gauge, int | `{connections}` | — |
+| `postgresql.database.count` | instance | Sum, non-monotonic, int | `{databases}` | — (collected databases) |
+| `postgresql.replication.data_delay` | instance | Gauge, int | `By` | `replication_client` (client address or `unix`) |
+| `postgresql.wal.lag` | instance | Gauge, int | `s` | `operation` = `write`, `flush`, `replay`; `replication_client` (omitted while unknown) |
+| `postgresql.wal.age` | instance | Gauge, int | `s` | — (only when WAL archiving has archived a segment) |
+| `postgresql.backends` | database | Sum, non-monotonic, int | `1` | — |
+| `postgresql.commits` / `postgresql.rollbacks` | database | Sum, monotonic, int | `1` | — |
+| `postgresql.db_size` | database | Sum, non-monotonic, int | `By` | — |
+| `postgresql.deadlocks` *(opt-in in OTel)* | database | Sum, monotonic, int | `{deadlock}` | — |
+| `postgresql.database.locks` *(opt-in in OTel)* | database | Gauge, int | `{lock}` | `relation` (`''` for non-relation locks), `mode`, `lock_type`; top 100 rows by count |
+| `postgresql.table.count` | database | Sum, non-monotonic, int | `{table}` | — |
+| `postgresql.rows` | table | Sum, non-monotonic, int | `1` | `state` = `live`, `dead` |
+| `postgresql.operations` | table | Sum, monotonic, int | `1` | `operation` = `ins`, `upd`, `del`, `hot_upd` |
+| `postgresql.table.size` | table | Sum, non-monotonic, int | `By` | — |
+| `postgresql.table.vacuum.count` | table | Sum, monotonic, int | `{vacuum}` | — |
+| `postgresql.blocks_read` | table | Sum, monotonic, int | `1` | `source` = `heap_read`, `heap_hit`, `idx_read`, `idx_hit`, `toast_read`, `toast_hit`, `tidx_read`, `tidx_hit` |
+| `postgresql.index.scans` | index | Sum, monotonic, int | `{scans}` | — |
+| `postgresql.index.size` | index | Gauge, int | `By` | — |
+
+Cardinality: at most 32 databases, `top_n_tables` (default 20) largest tables and indexes per database, 100 lock rows per database.
+
+### 6.6 Docker Engine
+
+Integration id `docker` (rule `docker`) sends **no metrics**: the OTel `docker_stats` receiver defines only `container.*` metrics, which the agent
+already sends from cgroup v2 (§2 container metrics), and there are no OTel engine-level `docker.*` names. The integration reports the Docker Engine
+API state for the service card: `enabled` when `GET /containers/json` succeeds on `containers.docker_socket`, `needs_configuration` on permission
+denied (hint: docker group membership, which is root-equivalent), `error` when the socket is missing or the API fails, `not_available` when
+`containers.enabled` is false.

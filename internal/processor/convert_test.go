@@ -28,7 +28,7 @@ func hostResource() *resourcepb.Resource {
 	return &resourcepb.Resource{Attributes: []*commonpb.KeyValue{
 		s("host.id", "h-1"), s("host.name", "web-1"), s("host.arch", "amd64"), s("os.type", "linux"),
 		s("os.description", "Ubuntu 24.04 LTS"), s("openlog.agent.name", "openlog-infra-agent"), s("openlog.agent.version", "0.1.0"),
-		s("env", "prod"),
+		s("openlog.entity.type", "host"), s("env", "prod"),
 	}}
 }
 

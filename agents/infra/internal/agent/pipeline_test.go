@@ -33,6 +33,7 @@ type fakeSender struct {
 	mu          sync.Mutex
 	metricTimes []uint64 // sample timestamp of each delivered metrics payload
 	logs        []*logspb.LogRecord
+	traces      []*tracepb.TracesData
 }
 
 func (f *fakeSender) Send(ctx context.Context, signal exporter.Signal, data []byte) error {

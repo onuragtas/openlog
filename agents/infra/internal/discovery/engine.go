@@ -22,10 +22,11 @@ const (
 
 var sourceOrder = []string{SourceProcess, SourceSystemdUnit, SourceListeningPort, SourceContainer, SourcePackage}
 
-// Integration status values.
+// Integration status values (semantic-conventions §3.4).
 const (
 	StatusEnabled            = "enabled"
 	StatusNeedsConfiguration = "needs_configuration"
+	StatusError              = "error"
 	StatusNotAvailable       = "not_available"
 )
 
@@ -40,6 +41,14 @@ type PortRef struct {
 type IntegrationStatus struct {
 	ID     string `json:"id,omitempty"`
 	Status string `json:"status"`
+	// Error is the sanitized reason of status "error" (also set for
+	// needs_configuration when the server rejected the connection).
+	Error string `json:"error,omitempty"`
+	// Hint is a short configuration hint (a config.yaml snippet) for
+	// needs_configuration and not_available.
+	Hint string `json:"hint,omitempty"`
+	// Endpoint is the endpoint the integration collects from (no credentials).
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 // Service is the body of a discovered_service item (semantic-conventions §3.4).

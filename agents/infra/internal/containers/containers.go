@@ -49,6 +49,9 @@ type Container struct {
 	Created string            `json:"created,omitempty" yaml:"created"`
 	Labels  map[string]string `json:"labels" yaml:"labels"`
 	Ports   []Port            `json:"ports" yaml:"ports"`
+	// IPs are the container's network addresses (Docker NetworkSettings); used
+	// by integrations to reach services, not part of the inventory body.
+	IPs []string `json:"-" yaml:"ips"`
 }
 
 // ImageName splits an image reference into the name and tags used for the
@@ -220,6 +223,12 @@ type dockerContainer struct {
 		PublicPort  int    `json:"PublicPort"`
 		Type        string `json:"Type"`
 	} `json:"Ports"`
+	NetworkSettings struct {
+		Networks map[string]struct {
+			IPAddress         string `json:"IPAddress"`
+			GlobalIPv6Address string `json:"GlobalIPv6Address"`
+		} `json:"Networks"`
+	} `json:"NetworkSettings"`
 }
 
 // ParseDockerList parses a GET /containers/json response.
@@ -248,6 +257,19 @@ func ParseDockerList(body []byte) ([]Container, error) {
 				break
 			}
 			c.Labels[k] = truncate(r.Labels[k], MaxLabelValueBytes)
+		}
+		nets := make([]string, 0, len(r.NetworkSettings.Networks))
+		for n := range r.NetworkSettings.Networks {
+			nets = append(nets, n)
+		}
+		sort.Strings(nets)
+		for _, n := range nets {
+			nw := r.NetworkSettings.Networks[n]
+			for _, ip := range []string{nw.IPAddress, nw.GlobalIPv6Address} {
+				if ip != "" {
+					c.IPs = append(c.IPs, ip)
+				}
+			}
 		}
 		seen := map[Port]bool{}
 		for _, p := range r.Ports {

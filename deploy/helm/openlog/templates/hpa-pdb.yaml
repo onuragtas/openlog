@@ -1,7 +1,8 @@
-{{- range $component := list "ingest" "processor" "api" }}
+{{- range $component := list "ingest" "processor" "api" "alert" }}
 {{- $v := index $.Values $component }}
 {{- $ctx := dict "root" $ "component" $component "values" $v }}
-{{- if and $v.enabled $v.autoscaling.enabled }}
+{{- $on := and $v.enabled (or (ne $component "alert") (include "openlog.postgres.enabled" $)) }}
+{{- if and $on $v.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -28,7 +29,7 @@ spec:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 {{- end }}
-{{- if and $v.enabled $v.pdb.enabled }}
+{{- if and $on $v.pdb.enabled }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

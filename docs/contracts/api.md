@@ -48,7 +48,9 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 |---|:-:|:-:|:-:|:-:|
 | Telemetry, `GET /orgs/current`, `GET /members`, `GET /fleet/*`, own sessions, leave organization | ✓ | ✓ | ✓ | ✓ |
 | `GET /license-keys`, `GET /api-keys`, `POST /api-keys`, revoke own API keys | | ✓ | ✓ | ✓ |
-| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, rollback) | | | ✓ | ✓ |
+| Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ |
+| Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
+| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, rollback), any alert rule or mute, alert channels and test sends | | | ✓ | ✓ |
 | Grant or remove the owner role, invite owners, remove owners | | | | ✓ |
 
 An organization always keeps at least one owner (`409 failed_precondition`).
@@ -234,6 +236,107 @@ All spans of the trace ordered by start time, or `404`.
   "attributes": {}, "resource_attributes": {}, "events": [{"timestamp": "…", "name": "…", "attributes": {}}]}]}
 ```
 
+## APM
+
+Application performance data derived from traces. Definitions (transactions, error groups, sampling weights,
+latency histogram, Apdex, service map merge rules) are in [apm.md](apm.md); this section lists the endpoints.
+Telemetry permissions (any role, API keys too) except `PUT …/settings`.
+
+Common parameters: `from`/`to` (default last hour), `step` (Go duration ≥ `60s`, default ≈ 60 points, rounded up to
+whole minutes; `400` below 60s). On `/apm/services/{service_name}/…`: `namespace`, `environment` — omitted = every
+namespace/environment of the service, present (also empty) = exact match. Data is per minute: the first bucket starts
+at `from` truncated to the minute. Durations are milliseconds; `throughput` is requests (or calls) per minute;
+`error_rate` and `apdex` are 0..1; `avg_ms`, `p50_ms`, `p95_ms`, `p99_ms`, `apdex` are `null` without requests. All
+counts are weighted by the sampling probability (apm.md §4).
+
+**RED object** (`ApmRed`): `{"requests", "throughput", "errors", "error_rate", "avg_ms", "p50_ms", "p95_ms", "p99_ms", "apdex"}`.
+
+### `GET /api/v1/apm/services?from=&to=&step=&namespace=&environment=&q=`
+Services with spans since `from` (`q`: case-insensitive substring of the name), ordered by name:
+```json
+{"step": "60s", "services": [{"service_name": "orders", "service_namespace": "shop", "environment": "prod",
+  "language": "go", "version": "1.4.2", "last_seen": "…", "apdex_t_ms": 500, "requests": 5400, "throughput": 90,
+  "errors": 27, "error_rate": 0.005, "avg_ms": 41.2, "p50_ms": 18.3, "p95_ms": 120.4, "p99_ms": 480.0, "apdex": 0.97,
+  "sparkline": [[1757757600000, 88.0]]}]}
+```
+
+### `GET /api/v1/apm/services/{service_name}`
+`404` when the service has no data within retention.
+```json
+{"service_name": "orders", "apdex_t_ms": 500, "apdex_t_default": true,
+ "instances": [{"service_namespace": "shop", "environment": "prod", "first_seen": "…", "last_seen": "…", "version": "1.4.2",
+                "language": "go", "sdk_name": "opentelemetry", "resource_attributes": {"host.id": "…"}}],
+ "hosts": [{"host_id": "…", "host_name": "web-1", "first_seen": "…", "last_seen": "…", "known": true}]}
+```
+`known`: the host has a host record (`GET /hosts/{host_id}` works).
+
+### `GET /api/v1/apm/services/{service_name}/overview?transaction=&type=`
+`{"step": "60s", "apdex_t_ms": 500, "totals": ApmRed, "series": [{"t": 1757757600000, …ApmRed}]}`; `transaction`/`type`
+restrict to one transaction. Buckets without requests are omitted.
+
+### `GET /api/v1/apm/services/{service_name}/transactions?sort=&type=&limit=`
+`sort` = `time` (default: most time consumed) | `throughput` | `slowest` (p95) | `errors`; `limit` default 100, max 1000.
+`{"apdex_t_ms": 500, "transactions": [{"transaction_type": "web", "transaction_name": "GET /orders/{id}", "time_consumed_ms", "time_share", "max_ms", …ApmRed}]}`
+
+### `GET /api/v1/apm/services/{service_name}/transaction?name=&type=`
+`name` required.
+```json
+{"transaction_name": "GET /orders/{id}", "transaction_type": "", "step": "60s", "apdex_t_ms": 500, "totals": ApmRed,
+ "max_ms": 1840.2, "series": [ApmPoint], "histogram": [{"from_ms": 17.4, "to_ms": 19.0, "count": 42}],
+ "slowest": [{"trace_id", "span_id", "timestamp", "duration_ms", "is_error", "http_status_code", "service_name", "transaction_name"}]}
+```
+`histogram` lists the non-empty latency buckets (apm.md §4.1); `slowest` the 10 slowest entry spans in the range.
+
+### `GET /api/v1/apm/services/{service_name}/errors?limit=`
+Error groups with occurrences in the range, most frequent first (`limit` default 50, max 500):
+```json
+{"step": "60s", "groups": [{"group_id": "9f3c2a71d4b84e0f", "error_type": "*errors.errorString",
+  "message": "order <n>: inventory shard <n> unavailable", "count": 12, "total_count": 480, "first_seen": "…",
+  "last_seen": "…", "last_trace_id": "…", "last_span_name": "GET /orders/{id}", "sparkline": [[1757757600000, 2]]}]}
+```
+`count` is in the range, `total_count`, `first_seen`, `last_seen` over retention.
+
+### `GET /api/v1/apm/services/{service_name}/errors/{group_id}`
+`400` unless `group_id` is 16 hex digits, `404` for an unknown group. Group fields above plus `last_message` (raw),
+`stacktrace` (newest sample), `last_span_id`, `series` (`[[ms, count]]`) and `samples` (newest 20 error spans in the
+range: `{"trace_id", "span_id", "timestamp", "span_name", "transaction_name", "duration_ms", "message"}`).
+
+### `GET /api/v1/apm/services/{service_name}/databases?sort=&db_system=&limit=`
+`sort` = `time` (default) | `calls` | `slowest` (avg) | `errors`.
+`{"queries": [{"db_system": "postgresql", "db_name": "orders", "db_operation": "SELECT", "statement": "SELECT … WHERE id = ?", "calls", "throughput", "errors", "error_rate", "avg_ms", "p95_ms", "max_ms", "time_consumed_ms", "time_share"}]}`
+
+### `GET /api/v1/apm/services/{service_name}/hosts`
+`{"hosts": [...]}` (shape as in the service object).
+
+### `GET /api/v1/apm/services/{service_name}/settings` · `PUT …/settings` `{"apdex_t_ms": 300}`
+`{"service_name", "service_namespace", "environment", "apdex_t_ms", "is_default", "updated_at", "updated_by_email"}`.
+The key is (`service_name`, `namespace`, `environment` query parameters, missing = `''`); a row with empty namespace and
+environment applies to all of them unless a more specific row exists. `PUT` needs a signed-in admin or owner (`403`
+otherwise; CSRF as usual), `apdex_t_ms` an integer 1..600000 (`400`), writes the audit event
+`apm.service_settings.update`; not available with `OPENLOG_AUTH_MODE=static` (`404`, `GET` returns the default).
+
+### `GET /api/v1/apm/hosts/{host_id}/services?from=`
+Services whose resources carried `host.id` since `from` (default 24h ago):
+`{"services": [{"service_name", "service_namespace", "environment", "first_seen", "last_seen"}]}`. Unknown hosts → empty list.
+
+### `GET /api/v1/apm/map?service=&namespace=&environment=`
+```json
+{"nodes": [{"id": "service:orders|shop|prod", "type": "service", "name": "orders", "service_namespace": "shop",
+            "environment": "prod", "requests", "throughput", "error_rate", "avg_ms", "p95_ms", "apdex"},
+           {"id": "db:postgresql/orders", "type": "db", "name": "postgresql/orders", "service_namespace": "", "environment": "", …}],
+ "edges": [{"id": "service:frontend|shop|prod->service:orders|shop|prod", "source": "…", "target": "…", "target_type": "service",
+            "calls", "throughput", "errors", "error_rate", "avg_ms", "p95_ms"}]}
+```
+Node `type` ∈ `service`, `db`, `external`, `messaging`; dependency node RED is the sum of its incoming edges. `service`
+restricts the map to edges touching that service.
+
+### `GET /api/v1/apm/traces?service=&namespace=&environment=&transaction=&type=&min_duration_ms=&max_duration_ms=&error=&attr.<key>=&sort=&limit=`
+Entry spans in the range (`sort` = `timestamp` (default, newest first) | `duration`; `limit` default 50, max 500). Without
+`service`, one row per trace. `error` = `true`|`false`. `attr.<key>=<value>`: exact match on a span attribute (at most 10;
+key ≤ 256 bytes, one value ≤ 1024 bytes; `400` otherwise). Open results with `GET /traces/{trace_id}` and correlated
+logs with `GET /logs?trace_id=`.
+`{"traces": [{"trace_id", "span_id", "timestamp", "duration_ms", "is_error", "http_status_code", "service_name", "service_namespace", "environment", "transaction_type", "transaction_name"}]}`
+
 ## Fleet (agent updates)
 
 Agent update policy, rollouts and agents of the caller's organization ([releases-updates.md](releases-updates.md)
@@ -327,6 +430,32 @@ down to `to_version`, with the policy's waves; it supersedes the open rollout. `
 lower than that version. `409`: catalog unavailable, no agent runs a newer version, or `to_version` is below the
 `rollback_floor` of the version rolled back from. The controller does not start a new upgrade to the version rolled
 back from; a newer release does.
+
+## Alerting
+
+Rules, incidents, notification channels, mute windows and the delivery log of the caller's organization. Semantics
+(rule types, evaluation, state machine, notifications, payloads, secrets): [alerting.md](alerting.md); shapes:
+[openapi.yaml](openapi.yaml) tag `alerts`; tables: [postgres.md](postgres.md#alerting-0004_alerting). Reads need any role
+(API keys too); writes need a signed-in user (CSRF as usual) with the role in [Roles](#roles): members create rules and
+mutes and change only those they created (`403 permission_denied` otherwise), work on incidents; admins and owners change
+everything and manage channels. Not available with `OPENLOG_AUTH_MODE=static` (`404`). Every write is audited
+(`alert.*`, alerting.md §7).
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/v1/alerts/rule-types` | `{"types": [{"type", "available", "reason"}]}` |
+| `GET /api/v1/alerts/rules?type=&enabled=` · `POST /api/v1/alerts/rules` | list ordered by name; create → `201` Rule. `409` at `OPENLOG_ALERT_MAX_RULES_PER_ORG` |
+| `GET /api/v1/alerts/rules/{id}` | Rule + `series` (non-ok series states) |
+| `PUT /api/v1/alerts/rules/{id}` · `DELETE …` | full replacement (optional `version` → `409` when stale); changing `type`/`condition` resolves open incidents (`rule_changed`); delete resolves them (`rule_deleted`), incidents are kept |
+| `POST /api/v1/alerts/rules/{id}/enable` · `…/disable` | disable resolves open incidents (`rule_disabled`) |
+| `POST /api/v1/alerts/rules/preview` `{"rule": RuleInput, "hours": 1..24}` | evaluates the unsaved definition over the last hours through the tenant-scoped query layer (viewer): `{"from", "to", "step_seconds", "operator", "threshold", "recovery_threshold", "unit", "series": [{"key", "labels", "points": [[ms, value\|null]], "transitions": [{"at", "state", "value"}], "incidents": [{"opened_at", "resolved_at", "peak"}]}], "truncated", "approximate"}` |
+| `GET /api/v1/alerts/incidents?state=open,acknowledged&rule_id=&severity=&limit=&cursor=` | newest first (default 50, max 500), `next_cursor`, `counts {open, acknowledged, resolved (7 d)}` |
+| `GET /api/v1/alerts/incidents/{id}` | Incident + `events` (timeline) + `deliveries` |
+| `POST /api/v1/alerts/incidents/{id}/acknowledge` · `…/resolve` `{"note"?}` · `…/notes` `{"text"}` | ack is idempotent (`409` when resolved; stops re-notifications); resolve enqueues resolve notifications; note → `201` event |
+| `GET /api/v1/alerts/channels` · `POST` · `GET/PUT/DELETE /api/v1/alerts/channels/{id}` | secrets are write-only (`secret_hints` masked; omitted secret fields keep stored values; `generated_secrets` once on create); list carries `secrets_configured`. `409` without `OPENLOG_SECRETS_KEY` |
+| `POST /api/v1/alerts/channels/{id}/test` | synchronous test send: `{"success", "status_code", "error", "duration_ms", "notification_id"}` (always `200` when the channel exists) |
+| `GET /api/v1/alerts/mutes?include_expired=` · `POST` · `PUT/DELETE /api/v1/alerts/mutes/{id}` | `starts_at`/`ends_at` (≤ 90 days), `rule_ids`, label `matchers`; `active` computed |
+| `GET /api/v1/alerts/deliveries?channel_id=&incident_id=&status=&limit=` | delivery log newest first (default 100, max 500) with `attempt_log` |
 
 ## Edge cases (machine-readable spec: [openapi.yaml](openapi.yaml))
 

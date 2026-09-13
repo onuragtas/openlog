@@ -52,8 +52,15 @@ Otomatik güncelleme, filo, TLS ve M1 kalanları birleştirildikten sonra, sıf�
 
 - `openlog-alert`: eşik kuralları, incident, Slack/e-posta/webhook
 - Agent entegrasyonları: nginx, Redis, MySQL, PostgreSQL, Docker (keşif ile otomatik açılma)
+  - ✅ (D-031): keşifle yaşam döngüsü, uç nokta türetme, `env:`/`file:` kimlik bilgileri, gerçek durum (`enabled`/`needs_configuration`/`error` + ipucu), OTel Collector receiver isimleriyle nginx (4), Redis (28), MySQL/MariaDB (28), PostgreSQL (21) metrik; gerçek container'larda doğru/eksik/yanlış parola senaryoları doğrulandı. Docker: OTel'de motor seviyesi metrik adı olmadığı için yalnızca erişilebilirlik.
+  - Güvenlik düzeltmesi: komut satırı maskeleme `--requirepass`/`--masterauth` gibi sonu parola kelimesiyle biten bayrakları kaçırıyordu → düzeltildi, test + sözleşme §3.5 güncellendi.
+  - Kalan: entegrasyon panelleri ve önerilen alarmlar (UI), MySQL io-wait metriklerinin gerçek veride doğrulanması, nginx Plus/VTS, Redis cluster, `pg_stat_statements`
 - APM backend: span → transaction türetme, RED metrikleri, Apdex, servis listesi, trace waterfall (OTel SDK ile)
+  - ✅ (D-032, `docs/contracts/apm.md`): transaction/hata/örnekleme ağırlığı tanımları, `apm_*` ClickHouse tabloları + MV'ler (2 shard'da doğrulandı), shard başına edge eşleştirme işi, servis listesi/genel bakış/transaction/hata gelen kutusu/DB sorguları/servis haritası/trace arama + trace logları, host ↔ servis bağlantısı, Apdex T ayarı. `test/apmdemo` (Node + Go + PHP) ile API sayıları ham span'larla birebir (percentiller <%9,1). Processor `hosts` ezme hatası düzeltildi.
+  - Kalan: `make stack-demo`'ya APM eklenmesi, 10 dk'dan geç gelen span'ların eşleştirilmemesi, APM saklama süresinin ayarlanabilir olması, otelsql bağlantı span'larının DB sorgusu gibi görünmesi
 - Go ve PHP agent geliştirmelerinin başlaması
+  - Go agent (`agents/go`, D-033) ✅: `openlog.Start`, HTTP/SQL/slog/gRPC/chi/gin/echo, runtime metrikleri, infra agent ile aynı `host.id`, canlı ortamda span/log/metrik doğrulandı. Kalan: APM servis listesinde gösterim, uzak parent'tan `sampling.ratio` aktarımı, container içindeki uygulamalarda host eşleşmesi, release'te modül tag'leri
+  - Backend hatası (Go agent testi buldu): processor, `host.id` taşıyan uygulama kaynaklarından da `hosts` satırı yazıyor ve agent adı/sürümünü boşla eziyor → yalnızca `openlog.entity.type=host` kaynaklarından yazılmalı (APM işine atandı)
 
 ## M3 — APM GA ve sorgu dili
 

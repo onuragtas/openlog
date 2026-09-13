@@ -34,6 +34,17 @@ var (
 	TraceIndex         = Table{"trace_index"}
 	InventoryItems     = Table{"inventory_items"}
 	InventorySnapshots = Table{"inventory_snapshots"}
+
+	// APM aggregates (docs/contracts/apm.md §8). Always re-aggregate with GROUP BY;
+	// ApmServiceLinks1m must be read with Final().
+	ApmTransactions1m = Table{"apm_transactions_1m"}
+	ApmServiceEdges1m = Table{"apm_service_edges_1m"}
+	ApmServiceLinks1m = Table{"apm_service_links_1m"}
+	ApmDBQueries1m    = Table{"apm_db_queries_1m"}
+	ApmErrors1m       = Table{"apm_errors_1m"}
+	ApmErrorGroups    = Table{"apm_error_groups"}
+	ApmServices       = Table{"apm_services"}
+	ApmServiceHosts   = Table{"apm_service_hosts"}
 )
 
 const tenantParam = "tenant_id"
@@ -117,7 +128,7 @@ func (q *Select) fail(format string, args ...any) {
 // forbidden matches fragment content that could escape the tenant boundary:
 // references to tenant_id, other tables/databases, sub-queries, statement
 // terminators and comments.
-var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations)(_local|_mv)?\b)`)
+var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_services|apm_service_hosts)(_local|_mv)?\b)`)
 
 func (q *Select) check(frags ...string) bool {
 	for _, f := range frags {

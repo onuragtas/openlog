@@ -17,6 +17,7 @@ import (
 	ch "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/onuragtas/openlog/internal/alert"
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
@@ -38,6 +39,8 @@ type Server struct {
 	srv      *http.Server
 	versions VersionSource  // nil: GET /api/v1/version reports the build only
 	fleet    *fleet.Manager // nil: no fleet endpoints (static auth mode)
+	apm      *apmState      // APM settings (apm.go); nil: default Apdex T
+	alerts   *alert.Manager // nil: no alerting endpoints (alerts.go; static auth mode)
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -91,9 +94,11 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/v1/inventory/search", s.inventorySearch)
 	route("GET /api/v1/logs", s.listLogs)
 	route("GET /api/v1/traces/{trace_id}", s.getTrace)
+	s.apmRoutes(mux)
 	s.accountRoutes(mux)
 	s.versionRoutes(mux)
 	s.fleetRoutes(mux)
+	s.alertRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})

@@ -142,6 +142,22 @@ services:
       OPENLOG_RELEASE_CATALOG_REFRESH: ${OPENLOG_RELEASE_CATALOG_REFRESH:-15m}
       OPENLOG_FLEET_SYNC_INTERVAL: ${OPENLOG_FLEET_SYNC_INTERVAL:-300s}
       OPENLOG_FLEET_CONTROLLER_INTERVAL: ${OPENLOG_FLEET_CONTROLLER_INTERVAL:-30s}
+      # Alerting (docs/contracts/alerting.md, config.md "openlog-alert"). The evaluator and dispatcher run in this
+      # process unless OPENLOG_ALERT_ENABLED=false (then run the `openlog-alert` service below).
+      # Notification channels need OPENLOG_SECRETS_KEY (openssl rand -base64 32); keep it with your backups.
+      OPENLOG_ALERT_ENABLED: ${OPENLOG_ALERT_ENABLED:-true}
+      OPENLOG_SECRETS_KEY: ${OPENLOG_SECRETS_KEY:-}
+      OPENLOG_SECRETS_KEY_PREVIOUS: ${OPENLOG_SECRETS_KEY_PREVIOUS:-}
+      OPENLOG_PUBLIC_URL: ${OPENLOG_PUBLIC_URL:-http://localhost:8080}
+      OPENLOG_ALERT_EVALUATION_DELAY: ${OPENLOG_ALERT_EVALUATION_DELAY:-15s}
+      OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS: ${OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS:-false}
+      OPENLOG_SMTP_HOST: ${OPENLOG_SMTP_HOST:-}
+      OPENLOG_SMTP_PORT: ${OPENLOG_SMTP_PORT:-587}
+      OPENLOG_SMTP_USERNAME: ${OPENLOG_SMTP_USERNAME:-}
+      OPENLOG_SMTP_PASSWORD: ${OPENLOG_SMTP_PASSWORD:-}
+      OPENLOG_SMTP_FROM: ${OPENLOG_SMTP_FROM:-}
+      OPENLOG_SMTP_TLS: ${OPENLOG_SMTP_TLS:-starttls}
+      OPENLOG_SMTP_INSECURE_SKIP_VERIFY: ${OPENLOG_SMTP_INSECURE_SKIP_VERIFY:-false}
     volumes:
       # Release mirror and trusted keys files (read-only). Empty unless you put releases there.
       - ${OPENLOG_RELEASE_HOST_DIR:-./releases}:/releases:ro
@@ -177,6 +193,47 @@ services:
     depends_on:
       openlog:
         condition: service_healthy
+
+  # Optional dedicated alert evaluators (docs/contracts/alerting.md §4: rules are shared through PostgreSQL leases):
+  #   OPENLOG_ALERT_ENABLED=false docker compose --profile alert up -d --scale openlog-alert=3
+  openlog-alert:
+    profiles: ["alert"]
+    image: ${OPENLOG_IMAGE:-openlog:dev}
+    entrypoint: ["/usr/local/bin/openlog-alert"]
+    environment:
+      OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
+      OPENLOG_CLICKHOUSE_ADDR: clickhouse:9000
+      OPENLOG_CLICKHOUSE_USER: ${OPENLOG_CLICKHOUSE_USER:-openlog}
+      OPENLOG_CLICKHOUSE_PASSWORD: ${OPENLOG_CLICKHOUSE_PASSWORD:-openlog}
+      OPENLOG_CLICKHOUSE_CLUSTER: openlog
+      OPENLOG_AUTH_MODE: postgres
+      OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
+      OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
+      OPENLOG_SECRETS_KEY: ${OPENLOG_SECRETS_KEY:-}
+      OPENLOG_SECRETS_KEY_PREVIOUS: ${OPENLOG_SECRETS_KEY_PREVIOUS:-}
+      OPENLOG_PUBLIC_URL: ${OPENLOG_PUBLIC_URL:-http://localhost:8080}
+      OPENLOG_ALERT_EVALUATION_DELAY: ${OPENLOG_ALERT_EVALUATION_DELAY:-15s}
+      OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS: ${OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS:-false}
+      OPENLOG_SMTP_HOST: ${OPENLOG_SMTP_HOST:-}
+      OPENLOG_SMTP_PORT: ${OPENLOG_SMTP_PORT:-587}
+      OPENLOG_SMTP_USERNAME: ${OPENLOG_SMTP_USERNAME:-}
+      OPENLOG_SMTP_PASSWORD: ${OPENLOG_SMTP_PASSWORD:-}
+      OPENLOG_SMTP_FROM: ${OPENLOG_SMTP_FROM:-}
+      OPENLOG_SMTP_TLS: ${OPENLOG_SMTP_TLS:-starttls}
+      OPENLOG_SMTP_INSECURE_SKIP_VERIFY: ${OPENLOG_SMTP_INSECURE_SKIP_VERIFY:-false}
+    depends_on:
+      # `openlog` applies the migrations on start.
+      openlog:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9464/readyz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    # Running evaluations (query timeout) and deliveries (delivery timeout) finish before leases are released.
+    stop_grace_period: 40s
+    restart: unless-stopped
 
   # Optional automatic updates (docs/operations/upgrading.md):
   #   docker compose --profile updater up -d openlog-updater

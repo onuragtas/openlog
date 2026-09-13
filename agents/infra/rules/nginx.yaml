@@ -12,8 +12,8 @@ endpoints:
   - from: listening_port
 integration:
   id: nginx
-  auto_enable: true         # stub_status, when reachable without credentials
-  requires: []
+  auto_enable: true         # probe /nginx_status, /stub_status, … on the discovered ports; no stub_status → needs_configuration
+  requires: []              # stub_status needs no credentials
 apm_hint: null
 logs:
   - path: "/var/log/nginx/*.log"

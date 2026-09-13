@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -46,23 +47,82 @@ func (d Duration) D() time.Duration { return time.Duration(d) }
 
 // Config is the full agent configuration.
 type Config struct {
-	LicenseKey        string          `yaml:"license_key"`
-	Endpoint          string          `yaml:"endpoint"`
-	Interval          Duration        `yaml:"interval"`
-	InventoryInterval Duration        `yaml:"inventory_interval"`
-	StateDir          string          `yaml:"state_dir"`
-	LogLevel          string          `yaml:"log_level"`
-	Host              HostConfig      `yaml:"host"`
-	Collectors        Collectors      `yaml:"collectors"`
-	Inventory         InventoryConfig `yaml:"inventory"`
-	Discovery         DiscoveryConfig `yaml:"discovery"`
-	Buffer            BufferConfig    `yaml:"buffer"`
-	Export            ExportConfig    `yaml:"export"`
-	ProcessMetrics    ProcessMetrics  `yaml:"process_metrics"`
-	Containers        Containers      `yaml:"containers"`
-	Logs              LogsConfig      `yaml:"logs"`
-	Update            UpdateConfig    `yaml:"update"`
-	Release           ReleaseConfig   `yaml:"release"`
+	LicenseKey        string             `yaml:"license_key"`
+	Endpoint          string             `yaml:"endpoint"`
+	Interval          Duration           `yaml:"interval"`
+	InventoryInterval Duration           `yaml:"inventory_interval"`
+	StateDir          string             `yaml:"state_dir"`
+	LogLevel          string             `yaml:"log_level"`
+	Host              HostConfig         `yaml:"host"`
+	Collectors        Collectors         `yaml:"collectors"`
+	Inventory         InventoryConfig    `yaml:"inventory"`
+	Discovery         DiscoveryConfig    `yaml:"discovery"`
+	Buffer            BufferConfig       `yaml:"buffer"`
+	Export            ExportConfig       `yaml:"export"`
+	ProcessMetrics    ProcessMetrics     `yaml:"process_metrics"`
+	Containers        Containers         `yaml:"containers"`
+	Logs              LogsConfig         `yaml:"logs"`
+	Integrations      IntegrationsConfig `yaml:"integrations"`
+	Update            UpdateConfig       `yaml:"update"`
+	Release           ReleaseConfig      `yaml:"release"`
+	PHPForwarder      PHPForwarder       `yaml:"php_forwarder"`
+}
+
+// PHPForwarder configures the php_forwarder module (docs/contracts/php-agent.md §6).
+type PHPForwarder struct {
+	// Enabled: nil (unset) = enabled while discovery finds a PHP runtime; an explicit value wins.
+	Enabled *bool `yaml:"enabled"`
+	// Socket is the unix datagram socket path; empty disables the unix listener (UDP only).
+	Socket string `yaml:"socket"`
+	// SocketGroup: "" or "auto" = first existing of www-data, nginx, apache, php-fpm; or a group name / numeric gid.
+	SocketGroup string `yaml:"socket_group"`
+	// SocketMode is "0660" (default) or "0666" (any local user may send).
+	SocketMode        string   `yaml:"socket_mode"`
+	UDPListen         string   `yaml:"udp_listen"`
+	MaxPendingTraces  int      `yaml:"max_pending_traces"`
+	ReassemblyTimeout Duration `yaml:"reassembly_timeout"`
+}
+
+// DefaultPHPSocket is the default php_forwarder.socket.
+const DefaultPHPSocket = "/run/openlog-infra-agent/php.sock"
+
+// Mode returns the socket file mode.
+func (p PHPForwarder) Mode() os.FileMode {
+	if p.SocketMode == "0666" {
+		return 0o666
+	}
+	return 0o660
+}
+
+func (p *PHPForwarder) validate() []error {
+	var errs []error
+	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
+	if p.Socket != "" {
+		if !filepath.IsAbs(p.Socket) {
+			add("php_forwarder.socket must be an absolute path")
+		}
+		if len(p.Socket) > 107 {
+			add("php_forwarder.socket must be at most 107 bytes (unix socket path limit)")
+		}
+	}
+	if p.Socket == "" && p.UDPListen == "" {
+		add("php_forwarder: socket or udp_listen must be set")
+	}
+	if p.SocketMode != "0660" && p.SocketMode != "0666" {
+		add("php_forwarder.socket_mode must be \"0660\" or \"0666\"")
+	}
+	if p.UDPListen != "" {
+		if _, port, err := net.SplitHostPort(p.UDPListen); err != nil || port == "" || port == "0" {
+			add("php_forwarder.udp_listen must be host:port (e.g. 127.0.0.1:18127)")
+		}
+	}
+	if p.MaxPendingTraces < 1 || p.MaxPendingTraces > 1_000_000 {
+		add("php_forwarder.max_pending_traces must be between 1 and 1000000")
+	}
+	if d := p.ReassemblyTimeout.D(); d < 100*time.Millisecond || d > 5*time.Minute {
+		add("php_forwarder.reassembly_timeout must be between 100ms and 5m")
+	}
+	return errs
 }
 
 // UpdateConfig configures agent self-update (docs/contracts/releases-updates.md §3).
@@ -188,7 +248,12 @@ func Default() *Config {
 			MaxLineBytes: 64 << 10, RateLimitLines: 2000,
 			Journald: JournaldInput{JournalctlPath: "journalctl"},
 		},
-		Update: UpdateConfig{Enabled: true, InstallRoot: DefaultInstallRoot},
+		Integrations: defaultIntegrations(),
+		Update:       UpdateConfig{Enabled: true, InstallRoot: DefaultInstallRoot},
+		PHPForwarder: PHPForwarder{
+			Socket: DefaultPHPSocket, SocketGroup: "auto", SocketMode: "0660",
+			MaxPendingTraces: 10000, ReassemblyTimeout: Duration(5 * time.Second),
+		},
 	}
 }
 
@@ -292,6 +357,8 @@ func (c *Config) Validate(requireExport bool) error {
 		add("release.trusted_keys_file must be an absolute path")
 	}
 	errs = append(errs, c.Logs.validate()...)
+	errs = append(errs, c.Integrations.validate()...)
+	errs = append(errs, c.PHPForwarder.validate()...)
 	for k := range c.Host.ExtraAttributes {
 		if k == "" {
 			add("host.extra_attributes contains an empty key")

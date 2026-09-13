@@ -36,6 +36,9 @@ func testConfig(t *testing.T, root, endpoint string) *config.Config {
 	cfg.Buffer.Dir = filepath.Join(t.TempDir(), "buffer")
 	cfg.Discovery.RulesDir = filepath.Join(t.TempDir(), "none")
 	cfg.Export.MaxRequestBytes = 64 << 10
+	// Pipeline tests count inventory snapshots; integration status changes
+	// (fixture services are unreachable) would add snapshots.
+	cfg.Integrations.Enabled = false
 	return cfg
 }
 

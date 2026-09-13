@@ -9,4 +9,5 @@ version:
   - package: ["docker-ce", "docker.io", "moby-engine", "docker-engine", "docker"]
 integration:
   id: docker
-  auto_enable: true         # local Docker socket
+  auto_enable: true         # containers.docker_socket; permission denied → needs_configuration
+  requires: []

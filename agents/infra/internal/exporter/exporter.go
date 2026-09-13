@@ -27,6 +27,8 @@ type Signal string
 const (
 	SignalMetrics Signal = "metrics"
 	SignalLogs    Signal = "logs"
+	// SignalTraces carries spans received by the PHP forwarder (docs/contracts/php-agent.md §6).
+	SignalTraces Signal = "traces"
 )
 
 // LicenseHeader carries the ingest license key.

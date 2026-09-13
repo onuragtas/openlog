@@ -1,4 +1,4 @@
-export type UnitKind = "percent" | "bytes" | "bytesPerSec" | "number";
+export type UnitKind = "percent" | "bytes" | "bytesPerSec" | "number" | "ms";
 
 const BYTE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 
@@ -28,6 +28,8 @@ export function formatValue(v: number | null | undefined, kind: UnitKind, locale
       return formatBytes(v);
     case "bytesPerSec":
       return `${formatBytes(v)}/s`;
+    case "ms":
+      return Math.abs(v) >= 1000 ? `${formatNumber(v / 1000, locale)} s` : `${formatNumber(v, locale)} ms`;
     default:
       return formatNumber(v, locale);
   }

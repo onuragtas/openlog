@@ -2,6 +2,8 @@
 // auth, error envelopes, defaults and filters.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import { accountHandlers, authenticate } from "./account";
+import { alertHandlers } from "./alerts";
+import { apmHandlers } from "./apm";
 import { fleetHandlers } from "./fleet";
 import * as fx from "./fixtures";
 
@@ -219,6 +221,8 @@ export const handlers = [
 
   ...accountHandlers,
   ...fleetHandlers,
+  ...apmHandlers,
+  ...alertHandlers,
 
   http.all(`${API}/*`, () => apiError("not_found", "no such endpoint")),
 ];

@@ -145,6 +145,19 @@ type Config struct {
 	UpdateCheck    UpdateCheck
 	// Fleet configures agent fleet updates (fleet.go).
 	Fleet Fleet
+	// Alert configures alerting (alert.go).
+	Alert Alert
+	// APM configures the edge-linking job and Apdex default (docs/contracts/apm.md).
+	APM APM
+}
+
+// APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
+type APM struct {
+	LinkEnabled   bool          // OPENLOG_APM_LINK_ENABLED
+	LinkInterval  time.Duration // OPENLOG_APM_LINK_INTERVAL
+	LinkLookback  time.Duration // OPENLOG_APM_LINK_LOOKBACK
+	LinkDelay     time.Duration // OPENLOG_APM_LINK_DELAY
+	DefaultApdexT time.Duration // OPENLOG_APM_DEFAULT_APDEX_T
 }
 
 // UpdateCheck configures the release check of openlog-api (docs/contracts/releases-updates.md §5).
@@ -244,6 +257,14 @@ func Load(getenv func(string) string) (Config, error) {
 			TrustedKeysFile: p.str("OPENLOG_RELEASE_TRUSTED_KEYS_FILE", ""),
 		},
 		Fleet: loadFleet(&p),
+		Alert: loadAlert(&p),
+		APM: APM{
+			LinkEnabled:   p.bool("OPENLOG_APM_LINK_ENABLED", true),
+			LinkInterval:  p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
+			LinkLookback:  p.duration("OPENLOG_APM_LINK_LOOKBACK", 10*time.Minute),
+			LinkDelay:     p.duration("OPENLOG_APM_LINK_DELAY", time.Minute),
+			DefaultApdexT: p.duration("OPENLOG_APM_DEFAULT_APDEX_T", 500*time.Millisecond),
+		},
 		Bootstrap: Bootstrap{
 			TenantID:      p.str("OPENLOG_BOOTSTRAP_TENANT_ID", "default"),
 			OrgName:       p.str("OPENLOG_BOOTSTRAP_ORG_NAME", ""),
@@ -313,6 +334,18 @@ func (c Config) validate(getenv func(string) string) error {
 	if c.API.MaxRows <= 0 {
 		errs = append(errs, errors.New("OPENLOG_API_MAX_ROWS must be > 0"))
 	}
+	if c.APM.LinkInterval < 10*time.Second {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_INTERVAL: must be at least 10s, got %s", c.APM.LinkInterval))
+	}
+	if c.APM.LinkLookback < time.Minute || c.APM.LinkLookback > 24*time.Hour {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_LOOKBACK: must be between 1m and 24h, got %s", c.APM.LinkLookback))
+	}
+	if c.APM.LinkDelay < 0 || c.APM.LinkDelay > time.Hour {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_DELAY: must be between 0 and 1h, got %s", c.APM.LinkDelay))
+	}
+	if c.APM.DefaultApdexT < time.Millisecond || c.APM.DefaultApdexT > 10*time.Minute {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_DEFAULT_APDEX_T: must be between 1ms and 10m, got %s", c.APM.DefaultApdexT))
+	}
 	if c.Migrate.KafkaPartitions <= 0 || c.Migrate.KafkaReplicationFactor <= 0 {
 		errs = append(errs, errors.New("OPENLOG_KAFKA_PARTITIONS and OPENLOG_KAFKA_REPLICATION_FACTOR must be > 0"))
 	}
@@ -351,6 +384,7 @@ func (c Config) validate(getenv func(string) string) error {
 		errs = append(errs, errors.New("OPENLOG_LOGIN_MAX_FAILURES must be > 0"))
 	}
 	errs = append(errs, c.Fleet.validate()...)
+	errs = append(errs, c.Alert.validate()...)
 	return errors.Join(errs...)
 }
 

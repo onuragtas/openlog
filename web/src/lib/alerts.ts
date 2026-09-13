@@ -1,0 +1,510 @@
+// Pure alerting logic for the UI: rule drafts ↔ API input, client validation (mirrors internal/alert), durations,
+// editor prefill from host charts, permission helpers and preview → chart data. Unit-tested in alerts.test.ts.
+import type {
+  AlertCondition,
+  AlertFilter,
+  AlertFlapping,
+  AlertOperator,
+  AlertRule,
+  AlertRuleInput,
+  AlertRulePreview,
+  AlertRuleType,
+  AlertSeverity,
+} from "@/api/alerts";
+import { can, type Role } from "@/api/roles";
+import type { UnitKind } from "@/lib/format";
+import type { ChartSeriesInput } from "@/lib/series";
+
+// ---- durations ----
+
+export const DURATION_UNITS = { s: 1, m: 60, h: 3600, d: 86400 } as const;
+export type DurationUnit = keyof typeof DURATION_UNITS;
+
+/** Largest unit that divides seconds evenly (0 → minutes). */
+export function splitDuration(seconds: number): { value: number; unit: DurationUnit } {
+  if (!seconds) return { value: 0, unit: "m" };
+  for (const unit of ["d", "h", "m"] as const) {
+    if (seconds % DURATION_UNITS[unit] === 0) return { value: seconds / DURATION_UNITS[unit], unit };
+  }
+  return { value: seconds, unit: "s" };
+}
+
+export function joinDuration(value: number, unit: DurationUnit): number {
+  return Math.round(value * DURATION_UNITS[unit]);
+}
+
+/** 90 → "1m 30s", 3600 → "1h", 0 → "0s". */
+export function formatDurationShort(seconds: number): string {
+  if (!seconds) return "0s";
+  const parts: string[] = [];
+  let rest = Math.round(seconds);
+  for (const [unit, size] of [["d", 86400], ["h", 3600], ["m", 60], ["s", 1]] as const) {
+    if (rest >= size) {
+      parts.push(`${Math.floor(rest / size)}${unit}`);
+      rest %= size;
+    }
+  }
+  return parts.join(" ");
+}
+
+// ---- drafts ----
+
+export const FILTER_OPS = ["eq", "neq", "in", "not_in", "contains"] as const;
+export type FilterOp = (typeof FILTER_OPS)[number];
+
+export interface FilterDraft {
+  field: string;
+  op: FilterOp;
+  /** Comma-separated for in/not_in. */
+  values: string;
+}
+
+export interface LabelDraft {
+  key: string;
+  value: string;
+}
+
+/** Editable form state; numbers the user types stay strings until conversion. */
+export interface RuleDraft {
+  name: string;
+  description: string;
+  type: AlertRuleType;
+  severity: AlertSeverity;
+  enabled: boolean;
+  interval_seconds: number;
+  for_seconds: number;
+  recovery_for_seconds: number;
+  renotify_interval_seconds: number;
+  channel_ids: string[];
+  runbook_url: string;
+  labels: LabelDraft[];
+  flapping: AlertFlapping;
+  version?: number;
+  // condition
+  metric: string;
+  aggregation: NonNullable<AlertCondition["aggregation"]>;
+  series_aggregation: "" | NonNullable<AlertCondition["series_aggregation"]>;
+  window_seconds: number;
+  lookback_seconds: number;
+  filters: FilterDraft[];
+  group_by: string[];
+  operator: AlertOperator;
+  threshold: string;
+  recovery_threshold: string;
+  missing_data: NonNullable<AlertCondition["missing_data"]>;
+  query: string;
+  severity_min: string;
+  signal: NonNullable<AlertCondition["signal"]>;
+  event: NonNullable<AlertCondition["event"]>;
+  match: string;
+  service_name: string;
+  environment: string;
+  transaction_name: string;
+  min_requests: string;
+}
+
+export const DEFAULT_FLAPPING: AlertFlapping = { enabled: true, transitions: 4, window_seconds: 3600, hold_seconds: 600 };
+
+const TYPE_DEFAULTS: Record<AlertRuleType, Partial<RuleDraft>> = {
+  metric_threshold: { window_seconds: 300, operator: "gt", group_by: ["host"], interval_seconds: 60 },
+  log_match: { window_seconds: 300, operator: "gte", threshold: "1", group_by: ["host"], interval_seconds: 60 },
+  no_data: { window_seconds: 300, lookback_seconds: 86400, group_by: ["host"], interval_seconds: 60 },
+  discovery: { window_seconds: 900, lookback_seconds: 86400, group_by: [], interval_seconds: 300 },
+  apm: { window_seconds: 300, operator: "gt", metric: "p95_ms", group_by: [], interval_seconds: 60 },
+};
+
+export function emptyDraft(type: AlertRuleType = "metric_threshold"): RuleDraft {
+  return {
+    name: "",
+    description: "",
+    type,
+    severity: "warning",
+    enabled: true,
+    interval_seconds: 60,
+    for_seconds: 0,
+    recovery_for_seconds: 0,
+    renotify_interval_seconds: 0,
+    channel_ids: [],
+    runbook_url: "",
+    labels: [],
+    flapping: { ...DEFAULT_FLAPPING },
+    metric: "",
+    aggregation: "avg",
+    series_aggregation: "",
+    window_seconds: 300,
+    lookback_seconds: 86400,
+    filters: [],
+    group_by: ["host"],
+    operator: "gt",
+    threshold: "",
+    recovery_threshold: "",
+    missing_data: "keep",
+    query: "",
+    severity_min: "",
+    signal: "host",
+    event: "service_disappeared",
+    match: "",
+    service_name: "",
+    environment: "",
+    transaction_name: "",
+    min_requests: "",
+    ...TYPE_DEFAULTS[type],
+  };
+}
+
+/** Switches the type, keeping common fields and applying the new type's condition defaults. */
+export function changeType(d: RuleDraft, type: AlertRuleType): RuleDraft {
+  const fresh = emptyDraft(type);
+  return {
+    ...fresh,
+    name: d.name,
+    description: d.description,
+    severity: d.severity,
+    enabled: d.enabled,
+    for_seconds: type === "discovery" ? 0 : d.for_seconds,
+    recovery_for_seconds: d.recovery_for_seconds,
+    renotify_interval_seconds: d.renotify_interval_seconds,
+    channel_ids: d.channel_ids,
+    runbook_url: d.runbook_url,
+    labels: d.labels,
+    flapping: d.flapping,
+    version: d.version,
+    filters: type === "apm" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
+  };
+}
+
+const numStr = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
+
+export function draftFromRule(rule: AlertRule): RuleDraft {
+  const c = rule.condition;
+  const base = emptyDraft(rule.type);
+  return {
+    ...base,
+    name: rule.name,
+    description: rule.description,
+    severity: rule.severity,
+    enabled: rule.enabled,
+    interval_seconds: rule.interval_seconds,
+    for_seconds: rule.for_seconds,
+    recovery_for_seconds: rule.recovery_for_seconds,
+    renotify_interval_seconds: rule.renotify_interval_seconds,
+    channel_ids: [...rule.channel_ids],
+    runbook_url: rule.runbook_url,
+    labels: Object.entries(rule.labels).map(([key, value]) => ({ key, value })),
+    flapping: { ...rule.flapping },
+    version: rule.version,
+    metric: c.metric ?? base.metric,
+    aggregation: c.aggregation ?? base.aggregation,
+    series_aggregation: c.series_aggregation ?? "",
+    window_seconds: c.window_seconds ?? base.window_seconds,
+    lookback_seconds: c.lookback_seconds ?? base.lookback_seconds,
+    filters: (c.filters ?? []).map((f) => ({ field: f.field, op: f.op, values: f.values.join(", ") })),
+    group_by: c.group_by ?? [],
+    operator: c.operator ?? base.operator,
+    threshold: numStr(c.threshold),
+    recovery_threshold: numStr(c.recovery_threshold),
+    missing_data: c.missing_data ?? "keep",
+    query: c.query ?? "",
+    severity_min: c.severity_min ?? "",
+    signal: c.signal ?? "host",
+    event: c.event ?? "service_disappeared",
+    match: c.match ?? "",
+    service_name: c.service_name ?? "",
+    environment: c.environment ?? "",
+    transaction_name: c.transaction_name ?? "",
+    min_requests: c.min_requests ? String(c.min_requests) : "",
+  };
+}
+
+function parseNumber(s: string): number | null {
+  const t = s.trim().replace(",", ".");
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function filtersToInput(fs: FilterDraft[]): AlertFilter[] {
+  return fs
+    .filter((f) => f.field.trim() !== "")
+    .map((f) => {
+      const values = f.values
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => v !== "");
+      return { field: f.field.trim(), op: f.op, values: f.op === "in" || f.op === "not_in" ? values : values.slice(0, 1) };
+    });
+}
+
+export function draftToInput(d: RuleDraft): AlertRuleInput {
+  const threshold = parseNumber(d.threshold) ?? undefined;
+  const recovery = parseNumber(d.recovery_threshold);
+  let condition: AlertCondition;
+  switch (d.type) {
+    case "metric_threshold":
+      condition = {
+        metric: d.metric.trim(),
+        aggregation: d.aggregation,
+        ...(d.series_aggregation ? { series_aggregation: d.series_aggregation } : {}),
+        window_seconds: d.window_seconds,
+        filters: filtersToInput(d.filters),
+        group_by: d.group_by,
+        operator: d.operator,
+        threshold,
+        recovery_threshold: recovery,
+        missing_data: d.missing_data,
+      };
+      break;
+    case "log_match":
+      condition = {
+        query: d.query,
+        severity_min: d.severity_min,
+        filters: filtersToInput(d.filters),
+        group_by: d.group_by,
+        window_seconds: d.window_seconds,
+        operator: d.operator,
+        threshold,
+        recovery_threshold: recovery,
+      };
+      break;
+    case "no_data":
+      condition = {
+        signal: d.signal,
+        ...(d.signal === "metric" ? { metric: d.metric.trim() } : {}),
+        filters: filtersToInput(d.filters),
+        group_by: d.group_by.length ? d.group_by : ["host"],
+        window_seconds: d.window_seconds,
+        lookback_seconds: d.lookback_seconds,
+      };
+      break;
+    case "discovery":
+      condition = { event: d.event, filters: filtersToInput(d.filters), match: d.match, window_seconds: d.window_seconds, lookback_seconds: d.lookback_seconds };
+      break;
+    case "apm":
+      condition = {
+        service_name: d.service_name.trim(),
+        environment: d.environment.trim() === "" ? null : d.environment.trim(),
+        transaction_name: d.transaction_name.trim(),
+        metric: d.metric,
+        group_by: d.group_by,
+        window_seconds: d.window_seconds,
+        min_requests: parseNumber(d.min_requests) ?? 0,
+        operator: d.operator,
+        threshold,
+        recovery_threshold: recovery,
+        missing_data: d.missing_data,
+      };
+      break;
+  }
+  const labels: Record<string, string> = {};
+  for (const l of d.labels) if (l.key.trim()) labels[l.key.trim()] = l.value;
+  return {
+    name: d.name.trim(),
+    description: d.description,
+    type: d.type,
+    severity: d.severity,
+    enabled: d.enabled,
+    interval_seconds: d.interval_seconds,
+    for_seconds: d.type === "discovery" ? 0 : d.for_seconds,
+    recovery_for_seconds: d.recovery_for_seconds,
+    condition,
+    channel_ids: d.channel_ids,
+    renotify_interval_seconds: d.renotify_interval_seconds,
+    flapping: d.flapping,
+    runbook_url: d.runbook_url.trim(),
+    labels,
+    ...(d.version ? { version: d.version } : {}),
+  };
+}
+
+// ---- validation ----
+
+export type ValidationKey = "required" | "number" | "range" | "recoverySide" | "labelKey" | "filterValues" | "renotify" | "url";
+
+export interface ValidationIssue {
+  key: ValidationKey;
+  params?: Record<string, string | number>;
+}
+
+export type DraftErrors = Partial<Record<string, ValidationIssue>>;
+
+const LABEL_KEY = /^[a-zA-Z0-9_.-]{1,64}$/;
+const ATTR_KEY = /^[A-Za-z0-9_.\-/]{1,128}$/;
+
+function inRange(errors: DraftErrors, field: string, v: number, min: number, max: number) {
+  if (!Number.isFinite(v) || v < min || v > max) errors[field] = { key: "range", params: { min, max } };
+}
+
+/** Client-side checks mirroring internal/alert validation; the server remains authoritative. */
+export function validateDraft(d: RuleDraft): DraftErrors {
+  const e: DraftErrors = {};
+  if (!d.name.trim()) e.name = { key: "required" };
+  inRange(e, "interval_seconds", d.interval_seconds, 10, 3600);
+  if (d.type !== "discovery") inRange(e, "for_seconds", d.for_seconds, 0, 86400);
+  inRange(e, "recovery_for_seconds", d.recovery_for_seconds, 0, 86400);
+  if (d.renotify_interval_seconds !== 0 && (d.renotify_interval_seconds < 300 || d.renotify_interval_seconds > 604800)) {
+    e.renotify_interval_seconds = { key: "renotify" };
+  }
+  if (d.runbook_url.trim() && !/^https?:\/\/[^\s/]+/.test(d.runbook_url.trim())) e.runbook_url = { key: "url" };
+  d.labels.forEach((l, i) => {
+    if (l.key.trim() && !LABEL_KEY.test(l.key.trim())) e[`labels.${i}`] = { key: "labelKey" };
+  });
+  const needsThreshold = d.type === "metric_threshold" || d.type === "log_match" || d.type === "apm";
+  if (needsThreshold) {
+    const th = parseNumber(d.threshold);
+    if (d.threshold.trim() === "") e.threshold = { key: "required" };
+    else if (th === null) e.threshold = { key: "number" };
+    const rec = parseNumber(d.recovery_threshold);
+    if (d.recovery_threshold.trim() !== "" && rec === null) e.recovery_threshold = { key: "number" };
+    if (th !== null && rec !== null) {
+      const up = d.operator === "gt" || d.operator === "gte";
+      if ((up && rec > th) || (!up && rec < th)) e.recovery_threshold = { key: "recoverySide" };
+    }
+  }
+  switch (d.type) {
+    case "metric_threshold":
+      if (!d.metric.trim()) e.metric = { key: "required" };
+      inRange(e, "window_seconds", d.window_seconds, 10, 21600);
+      break;
+    case "log_match":
+      inRange(e, "window_seconds", d.window_seconds, 10, 21600);
+      break;
+    case "no_data":
+      if (d.signal === "metric" && !d.metric.trim()) e.metric = { key: "required" };
+      inRange(e, "window_seconds", d.window_seconds, 60, 86400);
+      inRange(e, "lookback_seconds", d.lookback_seconds, Math.max(600, d.window_seconds + 1), 604800);
+      break;
+    case "discovery":
+      inRange(e, "window_seconds", d.window_seconds, 300, 86400);
+      inRange(e, "lookback_seconds", d.lookback_seconds, d.window_seconds + 1, 604800);
+      break;
+    case "apm":
+      if (!d.service_name.trim()) e.service_name = { key: "required" };
+      inRange(e, "window_seconds", d.window_seconds, 60, 21600);
+      if (d.min_requests.trim() !== "" && (parseNumber(d.min_requests) ?? -1) < 0) e.min_requests = { key: "number" };
+      break;
+  }
+  d.filters.forEach((f, i) => {
+    const key = f.field.replace(/^(attr|resource)\./, "");
+    if ((f.field.startsWith("attr.") || f.field.startsWith("resource.")) && !ATTR_KEY.test(key)) e[`filters.${i}`] = { key: "labelKey" };
+    else if (f.field && f.values.split(",").every((v) => v.trim() === "")) e[`filters.${i}`] = { key: "filterValues" };
+  });
+  return e;
+}
+
+export function hasErrors(e: DraftErrors): boolean {
+  return Object.keys(e).length > 0;
+}
+
+// ---- prefill ("create alert from this metric") ----
+
+/** Search params of /alerts/rules/new. */
+export interface RuleEditorSearch {
+  type?: string;
+  metric?: string;
+  host?: string;
+  hostName?: string;
+  agg?: string;
+  seriesAgg?: string;
+  groupBy?: string;
+  /** "attr.cpu.mode=idle": excluded attribute value (not_in filter). */
+  exclude?: string;
+  name?: string;
+}
+
+const AGGS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
+const SERIES_AGGS = ["avg", "sum", "min", "max"] as const;
+const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm"];
+
+export function applyPrefill(s: RuleEditorSearch): RuleDraft {
+  const type = TYPES.includes(s.type as AlertRuleType) ? (s.type as AlertRuleType) : "metric_threshold";
+  const d = emptyDraft(type);
+  if (s.metric) d.metric = s.metric;
+  if (s.agg && (AGGS as readonly string[]).includes(s.agg)) d.aggregation = s.agg as RuleDraft["aggregation"];
+  if (s.seriesAgg && (SERIES_AGGS as readonly string[]).includes(s.seriesAgg)) d.series_aggregation = s.seriesAgg as RuleDraft["series_aggregation"];
+  if (s.groupBy !== undefined) d.group_by = s.groupBy.split(",").map((g) => g.trim()).filter(Boolean);
+  if (s.host) d.filters.push({ field: "host.id", op: "eq", values: s.host });
+  if (s.exclude) {
+    const [field, value] = s.exclude.split("=", 2);
+    if (field && value) d.filters.push({ field, op: "not_in", values: value });
+  }
+  if (s.name) d.name = s.name;
+  else if (s.metric) d.name = s.hostName ? `${s.metric} on ${s.hostName}` : s.metric;
+  return d;
+}
+
+/** Prefill for a host chart metric: one host, grouped by host; CPU utilization alerts on busy time (not idle). */
+export function createAlertSearch(spec: { metric: string; hostId: string; hostName?: string; agg: string }): RuleEditorSearch {
+  const s: RuleEditorSearch = { type: "metric_threshold", metric: spec.metric, host: spec.hostId, hostName: spec.hostName, agg: spec.agg, groupBy: "host" };
+  if (spec.metric === "system.cpu.utilization") {
+    s.exclude = "attr.cpu.mode=idle";
+    s.seriesAgg = "sum";
+  }
+  return s;
+}
+
+// ---- permissions ----
+
+/** Members change the rules and mutes they created; admins and owners change everything. */
+export function canEditOwned(role: Role | null | undefined, createdByUserId: string | null | undefined, userId: string | null | undefined): boolean {
+  if (can(role, "alerts.manage")) return true;
+  return can(role, "alerts.write") && !!createdByUserId && createdByUserId === userId;
+}
+
+// ---- preview ----
+
+export function labelsText(labels: Record<string, string>): string {
+  if (labels["host.name"]) return labels["host.name"];
+  const entries = Object.entries(labels).filter(([k]) => k !== "host.id" || !labels["host.name"]);
+  if (entries.length === 0) return "";
+  return entries.map(([k, v]) => `${k}=${v}`).join(", ");
+}
+
+export interface PreviewBand {
+  from: number;
+  to: number;
+}
+
+export interface PreviewChartData {
+  series: ChartSeriesInput[];
+  bands: PreviewBand[];
+  fires: number[];
+  hiddenSeries: number;
+  incidents: number;
+}
+
+/** Converts a preview into chart series (≤ maxSeries, incident series first), would-fire bands and markers. */
+export function previewChartData(p: AlertRulePreview, fallbackLabel: string, maxSeries = 10): PreviewChartData {
+  const toMs = Date.parse(p.to.replace(/(\.\d{3})\d+/, "$1"));
+  const sorted = [...p.series].sort((a, b) => b.incidents.length - a.incidents.length || a.key.localeCompare(b.key));
+  const shown = sorted.slice(0, maxSeries);
+  const parse = (s: string) => Date.parse(s.replace(/(\.\d{3})\d+/, "$1"));
+  const bands: PreviewBand[] = [];
+  const fires: number[] = [];
+  let incidents = 0;
+  for (const s of p.series) incidents += s.incidents.length;
+  for (const s of shown) {
+    for (const inc of s.incidents) bands.push({ from: parse(inc.opened_at), to: inc.resolved_at ? parse(inc.resolved_at) : toMs });
+    for (const tr of s.transitions) if (tr.state === "firing") fires.push(parse(tr.at));
+  }
+  const used = new Map<string, number>();
+  const series = shown.map((s) => {
+    let label = labelsText(s.labels) || fallbackLabel;
+    const n = used.get(label) ?? 0;
+    used.set(label, n + 1);
+    if (n > 0) label = `${label} (${n + 1})`;
+    return {
+      label,
+      points: s.points.filter((pt): pt is [number, number] => pt[1] !== null && pt[1] !== undefined).map(([t, v]) => [t, v] as [number, number]),
+    };
+  });
+  return { series, bands, fires: fires.sort((a, b) => a - b), hiddenSeries: Math.max(0, p.series.length - shown.length), incidents };
+}
+
+/** Chart unit for a preview: OTel unit "1" is a ratio (percent) except Apdex. */
+export function unitKindFor(unit: string, type: AlertRuleType, metric?: string): UnitKind {
+  if (unit === "ms") return "ms";
+  if (unit === "By") return "bytes";
+  if (unit === "By/s") return "bytesPerSec";
+  if (unit === "1") return type === "apm" && metric === "apdex" ? "number" : "percent";
+  return "number";
+}

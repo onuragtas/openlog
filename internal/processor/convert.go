@@ -15,6 +15,7 @@ import (
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
+	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/otlputil"
 )
 
@@ -24,6 +25,8 @@ const (
 	EventInventorySnapshot = "openlog.inventory.snapshot"
 
 	attrEventName          = "event.name"
+	attrEntityType         = "openlog.entity.type"
+	entityTypeHost         = "host"
 	attrInventorySnapshot  = "openlog.inventory.snapshot_id"
 	attrInventoryCategory  = "openlog.inventory.category"
 	attrInventoryKey       = "openlog.inventory.key"
@@ -151,9 +154,13 @@ func newResourceInfo(res *resourcepb.Resource) resourceInfo {
 	}
 }
 
-// upsertHost records the host of a resource once per (tenant, host).
+// upsertHost records the host of a resource once per (tenant, host). Only host entity
+// resources (openlog.entity.type=host, the infra agent) write host rows: application
+// resources (OTel SDKs, APM) also carry host.id but lack the agent/OS attributes and
+// would overwrite them in the ReplacingMergeTree. Their host <-> service link is kept in
+// apm_service_hosts (docs/contracts/apm.md §1).
 func (r *Rows) upsertHost(tenant string, ri resourceInfo, seen time.Time) {
-	if ri.hostID == "" {
+	if ri.hostID == "" || ri.attrs[attrEntityType] != entityTypeHost {
 		return
 	}
 	k := [2]string{tenant, ri.hostID}
@@ -432,8 +439,22 @@ var statusCodes = map[tracepb.Status_StatusCode]string{
 	tracepb.Status_STATUS_CODE_ERROR: "error",
 }
 
-// AddTraces converts a trace export request.
+// localSpanKey identifies a span within one export request.
+type localSpanKey struct{ trace, span string }
+
+// AddTraces converts a trace export request. APM columns are derived per span
+// (docs/contracts/apm.md); the parent lookup for entry-span detection is limited
+// to this request, so conversion stays a function of the Kafka record.
 func (r *Rows) AddTraces(tenant string, receivedAt time.Time, req *coltrace.ExportTraceServiceRequest) {
+	services := map[localSpanKey]string{}
+	for _, rs := range req.GetResourceSpans() {
+		svc := otlputil.AttrString(rs.GetResource().GetAttributes(), otlputil.AttrServiceName)
+		for _, ss := range rs.GetScopeSpans() {
+			for _, sp := range ss.GetSpans() {
+				services[localSpanKey{string(sp.GetTraceId()), string(sp.GetSpanId())}] = svc
+			}
+		}
+	}
 	for _, rs := range req.GetResourceSpans() {
 		ri := newResourceInfo(rs.GetResource())
 		r.upsertHost(tenant, ri, receivedAt)
@@ -475,6 +496,14 @@ func (r *Rows) AddTraces(tenant string, receivedAt time.Time, req *coltrace.Expo
 					row.LinksTraceID = append(row.LinksTraceID, otlputil.HexID(l.GetTraceId()))
 					row.LinksSpanID = append(row.LinksSpanID, otlputil.HexID(l.GetSpanId()))
 				}
+				parentSvc, parentLocal := services[localSpanKey{string(sp.GetTraceId()), string(sp.GetParentSpanId())}]
+				row.APM = apm.Derive(&apm.Input{
+					Resource: ri.attrs, Attributes: row.Attributes, Kind: kind, StatusCode: code,
+					StatusMessage: row.StatusMessage, Name: row.Name, TraceState: row.TraceState, Flags: sp.GetFlags(),
+					ParentSpanID:           row.ParentSpanID,
+					ParentLocalSameService: parentLocal && len(sp.GetParentSpanId()) > 0 && parentSvc == ri.serviceName,
+					EventsName:             row.EventsName, EventsAttributes: row.EventsAttributes,
+				})
 				r.Spans = append(r.Spans, row)
 			}
 		}

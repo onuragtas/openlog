@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import { traceQuery } from "@/api/queries";
 import type { Span } from "@/api/types";
+import { TraceLogsPanel } from "@/components/apm/TraceLogsPanel";
 import { AttributeTable } from "@/components/JsonView";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Waterfall } from "@/components/trace/Waterfall";
@@ -138,6 +139,12 @@ export function TracePage() {
           </CardContent>
         </Card>
       </div>
+      <TraceLogsPanel
+        traceId={query.data.trace_id}
+        startMs={startMs}
+        endMs={startMs + layout.totalNs / 1e6}
+        onSelectSpan={(id) => void navigate({ search: (prev) => ({ ...prev, span: id }), replace: true })}
+      />
     </div>
   );
 }

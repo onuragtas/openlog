@@ -21,13 +21,19 @@ import (
 //
 // Other leader-only jobs (e.g. fleet rollout transitions) should be registered here with
 // leader.Add before leader.Run.
-func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, srv *api.Server, log *slog.Logger, fleetController func(ctx context.Context)) {
+//
+// apmLinker (nil when disabled) is the APM edge-linking job (docs/contracts/apm.md §6). Without
+// PostgreSQL (static auth mode, development) there is no leader election and it runs in this process.
+func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, srv *api.Server, log *slog.Logger, fleetController, apmLinker func(ctx context.Context)) {
 	uc := updatecheck.Config{
 		Enabled: cfg.UpdateCheck.Enabled, Interval: cfg.UpdateCheck.Interval, IndexURL: cfg.UpdateCheck.IndexURL,
 		Channel: cfg.UpdateCheck.Channel, TrustedKeysFile: cfg.UpdateCheck.TrustedKeysFile,
 	}
 	if pool == nil {
 		srv.SetVersionSource(updatecheck.NewReader(updatecheck.Config{}, version.String(), nil, nil))
+		if apmLinker != nil {
+			go apmLinker(ctx)
+		}
 		return
 	}
 	store := pgUpdateStore{pool: pool}
@@ -36,6 +42,9 @@ func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 	leader := postgres.NewLeader(pool, log.With("job", "leader"))
 	if fleetController != nil {
 		leader.Add("fleet-rollouts", fleetController) // internal/fleet rollout controller
+	}
+	if apmLinker != nil {
+		leader.Add("apm-edge-linking", apmLinker) // internal/apm, per shard
 	}
 	if uc.Enabled {
 		keys, err := release.TrustedKeys(uc.TrustedKeysFile)

@@ -60,7 +60,11 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx redis-server postgresql \
     && rm -rf /var/lib/apt/lists/* \
     # Without try_files a missing file logs "[error] open() ... failed" to error.log (test/e2e agent_logs).
-    && sed -i '/try_files/d' /etc/nginx/sites-available/default
+    && sed -i '/try_files/d' /etc/nginx/sites-available/default \
+    # stub_status on loopback so the agent's nginx integration is `enabled` (test/e2e services). The
+    # probe requests must not add access.log lines, which agent_logs counts.
+    && sed -i 's|^\(\s*\)server_name _;|&\n\1location = /nginx_status { stub_status; access_log off; allow 127.0.0.1; allow ::1; deny all; }|' /etc/nginx/sites-available/default \
+    && grep -q 'location = /nginx_status' /etc/nginx/sites-available/default
 COPY --from=build /out/mysql /usr/local/bin/mysql
 COPY --from=dind /usr/local/bin/dockerd /usr/local/bin/containerd /usr/local/bin/containerd-shim-runc-v2 \
     /usr/local/bin/runc /usr/local/bin/docker /usr/local/bin/docker-init /usr/local/bin/docker-proxy /usr/local/bin/

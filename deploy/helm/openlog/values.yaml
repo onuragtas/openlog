@@ -547,6 +547,81 @@ api:
     tls: []
 
 # -----------------------------------------------------------------------------
+# openlog-alert: alert rule evaluation + notification delivery (docs/contracts/alerting.md).
+# Stateless: rules are shared across replicas with PostgreSQL leases, the outbox with SKIP LOCKED,
+# so any replica count (and HPA) works. Requires auth.mode=postgres.
+# -----------------------------------------------------------------------------
+alert:
+  enabled: true
+  replicaCount: 2
+  logLevel: ""
+  # OPENLOG_SECRETS_KEY: base64 of 32 random bytes (`openssl rand -base64 32`) encrypting notification
+  # channel secrets (AES-256-GCM). Given to api and alert pods from the chart Secret (key secrets-key), or
+  # from auth.existingSecret under secretsKeyKey. Without it channels cannot be created or delivered.
+  # Back it up: channels cannot be decrypted without it.
+  secretsKey: ""
+  secretsKeyKey: secrets-key
+  # Rotation: the old key(s), comma-separated, then run `openlog-alert rotate-secrets` once.
+  secretsKeyPrevious: ""
+  secretsKeyPreviousKey: secrets-key-previous
+  # Web UI base URL used in notification links (OPENLOG_PUBLIC_URL).
+  publicURL: ""
+  # Refuse webhook/Slack/Teams/SMTP destinations on private, loopback and link-local addresses. true for SaaS.
+  blockPrivateDestinations: false
+  # Global SMTP server for e-mail channels (OPENLOG_SMTP_*). STARTTLS required unless tls: tls|none.
+  smtp:
+    host: ""
+    port: 587
+    username: ""
+    from: ""
+    tls: starttls
+    insecureSkipVerify: false
+    passwordSecret:
+      name: ""
+      key: password
+  config:
+    OPENLOG_ALERT_LEASE_TTL: "30s"
+    OPENLOG_ALERT_LEASE_RENEW_INTERVAL: "10s"
+    OPENLOG_ALERT_EVALUATION_DELAY: "15s"
+    OPENLOG_ALERT_MAX_CONCURRENT_EVALUATIONS: "16"
+    OPENLOG_ALERT_TENANT_MAX_CONCURRENT: "4"
+    OPENLOG_ALERT_TENANT_EVALUATIONS_PER_MINUTE: "600"
+    OPENLOG_ALERT_QUERY_TIMEOUT: "20s"
+    OPENLOG_ALERT_DISPATCH_WORKERS: "4"
+    OPENLOG_ALERT_DELIVERY_TIMEOUT: "10s"
+    OPENLOG_ALERT_DELIVERY_MAX_ATTEMPTS: "10"
+  extraEnv: []
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    behavior: {}
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  # Running evaluations (query timeout 20s) and deliveries (10s) finish before the pod releases its leases.
+  terminationGracePeriodSeconds: 45
+  preStopSleepSeconds: 0
+  probes:
+    startup: {periodSeconds: 2, failureThreshold: 60, timeoutSeconds: 2}
+    liveness: {periodSeconds: 10, failureThreshold: 6, timeoutSeconds: 2}
+    readiness: {periodSeconds: 5, failureThreshold: 3, timeoutSeconds: 2}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+
+# -----------------------------------------------------------------------------
 # openlog-migrate: Helm hook Job applying the ClickHouse schema (+ Kafka topics in external mode)
 # -----------------------------------------------------------------------------
 migrate:

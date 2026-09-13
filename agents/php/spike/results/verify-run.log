@@ -1,0 +1,50 @@
+200 a /users/7/orders trace=4c2953622b6086caa46723f43306ffb6
+500 a /boom trace=248af23ea18aa4404dc828b6d64c6a50
+200 a /api/products/3 trace=5ccf0fb55209346e5c06c9513f752f32
+500 a /api/boom trace=34d987bc1667552af84e4e1779d7f73c
+OK a-laravel-orders: trace 4c2953622b6086caa46723f43306ffb6, 7 spans
+   php-laravel-proto-a  server   GET /users/{id}/orders                 187.44ms unset /users/{id}/orders | 200
+   php-laravel-proto-a  client   USE                                      0.07ms unset mysql | use `spike`;
+   php-laravel-proto-a  client   SET                                      0.11ms unset mysql | SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci', SESSION sq
+   php-laravel-proto-a  client   SELECT                                   5.30ms unset mysql | select * from `items` where `id` <= ? order by `id` asc
+   php-laravel-proto-a  client   SELECT                                   0.11ms unset redis
+   php-laravel-proto-a  client   INCR                                     0.21ms unset redis
+   php-laravel-proto-a  client   GET                                      0.14ms unset redis
+OK a-laravel-boom: trace 248af23ea18aa4404dc828b6d64c6a50, 1 spans
+   php-laravel-proto-a  server   GET /boom                               27.59ms error /boom | 500 | events:exception
+OK a-symfony-product: trace 5ccf0fb55209346e5c06c9513f752f32, 4 spans
+   php-symfony-proto-a  server   GET product_show                         2.07ms unset 200
+   php-symfony-proto-a  client   SELECT                                   0.16ms unset mysql | SELECT id, name, price FROM items WHERE id = ?
+   php-symfony-proto-a  client   INCR                                     0.09ms unset redis
+   php-symfony-proto-a  client   GET                                      0.03ms unset redis
+OK a-symfony-boom: trace 34d987bc1667552af84e4e1779d7f73c, 1 spans
+   php-symfony-proto-a  server   GET product_boom                         1.22ms error 500
+200 b /users/7/orders trace=47592c78d932044890b6888fc1507c2c
+500 b /boom trace=f0246e9f051d9781fe24aec88df7af3f
+200 b /api/products/3 trace=4f5e1770894056e617a1146d3a4053fd
+500 b /api/boom trace=c2ee8f92e27bc813518709069d7bbefd
+OK b-laravel-orders: trace 47592c78d932044890b6888fc1507c2c, 10 spans
+   php-laravel-proto-b  server   GET /users/{id}/orders                  94.77ms unset users/{id}/orders | 200
+   php-laravel-proto-b  internal App\Models\Item::get                     7.95ms unset select * from `items` where `id` <= ? order by `id` asc
+   php-laravel-proto-b  client   sql SELECT                               6.45ms unset mariadb | select * from `items` where `id` <= ? order by `id` asc
+   php-laravel-proto-b  client   PDO::__construct                         3.85ms unset mysql
+   php-laravel-proto-b  client   PDO::exec                                0.13ms unset mysql | use `spike`;
+   php-laravel-proto-b  client   PDO::exec                                0.27ms unset mysql | SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci', SESSION sq
+   php-laravel-proto-b  client   PDO::prepare                             0.36ms unset mysql | select * from `items` where `id` <= ? order by `id` asc
+   php-laravel-proto-b  client   PDOStatement::execute                    0.50ms unset mysql
+   php-laravel-proto-b  client   PDOStatement::fetchAll                   0.02ms unset mysql
+   php-laravel-proto-b  client   GET                                     35.85ms unset 200
+OK b-laravel-boom: trace f0246e9f051d9781fe24aec88df7af3f, 1 spans
+   php-laravel-proto-b  server   GET /boom                               27.62ms error boom | 500 | events:exception
+OK b-symfony-product: trace 4f5e1770894056e617a1146d3a4053fd, 4 spans
+   php-symfony-proto-b  server   GET product_show                         2.33ms unset product_show | 200
+   php-symfony-proto-b  client   PDO::__construct                         0.83ms unset mysql
+   php-symfony-proto-b  client   PDO::prepare                             0.01ms unset mysql | SELECT id, name, price FROM items WHERE id = ?
+   php-symfony-proto-b  client   PDOStatement::execute                    0.23ms unset mysql
+OK b-symfony-boom: trace c2ee8f92e27bc813518709069d7bbefd, 1 spans
+   php-symfony-proto-b  server   GET product_boom                         0.65ms error product_boom | 500 | events:exception
+APM services (q=php-):
+   php-laravel-proto-a    requests=167847 errors=7805 p95=24.029151798201ms language=php
+   php-laravel-proto-b    requests=82822  errors=1    p95=17.085822577851ms language=php
+   php-symfony-proto-a    requests=4      errors=1    p95=81.571880148433ms language=php
+   php-symfony-proto-b    requests=4      errors=1    p95=10.196485018554ms language=php

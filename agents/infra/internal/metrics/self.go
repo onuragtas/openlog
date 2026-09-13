@@ -19,7 +19,11 @@ func SelfTelemetry(stats *selfmon.Stats, now time.Time) []*metricspb.Metric {
 	start := stats.Start()
 
 	var exportPts []otlputil.Point
-	for _, sig := range []string{"metrics", "logs"} {
+	signals := []string{"metrics", "logs"}
+	if snap.PHP != nil {
+		signals = append(signals, "traces") // only agents that forward spans have trace payloads
+	}
+	for _, sig := range signals {
 		for _, outcome := range []string{"sent", "buffered", "dropped"} {
 			v := snap.ExportItems[selfmon.ExportKey{Signal: sig, Outcome: outcome}]
 			exportPts = append(exportPts, otlputil.IntPoint(int64(v), otlputil.Str("signal", sig), otlputil.Str("outcome", outcome)))
@@ -47,6 +51,32 @@ func SelfTelemetry(stats *selfmon.Stats, now time.Time) []*metricspb.Metric {
 			pts = append(pts, otlputil.IntPoint(int64(snap.PermissionDenied[k]), otlputil.Str("collector", k)))
 		}
 		out = append(out, otlputil.Sum("openlog.agent.permission_denied", "{error}", true, start, now, pts...))
+	}
+	if len(snap.IntegrationCollections) > 0 {
+		var cols, errs, durs []otlputil.Point
+		for _, k := range selfmon.SortedKeys(snap.IntegrationCollections) {
+			attr := otlputil.Str("integration", k)
+			cols = append(cols, otlputil.IntPoint(int64(snap.IntegrationCollections[k]), attr))
+			errs = append(errs, otlputil.IntPoint(int64(snap.IntegrationErrors[k]), attr))
+			durs = append(durs, otlputil.DoublePoint(snap.IntegrationDurations[k].Seconds(), attr))
+		}
+		out = append(out,
+			otlputil.Sum("openlog.agent.integration.collections", "{collection}", true, start, now, cols...),
+			otlputil.Sum("openlog.agent.integration.errors", "{error}", true, start, now, errs...),
+			otlputil.Gauge("openlog.agent.integration.duration", "s", now, durs...),
+		)
+	}
+	if p := snap.PHP; p != nil {
+		var pts []otlputil.Point
+		for _, result := range selfmon.PHPMessageResults {
+			pts = append(pts, otlputil.IntPoint(int64(p.Messages[result]), otlputil.Str("result", result)))
+		}
+		out = append(out,
+			otlputil.Sum("openlog.agent.php.messages", "{message}", true, start, now, pts...),
+			otlputil.Sum("openlog.agent.php.spans", "{span}", true, start, now, otlputil.IntPoint(int64(p.Spans))),
+			otlputil.Sum("openlog.agent.php.reassembly_timeouts", "{trace}", true, start, now, otlputil.IntPoint(int64(p.ReassemblyTimeouts))),
+			otlputil.Gauge("openlog.agent.php.pending_traces", "{trace}", now, otlputil.IntPoint(p.PendingTraces)),
+		)
 	}
 	if snap.UpdateState != "" {
 		out = append(out, otlputil.Gauge("openlog.agent.update.state", "1", now,

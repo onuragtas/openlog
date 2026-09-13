@@ -118,6 +118,20 @@ per pod. Metric: `openlog_license_key_resolutions_total{result="hit|miss|negativ
 | `OPENLOG_INVITATION_TTL` | `168h` | Invitation validity |
 | `OPENLOG_API_TRUSTED_PROXIES` | `` | CIDRs/addresses of reverse proxies whose `X-Forwarded-For` is trusted for the client IP (rate limiting, sessions, audit log). Empty = use the TCP peer address |
 
+**APM** ([apm.md](apm.md)):
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENLOG_APM_DEFAULT_APDEX_T` | `500ms` | Apdex T of services without a setting (1ms–10m) |
+| `OPENLOG_APM_LINK_ENABLED` | `true` | Run the edge-linking job (trace-linked service map edges). Runs on the api leader (PostgreSQL advisory lock); with `OPENLOG_AUTH_MODE=static` in every api process |
+| `OPENLOG_APM_LINK_INTERVAL` | `1m` | Time between runs (≥ 10s) |
+| `OPENLOG_APM_LINK_LOOKBACK` | `10m` | Every run recomputes the whole minutes of `[now − lookback, now − delay)`; spans arriving later than this are not linked (1m–24h) |
+| `OPENLOG_APM_LINK_DELAY` | `1m` | Minutes younger than this are left for the next run (0–1h); keep it above the processor's ingest-to-queryable delay |
+
+The job connects to one replica per shard from `system.clusters` (like direct processor inserts, the replica
+`host_name:port` must be reachable from the api; TLS settings apply). Metrics: `openlog_apm_link_runs_total{result}`,
+`openlog_apm_link_rows_total`, `openlog_apm_link_duration_seconds`, `openlog_apm_link_lag_seconds`.
+
 Session cookie: `openlog_session`, `HttpOnly`, `SameSite=Strict`, `Path=/api`, `Secure` per
 `OPENLOG_COOKIE_SECURE`. The api waits for PostgreSQL at start-up and adds a `postgres` readiness check.
 
@@ -230,6 +244,43 @@ Compose: `OPENLOG_UPDATER_SERVICES` (`openlog`), `OPENLOG_UPDATER_HEALTH_URLS` (
 Kubernetes: `OPENLOG_UPDATER_K8S_DEPLOYMENTS`, `OPENLOG_UPDATER_K8S_MIGRATE_TEMPLATE`, `OPENLOG_UPDATER_VERSION_URL`,
 `OPENLOG_UPDATER_ROLLOUT_TIMEOUT` (`15m`), `OPENLOG_UPDATER_MIGRATE_TIMEOUT` (`30m`), plus the release variables
 above and `OPENLOG_POSTGRES_*` for its status and audit events. Details: [upgrading.md](../operations/upgrading.md).
+
+## `openlog-alert`
+
+Alert rule evaluation and notification delivery ([alerting.md](alerting.md)). Run any number of replicas (rules are
+shared through PostgreSQL leases), or let `openlog-allinone` run it (`OPENLOG_ALERT_ENABLED`). Requires
+`OPENLOG_AUTH_MODE=postgres`; uses the common ClickHouse and PostgreSQL variables. `openlog-api` reads the secrets,
+public URL, SMTP and limit variables too (channel encryption, test sends, previews).
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENLOG_ALERT_ENABLED` | `true` | `openlog-allinone` only: run the evaluator and dispatcher in the process |
+| `OPENLOG_SECRETS_KEY` | `` | Base64 32-byte AES-256-GCM key for channel secrets (`openssl rand -base64 32`). Without it channels cannot be saved, tested or delivered. Same value on every api and alert pod |
+| `OPENLOG_SECRETS_KEY_PREVIOUS` | `` | Comma-separated old keys still accepted for decryption during a rotation (then run `openlog-alert rotate-secrets`) |
+| `OPENLOG_PUBLIC_URL` | `` | Web UI base URL for links in notifications (`https://openlog.example.com`); empty = no links |
+| `OPENLOG_ALERT_LEASE_TTL` | `30s` | Rule lease lifetime (≥ 5s): a dead pod's rules move after this long |
+| `OPENLOG_ALERT_LEASE_RENEW_INTERVAL` | `10s` | Renew/rebalance period (≤ TTL/2) |
+| `OPENLOG_ALERT_EVALUATION_DELAY` | `15s` | Windows end this long before now (ingest-to-queryable delay) |
+| `OPENLOG_ALERT_MAX_CONCURRENT_EVALUATIONS` | `16` | Per pod |
+| `OPENLOG_ALERT_TENANT_MAX_CONCURRENT` | `4` | Per organization per pod |
+| `OPENLOG_ALERT_TENANT_EVALUATIONS_PER_MINUTE` | `600` | Token bucket per organization per pod; over budget = `throttled`, retried |
+| `OPENLOG_ALERT_MAX_SERIES_PER_RULE` | `1000` | Series per evaluation (more → evaluation error) |
+| `OPENLOG_ALERT_QUERY_TIMEOUT` | `20s` | ClickHouse `max_execution_time` of evaluation and preview queries |
+| `OPENLOG_ALERT_MAX_RULES_PER_ORG` | `1000` | api: rules per organization |
+| `OPENLOG_ALERT_DISPATCH_WORKERS` | `4` | Concurrent deliveries per pod |
+| `OPENLOG_ALERT_DELIVERY_TIMEOUT` | `10s` | Per HTTP/SMTP delivery attempt |
+| `OPENLOG_ALERT_DELIVERY_MAX_ATTEMPTS` | `10` | Then the notification is `failed` (also after 24 h) |
+| `OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS` | `false` | Refuse webhook/Slack/Teams/SMTP connections to loopback, private, link-local and CGNAT addresses (checked after DNS resolution). **Set `true` for SaaS** |
+| `OPENLOG_SMTP_HOST` / `OPENLOG_SMTP_PORT` | `` / `587` | Global SMTP server for e-mail channels without their own server |
+| `OPENLOG_SMTP_USERNAME` / `OPENLOG_SMTP_PASSWORD` | `` | PLAIN auth, only over TLS |
+| `OPENLOG_SMTP_FROM` | `` | Required with a host, e.g. `openlog <alerts@example.com>` |
+| `OPENLOG_SMTP_TLS` | `starttls` | `starttls` (required), `tls` (implicit, port 465) or `none` (no credentials allowed) |
+| `OPENLOG_SMTP_INSECURE_SKIP_VERIFY` | `false` | **Testing only** |
+
+Commands: `openlog-alert rotate-secrets [-check]` (re-encrypt channel secrets with the current key; `-check` exits 3
+while channels still use another key). Readiness checks: `postgres`, `clickhouse`. Metrics: alerting.md §8. On SIGTERM
+running evaluations and deliveries finish, then the pod releases its leases (grace period ≥ query timeout + delivery
+timeout). `openlog-alert` records itself in `component_heartbeats`.
 
 ## Ports summary
 

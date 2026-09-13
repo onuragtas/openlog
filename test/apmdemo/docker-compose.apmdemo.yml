@@ -1,0 +1,176 @@
+# APM demo (test/apmdemo/README.md): three OpenTelemetry-instrumented microservices plus their
+# datastores and a load generator. Additions to deploy/compose/docker-compose.yml, so relative
+# paths resolve against deploy/compose:
+#
+#   docker compose -f deploy/compose/docker-compose.yml -f test/apmdemo/docker-compose.apmdemo.yml up -d --build
+#
+# The demo services do not depend on `openlog`: the OTLP exporters retry until it is reachable,
+# so this file also works on its own (with any OTLP/HTTP receiver named `openlog`).
+#
+#   frontend          Node.js 22 + Express 5   http://localhost:${APMDEMO_FRONTEND_PORT:-33000}
+#   orders            Go net/http + database/sql (pgx) -> orders-db
+#   catalog           PHP 8.3 + Slim 4 (OTel auto-instrumentation) -> redis
+#   apmdemo-loadgen   ~8 req/s against frontend (named so it does not merge with `loadgen`)
+
+x-apmdemo-otel: &apmdemo-otel
+  OPENLOG_LICENSE_KEY: ${APMDEMO_LICENSE_KEY:-apmdemo-license-key}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${APMDEMO_OTLP_ENDPOINT:-http://openlog:4318}
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_EXPORTER_OTLP_HEADERS: openlog-license-key=${APMDEMO_LICENSE_KEY:-apmdemo-license-key}
+  OTEL_TRACES_SAMPLER: parentbased_always_on
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_METRICS_EXPORTER: none
+
+services:
+  # openlog (base file): link trace edges more often than the 1m default so the map fills quickly.
+  openlog:
+    environment:
+      OPENLOG_APM_LINK_INTERVAL: ${APMDEMO_LINK_INTERVAL:-20s}
+      OPENLOG_APM_LINK_DELAY: ${APMDEMO_LINK_DELAY:-20s}
+
+  frontend:
+    build:
+      context: ../../test/apmdemo/frontend
+    image: openlog-apmdemo/frontend:1
+    hostname: frontend
+    environment:
+      <<: *apmdemo-otel
+      OTEL_SERVICE_NAME: frontend
+      OTEL_RESOURCE_ATTRIBUTES: service.name=frontend,service.namespace=shop,service.version=1.0.0,deployment.environment=demo,deployment.environment.name=demo,host.id=${APMDEMO_HOST_ID:-a0de0000000000000000000000000001},host.name=apmdemo-host-1
+      OTEL_LOGS_EXPORTER: otlp
+      # Stable HTTP semantic conventions (http.request.method, http.response.status_code, ...).
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+      CATALOG_URL: http://catalog:8080
+      ORDERS_URL: http://orders:8080
+    ports:
+      - "${APMDEMO_FRONTEND_PORT:-33000}:3000"
+    depends_on:
+      orders:
+        condition: service_started
+      catalog:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  orders:
+    build:
+      context: ../../test/apmdemo/orders
+    image: openlog-apmdemo/orders:1
+    hostname: orders
+    environment:
+      <<: *apmdemo-otel
+      OTEL_SERVICE_NAME: orders
+      OTEL_RESOURCE_ATTRIBUTES: service.name=orders,service.namespace=shop,service.version=1.0.0,deployment.environment=demo,deployment.environment.name=demo,host.id=${APMDEMO_HOST_ID:-a0de0000000000000000000000000001},host.name=apmdemo-host-1
+      OTEL_LOGS_EXPORTER: otlp
+      DATABASE_URL: postgres://orders:orders@orders-db:5432/orders?sslmode=disable
+      DB_HOST: orders-db
+      DB_PORT: "5432"
+    depends_on:
+      orders-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  catalog:
+    build:
+      context: ../../test/apmdemo/catalog
+    image: openlog-apmdemo/catalog:1
+    hostname: catalog
+    environment:
+      <<: *apmdemo-otel
+      OTEL_SERVICE_NAME: catalog
+      OTEL_RESOURCE_ATTRIBUTES: service.name=catalog,service.namespace=shop,service.version=1.0.0,deployment.environment=demo,deployment.environment.name=demo,host.id=${APMDEMO_HOST_ID:-a0de0000000000000000000000000001},host.name=apmdemo-host-1
+      OTEL_PHP_AUTOLOAD_ENABLED: "true"
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8080) ? 0 : 1);"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  orders-db:
+    image: postgres:16-alpine
+    hostname: orders-db
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_USER: orders
+      POSTGRES_PASSWORD: orders
+    volumes:
+      - apmdemo-orders-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders -d orders"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  apmdemo-loadgen:
+    build:
+      context: ../../test/apmdemo/frontend
+    image: openlog-apmdemo/frontend:1
+    command: ["node", "loadgen.js"]
+    environment:
+      LOADGEN_TARGET: http://frontend:3000
+      LOADGEN_RPS: ${APMDEMO_LOADGEN_RPS:-8}
+    healthcheck:
+      disable: true
+    depends_on:
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+
+  # The host the demo services "run on": the openlog infra agent (Debian 12, test/e2e/target `plain`)
+  # with machine-id = the services' host.id, so the host page lists the services and the service
+  # page links the host (apm.md §1).
+  apmdemo-host:
+    build:
+      context: ../../test/e2e/target
+      target: plain
+      additional_contexts:
+        agent: ../../agents/infra
+        release: ../../libs/release
+      args:
+        AGENT_VERSION: ${APMDEMO_AGENT_VERSION:-0.1.0-e2e}
+    image: openlog-e2e-target:plain
+    hostname: apmdemo-host-1
+    init: true
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    environment:
+      E2E_ROLE: plain
+      E2E_MACHINE_ID: ${APMDEMO_HOST_ID:-a0de0000000000000000000000000001}
+      E2E_INVENTORY_INTERVAL: 2m
+      OPENLOG_LICENSE_KEY: ${APMDEMO_LICENSE_KEY:-apmdemo-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    restart: unless-stopped
+
+volumes:
+  apmdemo-orders-db:

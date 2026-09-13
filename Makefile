@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 IMAGE ?= openlog:dev
-COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env.example
+# The shared local stack is always project `openlog` (agents and demos join its network `openlog_default`).
+# Test and demo tooling must pass its own -p when it reuses deploy/compose/docker-compose.yml.
+COMPOSE := docker compose -p openlog -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env.example
 BIN := bin
 
 # ---------------------------------------------------------------------------------------------

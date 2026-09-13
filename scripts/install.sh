@@ -48,7 +48,7 @@ die() {
 	log "error: $*"
 	exit 1
 }
-usage() { sed -n '2,24s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/main/docs/operations/releasing.md"; }
+usage() { sed -n '2,24s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
 
 cleanup() { [ -z "$tmpdir" ] || rm -rf "$tmpdir"; }
 trap cleanup EXIT INT TERM

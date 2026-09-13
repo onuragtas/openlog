@@ -113,6 +113,9 @@ type Integration struct {
 type APMHint struct {
 	Language string `yaml:"language" json:"language"`
 	Agent    string `yaml:"agent" json:"agent"`
+	// Status is set by the agent, never by rules: for openlog-agent-php "active" when the PHP forwarder received
+	// spans in the last 10 minutes, else "not_installed" (semantic-conventions §3.4).
+	Status string `yaml:"-" json:"status,omitempty"`
 }
 
 var (

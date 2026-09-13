@@ -1,8 +1,13 @@
-import { useQueries } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { getRouteApi, Link } from "@tanstack/react-router";
+import { BellPlus } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { metricQuery } from "@/api/queries";
+import { useMe } from "@/api/account";
+import { hostQuery, metricQuery } from "@/api/queries";
+import { can } from "@/api/roles";
+import { buttonVariants } from "@/components/ui/button";
+import { createAlertSearch } from "@/lib/alerts";
 import type { Aggregation } from "@/api/types";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,9 +92,11 @@ export const OVERVIEW_CHARTS: ChartDef[] = [
   },
 ];
 
-function MetricChartCard({ hostId, range, def }: { hostId: string; range: RangeSpec; def: ChartDef }) {
+function MetricChartCard({ hostId, range, def, canAlert }: { hostId: string; range: RangeSpec; def: ChartDef; canAlert: boolean }) {
   const { t } = useTranslation();
   const title = t(def.titleKey);
+  const hostName = useQuery({ ...hostQuery(hostId), enabled: canAlert }).data?.host_name;
+  const alertMetric = def.metrics[0]!;
   const results = useQueries({
     queries: def.metrics.map((m) => metricQuery({ hostId, name: m.name, range, agg: m.agg, groupBy: m.groupBy })),
   });
@@ -110,10 +117,21 @@ function MetricChartCard({ hostId, range, def }: { hostId: string; range: RangeS
 
   return (
     <Card className="min-w-0 gap-2">
-      <CardHeader>
+      <CardHeader className="flex-row items-center justify-between">
         <CardTitle>
           <h2>{title}</h2>
         </CardTitle>
+        {canAlert && (
+          <Link
+            to="/alerts/rules/new"
+            search={createAlertSearch({ metric: alertMetric.name, hostId, hostName, agg: alertMetric.agg }) as never}
+            aria-label={`${t("charts.createAlert")}: ${title}`}
+            title={t("charts.createAlert")}
+            className={buttonVariants({ variant: "ghost", size: "icon", className: "-my-2 size-7" })}
+          >
+            <BellPlus aria-hidden="true" />
+          </Link>
+        )}
       </CardHeader>
       <CardContent>
         <TimeSeriesChart
@@ -139,10 +157,11 @@ function MetricChartCard({ hostId, range, def }: { hostId: string; range: RangeS
 export function HostOverviewTab({ hostId }: { hostId: string }) {
   const search = route.useSearch();
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
+  const canAlert = can(useMe().data?.role, "alerts.write");
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       {OVERVIEW_CHARTS.map((def) => (
-        <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} />
+        <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} canAlert={canAlert} />
       ))}
     </div>
   );

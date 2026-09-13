@@ -15,9 +15,13 @@ const Redacted = "***"
 var (
 	// scheme://user:pass@ → scheme://user:***@
 	urlUserinfo = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.\-]*://[^\s:/@]*:)[^\s@]+@`)
-	// --password=x, --password x, -token x, --api-key=x, ...
-	secretFlag     = regexp.MustCompile(`(?i)(--?(?:password|passwd|pwd|secret|token|api[-_]?key|auth|credentials?))(=|\s+)\S+`)
-	secretFlagName = regexp.MustCompile(`(?i)^--?(?:password|passwd|pwd|secret|token|api[-_]?key|auth|credentials?)$`)
+	// --password=x, --password x, -token x, --api-key=x, and flags whose name ENDS in a
+	// secret word: --requirepass x, --masterauth x (Redis), --db-password x, --keypass x.
+	// Names ending in something else (--passive, --auth-mode, --token-file) are kept.
+	secretFlag = regexp.MustCompile(`(?i)(--?[A-Za-z0-9_.\-]*?(?:password|passwd|pass|pwd|secret|token|api[-_]?key|auth|credentials?))(=|\s+)\S+`)
+	// Bare secret flag names that start with -p (their value was masked separately), which the
+	// MySQL -p<password> rule below must not treat as an attached password.
+	secretFlagName = regexp.MustCompile(`(?i)^-(?:password|passwd|pass|pwd)$`)
 	// KEY=value token (optionally prefixed by dashes, e.g. -Dx.keyStorePassword=v).
 	keyValue = regexp.MustCompile(`^(-{0,2}[A-Za-z_][A-Za-z0-9_.\-]*)=(.+)$`)
 	// Keys naming a secret, unless they merely point at a file/path/dir.
@@ -40,8 +44,22 @@ func Cmdline(exe, s string) string {
 		mysqlStyle = isMySQLExe(argv0)
 	}
 	s = urlUserinfo.ReplaceAllString(s, "${1}"+Redacted+"@")
-	s = secretFlag.ReplaceAllString(s, "${1}${2}"+Redacted)
+	s = maskFlags(s, mysqlStyle)
 	return token.ReplaceAllStringFunc(s, func(tok string) string { return maskToken(tok, mysqlStyle) })
+}
+
+// maskFlags masks the value after a secret flag. For MySQL/MariaDB clients a single-dash
+// token starting with -p is an attached password (e.g. -psecret), not a flag name, so it is
+// left to the -p<value> rule in maskToken instead of masking the following argument.
+func maskFlags(s string, mysqlStyle bool) string {
+	return secretFlag.ReplaceAllStringFunc(s, func(m string) string {
+		sub := secretFlag.FindStringSubmatch(m)
+		name := sub[1]
+		if mysqlStyle && strings.HasPrefix(name, "-p") && !strings.HasPrefix(name, "--") && !secretFlagName.MatchString(name) {
+			return m
+		}
+		return name + sub[2] + Redacted
+	})
 }
 
 // Text masks secrets in free text such as log lines, using the same patterns
@@ -51,7 +69,7 @@ func Text(s string) string {
 		return s
 	}
 	s = urlUserinfo.ReplaceAllString(s, "${1}"+Redacted+"@")
-	s = secretFlag.ReplaceAllString(s, "${1}${2}"+Redacted)
+	s = maskFlags(s, false)
 	return token.ReplaceAllStringFunc(s, func(tok string) string { return maskToken(tok, false) })
 }
 

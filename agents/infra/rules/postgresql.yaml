@@ -14,7 +14,7 @@ endpoints:
   - from: listening_port
 integration:
   id: postgresql
-  requires: ["credentials"]
+  requires: ["credentials"]   # integrations.postgresql.username/password (member of pg_monitor)
 logs:
   - path: "/var/log/postgresql/*.log"            # Debian/Ubuntu
   - path: "/var/lib/pgsql/data/log/*.log"          # RHEL family

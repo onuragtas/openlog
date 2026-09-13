@@ -1,0 +1,25 @@
+# Laravel on :80, Symfony on :8081, both through FastCGI to ${PHP_HOST}.
+# The upstream is a variable so nginx re-resolves it through Docker's DNS: `docker compose restart php-*` can
+# give the PHP container a new IP, and a statically resolved fastcgi_pass then fails with 502 (seen in the spike).
+resolver 127.0.0.11 valid=2s ipv6=off;
+
+server {
+    listen 80;
+    set $php_laravel ${PHP_HOST}:9000;
+    location / {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /srv/laravel/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_pass $php_laravel;
+    }
+}
+server {
+    listen 8081;
+    set $php_symfony ${PHP_HOST}:9001;
+    location / {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /srv/symfony/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_pass $php_symfony;
+    }
+}

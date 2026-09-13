@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import { hostQuery } from "@/api/queries";
+import { HostServices } from "@/components/apm/HostServices";
 import { AttributeChips } from "@/components/AttributeChips";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,6 +83,7 @@ export function HostDetailPage() {
         <div className="mt-2">
           <AttributeChips attributes={h.resource_attributes} max={12} />
         </div>
+        <HostServices hostId={hostId} />
       </div>
 
       <Tabs value={tab} onValueChange={(v) => void navigate({ search: (prev) => ({ ...prev, tab: v === "overview" ? undefined : (v as HostTab) }) })}>

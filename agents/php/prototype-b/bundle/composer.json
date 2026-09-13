@@ -1,0 +1,42 @@
+{
+    "name": "openlog/php-agent-bundle-spike",
+    "description": "openlog PHP agent spike (option B): OpenTelemetry SDK + auto-instrumentation bundle loaded via auto_prepend_file",
+    "license": "Apache-2.0",
+    "type": "project",
+    "require": {
+        "php": "^8.2",
+        "open-telemetry/api": "^1.8",
+        "open-telemetry/sdk": "^1.8",
+        "open-telemetry/exporter-otlp": "^1.3",
+        "open-telemetry/opentelemetry-auto-laravel": "^1.9",
+        "open-telemetry/opentelemetry-auto-symfony": "^1.4",
+        "open-telemetry/opentelemetry-auto-pdo": "^0.5",
+        "nyholm/psr7": "^1.8"
+    },
+    "replace": {
+        "laravel/framework": "*",
+        "symfony/http-kernel": "*",
+        "symfony/http-client-contracts": "*",
+        "google/protobuf": "*",
+        "symfony/polyfill-mbstring": "*",
+        "symfony/polyfill-php82": "*",
+        "symfony/polyfill-php83": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Openlog\\Php\\": "src/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.3.0",
+            "ext-opentelemetry": "1.1.0",
+            "ext-protobuf": "4.30.0"
+        },
+        "allow-plugins": {
+            "php-http/discovery": false,
+            "tbachert/spi": true
+        },
+        "optimize-autoloader": true
+    }
+}

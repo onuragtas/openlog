@@ -1,0 +1,154 @@
+# Local agents and demo apps that send data to the ONE shared local openlog stack
+# (deploy/compose, compose project `openlog`). This project never runs an openlog backend.
+#
+#   # 1. shared backend (once)
+#   docker compose -p openlog -f deploy/compose/docker-compose.yml up -d --wait
+#   # 2. agents + demo apps
+#   docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build
+#   # remove only the agents
+#   docker compose -p openlog-agents -f test/localagents/docker-compose.yml down -v
+#
+# Everything joins the shared stack's network (`openlog_default`), so the ingest is http://openlog:4318.
+# The license key must be the shared stack's OPENLOG_BOOTSTRAP_LICENSE_KEY (deploy/compose/.env).
+#
+#   apm-host      Debian 12 + openlog-infra-agent; machine-id = host.id of the demo services
+#   web-host      Debian 12 + nginx, redis, postgresql + openlog-infra-agent (logs, integrations)
+#   frontend      Node.js (OTel)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-33000}
+#   orders        Go (OTel) -> orders-db
+#   catalog       PHP 8.3 (OTel) -> redis
+#   loadgen       ~8 req/s against frontend
+
+name: openlog-agents
+
+x-otel: &otel
+  OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://openlog:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_EXPORTER_OTLP_HEADERS: openlog-license-key=${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+  OTEL_TRACES_SAMPLER: parentbased_always_on
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_METRICS_EXPORTER: none
+
+x-apm-resource: &apm-resource "service.namespace=shop,service.version=1.0.0,deployment.environment=local,deployment.environment.name=local,host.id=a0de0000000000000000000000000001,host.name=apm-host"
+
+services:
+  frontend:
+    build: {context: ../apmdemo/frontend}
+    image: openlog-apmdemo/frontend:1
+    hostname: frontend
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: frontend
+      OTEL_RESOURCE_ATTRIBUTES: *apm-resource
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+      CATALOG_URL: http://catalog:8080
+      ORDERS_URL: http://orders:8080
+    ports: ["${LOCALAGENTS_FRONTEND_PORT:-33000}:3000"]
+    depends_on: [orders, catalog]
+    restart: unless-stopped
+
+  orders:
+    build: {context: ../apmdemo/orders}
+    image: openlog-apmdemo/orders:1
+    hostname: orders
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: orders
+      OTEL_RESOURCE_ATTRIBUTES: *apm-resource
+      OTEL_LOGS_EXPORTER: otlp
+      DATABASE_URL: postgres://orders:orders@orders-db:5432/orders?sslmode=disable
+      DB_HOST: orders-db
+      DB_PORT: "5432"
+    depends_on:
+      orders-db: {condition: service_healthy}
+    restart: unless-stopped
+
+  catalog:
+    build: {context: ../apmdemo/catalog}
+    image: openlog-apmdemo/catalog:1
+    hostname: catalog
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: catalog
+      OTEL_RESOURCE_ATTRIBUTES: *apm-resource
+      OTEL_PHP_AUTOLOAD_ENABLED: "true"
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: none
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20}
+    restart: unless-stopped
+
+  orders-db:
+    image: postgres:16-alpine
+    hostname: orders-db
+    environment: {POSTGRES_DB: orders, POSTGRES_USER: orders, POSTGRES_PASSWORD: orders}
+    volumes: ["orders-db:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U orders -d orders"], interval: 5s, timeout: 5s, retries: 30}
+    restart: unless-stopped
+
+  loadgen:
+    image: openlog-apmdemo/frontend:1
+    command: ["node", "loadgen.js"]
+    environment:
+      LOADGEN_TARGET: http://frontend:3000
+      LOADGEN_RPS: ${LOCALAGENTS_LOADGEN_RPS:-8}
+    depends_on: [frontend]
+    restart: unless-stopped
+
+  apm-host:
+    build:
+      context: ../e2e/target
+      target: plain
+      additional_contexts: {agent: ../../agents/infra, release: ../../libs/release}
+      args: {AGENT_VERSION: 0.9.1-local}
+    image: openlog-e2e-target:plain
+    hostname: apm-host
+    init: true
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    environment:
+      E2E_ROLE: plain
+      E2E_MACHINE_ID: a0de0000000000000000000000000001
+      E2E_INVENTORY_INTERVAL: 5m
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    restart: unless-stopped
+
+  web-host:
+    build:
+      context: ../e2e/target
+      target: services
+      additional_contexts: {agent: ../../agents/infra, release: ../../libs/release}
+      args: {AGENT_VERSION: 0.9.1-local}
+    image: openlog-e2e-target:services
+    hostname: web-host
+    init: true
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    environment:
+      E2E_ROLE: target
+      E2E_SERVICES: "1"
+      E2E_DOCKER: "0"
+      E2E_MACHINE_ID: a0de0000000000000000000000000002
+      E2E_INVENTORY_INTERVAL: 5m
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    volumes: ["web-host-state:/var/lib/openlog-infra-agent"]
+    restart: unless-stopped
+
+networks:
+  default:
+    name: openlog_default
+    external: true
+
+volumes:
+  orders-db:
+  web-host-state:

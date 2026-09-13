@@ -24,6 +24,85 @@ type Stats struct {
 	interval         time.Duration
 	updateState      string
 	updateAttempts   map[string]uint64
+
+	integrationCollections map[string]uint64
+	integrationErrors      map[string]uint64
+	integrationDurations   map[string]time.Duration
+
+	php *PHPSnapshot // nil until the PHP forwarder has started once
+}
+
+// PHPSnapshot holds the PHP forwarder counters (openlog.agent.php.*).
+type PHPSnapshot struct {
+	Messages           map[string]uint64 // result: accepted, malformed, unsupported_version, dropped
+	Spans              uint64
+	ReassemblyTimeouts uint64
+	PendingTraces      int64
+}
+
+// PHPMessageResults lists the result values of openlog.agent.php.messages.
+var PHPMessageResults = []string{"accepted", "malformed", "unsupported_version", "dropped"}
+
+func (s *Stats) phpLocked() *PHPSnapshot {
+	if s.php == nil {
+		s.php = &PHPSnapshot{Messages: map[string]uint64{}}
+	}
+	return s.php
+}
+
+// PHPStarted makes the openlog.agent.php.* metrics visible (with zero values).
+func (s *Stats) PHPStarted() {
+	s.mu.Lock()
+	s.phpLocked()
+	s.mu.Unlock()
+}
+
+// AddPHPMessages increments openlog.agent.php.messages{result}.
+func (s *Stats) AddPHPMessages(result string, n int) {
+	if n <= 0 {
+		return
+	}
+	s.mu.Lock()
+	s.phpLocked().Messages[result] += uint64(n)
+	s.mu.Unlock()
+}
+
+// AddPHPSpans increments openlog.agent.php.spans (spans handed to the export pipeline).
+func (s *Stats) AddPHPSpans(n int) {
+	s.mu.Lock()
+	s.phpLocked().Spans += uint64(max(n, 0))
+	s.mu.Unlock()
+}
+
+// AddPHPReassemblyTimeouts increments openlog.agent.php.reassembly_timeouts.
+func (s *Stats) AddPHPReassemblyTimeouts(n int) {
+	s.mu.Lock()
+	s.phpLocked().ReassemblyTimeouts += uint64(max(n, 0))
+	s.mu.Unlock()
+}
+
+// SetPHPPendingTraces records openlog.agent.php.pending_traces.
+func (s *Stats) SetPHPPendingTraces(n int) {
+	s.mu.Lock()
+	s.phpLocked().PendingTraces = int64(n)
+	s.mu.Unlock()
+}
+
+// AddIntegrationCollection records one collection of an integration for
+// openlog.agent.integration.{collections,errors,duration}{integration}.
+func (s *Stats) AddIntegrationCollection(integration string, d time.Duration, failed bool) {
+	s.mu.Lock()
+	if s.integrationCollections == nil {
+		s.integrationCollections, s.integrationErrors, s.integrationDurations = map[string]uint64{}, map[string]uint64{}, map[string]time.Duration{}
+	}
+	s.integrationCollections[integration]++
+	if failed {
+		s.integrationErrors[integration]++
+	} else if _, ok := s.integrationErrors[integration]; !ok {
+		s.integrationErrors[integration] = 0
+	}
+	s.integrationDurations[integration] = d
+	s.mu.Unlock()
 }
 
 // SetUpdateState records openlog.agent.update.state{state}.
@@ -101,6 +180,12 @@ type Snapshot struct {
 	Interval         time.Duration
 	UpdateState      string // empty until the update manager reports one
 	UpdateAttempts   map[string]uint64
+
+	IntegrationCollections map[string]uint64
+	IntegrationErrors      map[string]uint64
+	IntegrationDurations   map[string]time.Duration
+
+	PHP *PHPSnapshot // nil until the PHP forwarder has started once
 }
 
 // Snapshot copies the current values.
@@ -108,13 +193,33 @@ func (s *Stats) Snapshot() Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := Snapshot{
-		ExportItems:      make(map[ExportKey]uint64, len(s.exportItems)),
-		PermissionDenied: make(map[string]uint64, len(s.permissionDenied)),
-		Durations:        make(map[string]time.Duration, len(s.durations)),
-		BufferBytes:      s.bufferBytes,
-		Interval:         s.interval,
-		UpdateState:      s.updateState,
-		UpdateAttempts:   make(map[string]uint64, len(s.updateAttempts)),
+		IntegrationCollections: make(map[string]uint64, len(s.integrationCollections)),
+		IntegrationErrors:      make(map[string]uint64, len(s.integrationErrors)),
+		IntegrationDurations:   make(map[string]time.Duration, len(s.integrationDurations)),
+		ExportItems:            make(map[ExportKey]uint64, len(s.exportItems)),
+		PermissionDenied:       make(map[string]uint64, len(s.permissionDenied)),
+		Durations:              make(map[string]time.Duration, len(s.durations)),
+		BufferBytes:            s.bufferBytes,
+		Interval:               s.interval,
+		UpdateState:            s.updateState,
+		UpdateAttempts:         make(map[string]uint64, len(s.updateAttempts)),
+	}
+	if s.php != nil {
+		p := *s.php
+		p.Messages = make(map[string]uint64, len(s.php.Messages))
+		for k, v := range s.php.Messages {
+			p.Messages[k] = v
+		}
+		out.PHP = &p
+	}
+	for k, v := range s.integrationCollections {
+		out.IntegrationCollections[k] = v
+	}
+	for k, v := range s.integrationErrors {
+		out.IntegrationErrors[k] = v
+	}
+	for k, v := range s.integrationDurations {
+		out.IntegrationDurations[k] = v
 	}
 	for k, v := range s.updateAttempts {
 		out.UpdateAttempts[k] = v

@@ -25,10 +25,15 @@ func main() {
 				return err
 			}
 		}
-		return app.RunAll(ctx,
+		fns := []func(ctx context.Context) error{
 			func(ctx context.Context) error { return app.RunIngest(ctx, cfg, adm, log) },
 			func(ctx context.Context) error { return app.RunProcessor(ctx, cfg, adm, log) },
 			func(ctx context.Context) error { return app.RunAPI(ctx, cfg, adm, log) },
-		)
+		}
+		// Alert evaluator + dispatcher (docs/contracts/alerting.md); needs PostgreSQL.
+		if cfg.Alert.Enabled && cfg.AuthMode == "postgres" {
+			fns = append(fns, func(ctx context.Context) error { return app.RunAlert(ctx, cfg, adm, log) })
+		}
+		return app.RunAll(ctx, fns...)
 	})
 }

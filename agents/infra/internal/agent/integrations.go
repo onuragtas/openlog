@@ -1,0 +1,29 @@
+package agent
+
+import (
+	"time"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/config"
+	"github.com/onuragtas/openlog/agents/infra/internal/containers"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/docker"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mysql"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/nginx"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/postgresql"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/redis"
+)
+
+// statusSnapshotGap is the minimum time between inventory snapshots triggered
+// only by integration status changes (first results after start are exempt).
+const statusSnapshotGap = time.Minute
+
+// Registry returns the integrations implemented by this agent.
+func Registry(cfg *config.Config, ctr *containers.Source) []integrations.Integration {
+	return []integrations.Integration{
+		nginx.Integration{},
+		redis.Integration{},
+		mysql.Integration{},
+		postgresql.Integration{},
+		docker.Integration{Source: ctr, Socket: cfg.Containers.DockerSocket},
+	}
+}

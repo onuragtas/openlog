@@ -449,7 +449,7 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
       key: {{ include "openlog.secret.licenseKeysKey" $root }}
       optional: true
 {{- end }}
-{{- else if has $c (list "ingest" "processor" "api" "migrate" "updater") }}
+{{- else if has $c (list "ingest" "processor" "api" "migrate" "updater" "alert") }}
 {{- /* processor: component_heartbeats for contract migrations; updater: status + audit log */}}
 {{ include "openlog.postgresEnv" $root }}
 {{- end }}
@@ -482,6 +482,45 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 - name: OPENLOG_API_TRUSTED_PROXIES
   value: {{ join "," $a.trustedProxies | quote }}
 {{- end }}
+{{- if and (has $c (list "api" "alert")) (include "openlog.postgres.enabled" $root) }}
+{{- /* Alerting (docs/contracts/alerting.md): channel secret encryption, links, egress policy, SMTP. */}}
+{{- $al := $root.Values.alert }}
+- name: OPENLOG_SECRETS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.alertSecretsKeyKey" $root }}
+      optional: true
+- name: OPENLOG_SECRETS_KEY_PREVIOUS
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.alertSecretsKeyPreviousKey" $root }}
+      optional: true
+- name: OPENLOG_PUBLIC_URL
+  value: {{ $al.publicURL | quote }}
+- name: OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS
+  value: {{ $al.blockPrivateDestinations | toString | quote }}
+- name: OPENLOG_SMTP_HOST
+  value: {{ $al.smtp.host | quote }}
+- name: OPENLOG_SMTP_PORT
+  value: {{ include "openlog.envValue" $al.smtp.port }}
+- name: OPENLOG_SMTP_USERNAME
+  value: {{ $al.smtp.username | quote }}
+- name: OPENLOG_SMTP_FROM
+  value: {{ $al.smtp.from | quote }}
+- name: OPENLOG_SMTP_TLS
+  value: {{ $al.smtp.tls | quote }}
+- name: OPENLOG_SMTP_INSECURE_SKIP_VERIFY
+  value: {{ $al.smtp.insecureSkipVerify | toString | quote }}
+{{- with $al.smtp.passwordSecret.name }}
+- name: OPENLOG_SMTP_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: {{ $al.smtp.passwordSecret.key }}
+{{- end }}
+{{- end }}
 {{- if eq $c "migrate" }}
 - name: OPENLOG_KAFKA_PARTITIONS
   value: {{ include "openlog.envValue" $root.Values.kafka.topics.partitions }}
@@ -506,6 +545,15 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 {{- with .values.extraEnv }}
 {{ toYaml . }}
 {{- end }}
+{{- end -}}
+
+{{/* Secret keys of the alerting encryption keys (chart Secret or auth.existingSecret). ctx: root */}}
+{{- define "openlog.secret.alertSecretsKeyKey" -}}
+{{- if .Values.auth.existingSecret -}}{{ .Values.alert.secretsKeyKey }}{{- else -}}secrets-key{{- end -}}
+{{- end -}}
+
+{{- define "openlog.secret.alertSecretsKeyPreviousKey" -}}
+{{- if .Values.auth.existingSecret -}}{{ .Values.alert.secretsKeyPreviousKey }}{{- else -}}secrets-key-previous{{- end -}}
 {{- end -}}
 
 {{/* ---------------------------------------------------------------------------

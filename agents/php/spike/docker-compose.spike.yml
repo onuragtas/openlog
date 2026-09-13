@@ -1,0 +1,109 @@
+# PHP agent spike services (compose project openlog-phpspike). Standalone: no openlog backend of its own.
+# All telemetry goes to the one shared local openlog (compose project `openlog`) through its OTLP/HTTP port on the
+# host: http://host.docker.internal:4318, license key dev-license-key. Always run with `-p openlog-phpspike`
+# (see agents/php/Makefile and bench/lib.sh).
+name: openlog-phpspike
+
+x-php: &php
+  image: openlog-phpspike/app:dev
+  cpus: 4
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  # Without these, >600 req/s of short-lived Redis/MariaDB connections exhaust ephemeral ports
+  # ("Cannot assign requested address" -> HTTP 500), which skewed the first benchmark runs.
+  sysctls:
+    net.ipv4.ip_local_port_range: "15000 64999"
+    net.ipv4.tcp_tw_reuse: "1"
+  depends_on:
+    mariadb: {condition: service_healthy}
+    redis: {condition: service_started}
+
+x-nginx: &nginx
+  image: nginx:1.29-alpine
+  volumes: ["./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro"]
+
+services:
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: spike
+      MARIADB_USER: spike
+      MARIADB_PASSWORD: spike
+    volumes:
+      - ./mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      retries: 40
+
+  redis:
+    image: redis:7-alpine
+
+  # --- baseline: no instrumentation ---
+  php-base:
+    <<: *php
+    environment:
+      SPIKE_VARIANT: base
+      PHP_INI_SCAN_DIR: ":/opt/variants/base"
+      SPIKE_SYMFONY_URL: http://nginx-base:8081
+      SPIKE_LARAVEL_SERVICE: php-laravel-base
+      SPIKE_SYMFONY_SERVICE: php-symfony-base
+      REDIS_PERSISTENT: "true"
+  nginx-base:
+    <<: *nginx
+    environment: {PHP_HOST: php-base}
+    ports: ["127.0.0.1:28801:80", "127.0.0.1:28811:8081"]
+    depends_on: [php-base]
+
+  # --- option A: own extension + local forwarder ---
+  php-a:
+    <<: *php
+    environment:
+      SPIKE_VARIANT: a
+      PHP_INI_SCAN_DIR: ":/opt/variants/a"
+      SPIKE_SYMFONY_URL: http://nginx-a:8081
+      SPIKE_LARAVEL_SERVICE: php-laravel-proto-a
+      SPIKE_SYMFONY_SERVICE: php-symfony-proto-a
+      REDIS_PERSISTENT: "true"
+    volumes: ["php-sock:/run/openlog"]
+  nginx-a:
+    <<: *nginx
+    environment: {PHP_HOST: php-a}
+    ports: ["127.0.0.1:28802:80", "127.0.0.1:28812:8081"]
+    depends_on: [php-a]
+  forwarder:
+    image: openlog-phpspike/forwarder:dev
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      OPENLOG_ENDPOINT: ${SPIKE_OTLP_ENDPOINT:-http://host.docker.internal:4318}
+      OPENLOG_LICENSE_KEY: ${SPIKE_LICENSE_KEY:-dev-license-key}
+    volumes: ["php-sock:/run/openlog"]
+
+  # --- option B: ext-opentelemetry + scoped SDK bundle ---
+  php-b:
+    <<: *php
+    environment:
+      SPIKE_VARIANT: b
+      PHP_INI_SCAN_DIR: ":/opt/variants/b"
+      SPIKE_SYMFONY_URL: http://nginx-b:8081
+      SPIKE_LARAVEL_SERVICE: php-laravel-proto-b
+      SPIKE_SYMFONY_SERVICE: php-symfony-proto-b
+      REDIS_PERSISTENT: "true"
+      OPENLOG_ENDPOINT: ${SPIKE_B_ENDPOINT:-http://host.docker.internal:4318}
+      OPENLOG_LICENSE_KEY: ${SPIKE_LICENSE_KEY:-dev-license-key}
+  nginx-b:
+    <<: *nginx
+    environment: {PHP_HOST: php-b}
+    ports: ["127.0.0.1:28803:80", "127.0.0.1:28813:8081"]
+    depends_on: [php-b]
+
+  k6:
+    image: grafana/k6:latest
+    profiles: ["bench"]
+    user: "0:0"
+    volumes:
+      - ../bench:/bench:ro
+      - ./results:/results
+
+volumes:
+  php-sock:

@@ -23,9 +23,11 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/exporter"
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs"
 	"github.com/onuragtas/openlog/agents/infra/internal/ids"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations"
 	"github.com/onuragtas/openlog/agents/infra/internal/inventory"
 	"github.com/onuragtas/openlog/agents/infra/internal/logs"
 	"github.com/onuragtas/openlog/agents/infra/internal/metrics"
+	"github.com/onuragtas/openlog/agents/infra/internal/phpforwarder"
 	"github.com/onuragtas/openlog/agents/infra/internal/resource"
 	"github.com/onuragtas/openlog/agents/infra/internal/selfmon"
 	"github.com/onuragtas/openlog/agents/infra/rules"
@@ -34,6 +36,7 @@ import (
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 )
 
 // MaxInterval caps automatic interval growth by the resource budget check.
@@ -80,6 +83,15 @@ type Agent struct {
 	pipe    *pipeline
 	ctr     *containers.Source
 	logs    *logs.Manager
+	integ   *integrations.Manager
+	php     *phpModule // nil unless exporting
+
+	// apm_hint.status of PHP services in the last inventory snapshot ("active" = true).
+	apmActive bool
+
+	// Integration status fingerprint of the last inventory snapshot.
+	statusFP      uint64
+	statusPending bool
 
 	interval      time.Duration
 	lastInventory time.Time
@@ -141,6 +153,14 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 			return nil, fmt.Errorf("discovery rules: %w", err)
 		}
 		a.engine = discovery.NewEngine(rs)
+		a.integ = integrations.NewManager(integrations.Options{
+			Config: &cfg.Integrations, Integrations: Registry(cfg, a.ctr), Rules: rs,
+			FS: a.fs, Log: log.With("component", "integrations"), Stats: a.stats, Resource: a.res,
+			AgentName: resource.AgentName, AgentVersion: version, HostName: resource.Hostname(a.fs),
+		})
+	}
+	for _, w := range cfg.Warnings() {
+		log.Warn("configuration warning", "warning", w)
 	}
 	if forExport {
 		a.exp = exporter.New(cfg.Endpoint, cfg.LicenseKey, version, cfg.Export.Timeout.D())
@@ -150,6 +170,14 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 		}
 		a.stats.SetBufferBytes(a.buf.Bytes())
 		a.pipe = newPipeline(a.exp, a.buf, a.stats, log)
+		pc := cfg.PHPForwarder
+		phpLog := log.With("component", "php_forwarder")
+		a.php = &phpModule{cfg: pc, fs: a.fs, log: phpLog, fwd: phpforwarder.New(phpforwarder.Options{
+			Socket: pc.Socket, SocketGroup: pc.SocketGroup, SocketMode: pc.Mode(), UDPListen: pc.UDPListen,
+			MaxPendingTraces: pc.MaxPendingTraces, ReassemblyTimeout: pc.ReassemblyTimeout.D(),
+			MaxBatchBytes: cfg.Export.MaxRequestBytes / 2, HostResource: a.res, Stats: a.stats, Log: phpLog,
+			Emit: func(td *tracepb.TracesData, spans int) { a.enqueue(exporter.SignalTraces, spans, td) },
+		})}
 		lc := cfg.Logs
 		if lc.Enabled && (len(lc.Files) > 0 || lc.Journald.Enabled || (lc.AutoFromDiscovery && cfg.Discovery.Enabled)) {
 			a.logs = logs.New(logs.Options{
@@ -221,10 +249,15 @@ func (a *Agent) scope() *commonpb.InstrumentationScope {
 
 // CollectMetrics gathers one metrics sample.
 func (a *Agent) CollectMetrics(now time.Time) *metricspb.MetricsData {
-	return &metricspb.MetricsData{ResourceMetrics: []*metricspb.ResourceMetrics{{
+	md := &metricspb.MetricsData{ResourceMetrics: []*metricspb.ResourceMetrics{{
 		Resource:     a.res,
 		ScopeMetrics: []*metricspb.ScopeMetrics{{Scope: a.scope(), Metrics: a.metrics.Collect(now)}},
 	}}}
+	if a.integ != nil {
+		// Integration samples collected since the previous round (one resource per instance / entity).
+		md.ResourceMetrics = append(md.ResourceMetrics, a.integ.Drain()...)
+	}
+	return md
 }
 
 // CollectInventory gathers a full inventory snapshot including discovery.
@@ -235,6 +268,16 @@ func (a *Agent) CollectInventory(now time.Time) (*logspb.LogsData, []discovery.S
 	if a.engine != nil {
 		start := time.Now()
 		services = a.engine.Discover(d)
+		if a.integ != nil {
+			a.integ.Reconcile(services, d.Containers)
+			a.integ.Annotate(services)
+			a.statusFP, a.statusPending = a.integ.StatusFingerprint()
+		}
+		if a.php != nil {
+			a.php.observe(services) // php_forwarder.enabled unset: runs while a PHP runtime is discovered
+		}
+		a.apmActive = a.php.active(time.Now())
+		annotateAPMHints(services, a.apmActive)
 		a.stats.SetCollectorDuration("discovery", time.Since(start))
 		items = append(items, discovery.Items(services)...)
 		a.metrics.SetServiceLookup(discovery.NewServiceIndex(services).Lookup)
@@ -261,6 +304,14 @@ func (a *Agent) Once(ctx context.Context, w io.Writer) error {
 	ld, services, err := a.CollectInventory(a.Now())
 	if err != nil {
 		return err
+	}
+	if a.integ != nil {
+		// Run every integration once and snapshot again so that the statuses
+		// reflect the real collection result.
+		a.integ.CollectOnce(ctx)
+		if ld, services, err = a.CollectInventory(a.Now()); err != nil {
+			return err
+		}
 	}
 	select {
 	case <-ctx.Done():
@@ -319,7 +370,15 @@ func (a *Agent) Run(ctx context.Context) error {
 		close(logsDone)
 	}
 
+	if a.integ != nil {
+		a.integ.Start(ctx)
+	}
+	a.php.arm() // explicit php_forwarder.enabled: true starts now; auto waits for the first discovery
 	a.collectLoop(ctx)
+	if a.integ != nil {
+		a.integ.Stop()
+	}
+	a.php.shutdown() // pending PHP spans go into the export queue before it is drained
 	cancelLogs()
 	<-logsDone
 
@@ -414,9 +473,22 @@ func (a *Agent) collectRound() {
 		}
 		due := a.lastInventory.IsZero() || now.Sub(a.lastInventory) >= a.cfg.InventoryInterval.D()
 		changed := !a.lastInventory.IsZero() && fp != a.fingerprint
-		if due || changed {
+		statusChanged := false
+		if a.integ != nil && !a.lastInventory.IsZero() {
+			// One snapshot as soon as every instance has a first result, then at most
+			// one per statusSnapshotGap for later transitions.
+			sfp, pending := a.integ.StatusFingerprint()
+			statusChanged = sfp != a.statusFP && ((a.statusPending && !pending) || now.Sub(a.lastInventory) >= statusSnapshotGap)
+		}
+		// apm_hint.status of PHP services flips when spans start or stop arriving.
+		apmChanged := a.engine != nil && !a.lastInventory.IsZero() && a.php.active(time.Now()) != a.apmActive
+		if due || changed || statusChanged || apmChanged {
 			if changed {
 				a.log.Info("host change detected; sending inventory snapshot")
+			} else if statusChanged && !due {
+				a.log.Info("integration status changed; sending inventory snapshot")
+			} else if apmChanged && !due {
+				a.log.Info("apm agent status changed; sending inventory snapshot")
 			}
 			a.fingerprint, a.lastInventory = fp, now
 			ld, _, err := a.CollectInventory(now)
@@ -483,6 +555,9 @@ func (a *Agent) checkBudget(now time.Time) {
 		old := a.interval
 		a.interval = min(a.interval*2, MaxInterval)
 		a.stats.SetCollectionInterval(a.interval)
+		if a.integ != nil {
+			a.integ.SetSlowdown(float64(a.interval) / float64(a.cfg.Interval.D()))
+		}
 		a.log.Warn("resource budget exceeded; increasing collection interval",
 			"collect_fraction", frac, "budget", cpuBudget, "old_interval", old, "new_interval", a.interval)
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/onuragtas/openlog/internal/admin"
 	"github.com/onuragtas/openlog/internal/api"
 	"github.com/onuragtas/openlog/internal/api/query"
+	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/ingest"
@@ -255,8 +256,23 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	if svc != nil {
 		srv.SetAccounts(svc)
 	}
+	var apmSettings apm.SettingsStore // nil in static mode: default Apdex T
+	if pgPool != nil {
+		apmSettings = apm.PGSettings{Pool: pgPool}
+	}
+	srv.SetAPM(apmSettings, cfg.APM.DefaultApdexT)
+	if err := startAlertAPI(cfg, pgPool, srv, apmSettings, log); err != nil { // alert.go
+		return err
+	}
+	var apmLinker func(ctx context.Context)
+	if cfg.APM.LinkEnabled {
+		apmLinker = apm.NewLinker(conn, apm.LinkerOptions{
+			Database: cfg.ClickHouseDatabase, Cluster: cfg.ClickHouseCluster, Conn: clickhouse.OptionsFromConfig(cfg.Common),
+			Interval: cfg.APM.LinkInterval, Lookback: cfg.APM.LinkLookback, Delay: cfg.APM.LinkDelay,
+		}, log.With("job", "apm-link"), adm.Registry()).Run
+	}
 	fleetController := startFleetAPI(ctx, cfg, pgPool, srv, adm.Registry(), log)
-	startLeaderTasks(ctx, cfg, pgPool, srv, log, fleetController)
+	startLeaderTasks(ctx, cfg, pgPool, srv, log, fleetController, apmLinker)
 	if cfg.API.UIEnabled {
 		srv.SetUI(web.Handler(web.Dist()))
 		log.Info("web UI enabled", "path", "/")

@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { Boxes, LogOut, Rocket, ScrollText, Server, Settings } from "lucide-react";
+import { Activity, Bell, Boxes, LogOut, Rocket, ScrollText, Server, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { logout } from "@/api/account";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
@@ -13,9 +13,11 @@ import type { RangeSpec } from "@/lib/time";
 
 const NAV = [
   { to: "/hosts", icon: Server, label: "nav.hosts" },
+  { to: "/apm", icon: Activity, label: "nav.apm" },
   { to: "/logs", icon: ScrollText, label: "nav.logs" },
   { to: "/inventory", icon: Boxes, label: "nav.inventorySearch" },
   { to: "/fleet", icon: Rocket, label: "nav.fleet" },
+  { to: "/alerts", icon: Bell, label: "nav.alerts" },
   { to: "/settings", icon: Settings, label: "nav.settings" },
 ] as const;
 
@@ -42,7 +44,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const showRange = !pathname.startsWith("/traces/") && !pathname.startsWith("/settings") && pathname !== "/inventory" && pathname !== "/hosts" && pathname !== "/fleet";
+  const showRange = !pathname.startsWith("/traces/") && !pathname.startsWith("/settings") && pathname !== "/inventory" && pathname !== "/hosts" && pathname !== "/fleet" && !pathname.startsWith("/alerts");
 
   return (
     <div className="flex h-full min-h-0">

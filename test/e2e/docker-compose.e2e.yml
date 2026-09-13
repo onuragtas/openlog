@@ -29,6 +29,21 @@ services:
       bootstrap-other:
         condition: service_completed_successfully
 
+  # Webhook receiver for the alerts phase (alerts_test.go): records notifications, verifies X-Openlog-Signature.
+  alert-receiver:
+    build:
+      context: ../../test/alertproof/receiver
+    image: openlog-e2e/alert-receiver:dev
+    environment:
+      HMAC_SECRET: ${E2E_ALERT_HMAC_SECRET:-e2e-alert-hmac-secret}
+    ports:
+      - "127.0.0.1:${E2E_ALERT_RECEIVER_PORT:-18881}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   # Debian 12 with nginx, redis, postgresql, a fake mysql client with secrets in its cmdline and the agent.
   # With E2E_DOCKER=1 (default) it also runs its own dockerd (static binaries from docker:dind; no
   # bridge, no iptables, vfs storage) with one container, e2e-sleeper, for container inventory and

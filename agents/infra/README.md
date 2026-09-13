@@ -65,6 +65,88 @@ Docker: the Docker socket is usually `root:docker 0660`. The unprivileged `openl
 failure is counted in `openlog.agent.permission_denied{collector="containers"}` and container metrics still come from cgroups (without names/images).
 Adding the user to the `docker` group grants root-equivalent access to the host; decide deliberately.
 
+## Integrations
+
+Discovered services get metric integrations (contract: `semantic-conventions.md` §6; metric names are those of the OpenTelemetry Collector
+receivers, so OTel Collector data fits the same panels):
+
+| Integration | Rules | Source | Credentials | Metrics |
+|---|---|---|---|---|
+| `nginx` | nginx | `stub_status`, probed on discovered ports (`/nginx_status`, `/stub_status`, `/status`, `/basic_status`, `/server_status`; http, then https) | none | `nginx.*` |
+| `redis` | redis | `INFO` over TCP, TLS or unix socket | optional `password` / ACL `username` | `redis.*` |
+| `mysql` | mysql, mariadb | global status, `performance_schema` io waits (top-N), replica status | required | `mysql.*` |
+| `postgresql` | postgresql | `pg_stat_database`, `pg_stat_bgwriter`/`pg_stat_checkpointer`, `pg_stat_replication`, `pg_locks`, top-N `pg_stat_user_tables`/`indexes` | required | `postgresql.*` |
+| `docker` | docker | Docker Engine API reachability (no own metrics: `container.*` come from cgroups, OTel has no engine-level `docker.*` names) | socket access | — |
+
+How it works: an integration instance starts when discovery finds a service whose rule has the integration id and stops when the service
+disappears. Each instance runs on its own goroutine (`integrations.interval`, default 30 s; `integrations.timeout` 10 s; at most
+`max_concurrent` at once; exponential backoff to 5 min after failures; panics are contained). Endpoints come from the service's listening ports
+(wildcard → loopback), well-known unix sockets, published container ports and container IPs; the first endpoint that answers is used. Every
+instance is its own OTLP resource: host resource + `openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`,
+`service.instance.id`, `server.address`, `server.port`. Self-telemetry: `openlog.agent.integration.{collections,errors,duration}{integration}`.
+
+`discovered_service.integration` reports the real state: `enabled` (last collection ok, `endpoint` set; `error` for partial collections),
+`needs_configuration` (credentials missing or rejected without a configured password, no stub_status, socket not accessible; `hint` holds a
+`config.yaml` snippet), `error` (sanitized reason, e.g. `authentication failed: Access denied for user 'openlog'@'10.0.0.5' (using password: YES)`),
+`not_available` (no implementation, disabled). A status change triggers a new inventory snapshot (at most once a minute after the first results).
+`-once` runs every integration once, so `openlog-infra-agent -once | jq '.discovered_services[].integration'` shows what the service card will say.
+
+Credentials: `password: env:NAME` (e.g. from a systemd `EnvironmentFile=`), `password: file:/etc/openlog-infra-agent/mysql.password` (mode 0600,
+owned by the agent user) or a literal (a warning is logged). They are read on every connection, never logged, never part of inventory, statuses
+or metrics, and passwords/DSN userinfo are masked in error messages.
+
+```yaml
+integrations:
+  redis:
+    password: env:OPENLOG_REDIS_PASSWORD          # only when requirepass/ACLs are used
+  mysql:
+    username: openlog
+    password: file:/etc/openlog-infra-agent/mysql.password
+    instances:                                     # overrides for matching services (port, endpoint, unit, container, instance)
+      - match: { container: legacy-mariadb }
+        username: monitor
+        password: env:OPENLOG_LEGACY_MYSQL_PASSWORD
+  postgresql:
+    username: openlog
+    password: env:OPENLOG_POSTGRESQL_PASSWORD
+    exclude_databases: [rdsadmin]
+  nginx:
+    instances:
+      - match: { port: 8080 }
+        endpoint: http://127.0.0.1:8080/nginx_status
+```
+
+Least-privilege monitoring users:
+
+```sql
+-- MySQL 8 / MariaDB 10.5+ (MariaDB ≥ 10.5.9: use REPLICA MONITOR instead of REPLICATION CLIENT to read replica status)
+CREATE USER 'openlog'@'localhost' IDENTIFIED BY '<password>' WITH MAX_USER_CONNECTIONS 3;
+GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'openlog'@'localhost';
+GRANT SELECT ON performance_schema.* TO 'openlog'@'localhost';
+```
+
+```sql
+-- PostgreSQL 10+
+CREATE ROLE openlog WITH LOGIN PASSWORD '<password>' CONNECTION LIMIT 3;
+GRANT pg_monitor TO openlog;          -- pg_stat_* incl. replication lag, pg_database_size; CONNECT on databases is granted to PUBLIC by default
+```
+
+```
+# nginx: stub_status on loopback
+server {
+    listen 127.0.0.1:8080;
+    location = /nginx_status { stub_status; allow 127.0.0.1; deny all; }
+}
+```
+
+```
+# Redis 6+ ACL user (only with requirepass/ACLs)
+ACL SETUSER openlog on >'<password>' +info +ping
+```
+
+Dependencies: `github.com/go-sql-driver/mysql` (MPL-2.0, used unmodified as a library), `filippo.io/edwards25519` (BSD-3-Clause),
+`github.com/jackc/pgx/v5`, `pgpassfile`, `pgservicefile` (MIT), `golang.org/x/text` (BSD-3-Clause).
+
 ## Logs
 
 Logs are sent as plain OTLP LogRecords (never inventory events). See `semantic-conventions.md` §4 for fields and attributes.

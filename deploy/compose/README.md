@@ -19,6 +19,14 @@ Open <http://localhost:8080> and sign in as `admin@openlog.local` / `openlog-dev
 agent (`install.sh`, [agents/infra](../../agents/infra/README.md)) using endpoint `http://<this host>:4318` and
 license key `dev-license-key`, or with the load generator below.
 
+Local agents and demo apps (infra agent hosts, Node/Go/PHP APM services) that send to this stack without running
+their own backend: [`test/localagents`](../../test/localagents/docker-compose.yml)
+(`docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build`).
+
+> **Project name.** This file declares `name: openlog`, so every `docker compose` command that uses it without
+> `-p` acts on the shared `openlog` stack — including `down -v`, which deletes its data. Test suites, demos and
+> scripts that reuse this file must always pass their own `-p` (e.g. `-p openlog-e2e`).
+
 `--build` builds `OPENLOG_IMAGE` (`openlog:dev`) from the working tree as version `0.0.0-dev` **without** release
 signing keys, so the release check reports `failed` ("no trusted release keys") and fleet updates are disabled.
 Released images (`OPENLOG_IMAGE=ghcr.io/onuragtas/openlog:<version>`, no `--build`) have the keys compiled in.

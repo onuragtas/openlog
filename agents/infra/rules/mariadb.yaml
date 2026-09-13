@@ -13,7 +13,7 @@ endpoints:
   - from: listening_port
 integration:
   id: mysql
-  requires: ["credentials"]
+  requires: ["credentials"]   # integrations.mysql.username/password (PROCESS, REPLICATION CLIENT, SELECT on performance_schema)
 logs:
   - path: "/var/log/mysql/*.log"
   - path: "/var/log/mariadb/*.log"

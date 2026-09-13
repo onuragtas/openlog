@@ -104,6 +104,21 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/inventory/search?category=package&q=ssl",
 		"/api/v1/logs?host_id=h1&service=api&q=err&severity_min=ERROR&trace_id=5b8efff798038103d269b633813fc60c",
 		"/api/v1/traces/5b8efff798038103d269b633813fc60c",
+		// APM (apm.go)
+		"/api/v1/apm/services?environment=prod&q=ord",
+		"/api/v1/apm/services/orders?namespace=shop&environment=prod",
+		"/api/v1/apm/services/orders/overview?transaction=GET%20%2Forders%2F%7Bid%7D&type=web",
+		"/api/v1/apm/services/orders/transactions?sort=slowest",
+		"/api/v1/apm/services/orders/transaction?name=GET%20%2Forders%2F%7Bid%7D",
+		"/api/v1/apm/services/orders/errors",
+		"/api/v1/apm/services/orders/errors/00000000000000ff",
+		"/api/v1/apm/services/orders/databases?sort=calls&db_system=postgresql",
+		"/api/v1/apm/services/orders/hosts",
+		"/api/v1/apm/services/orders/settings",
+		"/api/v1/apm/hosts/h1/services",
+		"/api/v1/apm/map?service=orders&environment=prod",
+		"/api/v1/apm/traces?service=orders&transaction=x&min_duration_ms=10&max_duration_ms=99&error=true&attr.http.route=%2Fx&sort=duration",
+		"/api/v1/apm/traces",
 	}
 	for _, p := range paths {
 		req := httptest.NewRequest(http.MethodGet, p, nil)

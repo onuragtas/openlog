@@ -14,7 +14,7 @@ endpoints:
   - from: listening_port
 integration:
   id: redis
-  auto_enable: true
+  auto_enable: true         # INFO without AUTH; a NOAUTH reply → needs_configuration (integrations.redis.password)
   requires: []
 apm_hint: null
 logs:

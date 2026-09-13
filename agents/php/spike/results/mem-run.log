@@ -1,0 +1,91 @@
+== mem run 1 variant base
+ Container openlog-phpspike-php-base-1 Restarting 
+ Container openlog-phpspike-php-base-1 Started 
+ Container openlog-phpspike-k6-run-96787a4c3ca5 Creating 
+ Container openlog-phpspike-k6-run-96787a4c3ca5 Created 
+reqs=9128 rps=910.7 p50=15.32ms p95=32.67ms failed=0.00%
+ Container openlog-phpspike-k6-run-1f82d3c9fffa Creating 
+ Container openlog-phpspike-k6-run-1f82d3c9fffa Created 
+reqs=20936 rps=1046.3 p50=13.96ms p95=25.22ms failed=0.00%
+== mem run 1 variant a
+ Container openlog-phpspike-php-a-1 Restarting 
+ Container openlog-phpspike-php-a-1 Started 
+ Container openlog-phpspike-k6-run-84a7154bc232 Creating 
+ Container openlog-phpspike-k6-run-84a7154bc232 Created 
+reqs=5453 rps=544.4 p50=23.72ms p95=65.69ms failed=0.00%
+ Container openlog-phpspike-k6-run-f9fcc0c63d9e Creating 
+ Container openlog-phpspike-k6-run-f9fcc0c63d9e Created 
+reqs=20007 rps=999.7 p50=14.06ms p95=28.04ms failed=0.00%
+== mem run 1 variant b
+ Container openlog-phpspike-php-b-1 Restarting 
+ Container openlog-phpspike-php-b-1 Started 
+ Container openlog-phpspike-k6-run-5f797b1d55e6 Creating 
+ Container openlog-phpspike-k6-run-5f797b1d55e6 Created 
+reqs=3252 rps=323.8 p50=41.96ms p95=88.46ms failed=0.00%
+ Container openlog-phpspike-k6-run-b9bfe162d9da Creating 
+ Container openlog-phpspike-k6-run-b9bfe162d9da Created 
+reqs=9025 rps=450.4 p50=32.68ms p95=53.21ms failed=0.00%
+== mem run 2 variant a
+ Container openlog-phpspike-php-a-1 Restarting 
+ Container openlog-phpspike-php-a-1 Started 
+ Container openlog-phpspike-k6-run-73c3e3cc43b5 Creating 
+ Container openlog-phpspike-k6-run-73c3e3cc43b5 Created 
+reqs=10250 rps=1024.0 p50=13.80ms p95=27.71ms failed=0.00%
+ Container openlog-phpspike-k6-run-43da00cb0291 Creating 
+ Container openlog-phpspike-k6-run-43da00cb0291 Created 
+reqs=26535 rps=1325.7 p50=11.09ms p95=18.44ms failed=0.00%
+== mem run 2 variant b
+ Container openlog-phpspike-php-b-1 Restarting 
+ Container openlog-phpspike-php-b-1 Started 
+ Container openlog-phpspike-k6-run-9ff122b4b9a1 Creating 
+ Container openlog-phpspike-k6-run-9ff122b4b9a1 Created 
+reqs=3857 rps=384.3 p50=37.82ms p95=67.39ms failed=0.00%
+ Container openlog-phpspike-k6-run-a87e9e11a5b9 Creating 
+ Container openlog-phpspike-k6-run-a87e9e11a5b9 Created 
+reqs=8454 rps=422.0 p50=34.00ms p95=58.49ms failed=0.00%
+== mem run 2 variant base
+ Container openlog-phpspike-php-base-1 Restarting 
+ Container openlog-phpspike-php-base-1 Started 
+ Container openlog-phpspike-k6-run-51aef519bd53 Creating 
+ Container openlog-phpspike-k6-run-51aef519bd53 Created 
+reqs=11728 rps=1171.2 p50=12.10ms p95=24.07ms failed=0.00%
+ Container openlog-phpspike-k6-run-12b485f7dbdf Creating 
+ Container openlog-phpspike-k6-run-12b485f7dbdf Created 
+reqs=30384 rps=1518.5 p50=9.61ms p95=16.92ms failed=0.00%
+== mem run 3 variant b
+ Container openlog-phpspike-php-b-1 Restarting 
+ Container openlog-phpspike-php-b-1 Started 
+ Container openlog-phpspike-k6-run-c8031a19f651 Creating 
+ Container openlog-phpspike-k6-run-c8031a19f651 Created 
+reqs=3780 rps=377.1 p50=38.00ms p95=68.55ms failed=0.00%
+ Container openlog-phpspike-k6-run-8ee6a2f40ede Creating 
+ Container openlog-phpspike-k6-run-8ee6a2f40ede Created 
+reqs=8944 rps=446.6 p50=32.95ms p95=54.33ms failed=0.00%
+== mem run 3 variant base
+ Container openlog-phpspike-php-base-1 Restarting 
+ Container openlog-phpspike-php-base-1 Started 
+ Container openlog-phpspike-k6-run-8eaa73d9ec14 Creating 
+ Container openlog-phpspike-k6-run-8eaa73d9ec14 Created 
+reqs=11176 rps=1116.4 p50=12.11ms p95=27.63ms failed=0.00%
+ Container openlog-phpspike-k6-run-0f6af07d3199 Creating 
+ Container openlog-phpspike-k6-run-0f6af07d3199 Created 
+reqs=29680 rps=1482.6 p50=9.72ms p95=17.68ms failed=0.00%
+== mem run 3 variant a
+ Container openlog-phpspike-php-a-1 Restarting 
+ Container openlog-phpspike-php-a-1 Started 
+ Container openlog-phpspike-k6-run-0f496cc53713 Creating 
+ Container openlog-phpspike-k6-run-0f496cc53713 Created 
+reqs=8175 rps=815.9 p50=16.76ms p95=38.84ms failed=0.00%
+ Container openlog-phpspike-k6-run-827ab962e70e Creating 
+ Container openlog-phpspike-k6-run-827ab962e70e Created 
+reqs=22237 rps=1111.1 p50=12.83ms p95=24.86ms failed=0.00%
+variant,run,workers,rss_kb
+base,1,9,30415
+a,1,9,31708
+b,1,9,34912
+a,2,9,31432
+b,2,9,35419
+base,2,9,30496
+b,3,9,35098
+base,3,9,30952
+a,3,9,31150

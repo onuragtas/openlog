@@ -16,7 +16,9 @@ export type Permission =
   | "license_keys.manage"
   | "api_keys.revoke_any"
   | "audit.read"
-  | "fleet.manage";
+  | "fleet.manage"
+  | "alerts.write"
+  | "alerts.manage";
 
 /** Mirrors internal/auth/roles.go. The server enforces permissions; the UI only hides actions. */
 const MIN_ROLE: Record<Permission, Role> = {
@@ -30,6 +32,9 @@ const MIN_ROLE: Record<Permission, Role> = {
   "api_keys.revoke_any": "admin",
   "audit.read": "admin",
   "fleet.manage": "admin",
+  // Alerting: members create rules/mutes (and change their own) and work on incidents; admins manage all + channels.
+  "alerts.write": "member",
+  "alerts.manage": "admin",
 };
 
 export function atLeast(role: Role | null | undefined, min: Role): boolean {

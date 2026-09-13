@@ -70,7 +70,11 @@ func runMain(m *testing.M) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if env, err = readEnvFile(filepath.Join(repoRoot, "test/e2e/e2e.env")); err != nil {
+	envFile := os.Getenv("E2E_ENV_FILE") // another stack's ports and keys (apm_test.go TestAPMStandalone)
+	if envFile == "" {
+		envFile = filepath.Join(repoRoot, "test/e2e/e2e.env")
+	}
+	if env, err = readEnvFile(envFile); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -392,7 +396,9 @@ func TestE2E(t *testing.T) {
 	t.Run("agent_logs", testAgentLogs)
 	t.Run("process_metrics", testProcessMetrics)
 	t.Run("containers", testContainers)
-	t.Run("ui", testUI) // skipped unless E2E_UI=1
+	t.Run("apm", testAPM)       // apm_test.go
+	t.Run("alerts", testAlerts) // alerts_test.go
+	t.Run("ui", testUI)         // skipped unless E2E_UI=1
 	if os.Getenv("E2E_SKIP_OUTAGE") == "1" {
 		t.Log("E2E_SKIP_OUTAGE=1: skipping outage phases")
 		return

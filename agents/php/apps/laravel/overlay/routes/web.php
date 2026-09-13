@@ -18,7 +18,8 @@ Route::get('/bench/{id}', function (int $id) {
 Route::get('/users/{id}/orders', function (int $id) {
     $items = Item::query()->where('id', '<=', 5)->orderBy('id')->get();
     Redis::incr('orders:hits');
-    $resp = Http::timeout(2)->get('http://symfony-' . env('SPIKE_VARIANT', 'base') . '/api/products/' . $id);
+    // getenv, not env(): env() returns null once the config is cached.
+    $resp = Http::timeout(2)->get((getenv('SPIKE_SYMFONY_URL') ?: 'http://nginx-base:8081') . '/api/products/' . $id);
     return response()->json([
         'user' => $id,
         'items' => $items->count(),
