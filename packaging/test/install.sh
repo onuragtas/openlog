@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs scripts/install.sh in debian:12, ubuntu:24.04, rockylinux:9 (packages) and alpine (tarball)
+# Runs scripts/install.sh in debian:12, ubuntu:24.04, rockylinux/rockylinux:9 (packages) and alpine (tarball)
 # against a local HTTP server serving DIST (built with
 # `make release-local RELEASE_BASE_URL=http://host.docker.internal:18080`).
 #
@@ -124,6 +124,6 @@ run() { # image method
 
 run "${DEBIAN_IMAGE:-debian:12}" deb
 run "${UBUNTU_IMAGE:-ubuntu:24.04}" deb
-run "${ROCKY_IMAGE:-rockylinux:9}" rpm
+run "${ROCKY_IMAGE:-rockylinux/rockylinux:9}" rpm
 run "${ALPINE_IMAGE:-alpine:3.22}" tarball
 echo "all install.sh tests passed"

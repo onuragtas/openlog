@@ -298,7 +298,7 @@ helm-lint:
 	"$(HELM)" template openlog deploy/helm/openlog | docker run --rm -i $(KUBECONFORM_IMAGE) \
 		-strict -summary -ignore-missing-schemas -kubernetes-version 1.30.0 -
 
-# Install the built .deb/.rpm in debian:12 / rockylinux:9 containers (needs release-local).
+# Install the built .deb/.rpm in debian:12 / rockylinux/rockylinux:9 containers (needs release-local).
 package-test:
 	packaging/test/packages.sh $(RELEASE_DIR) $(VERSION)
 

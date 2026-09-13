@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs the openlog-infra-agent .deb in debian:12 and the .rpm in rockylinux:9 and checks the
+# Installs the openlog-infra-agent .deb in debian:12 and the .rpm in rockylinux/rockylinux:9 and checks the
 # layout (docs/contracts/releases-updates.md §3). systemd does not run in the containers, so the
 # checks cover files, the `current` symlink, the account, the unit file and `-version`.
 #
@@ -24,7 +24,7 @@ arch=$(docker version --format '{{.Server.Arch}}')
 case $arch in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; esac
 
 DEBIAN_IMAGE=${DEBIAN_IMAGE:-debian:12}
-ROCKY_IMAGE=${ROCKY_IMAGE:-rockylinux:9}
+ROCKY_IMAGE=${ROCKY_IMAGE:-rockylinux/rockylinux:9}
 
 # Shell run inside the container. $1 = deb|rpm.
 # shellcheck disable=SC2016

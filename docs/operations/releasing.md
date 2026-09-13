@@ -267,9 +267,9 @@ Notes:
   warning when helm is missing), `NFPM=nfpm` (local nfpm instead of Docker), `RELEASE_CHANNEL`,
   `RELEASE_COMPAT`, `RELEASE_IMAGE`, `RELEASE_INDEX_ARGS="--entry 0.8.0=https://…/manifest.json"`.
 - The backend tarballs embed the placeholder UI unless `make web` ran before.
-- Checks: `make package-test VERSION=0.9.0` (deb in debian:12, rpm in rockylinux:9, arch of the
+- Checks: `make package-test VERSION=0.9.0` (deb in debian:12, rpm in rockylinux/rockylinux:9, arch of the
   Docker host), `packaging/test/install.sh dist 0.9.0 0.10.0-beta.1` (install.sh in debian:12,
-  ubuntu:24.04, rockylinux:9, alpine; needs a release built with
+  ubuntu:24.04, rockylinux/rockylinux:9, alpine; needs a release built with
   `RELEASE_BASE_URL=http://host.docker.internal:18090` for the index URLs).
 
 ## deb / rpm layout
