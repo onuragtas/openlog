@@ -70,7 +70,7 @@ func TestReassemblyOutOfOrder(t *testing.T) {
 func TestReassemblyTimeout(t *testing.T) {
 	a := newAssembler(5*time.Second, 10)
 	now := time.Unix(1000, 0)
-	a.add(part(t, 1, traceHex(0), 0, false, 2), now)                  // root arrived, rest lost
+	a.add(part(t, 1, traceHex(0), 0, false, 2), now)                 // root arrived, rest lost
 	a.add(part(t, 1, traceHex(1), 1, true, 2), now.Add(time.Second)) // root part lost
 	if got := a.expire(now.Add(4999 * time.Millisecond)); len(got) != 0 {
 		t.Fatalf("expired early: %d", len(got))

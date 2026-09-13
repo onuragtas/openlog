@@ -248,7 +248,7 @@ func (f *Forwarder) sweepLoop() {
 		if len(expired) > 0 {
 			f.o.Stats.AddPHPReassemblyTimeouts(len(expired))
 		}
-		flush := now.Sub(lastFlush) >= f.o.FlushInterval
+		flush := now.Sub(lastFlush) >= f.o.FlushInterval*9/10 // ticker jitter must not delay a flush by a whole tick
 		if flush {
 			lastFlush = now
 		}

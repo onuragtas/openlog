@@ -1,0 +1,251 @@
+# openlog PHP agent demo. ALWAYS run with `-p openlog-php` (see Makefile); never touches the shared `openlog` stack.
+# Telemetry path: PHP (openlog.so) -> unix datagram /run/openlog-infra-agent/php.sock (shared volume) -> forwarder
+# -> http://openlog:4318 on the external network `openlog_default` (shared local openlog, license dev-license-key).
+# Images: `OPENLOG_EXT=1 make images` compiles agents/php/ext into every PHP image; OPENLOG_EXT=0 (default) runs the
+# apps uninstrumented.
+name: openlog-php
+
+x-php-common: &php-common
+  volumes:
+    - php-sock:/run/openlog-infra-agent
+  networks: [demo]
+  # glibc sends A and AAAA in parallel on one socket; with Docker's DNS one reply is occasionally lost and the old
+  # libcurl of the buster images (PHP 7.1/7.4) then waits the full 5 s resolver timeout. Sequential queries avoid it.
+  dns_opt: ["single-request"]
+  restart: unless-stopped
+  environment: &php-env
+    OPENLOG_AGENT: ${OPENLOG_AGENT:-on}
+    OPENLOG_ENVIRONMENT: demo
+    OPENLOG_TT_THRESHOLD_MS: ${OPENLOG_TT_THRESHOLD_MS:-500}
+    REDIS_HOST: redis
+  # TCP probe (no PHP request, so no health-check traces): FPM on 9000, Apache on 80.
+  healthcheck:
+    test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/9000"]
+    interval: 3s
+    retries: 60
+  depends_on:
+    mariadb: {condition: service_healthy}
+    postgres: {condition: service_healthy}
+    redis: {condition: service_started}
+    forwarder: {condition: service_started}
+
+x-php-build: &php-build
+  context: ..
+  args:
+    OPENLOG_EXT: ${OPENLOG_EXT:-0}
+
+x-nginx: &nginx
+  image: nginx:1.29-alpine
+  networks: [demo]
+  restart: unless-stopped
+  volumes:
+    - ./nginx/app.conf.template:/etc/nginx/templates/default.conf.template:ro
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+    interval: 5s
+    retries: 30
+
+services:
+  # ---------------------------------------------------------------- datastores
+  mariadb:
+    image: mariadb:11
+    networks: [demo]
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: demo
+      MARIADB_USER: demo
+      MARIADB_PASSWORD: demo
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./datastores/mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      retries: 60
+
+  postgres:
+    image: postgres:16-alpine
+    networks: [demo]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./datastores/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "demo", "-d", "demo"]
+      interval: 3s
+      retries: 60
+
+  redis:
+    image: redis:7-alpine
+    networks: [demo]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- forwarder (one for all PHP containers)
+  forwarder:
+    image: openlog-php/forwarder:dev
+    build: {context: ./forwarder}
+    restart: unless-stopped
+    networks: [demo, openlog]
+    environment:
+      OPENLOG_PHP_SOCKET: /run/openlog-infra-agent/php.sock
+      OPENLOG_PHP_SOCKET_MODE: "0666"
+      OPENLOG_PHP_UDP: 0.0.0.0:18127
+      OPENLOG_ENDPOINT: ${OPENLOG_ENDPOINT:-http://openlog:4318}
+      OPENLOG_LICENSE_KEY: ${OPENLOG_LICENSE_KEY:-dev-license-key}
+      OPENLOG_HOST_NAME: openlog-php-demo
+      OPENLOG_DEBUG_DUMP: ${OPENLOG_DEBUG_DUMP:-0}
+    volumes:
+      - php-sock:/run/openlog-infra-agent
+
+  # ---------------------------------------------------------------- 1. Laravel 12 / PHP 8.3 (FPM + nginx)
+  php-laravel-83:
+    <<: *php-common
+    image: openlog-php/laravel-83:dev
+    build:
+      <<: *php-build
+      dockerfile: demo/laravel/Dockerfile
+      args:
+        OPENLOG_EXT: ${OPENLOG_EXT:-0}
+        PHP_IMAGE: php:8.3-fpm-bookworm
+        REDIS_VERSION: 6.2.0
+        LARAVEL_CONSTRAINT: ^12.0
+        ENV_FILE: laravel-83.env
+    environment:
+      <<: *php-env
+      OPENLOG_SERVICE_NAME: php-laravel-83
+      FPM_WORKERS: 4
+      DEMO_SYMFONY_URL: http://nginx-symfony-83
+      DEMO_PEER_URL: http://nginx-laravel-74
+  nginx-laravel-83:
+    <<: *nginx
+    environment: {PHP_HOST: php-laravel-83}
+    ports: ["127.0.0.1:28901:80"]
+    depends_on:
+      php-laravel-83: {condition: service_healthy}
+
+  # ---------------------------------------------------------------- 2. Laravel 8 / PHP 7.4 (FPM + nginx)
+  php-laravel-74:
+    <<: *php-common
+    image: openlog-php/laravel-74:dev
+    build:
+      <<: *php-build
+      dockerfile: demo/laravel/Dockerfile
+      args:
+        OPENLOG_EXT: ${OPENLOG_EXT:-0}
+        # buster (archive.debian.org) instead of bullseye: bullseye-security currently 404s for arm64 packages
+        PHP_IMAGE: php:7.4-fpm-buster
+        REDIS_VERSION: 6.0.2
+        LARAVEL_CONSTRAINT: ^8.0
+        ENV_FILE: laravel-74.env
+        # Laravel 8 has open advisories; Composer currently only reports them. If resolution gets blocked, set
+        # COMPOSER_BLOCK_INSECURE=false (demo only).
+        COMPOSER_BLOCK_INSECURE: ${COMPOSER_BLOCK_INSECURE:-true}
+    environment:
+      <<: *php-env
+      OPENLOG_SERVICE_NAME: php-laravel-74
+      FPM_WORKERS: 4
+      DEMO_SYMFONY_URL: http://nginx-symfony-83
+      DEMO_PEER_URL: http://nginx-laravel-83
+  nginx-laravel-74:
+    <<: *nginx
+    environment: {PHP_HOST: php-laravel-74}
+    ports: ["127.0.0.1:28902:80"]
+    depends_on:
+      php-laravel-74: {condition: service_healthy}
+
+  # ---------------------------------------------------------------- 3. Symfony 7.4 / PHP 8.3 (FPM + nginx)
+  php-symfony-83:
+    <<: *php-common
+    image: openlog-php/symfony-83:dev
+    build:
+      <<: *php-build
+      dockerfile: demo/symfony/Dockerfile
+    environment:
+      <<: *php-env
+      OPENLOG_SERVICE_NAME: php-symfony-83
+      FPM_WORKERS: 4
+      PG_HOST: postgres
+      DEMO_LARAVEL83_URL: http://nginx-laravel-83
+      DEMO_LARAVEL74_URL: http://nginx-laravel-74
+  nginx-symfony-83:
+    <<: *nginx
+    environment: {PHP_HOST: php-symfony-83}
+    ports: ["127.0.0.1:28903:80"]
+    depends_on:
+      php-symfony-83: {condition: service_healthy}
+
+  # ---------------------------------------------------------------- 4. WordPress / PHP 8.2 (Apache mod_php)
+  php-wordpress-82:
+    <<: *php-common
+    image: openlog-php/wordpress-82:dev
+    build:
+      <<: *php-build
+      dockerfile: demo/wordpress/Dockerfile
+    environment:
+      <<: *php-env
+      OPENLOG_SERVICE_NAME: php-wordpress-82
+      WORDPRESS_DB_HOST: mariadb:3306
+      WORDPRESS_DB_USER: demo
+      WORDPRESS_DB_PASSWORD: demo
+      WORDPRESS_DB_NAME: wordpress
+      WP_HOME: http://127.0.0.1:28904
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', getenv('WP_HOME'));
+        define('WP_SITEURL', getenv('WP_HOME'));
+        define('DISABLE_WP_CRON', true);
+      DEMO_UPSTREAM_URL: http://nginx-symfony-83
+    ports: ["127.0.0.1:28904:80"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/var/www/html/.demo-installed"]
+      interval: 3s
+      retries: 100
+
+  # ---------------------------------------------------------------- 5. plain PHP 7.1 (Apache mod_php)
+  php-plain-71:
+    <<: *php-common
+    image: openlog-php/plain-71:dev
+    build:
+      <<: *php-build
+      dockerfile: demo/plain71/Dockerfile
+    environment:
+      <<: *php-env
+      OPENLOG_SERVICE_NAME: php-plain-71
+      DB_HOST: mariadb
+      PG_HOST: postgres
+      DEMO_UPSTREAM_URL: http://nginx-laravel-74
+      DEMO_SYMFONY_URL: http://nginx-symfony-83
+    ports: ["127.0.0.1:28905:80"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/80"]
+      interval: 3s
+      retries: 60
+
+  # ---------------------------------------------------------------- load generator (profile "load")
+  loadgen:
+    image: openlog-php/loadgen:dev
+    build: {context: ./loadgen}
+    profiles: ["load"]
+    networks: [demo]
+    restart: unless-stopped
+    environment:
+      LOAD_IN_COMPOSE: "1"
+      LOAD_RATE: ${LOAD_RATE:-3}
+    volumes:
+      - ./load.sh:/load.sh:ro
+    command: ["bash", "/load.sh", "--loop"]
+
+networks:
+  demo: {}
+  openlog:
+    name: ${OPENLOG_NETWORK:-openlog_default}
+    external: true
+
+volumes:
+  php-sock:
+  mariadb-data:
+  postgres-data:

@@ -136,8 +136,8 @@ func TestReassemblyTimeoutIncomplete(t *testing.T) {
 	now := time.Unix(1000, 0)
 	f, col, st := newTestForwarder(&now)
 	lostRoot := splitMessage(t, "11111111111111111111111111111111", "", 3)
+	f.handle(lostRoot[0]) // the last part (with the root) never arrives
 	f.handle(lostRoot[1])
-	f.handle(lostRoot[2])
 	lostChild := splitMessage(t, "22222222222222222222222222222222", "", 3)
 	f.handle(lostChild[0])
 	f.handle(lostChild[2])
@@ -339,10 +339,9 @@ func splitMessage(t *testing.T, traceID, remoteParent string, n int) [][]byte {
 		return fmt.Sprintf(`{"id":"b00000000000000%d","parent":"a000000000000001","name":"App\\Services\\Report::build","kind":1,"start":%d,"dur":1000,"attrs":{"openlog.php.segment":"function"}}`, i, 1789302480000000000+i)
 	}
 	spans := []string{child(1), child(2), child(3), root}
-	per := (len(spans) + n - 1) / n
 	var out [][]byte
-	for seq := 0; seq < n; seq++ {
-		lo, hi := seq*per, min((seq+1)*per, len(spans))
+	for seq := 0; seq < n; seq++ { // one child per part, the rest (always including the root) in the last part
+		lo, hi := seq, seq+1
 		if seq == n-1 {
 			hi = len(spans)
 		}

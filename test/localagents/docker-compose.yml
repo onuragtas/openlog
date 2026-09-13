@@ -17,6 +17,9 @@
 #   orders        Go (OTel) -> orders-db
 #   catalog       PHP 8.3 (OTel) -> redis
 #   loadgen       ~8 req/s against frontend
+#   php-host      Debian 12 + PHP 8.3-FPM + nginx + openlog PHP extension + openlog-infra-agent (php_forwarder)
+#                 http://localhost:${LOCALAGENTS_PHP_PORT:-33080}; service php-shop, host.id a0de…0003
+#                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps php-host)
 
 name: openlog-agents
 
@@ -144,6 +147,26 @@ services:
     volumes: ["web-host-state:/var/lib/openlog-infra-agent"]
     restart: unless-stopped
 
+  php-host:
+    build:
+      context: php-host
+      # phpext: switch to ../../agents/php/ext once the v1 extension exists (patch-v1.pl is skipped for v1 sources).
+      additional_contexts: {agent: ../../agents/infra, release: ../../libs/release, phpext: ../../agents/php/prototype-a/ext}
+      args: {AGENT_VERSION: 0.9.1-local}
+    image: openlog-localagents/php-host:1
+    hostname: php-host
+    init: true
+    # NET_ADMIN only for outage drills (iptables -A OUTPUT -p tcp --dport 4318 -j REJECT inside the container).
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH, NET_ADMIN]
+    environment:
+      PHP_HOST_MACHINE_ID: a0de0000000000000000000000000003
+      PHP_HOST_LOADGEN_RPS: ${LOCALAGENTS_PHP_LOADGEN_RPS:-2}
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    ports: ["${LOCALAGENTS_PHP_PORT:-33080}:80"]
+    volumes: ["php-host-state:/var/lib/openlog-infra-agent"]
+    restart: unless-stopped
+
 networks:
   default:
     name: openlog_default
@@ -152,3 +175,4 @@ networks:
 volumes:
   orders-db:
   web-host-state:
+  php-host-state:

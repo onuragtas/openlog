@@ -117,7 +117,7 @@ php_forwarder:                   # receives spans from the openlog PHP extension
   reassembly_timeout: 5s         # incomplete traces are exported with openlog.php.incomplete=true
 
 update:
-  enabled: true                # apply signed updates ordered by the backend (sync/version reporting runs regardless)
+  enabled: true                 # apply signed updates ordered by the backend (sync/version reporting runs regardless)
   install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user
 
 release:
