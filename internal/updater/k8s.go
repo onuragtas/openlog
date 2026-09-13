@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -294,17 +296,26 @@ func (e *K8sEngine) Apply(ctx context.Context, t *Target, st *Status, save func(
 		return nil
 	}
 	rbErr := step("rollback", func() (string, error) {
+		// Roll back in the configured deployment order (same as the rollout) and in container-name
+		// order, so the sequence of patches is deterministic.
 		var errs []error
-		for name, prev := range previous {
+		for _, name := range e.Cfg.Deployments {
+			prev, ok := previous[name]
+			if !ok {
+				continue
+			}
 			var containers []map[string]string
-			for c, img := range prev {
-				containers = append(containers, map[string]string{"name": c, "image": img})
+			for _, c := range slices.Sorted(maps.Keys(prev)) {
+				containers = append(containers, map[string]string{"name": c, "image": prev[c]})
 			}
 			if err := e.patchImages(ctx, name, containers); err != nil {
 				errs = append(errs, fmt.Errorf("patch %s: %w", name, err))
 			}
 		}
-		for name := range previous {
+		for _, name := range e.Cfg.Deployments {
+			if _, ok := previous[name]; !ok {
+				continue
+			}
 			if err := e.waitRollout(ctx, name, e.Cfg.RolloutTimeout); err != nil {
 				errs = append(errs, err)
 			}
