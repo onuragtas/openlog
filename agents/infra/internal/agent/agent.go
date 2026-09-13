@@ -187,9 +187,16 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 			Emit: func(td *tracepb.TracesData, spans int) { a.enqueue(exporter.SignalTraces, spans, td) },
 		})}
 		lc := cfg.Logs
-		if lc.Enabled && (len(lc.Files) > 0 || lc.Journald.Enabled || (lc.AutoFromDiscovery && cfg.Discovery.Enabled)) {
+		// Container logs need container support (containers.enabled).
+		lc.Containers.Enabled = lc.Containers.Enabled && cfg.Containers.Enabled
+		if lc.Enabled && (len(lc.Files) > 0 || lc.Journald.Enabled || (lc.AutoFromDiscovery && cfg.Discovery.Enabled) || lc.Containers.Enabled) {
+			var ctrSrc logs.ContainerSource
+			if a.ctr != nil {
+				ctrSrc = a.ctr
+			}
 			a.logs = logs.New(logs.Options{
-				Config: lc, FS: a.fs, StateDir: cfg.StateDir, Resource: a.res, Scope: a.scope(),
+				Containers: ctrSrc,
+				Config:     lc, FS: a.fs, StateDir: cfg.StateDir, Resource: a.res, Scope: a.scope(),
 				Emit: func(ld *logspb.LogsData, records int, ack func()) {
 					parts := exporter.SplitLogs(ld, cfg.Export.MaxRequestBytes)
 					for i, part := range parts {

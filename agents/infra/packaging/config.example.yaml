@@ -66,6 +66,20 @@ logs:
     journalctl_path: journalctl
     units: []                    # e.g. [nginx.service]; empty = all
     priority: ""                 # e.g. warning (emerg..debug or 0..7); empty = all
+  containers:                    # stdout/stderr of Docker containers (needs containers.enabled)
+    enabled: true
+    source: auto                 # auto: json-file log when readable (CAP_DAC_READ_SEARCH, set by the systemd unit),
+                                 # else the Docker Engine API (docker group) | file | api
+    max_containers: 100          # running containers first
+    rate_limit_lines: 1000       # per container per second; 0 = unlimited; excess waits (no drops)
+    docker_containers_dir: /var/lib/docker/containers   # json-file logs when the Docker API is not accessible
+    include: []                  # empty = every container; an item matches when all its fields match (globs)
+    exclude: []
+    # exclude:
+    #   - compose_service: loadgen
+    #   - image: "busybox*"          # reference, name without tag or last path segment
+    #   - label: "com.example.debug=true"
+    # A container label openlog.logs=false always disables its logs.
 
 integrations:                    # metric integrations bound to discovered services (semantic-conventions §6)
   enabled: true                  # master switch (needs discovery.enabled)

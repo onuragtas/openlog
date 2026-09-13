@@ -104,10 +104,27 @@ Read from cgroup v2 for every directory under `/sys/fs/cgroup` named after a 64-
 | `container.blockio.io` | Sum, cumulative, monotonic | `By` | `io.stat` rbytes/wbytes summed over devices; `disk.io.direction` = `read`,`write` |
 | `container.blockio.operations` | Sum, cumulative, monotonic | `{operation}` | `io.stat` rios/wios; `disk.io.direction` |
 | `container.network.io` | Sum, cumulative, monotonic | `By` | `/proc/<pid>/net/dev` of a container process, non-`lo` interfaces summed; `network.io.direction` = `receive`,`transmit`; omitted for containers in the host network namespace |
+| `container.restarts` | Sum, cumulative, monotonic | `{restart}` | Docker `RestartCount` (inspect); only with Docker metadata |
+| `openlog.container.status` | Gauge | `1` | value 1 per container; `openlog.container.state` = Docker state (`running`,`paused`,`restarting`,`exited`,`created`,`dead`); `openlog.container.health` = `healthy`,`unhealthy`,`starting` (only with a healthcheck); `openlog.container.started_at` = RFC3339 start time (inspect) |
 
-Data point attributes: `container.id` (always), `container.name`, `container.image.name`, `container.image.tags` (string array; e.g. `["1.25"]`)
-when Docker metadata is available, `container.runtime` (`docker`, `containerd`, `cri-o`, `podman`) when known.
+Data point attributes of every container metric: `container.id` (always), `container.name`, `container.image.name`, `container.image.tags`
+(string array; e.g. `["1.25"]`) when Docker metadata is available, `container.runtime` (`docker`, `containerd`, `cri-o`, `podman`) when known,
+and from container labels (Docker metadata only): `docker.compose.project` (`com.docker.compose.project`), `docker.compose.service`
+(`com.docker.compose.service`), `k8s.pod.name` (`io.kubernetes.pod.name`), `k8s.namespace.name` (`io.kubernetes.pod.namespace`),
+`k8s.container.name` (`io.kubernetes.container.name`; Kubernetes on Docker via cri-dockerd — containerd/CRI-O hosts have no names, see below).
 Cumulative container counters carry no start time.
+
+`openlog.container.status` is sent every metrics interval for every container listed by the Docker Engine API that is running, paused or
+restarting, or that stopped, started or was created within the last 24 hours, and for every container cgroup without Docker metadata (state
+`running`, no health); at most 500 containers per sample, running ones first. Stopped containers therefore stay visible (with their state)
+until 24 hours after they stopped. `GET /containers/{id}/json` (start time, restart count, health, log source) runs for new containers, on
+state changes and at most once a minute per running container, at most 64 per listing. Without the Docker socket (or permission) the agent
+still sends cgroup metrics and status for running containers, keyed by `container.id` only; containerd, CRI-O and Podman containers are
+never enriched (no names, images or labels).
+
+**Container entity (backend).** The materialized view `containers_mv` (schema 0009) keeps one row per (tenant, `host.id`, `container.id`)
+from `openlog.container.status`, `container.restarts` and `container.cpu.time` points: first/last seen, host name, the identity attributes
+above, and state, health and start time of the latest status point (API: [api.md](api.md) "Containers"). 30 days after the last point.
 
 ### Agent self-telemetry
 
@@ -172,7 +189,7 @@ Unknown fields must be ignored by consumers; missing fields are allowed.
 | `user` | user name | `name`, `uid`, `gid`, `home`, `shell` |
 | `network_interface` | interface name | `name`, `mac`, `mtu`, `operstate`, `addresses` |
 | `mount` | mount point | `mountpoint`, `device`, `fs_type`, `options` |
-| `container` | container id (64 hex) | `id`, `name`, `runtime` (`docker`), `image` (as reported, e.g. `nginx:1.25` or `sha256:…`), `image_id`, `state` (`running`,`exited`,`paused`,`created`,…), `created` (RFC3339), `labels` (object; at most 100 keys, values truncated to 256 bytes), `ports` (array of `{ip, private_port, public_port, protocol}`) |
+| `container` | container id (64 hex) | `id`, `name`, `runtime` (`docker`), `image` (as reported, e.g. `nginx:1.25` or `sha256:…`), `image_id`, `state` (`running`,`exited`,`paused`,`created`,…), `health` (`healthy`,`unhealthy`,`starting`; omitted without healthcheck), `created` (RFC3339), `started_at` / `finished_at` (RFC3339; omitted until inspected or when never started/stopped), `restart_count`, `exit_code` (stopped containers, omitted when 0), `labels` (object; at most 100 keys, values truncated to 256 bytes), `ports` (array of `{ip, private_port, public_port, protocol}`) |
 | `discovered_service` | `<rule_id>:<instance>` | see 3.4 |
 
 ### 3.4 `discovered_service` body
@@ -253,7 +270,7 @@ Environment variables and file contents are never collected (log files are colle
 
 ## 4. Log records (infra agent)
 
-Log lines are sent as ordinary OTLP LogRecords on the logs signal in the host resource of §1. They never carry `event.name` or `openlog.inventory.*` attributes.
+Log lines are sent as ordinary OTLP LogRecords on the logs signal in the host resource of §1 (container logs: see §4.1). They never carry `event.name` or `openlog.inventory.*` attributes.
 
 | Field | Files | journald |
 |---|---|---|
@@ -289,6 +306,42 @@ Masking: log bodies are user data and are **not** masked by default. With `logs.
 
 Delivery is at-least-once: file offsets and the journal cursor are committed after the batch was sent or written to the disk buffer, so a crash can resend up to a few seconds of records.
 
+### 4.1 Container logs (`logs.containers`)
+
+stdout/stderr of Docker containers, collected automatically (default on; requires `containers.enabled`). Each container's records are a
+separate `ResourceLogs` whose resource is the host resource of §1 plus the container identity attributes of §2 "Container metrics"
+(`container.id`, `container.name`, `container.image.name`, `container.image.tags`, `container.runtime`, `docker.compose.project`,
+`docker.compose.service`, `k8s.*`).
+
+| Field | Value |
+|---|---|
+| `time_unix_nano` | Docker's time of the message |
+| `observed_time_unix_nano` | time read |
+| `body` | the message without its trailing newline; messages Docker split into 16 KiB parts are joined; same limits, severity heuristic and masking as files |
+| `trace_id` / `span_id` | from a JSON object body (≤ 16 KiB) with a 32-hex `trace_id`, `traceId`, `traceID`, `trace.id`, `otelTraceID` or `TraceId` field (not all zeros), and a 16-hex `span_id`/`spanId`/`span.id`/`otelSpanID` field |
+| attribute `openlog.log.source` | `container` |
+| attribute `log.iostream` | `stdout` or `stderr` (absent for lines that are not json-file entries) |
+| attribute `openlog.log.truncated` | as for files |
+
+Sources, per container (`logs.containers.source: auto`): the json-file log (`LogPath` from `GET /containers/{id}/json`, e.g.
+`/var/lib/docker/containers/<id>/<id>-json.log`) when the agent can open it — the files are `root:root 0640` in a `0710` directory, so this
+needs `CAP_DAC_READ_SEARCH` (granted by the systemd unit) or root —, otherwise the Docker Engine API
+`GET /containers/{id}/logs?follow=1&stdout=1&stderr=1&timestamps=1&since=…` (docker group). The API also serves the `local` and `journald`
+drivers and, with Docker ≥ 20.10 dual logging, most remote drivers; drivers that cannot be read (`none`, or remote drivers with dual logging
+disabled) are retried with backoff (30 s … 5 min) and logged once. `source: file` / `api` force one path. Without API access the agent lists
+`logs.containers.docker_containers_dir/<id>/` and reads `config.v2.json` (name, image, labels, state) when readable.
+
+Selection: running, paused and restarting containers, plus stopped containers until their log was read to the end (they stopped after the
+agent started, or a saved position exists); running containers first, at most `max_containers`. A container label `openlog.logs=false`
+disables a container; `exclude` then `include` (empty = all) match `name`, `image` (reference, name without tag or last path segment),
+`compose_project`, `compose_service` and `label` (`key` or `key=value`) with `filepath.Match` globs, all given fields of an item must match.
+
+Positions: json-file logs use the file offsets of §4 (rotation `<id>-json.log` → `.1` is followed; when the agent was down during a rotation
+the rest of `<id>-json.log.1` is read before the new file). Containers running at the first listing start at `logs.start_at`; containers
+seen later are read from their beginning, skipping messages older than the agent start (`start_at: end`) or already read. API streams
+store the Docker time of the last delivered record per container in the state file and resume after it. Per-container rate limit
+`rate_limit_lines` (backpressure: the file keeps unread data, the stream blocks). Multiline grouping is not applied to container logs.
+
 ## 5. Infra agent configuration keys (M1 additions)
 
 | Key | Default | Meaning |
@@ -308,6 +361,12 @@ Delivery is at-least-once: file offsets and the journal cursor are committed aft
 | `logs.parse_severity` | `true` | file severity heuristic |
 | `logs.mask_secrets` | `false` | apply §3.5 masking to log bodies |
 | `logs.poll_interval` | `1s` | file poll and batch flush interval |
+| `logs.containers.enabled` | `true` | container logs (§4.1); needs `containers.enabled` |
+| `logs.containers.source` | `auto` | `auto`, `file` (json-file logs only) or `api` (Docker Engine API only) |
+| `logs.containers.max_containers` | `100` | containers read at once (1–1000) |
+| `logs.containers.rate_limit_lines` | `1000` | lines per second per container (0 = unlimited) |
+| `logs.containers.include[]` / `exclude[]` | `[]` | `{name, image, compose_project, compose_service, label}` globs; label `openlog.logs=false` always excludes |
+| `logs.containers.docker_containers_dir` | `/var/lib/docker/containers` | json-file logs without Docker API access (host path under `host.root_path`) |
 
 ## 6. Integrations (infra agent, M2, D-031)
 

@@ -99,6 +99,8 @@ export interface LogAttrFilters {
   discoveryId?: string;
   /** openlog.systemd.unit */
   systemdUnit?: string;
+  /** log.iostream of container logs: stdout | stderr */
+  stream?: string;
 }
 
 /** Query parameters for LogAttrFilters; empty values are omitted. */
@@ -107,9 +109,10 @@ export const logAttrQuery = (a?: LogAttrFilters) => ({
   "attr.log.file.path": a?.filePath || undefined,
   "attr.openlog.discovery.id": a?.discoveryId || undefined,
   "attr.openlog.systemd.unit": a?.systemdUnit || undefined,
+  "attr.log.iostream": a?.stream || undefined,
 });
 
-const logAttrKey = (a?: LogAttrFilters) => [a?.source ?? "", a?.filePath ?? "", a?.discoveryId ?? "", a?.systemdUnit ?? ""];
+const logAttrKey = (a?: LogAttrFilters) => [a?.source ?? "", a?.filePath ?? "", a?.discoveryId ?? "", a?.systemdUnit ?? "", a?.stream ?? ""];
 
 export interface LogsRequest {
   range: RangeSpec;
@@ -118,13 +121,15 @@ export interface LogsRequest {
   q?: string;
   severity?: string;
   traceId?: string;
+  /** container logs (resource attribute container.id) */
+  containerId?: string;
   attrs?: LogAttrFilters;
   limit?: number;
 }
 
 export const logsQuery = (r: LogsRequest) =>
   queryOptions({
-    queryKey: ["logs", r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "", ...logAttrKey(r.attrs), r.limit ?? 200],
+    queryKey: ["logs", r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "", r.containerId ?? "", ...logAttrKey(r.attrs), r.limit ?? 200],
     queryFn: async ({ signal }) => {
       const { from, to } = resolveRange(r.range, Date.now());
       return unwrap(
@@ -138,6 +143,7 @@ export const logsQuery = (r: LogsRequest) =>
               q: r.q || undefined,
               severity_min: r.severity || undefined,
               trace_id: r.traceId || undefined,
+              container_id: r.containerId || undefined,
               ...logAttrQuery(r.attrs),
               limit: r.limit ?? 200,
             },
@@ -167,7 +173,7 @@ export interface LogPage {
 export const logsInfiniteQuery = (r: LogsRequest) => {
   const limit = r.limit ?? LOG_PAGE_SIZE;
   return infiniteQueryOptions({
-    queryKey: ["logs-pages", r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "", ...logAttrKey(r.attrs), limit],
+    queryKey: ["logs-pages", r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "", r.containerId ?? "", ...logAttrKey(r.attrs), limit],
     initialPageParam: null as LogPageParam | null,
     queryFn: async ({ pageParam, signal }): Promise<LogPage> => {
       let page = pageParam;
@@ -186,6 +192,7 @@ export const logsInfiniteQuery = (r: LogsRequest) => {
               q: r.q || undefined,
               severity_min: r.severity || undefined,
               trace_id: r.traceId || undefined,
+              container_id: r.containerId || undefined,
               ...logAttrQuery(r.attrs),
               limit,
             },

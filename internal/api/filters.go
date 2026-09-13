@@ -41,6 +41,7 @@ var logAttrFilters = map[string]bool{
 	"openlog.discovery.id":      true,
 	"openlog.systemd.unit":      true,
 	"openlog.syslog.identifier": true,
+	"log.iostream":              true,
 }
 
 const maxAttrFilterValueBytes = 1024

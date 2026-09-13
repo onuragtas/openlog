@@ -4,6 +4,7 @@ import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import { accountHandlers, authenticate } from "./account";
 import { alertHandlers } from "./alerts";
 import { apmHandlers } from "./apm";
+import { containerHandlers, containerLogs } from "./containers";
 import { fleetHandlers } from "./fleet";
 import { integrationSettingsHandlers } from "./integrationSettings";
 import * as fx from "./fixtures";
@@ -16,7 +17,7 @@ export function apiError(code: ErrorCode, message: string) {
 }
 
 /** Attribute keys accepted as attr.<key> log filters (internal/api/filters.go). */
-const LOG_ATTR_FILTERS = ["openlog.log.source", "log.file.path", "log.file.name", "openlog.discovery.id", "openlog.systemd.unit", "openlog.syslog.identifier"];
+const LOG_ATTR_FILTERS = ["openlog.log.source", "log.file.path", "log.file.name", "openlog.discovery.id", "openlog.systemd.unit", "openlog.syslog.identifier", "log.iostream"];
 
 /** Wraps a resolver with the authentication done by internal/api wrap(): session (see mocks/account.ts) or API key. */
 function authed(resolver: HttpResponseResolver): HttpResponseResolver {
@@ -214,13 +215,17 @@ export const handlers = [
       if (!value || p.getAll(name).length !== 1) return apiError("invalid_argument", `attr.${key}: exactly one non-empty value is required`);
       attrFilters.push([key, value]);
     }
-    const list = fx.logs(Date.now()).filter((l) => {
+    const containerId = (p.get("container_id") ?? "").toLowerCase();
+    const now = Date.now();
+    const list = [...fx.logs(now), ...containerLogs(now)].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).filter((l) => {
       const ts = Date.parse(l.timestamp);
       if (ts < r.from || ts > r.to) return false;
       if (p.get("host_id") && l.host_id !== p.get("host_id")) return false;
       if (p.get("service") && l.service_name !== p.get("service")) return false;
       if (q && !l.body.toLowerCase().includes(q)) return false;
       if (traceId && l.trace_id !== traceId) return false;
+      if (containerId && l.resource_attributes["container.id"] !== containerId) return false;
+      if (p.get("compose_service") && l.resource_attributes["docker.compose.service"] !== p.get("compose_service")) return false;
       if (sevMin !== null && l.severity_number < sevMin) return false;
       if (attrFilters.some(([k, v]) => l.attributes[k] !== v)) return false;
       return true;
@@ -239,6 +244,7 @@ export const handlers = [
   ...accountHandlers,
   ...fleetHandlers,
   ...integrationSettingsHandlers,
+  ...containerHandlers,
   ...apmHandlers,
   ...alertHandlers,
 

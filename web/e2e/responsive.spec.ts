@@ -5,12 +5,20 @@ import { expect, test, type Page } from "@playwright/test";
 // container, so neither the document nor the <main> scroll area may be wider than the viewport.
 
 const HOST = "9f3c2a71d4b84e0f8a6b1c2d3e4f5a6b";
+const CONTAINER = "0a".repeat(32);
 const SERVICE = "/apm/services/orders?ns=shop&env=prod";
 
 const ROUTES = [
   "/hosts",
   `/hosts/${HOST}`,
   `/hosts/${HOST}?tab=services`,
+  `/hosts/${HOST}?tab=containers`,
+  "/containers",
+  "/containers?group=true",
+  `/containers/${CONTAINER}`,
+  `/containers/${CONTAINER}?tab=services`,
+  `/containers/${CONTAINER}?tab=logs`,
+  `/containers/${CONTAINER}?tab=attributes`,
   `/hosts/${HOST}?tab=inventory`,
   `/hosts/${HOST}?tab=logs`,
   "/apm",

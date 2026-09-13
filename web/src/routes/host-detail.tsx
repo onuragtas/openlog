@@ -12,6 +12,7 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { parseTimeParam } from "@/lib/time";
 import { HOST_TABS, type HostTab } from "@/router";
+import { HostContainersTab } from "./host/containers-tab";
 import { HostInventoryTab } from "./host/inventory-tab";
 import { HostLogsTab } from "./host/logs-tab";
 import { HostOverviewTab } from "./host/overview-tab";
@@ -100,6 +101,7 @@ export function HostDetailPage() {
         <TabsContent value="services">
           <HostServicesTab hostId={hostId} />
         </TabsContent>
+        <TabsContent value="containers">{tab === "containers" && <HostContainersTab hostId={hostId} />}</TabsContent>
         <TabsContent value="inventory">
           <HostInventoryTab hostId={hostId} />
         </TabsContent>

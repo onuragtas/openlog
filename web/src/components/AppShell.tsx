@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { Activity, Bell, Boxes, LogOut, Menu, MoreVertical, Plug, Rocket, ScrollText, Server, Settings, X } from "lucide-react";
+import { Activity, Bell, Boxes, Container, LogOut, Menu, MoreVertical, Plug, Rocket, ScrollText, Server, Settings, X } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
 import { logout, useMe } from "@/api/account";
@@ -17,6 +17,7 @@ import type { RangeSpec } from "@/lib/time";
 
 const NAV = [
   { to: "/hosts", icon: Server, label: "nav.hosts" },
+  { to: "/containers", icon: Container, label: "nav.containers" },
   { to: "/integrations", icon: Plug, label: "nav.integrations" },
   { to: "/apm", icon: Activity, label: "nav.apm" },
   { to: "/logs", icon: ScrollText, label: "nav.logs" },

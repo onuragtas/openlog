@@ -145,7 +145,7 @@ func TestLogAttributeFilters(t *testing.T) {
 	}
 
 	for _, bad := range []struct{ query, want string }{
-		{"attr.password=hunter2", "attr.password: unsupported attribute filter (supported: log.file.name, log.file.path, openlog.discovery.id, openlog.log.source, openlog.syslog.identifier, openlog.systemd.unit)"},
+		{"attr.password=hunter2", "attr.password: unsupported attribute filter (supported: log.file.name, log.file.path, log.iostream, openlog.discovery.id, openlog.log.source, openlog.syslog.identifier, openlog.systemd.unit)"},
 		{"attr.log.file.path=", "exactly one non-empty value"},
 		{"attr.log.file.path=/a&attr.log.file.path=/b", "exactly one non-empty value"},
 		{"attr.openlog.systemd.unit=" + strings.Repeat("x", 1025), "at most 1024 bytes"},

@@ -206,6 +206,65 @@ Every `/hosts/{host_id}/…` endpoint (`metrics`, `inventory`, `services`) first
 in the caller's organization and returns `404 not_found` (`"host not found"`) otherwise. A host of another
 organization is indistinguishable from an unknown one. Parameter errors (`400`) are reported before this check.
 
+## Containers
+
+Containers reported by the infra agent: cgroup metrics, `openlog.container.status` and `container.restarts` data points
+(semantic-conventions.md §2 "Container metrics"), kept in the `containers` table (0009_containers, 30 days after the last
+data point). A container is identified by `container_id` (64 hex); `reporting` is false when its last data point is older
+than 5 minutes. Telemetry permissions (any role, API keys too); every query is tenant-scoped. `container_id` path
+parameters that are not 64 hex characters → `400 invalid_argument`.
+
+**Container object** (`Container`):
+```json
+{"container_id": "3f4e…", "name": "openlog-agents-orders-1", "image_name": "openlog-apmdemo/orders", "image_tags": ["1"],
+ "runtime": "docker", "host_id": "…", "host_name": "docker-desktop", "compose_project": "openlog-agents",
+ "compose_service": "orders", "k8s_pod_name": "", "k8s_namespace_name": "", "k8s_container_name": "",
+ "state": "running", "health": "healthy", "started_at": "2026-09-14T09:00:00.5Z", "restart_count": 0,
+ "first_seen": "…", "last_seen": "…", "reporting": true,
+ "cpu_utilization": 0.012, "memory_usage": 18350080, "memory_limit": 8233447424,
+ "cpu_sparkline": [[1757757600000, 0.011]], "memory_sparkline": [[1757757600000, 18350080]]}
+```
+`state` is the Docker state (`running`, `paused`, `restarting`, `exited`, `created`, `dead`) or `""` when the agent sends
+none (no Docker API access); `health` is `healthy`/`unhealthy`/`starting` or `""`; `started_at` is `null` when unknown.
+`cpu_utilization` (0..1 of the host), `memory_usage` and `memory_limit` (bytes; host memory when unlimited) are the latest
+bucket of the range, `null` without data points.
+
+### `GET /api/v1/containers?host_id=&compose_project=&compose_service=&state=&q=&from=&to=&limit=`
+Containers with data in `[from, to]` (default last hour), ordered by compose project, compose service and name:
+`{"containers": [Container…], "total": 12, "step": "120s"}`. `total` counts matches before `limit`; sparklines have
+≈ 30 buckets of `step`. `compose_project`/`compose_service` are exact matches, present but empty = containers without
+one; `state` is one of the states above or `unknown` (`400` otherwise); `q` (≤ 256 bytes) matches every whitespace-separated
+term, case-insensitive, against id, name, image, tags, host, compose and Kubernetes names.
+
+### `GET /api/v1/containers/groups?host_id=&state=&q=&from=&to=`
+The same containers grouped by compose project and service. `running` counts reporting containers in state `running`;
+`cpu_utilization` and `memory_usage` sum the latest values of reporting containers (`null` without data; not computed
+above `OPENLOG_API_MAX_ROWS` containers).
+```json
+{"projects": [{"compose_project": "openlog-agents", "host_ids": ["…"], "containers": 9, "running": 9,
+  "services": [{"compose_service": "orders", "containers": 1, "running": 1, "cpu_utilization": 0.01, "memory_usage": 18350080}]}]}
+```
+
+### `GET /api/v1/containers/{container_id}?from=&to=`
+The container's latest record (the host it was seen on last) with stats over the range, plus `attributes` (data point
+attributes of its latest status point), or `404`.
+
+### `GET /api/v1/containers/{container_id}/timeseries?from=&to=&step=`
+Chart series from raw data points (`step`: Go duration ≥ `10s`, default ≈ 300 points; 30-day retention), `404` for an
+unknown container. Gauges are averaged per bucket; `network_*` and `blockio_*` are per-second rates of the cumulative
+counters per series (resets clamp to 0), summed over series.
+```json
+{"container_id": "…", "host_id": "…", "step": "20s", "from": 1757757600000, "to": 1757761200000,
+ "series": {"cpu_utilization": [[1757757600000, 0.01]], "memory_usage": [], "memory_limit": [], "network_receive": [],
+            "network_transmit": [], "blockio_read": [], "blockio_write": []}}
+```
+
+### `GET /api/v1/containers/{container_id}/services?from=&to=`
+APM services whose span resources carried this `container.id` (`apm_service_containers`, apm.md §1), with the RED object
+over the range: `{"services": [{"service_name", "service_namespace", "environment", "first_seen", "last_seen", "apdex_t_ms", …ApmRed}]}`.
+
+Container logs: `GET /api/v1/logs?container_id=…` (see Logs).
+
 ## Metrics
 
 ### `GET /api/v1/metrics/names?host_id=&from=&to=`
@@ -254,15 +313,17 @@ Across all hosts' latest complete snapshots: items in `category` (required) whos
 
 ## Logs
 
-### `GET /api/v1/logs?host_id=&service=&q=&severity_min=&trace_id=&attr.<key>=&from=&to=&limit=`
+### `GET /api/v1/logs?host_id=&service=&container_id=&compose_project=&compose_service=&q=&severity_min=&trace_id=&attr.<key>=&from=&to=&limit=`
 Excludes inventory events (`event.name` starting with `openlog.inventory.`). `q` is a case-insensitive substring match on body. Newest first.
 
 `attr.<key>=<value>` is an exact-match filter on a log record attribute (AND-ed, one value per key, bound as a query
 parameter). Allowed keys — the attributes the infra agent sets (semantic-conventions §4):
-`openlog.log.source` (`file` / `journald`), `log.file.path`, `log.file.name`, `openlog.discovery.id`,
-`openlog.systemd.unit`, `openlog.syslog.identifier`. Any other `attr.*` key, an empty or repeated value, or a value
+`openlog.log.source` (`file` / `journald` / `container`), `log.file.path`, `log.file.name`, `openlog.discovery.id`,
+`openlog.systemd.unit`, `openlog.syslog.identifier`, `log.iostream` (`stdout` / `stderr`). Any other `attr.*` key, an empty or repeated value, or a value
 longer than 1024 bytes → `400 invalid_argument`. Agent log records have an empty `service_name`, so host log views use
 `host_id` plus these filters, e.g. `?host_id=…&attr.openlog.discovery.id=nginx&attr.log.file.path=/var/log/nginx/error.log`.
+`container_id`, `compose_project` and `compose_service` are exact matches on the resource attributes `container.id`
+(lower-cased), `docker.compose.project` and `docker.compose.service` of container logs (semantic-conventions §4).
 ```json
 {"logs": [{"timestamp": "…", "severity_text": "ERROR", "severity_number": 17, "body": "…", "host_id": "…",
            "service_name": "…", "trace_id": "…", "span_id": "…", "attributes": {}, "resource_attributes": {}}]}
@@ -349,6 +410,12 @@ range: `{"trace_id", "span_id", "timestamp", "span_name", "transaction_name", "d
 
 ### `GET /api/v1/apm/services/{service_name}/hosts`
 `{"hosts": [...]}` (shape as in the service object).
+
+### `GET /api/v1/apm/services/{service_name}/containers?from=`
+Containers whose span resources carried `container.id` for the service since `from` (apm.md §1), newest first. `known`:
+the container has infra agent data (Containers); `state`, `reporting` and the latest `cpu_utilization`, `memory_usage`,
+`memory_limit` are set only then.
+`{"containers": [{"container_id", "name", "host_id", "host_name", "first_seen", "last_seen", "known", "state", "reporting", "cpu_utilization", "memory_usage", "memory_limit"}]}`
 
 ### `GET /api/v1/apm/services/{service_name}/settings` · `PUT …/settings` `{"apdex_t_ms": 300}`
 `{"service_name", "service_namespace", "environment", "apdex_t_ms", "is_default", "updated_at", "updated_by_email"}`.

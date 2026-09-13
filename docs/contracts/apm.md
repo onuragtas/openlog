@@ -28,6 +28,15 @@ Other resource attributes shown by the UI: `service.version`, `telemetry.sdk.lan
 services running on it. The processor also upserts the `hosts` table from trace resources carrying `host.id`
 (unchanged M1 behavior).
 
+**Container ↔ service linkage:** a span resource with both `service.name` and `container.id` links the service to that
+container (`apm_service_containers`, lower-cased id; also records the resource's `host.id` and `container.name`). The infra
+agent reports the same `container.id` for the container's metrics, status and logs (semantic-conventions §2, §4.1), so the
+service page lists its containers with state, CPU and memory, and the container page lists its services with RED metrics.
+OTel SDKs set `container.id` with their container resource detectors (Go agent: `agents/go`, from `/proc/self/cgroup`, else
+`/proc/self/mountinfo` under a private cgroup namespace) or `OTEL_RESOURCE_ATTRIBUTES`. Services without `container.id` are
+not linked: matching by `host.id` + process is not done (a host runs many containers; PIDs differ between namespaces).
+Only spans link; logs and metrics of applications do not.
+
 ## 2. Transactions
 
 A **transaction** is a service's entry span. The processor sets `is_entry = true` for a span when
@@ -237,6 +246,7 @@ fires on the shard that receives the spans block.
 | `apm_error_groups` | AggregatingMergeTree | tenant, service triple, error_group_id | first_seen, last_seen, count, error_type, message, stacktrace, span_name, sample trace ids (≤ 10) | 30 d after last_seen |
 | `apm_services` | AggregatingMergeTree | tenant, service triple | first_seen, last_seen, version, language, sdk, resource attributes | 30 d after last_seen |
 | `apm_service_hosts` | AggregatingMergeTree | tenant, host_id, service triple | first_seen, last_seen, host_name | 30 d after last_seen |
+| `apm_service_containers` | AggregatingMergeTree | tenant, container_id, service triple | first_seen, last_seen, host_id, container_name | 30 d after last_seen (fixed, not `OPENLOG_APM_RETENTION_DAYS`; schema 0009) |
 
 **Retention.** The TTLs above (30 d) are the default of `OPENLOG_APM_RETENTION_DAYS` (1–3650). `openlog-migrate` (and
 `openlog-allinone` with `OPENLOG_MIGRATE_ON_START`) compares it, after applying the migration files, with the value

@@ -17,6 +17,9 @@
 #   orders        Go (OTel) -> orders-db
 #   catalog       PHP 8.3 (OTel) -> redis
 #   loadgen       ~8 req/s against frontend
+#   docker-host   openlog-infra-agent watching the Docker engine itself (every container of this Docker host:
+#                 metrics, status, logs; compose project/service; APM services linked by container.id)
+#                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps docker-host)
 #   php-host      Debian 12 + PHP 8.3-FPM + nginx + openlog PHP extension + openlog-infra-agent (php_forwarder)
 #                 http://localhost:${LOCALAGENTS_PHP_PORT:-33080}; service php-shop, host.id a0de…0003
 #                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps php-host)
@@ -34,6 +37,18 @@ x-otel: &otel
 
 x-apm-resource: &apm-resource "service.namespace=shop,service.version=1.0.0,deployment.environment=local,deployment.environment.name=local,host.id=a0de0000000000000000000000000001,host.name=apm-host"
 
+# Adds container.id (OTel semantic convention) to OTEL_RESOURCE_ATTRIBUTES, then runs the image command. Docker's
+# private cgroup namespace hides the id from /proc/self/cgroup; /proc/self/mountinfo shows the container directory
+# (the same fallback as agents/go and the OTel container resource detectors). The demo SDKs read the variable.
+x-container-id: &container-id
+  - /bin/sh
+  - -c
+  - |
+    cid=$$(sed -n 's#.*/containers/\([0-9a-f]\{64\}\)/.*#\1#p' /proc/self/mountinfo | head -n 1)
+    if [ -n "$$cid" ]; then export OTEL_RESOURCE_ATTRIBUTES="$${OTEL_RESOURCE_ATTRIBUTES:+$$OTEL_RESOURCE_ATTRIBUTES,}container.id=$$cid"; fi
+    exec "$$@"
+  - container-id
+
 services:
   frontend:
     build: {context: ../apmdemo/frontend}
@@ -47,6 +62,8 @@ services:
       OTEL_SEMCONV_STABILITY_OPT_IN: http
       CATALOG_URL: http://catalog:8080
       ORDERS_URL: http://orders:8080
+    entrypoint: *container-id
+    command: ["node", "--require", "./instrumentation.js", "server.js"]
     ports: ["${LOCALAGENTS_FRONTEND_PORT:-33000}:3000"]
     depends_on: [orders, catalog]
     restart: unless-stopped
@@ -63,6 +80,8 @@ services:
       DATABASE_URL: postgres://orders:orders@orders-db:5432/orders?sslmode=disable
       DB_HOST: orders-db
       DB_PORT: "5432"
+    entrypoint: *container-id
+    command: ["/usr/local/bin/orders"]
     depends_on:
       orders-db: {condition: service_healthy}
     restart: unless-stopped
@@ -80,6 +99,8 @@ services:
       OTEL_LOGS_EXPORTER: none
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+    entrypoint: *container-id
+    command: ["php", "-S", "0.0.0.0:8080", "-t", "public", "public/index.php"]
     depends_on:
       redis: {condition: service_healthy}
     restart: unless-stopped
@@ -147,6 +168,46 @@ services:
     volumes: ["web-host-state:/var/lib/openlog-infra-agent"]
     restart: unless-stopped
 
+  docker-host:
+    image: openlog-e2e-target:plain
+    depends_on: [apm-host] # builds the image
+    hostname: docker-host
+    init: true
+    # The Docker host's processes, cgroups, socket and json-file logs under host.root_path /host. Runs as root: the Docker
+    # Desktop socket is root-owned, and the agent reads the container log files (on a real host the systemd unit runs it as
+    # openlog-agent with CAP_DAC_READ_SEARCH plus docker group membership).
+    pid: host
+    cgroup: host
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /host/etc && cat >/etc/openlog-infra-agent/config.yaml <<EOF
+        interval: 10s
+        inventory_interval: 5m
+        host:
+          root_path: /host
+          extra_attributes: {env: local}
+        buffer: {dir: /var/lib/openlog-infra-agent/buffer}
+        discovery: {enabled: false}
+        process_metrics: {enabled: false}
+        logs:
+          start_at: end
+          containers:
+            exclude: [{compose_service: loadgen}]
+        EOF
+        exec /usr/bin/openlog-infra-agent -config /etc/openlog-infra-agent/config.yaml
+    environment:
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - /var/lib/docker/containers:/host/var/lib/docker/containers:ro
+      - docker-host-state:/var/lib/openlog-infra-agent
+    restart: unless-stopped
+
   php-host:
     build:
       context: php-host
@@ -173,6 +234,7 @@ networks:
     external: true
 
 volumes:
+  docker-host-state:
   orders-db:
   web-host-state:
   php-host-state:

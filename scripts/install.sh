@@ -369,7 +369,7 @@ if [ -n "$running" ] && [ -x "$ROOT/current/openlog-infra-agent" ]; then
 	cmp=$(semver_cmp "$running" "$version")
 	legacy=0
 	trusted_dir "$ROOT/versions/$running" || legacy=1
-	if [ "$legacy" = 1 ] && [ "$cmp" = 1 ] && [ "$explicit_version" = 0 ]; then
+	if [ "$legacy" = 1 ] && [ "$cmp" != -1 ] && [ "$explicit_version" = 0 ]; then
 		# Written by an older agent's self-update and writable by it: re-install the same version from the release.
 		log "the agent runs $running from a directory writable by $USER_NAME; re-installing $running root-owned"
 		version=$running

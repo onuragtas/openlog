@@ -14,6 +14,8 @@ import { validateRangeSearch, type RangeSpec } from "@/lib/time";
 // Screens are code-split per route (uPlot only loads with host detail).
 const HostsPage = lazyRouteComponent(() => import("@/routes/hosts"), "HostsPage");
 const HostDetailPage = lazyRouteComponent(() => import("@/routes/host-detail"), "HostDetailPage");
+const ContainersPage = lazyRouteComponent(() => import("@/routes/containers"), "ContainersPage");
+const ContainerDetailPage = lazyRouteComponent(() => import("@/routes/container-detail"), "ContainerDetailPage");
 const HostIntegrationPage = lazyRouteComponent(() => import("@/routes/integrations"), "HostIntegrationPage");
 const IntegrationsPage = lazyRouteComponent(() => import("@/routes/integrations"), "IntegrationsPage");
 const LogsPage = lazyRouteComponent(() => import("@/routes/logs"), "LogsPage");
@@ -109,7 +111,7 @@ const hostsRoute = createRoute({
   component: HostsPage,
 });
 
-export const HOST_TABS = ["overview", "services", "inventory", "logs"] as const;
+export const HOST_TABS = ["overview", "services", "containers", "inventory", "logs"] as const;
 export type HostTab = (typeof HOST_TABS)[number];
 
 export interface HostDetailSearch {
@@ -144,6 +146,56 @@ const hostDetailRoute = createRoute({
     lunit: str(s.lunit),
   }),
   component: HostDetailPage,
+});
+
+// ---- Containers (routes/containers.tsx, routes/container-detail.tsx) ----
+
+export const CONTAINER_STATES = ["running", "paused", "restarting", "exited", "created", "dead", "removing", "unknown"] as const;
+export type ContainerStateParam = (typeof CONTAINER_STATES)[number];
+
+export interface ContainersSearch {
+  q?: string;
+  host?: string;
+  project?: string;
+  state?: ContainerStateParam;
+  /** list layout: flat table or grouped by compose project/service */
+  group?: boolean;
+}
+
+const containersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/containers",
+  validateSearch: (s: Record<string, unknown>): ContainersSearch => ({
+    q: str(s.q),
+    host: str(s.host),
+    project: typeof s.project === "string" ? s.project : undefined,
+    state: (CONTAINER_STATES as readonly string[]).includes(String(s.state)) ? (s.state as ContainerStateParam) : undefined,
+    group: s.group === true || s.group === "true" ? true : undefined,
+  }),
+  component: ContainersPage,
+});
+
+export const CONTAINER_TABS = ["overview", "services", "logs", "attributes"] as const;
+export type ContainerTab = (typeof CONTAINER_TABS)[number];
+
+export interface ContainerDetailSearch {
+  tab?: ContainerTab;
+  /** logs text filter, minimum severity, stream (stdout/stderr) */
+  lq?: string;
+  severity?: string;
+  stream?: "stdout" | "stderr";
+}
+
+const containerDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/containers/$containerId",
+  validateSearch: (s: Record<string, unknown>): ContainerDetailSearch => ({
+    tab: (CONTAINER_TABS as readonly string[]).includes(String(s.tab)) ? (s.tab as ContainerTab) : undefined,
+    lq: str(s.lq),
+    severity: str(s.severity),
+    stream: s.stream === "stdout" || s.stream === "stderr" ? s.stream : undefined,
+  }),
+  component: ContainerDetailPage,
 });
 
 // ---- Integrations (routes/integrations.tsx) ----
@@ -384,6 +436,8 @@ export const routeTree = rootRoute.addChildren([
     indexRoute,
     hostsRoute,
     hostDetailRoute,
+    containersRoute,
+    containerDetailRoute,
     hostIntegrationRoute,
     integrationsRoute,
     apmServicesRoute,

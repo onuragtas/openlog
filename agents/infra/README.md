@@ -21,9 +21,13 @@ discovered service the process belongs to). Only these processes produce series;
 
 **Container metrics** (`containers`, cgroup v2 only): `container.cpu.time`, `container.cpu.utilization`, `container.memory.usage`
 (current − inactive_file), `container.memory.limit`, `container.blockio.io`, `container.blockio.operations` and `container.network.io`
-(not for host-network containers), with `container.id`, `container.name`, `container.image.name`, `container.image.tags` and `container.runtime`.
-Containers are found by walking `/sys/fs/cgroup` for 64-hex id directories (Docker, containerd/CRI, CRI-O, Podman); names and images come
-from the Docker Engine API.
+(not for host-network containers), with `container.id`, `container.name`, `container.image.name`, `container.image.tags`, `container.runtime`
+and, from container labels, `docker.compose.project`, `docker.compose.service` and `k8s.pod.name`/`k8s.namespace.name`/`k8s.container.name`.
+Containers are found by walking `/sys/fs/cgroup` for 64-hex id directories (Docker, containerd/CRI, CRI-O, Podman); names, images and labels come
+from the Docker Engine API. `openlog.container.status` (value 1, `openlog.container.state`, `openlog.container.health`,
+`openlog.container.started_at`) and `container.restarts` report every Docker container that is running or stopped within the last 24 hours
+(at most 500), so stopped containers stay visible in openlog's Containers page; start time, restart count and health come from
+`GET /containers/{id}/json` (new containers, state changes, once a minute per running container).
 It also sends self-telemetry: `openlog.agent.export.items`, `openlog.agent.buffer.usage`,
 `openlog.agent.collector.duration`, `openlog.agent.permission_denied` and `openlog.agent.collection.interval`
 (the effective metrics interval in seconds, which rises when the CPU budget check backs off), plus
@@ -45,7 +49,7 @@ fingerprint changes (package database mtime, systemd unit directories, listening
 | `user` | `/etc/passwd` (name, uid, gid, home, shell) |
 | `network_interface` | `/sys/class/net` + interface addresses |
 | `mount` | `mountinfo` |
-| `container` | Docker Engine API `GET /containers/json?all=1` over `containers.docker_socket` (id, name, image, image id, state, created, labels with values ≤ 256 bytes, ports) |
+| `container` | Docker Engine API `GET /containers/json?all=1` over `containers.docker_socket` (id, name, image, image id, state, health, created, started/finished, restart count, exit code, labels with values ≤ 256 bytes, ports) |
 | `discovered_service` | discovery engine (below); includes `command` and the rule's `log_paths` |
 
 Secrets are masked in command lines and `ExecStart`:
@@ -69,7 +73,8 @@ metrics still come from cgroups (without names/images) and integrations derive c
 ## Docker access
 
 The deb/rpm packages and `scripts/install.sh` add `openlog-agent` to the `docker` group when that group exists, so the agent can
-read the Docker Engine API (container names, images, ports and IPs used to reach nginx, Redis, … in containers). Existing
+read the Docker Engine API (container names, images, states, ports and IPs used to reach nginx, Redis, … in containers, and container log
+streams when the json-file logs are not readable). Existing
 members are left alone. A new membership only takes effect after a restart; the installers restart a running service once.
 
 **Docker group membership is root-equivalent:** anyone who controls the `openlog-agent` user can control Docker and thus the host.
@@ -214,6 +219,19 @@ the agent (it is not in the scratch container image) and the agent user needs jo
 **Discovery-driven**: rules may declare `logs: [{path: "/var/log/nginx/*.log"}]` (nginx, Apache, MySQL, MariaDB, PostgreSQL and Redis do). Discovered
 services report them as `log_paths`; with `logs.auto_from_discovery: true` they are tailed with `openlog.discovery.id=<rule_id>`. A configured file whose
 path matches a discovered glob also gets the discovery id.
+
+**Containers** (`logs.containers`, on by default with `containers.enabled`): stdout/stderr of Docker containers, one OTLP resource per container
+(host attributes + `container.id`, `container.name`, image, `docker.compose.project/service`), records with `openlog.log.source=container`,
+`log.iostream=stdout|stderr`, Docker's timestamp and, for JSON bodies with a `trace_id`/`traceId` field, the trace and span id (so the trace page
+finds them). See `semantic-conventions.md` §4.1.
+- `source: auto` (default) reads the json-file log (`/var/lib/docker/containers/<id>/<id>-json.log`, `root:root 0640`) when the agent can open
+  it — the systemd unit grants `CAP_DAC_READ_SEARCH`, so packaged installs read the files — with the file offsets, rotation (`-json.log.1`) and
+  16 KiB partial-message joining; otherwise it streams `GET /containers/{id}/logs?follow=1&timestamps=1` over the Docker socket (docker group),
+  which also covers the `local` and `journald` log drivers and resumes after the last delivered record. `source: file` / `api` force one path.
+- Running containers are read (running first, at most `max_containers`, default 100); stopped containers until their log was read to the end.
+  `rate_limit_lines` is per container (default 1000/s, backpressure). Containers running at the first start follow `logs.start_at`.
+- Select with `include` / `exclude` (`name`, `image`, `compose_project`, `compose_service`, `label` globs) or label a container `openlog.logs=false`.
+- Multiline grouping is not applied; drivers that cannot be read (`none`, remote drivers without dual logging) are retried with backoff and logged once.
 
 **Masking**: log bodies are user data and are not masked unless `logs.mask_secrets: true` (same patterns as command lines, without the MySQL `-p` rule).
 

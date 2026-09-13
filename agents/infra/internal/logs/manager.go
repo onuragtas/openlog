@@ -74,6 +74,9 @@ type Options struct {
 	Log           *slog.Logger
 	MaxBatchBytes int
 	Now           func() time.Time
+	// Containers lists containers and streams their logs (logs.containers); nil: only
+	// json-file logs found in logs.containers.docker_containers_dir are read.
+	Containers ContainerSource
 }
 
 type fileState struct {
@@ -91,6 +94,8 @@ type stateDoc struct {
 	Journald struct {
 		Cursor string `json:"cursor,omitempty"`
 	} `json:"journald"`
+	// Containers: container id -> Docker time (unix ns) of the last delivered API stream record.
+	Containers map[string]int64 `json:"containers,omitempty"`
 }
 
 type fileCheckpoint struct {
@@ -99,11 +104,23 @@ type fileCheckpoint struct {
 }
 
 type batch struct {
-	records []*logspb.LogRecord
+	groups  []*recordGroup
+	records int
 	bytes   int
 	files   map[string]fileCheckpoint
 	cursor  string
 	seq     uint64
+	streams map[string]time.Time // container API stream positions
+}
+
+// recordGroup holds the records of one resource (host, or host + container) in a batch.
+type recordGroup struct {
+	res     *resourcepb.Resource
+	records []*logspb.LogRecord
+}
+
+func newBatch() batch {
+	return batch{files: map[string]fileCheckpoint{}, streams: map[string]time.Time{}}
 }
 
 // Manager runs all log inputs.
@@ -133,11 +150,24 @@ type Manager struct {
 	warnedMax bool
 	batch     batch
 	jseq      uint64
+	runCtx    context.Context
+
+	// Container logs (containers.go); used by the Run goroutine only.
+	ctrSrc        ContainerSource
+	ctrLogs       map[string]*ctrLog
+	ctrEntries    chan containerEntry
+	streams       map[string]*apiStream
+	ctrFileSrcs   []*source
+	ctrDrained    map[string]string
+	ctrScanned    bool
+	ctrWarnedMax  bool
+	ctrWarnedList bool
 
 	stMu      sync.Mutex
 	committed map[string]*fileState
 	cursor    string
 	cursorSeq uint64
+	ctrSince  map[string]time.Time
 	dirty     bool
 	saved     stateDoc
 	lastSave  time.Time
@@ -150,6 +180,13 @@ func New(o Options) *Manager {
 		paused: o.Paused, log: o.Log, maxBytes: o.MaxBatchBytes, now: o.Now,
 		chunk: make([]byte, readChunk), tailers: map[string]*tailer{}, seenGlobs: map[string]bool{},
 		committed: map[string]*fileState{},
+		ctrLogs:   map[string]*ctrLog{}, streams: map[string]*apiStream{}, ctrDrained: map[string]string{}, ctrSince: map[string]time.Time{},
+	}
+	if o.Containers != nil {
+		m.ctrSrc = o.Containers
+	}
+	if o.Config.Containers.Enabled {
+		m.ctrEntries = make(chan containerEntry, ctrEntryBuffer)
 	}
 	if m.log == nil {
 		m.log = slog.Default()
@@ -167,7 +204,7 @@ func New(o Options) *Manager {
 		}
 		m.explicit = append(m.explicit, s)
 	}
-	m.batch.files = map[string]fileCheckpoint{}
+	m.batch = newBatch()
 	return m
 }
 
@@ -198,6 +235,7 @@ func (m *Manager) discoveredLogs() ([]DiscoveredLog, bool) {
 // it returns; call SaveState after the pipeline has settled.
 func (m *Manager) Run(ctx context.Context) {
 	m.started = m.now()
+	m.runCtx = ctx
 	m.loadState()
 	var journal chan journalEntry
 	if m.cfg.Journald.Enabled {
@@ -211,11 +249,16 @@ func (m *Manager) Run(ctx context.Context) {
 	m.tick(m.now())
 	for {
 		var jch <-chan journalEntry
-		if journal != nil && !m.isPaused() {
-			jch = journal
+		var cch <-chan containerEntry
+		if !m.isPaused() {
+			if journal != nil {
+				jch = journal
+			}
+			cch = m.ctrEntries
 		}
 		select {
 		case <-ctx.Done():
+			m.stopStreams()
 			for _, t := range m.tailers {
 				m.flushTailer(t, m.now())
 				t.f.Close()
@@ -224,6 +267,8 @@ func (m *Manager) Run(ctx context.Context) {
 			return
 		case e := <-jch:
 			m.addJournal(e)
+		case e := <-cch:
+			m.addContainerEntry(e)
 		case <-ticker.C:
 			m.tick(m.now())
 		}
@@ -292,11 +337,15 @@ func excluded(s *source, host string) bool {
 // scan expands the globs, opens new files and drops files no source wants.
 func (m *Manager) scan(now time.Time) {
 	m.lastScan = now
-	srcs := m.sources()
+	// Container logs first: a configured glob that also matches a json-file log does not claim it.
+	srcs := append(m.containerSources(now), m.sources()...)
 	wanted := map[string]bool{}
 	for _, s := range srcs {
 		initial := !m.seenGlobs[s.glob]
 		m.seenGlobs[s.glob] = true
+		if s.ctr != nil {
+			initial = s.ctr.initial
+		}
 		matches, _ := filepath.Glob(m.fs.Path(s.glob))
 		for _, local := range matches {
 			host := m.hostPath(local)
@@ -311,7 +360,7 @@ func (m *Manager) scan(now time.Time) {
 			if !ok {
 				continue
 			}
-			key := fmt.Sprintf("%d:%d", dev, ino)
+			key := keyOf(dev, ino)
 			if wanted[key] {
 				continue // an earlier source already claimed it
 			}
@@ -332,11 +381,14 @@ func (m *Manager) scan(now time.Time) {
 				continue
 			}
 			m.open(s, local, host, fi, dev, ino, key, initial, now)
+			if s.ctr != nil {
+				m.resumeRotated(s, local, host, wanted, now)
+			}
 		}
 	}
 	ds, _ := m.discoveredLogsNoReset()
 	for key, t := range m.tailers {
-		if !wanted[key] && t.goneAt.IsZero() {
+		if !wanted[key] && t.goneAt.IsZero() && !t.drain {
 			// Still at its path but no source matches any more: stop tailing.
 			if fi, err := os.Stat(t.local); err == nil {
 				if dev, ino, _ := identity(fi); dev == t.dev && ino == t.ino {
@@ -358,6 +410,9 @@ func (m *Manager) discoveredLogsNoReset() ([]DiscoveredLog, bool) {
 // fileAttrs builds log.file.* attributes, user attributes and the discovery
 // id of the first discovered service whose log glob matches the path.
 func fileAttrs(t *tailer, ds []DiscoveredLog) []*commonpb.KeyValue {
+	if t.src.ctr != nil {
+		return attrsContainer // records carry their own attributes (containerRecord)
+	}
 	attrs := []*commonpb.KeyValue{
 		otlputil.Str(AttrSource, SourceFile),
 		otlputil.Str("log.file.path", t.host),
@@ -425,6 +480,9 @@ func (m *Manager) open(s *source, local, host string, fi os.FileInfo, dev, ino u
 		readOff: offset, bufStart: offset, buf: make([]byte, 0, 2*readChunk), lastData: now,
 		fpLen: fpLen, fpHash: fpHash,
 	}
+	if how != "saved offset" {
+		t.since = s.since // a saved position resumes without a time filter
+	}
 	ds, _ := m.discoveredLogsNoReset()
 	t.attrs = fileAttrs(t, ds)
 	m.tailers[key] = t
@@ -451,6 +509,9 @@ func (m *Manager) checkRotation(t *tailer, now time.Time) {
 	}
 	if same {
 		t.goneAt = time.Time{}
+		if m.drained(t, fi, now) {
+			m.closeTailer(t, now)
+		}
 		return
 	}
 	if t.goneAt.IsZero() {
@@ -515,44 +576,69 @@ func (m *Manager) emitFileRecord(t *tailer, line []byte, truncated bool) {
 	if m.cfg.ParseSeverity {
 		rec.SeverityNumber, rec.SeverityText = ParseSeverity(body)
 	}
-	if m.cfg.RateLimitLines > 0 {
+	if m.rateLimit(t) > 0 {
 		t.tokens--
 	}
-	m.add(rec, len(body))
+	m.add(nil, rec, len(body))
 	m.batch.files[t.key] = fileCheckpoint{gen: t.gen, offset: t.commitOffset()}
-	if len(m.batch.records) >= batchMaxRecords || m.batch.bytes >= m.maxBytes {
-		m.flush()
-	}
+	m.flushIfFull()
 }
 
 func (m *Manager) addJournal(e journalEntry) {
-	m.add(e.rec, len(e.rec.GetBody().GetStringValue()))
+	m.add(nil, e.rec, len(e.rec.GetBody().GetStringValue()))
 	if e.cursor != "" {
 		m.jseq++
 		m.batch.cursor, m.batch.seq = e.cursor, m.jseq
 	}
-	if len(m.batch.records) >= batchMaxRecords || m.batch.bytes >= m.maxBytes {
+	m.flushIfFull()
+}
+
+// add appends a record of res (nil: the host resource) to the batch.
+func (m *Manager) add(res *resourcepb.Resource, rec *logspb.LogRecord, bodyLen int) {
+	if res == nil {
+		res = m.res
+	}
+	var g *recordGroup
+	if n := len(m.batch.groups); n > 0 && m.batch.groups[n-1].res == res {
+		g = m.batch.groups[n-1]
+	} else {
+		for _, x := range m.batch.groups {
+			if x.res == res {
+				g = x
+				break
+			}
+		}
+		if g == nil {
+			g = &recordGroup{res: res}
+			m.batch.groups = append(m.batch.groups, g)
+		}
+	}
+	g.records = append(g.records, rec)
+	m.batch.records++
+	m.batch.bytes += bodyLen + 64 + 16*len(rec.Attributes)
+}
+
+func (m *Manager) flushIfFull() {
+	if m.batch.records >= batchMaxRecords || m.batch.bytes >= m.maxBytes {
 		m.flush()
 	}
 }
 
-func (m *Manager) add(rec *logspb.LogRecord, bodyLen int) {
-	m.batch.records = append(m.batch.records, rec)
-	m.batch.bytes += bodyLen + 64 + 16*len(rec.Attributes)
-}
-
 func (m *Manager) flush() {
 	b := m.batch
-	m.batch = batch{files: map[string]fileCheckpoint{}}
-	if len(b.records) == 0 {
+	m.batch = newBatch()
+	if b.records == 0 {
 		m.ack(b) // checkpoints without records (e.g. skipped over-long tails)
 		return
 	}
-	ld := &logspb.LogsData{ResourceLogs: []*logspb.ResourceLogs{{
-		Resource:  m.res,
-		ScopeLogs: []*logspb.ScopeLogs{{Scope: m.scope, LogRecords: b.records}},
-	}}}
-	m.emit(ld, len(b.records), func() { m.ack(b) })
+	ld := &logspb.LogsData{ResourceLogs: make([]*logspb.ResourceLogs, 0, len(b.groups))}
+	for _, g := range b.groups {
+		ld.ResourceLogs = append(ld.ResourceLogs, &logspb.ResourceLogs{
+			Resource:  g.res,
+			ScopeLogs: []*logspb.ScopeLogs{{Scope: m.scope, LogRecords: g.records}},
+		})
+	}
+	m.emit(ld, b.records, func() { m.ack(b) })
 }
 
 func (m *Manager) ack(b batch) {
@@ -571,6 +657,12 @@ func (m *Manager) ack(b batch) {
 	if b.cursor != "" && b.seq > m.cursorSeq {
 		m.cursor, m.cursorSeq = b.cursor, b.seq
 		m.dirty = true
+	}
+	for id, ts := range b.streams {
+		if ts.After(m.ctrSince[id]) {
+			m.ctrSince[id] = ts
+			m.dirty = true
+		}
 	}
 }
 
@@ -596,6 +688,9 @@ func (m *Manager) loadState() {
 	defer m.stMu.Unlock()
 	m.saved = doc
 	m.cursor = doc.Journald.Cursor
+	for id, ns := range doc.Containers {
+		m.ctrSince[id] = time.Unix(0, ns).UTC()
+	}
 }
 
 // SaveState atomically writes offsets and the journal cursor.
@@ -618,6 +713,12 @@ func (m *Manager) SaveState() error {
 		doc.Files[k] = &c
 	}
 	doc.Journald.Cursor = m.cursor
+	if len(m.ctrSince) > 0 {
+		doc.Containers = make(map[string]int64, len(m.ctrSince))
+		for id, ts := range m.ctrSince {
+			doc.Containers[id] = ts.UnixNano()
+		}
+	}
 	m.dirty = false
 	m.stMu.Unlock()
 
@@ -646,6 +747,8 @@ func (m *Manager) SaveState() error {
 	}
 	return os.Rename(tmp, m.statePath())
 }
+
+func keyOf(dev, ino uint64) string { return fmt.Sprintf("%d:%d", dev, ino) }
 
 // Files returns the host paths currently tailed (for diagnostics and tests).
 func (m *Manager) Files() []string {

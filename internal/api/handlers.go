@@ -310,6 +310,16 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request, sc *query.Scop
 	if v := qp.Get("trace_id"); v != "" {
 		q.Where("trace_id = {trace_id:String}").Param("trace_id", strings.ToLower(v))
 	}
+	// Container logs (semantic-conventions §4): resource attributes with skip indexes (0009_containers).
+	if v := qp.Get("container_id"); v != "" {
+		q.Where("resource_attributes['container.id'] = {container_id:String}").Param("container_id", strings.ToLower(v))
+	}
+	if v := qp.Get("compose_service"); v != "" {
+		q.Where("resource_attributes['docker.compose.service'] = {compose_service:String}").Param("compose_service", v)
+	}
+	if v := qp.Get("compose_project"); v != "" {
+		q.Where("resource_attributes['docker.compose.project'] = {compose_project:String}").Param("compose_project", v)
+	}
 	if v := qp.Get("severity_min"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {

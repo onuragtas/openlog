@@ -28,6 +28,8 @@ tags:
   - name: traces
   - name: apm
     description: Application performance monitoring derived from traces (apm.md)
+  - name: containers
+    description: Containers reported by the infra agent (semantic-conventions.md §2) and their APM services
   - name: fleet
   - name: integrations
   - name: alerts
@@ -71,6 +73,161 @@ paths:
               schema: { $ref: "#/components/schemas/Host" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/containers:
+    get:
+      tags: [containers]
+      operationId: listContainers
+      description: |
+        Containers with data in [from, to] (default last hour), ordered by compose project, compose service and name.
+        Filters are exact matches; `compose_project`/`compose_service` present but empty select containers without one.
+        `q` matches every term (case-insensitive) against id, name, image, tags, host, compose and Kubernetes names.
+        `cpu_utilization`, `memory_usage` and `memory_limit` are the latest bucket of the range; sparklines have ≈ 30 buckets (`step`).
+      parameters:
+        - name: host_id
+          in: query
+          schema: { type: string, maxLength: 256 }
+        - name: compose_project
+          in: query
+          schema: { type: string }
+        - name: compose_service
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { $ref: "#/components/schemas/ContainerStateFilter" }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 256 }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [containers, total, step]
+                properties:
+                  containers:
+                    type: array
+                    items: { $ref: "#/components/schemas/Container" }
+                  total: { type: integer, description: "Matching containers before limit" }
+                  step: { type: string, example: 120s }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/containers/groups:
+    get:
+      tags: [containers]
+      operationId: listContainerGroups
+      description: The containers of `GET /containers` (same filters) grouped by compose project and service.
+      parameters:
+        - name: host_id
+          in: query
+          schema: { type: string, maxLength: 256 }
+        - name: state
+          in: query
+          schema: { $ref: "#/components/schemas/ContainerStateFilter" }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 256 }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects:
+                    type: array
+                    items: { $ref: "#/components/schemas/ComposeProject" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/containers/{container_id}:
+    get:
+      tags: [containers]
+      operationId: getContainer
+      description: Latest record of the container (the host it was seen on last, within the 30-day retention); stats over [from, to].
+      parameters:
+        - $ref: "#/components/parameters/ContainerID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContainerDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/containers/{container_id}/timeseries:
+    get:
+      tags: [containers]
+      operationId: getContainerTimeseries
+      description: |
+        Chart series of one container from raw data points (30-day retention). Gauges are averaged per bucket;
+        `network_*` and `blockio_*` are per-second rates of the cumulative counters (resets clamp to 0).
+      parameters:
+        - $ref: "#/components/parameters/ContainerID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: step
+          in: query
+          description: Go duration >= 10s; default ≈ 300 points
+          schema: { type: string, example: 1m }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContainerTimeseries" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/containers/{container_id}/services:
+    get:
+      tags: [containers]
+      operationId: listContainerServices
+      description: APM services whose span resources carried this `container.id` (any time within retention), with RED metrics over [from, to].
+      parameters:
+        - $ref: "#/components/parameters/ContainerID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services:
+                    type: array
+                    items: { $ref: "#/components/schemas/ContainerService" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
         "504": { $ref: "#/components/responses/Timeout" }
 
@@ -262,8 +419,24 @@ paths:
           schema: { type: string }
         - name: attr.openlog.log.source
           in: query
-          description: "`file` or `journald`"
+          description: "`file`, `journald` or `container`"
           schema: { type: string, example: file }
+        - name: container_id
+          in: query
+          description: Container logs (resource attribute `container.id`)
+          schema: { type: string }
+        - name: compose_service
+          in: query
+          description: Resource attribute `docker.compose.service`
+          schema: { type: string }
+        - name: compose_project
+          in: query
+          description: Resource attribute `docker.compose.project`
+          schema: { type: string }
+        - name: attr.log.iostream
+          in: query
+          description: "Container logs: `stdout` or `stderr`"
+          schema: { type: string, example: stderr }
         - name: attr.log.file.path
           in: query
           schema: { type: string, example: /var/log/nginx/access.log }
@@ -540,6 +713,31 @@ paths:
                   hosts:
                     type: array
                     items: { $ref: "#/components/schemas/ApmServiceHost" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/containers:
+    get:
+      tags: [apm, containers]
+      operationId: listApmServiceContainers
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Containers whose span resources carried container.id for this service since `from`, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [containers]
+                properties:
+                  containers:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmServiceContainer" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
   /api/v1/apm/services/{service_name}/settings:
@@ -2020,6 +2218,12 @@ components:
       in: path
       required: true
       schema: { type: string }
+    ContainerID:
+      name: container_id
+      in: path
+      required: true
+      description: 64 hex characters (case-insensitive)
+      schema: { type: string, pattern: "^[0-9a-fA-F]{64}$" }
     From:
       name: from
       in: query
@@ -2138,6 +2342,97 @@ components:
         agent_version: { type: string }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
         resource_attributes: { $ref: "#/components/schemas/StringMap" }
+
+    ContainerStateFilter:
+      type: string
+      description: "`unknown`: the agent sends no state (no Docker API access, or an agent without openlog.container.status)"
+      enum: [running, paused, restarting, exited, created, dead, removing, unknown]
+
+    Container:
+      type: object
+      required: [container_id, name, image_name, image_tags, runtime, host_id, host_name, compose_project, compose_service,
+        k8s_pod_name, k8s_namespace_name, k8s_container_name, state, health, started_at, restart_count, first_seen, last_seen,
+        reporting, cpu_utilization, memory_usage, memory_limit, cpu_sparkline, memory_sparkline]
+      properties:
+        container_id: { type: string }
+        name: { type: string, description: "Empty without Docker metadata" }
+        image_name: { type: string }
+        image_tags: { type: array, items: { type: string } }
+        runtime: { type: string, description: "docker, containerd, cri-o, podman or empty" }
+        host_id: { type: string }
+        host_name: { type: string }
+        compose_project: { type: string }
+        compose_service: { type: string }
+        k8s_pod_name: { type: string }
+        k8s_namespace_name: { type: string }
+        k8s_container_name: { type: string }
+        state: { type: string, description: "Docker state (running, exited, …); empty when unknown" }
+        health: { type: string, description: "healthy, unhealthy, starting or empty" }
+        started_at: { type: [string, "null"], description: RFC3339 }
+        restart_count: { type: integer }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        reporting: { type: boolean, description: "Data within the last 5 minutes" }
+        cpu_utilization: { type: [number, "null"], description: "0..1 of the host's CPUs" }
+        memory_usage: { type: [number, "null"], description: bytes }
+        memory_limit: { type: [number, "null"], description: "bytes (host memory when unlimited)" }
+        cpu_sparkline:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPoint" }
+        memory_sparkline:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPoint" }
+
+    ContainerDetail:
+      allOf:
+        - $ref: "#/components/schemas/Container"
+        - type: object
+          required: [attributes]
+          properties:
+            attributes: { $ref: "#/components/schemas/StringMap" }
+
+    ComposeService:
+      type: object
+      required: [compose_service, containers, running, cpu_utilization, memory_usage]
+      properties:
+        compose_service: { type: string }
+        containers: { type: integer }
+        running: { type: integer, description: "Reporting containers in state running" }
+        cpu_utilization: { type: [number, "null"], description: "Sum over reporting containers" }
+        memory_usage: { type: [number, "null"] }
+
+    ComposeProject:
+      type: object
+      required: [compose_project, host_ids, containers, running, services]
+      properties:
+        compose_project: { type: string, description: "Empty: containers without a compose project" }
+        host_ids: { type: array, items: { type: string } }
+        containers: { type: integer }
+        running: { type: integer }
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/ComposeService" }
+
+    ContainerTimeseries:
+      type: object
+      required: [container_id, host_id, step, from, to, series]
+      properties:
+        container_id: { type: string }
+        host_id: { type: string }
+        step: { type: string, example: 20s }
+        from: { type: integer, description: unix ms }
+        to: { type: integer, description: unix ms }
+        series:
+          type: object
+          required: [cpu_utilization, memory_usage, memory_limit, network_receive, network_transmit, blockio_read, blockio_write]
+          properties:
+            cpu_utilization: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            memory_usage: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            memory_limit: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            network_receive: { type: array, items: { $ref: "#/components/schemas/MetricPoint" }, description: bytes/s }
+            network_transmit: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            blockio_read: { type: array, items: { $ref: "#/components/schemas/MetricPoint" }, description: bytes/s }
+            blockio_write: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
 
     MetricType:
       type: string
@@ -2403,6 +2698,34 @@ components:
         first_seen: { $ref: "#/components/schemas/Timestamp" }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
         known: { type: boolean, description: "The host has a host record (GET /hosts/{host_id})" }
+    ApmServiceContainer:
+      type: object
+      required: [container_id, name, host_id, host_name, first_seen, last_seen, known, state, reporting, cpu_utilization, memory_usage, memory_limit]
+      properties:
+        container_id: { type: string }
+        name: { type: string, description: "Docker name, else the span resource's container.name" }
+        host_id: { type: string }
+        host_name: { type: string }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        known: { type: boolean, description: "The container has infra agent data (GET /containers/{container_id})" }
+        state: { type: string }
+        reporting: { type: boolean }
+        cpu_utilization: { type: [number, "null"] }
+        memory_usage: { type: [number, "null"] }
+        memory_limit: { type: [number, "null"] }
+    ContainerService:
+      allOf:
+        - $ref: "#/components/schemas/ApmRed"
+        - type: object
+          required: [service_name, service_namespace, environment, first_seen, last_seen, apdex_t_ms]
+          properties:
+            service_name: { type: string }
+            service_namespace: { type: string }
+            environment: { type: string }
+            first_seen: { $ref: "#/components/schemas/Timestamp" }
+            last_seen: { $ref: "#/components/schemas/Timestamp" }
+            apdex_t_ms: { type: number }
     ApmServiceDetail:
       type: object
       required: [service_name, instances, hosts, apdex_t_ms, apdex_t_default]

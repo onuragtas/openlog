@@ -120,6 +120,14 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/apm/map?service=orders&environment=prod",
 		"/api/v1/apm/traces?service=orders&transaction=x&min_duration_ms=10&max_duration_ms=99&error=true&attr.http.route=%2Fx&sort=duration",
 		"/api/v1/apm/traces",
+		"/api/v1/apm/services/orders/containers?environment=prod",
+		// containers (containers.go)
+		"/api/v1/containers?host_id=h1&compose_project=shop&compose_service=orders&state=running&q=ord",
+		"/api/v1/containers/groups?host_id=h1",
+		"/api/v1/containers/" + strings.Repeat("ab", 32),
+		"/api/v1/containers/" + strings.Repeat("ab", 32) + "/timeseries",
+		"/api/v1/containers/" + strings.Repeat("ab", 32) + "/services",
+		"/api/v1/logs?container_id=" + strings.Repeat("ab", 32) + "&compose_service=orders&compose_project=shop&attr.log.iostream=stderr",
 	}
 	for _, p := range paths {
 		req := httptest.NewRequest(http.MethodGet, p, nil)

@@ -101,6 +101,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/v1/logs", s.listLogs)
 	route("GET /api/v1/traces/{trace_id}", s.getTrace)
 	s.apmRoutes(mux)
+	s.containerRoutes(mux)
 	s.accountRoutes(mux)
 	s.versionRoutes(mux)
 	s.updateRoutes(mux)

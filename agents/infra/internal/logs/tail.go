@@ -33,6 +33,12 @@ type source struct {
 	multiline   *regexp.Regexp
 	attrs       map[string]string
 	discoveryID string // set for discovery-driven sources
+	// Container json-file logs (containers.go): the container, its state when listed and the
+	// Docker time before which records are skipped (logs.start_at=end, already read).
+	ctr         *ctrLog
+	ctrState    string
+	ctrFinished string
+	since       time.Time
 }
 
 type pending struct {
@@ -57,6 +63,11 @@ type tailer struct {
 	bufStart int64  // file offset of buf[0]
 	skipping bool   // discarding the rest of an over-long line
 	pend     *pending
+	// Container logs: partial json-file messages per stream, time filter; drain: a rotated
+	// file read to its end and then closed.
+	dpart [3]pendingLine
+	since time.Time
+	drain bool
 
 	lastData time.Time
 	goneAt   time.Time // path renamed/removed; zero while in place
@@ -71,10 +82,33 @@ type tailer struct {
 // unemitted data is lost: the start of a pending multiline record or of the
 // buffered partial line.
 func (t *tailer) commitOffset() int64 {
-	if t.pend != nil {
-		return t.pend.start
+	off := t.bufStart
+	if t.pend != nil && t.pend.start < off {
+		off = t.pend.start
 	}
-	return t.bufStart
+	for i := range t.dpart {
+		if p := &t.dpart[i]; p.started && p.start < off {
+			off = p.start
+		}
+	}
+	return off
+}
+
+func (t *tailer) hasPartial() bool {
+	for i := range t.dpart {
+		if t.dpart[i].started {
+			return true
+		}
+	}
+	return false
+}
+
+// rateLimit is the lines-per-second limit of the tailer's source.
+func (m *Manager) rateLimit(t *tailer) int {
+	if t.src.ctr != nil {
+		return m.cfg.Containers.RateLimitLines
+	}
+	return m.cfg.RateLimitLines
 }
 
 func identity(fi os.FileInfo) (dev, ino uint64, ok bool) {
@@ -95,11 +129,11 @@ func prefixHash(f *os.File, n int) (int, uint64) {
 }
 
 func (m *Manager) canEmit(t *tailer) bool {
-	return m.cfg.RateLimitLines <= 0 || t.tokens >= 1
+	return m.rateLimit(t) <= 0 || t.tokens >= 1
 }
 
 func (m *Manager) refillTokens(t *tailer, now time.Time) {
-	rate := float64(m.cfg.RateLimitLines)
+	rate := float64(m.rateLimit(t))
 	if rate <= 0 {
 		return
 	}
@@ -153,6 +187,9 @@ func (m *Manager) pollFile(t *tailer, now time.Time) {
 		t.pend = nil
 		m.emitFileRecord(t, p.body, p.truncated)
 	}
+	if t.src.ctr != nil && idle >= multilineFlush && m.canEmit(t) {
+		m.flushContainerParts(t)
+	}
 	if t.fpLen < fingerprintLen && t.readOff > int64(t.fpLen) {
 		t.fpLen, t.fpHash = prefixHash(t.f, fingerprintLen)
 		m.updateFingerprint(t)
@@ -200,6 +237,10 @@ func (m *Manager) processLines(t *tailer, now time.Time) {
 
 // handleLine applies multiline grouping. line may alias the read buffer.
 func (m *Manager) handleLine(t *tailer, line []byte, start int64, truncated bool) {
+	if t.src.ctr != nil {
+		m.handleContainerLine(t, line, start, truncated)
+		return
+	}
 	line = bytes.TrimSuffix(line, []byte{'\r'})
 	re := t.src.multiline
 	if re == nil {
@@ -240,5 +281,8 @@ func (m *Manager) flushTailer(t *tailer, now time.Time) {
 		p := t.pend
 		t.pend = nil
 		m.emitFileRecord(t, p.body, p.truncated)
+	}
+	if t.src.ctr != nil {
+		m.flushContainerParts(t)
 	}
 }

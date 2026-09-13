@@ -37,6 +37,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/containers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Containers with data in [from, to] (default last hour), ordered by compose project, compose service and name.
+         *     Filters are exact matches; `compose_project`/`compose_service` present but empty select containers without one.
+         *     `q` matches every term (case-insensitive) against id, name, image, tags, host, compose and Kubernetes names.
+         *     `cpu_utilization`, `memory_usage` and `memory_limit` are the latest bucket of the range; sparklines have ≈ 30 buckets (`step`).
+         */
+        get: operations["listContainers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/containers/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The containers of `GET /containers` (same filters) grouped by compose project and service. */
+        get: operations["listContainerGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/containers/{container_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Latest record of the container (the host it was seen on last, within the 30-day retention); stats over [from, to]. */
+        get: operations["getContainer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/containers/{container_id}/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Chart series of one container from raw data points (30-day retention). Gauges are averaged per bucket;
+         *     `network_*` and `blockio_*` are per-second rates of the cumulative counters (resets clamp to 0).
+         */
+        get: operations["getContainerTimeseries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/containers/{container_id}/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description APM services whose span resources carried this `container.id` (any time within retention), with RED metrics over [from, to]. */
+        get: operations["listContainerServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metrics/names": {
         parameters: {
             query?: never;
@@ -306,6 +399,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listApmServiceHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/containers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmServiceContainers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1325,6 +1434,87 @@ export interface components {
             resource_attributes: components["schemas"]["StringMap"];
         };
         /**
+         * @description `unknown`: the agent sends no state (no Docker API access, or an agent without openlog.container.status)
+         * @enum {string}
+         */
+        ContainerStateFilter: "running" | "paused" | "restarting" | "exited" | "created" | "dead" | "removing" | "unknown";
+        Container: {
+            container_id: string;
+            /** @description Empty without Docker metadata */
+            name: string;
+            image_name: string;
+            image_tags: string[];
+            /** @description docker, containerd, cri-o, podman or empty */
+            runtime: string;
+            host_id: string;
+            host_name: string;
+            compose_project: string;
+            compose_service: string;
+            k8s_pod_name: string;
+            k8s_namespace_name: string;
+            k8s_container_name: string;
+            /** @description Docker state (running, exited, …); empty when unknown */
+            state: string;
+            /** @description healthy, unhealthy, starting or empty */
+            health: string;
+            /** @description RFC3339 */
+            started_at: string | null;
+            restart_count: number;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description Data within the last 5 minutes */
+            reporting: boolean;
+            /** @description 0..1 of the host's CPUs */
+            cpu_utilization: number | null;
+            /** @description bytes */
+            memory_usage: number | null;
+            /** @description bytes (host memory when unlimited) */
+            memory_limit: number | null;
+            cpu_sparkline: components["schemas"]["MetricPoint"][];
+            memory_sparkline: components["schemas"]["MetricPoint"][];
+        };
+        ContainerDetail: components["schemas"]["Container"] & {
+            attributes: components["schemas"]["StringMap"];
+        };
+        ComposeService: {
+            compose_service: string;
+            containers: number;
+            /** @description Reporting containers in state running */
+            running: number;
+            /** @description Sum over reporting containers */
+            cpu_utilization: number | null;
+            memory_usage: number | null;
+        };
+        ComposeProject: {
+            /** @description Empty: containers without a compose project */
+            compose_project: string;
+            host_ids: string[];
+            containers: number;
+            running: number;
+            services: components["schemas"]["ComposeService"][];
+        };
+        ContainerTimeseries: {
+            container_id: string;
+            host_id: string;
+            /** @example 20s */
+            step: string;
+            /** @description unix ms */
+            from: number;
+            /** @description unix ms */
+            to: number;
+            series: {
+                cpu_utilization: components["schemas"]["MetricPoint"][];
+                memory_usage: components["schemas"]["MetricPoint"][];
+                memory_limit: components["schemas"]["MetricPoint"][];
+                /** @description bytes/s */
+                network_receive: components["schemas"]["MetricPoint"][];
+                network_transmit: components["schemas"]["MetricPoint"][];
+                /** @description bytes/s */
+                blockio_read: components["schemas"]["MetricPoint"][];
+                blockio_write: components["schemas"]["MetricPoint"][];
+            };
+        };
+        /**
          * @description Empty string when the metric has no data in range.
          * @enum {string}
          */
@@ -1508,6 +1698,30 @@ export interface components {
             last_seen: components["schemas"]["Timestamp"];
             /** @description The host has a host record (GET /hosts/{host_id}) */
             known: boolean;
+        };
+        ApmServiceContainer: {
+            container_id: string;
+            /** @description Docker name, else the span resource's container.name */
+            name: string;
+            host_id: string;
+            host_name: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description The container has infra agent data (GET /containers/{container_id}) */
+            known: boolean;
+            state: string;
+            reporting: boolean;
+            cpu_utilization: number | null;
+            memory_usage: number | null;
+            memory_limit: number | null;
+        };
+        ContainerService: components["schemas"]["ApmRed"] & {
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            apdex_t_ms: number;
         };
         ApmServiceDetail: {
             service_name: string;
@@ -2627,6 +2841,8 @@ export interface components {
     };
     parameters: {
         HostID: string;
+        /** @description 64 hex characters (case-insensitive) */
+        ContainerID: string;
         /** @description RFC3339 or unix milliseconds. Default now − 1h. */
         From: string;
         /** @description RFC3339 or unix milliseconds. Default now. */
@@ -2699,6 +2915,184 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listContainers: {
+        parameters: {
+            query?: {
+                host_id?: string;
+                compose_project?: string;
+                compose_service?: string;
+                state?: components["schemas"]["ContainerStateFilter"];
+                q?: string;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        containers: components["schemas"]["Container"][];
+                        /** @description Matching containers before limit */
+                        total: number;
+                        /** @example 120s */
+                        step: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listContainerGroups: {
+        parameters: {
+            query?: {
+                host_id?: string;
+                state?: components["schemas"]["ContainerStateFilter"];
+                q?: string;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        projects: components["schemas"]["ComposeProject"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getContainer: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                /** @description 64 hex characters (case-insensitive) */
+                container_id: components["parameters"]["ContainerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContainerDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getContainerTimeseries: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 10s; default ≈ 300 points */
+                step?: string;
+            };
+            header?: never;
+            path: {
+                /** @description 64 hex characters (case-insensitive) */
+                container_id: components["parameters"]["ContainerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContainerTimeseries"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listContainerServices: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                /** @description 64 hex characters (case-insensitive) */
+                container_id: components["parameters"]["ContainerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        services: components["schemas"]["ContainerService"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             500: components["responses"]["Internal"];
             504: components["responses"]["Timeout"];
         };
@@ -2887,8 +3281,16 @@ export interface operations {
                 /** @description Severity number 1-24 or a name (TRACE, DEBUG, INFO, WARN, WARNING, ERROR, FATAL). */
                 severity_min?: string;
                 trace_id?: string;
-                /** @description `file` or `journald` */
+                /** @description `file`, `journald` or `container` */
                 "attr.openlog.log.source"?: string;
+                /** @description Container logs (resource attribute `container.id`) */
+                container_id?: string;
+                /** @description Resource attribute `docker.compose.service` */
+                compose_service?: string;
+                /** @description Resource attribute `docker.compose.project` */
+                compose_project?: string;
+                /** @description Container logs: `stdout` or `stderr` */
+                "attr.log.iostream"?: string;
                 "attr.log.file.path"?: string;
                 "attr.log.file.name"?: string;
                 /** @description Discovery rule id of the service whose log glob matched the file. */
@@ -3284,6 +3686,42 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listApmServiceContainers: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Containers whose span resources carried container.id for this service since `from`, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        containers: components["schemas"]["ApmServiceContainer"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
         };
     };

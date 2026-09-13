@@ -15,6 +15,7 @@ import { OverviewTab } from "@/components/apm/OverviewTab";
 import { ServiceMap } from "@/components/apm/ServiceMap";
 import { TracesTab } from "@/components/apm/TracesTab";
 import { TransactionsTab } from "@/components/apm/TransactionsTab";
+import { ServiceContainers } from "@/components/containers/ServiceContainers";
 import { PageHeader } from "@/components/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
@@ -241,6 +242,7 @@ export function ApmServicePage() {
               )}
             </dd>
           </div>
+          <ServiceContainers scope={scope} range={range} />
           {d.instances.length > 1 && (
             <div className="flex gap-1.5">
               <dt className="text-muted-foreground">{t("apm.service.environments")}</dt>

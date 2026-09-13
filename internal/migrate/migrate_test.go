@@ -82,12 +82,15 @@ func TestEmbeddedSchema(t *testing.T) {
 			if strings.Contains(st, "{cluster}") {
 				t.Errorf("unreplaced macro in %d: %s", m.Version, st)
 			}
-			// Expand migrations: CREATE ... IF NOT EXISTS, or idempotent column additions (ALTER TABLE ...
-			// ADD COLUMN IF NOT EXISTS, e.g. 0006_apm); anything else (DROP, MODIFY, RENAME) is not allowed here.
-			isAddColumns := strings.HasPrefix(st, "ALTER TABLE") &&
-				strings.Count(st, "ADD COLUMN") > 0 && strings.Count(st, "ADD COLUMN") == strings.Count(st, "ADD COLUMN IF NOT EXISTS") &&
+			// Expand migrations: CREATE ... IF NOT EXISTS, or idempotent column/index additions (ALTER TABLE ...
+			// ADD COLUMN IF NOT EXISTS, e.g. 0006_apm; ADD INDEX IF NOT EXISTS, 0009_containers); anything else
+			// (DROP, MODIFY, RENAME) is not allowed here.
+			idempotentAdds := func(clause string) bool {
+				return strings.Count(st, clause) > 0 && strings.Count(st, clause) == strings.Count(st, clause+" IF NOT EXISTS")
+			}
+			isAdd := strings.HasPrefix(st, "ALTER TABLE") && (idempotentAdds("ADD COLUMN") || idempotentAdds("ADD INDEX")) &&
 				!strings.Contains(st, "DROP") && !strings.Contains(st, "MODIFY") && !strings.Contains(st, "RENAME")
-			if !strings.HasPrefix(st, "CREATE") && !isAddColumns {
+			if !strings.HasPrefix(st, "CREATE") && !isAdd {
 				t.Errorf("unexpected statement start in %d: %.40q", m.Version, st)
 			}
 		}
