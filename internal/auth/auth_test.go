@@ -40,9 +40,10 @@ func TestPasswordHashing(t *testing.T) {
 func TestValidatePassword(t *testing.T) {
 	for pw, ok := range map[string]bool{
 		"short":                               false,
-		"elevenchars":                         false,
-		"twelve chars":                        true,
-		"çğıöşüçğıöşü":                        true, // 12 runes
+		"seven77":                             false,
+		"eight888":                            true,
+		"çğıöşüçğ":                            true, // 8 runes, 16 bytes
+		"çğıöşüç":                             false, // 7 runes, 14 bytes
 		strings.Repeat("x", MaxPasswordLen):   true,
 		strings.Repeat("x", MaxPasswordLen+1): false,
 	} {

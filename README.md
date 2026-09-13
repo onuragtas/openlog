@@ -26,14 +26,22 @@ cd openlog
 cp deploy/compose/.env.example deploy/compose/.env
 ```
 
+Generate the random values in a terminal and paste the **output** into the file (`.env` does not run commands):
+
+```sh
+echo "olk_$(openssl rand -hex 24)"   # OPENLOG_BOOTSTRAP_LICENSE_KEY
+openssl rand -base64 32              # OPENLOG_SECRETS_KEY
+openssl rand -hex 16                 # OPENLOG_POSTGRES_PASSWORD (run again for OPENLOG_CLICKHOUSE_PASSWORD)
+```
+
 Edit `deploy/compose/.env`. **Change every development value** before exposing the server:
 
 | Variable | Set to |
 |---|---|
-| `OPENLOG_BOOTSTRAP_OWNER_EMAIL` / `OPENLOG_BOOTSTRAP_OWNER_PASSWORD` | your admin login (password ≥ 8 characters) |
-| `OPENLOG_BOOTSTRAP_LICENSE_KEY` | ingest key for agents, e.g. `olk_$(openssl rand -hex 24)` |
-| `OPENLOG_SECRETS_KEY` | `openssl rand -base64 32` (encrypts alert channel secrets; keep it with your backups) |
-| `OPENLOG_POSTGRES_PASSWORD`, `OPENLOG_CLICKHOUSE_PASSWORD` | `openssl rand -hex 16` each |
+| `OPENLOG_BOOTSTRAP_OWNER_EMAIL` / `OPENLOG_BOOTSTRAP_OWNER_PASSWORD` | your admin login (password: 8–256 characters) |
+| `OPENLOG_BOOTSTRAP_LICENSE_KEY` | ingest key for agents (generated above) |
+| `OPENLOG_SECRETS_KEY` | generated above; encrypts alert channel secrets — keep it with your backups |
+| `OPENLOG_POSTGRES_PASSWORD`, `OPENLOG_CLICKHOUSE_PASSWORD` | generated above. Set them **before the first start**: PostgreSQL and ClickHouse only apply them when their volumes are created |
 | `OPENLOG_COOKIE_SECURE` | `true` once the UI is served over HTTPS (see step 5), `false` for plain HTTP |
 | `OPENLOG_UPDATE_CHECK` | `disabled` until the first signed GitHub release exists |
 | `OPENLOG_RELEASE_MIRROR_DIR`, `OPENLOG_RELEASE_SERVE_MIRROR` | empty / `false` (only for air-gapped release mirrors) |
