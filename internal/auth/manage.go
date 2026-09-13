@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -279,8 +280,12 @@ func (s *Service) ListLicenseKeys(ctx context.Context, p *Principal) ([]LicenseK
 	return ks, nil
 }
 
-// CreateLicenseKey creates an ingest key (admin+). The plaintext is returned once.
-func (s *Service) CreateLicenseKey(ctx context.Context, p *Principal, name string, meta ClientMeta) (LicenseKey, string, error) {
+// CreateLicenseKey creates an ingest key (admin+). With customKey == "" a key is
+// generated and its plaintext returned once. Otherwise customKey (trimmed,
+// validated with ValidateCustomKey) is imported: only its hash is stored, the
+// key is marked Custom and the returned plaintext is "". A value that already
+// exists in any organization, active or revoked, fails with already_exists.
+func (s *Service) CreateLicenseKey(ctx context.Context, p *Principal, name, customKey string, meta ClientMeta) (LicenseKey, string, error) {
 	if err := s.gate(p, ActManageLicenseKeys); err != nil {
 		return LicenseKey{}, "", err
 	}
@@ -288,16 +293,30 @@ func (s *Service) CreateLicenseKey(ctx context.Context, p *Principal, name strin
 	if err != nil {
 		return LicenseKey{}, "", err
 	}
-	secret, err := NewSecret(PrefixLicenseKey)
-	if err != nil {
+	secret := strings.TrimSpace(customKey)
+	custom := secret != ""
+	if custom {
+		if err := ValidateCustomKey(secret, MinCustomKeyLen); err != nil {
+			return LicenseKey{}, "", err
+		}
+	} else if secret, err = NewSecret(PrefixLicenseKey); err != nil {
 		return LicenseKey{}, "", err
 	}
-	k := LicenseKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: HashSecret(secret),
+	k := LicenseKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: HashSecret(secret), Custom: custom,
 		CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: s.now()}
 	if err := s.store.CreateLicenseKey(ctx, &k); err != nil {
+		if custom && errors.Is(err, ErrAlreadyExists) {
+			// Never reveal which organization uses the value (or that it was revoked).
+			return LicenseKey{}, "", &Error{Code: CodeAlreadyExists, Message: "this key value is already in use; choose another value"}
+		}
 		return LicenseKey{}, "", s.fail(err)
 	}
-	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "license_key.create", "license_key", k.ID, map[string]any{"name": name, "prefix": k.Prefix})
+	details := map[string]any{"name": name, "prefix": k.Prefix}
+	if custom {
+		details["custom"] = true
+		secret = "" // the caller already knows it
+	}
+	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "license_key.create", "license_key", k.ID, details)
 	return k, secret, nil
 }
 

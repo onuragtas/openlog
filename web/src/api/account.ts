@@ -133,8 +133,9 @@ export async function acceptInvitation(token: string, password: string, name: st
   return remember(unwrap(await api.POST("/api/v1/invitations/accept", { body: { token, password, name } })));
 }
 
-export async function createLicenseKey(name: string) {
-  return unwrap(await api.POST("/api/v1/license-keys", { body: { name } }));
+/** Creates an ingest key. With `key`, that value is imported (response `key` is null). */
+export async function createLicenseKey(name: string, key?: string) {
+  return unwrap(await api.POST("/api/v1/license-keys", { body: key === undefined ? { name } : { name, key } }));
 }
 
 export async function revokeLicenseKey(id: string): Promise<void> {

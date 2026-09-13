@@ -178,6 +178,7 @@ func Run(t *testing.T, newStore func(t *testing.T) auth.Store) {
 		{"last_owner", nil, lastOwner},
 		{"invitations", nil, invitations},
 		{"license_key_cache_revocation", nil, licenseKeyCache},
+		{"custom_license_keys", nil, customLicenseKeys},
 		{"bootstrap_idempotent", nil, bootstrapIdempotent},
 		{"audit_log", nil, auditLog},
 		{"change_password", nil, changePassword},
@@ -327,7 +328,7 @@ func apiKeys(t *testing.T, e *Env) {
 	}
 	pPost, err := e.Auth(http.MethodPost, nil, WithBearer(secret))
 	ok(t, err, "bearer POST needs no CSRF token")
-	_, _, err = e.Svc.CreateLicenseKey(ctx, pPost, "x", e.Meta)
+	_, _, err = e.Svc.CreateLicenseKey(ctx, pPost, "x", "", e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "API keys are read-only")
 	_, _, err = e.Svc.CreateAPIKey(ctx, pPost, "x", nil, e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "API key creating API keys")
@@ -379,7 +380,7 @@ func roles(t *testing.T, e *Env) {
 		t.Fatalf("roles %s %s %s", admin.P.Role, member.P.Role, viewer.P.Role)
 	}
 
-	_, _, err := e.Svc.CreateLicenseKey(ctx, viewer.P, "k", e.Meta)
+	_, _, err := e.Svc.CreateLicenseKey(ctx, viewer.P, "k", "", e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "viewer creates license key")
 	_, _, err = e.Svc.CreateAPIKey(ctx, viewer.P, "k", nil, e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "viewer creates API key")
@@ -396,7 +397,7 @@ func roles(t *testing.T, e *Env) {
 
 	memberKey, _, err := e.Svc.CreateAPIKey(ctx, member.P, "mine", nil, e.Meta)
 	ok(t, err, "member creates API key")
-	_, _, err = e.Svc.CreateLicenseKey(ctx, member.P, "k", e.Meta)
+	_, _, err = e.Svc.CreateLicenseKey(ctx, member.P, "k", "", e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "member creates license key")
 	_, err = e.Svc.ListLicenseKeys(ctx, member.P)
 	ok(t, err, "member lists license keys")
@@ -407,7 +408,7 @@ func roles(t *testing.T, e *Env) {
 
 	adminKey, _, err := e.Svc.CreateAPIKey(ctx, admin.P, "admin", nil, e.Meta)
 	ok(t, err, "admin creates API key")
-	_, _, err = e.Svc.CreateLicenseKey(ctx, admin.P, "prod", e.Meta)
+	_, _, err = e.Svc.CreateLicenseKey(ctx, admin.P, "prod", "", e.Meta)
 	ok(t, err, "admin creates license key")
 	_, _, err = e.Svc.CreateInvitation(ctx, admin.P, e.Email("o2"), auth.RoleOwner, e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "admin invites owner")
@@ -533,7 +534,7 @@ func invitations(t *testing.T, e *Env) {
 
 func licenseKeyCache(t *testing.T, e *Env) {
 	org, owner := e.Bootstrap("lk")
-	k, secret, err := e.Svc.CreateLicenseKey(ctx, owner.P, "prod", e.Meta)
+	k, secret, err := e.Svc.CreateLicenseKey(ctx, owner.P, "prod", "", e.Meta)
 	ok(t, err, "create license key")
 	if !strings.HasPrefix(secret, auth.PrefixLicenseKey) || k.Prefix != secret[:12] {
 		t.Fatalf("key %q prefix %q", secret, k.Prefix)
@@ -569,6 +570,74 @@ func licenseKeyCache(t *testing.T, e *Env) {
 	expect(t, err, auth.ErrNotFound, "revoke key of another org")
 	_, err = e.Svc.RevokeLicenseKey(ctx, other.P, "not-a-uuid", e.Meta)
 	expect(t, err, auth.ErrNotFound, "malformed id")
+}
+
+func customLicenseKeys(t *testing.T, e *Env) {
+	org, owner := e.Bootstrap("ck")
+	value := "  " + strings.Repeat("a1B2", 6) + e.sfx + "  " // 32 chars, unique per run, surrounding spaces trimmed
+	trimmed := strings.TrimSpace(value)
+	k, secret, err := e.Svc.CreateLicenseKey(ctx, owner.P, "signoz import", value, e.Meta)
+	ok(t, err, "create custom key")
+	if secret != "" || !k.Custom || k.Prefix != trimmed[:8] {
+		t.Fatalf("custom key: secret %q, %+v", secret, k)
+	}
+	cache := tenant.NewCached(e.Store, tenant.CacheOptions{TTL: time.Minute, NegativeTTL: 10 * time.Second, Now: e.Now})
+	if got, err := cache.Resolve(ctx, trimmed); err != nil || got != org.TenantID {
+		t.Fatalf("resolve custom key = %q %v", got, err)
+	}
+	keys, err := e.Svc.ListLicenseKeys(ctx, owner.P)
+	ok(t, err, "list")
+	if len(keys) != 1 || !keys[0].Custom {
+		t.Fatalf("listed keys %+v", keys)
+	}
+	_, gen, err := e.Svc.CreateLicenseKey(ctx, owner.P, "generated", "", e.Meta)
+	ok(t, err, "generated key")
+	keys, _ = e.Svc.ListLicenseKeys(ctx, owner.P)
+	for _, x := range keys {
+		if x.Custom != (x.ID == k.ID) || (x.ID != k.ID && !strings.HasPrefix(gen, x.Prefix)) {
+			t.Fatalf("custom flag %+v", x)
+		}
+	}
+	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, 50)
+	ok(t, err, "audit")
+	audited := false
+	for _, ev := range evs {
+		if ev.Action == "license_key.create" && ev.TargetID == k.ID && ev.Details["custom"] == true {
+			audited = true
+		}
+	}
+	if !audited {
+		t.Fatalf("custom key creation not audited with custom=true: %+v", evs)
+	}
+
+	for _, bad := range []string{"short-key-123", strings.Repeat("x", 257), "has space in the middle!", `with"quote-1234567`, "with'quote-1234567", `back\slash-1234567`, "non-ascii-ğüşiöç-1234"} {
+		_, _, err := e.Svc.CreateLicenseKey(ctx, owner.P, "bad", bad, e.Meta)
+		expect(t, err, auth.ErrInvalidArgument, "invalid custom key "+bad)
+	}
+	_, _, err = e.Svc.CreateLicenseKey(ctx, owner.P, "dup", trimmed, e.Meta)
+	expect(t, err, auth.ErrAlreadyExists, "duplicate within org")
+
+	_, other := e.Bootstrap("ck2")
+	_, _, err = e.Svc.CreateLicenseKey(ctx, other.P, "dup", trimmed, e.Meta)
+	expect(t, err, auth.ErrAlreadyExists, "duplicate across orgs")
+	if msg := err.Error(); strings.Contains(msg, org.ID) || strings.Contains(msg, org.TenantID) {
+		t.Fatalf("conflict reveals the other organization: %v", err)
+	}
+
+	_, err = e.Svc.RevokeLicenseKey(ctx, owner.P, k.ID, e.Meta)
+	ok(t, err, "revoke custom key")
+	_, _, err = e.Svc.CreateLicenseKey(ctx, owner.P, "reuse", trimmed, e.Meta)
+	expect(t, err, auth.ErrAlreadyExists, "revoked value reused in the same org")
+	_, _, err = e.Svc.CreateLicenseKey(ctx, other.P, "reuse", trimmed, e.Meta)
+	expect(t, err, auth.ErrAlreadyExists, "revoked value reused in another org")
+	e.Advance(61 * time.Second)
+	if _, err := cache.Resolve(ctx, trimmed); !errors.Is(err, tenant.ErrUnknownKey) {
+		t.Fatalf("revoked custom key after TTL: %v", err)
+	}
+
+	member := e.AddUser(owner, "ck-member", auth.RoleMember)
+	_, _, err = e.Svc.CreateLicenseKey(ctx, member.P, "m", strings.Repeat("m", 32)+e.sfx, e.Meta)
+	expect(t, err, auth.ErrPermissionDenied, "member imports a key")
 }
 
 func bootstrapIdempotent(t *testing.T, e *Env) {
@@ -615,7 +684,7 @@ func bootstrapIdempotent(t *testing.T, e *Env) {
 
 func auditLog(t *testing.T, e *Env) {
 	_, owner := e.Bootstrap("audit")
-	k, _, err := e.Svc.CreateLicenseKey(ctx, owner.P, "prod", e.Meta)
+	k, _, err := e.Svc.CreateLicenseKey(ctx, owner.P, "prod", "", e.Meta)
 	ok(t, err, "create key")
 	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, 50)
 	ok(t, err, "list audit")

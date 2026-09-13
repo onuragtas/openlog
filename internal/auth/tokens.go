@@ -38,12 +38,37 @@ func HashSecret(secret string) []byte {
 // prefix plus the first 8 characters (e.g. "olk_1a2b3c4d").
 func DisplayPrefix(secret string) string {
 	for _, p := range []string{PrefixLicenseKey, PrefixAPIKey, PrefixInvitation} {
-		if len(secret) >= len(p)+16 && secret[:len(p)] == p {
+		// Generated keys have 48 characters after the prefix; shorter operator-chosen
+		// values that merely start with a type prefix fall through to the half rule.
+		if len(secret) >= len(p)+24 && secret[:len(p)] == p {
 			return secret[:len(p)+8]
 		}
 	}
 	// Operator-chosen keys (bootstrap): never reveal more than half.
 	return secret[:min(8, len(secret)/2)]
+}
+
+// Length limits of operator-chosen ("custom") ingest license key values.
+const (
+	MinCustomKeyLen = 16  // POST /api/v1/license-keys with "key"
+	MaxCustomKeyLen = 256 // also applies to bootstrap keys
+)
+
+// ValidateCustomKey checks an operator-chosen key value (already trimmed):
+// minLen–MaxCustomKeyLen characters of printable ASCII without spaces, quotes
+// or backslashes, so it fits HTTP headers, gRPC metadata and shell arguments
+// (install.sh). Bootstrap passes MinProvidedKeyLen as minLen.
+func ValidateCustomKey(key string, minLen int) error {
+	if len(key) < minLen || len(key) > MaxCustomKeyLen {
+		return invalid("key must be %d–%d characters", minLen, MaxCustomKeyLen)
+	}
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+		if c < 0x21 || c > 0x7e || c == '"' || c == '\'' || c == '\\' {
+			return invalid("key may contain only printable ASCII characters without spaces, quotes or backslashes")
+		}
+	}
+	return nil
 }
 
 // newOpaqueToken returns 32 random bytes, base64url encoded (session and CSRF tokens).

@@ -366,17 +366,17 @@ func (s *Store) RevokeUserSessions(ctx context.Context, userID, exceptID string,
 
 func (s *Store) CreateLicenseKey(ctx context.Context, k *auth.LicenseKey) error {
 	k.CreatedAt = ts(k.CreatedAt)
-	err := s.pool.QueryRow(ctx, `INSERT INTO license_keys (org_id, name, key_prefix, key_hash, created_by, created_at)
-		VALUES ($1, $2, $3, $4, $5::uuid, $6) RETURNING id::text`,
-		k.OrgID, k.Name, k.Prefix, k.Hash, nullID(k.CreatedBy), k.CreatedAt).Scan(&k.ID)
+	err := s.pool.QueryRow(ctx, `INSERT INTO license_keys (org_id, name, key_prefix, key_hash, custom, created_by, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6::uuid, $7) RETURNING id::text`,
+		k.OrgID, k.Name, k.Prefix, k.Hash, k.Custom, nullID(k.CreatedBy), k.CreatedAt).Scan(&k.ID)
 	return mapErr(err)
 }
 
-const licenseKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, coalesce(k.created_by::text, ''), k.created_at, k.last_used_at, k.revoked_at`
+const licenseKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, k.custom, coalesce(k.created_by::text, ''), k.created_at, k.last_used_at, k.revoked_at`
 
 func scanLicenseKey(r pgx.Row, extra ...any) (auth.LicenseKey, error) {
 	var k auth.LicenseKey
-	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.CreatedBy, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt}, extra...)
+	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.Custom, &k.CreatedBy, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt}, extra...)
 	return k, r.Scan(dest...)
 }
 

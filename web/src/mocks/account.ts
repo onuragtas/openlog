@@ -5,6 +5,7 @@
 // `resetMockAccounts()` runs after every test.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import type { ApiKey, Invitation, LicenseKey, Member, Session } from "@/api/account";
+import { customKeyProblem } from "@/api/licenseKeyValue";
 import type { Role } from "@/api/roles";
 import { formatTs } from "./fixtures";
 
@@ -102,9 +103,10 @@ function seed() {
       { id: "inv-1", email: "new@example.com", role: "member", invited_by_email: user.email, created_at: ago(day), expires_at: formatTs(now + 6 * day) },
     ] as Invitation[],
     licenseKeys: [
-      { id: "lk-1", name: "production hosts", prefix: "olk_9f3c2a71", created_by_email: user.email, created_at: ago(20 * day), last_used_at: ago(45_000), revoked_at: null },
-      { id: "lk-2", name: "old staging", prefix: "olk_77aa01b3", created_by_email: "grace@example.com", created_at: ago(35 * day), last_used_at: ago(9 * day), revoked_at: ago(8 * day) },
+      { id: "lk-1", name: "production hosts", prefix: "olk_9f3c2a71", custom: false, created_by_email: user.email, created_at: ago(20 * day), last_used_at: ago(45_000), revoked_at: null },
+      { id: "lk-2", name: "old staging", prefix: "olk_77aa01b3", custom: false, created_by_email: "grace@example.com", created_at: ago(35 * day), last_used_at: ago(9 * day), revoked_at: ago(8 * day) },
     ] as LicenseKey[],
+    customKeyValues: new Set<string>(),
     apiKeys: [
       {
         id: "ak-1", name: "grafana", prefix: "ola_5d1e0c9a", scope: "read", created_by_user_id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000002",
@@ -308,10 +310,22 @@ export const accountHandlers = [
   http.get(`${API}/license-keys`, authed("member", () => HttpResponse.json({ license_keys: db.licenseKeys }))),
 
   http.post(`${API}/license-keys`, authed("admin", async (_ctx, { request }) => {
-    const name = (await body<{ name: string }>(request)).name?.trim();
+    const b = await body<{ name: string; key?: string | null }>(request);
+    const name = b.name?.trim();
     if (!name) return fail("invalid_argument", "name is required");
+    if (typeof b.key === "string") {
+      // Imported value: same rules as the API (docs/contracts/api.md); only a "hash" is kept.
+      const value = b.key.trim();
+      const problem = customKeyProblem(value);
+      if (problem) return fail("invalid_argument", problem === "length" ? "key must be 16–256 characters" : "key may contain only printable ASCII characters without spaces, quotes or backslashes");
+      if (db.customKeyValues.has(value)) return fail("already_exists", "this key value is already in use; choose another value");
+      db.customKeyValues.add(value);
+      const license_key: LicenseKey = { id: nextId("lk"), name, prefix: value.slice(0, Math.min(8, Math.floor(value.length / 2))), custom: true, created_by_email: db.user.email, created_at: formatTs(Date.now()), last_used_at: null, revoked_at: null };
+      db.licenseKeys.unshift(license_key);
+      return HttpResponse.json({ license_key, key: null }, { status: 201 });
+    }
     const key = `olk_${hex(48)}`;
-    const license_key: LicenseKey = { id: nextId("lk"), name, prefix: key.slice(0, 12), created_by_email: db.user.email, created_at: formatTs(Date.now()), last_used_at: null, revoked_at: null };
+    const license_key: LicenseKey = { id: nextId("lk"), name, prefix: key.slice(0, 12), custom: false, created_by_email: db.user.email, created_at: formatTs(Date.now()), last_used_at: null, revoked_at: null };
     db.licenseKeys.unshift(license_key);
     return HttpResponse.json({ license_key, key }, { status: 201 });
   })),

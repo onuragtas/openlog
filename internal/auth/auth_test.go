@@ -70,6 +70,37 @@ func TestSecrets(t *testing.T) {
 	}
 }
 
+func TestValidateCustomKey(t *testing.T) {
+	cases := []struct {
+		key string
+		min int
+		ok  bool
+	}{
+		{strings.Repeat("a", 16), MinCustomKeyLen, true},
+		{strings.Repeat("a", 15), MinCustomKeyLen, false},
+		{strings.Repeat("a", 256), MinCustomKeyLen, true},
+		{strings.Repeat("a", 257), MinCustomKeyLen, false},
+		{"0123456789abcdefABCDEF!#$%&()*+,-./:;<=>?@[]^_`{|}~", MinCustomKeyLen, true},
+		{"dev-license-key", MinProvidedKeyLen, true},
+		{"dev-license-key", MinCustomKeyLen, false},
+		{"abcdefgh ijklmnopq", MinCustomKeyLen, false},
+		{"abcdefghijklmnop\t", MinCustomKeyLen, false},
+		{`abcdefghijklmnop"`, MinCustomKeyLen, false},
+		{"abcdefghijklmnop'", MinCustomKeyLen, false},
+		{`abcdefghijklmnop\`, MinCustomKeyLen, false},
+		{"abcdefghijklmnopç", MinCustomKeyLen, false},
+	}
+	for _, c := range cases {
+		if err := ValidateCustomKey(c.key, c.min); (err == nil) != c.ok {
+			t.Errorf("ValidateCustomKey(%q, %d) = %v", c.key, c.min, err)
+		}
+	}
+	// A short operator-chosen value that starts with a type prefix still reveals at most half.
+	if p := DisplayPrefix("olk_0123456789ab"); p != "olk_0123" {
+		t.Errorf("short olk_ custom key prefix = %q", p)
+	}
+}
+
 func TestRoles(t *testing.T) {
 	cases := []struct {
 		role Role

@@ -6,6 +6,7 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/onuragtas/openlog/internal/auth"
@@ -410,6 +411,7 @@ type licenseKeyJSON struct {
 	ID             string  `json:"id"`
 	Name           string  `json:"name"`
 	Prefix         string  `json:"prefix"`
+	Custom         bool    `json:"custom"`
 	CreatedByEmail string  `json:"created_by_email"`
 	CreatedAt      string  `json:"created_at"`
 	LastUsedAt     *string `json:"last_used_at"`
@@ -417,7 +419,7 @@ type licenseKeyJSON struct {
 }
 
 func licenseKeyResponse(k auth.LicenseKey) licenseKeyJSON {
-	return licenseKeyJSON{ID: k.ID, Name: k.Name, Prefix: k.Prefix, CreatedByEmail: k.CreatedByEmail,
+	return licenseKeyJSON{ID: k.ID, Name: k.Name, Prefix: k.Prefix, Custom: k.Custom, CreatedByEmail: k.CreatedByEmail,
 		CreatedAt: formatTime(k.CreatedAt), LastUsedAt: optTime(k.LastUsedAt), RevokedAt: optTime(k.RevokedAt)}
 }
 
@@ -436,17 +438,28 @@ func (s *Server) listLicenseKeys(w http.ResponseWriter, r *http.Request, p *auth
 
 func (s *Server) createLicenseKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
 	var in struct {
-		Name string `json:"name"`
+		Name string  `json:"name"`
+		Key  *string `json:"key"` // optional: import an existing key value
 	}
 	if err := decodeJSON(r, &in); err != nil {
 		return err
 	}
-	k, secret, err := s.accounts.CreateLicenseKey(r.Context(), p, in.Name, s.accounts.Meta(r))
+	custom := ""
+	if in.Key != nil {
+		if custom = strings.TrimSpace(*in.Key); custom == "" {
+			return badRequest("key must not be empty; omit it to generate a key")
+		}
+	}
+	k, secret, err := s.accounts.CreateLicenseKey(r.Context(), p, in.Name, custom, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
 	k.CreatedByEmail = p.Email
-	writeJSON(w, http.StatusCreated, map[string]any{"license_key": licenseKeyResponse(k), "key": secret})
+	var key *string // null for imported keys: the caller already knows the value
+	if secret != "" {
+		key = &secret
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"license_key": licenseKeyResponse(k), "key": key})
 	return nil
 }
 

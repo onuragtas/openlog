@@ -116,11 +116,22 @@ organization (send `X-Openlog-Org-Id` to switch).
 ## Ingest license keys
 
 ### `GET /api/v1/license-keys`
-`{"license_keys": [{"id", "name", "prefix": "olk_1a2b3c4d", "created_by_email", "created_at", "last_used_at", "revoked_at"}]}`
+`{"license_keys": [{"id", "name", "prefix": "olk_1a2b3c4d", "custom": false, "created_by_email", "created_at", "last_used_at", "revoked_at"}]}`
 (revoked keys included). `last_used_at` is updated at most once a minute and may lag by up to a minute per ingest pod.
 
-### `POST /api/v1/license-keys` `{"name"}`
-`201 {"license_key": {…}, "key": "olk_…"}` — **the key is shown only in this response**.
+### `POST /api/v1/license-keys` `{"name", "key"?}`
+Without `key`: `201 {"license_key": {…, "custom": false}, "key": "olk_…"}` — **the key is shown only in this response**.
+
+With `key` an existing value is **imported**, so senders that already use it (e.g. an `x-api-key` header configured
+for another backend) keep working without being redeployed:
+- Surrounding whitespace is trimmed; the value must be 16–256 characters of printable ASCII without spaces, quotes
+  or backslashes (`[\x21-\x7e]` minus `"`, `'`, `\`), so it fits HTTP headers, gRPC metadata and `install.sh`.
+  Otherwise `400 invalid_argument` (an empty `key` is also rejected; omit it to generate a key).
+- Only `sha256(key)` and a display prefix revealing at most half of the value are stored.
+- A value already used by **any** organization, active or revoked, fails with `409 already_exists`; the response
+  does not say which organization has it.
+- `201 {"license_key": {…, "custom": true}, "key": null}` (the caller already knows the value). Audit:
+  `license_key.create` with `details.custom = true`.
 
 ### `DELETE /api/v1/license-keys/{id}`
 Revokes → `204` (idempotent). Ingest pods keep accepting the key until their cache entry expires, i.e. for up to

@@ -188,7 +188,7 @@ PostgreSQL migrations before every command. It does not start an admin server.
 | `OPENLOG_BOOTSTRAP_OWNER_EMAIL` | `` | Owner to ensure (created if missing, added as owner if not a member) |
 | `OPENLOG_BOOTSTRAP_OWNER_PASSWORD` | `` | Required only when the owner user does not exist yet (≥ 12 characters); an existing user's password is never changed |
 | `OPENLOG_BOOTSTRAP_OWNER_NAME` | `` | Display name for a new owner |
-| `OPENLOG_BOOTSTRAP_LICENSE_KEY` | `` | Plaintext ingest key to ensure (≥ 8 characters; development — prefer generated keys). Fails if it belongs to another organization or was revoked |
+| `OPENLOG_BOOTSTRAP_LICENSE_KEY` | `` | Plaintext ingest key to ensure: 8–256 characters of printable ASCII without spaces, quotes or backslashes (keys created in the UI/API with a custom value need ≥ 16). Prefer generated keys. Fails if it belongs to another organization or was revoked |
 | `OPENLOG_BOOTSTRAP_API_KEY` | `` | Plaintext read-only API key to ensure (same rules) |
 
 ## Fleet updates (`openlog-ingest`, `openlog-api`)

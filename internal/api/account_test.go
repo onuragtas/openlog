@@ -219,6 +219,24 @@ func TestManagementFlow(t *testing.T) {
 		t.Fatalf("revoke: %d %s", rec.Code, rec.Body)
 	}
 
+	// Imported (custom) key value: 201 with "key": null and "custom": true; 400 when invalid; 409 when reused.
+	customValue := "0123456789abcdef0123456789abcdef"
+	rec = owner.do(http.MethodPost, "/api/v1/license-keys", map[string]string{"name": "signoz", "key": " " + customValue + " "})
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"key":null`) || !strings.Contains(rec.Body.String(), `"custom":true`) || strings.Contains(rec.Body.String(), customValue) {
+		t.Fatalf("create custom key: %d %s", rec.Code, rec.Body)
+	}
+	for _, bad := range []string{"", "   ", "too-short", "has space 0123456789", `quote"0123456789abc`} {
+		if rec := owner.do(http.MethodPost, "/api/v1/license-keys", map[string]string{"name": "bad", "key": bad}); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_argument") {
+			t.Fatalf("invalid custom key %q: %d %s", bad, rec.Code, rec.Body)
+		}
+	}
+	if rec := owner.do(http.MethodPost, "/api/v1/license-keys", map[string]string{"name": "again", "key": customValue}); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "already_exists") {
+		t.Fatalf("duplicate custom key: %d %s", rec.Code, rec.Body)
+	}
+	if rec := owner.do(http.MethodGet, "/api/v1/license-keys", nil); !strings.Contains(rec.Body.String(), `"custom":false`) || !strings.Contains(rec.Body.String(), `"custom":true`) {
+		t.Fatalf("list custom flags: %s", rec.Body)
+	}
+
 	// Invite a viewer and accept.
 	rec = owner.do(http.MethodPost, "/api/v1/invitations", map[string]string{"email": "viewer@example.com", "role": "viewer"})
 	if rec.Code != http.StatusCreated {

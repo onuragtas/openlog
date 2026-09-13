@@ -26,7 +26,9 @@ func NewTenantID() (string, error) {
 }
 
 // MinProvidedKeyLen is the minimum length of operator-chosen keys in
-// BootstrapSpec (generated keys are always 52 characters).
+// BootstrapSpec (generated keys are always 52 characters). It is lower than
+// MinCustomKeyLen so existing development keys such as "dev-license-key"
+// (15 characters) keep working; the character rules of ValidateCustomKey apply.
 const MinProvidedKeyLen = 8
 
 // BootstrapSpec describes the first organization for self-hosted/dev installs
@@ -103,8 +105,8 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 
 	// Reject keys owned by another organization before creating anything.
 	if spec.LicenseKey != "" {
-		if len(spec.LicenseKey) < MinProvidedKeyLen {
-			return res, fmt.Errorf("license key must be at least %d characters", MinProvidedKeyLen)
+		if err := ValidateCustomKey(spec.LicenseKey, MinProvidedKeyLen); err != nil {
+			return res, fmt.Errorf("bootstrap license key: %s", err.(*Error).Message)
 		}
 		info, err := s.store.LookupLicenseKey(ctx, HashSecret(spec.LicenseKey))
 		if err == nil && info.TenantID != spec.TenantID {
@@ -160,9 +162,6 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 	res.Org = org
 
 	if spec.LicenseKey != "" {
-		if len(spec.LicenseKey) < MinProvidedKeyLen {
-			return res, fmt.Errorf("license key must be at least %d characters", MinProvidedKeyLen)
-		}
 		info, err := s.store.LookupLicenseKey(ctx, HashSecret(spec.LicenseKey))
 		switch {
 		case err == nil:
@@ -170,7 +169,7 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 				return res, errors.New("the bootstrap license key already belongs to another organization")
 			}
 		case errors.Is(err, tenant.ErrUnknownKey):
-			k := LicenseKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.LicenseKey), Hash: HashSecret(spec.LicenseKey), CreatedBy: owner.ID, CreatedAt: now}
+			k := LicenseKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.LicenseKey), Hash: HashSecret(spec.LicenseKey), Custom: true, CreatedBy: owner.ID, CreatedAt: now}
 			if err := s.store.CreateLicenseKey(ctx, &k); err != nil {
 				if errors.Is(err, ErrAlreadyExists) {
 					return res, errors.New("the bootstrap license key exists but was revoked; choose another key")

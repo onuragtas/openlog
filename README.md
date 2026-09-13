@@ -49,6 +49,10 @@ Edit `deploy/compose/.env`. **Change every development value** before exposing t
 The bootstrap values are applied **on first start only**; change the password later in the UI
 (Settings → Security) and create more ingest keys under Settings → License keys.
 
+Moving from another backend? Under Settings → License keys, turn on **Use my own key value** to import the key
+your applications already send (in the `openlog-license-key`, `x-api-key` or `Authorization: Bearer` header), so
+they keep working without being redeployed. Only a hash of the value is stored.
+
 ### 3. Start
 
 ```sh

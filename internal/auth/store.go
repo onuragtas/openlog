@@ -72,6 +72,7 @@ type LicenseKey struct {
 	Name           string
 	Prefix         string
 	Hash           []byte
+	Custom         bool // operator-chosen value (imported or bootstrap), not generated
 	CreatedBy      string
 	CreatedByEmail string
 	CreatedAt      time.Time

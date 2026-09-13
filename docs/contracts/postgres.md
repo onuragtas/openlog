@@ -31,16 +31,18 @@ Nothing that grants access is stored in plaintext:
 
 | Secret | Format | Stored as |
 |---|---|---|
-| Ingest license key | `olk_` + 48 hex chars (192 random bits) | `license_keys.key_hash = sha256(key)`, `key_prefix` = first 12 chars |
+| Ingest license key | `olk_` + 48 hex chars (192 random bits), or an imported value (16–256 printable ASCII chars, see [api.md](api.md#post-apiv1license-keys-name-key)) | `license_keys.key_hash = sha256(key)`, `key_prefix` = first 12 chars (at most half of an imported value) |
 | API key | `ola_` + 48 hex chars | `api_keys.key_hash = sha256(key)`, `key_prefix` = first 12 chars |
 | Invitation token | `oli_` + 48 hex chars | `invitations.token_hash = sha256(token)` |
 | Session token (cookie) | 32 random bytes, base64url | `sessions.token_hash = sha256(token)` |
 | Password | user-chosen, 8–256 chars | `users.password_hash` = argon2id PHC string (`m=19456,t=2,p=1`, 16-byte salt, 32-byte key) |
 
 Keys are high-entropy random values, so an unsalted SHA-256 is sufficient and allows an indexed lookup.
-Keys are shown once, in the response that creates them. Operator-chosen keys given to
-`openlog-admin bootstrap` (development) are hashed the same way; their displayed prefix reveals at most
-half of the key.
+Keys are shown once, in the response that creates them. Operator-chosen keys — imported under
+Settings → License keys, or given to `openlog-admin bootstrap` (`OPENLOG_BOOTSTRAP_LICENSE_KEY`) — are
+hashed the same way; their displayed prefix reveals at most half of the key. An imported value should
+itself be high-entropy (e.g. an existing 32-character random key). Bootstrap keys follow the same character
+rules but may be as short as 8 characters, so development defaults such as `dev-license-key` keep working.
 
 ## Tables
 
@@ -69,8 +71,11 @@ removing the last owner fails (the owner rows are locked `FOR UPDATE`, so concur
 both succeed).
 
 ### `license_keys` (ingest)
-`id`, `org_id`, `name`, `key_prefix`, `key_hash` (UNIQUE, 32 bytes), `created_by` (user, NULL after
-the user is deleted), `created_at`, `last_used_at`, `revoked_at`, `revoked_by`.
+`id`, `org_id`, `name`, `key_prefix`, `key_hash` (UNIQUE, 32 bytes), `custom` (boolean, `0007_license_key_custom`;
+true = operator-chosen value, imported or bootstrap; rows from before the migration are backfilled from
+`key_prefix NOT LIKE 'olk\_%'`), `created_by` (user, NULL after the user is deleted), `created_at`,
+`last_used_at`, `revoked_at`, `revoked_by`. The unique `key_hash` makes a value usable by one organization
+only, and a revoked value can never be imported again.
 Lookup: `WHERE key_hash = $1 AND revoked_at IS NULL`. Revocation is a soft delete (the row stays for
 the audit trail and to keep the hash unusable). `last_used_at` is written asynchronously by ingest, at
 most once per minute per key per pod.
@@ -102,7 +107,7 @@ created. Accepting marks the invitation and inserts the membership in one transa
 | `org.create`, `org.rename`, `bootstrap` | organization |
 | `member.role_change` (`details.from`/`to`), `member.remove` | user |
 | `invitation.create`, `invitation.revoke`, `invitation.accept` | invitation |
-| `license_key.create`, `license_key.revoke` | license_key (`details.name`, `details.prefix`) |
+| `license_key.create`, `license_key.revoke` | license_key (`details.name`, `details.prefix`; `details.custom = true` for an imported value) |
 | `api_key.create`, `api_key.revoke` | api_key |
 | `user.login`, `user.logout`, `user.password_change`, `user.password_reset`, `session.revoke` | session / user |
 | `fleet.policy.update` (`details.from`/`to`) | policy (organization id) |

@@ -629,6 +629,7 @@ export interface paths {
         };
         get: operations["listLicenseKeys"];
         put?: never;
+        /** @description Without `key` a key is generated and returned once. With `key` an existing value is imported (e.g. a key senders already use with another backend): surrounding whitespace is trimmed; 16–256 printable ASCII characters without spaces, quotes or backslashes. Only its SHA-256 hash is stored; the response `key` is null. A value already used by any organization, active or revoked, fails with 409 already_exists. */
         post: operations["createLicenseKey"];
         delete?: never;
         options?: never;
@@ -1707,8 +1708,10 @@ export interface components {
         LicenseKey: {
             id: string;
             name: string;
-            /** @description Visible, non-secret start of the key, e.g. olk_1a2b3c4d */
+            /** @description Visible, non-secret start of the key, e.g. olk_1a2b3c4d (at most half of an imported value) */
             prefix: string;
+            /** @description true: the value was chosen by an operator (imported or bootstrap) instead of generated */
+            custom: boolean;
             created_by_email: string;
             created_at: components["schemas"]["Timestamp"];
             last_used_at: components["schemas"]["NullableTimestamp"];
@@ -3716,11 +3719,15 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NameRequest"];
+                "application/json": {
+                    name: string;
+                    /** @description Optional key value to import instead of generating one */
+                    key?: string;
+                };
             };
         };
         responses: {
-            /** @description Created; the key is shown only in this response */
+            /** @description Created; a generated key is shown only in this response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3728,14 +3735,15 @@ export interface operations {
                 content: {
                     "application/json": {
                         license_key: components["schemas"]["LicenseKey"];
-                        /** @description olk_… (shown once) */
-                        key: string;
+                        /** @description olk_… (shown once); null for an imported value */
+                        key: string | null;
                     };
                 };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     revokeLicenseKey: {

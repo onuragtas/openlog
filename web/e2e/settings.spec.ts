@@ -30,8 +30,28 @@ test("settings: keys are shown once, members, sessions, organization switch", as
   await row.getByRole("button", { name: "Confirm revoke" }).click();
   await expect(row.getByText("Revoked")).toBeVisible();
 
+  // Imported key value (e.g. an x-api-key used with another backend): no reveal, "custom" badge.
+  const customValue = "0123456789abcdef0123456789abcdef";
+  await page.getByLabel("Key name").fill("signoz senders");
+  await page.getByRole("switch", { name: "Use my own key value" }).click();
+  const valueInput = page.getByLabel("Key value", { exact: true });
+  await expect(valueInput).toHaveAttribute("type", "password");
+  await valueInput.fill("short");
+  await expect(page.getByRole("alert")).toContainText("16–256 characters");
+  await expect(page.getByRole("button", { name: "Create key" })).toBeDisabled();
+  await valueInput.fill(customValue);
+  await page.getByRole("button", { name: "Create key" }).click();
+  await expect(page.getByTestId("license-key-imported")).toContainText("signoz senders");
+  await expect(page.getByTestId("secret-reveal")).toHaveCount(0);
+  const customRow = page.getByRole("row", { name: /signoz senders/ });
+  await expect(customRow.getByText("custom", { exact: true })).toBeVisible();
+  await expect(page.getByText(customValue)).toHaveCount(0);
+  await page.getByTestId("license-key-imported").getByRole("button", { name: "Done" }).click();
+  await expect(page.getByTestId("license-key-imported")).toHaveCount(0);
+
   // API key.
   await page.getByRole("link", { name: "API keys" }).click();
+  await expect(page).toHaveURL(/\/settings\/api-keys/);
   await page.getByLabel("Key name").fill("ci");
   await page.getByRole("button", { name: "Create API key" }).click();
   expect(await page.getByTestId("secret-reveal").getByRole("textbox").inputValue()).toMatch(/^ola_/);

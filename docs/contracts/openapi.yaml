@@ -990,14 +990,24 @@ paths:
     post:
       tags: [keys]
       operationId: createLicenseKey
+      description: >-
+        Without `key` a key is generated and returned once. With `key` an existing value is imported (e.g. a key
+        senders already use with another backend): surrounding whitespace is trimmed; 16–256 printable ASCII
+        characters without spaces, quotes or backslashes. Only its SHA-256 hash is stored; the response `key` is
+        null. A value already used by any organization, active or revoked, fails with 409 already_exists.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/NameRequest" }
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 200 }
+                key: { type: string, minLength: 16, maxLength: 256, description: "Optional key value to import instead of generating one" }
       responses:
         "201":
-          description: Created; the key is shown only in this response
+          description: Created; a generated key is shown only in this response
           content:
             application/json:
               schema:
@@ -1005,10 +1015,11 @@ paths:
                 required: [license_key, key]
                 properties:
                   license_key: { $ref: "#/components/schemas/LicenseKey" }
-                  key: { type: string, description: "olk_… (shown once)" }
+                  key: { type: [string, "null"], description: "olk_… (shown once); null for an imported value" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /api/v1/license-keys/{id}:
     delete:
@@ -2664,11 +2675,12 @@ components:
 
     LicenseKey:
       type: object
-      required: [id, name, prefix, created_by_email, created_at, last_used_at, revoked_at]
+      required: [id, name, prefix, custom, created_by_email, created_at, last_used_at, revoked_at]
       properties:
         id: { type: string }
         name: { type: string }
-        prefix: { type: string, description: "Visible, non-secret start of the key, e.g. olk_1a2b3c4d" }
+        prefix: { type: string, description: "Visible, non-secret start of the key, e.g. olk_1a2b3c4d (at most half of an imported value)" }
+        custom: { type: boolean, description: "true: the value was chosen by an operator (imported or bootstrap) instead of generated" }
         created_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         last_used_at: { $ref: "#/components/schemas/NullableTimestamp" }
