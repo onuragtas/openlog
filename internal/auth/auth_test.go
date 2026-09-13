@@ -42,7 +42,7 @@ func TestValidatePassword(t *testing.T) {
 		"short":                               false,
 		"seven77":                             false,
 		"eight888":                            true,
-		"çğıöşüçğ":                            true, // 8 runes, 16 bytes
+		"çğıöşüçğ":                            true,  // 8 runes, 16 bytes
 		"çğıöşüç":                             false, // 7 runes, 14 bytes
 		strings.Repeat("x", MaxPasswordLen):   true,
 		strings.Repeat("x", MaxPasswordLen+1): false,
