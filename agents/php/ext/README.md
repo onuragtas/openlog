@@ -21,6 +21,25 @@ missing, full or slow, the message is dropped and counted. No license key or end
 NTS and ZTS, glibc and musl, amd64 and arm64 (CI: `php-ext` job; locally `build/run-matrix.sh`). SAPIs: PHP-FPM,
 Apache mod_php (`apache2handler`), CGI/FastCGI, CLI.
 
+### Tested matrix (`build/run-matrix.sh`, arm64, 2026-09-13)
+
+| Image | phpt passed / failed / skipped | Skips |
+|---|---|---|
+| `php:7.1-cli` … `php:7.3-cli` | 25 / 0 / 1 | fibers (8.1+) |
+| `php:7.4-cli`, `php:8.0-cli` | 24 / 0 / 2 | fibers; pgsql (bullseye arm64 mirror has no libpq-dev) |
+| `php:8.1-cli` … `php:8.4-cli` | 26 / 0 / 0 | — |
+| `php:8.3-zts` | 26 / 0 / 0 | — |
+| `php:7.4-zts` | 15 / 0 / 11 | web-SAPI tests (image has no `php-cgi`), fibers, pgsql |
+| `php:7.4-cli-alpine` / `php:8.3-cli-alpine` | 25 / 0 / 1 · 26 / 0 / 0 | fibers (7.4) |
+
+Tests (`tests/*.phpt`, a child PHP process + a unix datagram receiver validating every message against the
+forwarder's rules): CLI/web transactions, traceparent (valid, unsampled, 8 malformed variants), sampling,
+fail-open (missing socket, invalid transport, receiver that never reads), splitting (2001 spans), span limit, tracer
+(threshold, fast calls, limits, 3000-deep recursion), generators, fibers, errors (uncaught, handler, fatal, 4 KiB
+truncation, exit), PDO, SQL sanitizing, mysqli, pgsql, phpredis, Predis, curl, curl_multi, streams (incl. context
+restore and opcache), Laravel, Symfony, Slim, WordPress, CodeIgniter, Yii (stub classes with the real names), several
+requests per process (php-cgi -T), log correlation. Real framework versions are exercised by `agents/php/demo`.
+
 ## Build and install
 
 ```sh
