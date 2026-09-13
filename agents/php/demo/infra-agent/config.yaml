@@ -1,0 +1,34 @@
+# openlog-infra-agent config for the PHP demo forwarder container.
+# license_key / endpoint come from OPENLOG_LICENSE_KEY / OPENLOG_ENDPOINT (compose environment).
+interval: 30s
+inventory_interval: 1h
+state_dir: /var/lib/openlog-infra-agent
+log_level: info
+
+host:
+  root_path: /
+  extra_attributes:
+    env: demo
+
+buffer:
+  dir: /var/lib/openlog-infra-agent/buffer
+  max_bytes: 67108864
+
+# Nothing to discover or tail inside this container; PHP runs in the sibling containers.
+containers:
+  enabled: false
+logs:
+  enabled: false
+integrations:
+  enabled: false
+
+php_forwarder:
+  enabled: true                  # explicit: discovery finds no PHP runtime in this container
+  socket: /run/openlog-infra-agent/php.sock   # shared named volume with every PHP container
+  socket_mode: "0666"            # PHP workers run as www-data in other containers (demo only)
+  udp_listen: 0.0.0.0:18127      # fallback: openlog.transport=udp://forwarder:18127
+  max_pending_traces: 10000
+  reassembly_timeout: 5s
+
+update:
+  enabled: false

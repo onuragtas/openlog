@@ -91,12 +91,16 @@ One JSON object (UTF-8) per datagram; all IDs lowercase hex; times unix nanoseco
   injects `traceparent` (+ `tracestate`) into the outgoing request.
 - **Errors:** uncaught exceptions and fatal errors → root span `status=2` + `exception` event; caught exceptions only
   when reported through framework handlers (Laravel `report()`, Symfony kernel exception).
-- **Logs correlation (optional):** `openlog.trace_id`/`openlog.span_id` exposed as PHP functions for log processors.
+- **Logs correlation (optional):** PHP functions `openlog\trace_id()`, `openlog\span_id()` (innermost non-segment
+  span) and `openlog\traceparent()` for log processors; `openlog\set_transaction_name()` overrides the name.
 
 ### 2.3 Splitting
 
 If the JSON exceeds 60 000 bytes, spans are split across datagrams with the same `pid` + `trace_id`, increasing `seq`
 from 0, `last: true` only on the final one; `resource`, `sampling_ratio`, `function_trace` are repeated in every part.
+Field order inside the object is not significant (the extension writes `seq`, `last` and `dropped_spans` after
+`spans`). The kernel's datagram queue is short (`net.unix.max_dgram_qlen`), so for split messages the extension may
+retry a part on `EAGAIN` for at most ~2 ms per message, never longer.
 The forwarder reassembles per (`pid`, `trace_id`) and exports when `last` arrives or after **5 s**; incomplete traces
 get `openlog.php.incomplete=true` on the root span (or on every span if the root is missing).
 
@@ -121,7 +125,7 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
 | Setting | Default |
 |---|---|
 | `openlog.enabled` | `1` |
-| `openlog.service_name` | `PHP_SAPI`-based fallback `php-app`; env `OPENLOG_SERVICE_NAME` overrides |
+| `openlog.service_name` | empty → `php-app` (web SAPIs) or `php-cli` (CLI); env `OPENLOG_SERVICE_NAME` overrides |
 | `openlog.service_namespace`, `openlog.service_version`, `openlog.environment` | empty; env `OPENLOG_*` overrides |
 | `openlog.transport` | `unix:///run/openlog-infra-agent/php.sock` |
 | `openlog.sampling_ratio` | `1.0` (parent-based: an incoming sampled `traceparent` is always recorded) |

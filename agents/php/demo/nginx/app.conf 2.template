@@ -1,0 +1,19 @@
+# Front controller at /srv/app/public/index.php via FastCGI to ${PHP_HOST}:9000 (Laravel and Symfony).
+# The upstream is a variable so nginx re-resolves it through Docker's DNS after a PHP container restart.
+resolver 127.0.0.11 valid=2s ipv6=off;
+
+server {
+    listen 80;
+    set $php_upstream ${PHP_HOST}:9000;
+    location = /nginx-health {
+        access_log off;
+        return 200 "ok\n";
+    }
+    location / {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /srv/app/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_read_timeout 60s;
+        fastcgi_pass $php_upstream;
+    }
+}

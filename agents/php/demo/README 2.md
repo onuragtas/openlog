@@ -6,7 +6,7 @@ stack (project `openlog`) is never started, stopped or modified from here.
 
 ```
 PHP worker (openlog.so) --unix datagram /run/openlog-infra-agent/php.sock (shared volume)--> forwarder
-forwarder = openlog-infra-agent (php_forwarder module) --OTLP/HTTP, openlog-license-key--> http://openlog:4318 (openlog_default)
+forwarder --OTLP/HTTP protobuf, openlog-license-key: dev-license-key--> http://openlog:4318 (network openlog_default)
 ```
 
 ## What runs
@@ -18,8 +18,7 @@ forwarder = openlog-infra-agent (php_forwarder module) --OTLP/HTTP, openlog-lice
 | `php-symfony-83` + `nginx-symfony-83` | symfony/skeleton 7.4 + FrameworkBundle, attribute routes, PHP 8.3 FPM | 127.0.0.1:28903 | PostgreSQL (PDO pgsql + `pg_*`), phpredis, HttpClient |
 | `php-wordpress-82` | official `wordpress:php8.2-apache` (mod_php), auto-installed with wp-cli | 127.0.0.1:28904 | MariaDB (mysqli), mu-plugin `openlog-demo.php` |
 | `php-plain-71` | plain PHP 7.1 on `php:7.1-apache` (mod_php) | 127.0.0.1:28905 | mysqli, pdo_mysql, pgsql, pdo_pgsql, phpredis 5.3.7, curl |
-| `forwarder` | **openlog-infra-agent** built from `agents/infra` (`infra-agent/`), `php_forwarder` enabled explicitly | – (UDP 18127 inside the network) | joins `openlog_default`; host `openlog-php-demo`, machine-id `0e0e…0071`; also sends this container's host metrics |
-| `debug-forwarder` (profile `debug-forwarder`) | standalone Go forwarder `forwarder/` with `OPENLOG_DEBUG_DUMP` | – | debug fallback, see below |
+| `forwarder` | `forwarder/` (Go, php-agent.md v1) | – (UDP 18127 inside the network) | joins `openlog_default` |
 | `mariadb`, `postgres`, `redis` | mariadb:11, postgres:16-alpine, redis:7-alpine | – | init SQL in `datastores/` |
 | `loadgen` (profile `load`) | alpine + curl running `load.sh --loop` | – | optional continuous traffic |
 
@@ -46,7 +45,7 @@ Useful knobs (environment of `make up`):
 |---|---|---|
 | `OPENLOG_AGENT` | `on` | `on` / `off` (extension loaded, transaction tracer disabled) / `none` (not loaded) |
 | `OPENLOG_TT_THRESHOLD_MS` | `500` | `openlog.transaction_tracer.threshold_ms` |
-| `OPENLOG_DEBUG_DUMP` | `0` | `debug-forwarder` only: `1` prints every message and converted span; `2` also raw JSON |
+| `OPENLOG_DEBUG_DUMP` | `0` | `1`: forwarder prints every message and converted span; `2`: also raw JSON |
 | `OPENLOG_ENDPOINT` / `OPENLOG_LICENSE_KEY` | `http://openlog:4318` / `dev-license-key` | export target |
 | `OPENLOG_NETWORK` | `openlog_default` | external network of the shared openlog |
 
@@ -110,24 +109,7 @@ Every `TRACE_EVERY`-th request (default 4) carries `traceparent: 00-<trace_id>-<
 trace IDs and a status-code summary, and exits non-zero on unexpected status codes. Look traces up at
 http://localhost:8080 (admin@openlog.local / openlog-dev-password) or `GET /api/v1/traces/{trace_id}`.
 
-## Forwarder
-
-**Default: the real infra agent.** `infra-agent/Dockerfile` builds `openlog-infra-agent` exactly like
-`test/localagents/php-host` (stage `agent-build`, named contexts `agent=agents/infra`, `release=libs/release`) into an
-Alpine image. `infra-agent/config.yaml` sets `php_forwarder.enabled: true` (discovery finds no PHP inside that
-container), `socket: /run/openlog-infra-agent/php.sock`, `socket_mode: "0666"`, `udp_listen: 0.0.0.0:18127`; container
-discovery, logs, integrations and self-update are off. Endpoint and license come from `OPENLOG_ENDPOINT` /
-`OPENLOG_LICENSE_KEY`; `host.name` is the compose hostname `openlog-php-demo` and `host.id` the fixed machine-id written by
-`infra-agent/entrypoint.sh`. Logs: `make logs` (look for `php forwarder started`).
-
-**Debug fallback: `forwarder/`** (prints every datagram):
-
-```bash
-docker compose -p openlog-php -f agents/php/demo/docker-compose.yml stop forwarder
-OPENLOG_DEBUG_DUMP=1 docker compose -p openlog-php -f agents/php/demo/docker-compose.yml --profile debug-forwarder up -d debug-forwarder
-docker compose -p openlog-php -f agents/php/demo/docker-compose.yml logs -f debug-forwarder
-# back: ... rm -sf debug-forwarder && ... up -d forwarder
-```
+## Forwarder (`forwarder/`)
 
 Standalone Go forwarder implementing docs/contracts/php-agent.md v1 §1, §2, §2.3 and the §6 validation semantics. The
 decode/reassembly/conversion files are copies of `agents/infra/internal/phpforwarder` (keep them in sync); `main.go`
@@ -151,8 +133,7 @@ Tests (in Docker): `docker run --rm -v "$PWD/agents/php/demo/forwarder":/src -w 
 ## Overhead benchmark
 
 `agents/php/bench/ext/` (project `openlog-php-bench`, ports 28906–28908): base / off / on variants of the
-`openlog-php/laravel-83:dev` image, 4 CPUs and 8 static FPM workers each, shared MariaDB/Redis/forwarder (the standalone
-`openlog-php/forwarder:dev`), k6 closed loop
+`openlog-php/laravel-83:dev` image, 4 CPUs and 8 static FPM workers each, shared MariaDB/Redis/forwarder, k6 closed loop
 on `/bench/{id}`. See the header of `bench/ext/run.sh`.
 
 ## Caveats

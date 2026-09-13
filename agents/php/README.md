@@ -1,6 +1,21 @@
-# openlog PHP agent — M2 spike (D-034)
+# openlog PHP agent
 
-Status: **spike / decision material, not a product.** License: Apache-2.0 (see [LICENSE](LICENSE)).
+License: Apache-2.0 (see [LICENSE](LICENSE)). Decisions D-035…D-038: own C extension, PHP 7.1+, function-level
+traces, forwarder in the infra agent. Contract: [docs/contracts/php-agent.md](../../docs/contracts/php-agent.md).
+
+| Path | What |
+|---|---|
+| [`ext/`](ext/README.md) | **The product:** `openlog.so` (C), PHP 7.1–8.4, NTS/ZTS, glibc/musl. Build, ini reference, supported frameworks and datastores, compatibility, troubleshooting. phpt tests in `ext/tests`, build matrix in `ext/build` |
+| [`demo/`](demo/README.md) | Real applications on the shared local openlog (compose project `openlog-php`): `php-laravel-83`, `php-laravel-74`, `php-symfony-83`, `php-wordpress-82`, `php-plain-71`, with the infra-agent forwarder and a load script |
+| `bench/ext/` | Overhead benchmark of `openlog.so` on the Laravel 8.3 reference app (baseline / tracer off / tracer on) |
+
+The forwarder is the infra agent's `php_forwarder` module (`agents/infra/internal/phpforwarder`).
+
+---
+
+## M2 spike (D-034, historical)
+
+The material below is the decision spike that preceded the extension; kept for reference, not a product.
 
 The decision document (Turkish, for the product owner) is [docs/decision.md](docs/decision.md).
 Measured results are in [spike/results/](spike/results/) (`summary.md`, `verify.txt`, `crash-test.txt`, raw k6 JSON).

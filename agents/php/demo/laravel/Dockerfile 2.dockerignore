@@ -1,0 +1,10 @@
+# Build context is agents/php: only the extension sources and the demo are needed.
+*
+!ext/
+!demo/
+ext/**/*.o
+ext/**/*.lo
+ext/**/.libs
+ext/modules
+ext/autom4te.cache
+demo/forwarder

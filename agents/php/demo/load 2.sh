@@ -157,7 +157,7 @@ echo "== status codes"
 sort "$RESULT_FILE" | uniq -c | sort -k3,3 -k4
 echo
 echo "== requests with traceparent (look these trace IDs up in the openlog UI, http://localhost:8080)"
-[ ${#TRACES[@]} -gt 0 ] && printf '%s\n' "${TRACES[@]:0:${SHOW_TRACES:-40}}"
+[ ${#TRACES[@]} -gt 0 ] && printf '%s\n' "${TRACES[@]:0:12}"
 FAILS=$(grep -c '^FAIL' "$RESULT_FILE" || true)
 echo
 echo "sent $N requests, $FAILS unexpected statuses"

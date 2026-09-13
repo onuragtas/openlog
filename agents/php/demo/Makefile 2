@@ -30,9 +30,8 @@ status:
 	@for u in 28901/health 28902/health 28903/health 28904/wp-json/demo/v1/health 28905/index.php; do \
 	  printf '%-45s %s\n' "http://127.0.0.1:$$u" "$$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:$$u)"; done
 	@echo
-	@for s in php-laravel-83 php-laravel-74 php-symfony-83 php-wordpress-82 php-plain-71; do \
-	  printf '%-18s openlog.so %s\n' $$s "$$($(DC) exec -T $$s php -r 'echo phpversion("openlog") ?: "NOT loaded";' 2>/dev/null)"; done
-	@$(DC) logs --no-log-prefix --tail 300 forwarder 2>/dev/null | grep -i 'php forwarder' | tail -2
+	@$(DC) exec -T php-laravel-83 php -m 2>/dev/null | grep -qx openlog && echo "openlog.so loaded (php-laravel-83)" || echo "openlog.so NOT loaded (php-laravel-83)"
+	@$(DC) logs --no-log-prefix --tail 200 forwarder 2>/dev/null | grep ' msg=stats ' | tail -1
 
 load:
 	bash "$(DEMO_DIR)/load.sh" --cli

@@ -29,6 +29,10 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
+#ifndef GC_ADDREF /* PHP < 7.3 */
+# define GC_ADDREF(p) (++GC_REFCOUNT(p))
+#endif
+
 #if PHP_VERSION_ID >= 80000
 typedef bool ol_bool;
 #else
@@ -60,6 +64,7 @@ typedef zend_bool ol_bool;
 #define OL_NF_ENDED     0x04
 #define OL_NF_ROOT      0x08
 #define OL_NF_UNCAUGHT  0x10 /* root carries an uncaught exception event */
+#define OL_NF_FATAL     0x20 /* root carries an engine fatal error event */
 
 /* attribute value types */
 #define OL_AT_STR  1
@@ -228,8 +233,13 @@ ZEND_BEGIN_MODULE_GLOBALS(openlog)
 		bool had;
 	} saved_ctx[OL_SAVED_CTX_MAX];
 	uint32_t nsaved_ctx;
+	zend_long http_status; /* status line seen by the http wrapper proxy for the current stream call */
 
 	uint64_t rng;
+
+	/* PHP 7.x end handlers of userland functions run after the frame is gone: This is kept here */
+	zend_execute_data *end_ex;
+	zval end_this;
 
 	/* process state */
 	int fd;
@@ -239,6 +249,7 @@ ZEND_BEGIN_MODULE_GLOBALS(openlog)
 	socklen_t addrlen;
 	int log_level_n;
 	int query_mode;
+	int retry_budget;
 	char container_id[65];
 	ol_bool proc_info_done;
 	char out[OL_DGRAM_MAX + 1];
@@ -287,8 +298,11 @@ ol_node *ol_span_end(zend_execute_data *ex);
 bool ol_span_is_open(zend_execute_data *ex);
 uint32_t ol_span_detached(const char *name, uint8_t kind);
 void ol_node_finish(uint32_t idx);
+void ol_node_discard(uint32_t idx);
 void ol_tracer_begin(zend_execute_data *ex);
-void ol_tracer_end(zend_execute_data *ex);
+void ol_tracer_end(zend_execute_data *ex, zend_function *fn);
+void ol_fiber_stacks_free(void);
+void ol_close_open_nodes(void);
 void ol_attr_str(ol_node *n, const char *key, const char *s, size_t len);
 void ol_attr_cstr(ol_node *n, const char *key, const char *s);
 void ol_attr_static(ol_node *n, const char *key, const char *s);
@@ -345,8 +359,17 @@ size_t ol_normalize_path(char *dst, size_t cap, const char *path, size_t len);
 size_t ol_route_from_pattern(char *dst, size_t cap, const char *pat, size_t len);
 bool ol_str_starts_ci(const char *s, size_t len, const char *prefix);
 void ol_url_attrs(ol_node *n, const char *url, size_t len);
+void ol_report_exception(zend_object *e);
+void ol_uncaught_exception(zend_object *e);
+
+/* ---- inst_http.c ---- */
+void ol_http_rshutdown(void);
+void ol_http_minit(void);
+void ol_http_mshutdown(void);
 
 #define OL_ZSTR_EQ_CI(zs, lit) ((zs) && ZSTR_LEN(zs) == sizeof(lit) - 1 && zend_binary_strcasecmp(ZSTR_VAL(zs), ZSTR_LEN(zs), lit, sizeof(lit) - 1) == 0)
+/* EG(exception) when it is a real Throwable (PHP 8 unwinds exit() with an internal non-Throwable object) */
+#define OL_EXCEPTION() ((EG(exception) && instanceof_function(EG(exception)->ce, zend_ce_throwable)) ? EG(exception) : NULL)
 #define OL_ACTIVE() (OLG(active))
 #define OL_REC() (OLG(active) && OLG(recording))
 

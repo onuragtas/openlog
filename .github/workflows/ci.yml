@@ -61,6 +61,29 @@ jobs:
       - name: race
         run: go test -race ./...
 
+  php-ext:
+    name: php-ext (${{ matrix.php }}, ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        php: ["7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4",
+              "7.4-zts", "8.3-zts", "7.4-cli-alpine", "8.3-cli-alpine"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: build openlog.so + phpt (NTS/ZTS, glibc/musl; amd64 and arm64 native runners)
+        env:
+          VERSIONS: ${{ matrix.php }}
+          EXTRA: ""
+          PARALLEL: "1"
+          WORK: ${{ runner.temp }}/openlog-ext-matrix
+        run: agents/php/ext/build/run-matrix.sh
+      - name: test logs
+        if: always()
+        run: cat "$RUNNER_TEMP"/openlog-ext-matrix/results/*.log
+
   web:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

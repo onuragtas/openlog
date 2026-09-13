@@ -393,10 +393,12 @@ void ol_tracer_begin(zend_execute_data *ex)
 {
 	ol_frame *f;
 	ol_frame *t;
-	uint32_t parent, idx = OL_NONE;
+	uint32_t parent, eff_span, idx = OL_NONE;
 
+	/* copy what is needed from the top frame: ol_push_frame() may realloc the stack */
 	t = ol_stack_top();
 	parent = t ? t->eff : (OLG(nnodes) ? 0 : OL_NONE);
+	eff_span = t ? t->eff_span : (OLG(nnodes) ? 0 : OL_NONE);
 	if (!OLG(tracer_full)) {
 		if (OLG(seg_bytes) + sizeof(ol_node) > OLG(seg_bytes_cap)) {
 			OLG(tracer_full) = true;
@@ -419,13 +421,47 @@ void ol_tracer_begin(zend_execute_data *ex)
 	f->ex = ex;
 	f->node = idx;
 	f->eff = idx != OL_NONE ? idx : parent;
-	f->eff_span = t ? t->eff_span : (OLG(nnodes) ? 0 : OL_NONE);
+	f->eff_span = eff_span;
 	f->type = OL_FT_TRACER;
 }
 
-static void ol_segment_describe(ol_node *n, zend_execute_data *ex)
+/* Gives back a span that turned out not to be needed (e.g. PDO::prepare without error). */
+void ol_node_discard(uint32_t idx)
 {
-	zend_function *fn = ex->func;
+	ol_node *n = ol_node_at(idx);
+	if (n == NULL) {
+		return;
+	}
+	if (idx == OLG(nnodes) - 1 && idx > 0) {
+		OLG(nnodes)--;
+		if (!(n->flags & OL_NF_SEGMENT) && OLG(nspans) > 0) {
+			OLG(nspans)--;
+		}
+	} else {
+		n->flags |= OL_NF_DEAD;
+	}
+}
+
+/* Request end: every node still open ends now; open function segments are discarded. */
+void ol_close_open_nodes(void)
+{
+	uint64_t now = ol_mono_ns();
+	uint32_t i;
+	for (i = 0; i < OLG(nnodes); i++) {
+		ol_node *n = ol_node_at(i);
+		if (n->flags & OL_NF_ENDED) {
+			continue;
+		}
+		if ((n->flags & OL_NF_SEGMENT) && n->name == NULL) {
+			n->flags |= OL_NF_DEAD;
+		}
+		n->dur = now - n->start;
+		n->flags |= OL_NF_ENDED;
+	}
+}
+
+static void ol_segment_describe(ol_node *n, zend_function *fn)
+{
 	zend_string *fname = fn->common.function_name;
 	zend_class_entry *scope = fn->common.scope;
 	size_t before = OLG(arena_total);
@@ -458,7 +494,7 @@ static void ol_segment_describe(ol_node *n, zend_execute_data *ex)
 	OLG(seg_bytes) += 384 + (OLG(arena_total) - before);
 }
 
-void ol_tracer_end(zend_execute_data *ex)
+void ol_tracer_end(zend_execute_data *ex, zend_function *fn)
 {
 	ol_stack *st = OLG(stack);
 	ol_frame *f;
@@ -510,7 +546,7 @@ void ol_tracer_end(zend_execute_data *ex)
 		return;
 	}
 	OLG(seg_kept)++;
-	ol_segment_describe(n, ex);
+	ol_segment_describe(n, fn);
 }
 
 /* ---------------- attributes ---------------- */
@@ -728,17 +764,38 @@ void ol_fiber_switch(void *from, void *to)
 	} else if (zend_hash_num_elements(OLG(fiber_stacks)) == 0 && OLG(stack) == &OLG(main_stack)) {
 		/* first switch: remember the current (main) context */
 		zend_hash_index_add_ptr(OLG(fiber_stacks), (zend_ulong) (uintptr_t) from, &OLG(main_stack));
-		st = ecalloc(1, sizeof(ol_stack));
+		st = calloc(1, sizeof(ol_stack));
+		if (st == NULL) {
+			return;
+		}
 		zend_hash_index_add_ptr(OLG(fiber_stacks), (zend_ulong) (uintptr_t) to, st);
 	} else {
-		st = ecalloc(1, sizeof(ol_stack));
+		st = calloc(1, sizeof(ol_stack));
+		if (st == NULL) {
+			return;
+		}
 		zend_hash_index_add_ptr(OLG(fiber_stacks), (zend_ulong) (uintptr_t) to, st);
 	}
-	if (st != &OLG(main_stack) && st->depth == 0 && st->f == NULL) {
-		st->f = ecalloc(32, sizeof(ol_frame));
-		st->cap = 32;
-	}
 	OLG(stack) = st;
+}
+
+/* Frees the stacks of fibers (malloc'ed, frames grown with realloc like the main stack). */
+void ol_fiber_stacks_free(void)
+{
+	ol_stack *st;
+	if (OLG(fiber_stacks) == NULL) {
+		return;
+	}
+	ZEND_HASH_FOREACH_PTR(OLG(fiber_stacks), st) {
+		if (st != &OLG(main_stack)) {
+			free(st->f);
+			free(st);
+		}
+	} ZEND_HASH_FOREACH_END();
+	zend_hash_destroy(OLG(fiber_stacks));
+	FREE_HASHTABLE(OLG(fiber_stacks));
+	OLG(fiber_stacks) = NULL;
+	OLG(stack) = &OLG(main_stack);
 }
 
 void ol_fiber_destroy(void *ctx)
@@ -753,7 +810,8 @@ void ol_fiber_destroy(void *ctx)
 		if (OLG(stack) == st) {
 			OLG(stack) = &OLG(main_stack);
 		}
-		/* frame arrays of fibers are emalloc'ed (grown with realloc only for the main stack) */
 		zend_hash_index_del(OLG(fiber_stacks), (zend_ulong) (uintptr_t) ctx);
+		free(st->f);
+		free(st);
 	}
 }

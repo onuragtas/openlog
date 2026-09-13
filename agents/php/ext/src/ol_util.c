@@ -12,7 +12,7 @@
 zval *ol_arg(zend_execute_data *ex, uint32_t n)
 {
 	zval *z;
-	if (ex == NULL || n == 0 || n > ZEND_CALL_NUM_ARGS(ex)) {
+	if (ex == NULL || n == 0 || ex == OLG(end_ex) || n > ZEND_CALL_NUM_ARGS(ex)) {
 		return NULL;
 	}
 	z = ZEND_CALL_ARG(ex, n);
@@ -22,6 +22,9 @@ zval *ol_arg(zend_execute_data *ex, uint32_t n)
 
 zval *ol_this(zend_execute_data *ex)
 {
+	if (ex && ex == OLG(end_ex)) {
+		return Z_TYPE(OLG(end_this)) == IS_OBJECT ? &OLG(end_this) : NULL;
+	}
 	if (ex && Z_TYPE(ex->This) == IS_OBJECT) {
 		return &ex->This;
 	}
@@ -180,11 +183,8 @@ size_t ol_utf8_clean(char *dst, const char *src, size_t len, size_t max)
 			i++;
 			continue;
 		}
-		if (i + need >= len + 0 && i + need > len - 1 + 1) {
-			/* sequence runs past the (possibly truncated) end */
-			if (i + need >= len) {
-				break;
-			}
+		if (i + need >= len) {
+			break; /* sequence runs past the (possibly truncated) end */
 		}
 		{
 			size_t k;
@@ -289,10 +289,12 @@ void ol_record_exception(ol_node *n, zend_object *ex, bool set_status)
 	ol_event *e;
 	smart_str st = {0};
 
-	if (n == NULL || ex == NULL) {
+	if (n == NULL || ex == NULL || !instanceof_function(ex->ce, zend_ce_throwable)) {
 		return;
 	}
 	if (OLG(nreported) < sizeof(OLG(last_reported)) / sizeof(OLG(last_reported)[0])) {
+		/* held until request end so the address cannot be reused by another exception */
+		GC_ADDREF(ex);
 		OLG(last_reported)[OLG(nreported)++] = ex;
 	}
 	msg = ol_prop(ex, "message", 7);
@@ -323,6 +325,36 @@ void ol_record_exception(ol_node *n, zend_object *ex, bool set_status)
 	if (set_status) {
 		n->status = OL_STATUS_ERROR;
 	}
+}
+
+/* Exception reported through a framework handler: exception event + error status on the transaction. */
+void ol_report_exception(zend_object *e)
+{
+	ol_node *root = ol_node_at(0);
+	if (!OL_REC() || root == NULL || e == NULL || ol_exception_seen(e)) {
+		return;
+	}
+	/* frameworks turn the engine's fatal error into an exception object and report it again */
+	if ((root->flags & OL_NF_FATAL) &&
+			(ol_instanceof(e, ZEND_STRL("symfony\\component\\errorhandler\\error\\fatalerror")) ||
+			 ol_instanceof(e, ZEND_STRL("symfony\\component\\debug\\exception\\fatalerrorexception")))) {
+		return;
+	}
+	ol_record_exception(root, e, true);
+}
+
+/* Exception leaving the top-level script. */
+void ol_uncaught_exception(zend_object *e)
+{
+	ol_node *root = ol_node_at(0);
+	if (!OL_REC() || root == NULL || e == NULL || !instanceof_function(e->ce, zend_ce_throwable)) {
+		return; /* exit() / die() unwinding is not an error */
+	}
+	if (!ol_exception_seen(e)) {
+		ol_record_exception(root, e, true);
+	}
+	root->status = OL_STATUS_ERROR;
+	root->flags |= OL_NF_UNCAUGHT;
 }
 
 static const char *ol_error_type_name(int type)
@@ -357,6 +389,7 @@ void ol_record_error(ol_node *n, int type, const char *file, uint32_t line, cons
 		n->status_msg = ol_strdup(msg, msg_len, 1024);
 	}
 	n->status = OL_STATUS_ERROR;
+	n->flags |= OL_NF_FATAL;
 }
 
 /* ---------------- SQL ---------------- */

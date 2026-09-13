@@ -1,0 +1,26 @@
+# Test image for agents/php/ext: an official PHP image + the datastore extensions the phpt tests exercise.
+# Build context: agents/php/ext/build. Used by build/run-matrix.sh and the CI php-ext job.
+# Old Debian releases (buster/bullseye) may have broken package mirrors; then pgsql is skipped (its tests skip) and
+# the image still builds: mysqli/pdo_mysql need no system packages.
+ARG PHP_IMAGE=php:8.3-cli
+FROM ${PHP_IMAGE}
+ARG REDIS_VERSION=6.2.0
+COPY apt-update.sh /usr/local/bin/apt-update
+RUN set -ux; \
+    pg=1; \
+    if command -v apk >/dev/null; then \
+      apk add --no-cache $PHPIZE_DEPS postgresql-dev linux-headers || pg=0; \
+    else \
+      { sh /usr/local/bin/apt-update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libpq-dev; } \
+        || { echo "libpq-dev unavailable: pgsql tests will skip"; pg=0; }; \
+      rm -rf /var/lib/apt/lists/*; \
+    fi; \
+    docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql >/dev/null || exit 1; \
+    if [ "$pg" = 1 ]; then docker-php-ext-install -j"$(nproc)" pgsql pdo_pgsql >/dev/null || echo "pgsql build failed: tests will skip"; fi; \
+    if printf 'no\nno\nno\nno\nno\nno\n' | pecl install "redis-${REDIS_VERSION}" >/tmp/pecl.log 2>&1; then \
+      docker-php-ext-enable redis; \
+    else \
+      tail -20 /tmp/pecl.log; echo "phpredis ${REDIS_VERSION} not installed: phpredis tests will skip"; \
+    fi; \
+    rm -rf /tmp/pear; \
+    php -m

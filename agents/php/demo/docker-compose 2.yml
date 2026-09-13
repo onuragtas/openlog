@@ -86,31 +86,9 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------- forwarder (one for all PHP containers)
-  # Default: the real openlog-infra-agent (php_forwarder module + host metrics of this container).
   forwarder:
-    image: openlog-php/infra-agent:dev
-    build:
-      context: ./infra-agent
-      additional_contexts:
-        agent: ../../infra
-        release: ../../../libs/release
-    hostname: openlog-php-demo
-    restart: unless-stopped
-    networks: [demo, openlog]
-    environment:
-      OPENLOG_ENDPOINT: ${OPENLOG_ENDPOINT:-http://openlog:4318}
-      OPENLOG_LICENSE_KEY: ${OPENLOG_LICENSE_KEY:-dev-license-key}
-      OPENLOG_MACHINE_ID: 0e0e0000000000000000000000000071
-    volumes:
-      - php-sock:/run/openlog-infra-agent
-      - agent-state:/var/lib/openlog-infra-agent
-
-  # Debug fallback: the standalone Go forwarder (demo/forwarder) with OPENLOG_DEBUG_DUMP. Stop `forwarder` first, e.g.
-  #   docker compose -p openlog-php stop forwarder && OPENLOG_DEBUG_DUMP=1 docker compose -p openlog-php --profile debug-forwarder up -d debug-forwarder
-  debug-forwarder:
     image: openlog-php/forwarder:dev
     build: {context: ./forwarder}
-    profiles: ["debug-forwarder"]
     restart: unless-stopped
     networks: [demo, openlog]
     environment:
@@ -269,6 +247,5 @@ networks:
 
 volumes:
   php-sock:
-  agent-state:
   mariadb-data:
   postgres-data:

@@ -150,8 +150,8 @@ services:
   php-host:
     build:
       context: php-host
-      # phpext: switch to ../../agents/php/ext once the v1 extension exists (patch-v1.pl is skipped for v1 sources).
-      additional_contexts: {agent: ../../agents/infra, release: ../../libs/release, phpext: ../../agents/php/prototype-a/ext}
+      # phpext: the v1 extension (patch-v1.pl is skipped for v1 sources).
+      additional_contexts: {agent: ../../agents/infra, release: ../../libs/release, phpext: ../../agents/php/ext}
       args: {AGENT_VERSION: 0.9.1-local}
     image: openlog-localagents/php-host:1
     hostname: php-host
