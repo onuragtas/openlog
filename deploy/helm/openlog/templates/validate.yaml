@@ -1,0 +1,104 @@
+{{- /* Render-time validation. Produces no manifests. */ -}}
+{{- $mode := .Values.dependencies.mode -}}
+{{- if not (has $mode (list "external" "operators")) -}}
+{{- fail (printf "dependencies.mode must be 'external' or 'operators', got %q" $mode) -}}
+{{- end -}}
+
+{{- if eq $mode "external" -}}
+{{- if empty .Values.kafka.external.brokers -}}
+{{- fail "dependencies.mode=external requires kafka.external.brokers" -}}
+{{- end -}}
+{{- if empty .Values.clickhouse.external.addrs -}}
+{{- fail "dependencies.mode=external requires clickhouse.external.addrs" -}}
+{{- end -}}
+{{- end -}}
+
+{{- $authMode := .Values.auth.mode -}}
+{{- if not (has $authMode (list "postgres" "static")) -}}
+{{- fail (printf "auth.mode must be 'postgres' or 'static', got %q" $authMode) -}}
+{{- end -}}
+{{- if eq $authMode "postgres" -}}
+{{- if not (has .Values.postgres.mode (list "external" "operator")) -}}
+{{- fail (printf "postgres.mode must be 'external' or 'operator', got %q" .Values.postgres.mode) -}}
+{{- end -}}
+{{- if and (eq .Values.postgres.mode "external") (not .Values.auth.existingSecret) (empty .Values.postgres.external.dsn) -}}
+{{- fail "postgres.mode=external requires postgres.external.dsn (or auth.existingSecret with the key auth.postgresDsnKey)" -}}
+{{- end -}}
+{{- if and (eq .Values.postgres.mode "operator") (lt (int .Values.postgres.operator.instances) 1) -}}
+{{- fail "postgres.operator.instances must be >= 1" -}}
+{{- end -}}
+{{- if and .Values.bootstrap.enabled (empty .Values.bootstrap.ownerEmail) -}}
+{{- fail "bootstrap.enabled requires bootstrap.ownerEmail" -}}
+{{- end -}}
+{{- else if .Values.bootstrap.enabled -}}
+{{- fail "bootstrap.enabled requires auth.mode=postgres" -}}
+{{- end -}}
+
+{{- /* D-015: database is fixed; catch stale values files that still set it. */ -}}
+{{- if and (hasKey .Values.clickhouse "database") (ne (toString .Values.clickhouse.database) "openlog") -}}
+{{- fail (printf "clickhouse.database is no longer configurable and must be 'openlog' (got %q); remove it from your values" (toString .Values.clickhouse.database)) -}}
+{{- end -}}
+
+{{- $partitions := int .Values.kafka.topics.partitions -}}
+{{- $rf := int .Values.kafka.topics.replicationFactor -}}
+{{- $minIsr := int .Values.kafka.topics.minInsyncReplicas -}}
+{{- if lt $partitions 1 -}}
+{{- fail "kafka.topics.partitions must be >= 1" -}}
+{{- end -}}
+{{- if gt $minIsr $rf -}}
+{{- fail (printf "kafka.topics.minInsyncReplicas (%d) must be <= replicationFactor (%d)" $minIsr $rf) -}}
+{{- end -}}
+
+{{- /* A consumer group cannot use more consumers than partitions. */ -}}
+{{- if .Values.processor.enabled -}}
+{{- if .Values.processor.autoscaling.enabled -}}
+{{- if gt (int .Values.processor.autoscaling.maxReplicas) $partitions -}}
+{{- fail (printf "processor.autoscaling.maxReplicas (%d) must be <= kafka.topics.partitions (%d)" (int .Values.processor.autoscaling.maxReplicas) $partitions) -}}
+{{- end -}}
+{{- if gt (int .Values.processor.autoscaling.minReplicas) (int .Values.processor.autoscaling.maxReplicas) -}}
+{{- fail "processor.autoscaling.minReplicas must be <= maxReplicas" -}}
+{{- end -}}
+{{- else if gt (int .Values.processor.replicaCount) $partitions -}}
+{{- fail (printf "processor.replicaCount (%d) must be <= kafka.topics.partitions (%d)" (int .Values.processor.replicaCount) $partitions) -}}
+{{- end -}}
+{{- end -}}
+
+{{- /* TLS / SASL (config.md "TLS and SASL"). */ -}}
+{{- $sasl := .Values.kafka.sasl -}}
+{{- if not (has (upper (toString $sasl.mechanism)) (list "" "PLAIN" "SCRAM-SHA-256" "SCRAM-SHA-512")) -}}
+{{- fail (printf "kafka.sasl.mechanism must be empty, PLAIN, SCRAM-SHA-256 or SCRAM-SHA-512, got %q" (toString $sasl.mechanism)) -}}
+{{- end -}}
+{{- if and $sasl.mechanism (not (eq (include "openlog.kafka.strimziAuth" .) "scram-sha-512")) (or (empty $sasl.username) (empty $sasl.passwordSecret.name)) -}}
+{{- fail "kafka.sasl.mechanism requires kafka.sasl.username and kafka.sasl.passwordSecret.name" -}}
+{{- end -}}
+{{- $auth := toString .Values.kafka.strimzi.listener.authentication -}}
+{{- if not (has $auth (list "" "scram-sha-512" "tls")) -}}
+{{- fail (printf "kafka.strimzi.listener.authentication must be empty, scram-sha-512 or tls, got %q" $auth) -}}
+{{- end -}}
+{{- if and (eq $auth "tls") (not .Values.kafka.strimzi.listener.tls) -}}
+{{- fail "kafka.strimzi.listener.authentication=tls requires kafka.strimzi.listener.tls=true" -}}
+{{- end -}}
+{{- range $dep := list "kafka" "clickhouse" -}}
+{{- $t := (index $.Values $dep).tls -}}
+{{- if and (not $t.enabled) (or $t.caSecret.name $t.clientSecret.name $t.serverName $t.insecureSkipVerify) (not (and (eq $dep "kafka") (include "openlog.kafka.strimziTLS" $))) -}}
+{{- fail (printf "%s.tls.* is set but %s.tls.enabled is false" $dep $dep) -}}
+{{- end -}}
+{{- end -}}
+
+{{- if eq $mode "operators" -}}
+{{- $brokers := 0 -}}
+{{- $controllers := 0 -}}
+{{- range .Values.kafka.strimzi.nodePools -}}
+{{- if has "broker" .roles }}{{ $brokers = add $brokers .replicas }}{{ end -}}
+{{- if has "controller" .roles }}{{ $controllers = add $controllers .replicas }}{{ end -}}
+{{- end -}}
+{{- if lt (int $controllers) 1 -}}
+{{- fail "kafka.strimzi.nodePools needs at least one pool with the controller role" -}}
+{{- end -}}
+{{- if lt (int $brokers) $rf -}}
+{{- fail (printf "kafka.topics.replicationFactor (%d) exceeds broker count (%d) in kafka.strimzi.nodePools" $rf (int $brokers)) -}}
+{{- end -}}
+{{- if eq (mod (int .Values.clickhouse.altinity.keeper.replicas) 2) 0 -}}
+{{- fail "clickhouse.altinity.keeper.replicas must be odd" -}}
+{{- end -}}
+{{- end -}}

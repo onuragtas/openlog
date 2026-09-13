@@ -1,0 +1,220 @@
+# Example production values. Copy, review every setting, and size from load tests
+# (docs/operations/scaling.md). Two variants are shown: `operators` (default below) and
+# `external` (commented block at the end).
+#
+#   kubectl -n openlog create secret generic openlog-credentials \
+#     --from-literal=clickhouse-password="$(openssl rand -base64 32)"
+#   helm upgrade --install openlog deploy/helm/openlog -n openlog -f my-values.yaml --timeout 30m
+#   # first owner (prints a generated password and an ingest license key once):
+#   kubectl -n openlog exec deploy/openlog-api -- openlog-admin create-owner --email you@example.com --org "Acme"
+#
+# Operators: Strimzi, Altinity clickhouse-operator and CloudNativePG (see README).
+
+image:
+  repository: ghcr.io/onuragtas/openlog
+  tag: "0.1.0"          # pin an exact version
+  pullPolicy: IfNotPresent
+
+logLevel: info
+
+auth:
+  mode: postgres
+  existingSecret: openlog-credentials
+  clickhousePasswordKey: clickhouse-password
+  session:
+    cookieSecure: true
+  # Pod CIDR of the ingress controller in front of openlog-api (client IPs for rate limiting / audit).
+  trustedProxies: ["10.0.0.0/8"]
+
+postgres:
+  mode: operator
+  operator:
+    instances: 3
+    storage:
+      size: 50Gi
+      storageClass: ""
+    resources:
+      requests: {cpu: "1", memory: 2Gi}
+      limits: {memory: 2Gi}
+    # Configure backups (CloudNativePG barmanObjectStore) - PostgreSQL holds all keys and users.
+    backup: {}
+  # External variant: mode: external + the DSN in openlog-credentials under `postgres-dsn`.
+
+scheduling:
+  podAntiAffinity: soft
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    whenUnsatisfiable: ScheduleAnyway
+    zones: true
+
+metrics:
+  podAnnotations: false
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+
+dependencies:
+  mode: operators
+
+kafka:
+  topics:
+    partitions: 48
+    replicationFactor: 3
+    minInsyncReplicas: 2
+    retentionMs: 86400000
+    maxMessageBytes: 12582912
+  strimzi:
+    nodePools:
+      # Dedicated KRaft controllers.
+      - name: controller
+        replicas: 3
+        roles: [controller]
+        storage: {size: 20Gi, storageClass: "", deleteClaim: false}
+        resources:
+          requests: {cpu: 500m, memory: 2Gi}
+          limits: {memory: 2Gi}
+        jvmOptions: {"-Xms": 1g, "-Xmx": 1g}
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {strimzi.io/pool-name: controller}
+        tolerations: []
+        topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels: {strimzi.io/pool-name: controller}
+      - name: broker
+        replicas: 6
+        roles: [broker]
+        storage: {size: 500Gi, storageClass: "", deleteClaim: false}
+        resources:
+          requests: {cpu: "4", memory: 16Gi}
+          limits: {memory: 16Gi}
+        jvmOptions: {"-Xms": 6g, "-Xmx": 6g}
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {strimzi.io/pool-name: broker}
+        tolerations: []
+        topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels: {strimzi.io/pool-name: broker}
+    kafkaExporter:
+      enabled: true
+    cruiseControl:
+      enabled: true
+
+clickhouse:
+  altinity:
+    image: clickhouse/clickhouse-server:25.8
+    shards: 3
+    replicas: 2
+    resources:
+      requests: {cpu: "8", memory: 32Gi}
+      limits: {memory: 32Gi}
+    storage:
+      size: 1Ti
+      storageClass: ""
+      reclaimPolicy: Retain
+    podDistribution:
+      - type: ReplicaAntiAffinity
+      - type: ShardAntiAffinity
+    keeper:
+      replicas: 3
+      resources:
+        requests: {cpu: "1", memory: 2Gi}
+        limits: {memory: 2Gi}
+      storage:
+        size: 20Gi
+
+ingest:
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 65
+  resources:
+    requests: {cpu: "2", memory: 2Gi}
+    limits: {memory: 4Gi}
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+
+processor:
+  autoscaling:
+    enabled: true
+    minReplicas: 6
+    # <= kafka.topics.partitions (48)
+    maxReplicas: 48
+    targetCPUUtilizationPercentage: 70
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies: [{type: Pods, value: 6, periodSeconds: 60}]
+      scaleDown:
+        stabilizationWindowSeconds: 900
+        policies: [{type: Pods, value: 2, periodSeconds: 300}]
+  resources:
+    requests: {cpu: "2", memory: 4Gi}
+    limits: {memory: 8Gi}
+  terminationGracePeriodSeconds: 120
+
+api:
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 12
+  resources:
+    requests: {cpu: "1", memory: 1Gi}
+    limits: {memory: 2Gi}
+  ingress:
+    enabled: true
+    className: nginx
+    host: openlog-api.example.com
+    tls:
+      - secretName: openlog-api-tls
+        hosts: [openlog-api.example.com]
+
+envoy:
+  enabled: true
+  replicaCount: 3
+  resources:
+    requests: {cpu: "1", memory: 512Mi}
+    limits: {memory: 1Gi}
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Local
+    annotations: {}
+    #  service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+# ---------------------------------------------------------------------------
+# External dependencies variant (managed Kafka / ClickHouse): replace the
+# `dependencies`, `kafka` and `clickhouse` blocks above with:
+#
+# dependencies:
+#   mode: external
+# kafka:
+#   topics:
+#     create: true        # openlog-migrate creates missing topics with these settings
+#     partitions: 48
+#     replicationFactor: 3
+#     minInsyncReplicas: 2
+#     retentionMs: 86400000
+#     maxMessageBytes: 12582912
+#   external:
+#     brokers: [b-1.kafka.example.internal:9092, b-2.kafka.example.internal:9092, b-3.kafka.example.internal:9092]
+# clickhouse:
+#   user: openlog
+#   external:
+#     addrs: [ch-0.clickhouse.example.internal:9000, ch-1.clickhouse.example.internal:9000]

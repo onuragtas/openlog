@@ -1,0 +1,48 @@
+{{- if include "openlog.postgres.operator" . }}
+{{- $pg := .Values.postgres.operator }}
+# PostgreSQL for tenancy, users and keys (docs/contracts/postgres.md). Requires the
+# CloudNativePG operator watching this namespace. CNPG creates the Secret
+# <name>-app (key `uri`, used as OPENLOG_POSTGRES_DSN) and the Services <name>-rw/-ro/-r.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "openlog.postgres.name" . }}
+  labels:
+    {{- include "openlog.labels" . | nindent 4 }}
+spec:
+  instances: {{ $pg.instances }}
+  imageName: {{ $pg.imageName }}
+  # Switchover to a replica, then update the old primary, without manual approval.
+  primaryUpdateStrategy: unsupervised
+  bootstrap:
+    initdb:
+      database: {{ $pg.database }}
+      owner: {{ $pg.owner }}
+  storage:
+    size: {{ $pg.storage.size }}
+    {{- with $pg.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  {{- with $pg.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $pg.parameters }}
+  postgresql:
+    parameters:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  affinity:
+    {{- if $pg.affinity }}
+    {{- toYaml $pg.affinity | nindent 4 }}
+    {{- else }}
+    # Spread instances over nodes (soft, so small dev clusters stay schedulable).
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: preferred
+    {{- end }}
+  {{- with $pg.backup }}
+  backup:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,13 @@
+.git
+.DS_Store
+bin/
+dist/
+deploy/
+docs/
+agents/
+**/*_test.go
+# Web: dependencies are installed and dist/ is rebuilt inside the image.
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/

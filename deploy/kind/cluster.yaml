@@ -1,0 +1,23 @@
+# Local multi-node Kubernetes cluster for the openlog `cluster` profile
+# (see docs/operations/kind-dev-cluster.md).
+#
+#   kind create cluster --config deploy/kind/cluster.yaml
+#
+# 1 control-plane + 3 workers, one "zone" label per worker so topology spread and
+# Strimzi/Altinity anti-affinity behave like a 3-node production cluster.
+# kind ships the `standard` StorageClass (rancher local-path provisioner);
+# metrics-server is NOT included (install it for `kubectl top` / HPA).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: openlog-dev
+nodes:
+  - role: control-plane
+  - role: worker
+    labels:
+      topology.kubernetes.io/zone: zone-a
+  - role: worker
+    labels:
+      topology.kubernetes.io/zone: zone-b
+  - role: worker
+    labels:
+      topology.kubernetes.io/zone: zone-c

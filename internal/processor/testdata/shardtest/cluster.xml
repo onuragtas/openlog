@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!-- 2 shards (shard 1: 2 replicas, shard 2: 1 replica), external Keeper. SHARD / REPLICA come from the environment. -->
+<clickhouse>
+    <logger>
+        <level>warning</level>
+        <console>1</console>
+    </logger>
+    <mark_cache_size>268435456</mark_cache_size>
+
+    <macros>
+        <cluster>openlog</cluster>
+        <shard from_env="SHARD"/>
+        <replica from_env="REPLICA"/>
+    </macros>
+
+    <remote_servers replace="true">
+        <openlog>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch-s1r1</host>
+                    <port>9000</port>
+                    <user from_env="CLICKHOUSE_USER"/>
+                    <password from_env="CLICKHOUSE_PASSWORD"/>
+                </replica>
+                <replica>
+                    <host>ch-s1r2</host>
+                    <port>9000</port>
+                    <user from_env="CLICKHOUSE_USER"/>
+                    <password from_env="CLICKHOUSE_PASSWORD"/>
+                </replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch-s2r1</host>
+                    <port>9000</port>
+                    <user from_env="CLICKHOUSE_USER"/>
+                    <password from_env="CLICKHOUSE_PASSWORD"/>
+                </replica>
+            </shard>
+        </openlog>
+    </remote_servers>
+
+    <zookeeper>
+        <node>
+            <host>keeper</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+</clickhouse>

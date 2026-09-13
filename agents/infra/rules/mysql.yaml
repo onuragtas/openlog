@@ -1,0 +1,19 @@
+id: mysql
+name: MySQL
+category: database
+match:
+  - process: { exe_basename: ["mysqld"] }
+  - systemd_unit: { name_regex: "^mysqld?(@.*)?\\.service$" }
+  - listening_port: { port: 3306, process_exe_basename: ["mysqld"] }
+  - container: { image_regex: "(^|/)(mysql|percona)(-server)?(:|@|$)" }
+  - package: { name_regex: "^(mysql-server(-core)?(-[0-9.]+)?|mysql-community-server|percona-server-server(-[0-9.]+)?)$" }
+version:
+  - package_regex: "^(mysql-server-core-[0-9.]+|mysql-server(-[0-9.]+)?|mysql-community-server|percona-server-server(-[0-9.]+)?)$"
+endpoints:
+  - from: listening_port
+integration:
+  id: mysql
+  requires: ["credentials"]
+logs:
+  - path: "/var/log/mysql/*.log"
+  - path: "/var/log/mysqld.log"      # RHEL family

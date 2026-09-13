@@ -1,0 +1,9 @@
+id: ntpd
+name: NTP daemon
+category: system
+match:
+  - process: { exe_basename: ["ntpd"] }
+  - systemd_unit: { name_regex: "^ntp(d|sec)?\\.service$" }
+  - package: { name: ["ntp", "ntpsec"] }
+version:
+  - package: ["ntpsec", "ntp"]

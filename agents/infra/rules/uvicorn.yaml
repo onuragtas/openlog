@@ -1,0 +1,8 @@
+id: uvicorn
+name: Uvicorn (Python)
+category: runtime
+match:
+  - process: { exe_basename_regex: "^(python[0-9.]*|pypy[0-9.]*|uvicorn)$", cmdline_regex: "(^|[\\s/])uvicorn(\\s|$)" }
+version:
+  - package: ["uvicorn", "python3-uvicorn"]
+apm_hint: { language: python, agent: openlog-agent-python }

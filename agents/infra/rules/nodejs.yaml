@@ -1,0 +1,8 @@
+id: nodejs
+name: Node.js
+category: runtime
+match:
+  - process: { exe_basename: ["node", "nodejs"] }
+version:
+  - package: ["nodejs"]
+apm_hint: { language: nodejs, agent: openlog-agent-nodejs }

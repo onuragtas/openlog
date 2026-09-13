@@ -1,0 +1,25 @@
+name: base system services
+processes:
+  - { pid: 700, exe: /usr/sbin/sshd, cmdline: "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", unit: ssh.service }
+  - { pid: 650, exe: /usr/sbin/crond, cmdline: "/usr/sbin/crond -n", unit: crond.service }
+  - { pid: 680, exe: /usr/sbin/chronyd, cmdline: "/usr/sbin/chronyd -F 2", unit: chronyd.service }
+  - { pid: 690, exe: /usr/sbin/ntpd, cmdline: "/usr/sbin/ntpd -p /run/ntpd.pid -g -u 105:107", unit: ntpsec.service }
+units:
+  - { name: ssh.service }
+  - { name: crond.service }
+  - { name: chronyd.service }
+  - { name: ntpsec.service }
+ports:
+  - { address: 0.0.0.0, port: 22, pid: 700 }
+  - { address: "::", port: 22, pid: 700 }
+  - { protocol: udp, address: 0.0.0.0, port: 123, pid: 690 }
+packages:
+  - { manager: apk, name: openssh-server, version: 9.6_p1-r0 }
+  - { manager: apk, name: cronie, version: 1.7.0-r0 }
+  - { manager: apk, name: chrony, version: 4.5-r0 }
+  - { manager: apk, name: ntpsec, version: 1.2.2-r0 }
+expect:
+  - { rule_id: sshd, instance: /usr/sbin/sshd, version: 9.6_p1, ports: [22, 22], matched_by: [process, systemd_unit, listening_port, package], packages: ["apk:openssh-server"] }
+  - { rule_id: cron, instance: /usr/sbin/crond, version: 1.7.0 }
+  - { rule_id: chrony, instance: /usr/sbin/chronyd, version: "4.5" }
+  - { rule_id: ntpd, instance: /usr/sbin/ntpd, version: 1.2.2, ports: [123] }

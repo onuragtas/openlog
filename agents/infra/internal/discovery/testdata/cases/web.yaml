@@ -1,0 +1,28 @@
+name: web servers and proxies
+processes:
+  - { pid: 900, exe: /usr/sbin/nginx, cmdline: "nginx: master process /usr/sbin/nginx -g daemon on; master_process on;", unit: nginx.service }
+  - { pid: 901, exe: /usr/sbin/nginx, cmdline: "nginx: worker process", unit: nginx.service }
+  - { pid: 1000, exe: /usr/sbin/apache2, cmdline: "/usr/sbin/apache2 -k start", unit: apache2.service }
+  - { pid: 1100, exe: /usr/sbin/haproxy, cmdline: "/usr/sbin/haproxy -Ws -f /etc/haproxy/haproxy.cfg", unit: haproxy.service }
+  - { pid: 1200, exe: /usr/bin/caddy, cmdline: "/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile", unit: caddy.service }
+units:
+  - { name: nginx.service }
+  - { name: apache2.service }
+  - { name: haproxy.service }
+  - { name: caddy.service }
+ports:
+  - { address: 0.0.0.0, port: 80, pid: 900 }
+  - { address: 0.0.0.0, port: 8080, pid: 1000 }
+  - { address: 0.0.0.0, port: 443, pid: 1100 }
+  - { address: 127.0.0.1, port: 2019, pid: 1200 }
+packages:
+  - { name: nginx, version: 1.24.0-2ubuntu7 }
+  - { name: apache2, version: 2.4.58-1ubuntu8 }
+  - { name: haproxy, version: 2.8.5-1ubuntu3 }
+  - { name: caddy, version: 2.6.2-6 }
+expect:
+  - { rule_id: nginx, instance: /usr/sbin/nginx, version: 1.24.0, pids: [900, 901], ports: [80], units: [nginx.service], matched_by: [process, systemd_unit, package], status: enabled }
+  - { rule_id: apache-httpd, instance: /usr/sbin/apache2, version: 2.4.58, ports: [8080], status: enabled }
+  - { rule_id: haproxy, instance: /usr/sbin/haproxy, version: 2.8.5, status: needs_configuration }
+  - { rule_id: caddy, instance: /usr/bin/caddy, version: 2.6.2, ports: [2019] }
+forbid: [redis, mysql, postgresql]

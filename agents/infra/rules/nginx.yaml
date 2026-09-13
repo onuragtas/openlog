@@ -1,0 +1,19 @@
+id: nginx
+name: nginx
+category: web
+match:
+  - process: { exe_basename: ["nginx"] }
+  - systemd_unit: { name_regex: "^nginx\\.service$" }
+  - container: { image_regex: "(^|/)nginx(:|@|$)" }
+  - package: { name: ["nginx", "nginx-core", "nginx-full", "nginx-light", "nginx-extras"] }
+version:
+  - package: ["nginx", "nginx-core", "nginx-full", "nginx-light", "nginx-extras"]
+endpoints:
+  - from: listening_port
+integration:
+  id: nginx
+  auto_enable: true         # stub_status, when reachable without credentials
+  requires: []
+apm_hint: null
+logs:
+  - path: "/var/log/nginx/*.log"

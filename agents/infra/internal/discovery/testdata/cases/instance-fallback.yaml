@@ -1,0 +1,19 @@
+name: >-
+  instance precedence (semantic-conventions §3.4): exe → unit → container →
+  package → port; ownerless ports (agent without CAP_SYS_PTRACE) never outrank
+  a unit or a package
+units:
+  - { name: memcached.service, state: enabled }
+ports:
+  - { address: 127.0.0.1, port: 11211, pid: 0 }
+  - { address: "::1", port: 7443, pid: 0 }
+  - { address: "::1", port: 7444, pid: 0 }
+packages:
+  - { name: memcached, version: 1.6.24-1build3 }
+  - { name: mysql-server-8.0, version: 8.0.36-0ubuntu0.22.04.1 }
+expect:
+  # unit outranks package and the ownerless port (memcached port matcher requires a process name, so the port is not linked)
+  - { rule_id: memcached, instance: memcached.service, matched_by: [systemd_unit, package], version: 1.6.24 }
+  # package outranks the ownerless port; mysql's port matcher needs process_exe_basename, so no port
+  - { rule_id: mysql, instance: "dpkg:mysql-server-8.0", matched_by: [package], version: 8.0.36 }
+exactly_keys: ["memcached:memcached.service", "mysql:dpkg:mysql-server-8.0"]

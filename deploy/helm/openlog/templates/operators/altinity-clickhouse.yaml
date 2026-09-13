@@ -1,0 +1,135 @@
+{{- if include "openlog.operators" . }}
+{{- $ch := .Values.clickhouse.altinity }}
+{{- $k := $ch.keeper }}
+{{- $keeperName := include "openlog.keeper.name" . }}
+# ClickHouse Keeper ensemble (Raft) used by ReplicatedMergeTree and ON CLUSTER DDL.
+# Requires the Altinity clickhouse-operator (>= 0.24) watching this namespace.
+apiVersion: clickhouse-keeper.altinity.com/v1
+kind: ClickHouseKeeperInstallation
+metadata:
+  name: {{ $keeperName }}
+  labels:
+    {{- include "openlog.labels" . | nindent 4 }}
+spec:
+  defaults:
+    templates:
+      podTemplate: keeper
+      dataVolumeClaimTemplate: keeper-data
+  configuration:
+    clusters:
+      - name: keeper
+        layout:
+          replicasCount: {{ $k.replicas }}
+    settings:
+      logger/level: information
+      logger/console: "true"
+      keeper_server/four_letter_word_white_list: "*"
+  templates:
+    podTemplates:
+      - name: keeper
+        spec:
+          affinity:
+          {{- if $k.affinity }}
+            {{- toYaml $k.affinity | nindent 12 }}
+          {{- else }}
+            # Default: spread the Raft quorum over nodes. Without it the scheduler may put all
+            # Keeper pods on one node, and losing that node stops Replicated inserts and ON CLUSTER DDL.
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    topologyKey: kubernetes.io/hostname
+                    labelSelector:
+                      matchLabels:
+                        clickhouse-keeper.altinity.com/chk: {{ $keeperName }}
+          {{- end }}
+          containers:
+            - name: clickhouse-keeper
+              image: {{ $k.image }}
+              resources:
+                {{- toYaml $k.resources | nindent 16 }}
+    volumeClaimTemplates:
+      - name: keeper-data
+        spec:
+          accessModes: [ReadWriteOnce]
+          {{- with $k.storage.storageClass }}
+          storageClassName: {{ . }}
+          {{- end }}
+          resources:
+            requests:
+              storage: {{ $k.storage.size }}
+---
+# ClickHouse cluster `{{ .Values.clickhouse.cluster }}`: {{ $ch.shards }} shard(s) x {{ $ch.replicas }} replica(s).
+# The operator generates the {cluster}, {shard}, {replica} (and {installation}) macros
+# used by schema/clickhouse/*.sql, and remote_servers with internal_replication=true.
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: {{ include "openlog.clickhouse.name" . }}
+  labels:
+    {{- include "openlog.labels" . | nindent 4 }}
+spec:
+  defaults:
+    templates:
+      podTemplate: clickhouse
+      dataVolumeClaimTemplate: data
+      serviceTemplate: clickhouse
+  configuration:
+    zookeeper:
+      nodes:
+        - host: {{ include "openlog.keeper.host" . }}
+          port: {{ $k.port }}
+    users:
+      # Application user for openlog services and openlog-migrate (password from the Secret).
+      {{ include "openlog.clickhouse.user" . }}/k8s_secret_password: {{ include "openlog.secretName" . }}/{{ include "openlog.secret.clickhousePasswordKey" . }}
+      {{ include "openlog.clickhouse.user" . }}/networks/ip:
+        - "::/0"
+      {{ include "openlog.clickhouse.user" . }}/profile: default
+      {{ include "openlog.clickhouse.user" . }}/quota: default
+    {{- with $ch.profiles }}
+    profiles:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with $ch.settings }}
+    settings:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    clusters:
+      - name: {{ .Values.clickhouse.cluster }}
+        layout:
+          shardsCount: {{ $ch.shards }}
+          replicasCount: {{ $ch.replicas }}
+  templates:
+    podTemplates:
+      - name: clickhouse
+        {{- with $ch.podDistribution }}
+        podDistribution:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        spec:
+          containers:
+            - name: clickhouse
+              image: {{ $ch.image }}
+              resources:
+                {{- toYaml $ch.resources | nindent 16 }}
+    serviceTemplates:
+      # The operator's default CHI Service is a LoadBalancer; keep it internal.
+      - name: clickhouse
+        generateName: clickhouse-{chi}
+        spec:
+          type: ClusterIP
+          ports:
+            - {name: http, port: 8123}
+            - {name: tcp, port: 9000}
+    volumeClaimTemplates:
+      - name: data
+        reclaimPolicy: {{ $ch.storage.reclaimPolicy }}
+        spec:
+          accessModes: [ReadWriteOnce]
+          {{- with $ch.storage.storageClass }}
+          storageClassName: {{ . }}
+          {{- end }}
+          resources:
+            requests:
+              storage: {{ $ch.storage.size }}
+{{- end }}

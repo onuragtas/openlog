@@ -1,0 +1,8 @@
+node_modules/
+# Build output: only the placeholder index.html is committed (so `go build`
+# works without Node). Do not commit a real build over it.
+dist/*
+!dist/index.html
+test-results/
+playwright-report/
+*.tsbuildinfo

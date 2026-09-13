@@ -1,0 +1,9 @@
+id: uwsgi
+name: uWSGI (Python)
+category: runtime
+match:
+  - process: { exe_basename_regex: "^uwsgi(-core)?$" }
+  - systemd_unit: { name_regex: "^uwsgi(@.*)?\\.service$" }
+version:
+  - package: ["uwsgi-core", "uwsgi"]
+apm_hint: { language: python, agent: openlog-agent-python }

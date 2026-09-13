@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>openlog</title>
+    <script>
+      // Apply the theme before first paint to avoid a flash.
+      (function () {
+        try {
+          var t = localStorage.getItem("openlog.theme") || "system";
+          var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-BJYAv_h7.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-CbXtAM7H.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-BchyB0Ig.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-tanstack-D_GxXHij.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-i18n-C-qy60vm.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-radix-CqumiUIk.js">
+    <link rel="modulepreload" crossorigin href="/assets/StateViews-BagFnpDn.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-B_4NkgLL.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

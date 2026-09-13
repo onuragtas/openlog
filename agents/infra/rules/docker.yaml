@@ -1,0 +1,12 @@
+id: docker
+name: Docker Engine
+category: container
+match:
+  - process: { exe_basename: ["dockerd"] }
+  - systemd_unit: { name_regex: "^docker\\.service$" }
+  - package: { name: ["docker-ce", "docker.io", "moby-engine", "docker-engine", "docker"] }
+version:
+  - package: ["docker-ce", "docker.io", "moby-engine", "docker-engine", "docker"]
+integration:
+  id: docker
+  auto_enable: true         # local Docker socket

@@ -1,0 +1,56 @@
+openlog {{ .Chart.AppVersion }} ({{ .Release.Name }}) - cluster profile
+Dependencies mode: {{ .Values.dependencies.mode }}
+  Kafka brokers:      {{ include "openlog.kafka.brokers" . }}
+  ClickHouse:         {{ include "openlog.clickhouse.addr" . }} (cluster {{ .Values.clickhouse.cluster }}, user {{ include "openlog.clickhouse.user" . }})
+  Topics:             {{ .Values.kafka.topicPrefix }}.otlp.{metrics,logs,traces}.v1  partitions={{ int64 .Values.kafka.topics.partitions }} RF={{ int64 .Values.kafka.topics.replicationFactor }}
+  Auth:               {{ .Values.auth.mode }}{{ if include "openlog.postgres.enabled" . }} (PostgreSQL {{ .Values.postgres.mode }}{{ if include "openlog.postgres.operator" . }}: CloudNativePG Cluster {{ include "openlog.postgres.name" . }}, {{ .Values.postgres.operator.instances }} instance(s){{ end }}){{ end }}
+{{- if include "openlog.operators" . }}
+
+Operators mode: the Strimzi and Altinity operators create Kafka / ClickHouse / Keeper
+asynchronously. openlog-migrate runs as a post-install hook and retries until they are
+ready; on first install use a long timeout and do NOT pass --wait:
+  helm install ... --timeout 30m
+Watch progress:
+  kubectl -n {{ .Release.Namespace }} get kafka,kafkanodepool,kafkatopic,chi,chk
+  kubectl -n {{ .Release.Namespace }} get pods -w
+{{- end }}
+
+OTLP endpoint (in cluster):
+{{- if .Values.envoy.enabled }}
+  gRPC: {{ include "openlog.componentName" (dict "root" . "component" "envoy") }}.{{ .Release.Namespace }}.svc:{{ .Values.envoy.service.grpcPort }}   (Envoy L7 LB)
+  HTTP: http://{{ include "openlog.componentName" (dict "root" . "component" "envoy") }}.{{ .Release.Namespace }}.svc:{{ .Values.envoy.service.httpPort }}
+{{- else }}
+  gRPC: {{ include "openlog.componentName" (dict "root" . "component" "ingest") }}.{{ .Release.Namespace }}.svc:{{ .Values.ingest.service.grpcPort }}
+  HTTP: http://{{ include "openlog.componentName" (dict "root" . "component" "ingest") }}.{{ .Release.Namespace }}.svc:{{ .Values.ingest.service.httpPort }}
+  WARNING: OTLP/gRPC through a plain ClusterIP/LoadBalancer Service is balanced per
+  connection, not per request. Enable envoy.enabled, or use a gRPC-aware Ingress/Gateway.
+{{- end }}
+
+Local access:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ if .Values.envoy.enabled }}{{ include "openlog.componentName" (dict "root" . "component" "envoy") }}{{ else }}{{ include "openlog.componentName" (dict "root" . "component" "ingest") }}{{ end }} 4317:4317 4318:4318
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "openlog.componentName" (dict "root" . "component" "api") }} 8080:8080
+{{- if include "openlog.postgres.enabled" . }}
+  Open http://localhost:8080 and sign in; create ingest license keys and API keys under Settings.
+  curl -H "Authorization: Bearer <read-only API key>" http://localhost:8080/api/v1/hosts
+{{- if not .Values.bootstrap.enabled }}
+
+First owner (prints a generated password and an ingest license key once):
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "openlog.componentName" (dict "root" . "component" "api") }} -- openlog-admin create-owner --email you@example.com --org "My organization"
+{{- end }}
+{{- else }}
+  curl -H "openlog-license-key: <key>" http://localhost:8080/api/v1/hosts
+{{- end }}
+
+Migration job logs (kept only on failure):
+  kubectl -n {{ .Release.Namespace }} logs job/{{ include "openlog.componentName" (dict "root" . "component" "migrate") }}
+
+Scaling: processor replicas are capped at kafka.topics.partitions ({{ int64 .Values.kafka.topics.partitions }}).
+See docs/operations/scaling.md.
+{{- if and (not (include "openlog.postgres.enabled" .)) (not .Values.auth.existingSecret) (not .Values.auth.licenseKeys) }}
+
+WARNING: auth.mode=static and auth.licenseKeys is empty - ingest and api will reject every request with 401.
+{{- end }}
+{{- if and (include "openlog.postgres.enabled" .) (not .Values.auth.session.cookieSecure) }}
+
+WARNING: auth.session.cookieSecure=false - session cookies are sent over plain HTTP. Development only.
+{{- end }}

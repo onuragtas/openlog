@@ -1,0 +1,49 @@
+{{- range $component := list "ingest" "processor" "api" }}
+{{- $v := index $.Values $component }}
+{{- $ctx := dict "root" $ "component" $component "values" $v }}
+{{- if and $v.enabled $v.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "openlog.componentName" $ctx }}
+  minReplicas: {{ $v.autoscaling.minReplicas }}
+  maxReplicas: {{ $v.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $v.autoscaling.targetCPUUtilizationPercentage }}
+  {{- with $v.autoscaling.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- if and $v.enabled $v.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  {{- if hasKey $v.pdb "minAvailable" }}
+  minAvailable: {{ $v.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ $v.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "openlog.selectorLabels" $ctx | nindent 6 }}
+{{- end }}
+{{- end }}

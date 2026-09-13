@@ -1,0 +1,23 @@
+name: >-
+  regression from a real Debian 12 container (no systemd, no CAP_SYS_PTRACE):
+  nginx workers have unreadable exe links, redis-server is a symlink to
+  redis-check-rdb, unit files exist but run nothing, template units exist
+processes:
+  - { pid: 586, ppid: 1, exe: /usr/sbin/nginx, cmdline: "nginx: master process nginx" }
+  - { pid: 587, ppid: 586, exe: "", comm: nginx, cmdline: "nginx: worker process" }
+  - { pid: 588, ppid: 586, exe: "", comm: nginx, cmdline: "nginx: worker process" }
+  - { pid: 598, ppid: 1, exe: /usr/bin/redis-check-rdb, comm: redis-server, cmdline: "/usr/bin/redis-server 0.0.0.0:6379" }
+units:
+  - { name: nginx.service }
+  - { name: redis-server.service, state: disabled }
+  - { name: redis-server@.service, state: disabled }
+ports:
+  - { address: 0.0.0.0, port: 80, pid: 586 }
+  - { address: 0.0.0.0, port: 6379, pid: 598 }
+packages:
+  - { name: nginx, version: 1.22.1-9+deb12u1 }
+  - { name: redis-server, version: "5:7.0.15-1~deb12u1" }
+expect:
+  - { rule_id: nginx, instance: /usr/sbin/nginx, version: 1.22.1, pids: [586, 587, 588], ports: [80], units: [nginx.service], matched_by: [process, systemd_unit, package] }
+  - { rule_id: redis, instance: /usr/bin/redis-check-rdb, version: 7.0.15, pids: [598], ports: [6379], units: [redis-server.service], matched_by: [process, systemd_unit, listening_port, package] }
+exactly_keys: ["nginx:/usr/sbin/nginx", "redis:/usr/bin/redis-check-rdb"]

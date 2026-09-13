@@ -1,0 +1,9 @@
+id: cron
+name: cron
+category: system
+match:
+  - process: { exe_basename: ["cron", "crond"] }
+  - systemd_unit: { name_regex: "^(cron|crond|cronie)\\.service$" }
+  - package: { name: ["cron", "cronie"] }
+version:
+  - package: ["cron", "cronie"]

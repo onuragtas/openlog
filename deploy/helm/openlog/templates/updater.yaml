@@ -1,0 +1,183 @@
+{{- if .Values.updater.enabled }}
+{{- $v := .Values.updater }}
+{{- $ctx := dict "root" . "component" "updater" "values" $v }}
+{{- $name := include "openlog.componentName" $ctx }}
+{{- if not .Values.api.enabled }}
+{{- fail "updater.enabled requires api.enabled (the updater reads the running version from openlog-api)" }}
+{{- end }}
+{{- $deployments := list }}
+{{- range $component := list "ingest" "processor" "api" }}
+{{- if (index $.Values $component).enabled }}
+{{- $deployments = append $deployments (include "openlog.componentName" (dict "root" $ "component" $component)) }}
+{{- end }}
+{{- end }}
+# openlog-updater (docs/operations/upgrading.md): a CronJob that verifies the signed release index
+# and, in `auto` mode, runs openlog-migrate with the new image, patches the images of the chart's
+# Deployments (rolling update), waits for the rollout and the new version, and patches the previous
+# images back on failure. RBAC is limited to these Deployments, Jobs and reading pods.
+# GitOps (Argo CD / Flux pinning the chart version) is the recommended alternative.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+rules:
+  # Read and patch the images of this release's Deployments only.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames:
+      {{- toYaml $deployments | nindent 6 }}
+    verbs: ["get", "patch"]
+  # Create the migrate Job and watch it.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get"]
+  # Logs of a failed migrate Job.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+{{- if $v.trustedKeys }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-keys
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+data:
+  release-keys: |
+    {{- range $v.trustedKeys }}
+    {{ . }}
+    {{- end }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  schedule: {{ $v.schedule | quote }}
+  {{- with $v.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $v.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "openlog.selectorLabels" $ctx | nindent 12 }}
+          {{- with $v.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          serviceAccountName: {{ $name }}
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          {{- include "openlog.podSecurity" . | nindent 10 }}
+          {{- with $v.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $v.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: updater
+              image: {{ include "openlog.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/usr/local/bin/openlog-updater", "-k8s", "-once"]
+              env:
+                {{- include "openlog.env" $ctx | nindent 16 }}
+                - name: OPENLOG_UPDATER_MODE
+                  value: {{ $v.mode | quote }}
+                - name: OPENLOG_UPDATE_CHANNEL
+                  value: {{ $v.channel | quote }}
+                - name: OPENLOG_RELEASE_INDEX_URL
+                  value: {{ $v.indexURL | quote }}
+                - name: OPENLOG_UPDATER_K8S_DEPLOYMENTS
+                  value: {{ join "," $deployments | quote }}
+                - name: OPENLOG_UPDATER_K8S_MIGRATE_TEMPLATE
+                  value: {{ include "openlog.componentName" (dict "root" . "component" "api") | quote }}
+                - name: OPENLOG_UPDATER_VERSION_URL
+                  value: {{ printf "http://%s:%v/api/v1/auth/config" (include "openlog.componentName" (dict "root" . "component" "api")) .Values.api.service.port | quote }}
+                - name: OPENLOG_UPDATER_MAINTENANCE_WINDOW
+                  value: {{ $v.maintenanceWindow | quote }}
+                - name: OPENLOG_UPDATER_IMAGE_REPOSITORY
+                  value: {{ $v.imageRepository | quote }}
+                - name: OPENLOG_UPDATER_HEALTH_TIMEOUT
+                  value: {{ $v.healthTimeout | quote }}
+                - name: OPENLOG_UPDATER_ROLLOUT_TIMEOUT
+                  value: {{ $v.rolloutTimeout | quote }}
+                - name: OPENLOG_UPDATER_MIGRATE_TIMEOUT
+                  value: {{ $v.migrateTimeout | quote }}
+                {{- if $v.trustedKeys }}
+                - name: OPENLOG_RELEASE_TRUSTED_KEYS_FILE
+                  value: /etc/openlog/release-keys
+                {{- end }}
+                {{- with $v.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              resources:
+                {{- toYaml $v.resources | nindent 16 }}
+              securityContext:
+                {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                {{- if $v.trustedKeys }}
+                - name: release-keys
+                  mountPath: /etc/openlog/release-keys
+                  subPath: release-keys
+                  readOnly: true
+                {{- end }}
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 16Mi
+            {{- if $v.trustedKeys }}
+            - name: release-keys
+              configMap:
+                name: {{ $name }}-keys
+            {{- end }}
+{{- end }}

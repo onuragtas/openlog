@@ -1,0 +1,10 @@
+id: php-fpm
+name: PHP-FPM
+category: runtime
+match:
+  - process: { exe_basename_regex: "^php-fpm[0-9.]*$" }
+  - systemd_unit: { name_regex: "^php[0-9.]*-fpm\\.service$" }
+version:
+  - cmdline_regex: "php-fpm: master process \\((\\S+)\\)"
+  - package_regex: "^php[0-9.]*-fpm$"
+apm_hint: { language: php, agent: openlog-agent-php }

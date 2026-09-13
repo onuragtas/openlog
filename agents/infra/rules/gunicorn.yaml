@@ -1,0 +1,8 @@
+id: gunicorn
+name: Gunicorn (Python)
+category: runtime
+match:
+  - process: { exe_basename_regex: "^(python[0-9.]*|pypy[0-9.]*|gunicorn)$", cmdline_regex: "(^|[\\s/])gunicorn(:|\\s|$)" }
+version:
+  - package: ["gunicorn", "python3-gunicorn"]
+apm_hint: { language: python, agent: openlog-agent-python }

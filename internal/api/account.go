@@ -1,0 +1,596 @@
+package api
+
+import (
+	"encoding/json"
+	"io"
+	"mime"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/onuragtas/openlog/internal/auth"
+)
+
+// accountFunc is a management handler for an authenticated principal.
+type accountFunc func(w http.ResponseWriter, r *http.Request, p *auth.Principal) error
+
+// publicFunc is an unauthenticated handler (sign-in, sign-up, invitations).
+type publicFunc func(w http.ResponseWriter, r *http.Request) error
+
+const maxJSONBody = 64 << 10
+
+func (s *Server) accountRoutes(mux *http.ServeMux) {
+	authed := func(pattern string, h accountFunc) {
+		mux.Handle(pattern, s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {
+			noStore(rec)
+			p, r := s.authenticate(rec, r)
+			if p == nil {
+				return
+			}
+			if err := h(rec, r, p); err != nil {
+				s.writeAccountError(rec, pattern, err)
+			}
+		}))
+	}
+	public := func(pattern string, h publicFunc) {
+		mux.Handle(pattern, s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {
+			noStore(rec)
+			if err := h(rec, r); err != nil {
+				s.writeAccountError(rec, pattern, err)
+			}
+		}))
+	}
+
+	// Available in both auth modes.
+	public("GET /api/v1/auth/config", s.authConfig)
+	authed("GET /api/v1/auth/me", s.me)
+	if s.accounts == nil {
+		return
+	}
+	public("POST /api/v1/auth/login", s.login)
+	public("POST /api/v1/auth/signup", s.signup)
+	public("POST /api/v1/invitations/lookup", s.lookupInvitation)
+	public("POST /api/v1/invitations/accept", s.acceptInvitation)
+	authed("POST /api/v1/auth/logout", s.logout)
+	authed("POST /api/v1/auth/password", s.changePassword)
+	authed("GET /api/v1/orgs/current", s.currentOrg)
+	authed("PATCH /api/v1/orgs/current", s.renameOrg)
+	authed("GET /api/v1/members", s.listMembers)
+	authed("PATCH /api/v1/members/{user_id}", s.updateMember)
+	authed("DELETE /api/v1/members/{user_id}", s.removeMember)
+	authed("GET /api/v1/invitations", s.listInvitations)
+	authed("POST /api/v1/invitations", s.createInvitation)
+	authed("DELETE /api/v1/invitations/{id}", s.revokeInvitation)
+	authed("GET /api/v1/license-keys", s.listLicenseKeys)
+	authed("POST /api/v1/license-keys", s.createLicenseKey)
+	authed("DELETE /api/v1/license-keys/{id}", s.revokeLicenseKey)
+	authed("GET /api/v1/api-keys", s.listAPIKeys)
+	authed("POST /api/v1/api-keys", s.createAPIKey)
+	authed("DELETE /api/v1/api-keys/{id}", s.revokeAPIKey)
+	authed("GET /api/v1/sessions", s.listSessions)
+	authed("DELETE /api/v1/sessions/{id}", s.revokeSession)
+	authed("GET /api/v1/audit-log", s.listAudit)
+}
+
+func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store") }
+
+func (s *Server) writeAccountError(w http.ResponseWriter, route string, err error) {
+	ae := s.toAPIError(err)
+	if ae.status >= 500 {
+		s.log.Error("api request failed", "route", route, "err", err)
+	}
+	writeError(w, ae)
+}
+
+// decodeJSON reads a JSON request body. application/json is required: HTML
+// forms cannot send it cross-site without a CORS preflight, which the API
+// never grants (defense against login CSRF on unauthenticated endpoints).
+func decodeJSON(r *http.Request, v any) error {
+	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if ct != "application/json" {
+		return badRequest("Content-Type must be application/json")
+	}
+	dec := json.NewDecoder(io.LimitReader(r.Body, maxJSONBody))
+	if err := dec.Decode(v); err != nil {
+		return badRequest("invalid JSON body: %v", err)
+	}
+	return nil
+}
+
+// ---- response shapes ----
+
+func optTime(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	v := formatTime(*t)
+	return &v
+}
+
+type userJSON struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+type orgJSON struct {
+	ID        string  `json:"id"`
+	TenantID  string  `json:"tenant_id"`
+	Name      string  `json:"name"`
+	Role      string  `json:"role,omitempty"`
+	CreatedAt *string `json:"created_at,omitempty"`
+}
+
+type meJSON struct {
+	Auth          string    `json:"auth"`
+	User          *userJSON `json:"user"`
+	Organization  *orgJSON  `json:"organization"`
+	Role          *string   `json:"role"`
+	Organizations []orgJSON `json:"organizations"`
+	CSRFToken     *string   `json:"csrf_token"`
+}
+
+func meResponse(p *auth.Principal, ms []auth.Membership) meJSON {
+	out := meJSON{Auth: string(p.Kind), Organizations: []orgJSON{}}
+	if p.Kind == auth.KindSession {
+		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name}
+		tok := p.CSRFToken
+		out.CSRFToken = &tok
+	}
+	if p.HasOrg() {
+		out.Organization = &orgJSON{ID: p.OrgID, TenantID: p.TenantID, Name: p.OrgName}
+		role := string(p.Role)
+		out.Role = &role
+	}
+	for _, m := range ms {
+		out.Organizations = append(out.Organizations, orgJSON{ID: m.Org.ID, TenantID: m.Org.TenantID, Name: m.Org.Name, Role: string(m.Role)})
+	}
+	return out
+}
+
+// ---- auth ----
+
+func (s *Server) authConfig(w http.ResponseWriter, _ *http.Request) error {
+	mode, signup := "static", false
+	if s.accounts != nil {
+		mode, signup = "postgres", s.accounts.Config().SignupEnabled
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"mode": mode, "signup_enabled": signup, "password_min_length": auth.MinPasswordLen})
+	return nil
+}
+
+func (s *Server) me(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var ms []auth.Membership
+	if s.accounts != nil {
+		res, err := s.accounts.Me(r.Context(), p)
+		if err != nil {
+			return err
+		}
+		ms = res.Memberships
+	}
+	writeJSON(w, http.StatusOK, meResponse(p, ms))
+	return nil
+}
+
+// startSession sets the session cookie and answers with the /auth/me shape
+// for the new session (organization: the user's default one).
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, res auth.LoginResult, status int) error {
+	http.SetCookie(w, s.accounts.SessionCookie(res.Token, res.Session.ExpiresAt))
+	p := &auth.Principal{Kind: auth.KindSession, UserID: res.User.ID, Email: res.User.Email, Name: res.User.Name,
+		SessionID: res.Session.ID, CSRFToken: res.Session.CSRFToken}
+	me, err := s.accounts.Me(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	if len(me.Memberships) > 0 {
+		m := me.Memberships[0]
+		p.OrgID, p.OrgName, p.TenantID, p.Role = m.Org.ID, m.Org.Name, m.Org.TenantID, m.Role
+	}
+	writeJSON(w, status, meResponse(p, me.Memberships))
+	return nil
+}
+
+func (s *Server) login(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	res, err := s.accounts.Login(r.Context(), in.Email, in.Password, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.startSession(w, r, res, http.StatusOK)
+}
+
+func (s *Server) signup(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		Name             string `json:"name"`
+		OrganizationName string `json:"organization_name"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	res, _, err := s.accounts.Signup(r.Context(), auth.SignupInput{Email: in.Email, Password: in.Password, Name: in.Name, OrgName: in.OrganizationName}, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.startSession(w, r, res, http.StatusCreated)
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	if err := s.accounts.Logout(r.Context(), p, s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	http.SetCookie(w, s.accounts.ClearedCookie())
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	if err := s.accounts.ChangePassword(r.Context(), p, in.CurrentPassword, in.NewPassword, s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+// ---- organization & members ----
+
+func (s *Server) currentOrg(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	org, err := s.accounts.CurrentOrg(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	created := formatTime(org.CreatedAt)
+	writeJSON(w, http.StatusOK, orgJSON{ID: org.ID, TenantID: org.TenantID, Name: org.Name, Role: string(p.Role), CreatedAt: &created})
+	return nil
+}
+
+func (s *Server) renameOrg(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	org, err := s.accounts.RenameOrg(r.Context(), p, in.Name, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	created := formatTime(org.CreatedAt)
+	writeJSON(w, http.StatusOK, orgJSON{ID: org.ID, TenantID: org.TenantID, Name: org.Name, Role: string(p.Role), CreatedAt: &created})
+	return nil
+}
+
+type memberJSON struct {
+	UserID   string `json:"user_id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	JoinedAt string `json:"joined_at"`
+}
+
+func (s *Server) listMembers(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ms, err := s.accounts.ListMembers(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	out := make([]memberJSON, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, memberJSON{UserID: m.UserID, Email: m.Email, Name: m.Name, Role: string(m.Role), JoinedAt: formatTime(m.JoinedAt)})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": out})
+	return nil
+}
+
+func (s *Server) updateMember(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Role string `json:"role"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	if err := s.accounts.UpdateMemberRole(r.Context(), p, r.PathValue("user_id"), auth.Role(in.Role), s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) removeMember(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	if err := s.accounts.RemoveMember(r.Context(), p, r.PathValue("user_id"), s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+// ---- invitations ----
+
+type invitationJSON struct {
+	ID             string `json:"id"`
+	Email          string `json:"email"`
+	Role           string `json:"role"`
+	InvitedByEmail string `json:"invited_by_email"`
+	CreatedAt      string `json:"created_at"`
+	ExpiresAt      string `json:"expires_at"`
+}
+
+func invitationResponse(i auth.Invitation) invitationJSON {
+	return invitationJSON{ID: i.ID, Email: i.Email, Role: string(i.Role), InvitedByEmail: i.InvitedByEmail,
+		CreatedAt: formatTime(i.CreatedAt), ExpiresAt: formatTime(i.ExpiresAt)}
+}
+
+func (s *Server) listInvitations(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	invs, err := s.accounts.ListInvitations(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	out := make([]invitationJSON, 0, len(invs))
+	for _, i := range invs {
+		out = append(out, invitationResponse(i))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
+	return nil
+}
+
+func (s *Server) createInvitation(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	inv, token, err := s.accounts.CreateInvitation(r.Context(), p, in.Email, auth.Role(in.Role), s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"invitation": invitationResponse(inv), "token": token})
+	return nil
+}
+
+func (s *Server) revokeInvitation(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	if err := s.accounts.RevokeInvitation(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) lookupInvitation(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Token string `json:"token"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	info, err := s.accounts.LookupInvitation(r.Context(), in.Token)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"organization_name": info.Org.Name, "email": info.Invitation.Email, "role": info.Invitation.Role,
+		"expires_at": formatTime(info.Invitation.ExpiresAt), "user_exists": info.UserExists,
+	})
+	return nil
+}
+
+func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+		Name     string `json:"name"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	res, _, err := s.accounts.AcceptInvitation(r.Context(), in.Token, in.Password, in.Name, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.startSession(w, r, res, http.StatusOK)
+}
+
+// ---- keys ----
+
+type licenseKeyJSON struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Prefix         string  `json:"prefix"`
+	CreatedByEmail string  `json:"created_by_email"`
+	CreatedAt      string  `json:"created_at"`
+	LastUsedAt     *string `json:"last_used_at"`
+	RevokedAt      *string `json:"revoked_at"`
+}
+
+func licenseKeyResponse(k auth.LicenseKey) licenseKeyJSON {
+	return licenseKeyJSON{ID: k.ID, Name: k.Name, Prefix: k.Prefix, CreatedByEmail: k.CreatedByEmail,
+		CreatedAt: formatTime(k.CreatedAt), LastUsedAt: optTime(k.LastUsedAt), RevokedAt: optTime(k.RevokedAt)}
+}
+
+func (s *Server) listLicenseKeys(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ks, err := s.accounts.ListLicenseKeys(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	out := make([]licenseKeyJSON, 0, len(ks))
+	for _, k := range ks {
+		out = append(out, licenseKeyResponse(k))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"license_keys": out})
+	return nil
+}
+
+func (s *Server) createLicenseKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	k, secret, err := s.accounts.CreateLicenseKey(r.Context(), p, in.Name, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	k.CreatedByEmail = p.Email
+	writeJSON(w, http.StatusCreated, map[string]any{"license_key": licenseKeyResponse(k), "key": secret})
+	return nil
+}
+
+func (s *Server) revokeLicenseKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	if _, err := s.accounts.RevokeLicenseKey(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+type apiKeyJSON struct {
+	ID              string  `json:"id"`
+	Name            string  `json:"name"`
+	Prefix          string  `json:"prefix"`
+	Scope           string  `json:"scope"`
+	CreatedByUserID string  `json:"created_by_user_id"`
+	CreatedByEmail  string  `json:"created_by_email"`
+	CreatedAt       string  `json:"created_at"`
+	LastUsedAt      *string `json:"last_used_at"`
+	ExpiresAt       *string `json:"expires_at"`
+	RevokedAt       *string `json:"revoked_at"`
+}
+
+func apiKeyResponse(k auth.APIKey) apiKeyJSON {
+	return apiKeyJSON{ID: k.ID, Name: k.Name, Prefix: k.Prefix, Scope: k.Scope, CreatedByUserID: k.CreatedBy, CreatedByEmail: k.CreatedByEmail,
+		CreatedAt: formatTime(k.CreatedAt), LastUsedAt: optTime(k.LastUsedAt), ExpiresAt: optTime(k.ExpiresAt), RevokedAt: optTime(k.RevokedAt)}
+}
+
+func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ks, err := s.accounts.ListAPIKeys(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	out := make([]apiKeyJSON, 0, len(ks))
+	for _, k := range ks {
+		out = append(out, apiKeyResponse(k))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"api_keys": out})
+	return nil
+}
+
+func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Name      string  `json:"name"`
+		ExpiresAt *string `json:"expires_at"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	var expires *time.Time
+	if in.ExpiresAt != nil && *in.ExpiresAt != "" {
+		t, err := parseTime(*in.ExpiresAt)
+		if err != nil {
+			return badRequest("expires_at: %v", err)
+		}
+		expires = &t
+	}
+	k, secret, err := s.accounts.CreateAPIKey(r.Context(), p, in.Name, expires, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	k.CreatedByEmail = p.Email
+	writeJSON(w, http.StatusCreated, map[string]any{"api_key": apiKeyResponse(k), "key": secret})
+	return nil
+}
+
+func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	if _, err := s.accounts.RevokeAPIKey(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+// ---- sessions & audit ----
+
+func (s *Server) listSessions(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ss, err := s.accounts.ListSessions(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	type sessionJSON struct {
+		ID         string `json:"id"`
+		CreatedAt  string `json:"created_at"`
+		LastSeenAt string `json:"last_seen_at"`
+		ExpiresAt  string `json:"expires_at"`
+		IP         string `json:"ip"`
+		UserAgent  string `json:"user_agent"`
+		Current    bool   `json:"current"`
+	}
+	out := make([]sessionJSON, 0, len(ss))
+	for _, x := range ss {
+		out = append(out, sessionJSON{ID: x.ID, CreatedAt: formatTime(x.CreatedAt), LastSeenAt: formatTime(x.LastSeenAt),
+			ExpiresAt: formatTime(x.ExpiresAt), IP: x.IP, UserAgent: x.UserAgent, Current: x.ID == p.SessionID})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": out})
+	return nil
+}
+
+func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	id := r.PathValue("id")
+	if err := s.accounts.RevokeSession(r.Context(), p, id, s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	if id == p.SessionID {
+		http.SetCookie(w, s.accounts.ClearedCookie())
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) listAudit(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	limit := 100
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return badRequest("limit must be a positive integer")
+		}
+		limit = min(n, 500)
+	}
+	evs, err := s.accounts.ListAuditEvents(r.Context(), p, limit)
+	if err != nil {
+		return err
+	}
+	type eventJSON struct {
+		ID         int64          `json:"id"`
+		ActorEmail string         `json:"actor_email"`
+		Action     string         `json:"action"`
+		TargetType string         `json:"target_type"`
+		TargetID   string         `json:"target_id"`
+		Details    map[string]any `json:"details"`
+		IP         string         `json:"ip"`
+		CreatedAt  string         `json:"created_at"`
+	}
+	out := make([]eventJSON, 0, len(evs))
+	for _, e := range evs {
+		d := e.Details
+		if d == nil {
+			d = map[string]any{}
+		}
+		out = append(out, eventJSON{ID: e.ID, ActorEmail: e.ActorEmail, Action: e.Action, TargetType: e.TargetType,
+			TargetID: e.TargetID, Details: d, IP: e.IP, CreatedAt: formatTime(e.CreatedAt)})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": out})
+	return nil
+}

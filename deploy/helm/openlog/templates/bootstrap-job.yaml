@@ -1,0 +1,77 @@
+{{- if and .Values.bootstrap.enabled (include "openlog.postgres.enabled" .) }}
+{{- $v := .Values.bootstrap }}
+{{- $ctx := dict "root" . "component" "bootstrap" "values" $v }}
+# openlog-admin bootstrap: applies the PostgreSQL migrations and idempotently ensures the
+# first organization, its owner and (optionally) an ingest license key. Runs after every
+# install and upgrade (after openlog-migrate); existing users' passwords are never changed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: {{ $v.hookDeletePolicy }}
+spec:
+  backoffLimit: {{ $v.backoffLimit }}
+  activeDeadlineSeconds: {{ $v.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "openlog.selectorLabels" $ctx | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- include "openlog.podSecurity" . | nindent 6 }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: bootstrap
+          image: {{ include "openlog.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/openlog-admin", "bootstrap"]
+          env:
+            - name: OPENLOG_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- include "openlog.postgresEnv" . | nindent 12 }}
+            {{- include "openlog.tls.env" . | nindent 12 }}
+            - name: OPENLOG_BOOTSTRAP_TENANT_ID
+              value: {{ $v.tenantId | quote }}
+            - name: OPENLOG_BOOTSTRAP_ORG_NAME
+              value: {{ $v.orgName | quote }}
+            - name: OPENLOG_BOOTSTRAP_OWNER_EMAIL
+              value: {{ $v.ownerEmail | quote }}
+            - name: OPENLOG_BOOTSTRAP_OWNER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openlog.secretName" . }}
+                  key: {{ include "openlog.secret.bootstrapPasswordKey" . }}
+                  optional: true
+            - name: OPENLOG_BOOTSTRAP_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openlog.secretName" . }}
+                  key: {{ include "openlog.secret.bootstrapLicenseKeyKey" . }}
+                  optional: true
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "openlog.tls.volumeMounts" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        {{- include "openlog.tls.volumes" . | nindent 8 }}
+{{- end }}

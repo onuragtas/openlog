@@ -1,0 +1,45 @@
+name: databases
+processes:
+  - { pid: 2000, exe: /usr/sbin/mysqld, cmdline: "/usr/sbin/mysqld", unit: mysql.service }
+  - { pid: 2100, exe: /usr/sbin/mariadbd, cmdline: "/usr/sbin/mariadbd", unit: mariadb.service }
+  - { pid: 2200, exe: /usr/lib/postgresql/16/bin/postgres, cmdline: "/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main -c config_file=/etc/postgresql/16/main/postgresql.conf", unit: postgresql@16-main.service }
+  - { pid: 2201, exe: /usr/lib/postgresql/16/bin/postgres, cmdline: "postgres: 16/main: checkpointer", unit: postgresql@16-main.service }
+  - { pid: 2300, exe: /usr/bin/mongod, cmdline: "/usr/bin/mongod --config /etc/mongod.conf", unit: mongod.service }
+  - { pid: 2400, exe: /usr/bin/redis-server, cmdline: "/usr/bin/redis-server 127.0.0.1:6379", unit: redis-server.service }
+  - { pid: 2500, exe: /usr/bin/memcached, cmdline: "/usr/bin/memcached -m 64 -p 11211 -u memcache -l 127.0.0.1", unit: memcached.service }
+  - { pid: 2600, exe: /usr/bin/clickhouse, cmdline: "/usr/bin/clickhouse-server --config=/etc/clickhouse-server/config.xml --pid-file=/run/clickhouse-server/clickhouse-server.pid", unit: clickhouse-server.service }
+  - { pid: 2700, exe: /usr/bin/clickhouse, cmdline: "clickhouse-client --query SELECT 1" }
+units:
+  - { name: mysql.service }
+  - { name: mariadb.service }
+  - { name: postgresql.service, state: enabled }
+  - { name: postgresql@.service, state: enabled }
+  - { name: mongod.service }
+  - { name: redis-server.service }
+  - { name: memcached.service }
+  - { name: clickhouse-server.service }
+ports:
+  - { address: 127.0.0.1, port: 3306, pid: 2000 }
+  - { address: 127.0.0.1, port: 3307, pid: 2100 }
+  - { address: 127.0.0.1, port: 5432, pid: 2200 }
+  - { address: 127.0.0.1, port: 27017, pid: 2300 }
+  - { address: 127.0.0.1, port: 6379, pid: 2400 }
+  - { address: 127.0.0.1, port: 11211, pid: 2500 }
+  - { address: "::", port: 9000, pid: 2600 }
+packages:
+  - { name: mysql-server-8.0, version: 8.0.36-0ubuntu0.22.04.1 }
+  - { name: mysql-server-core-8.0, version: 8.0.36-0ubuntu0.22.04.1 }
+  - { name: mariadb-server, version: "1:10.11.6-0ubuntu0.23.10.2" }
+  - { name: postgresql-16, version: 16.2-1.pgdg22.04+1 }
+  - { name: mongodb-org-server, version: 7.0.5 }
+  - { name: redis-server, version: "5:7.0.15-1build2" }
+  - { name: memcached, version: 1.6.24-1build3 }
+  - { name: clickhouse-server, version: 24.1.5.6 }
+expect:
+  - { rule_id: mysql, instance: /usr/sbin/mysqld, version: 8.0.36, ports: [3306], matched_by: [process, systemd_unit, listening_port, package], status: needs_configuration }
+  - { rule_id: mariadb, instance: /usr/sbin/mariadbd, version: 10.11.6, ports: [3307] }
+  - { rule_id: postgresql, instance: /usr/lib/postgresql/16/bin/postgres, version: "16", pids: [2200, 2201], units: [postgresql.service, postgresql@16-main.service] }
+  - { rule_id: mongodb, instance: /usr/bin/mongod, version: 7.0.5, ports: [27017] }
+  - { rule_id: redis, instance: /usr/bin/redis-server, version: 7.0.15, ports: [6379], matched_by: [process, systemd_unit, listening_port, package], status: enabled }
+  - { rule_id: memcached, instance: /usr/bin/memcached, version: 1.6.24, ports: [11211] }
+  - { rule_id: clickhouse, instance: /usr/bin/clickhouse, version: 24.1.5.6, pids: [2600], ports: [9000] }

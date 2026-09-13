@@ -1,0 +1,15 @@
+id: caddy
+name: Caddy
+category: web
+match:
+  - process: { exe_basename: ["caddy"] }
+  - systemd_unit: { name_regex: "^caddy(-api)?\\.service$" }
+  - container: { image_regex: "(^|/)caddy(:|@|$)" }
+  - package: { name: ["caddy"] }
+version:
+  - package: ["caddy"]
+endpoints:
+  - from: listening_port
+integration:
+  id: caddy
+  auto_enable: true         # admin API on localhost:2019

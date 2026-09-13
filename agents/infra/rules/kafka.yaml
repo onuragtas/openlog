@@ -1,0 +1,16 @@
+id: kafka
+name: Apache Kafka
+category: queue
+match:
+  - process: { exe_basename: ["java"], cmdline_regex: "(^|\\s)kafka\\.Kafka(\\s|$)" }
+  - systemd_unit: { name_regex: "^(confluent-)?kafka(-server)?\\.service$" }
+  - container: { image_regex: "(^|/)(kafka|cp-kafka|cp-server)(:|@|$)" }
+  - package: { name_regex: "^(confluent-(kafka|server)|kafka)$" }
+version:
+  - cmdline_regex: "kafka_[0-9.]+-([0-9]+\\.[0-9]+\\.[0-9]+)"
+  - package_regex: "^(confluent-(kafka|server)|kafka)$"
+endpoints:
+  - from: listening_port
+integration:
+  id: kafka
+  requires: ["jmx"]

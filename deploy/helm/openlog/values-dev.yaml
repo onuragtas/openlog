@@ -1,0 +1,166 @@
+# Local development on a k3d cluster with 3 agent nodes (see docs/operations/k3d-dev-cluster.md).
+#   helm install openlog deploy/helm/openlog -n openlog -f deploy/helm/openlog/values-dev.yaml --timeout 30m
+# Small resources, Strimzi Kafka (3 combined controller+broker nodes), Altinity ClickHouse
+# 2 shards x 1 replica + Keeper x3, CloudNativePG PostgreSQL (1 instance), one replica of each
+# openlog service, Envoy in front of ingest. Operators needed: Strimzi, Altinity, CloudNativePG.
+
+image:
+  repository: ghcr.io/onuragtas/openlog
+  # Built locally and loaded with `k3d image import ghcr.io/onuragtas/openlog:dev -c openlog`.
+  tag: dev
+  pullPolicy: IfNotPresent
+
+logLevel: debug
+
+auth:
+  mode: postgres
+  session:
+    # The dev cluster is reached over plain HTTP (port-forward).
+    cookieSecure: false
+
+postgres:
+  mode: operator
+  operator:
+    instances: 1
+    storage:
+      size: 1Gi
+      storageClass: ""  # cluster default (k3d: local-path, kind: standard)
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 512Mi}
+
+# Dev-only first organization: sign in as admin@openlog.local / openlog-dev-password,
+# agents use the ingest key dev-license-key (tenant `dev`).
+bootstrap:
+  enabled: true
+  tenantId: dev
+  orgName: Dev
+  ownerEmail: admin@openlog.local
+  ownerPassword: openlog-dev-password
+  licenseKey: dev-license-key
+
+dependencies:
+  mode: operators
+
+scheduling:
+  podAntiAffinity: soft
+  topologySpread:
+    enabled: true
+    whenUnsatisfiable: ScheduleAnyway
+
+kafka:
+  topics:
+    # Fewer partitions than the production 48 to keep brokers small; still allows
+    # scaling the processor 1 -> 2 -> 4 -> 12.
+    partitions: 12
+    replicationFactor: 3
+    minInsyncReplicas: 2
+  strimzi:
+    config:
+      auto.create.topics.enable: false
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      message.max.bytes: 12582912
+      replica.fetch.max.bytes: 12582912
+      num.network.threads: 2
+      num.io.threads: 4
+    nodePools:
+      - name: dual
+        replicas: 3
+        roles: [controller, broker]
+        storage:
+          size: 5Gi
+          storageClass: ""  # cluster default (k3d: local-path, kind: standard)
+          deleteClaim: true
+        resources:
+          requests: {cpu: 250m, memory: 1Gi}
+          limits: {memory: 1Gi}
+        jvmOptions:
+          "-Xms": 512m
+          "-Xmx": 512m
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      strimzi.io/pool-name: dual
+        tolerations: []
+        topologySpreadConstraints: []
+    kafkaExporter:
+      enabled: true
+
+clickhouse:
+  altinity:
+    shards: 2
+    replicas: 1
+    resources:
+      requests: {cpu: 250m, memory: 1Gi}
+      limits: {memory: 3Gi}
+    # ClickHouse enforces max_server_memory_usage (90% of the limit) against RSS, and the default
+    # mark cache (5 GiB) keeps growing into it: with 2Gi, RSS pinned at the cap and every insert
+    # failed with MEMORY_LIMIT_EXCEEDED once ~50M rows were stored (4 processors stalled).
+    settings:
+      mark_cache_size: 268435456
+    storage:
+      size: 5Gi
+      storageClass: ""  # cluster default (k3d: local-path, kind: standard)
+      reclaimPolicy: Delete
+    # 1 replica per shard: spread shards over nodes instead.
+    podDistribution:
+      - type: ShardAntiAffinity
+    keeper:
+      replicas: 3
+      resources:
+        requests: {cpu: 100m, memory: 256Mi}
+        limits: {memory: 512Mi}
+      storage:
+        size: 1Gi
+        storageClass: ""  # cluster default (k3d: local-path, kind: standard)
+
+ingest:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  pdb:
+    enabled: false
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 512Mi}
+
+processor:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  pdb:
+    enabled: false
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 2Gi}  # 50k-row log/span batches peak near 1 GiB
+
+api:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  pdb:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+
+migrate:
+  backoffLimit: 20
+
+envoy:
+  enabled: true
+  replicaCount: 1
+  pdb:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}

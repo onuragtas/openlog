@@ -1,0 +1,66 @@
+{{- /*
+Gateway API routes. GRPCRoute makes the Gateway balance per gRPC request and speak
+HTTP/2 to ingest (the Service port also carries appProtocol: grpc).
+*/ -}}
+{{- if .Values.gateway.enabled }}
+{{- $ingest := include "openlog.componentName" (dict "root" . "component" "ingest") }}
+{{- if .Values.ingest.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: {{ $ingest }}-grpc
+  labels:
+    {{- include "openlog.componentLabels" (dict "root" . "component" "ingest") | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gateway.parentRefs | nindent 4 }}
+  {{- with .Values.gateway.grpc.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - backendRefs:
+        - name: {{ $ingest }}
+          port: {{ .Values.ingest.service.grpcPort }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $ingest }}-http
+  labels:
+    {{- include "openlog.componentLabels" (dict "root" . "component" "ingest") | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gateway.parentRefs | nindent 4 }}
+  {{- with .Values.gateway.http.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /v1/}
+      backendRefs:
+        - name: {{ $ingest }}
+          port: {{ .Values.ingest.service.httpPort }}
+{{- end }}
+{{- if and .Values.api.enabled .Values.gateway.api.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "openlog.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "openlog.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.gateway.parentRefs | nindent 4 }}
+  {{- with .Values.gateway.api.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - backendRefs:
+        - name: {{ include "openlog.componentName" (dict "root" . "component" "api") }}
+          port: {{ .Values.api.service.port }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,9 @@
+id: dotnet
+name: .NET
+category: runtime
+match:
+  - process: { exe_basename: ["dotnet"] }
+version:
+  - cmdline_regex: "/shared/Microsoft\\.(?:AspNetCore|NETCore)\\.App/([0-9]+\\.[0-9]+\\.[0-9]+)"
+  - package_regex: "^(aspnetcore-runtime|dotnet-runtime)-[0-9.]+$"
+apm_hint: { language: dotnet, agent: openlog-agent-dotnet }

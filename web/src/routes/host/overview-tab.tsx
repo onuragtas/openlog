@@ -1,0 +1,149 @@
+import { useQueries } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { metricQuery } from "@/api/queries";
+import type { Aggregation } from "@/api/types";
+import { TimeSeriesChart } from "@/components/TimeSeriesChart";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { UnitKind } from "@/lib/format";
+import { fromMetricSeries, type ChartSeriesInput } from "@/lib/series";
+import type { RangeSpec } from "@/lib/time";
+
+const route = getRouteApi("/app/hosts/$hostId");
+
+interface MetricSpec {
+  name: string;
+  agg: Aggregation;
+  groupBy?: string[];
+  /** Fixed label for all series of this metric (used when combining metrics). */
+  label?: string;
+}
+
+interface ChartDef {
+  id: string;
+  titleKey: "charts.cpu" | "charts.load" | "charts.memory" | "charts.filesystem" | "charts.diskIO" | "charts.networkIO";
+  metrics: MetricSpec[];
+  unit: UnitKind;
+  stacked?: boolean;
+  order?: string[];
+  yMax?: number;
+  yCap?: number;
+  /** Series hidden until enabled in the legend. */
+  hidden?: readonly string[];
+}
+
+// Metric names/attributes: docs/contracts/semantic-conventions.md §2.
+export const OVERVIEW_CHARTS: ChartDef[] = [
+  {
+    id: "cpu",
+    titleKey: "charts.cpu",
+    metrics: [{ name: "system.cpu.utilization", agg: "avg", groupBy: ["cpu.mode"] }],
+    unit: "percent",
+    stacked: true,
+    order: ["user", "system", "iowait", "nice", "irq", "interrupt", "softirq", "steal", "idle"],
+    // A stacked idle area hides everything else; show busy modes, auto-scaled (max 100%).
+    hidden: ["idle"],
+    yCap: 1,
+  },
+  {
+    id: "load",
+    titleKey: "charts.load",
+    metrics: [
+      { name: "system.cpu.load_average.1m", agg: "avg", label: "1m" },
+      { name: "system.cpu.load_average.5m", agg: "avg", label: "5m" },
+      { name: "system.cpu.load_average.15m", agg: "avg", label: "15m" },
+    ],
+    unit: "number",
+  },
+  {
+    id: "memory",
+    titleKey: "charts.memory",
+    metrics: [{ name: "system.memory.usage", agg: "avg", groupBy: ["system.memory.state"] }],
+    unit: "bytes",
+    stacked: true,
+    order: ["used", "buffers", "cached", "free"],
+  },
+  {
+    id: "filesystem",
+    titleKey: "charts.filesystem",
+    metrics: [{ name: "system.filesystem.utilization", agg: "avg", groupBy: ["system.filesystem.mountpoint"] }],
+    unit: "percent",
+    yMax: 1,
+  },
+  {
+    id: "disk",
+    titleKey: "charts.diskIO",
+    metrics: [{ name: "system.disk.io", agg: "rate", groupBy: ["disk.io.direction"] }],
+    unit: "bytesPerSec",
+    order: ["read", "write"],
+  },
+  {
+    id: "network",
+    titleKey: "charts.networkIO",
+    metrics: [{ name: "system.network.io", agg: "rate", groupBy: ["network.io.direction"] }],
+    unit: "bytesPerSec",
+    order: ["receive", "transmit"],
+  },
+];
+
+function MetricChartCard({ hostId, range, def }: { hostId: string; range: RangeSpec; def: ChartDef }) {
+  const { t } = useTranslation();
+  const title = t(def.titleKey);
+  const results = useQueries({
+    queries: def.metrics.map((m) => metricQuery({ hostId, name: m.name, range, agg: m.agg, groupBy: m.groupBy })),
+  });
+
+  const isLoading = results.some((r) => r.isPending);
+  const error = results.find((r) => r.isError)?.error;
+  const dataKey = results.map((r) => r.dataUpdatedAt).join(",");
+  const series = useMemo<ChartSeriesInput[] | undefined>(() => {
+    if (results.some((r) => !r.data)) return undefined;
+    return results.flatMap((r, i) => {
+      const spec = def.metrics[i]!;
+      const s = fromMetricSeries(r.data!.series, { keys: spec.groupBy, fallbackLabel: spec.label ?? spec.name });
+      return spec.label ? s.map((x) => ({ ...x, label: spec.label! })) : s;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey, def]);
+  const first = results[0]?.data;
+
+  return (
+    <Card className="min-w-0 gap-2">
+      <CardHeader>
+        <CardTitle>
+          <h2>{title}</h2>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <TimeSeriesChart
+          title={title}
+          series={series}
+          unit={def.unit}
+          stacked={def.stacked}
+          order={def.order}
+          yMax={def.yMax}
+          yCap={def.yCap}
+          hidden={def.hidden}
+          from={first?.from}
+          to={first?.to}
+          isLoading={isLoading}
+          error={error}
+          onRetry={() => results.forEach((r) => void r.refetch())}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+export function HostOverviewTab({ hostId }: { hostId: string }) {
+  const search = route.useSearch();
+  const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      {OVERVIEW_CHARTS.map((def) => (
+        <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} />
+      ))}
+    </div>
+  );
+}

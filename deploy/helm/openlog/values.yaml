@@ -1,0 +1,694 @@
+# =============================================================================
+# openlog Helm chart - `cluster` deployment profile
+#
+# Contracts this chart implements:
+#   docs/contracts/config.md  (environment variables, ports, admin endpoints)
+#   docs/contracts/kafka.md   (topics, partitions, RF, min ISR, retention)
+#   schema/clickhouse/*.sql   ({cluster}/{shard}/{replica} macros, Distributed tables)
+#
+# Services are stateless; all state lives in Kafka and ClickHouse. Scale any
+# service by adding replicas (processor replicas are bounded by Kafka partitions).
+# =============================================================================
+
+nameOverride: ""
+# Keep short: operator-generated pods append suffixes (e.g. chi-<name>-openlog-0-0-0).
+fullnameOverride: ""
+# Extra labels added to every chart-managed resource.
+commonLabels: {}
+
+# One image contains every binary: /usr/local/bin/openlog-{ingest,processor,api,migrate,allinone}.
+image:
+  repository: ghcr.io/onuragtas/openlog
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# OPENLOG_LOG_LEVEL for all services (debug | info | warn | error). Components may override.
+logLevel: info
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Applied to every openlog pod (ingest, processor, api, migrate, envoy uses its own below).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: ["ALL"]
+
+# Extra env vars appended to every openlog container (list of EnvVar).
+extraEnv: []
+
+# Default scheduling policy for ingest / processor / api / envoy pods.
+scheduling:
+  # soft | hard | none. Ignored for a component that sets its own `affinity`.
+  podAntiAffinity: soft
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    # ScheduleAnyway keeps small (k3d) clusters schedulable; use DoNotSchedule in prod if desired.
+    whenUnsatisfiable: ScheduleAnyway
+    # Also spread across topology.kubernetes.io/zone.
+    zones: false
+
+metrics:
+  # Adds prometheus.io/scrape|port|path annotations (admin server :9464 /metrics).
+  podAnnotations: true
+  # Prometheus Operator ServiceMonitor (requires monitoring.coreos.com CRDs).
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# -----------------------------------------------------------------------------
+# Credentials
+# -----------------------------------------------------------------------------
+auth:
+  # OPENLOG_AUTH_MODE.
+  #   postgres - organizations (tenants), users, sessions, ingest license keys and API keys
+  #              in PostgreSQL (see `postgres`). Manage keys and members in the web UI.
+  #   static   - development/tests only: ingest and api accept auth.licenseKeys, no users,
+  #              no UI sign-in, no PostgreSQL.
+  mode: postgres
+  # Use an existing Secret instead of the chart-generated one. It must contain the
+  # keys below that apply. In `operators` mode the ClickHouseInstallation also reads the
+  # password from this Secret.
+  existingSecret: ""
+  clickhousePasswordKey: clickhouse-password
+  licenseKeysKey: license-keys
+  # postgres.mode=external: key holding OPENLOG_POSTGRES_DSN.
+  postgresDsnKey: postgres-dsn
+  # auth.mode=static only: OPENLOG_LICENSE_KEYS, "key1=tenant1,key2=tenant2". Ignored with existingSecret.
+  licenseKeys: ""
+  # openlog-api user sessions (server-side in PostgreSQL; HttpOnly SameSite=Strict cookie).
+  session:
+    ttl: 168h
+    idleTimeout: 24h
+    # Keep true behind TLS. false only for plain-HTTP development clusters.
+    cookieSecure: true
+    cookieDomain: ""
+  # Self-service sign-up (POST /api/v1/auth/signup), for SaaS.
+  signupEnabled: false
+  # Failed password checks per (email, client IP) within the window before 429.
+  login:
+    maxFailures: 10
+    window: 15m
+  invitationTTL: 168h
+  # CIDRs of ingress controllers / proxies whose X-Forwarded-For is trusted (client IP for
+  # rate limiting and the audit log). Empty = TCP peer address.
+  trustedProxies: []
+  # openlog-ingest license key cache. A revoked key keeps working for up to `ttl`;
+  # cached keys keep working for `maxStale` while PostgreSQL is unreachable.
+  cache:
+    ttl: 60s
+    negativeTTL: 10s
+    maxStale: 15m
+
+# -----------------------------------------------------------------------------
+# PostgreSQL (auth.mode=postgres; docs/contracts/postgres.md)
+# -----------------------------------------------------------------------------
+postgres:
+  # external - you provide PostgreSQL >= 16 (postgres.external.dsn, or auth.existingSecret
+  #            with auth.postgresDsnKey).
+  # operator - the chart renders a CloudNativePG `Cluster`; the CloudNativePG operator must
+  #            already be installed. The DSN comes from the Secret <name>-app that CNPG creates.
+  mode: external
+  # OPENLOG_POSTGRES_MAX_CONNS per ingest/api pod.
+  maxConns: 10
+  external:
+    # Stored in the chart Secret. REPLACE this placeholder. The password may be omitted here
+    # and given through passwordSecret instead.
+    dsn: "postgres://openlog@postgres.postgres.svc:5432/openlog?sslmode=require"
+    # Optional Secret with the password only (OPENLOG_POSTGRES_PASSWORD overrides the DSN's).
+    passwordSecret:
+      name: ""
+      key: password
+  # Server verification / client certificates (OPENLOG_POSTGRES_TLS_*). sslmode stays in the DSN:
+  # production = sslmode=verify-full with caSecret. Applies to both postgres modes (CNPG: its
+  # <name>-ca Secret, key ca.crt, signs the server certificate).
+  tls:
+    caSecret:
+      name: ""
+      key: ca.crt
+    clientSecret:
+      name: ""
+      certKey: tls.crt
+      keyKey: tls.key
+  operator:
+    # Cluster name; defaults to <fullname>-pg. Services: <name>-rw (primary), <name>-ro.
+    name: ""
+    # 1 for development, 3 for production (synchronous failover needs >= 2).
+    instances: 3
+    imageName: ghcr.io/cloudnative-pg/postgresql:16
+    database: openlog
+    owner: openlog
+    storage:
+      size: 20Gi
+      storageClass: ""
+    resources:
+      requests: {cpu: 250m, memory: 512Mi}
+      limits: {memory: 1Gi}
+    # spec.postgresql.parameters, e.g. {max_connections: "300"}
+    parameters: {}
+    # spec.affinity (default: soft anti-affinity on kubernetes.io/hostname).
+    affinity: {}
+    # spec.backup (barmanObjectStore ...). Strongly recommended in production.
+    backup: {}
+
+# -----------------------------------------------------------------------------
+# Dependencies
+# -----------------------------------------------------------------------------
+dependencies:
+  # external  - you provide Kafka brokers and ClickHouse addresses (kafka.external,
+  #             clickhouse.external). openlog-migrate creates the Kafka topics.
+  # operators - the chart renders Strimzi (Kafka, KafkaNodePool, KafkaTopic) and
+  #             Altinity (ClickHouseInstallation, ClickHouseKeeperInstallation)
+  #             custom resources. The operators must already be installed
+  #             (see README). OPENLOG_MIGRATE_SKIP_KAFKA=true is set automatically.
+  mode: external
+
+kafka:
+  # OPENLOG_KAFKA_TOPIC_PREFIX. Topics: <prefix>.otlp.{metrics,logs,traces}.v1
+  topicPrefix: openlog
+  topics:
+    # external mode: openlog-migrate creates missing topics with all settings below
+    #   (OPENLOG_KAFKA_PARTITIONS / _REPLICATION_FACTOR / _MIN_INSYNC_REPLICAS / _RETENTION_MS /
+    #   _MAX_MESSAGE_BYTES). Existing topics are left unchanged.
+    # operators mode: KafkaTopic CRs are rendered. false = you manage topics.
+    create: true
+    # kafka.md cluster profile: 48. Processor replicas (and HPA maxReplicas) must be <= this.
+    # Partitions can be increased later but never decreased (see docs/operations/scaling.md).
+    partitions: 48
+    replicationFactor: 3
+    minInsyncReplicas: 2
+    retentionMs: 86400000
+    maxMessageBytes: 12582912
+    # Additional topic-level config for KafkaTopic CRs (operators mode).
+    extraConfig: {}
+
+  external:
+    # Bootstrap brokers. Required in external mode - REPLACE this placeholder.
+    # Use the port of an SSL / SASL_SSL listener together with kafka.tls / kafka.sasl.
+    brokers:
+      - kafka-bootstrap.kafka.svc:9092
+
+  # TLS to the brokers (OPENLOG_KAFKA_TLS_*). Enabled automatically with
+  # kafka.strimzi.listener.tls in operators mode (CA = Secret <name>-cluster-ca-cert).
+  tls:
+    enabled: false
+    # Secret holding the CA bundle that signs the broker certificates (empty = system roots).
+    caSecret:
+      name: ""
+      key: ca.crt
+    # Secret with a client certificate for mutual TLS (e.g. a cert-manager Certificate).
+    clientSecret:
+      name: ""
+      certKey: tls.crt
+      keyKey: tls.key
+    # Name verified in broker certificates; empty = each broker's host.
+    serverName: ""
+    # Testing only.
+    insecureSkipVerify: false
+  # SASL (OPENLOG_KAFKA_SASL_*); set automatically for kafka.strimzi.listener.authentication=scram-sha-512.
+  sasl:
+    # "" | PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512. Combine with kafka.tls (SASL_SSL); PLAIN without TLS sends the password in clear.
+    mechanism: ""
+    username: ""
+    passwordSecret:
+      name: ""
+      key: password
+
+  # Used only when dependencies.mode=operators. Tested against Strimzi 1.2.0 (KRaft only).
+  strimzi:
+    # Strimzi >= 1.0 serves only kafka.strimzi.io/v1 (v1beta2 CRs are rejected).
+    # Set kafka.strimzi.io/v1beta2 for Strimzi 0.46 - 0.48.
+    apiVersion: kafka.strimzi.io/v1
+    # Kafka CR name; defaults to the release fullname. Bootstrap: <name>-kafka-bootstrap:<listenerPort>
+    name: ""
+    # Kafka version; empty = the operator's default.
+    version: ""
+    metadataVersion: ""
+    # Use 9093 (Strimzi's conventional TLS port) together with listener.tls=true.
+    listenerPort: 9092
+    # The internal listener used by openlog services.
+    listener:
+      # true: TLS listener (cluster CA); openlog gets OPENLOG_KAFKA_TLS_* with the CA Secret mounted.
+      tls: false
+      # "" (none) | scram-sha-512 (SASL; with tls=true that is SASL_SSL) | tls (mutual TLS, requires tls=true).
+      # Renders a KafkaUser and enables the User Operator; openlog reads the credentials from its Secret.
+      authentication: ""
+      # KafkaUser name; default <kafka name>-openlog.
+      user: ""
+    # Broker config. Defaults match docs/contracts/kafka.md (cluster profile).
+    config:
+      auto.create.topics.enable: false
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      message.max.bytes: 12582912
+      replica.fetch.max.bytes: 12582912
+    # KRaft node pools. At least one pool needs the controller role; the sum of
+    # broker-role replicas must be >= kafka.topics.replicationFactor.
+    nodePools:
+      - name: dual
+        replicas: 3
+        roles: [controller, broker]
+        storage:
+          size: 50Gi
+          storageClass: ""
+          deleteClaim: false
+        resources:
+          requests: {cpu: "1", memory: 4Gi}
+          limits: {memory: 4Gi}
+        jvmOptions: {}
+        # Strimzi PodTemplate fields.
+        affinity: {}
+        tolerations: []
+        topologySpreadConstraints: []
+    entityOperator:
+      topicOperator:
+        resources: {}
+    # Consumer-lag exporter (kafka_consumergroup_lag) - recommended for scaling processor.
+    kafkaExporter:
+      enabled: false
+    # Needed for KafkaRebalance after adding brokers.
+    cruiseControl:
+      enabled: false
+
+clickhouse:
+  # The database is always `openlog` (OPENLOG_CLICKHOUSE_DATABASE is fixed by contract, D-015)
+  # and is not configurable. Native TLS: see clickhouse.tls.
+  # OPENLOG_CLICKHOUSE_CLUSTER and (operators mode) the CHI cluster name; the schema uses
+  # the {cluster} macro which the Altinity operator sets to this name.
+  cluster: openlog
+  # Empty = "openlog" in operators mode (user created by the CHI), "default" in external mode.
+  user: ""
+  # Empty in operators mode = random, preserved across upgrades via lookup. Ignored with existingSecret.
+  password: ""
+
+  external:
+    # Native-protocol addresses. Required in external mode - REPLACE this placeholder.
+    # The server must define a cluster named `clickhouse.cluster` and the {cluster},
+    # {shard}, {replica} macros, plus Keeper/ZooKeeper for Replicated tables and ON CLUSTER DDL.
+    addrs:
+      - clickhouse.clickhouse.svc:9000
+
+  # Native protocol over TLS (OPENLOG_CLICKHOUSE_TLS_*), including the processor's direct
+  # shard connections. External mode: point clickhouse.external.addrs at the secure port
+  # and list <secure>1</secure> + that port in remote_servers. Operators mode: the chart
+  # only switches the address to securePort; configure the server certificate and
+  # tcp_port_secure in the CHI yourself (clickhouse.altinity.settings / files).
+  tls:
+    enabled: false
+    securePort: 9440
+    caSecret:
+      name: ""
+      key: ca.crt
+    # Client certificate (server verificationMode strict).
+    clientSecret:
+      name: ""
+      certKey: tls.crt
+      keyKey: tls.key
+    # Empty = verify each dialed host (every replica certificate must carry its host_name).
+    serverName: ""
+    # Testing only.
+    insecureSkipVerify: false
+
+  # Used only when dependencies.mode=operators (Altinity clickhouse-operator >= 0.24).
+  altinity:
+    # ClickHouseInstallation name; defaults to the release fullname.
+    # Service: clickhouse-<name>; pods: chi-<name>-<cluster>-<shard>-<replica>-0
+    name: ""
+    # Override the ClickHouse service host used for OPENLOG_CLICKHOUSE_ADDR.
+    host: ""
+    image: clickhouse/clickhouse-server:25.8
+    # Shards = write capacity; replicas = read capacity + durability.
+    # {cluster}, {shard}, {replica} macros are generated by the operator from this layout.
+    shards: 2
+    replicas: 2
+    resources:
+      requests: {cpu: "2", memory: 8Gi}
+      limits: {memory: 8Gi}
+    storage:
+      size: 100Gi
+      storageClass: ""
+      # Retain keeps PVs if the CHI is deleted.
+      reclaimPolicy: Retain
+    # Operator pod distribution rules; ReplicaAntiAffinity keeps replicas of one shard apart.
+    podDistribution:
+      - type: ReplicaAntiAffinity
+    # Extra spec.configuration.settings / profiles (Altinity key syntax).
+    settings: {}
+    profiles: {}
+    keeper:
+      name: ""
+      # Keeper client host override. Operator >= 0.24 creates service keeper-<name>.
+      host: ""
+      port: 2181
+      image: clickhouse/clickhouse-keeper:25.8
+      # Must be odd; 3 tolerates one failure.
+      replicas: 3
+      resources:
+        requests: {cpu: 500m, memory: 1Gi}
+        limits: {memory: 1Gi}
+      storage:
+        size: 10Gi
+        storageClass: ""
+      affinity: {}
+
+# -----------------------------------------------------------------------------
+# openlog-ingest: OTLP gRPC :4317 / HTTP :4318 -> Kafka
+# -----------------------------------------------------------------------------
+ingest:
+  enabled: true
+  # Ignored when autoscaling.enabled.
+  replicaCount: 2
+  logLevel: ""
+  # Service-specific env (config.md). Values are passed as strings.
+  config:
+    OPENLOG_INGEST_HTTP_ADDR: ":4318"
+    OPENLOG_INGEST_GRPC_ADDR: ":4317"
+    OPENLOG_INGEST_MAX_BODY_BYTES: "10485760"
+    OPENLOG_INGEST_PRODUCE_TIMEOUT: "10s"
+  extraEnv: []
+  resources:
+    requests: {cpu: "1", memory: 1Gi}
+    limits: {memory: 2Gi}
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    behavior: {}
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 25%, maxUnavailable: 0}
+  # Produce timeout (10s) + in-flight requests draining.
+  terminationGracePeriodSeconds: 30
+  # Time for endpoints/Envoy to stop routing before SIGTERM. 0 disables.
+  # Must exceed Envoy's detection time (health check 5s x unhealthy_threshold 2, DNS refresh 5s):
+  # with 5s, deleting an ingest pod under load produced ~250 client-visible 503s (Envoy
+  # upstream connect failures to the closed listener).
+  preStopSleepSeconds: 15
+  probes:
+    startup: {periodSeconds: 2, failureThreshold: 60, timeoutSeconds: 2}
+    liveness: {periodSeconds: 10, failureThreshold: 6, timeoutSeconds: 2}
+    readiness: {periodSeconds: 5, failureThreshold: 3, timeoutSeconds: 2}
+  service:
+    type: ClusterIP
+    annotations: {}
+    grpcPort: 4317
+    httpPort: 4318
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  # Optional Ingress for ingest. OTLP/gRPC needs an HTTP/2-aware (L7) controller;
+  # an L4 LoadBalancer pins long-lived gRPC connections to single pods.
+  ingress:
+    enabled: false
+    className: ""
+    grpc:
+      host: ""
+      # e.g. ingress-nginx: nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+      annotations: {}
+      tls: []
+    http:
+      host: ""
+      annotations: {}
+      tls: []
+
+# -----------------------------------------------------------------------------
+# openlog-processor: Kafka consumer group -> ClickHouse
+# -----------------------------------------------------------------------------
+processor:
+  enabled: true
+  # Must be <= kafka.topics.partitions (extra consumers sit idle).
+  replicaCount: 3
+  logLevel: ""
+  config:
+    OPENLOG_PROCESSOR_GROUP: openlog-processor
+    OPENLOG_PROCESSOR_BATCH_ROWS: "50000"
+    OPENLOG_PROCESSOR_FLUSH_INTERVAL: "2s"
+    OPENLOG_PROCESSOR_INSERT_TIMEOUT: "30s"
+  extraEnv: []
+  resources:
+    requests: {cpu: "1", memory: 2Gi}
+    limits: {memory: 4Gi}
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    # MUST be <= kafka.topics.partitions (enforced at render time).
+    maxReplicas: 24
+    targetCPUUtilizationPercentage: 70
+    # Every scale event triggers a consumer-group rebalance; scale down slowly.
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies: [{type: Pods, value: 4, periodSeconds: 60}]
+      scaleDown:
+        stabilizationWindowSeconds: 600
+        policies: [{type: Pods, value: 1, periodSeconds: 120}]
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  # Must cover flush interval + insert timeout (+ retries) + offset commit, so a
+  # stopping processor flushes its batches instead of leaving them to be re-read.
+  # Default: 2s flush + 30s insert timeout x2 attempts + margin.
+  terminationGracePeriodSeconds: 90
+  preStopSleepSeconds: 0
+  probes:
+    startup: {periodSeconds: 2, failureThreshold: 60, timeoutSeconds: 2}
+    liveness: {periodSeconds: 10, failureThreshold: 6, timeoutSeconds: 2}
+    readiness: {periodSeconds: 5, failureThreshold: 3, timeoutSeconds: 2}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+
+# -----------------------------------------------------------------------------
+# openlog-api: query API :8080
+# -----------------------------------------------------------------------------
+api:
+  enabled: true
+  replicaCount: 2
+  logLevel: ""
+  config:
+    OPENLOG_API_HTTP_ADDR: ":8080"
+    OPENLOG_API_QUERY_TIMEOUT: "30s"
+    OPENLOG_API_MAX_ROWS: "10000"
+  extraEnv: []
+  resources:
+    requests: {cpu: 500m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    behavior: {}
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 25%, maxUnavailable: 0}
+  # Query timeout (30s) + margin.
+  terminationGracePeriodSeconds: 45
+  preStopSleepSeconds: 5
+  probes:
+    startup: {periodSeconds: 2, failureThreshold: 60, timeoutSeconds: 2}
+    liveness: {periodSeconds: 10, failureThreshold: 6, timeoutSeconds: 2}
+    readiness: {periodSeconds: 5, failureThreshold: 3, timeoutSeconds: 2}
+  service:
+    type: ClusterIP
+    annotations: {}
+    port: 8080
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  ingress:
+    enabled: false
+    className: ""
+    host: ""
+    annotations: {}
+    tls: []
+
+# -----------------------------------------------------------------------------
+# openlog-migrate: Helm hook Job applying the ClickHouse schema (+ Kafka topics in external mode)
+# -----------------------------------------------------------------------------
+migrate:
+  enabled: true
+  # Empty = "pre-install,pre-upgrade" (external) or "post-install,pre-upgrade" (operators:
+  # ClickHouse does not exist before the release is installed).
+  hookEvents: ""
+  hookDeletePolicy: before-hook-creation,hook-succeeded
+  # Retries with exponential backoff (10s, 20s, 40s ... capped at 6m) while dependencies come up.
+  backoffLimit: 10
+  activeDeadlineSeconds: 1800
+  logLevel: ""
+  config: {}
+  extraEnv: []
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {memory: 256Mi}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -----------------------------------------------------------------------------
+# openlog-admin bootstrap: post-install/post-upgrade hook Job (auth.mode=postgres) that
+# idempotently creates the first organization and owner (and optionally an ingest key).
+# Alternative: kubectl -n <ns> exec deploy/<fullname>-api -- openlog-admin create-owner --email ... --org ...
+# -----------------------------------------------------------------------------
+bootstrap:
+  enabled: false
+  tenantId: default
+  orgName: Default
+  ownerEmail: ""
+  # Required only when the owner does not exist yet (>= 12 characters). Stored in the chart
+  # Secret, or read from auth.existingSecret key `ownerPasswordKey`.
+  ownerPassword: ""
+  ownerPasswordKey: bootstrap-owner-password
+  # Optional plaintext ingest license key to ensure (development). Prefer creating keys in the UI.
+  licenseKey: ""
+  licenseKeyKey: bootstrap-license-key
+  hookDeletePolicy: before-hook-creation,hook-succeeded
+  backoffLimit: 10
+  activeDeadlineSeconds: 1800
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 128Mi}
+  nodeSelector: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Gateway API routes for ingest (alternative to Ingress). Requires Gateway API CRDs
+# (GRPCRoute v1, Gateway API >= 1.1) and a Gateway that terminates HTTP/2.
+# -----------------------------------------------------------------------------
+gateway:
+  enabled: false
+  parentRefs: []
+  #  - name: public-gateway
+  #    namespace: gateway-system
+  grpc:
+    hostnames: []
+  http:
+    hostnames: []
+  api:
+    enabled: false
+    hostnames: []
+
+# -----------------------------------------------------------------------------
+# Envoy L7 load balancer in front of ingest.
+# OTLP/gRPC clients hold long-lived HTTP/2 connections; a kube-proxy (L4) Service
+# balances connections, not requests, so new ingest replicas get no traffic from
+# existing clients. Envoy balances per request/stream across all ingest pods
+# (discovered through a headless Service). Leave disabled if your ingress controller
+# or Gateway already does HTTP/2-aware balancing to ingest.
+# -----------------------------------------------------------------------------
+envoy:
+  enabled: false
+  image: envoyproxy/envoy:v1.35.3
+  replicaCount: 2
+  resources:
+    requests: {cpu: 500m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  # Clients are asked to reconnect after this long, so load re-balances across Envoy
+  # replicas behind an L4 LoadBalancer.
+  maxConnectionDuration: 300s
+  routeTimeout: 30s
+  dnsRefreshRate: 5s
+  logLevel: info
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  terminationGracePeriodSeconds: 30
+  service:
+    # LoadBalancer to expose OTLP outside the cluster.
+    type: ClusterIP
+    annotations: {}
+    grpcPort: 4317
+    httpPort: 4318
+    externalTrafficPolicy: ""
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+# -----------------------------------------------------------------------------
+# openlog-updater (optional): CronJob that keeps the Deployments on the newest signed
+# release of `channel` (docs/operations/upgrading.md). Recommended instead: GitOps
+# (Argo CD / Flux) pinning the chart version. Note that `helm upgrade` resets the
+# images to image.tag, so set image.tag to the running version before upgrading.
+# RBAC: get/patch on this release's ingest/processor/api Deployments, create/get Jobs,
+# get/list pods and pods/log in the release namespace.
+# -----------------------------------------------------------------------------
+updater:
+  enabled: false
+  # off | notify (only report in the UI / GET /api/v1/version) | auto
+  mode: notify
+  schedule: "17 3 * * *"
+  timeZone: "Etc/UTC"
+  channel: stable
+  indexURL: https://github.com/onuragtas/openlog/releases/latest/download/index.json
+  # Extra trusted release public keys (base64), e.g. for self-built releases. Release images
+  # already contain the official keys.
+  trustedKeys: []
+  # UTC windows, e.g. "sat,sun 02:00-05:00" (empty = whenever the CronJob runs).
+  maintenanceWindow: ""
+  # Pull from a mirror: the repository replaces the manifest's, the digest is kept.
+  imageRepository: ""
+  healthTimeout: 5m
+  rolloutTimeout: 15m
+  migrateTimeout: 30m
+  activeDeadlineSeconds: 5400
+  logLevel: ""
+  config: {}
+  extraEnv: []
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 128Mi}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []

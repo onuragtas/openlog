@@ -1,0 +1,13 @@
+name: server packages installed but not running yield package/unit instances
+units:
+  - { name: postgresql.service, state: disabled }
+  - { name: redis-server.service, state: masked }
+packages:
+  - { name: redis-server, version: "5:7.0.15-1build2" }
+  - { name: postgresql-16, version: 16.2-1 }
+  - { name: redis-tools, version: "5:7.0.15-1build2" }
+  - { name: mysql-client-8.0, version: 8.0.36-0ubuntu0 }
+expect:
+  - { rule_id: redis, instance: "dpkg:redis-server", matched_by: [package], version: 7.0.15 }
+  - { rule_id: postgresql, instance: postgresql.service, matched_by: [systemd_unit, package], version: "16.2" }
+forbid: [mysql, mariadb]

@@ -1,0 +1,19 @@
+id: apache-httpd
+name: Apache HTTP Server
+category: web
+match:
+  - process: { exe_basename: ["apache2", "httpd"] }
+  - systemd_unit: { name_regex: "^(apache2|httpd)(@.*)?\\.service$" }
+  - container: { image_regex: "(^|/)httpd(:|@|$)" }
+  - package: { name: ["apache2", "apache2-bin", "httpd"] }
+version:
+  - package: ["apache2", "apache2-bin", "httpd"]
+endpoints:
+  - from: listening_port
+integration:
+  id: apache
+  auto_enable: true         # mod_status on localhost
+apm_hint: null
+logs:
+  - path: "/var/log/apache2/*.log"   # Debian/Ubuntu
+  - path: "/var/log/httpd/*_log"     # RHEL family

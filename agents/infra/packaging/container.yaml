@@ -1,0 +1,7 @@
+# Configuration used by the Docker image. license_key and endpoint come from
+# OPENLOG_LICENSE_KEY and OPENLOG_ENDPOINT. Mount the host root at /host (read-only)
+# and run with --pid=host --network=host.
+host:
+  root_path: /host
+discovery:
+  rules_dir: /etc/openlog-infra-agent/discovery.d

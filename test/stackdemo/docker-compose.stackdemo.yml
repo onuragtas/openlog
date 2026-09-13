@@ -1,0 +1,66 @@
+# Local stack demo (docs/operations/local-stack-demo.md, test/stackdemo/run.sh): additions to
+# deploy/compose/docker-compose.yml. Relative paths resolve against deploy/compose.
+#
+#   releases       static HTTP server for the signed release mirror (./releases): install.sh, the
+#                  release check and openlog-updater read http://releases/index.json
+#   registry       registry:2 for the backend images the signed manifests point to (by digest)
+#   host-services  Debian 12 with nginx, redis and postgresql (agent installed with install.sh)
+#   host-plain     Debian 12 without services
+services:
+  releases:
+    image: nginx:1.29-alpine
+    volumes:
+      - ${OPENLOG_RELEASE_HOST_DIR:-./releases}:/usr/share/nginx/html:ro
+    ports:
+      - "127.0.0.1:${STACKDEMO_RELEASES_PORT:-18090}:80"
+    restart: unless-stopped
+
+  registry:
+    image: registry:2
+    ports:
+      - "127.0.0.1:${STACKDEMO_REGISTRY_PORT:-5001}:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    restart: unless-stopped
+
+  host-services:
+    build:
+      context: ../../test/stackdemo/host
+      args:
+        SERVICES: "1"
+    image: openlog-stackdemo/host-services:1
+    hostname: demo-web-1
+    environment:
+      # The tarball layout inside a container: treat it like a real host (update-capable).
+      OPENLOG_AGENT_CONTAINER: "0"
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    volumes:
+      - host-services-opt:/opt/openlog
+      - host-services-etc:/etc/openlog-infra-agent
+      - host-services-state:/var/lib/openlog-infra-agent
+    restart: unless-stopped
+
+  host-plain:
+    build:
+      context: ../../test/stackdemo/host
+      args:
+        SERVICES: "0"
+    image: openlog-stackdemo/host-plain:1
+    hostname: demo-plain-1
+    environment:
+      OPENLOG_AGENT_CONTAINER: "0"
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    volumes:
+      - host-plain-opt:/opt/openlog
+      - host-plain-etc:/etc/openlog-infra-agent
+      - host-plain-state:/var/lib/openlog-infra-agent
+    restart: unless-stopped
+
+volumes:
+  registry-data:
+  host-services-opt:
+  host-services-etc:
+  host-services-state:
+  host-plain-opt:
+  host-plain-etc:
+  host-plain-state:

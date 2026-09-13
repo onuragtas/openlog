@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<!--
+  ClickHouse node of the TLS integration test (test/e2e/tlstest): cluster `openlog` with 2 shards
+  (ch1, ch2), native protocol only on the secure port 9440 (plain tcp_port removed), client
+  certificates required (verificationMode strict). The servers use the same certificate as clients
+  for Distributed queries between the shards. HTTP 8123 stays plaintext for health checks.
+-->
+<clickhouse>
+    <logger>
+        <level>warning</level>
+        <console>1</console>
+    </logger>
+
+    <tcp_port remove="1"/>
+    <tcp_port_secure>9440</tcp_port_secure>
+
+    <macros>
+        <cluster>openlog</cluster>
+        <shard from_env="CH_SHARD"/>
+        <replica from_env="CH_REPLICA"/>
+    </macros>
+
+    <remote_servers replace="true">
+        <openlog>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch1</host>
+                    <port>9440</port>
+                    <secure>1</secure>
+                    <user from_env="CLICKHOUSE_USER"/>
+                    <password from_env="CLICKHOUSE_PASSWORD"/>
+                </replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch2</host>
+                    <port>9440</port>
+                    <secure>1</secure>
+                    <user from_env="CLICKHOUSE_USER"/>
+                    <password from_env="CLICKHOUSE_PASSWORD"/>
+                </replica>
+            </shard>
+        </openlog>
+    </remote_servers>
+
+    <zookeeper>
+        <node>
+            <host>ch1</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+
+    <openSSL>
+        <server>
+            <certificateFile>/certs/server.crt</certificateFile>
+            <privateKeyFile>/certs/server.key</privateKeyFile>
+            <caConfig>/certs/ca.crt</caConfig>
+            <verificationMode>strict</verificationMode>
+            <loadDefaultCAFile>false</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3,tlsv1,tlsv1_1</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+        </server>
+        <client>
+            <certificateFile>/certs/server.crt</certificateFile>
+            <privateKeyFile>/certs/server.key</privateKeyFile>
+            <caConfig>/certs/ca.crt</caConfig>
+            <verificationMode>strict</verificationMode>
+            <loadDefaultCAFile>false</loadDefaultCAFile>
+            <invalidCertificateHandler>
+                <name>RejectCertificateHandler</name>
+            </invalidCertificateHandler>
+        </client>
+    </openSSL>
+</clickhouse>

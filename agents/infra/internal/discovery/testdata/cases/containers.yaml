@@ -1,0 +1,30 @@
+name: container runtimes and orchestration
+processes:
+  - { pid: 4000, exe: /usr/bin/dockerd, cmdline: "/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock", unit: docker.service }
+  - { pid: 4100, exe: /usr/bin/containerd, cmdline: "/usr/bin/containerd", unit: containerd.service }
+  - { pid: 4200, exe: /usr/bin/kubelet, cmdline: "/usr/bin/kubelet --config=/var/lib/kubelet/config.yaml --token=abc", unit: kubelet.service }
+  - { pid: 4300, exe: /usr/local/bin/redis-server, cmdline: "redis-server *:6379", container: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef }
+  # A second redis container with the same executable path is a separate instance.
+  - { pid: 4400, exe: /usr/local/bin/redis-server, cmdline: "redis-server *:6379", container: 2222222222222222222222222222222222222222222222222222222222222222 }
+units:
+  - { name: docker.service }
+  - { name: docker.socket }
+  - { name: containerd.service }
+  - { name: kubelet.service }
+packages:
+  - { name: docker-ce, version: "5:25.0.3-1~ubuntu.22.04~jammy" }
+  - { name: containerd.io, version: 1.6.28-2 }
+  - { name: kubelet, version: 1.29.2-1.1 }
+containers:
+  - { id: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210, name: web, image: "docker.io/library/nginx:1.25", runtime: docker, state: running }
+  # Container inventory (Docker Engine API) of the redis process's container: both matchers join one instance.
+  - { id: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, name: cache, image: "redis:7.2-alpine", runtime: docker, state: running }
+  - { id: 1111111111111111111111111111111111111111111111111111111111111111, name: pg, image: "postgres:16", runtime: docker, state: exited }
+expect:
+  - { rule_id: docker, instance: /usr/bin/dockerd, version: 25.0.3, status: enabled }
+  - { rule_id: containerd, instance: /usr/bin/containerd, version: 1.6.28 }
+  - { rule_id: kubelet, instance: /usr/bin/kubelet, version: 1.29.2, status: needs_configuration }
+  - { rule_id: redis, instance: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, matched_by: [process, container], pids: [4300] }
+  - { rule_id: redis, instance: 2222222222222222222222222222222222222222222222222222222222222222, matched_by: [process], pids: [4400] }
+  - { rule_id: postgresql, instance: 1111111111111111111111111111111111111111111111111111111111111111, matched_by: [container] }
+  - { rule_id: nginx, instance: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210, matched_by: [container] }

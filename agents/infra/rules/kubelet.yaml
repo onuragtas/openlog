@@ -1,0 +1,14 @@
+id: kubelet
+name: Kubernetes kubelet
+category: orchestration
+match:
+  - process: { exe_basename: ["kubelet"] }
+  - systemd_unit: { name_regex: "^kubelet\\.service$" }
+  - package: { name: ["kubelet"] }
+version:
+  - package: ["kubelet"]
+endpoints:
+  - from: listening_port
+integration:
+  id: kubernetes
+  requires: ["credentials"]

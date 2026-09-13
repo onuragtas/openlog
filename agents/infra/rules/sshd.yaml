@@ -1,0 +1,12 @@
+id: sshd
+name: OpenSSH server
+category: system
+match:
+  - process: { exe_basename: ["sshd"] }
+  - systemd_unit: { name_regex: "^sshd?\\.(service|socket)$" }
+  - listening_port: { port: 22, protocol: tcp, process_exe_basename: ["sshd"] }
+  - package: { name: ["openssh-server"] }
+version:
+  - package: ["openssh-server"]
+endpoints:
+  - from: listening_port

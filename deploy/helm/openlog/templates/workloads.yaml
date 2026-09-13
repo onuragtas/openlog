@@ -1,0 +1,103 @@
+{{- range $component := list "ingest" "processor" "api" }}
+{{- $v := index $.Values $component }}
+{{- if $v.enabled }}
+{{- $ctx := dict "root" $ "component" $component "values" $v }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  {{- if not $v.autoscaling.enabled }}
+  replicas: {{ $v.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  {{- with $v.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "openlog.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openlog.selectorLabels" $ctx | nindent 8 }}
+        app.kubernetes.io/part-of: openlog
+        {{- with $v.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if not $.Values.auth.existingSecret }}
+        checksum/credentials: {{ printf "%s|%s|%s" $.Values.auth.licenseKeys $.Values.clickhouse.password $.Values.postgres.external.dsn | sha256sum }}
+        {{- end }}
+        {{- if $.Values.metrics.podAnnotations }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /metrics
+        {{- end }}
+        {{- with $v.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "openlog.serviceAccountName" $ }}
+      automountServiceAccountToken: false
+      {{- include "openlog.podSecurity" $ | nindent 6 }}
+      {{- include "openlog.scheduling" $ctx | nindent 6 }}
+      terminationGracePeriodSeconds: {{ $v.terminationGracePeriodSeconds }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "openlog.image" $ }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["/usr/local/bin/openlog-{{ $component }}"]
+          ports:
+            {{- if eq $component "ingest" }}
+            - name: grpc-otlp
+              containerPort: 4317
+              protocol: TCP
+            - name: http-otlp
+              containerPort: 4318
+              protocol: TCP
+            {{- end }}
+            {{- if eq $component "api" }}
+            - name: http-api
+              containerPort: 8080
+              protocol: TCP
+            {{- end }}
+            - name: admin
+              containerPort: 9464
+              protocol: TCP
+          env:
+            {{- include "openlog.env" $ctx | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /healthz, port: admin}
+            {{- toYaml $v.probes.startup | nindent 12 }}
+          livenessProbe:
+            httpGet: {path: /healthz, port: admin}
+            {{- toYaml $v.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /readyz, port: admin}
+            {{- toYaml $v.probes.readiness | nindent 12 }}
+          {{- if gt (int $v.preStopSleepSeconds) 0 }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ int $v.preStopSleepSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "openlog.tls.volumeMounts" $ | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        {{- include "openlog.tls.volumes" $ | nindent 8 }}
+{{- end }}
+{{- end }}

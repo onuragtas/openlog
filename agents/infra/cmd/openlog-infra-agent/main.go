@@ -1,0 +1,274 @@
+// Command openlog-infra-agent is the openlog Linux host agent.
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/agent"
+	"github.com/onuragtas/openlog/agents/infra/internal/config"
+	"github.com/onuragtas/openlog/agents/infra/internal/release"
+	"github.com/onuragtas/openlog/agents/infra/internal/update"
+	"github.com/onuragtas/openlog/agents/infra/internal/version"
+)
+
+// selfTestBudget keeps -self-test well inside the 30 s limit of the updater.
+const selfTestBudget = 25 * time.Second
+
+// beforeRun is nil in normal builds. The update end-to-end scenario's broken release
+// (-tags openlog_e2e_broken) sets it to fail after the startup check.
+var beforeRun func()
+
+func main() {
+	os.Exit(run())
+}
+
+func run() int {
+	configPath := flag.String("config", config.DefaultPath, "path to the configuration file")
+	showVersion := flag.Bool("version", false, "print version, commit, build date and install method, then exit")
+	once := flag.Bool("once", false, "collect one round of metrics, inventory and discovery, print the OTLP payload as JSON and exit (nothing is sent)")
+	validateRules := flag.Bool("validate-rules", false, "validate the embedded and configured discovery rules and exit")
+	selfTest := flag.Bool("self-test", false, "parse the configuration, run every collector once without sending and check the state directory is writable; exit 0 on success")
+	flag.Parse()
+
+	explicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "config" {
+			explicit = true
+		}
+	})
+	ver := version.Current()
+
+	// Without an explicit -config a missing default file is fine: the agent can
+	// be configured through OPENLOG_* environment variables alone.
+	cfg, loadErr := config.Load(*configPath, !explicit)
+
+	if *showVersion {
+		if cfg == nil {
+			cfg = config.Default()
+		}
+		printVersion(os.Stdout, cfg)
+		return 0
+	}
+	if *selfTest {
+		if loadErr != nil {
+			fmt.Fprintln(os.Stderr, "self-test:", loadErr)
+			return 1
+		}
+		return runSelfTest(cfg, ver)
+	}
+	if *validateRules || *once {
+		if loadErr != nil {
+			fmt.Fprintln(os.Stderr, loadErr)
+			return 2
+		}
+		if *validateRules {
+			return runValidateRules(cfg)
+		}
+	}
+
+	logCfg := cfg
+	if logCfg == nil {
+		logCfg = config.Default()
+	}
+	var level slog.Level
+	_ = level.UnmarshalText([]byte(logCfg.LogLevel))
+	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
+
+	var mgr *update.Manager
+	if !*once {
+		// Update startup check first: a candidate that cannot even load its configuration must
+		// still count its start attempts and roll back.
+		cfgPath := ""
+		if explicit {
+			cfgPath = *configPath
+		} else if _, err := os.Stat(*configPath); err == nil {
+			cfgPath = *configPath
+		}
+		mgr = newUpdateManager(logCfg, cfgPath, ver, log)
+		if mgr.Startup() {
+			log.Warn("exiting after rollback; the service manager restarts the previous version")
+			return 0
+		}
+		if beforeRun != nil {
+			beforeRun()
+		}
+	}
+	if loadErr != nil {
+		fmt.Fprintln(os.Stderr, loadErr)
+		return 2
+	}
+
+	if err := cfg.Validate(!*once); err != nil {
+		fmt.Fprintln(os.Stderr, "invalid configuration:\n"+err.Error())
+		return 2
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	a, err := agent.New(cfg, ver, log, !*once)
+	if err != nil {
+		log.Error("startup failed", "error", err)
+		return 1
+	}
+	if *once {
+		if err := a.Once(ctx, os.Stdout); err != nil {
+			log.Error("collection failed", "error", err)
+			return 1
+		}
+		return 0
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	mgr.SetStats(a.Stats())
+	mgr.SetRestart(cancel)
+	a.OnExportSuccess(mgr.Confirm)
+	syncer := &update.Syncer{
+		Endpoint: cfg.Endpoint, LicenseKey: cfg.LicenseKey, UserAgent: update.AgentName + "/" + ver,
+		Client: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "sync"),
+		Handle: mgr.Handle, Kick: mgr.Kick(), InitialDelay: -1,
+		Request: func() update.SyncRequest {
+			return update.SyncRequest{
+				HostID: a.HostID(), HostName: a.HostName(), Agent: mgr.AgentInfo(),
+				Update: mgr.Report(), ConfigHash: configHash(*configPath),
+			}
+		},
+	}
+	mgr.SetReporter(func(ctx context.Context) {
+		if _, err := syncer.Once(ctx); err != nil {
+			log.Debug("pre-restart sync failed", "error", err)
+		}
+	})
+	var wg sync.WaitGroup
+	wg.Go(func() { syncer.Run(ctx) })
+	wg.Go(func() { mgr.Run(ctx) })
+
+	if err := a.Run(ctx); err != nil {
+		log.Error("agent failed", "error", err)
+		return 1
+	}
+	cancel()
+	wg.Wait()
+	if mgr.Restarting() {
+		log.Info("agent exited to restart into another version", "state", mgr.State().Status)
+	}
+	return 0
+}
+
+func newUpdateManager(cfg *config.Config, cfgPath, ver string, log *slog.Logger) *update.Manager {
+	keys, err := release.TrustedKeys(cfg.Release.TrustedKeysFile)
+	if err != nil {
+		log.Warn("release keys unusable; updates cannot be applied", "error", err)
+		keys = nil
+	}
+	exe, _ := os.Executable()
+	install := update.Detect(update.Env{
+		Executable: exe, InstallRoot: cfg.Update.InstallRoot,
+		UpdatesEnabled: cfg.Update.Enabled, HaveTrustedKeys: len(keys) > 0,
+	})
+	log.Info("install detected", "version", ver, "install_method", install.Method, "update_capable", install.Capable,
+		"reason", install.Reason, "version_dir", install.VersionDir)
+	return update.NewManager(update.Options{
+		StateDir: cfg.StateDir, ConfigPath: cfgPath, Version: ver, Commit: version.Commit,
+		Install: install, Trusted: keys, Endpoint: cfg.Endpoint, LicenseKey: cfg.LicenseKey, Log: log,
+	})
+}
+
+func printVersion(w io.Writer, cfg *config.Config) {
+	keys, keyErr := release.TrustedKeys(cfg.Release.TrustedKeysFile)
+	exe, _ := os.Executable()
+	install := update.Detect(update.Env{
+		Executable: exe, InstallRoot: cfg.Update.InstallRoot,
+		UpdatesEnabled: cfg.Update.Enabled, HaveTrustedKeys: keyErr == nil && len(keys) > 0,
+	})
+	orUnknown := func(s string) string {
+		if s == "" {
+			return "unknown"
+		}
+		return s
+	}
+	fmt.Fprintln(w, "openlog-infra-agent", version.Current())
+	fmt.Fprintln(w, "commit:", orUnknown(version.Commit))
+	fmt.Fprintln(w, "date:", orUnknown(version.Date))
+	method := install.Method
+	if install.PackageVersion != "" {
+		method += " (package version " + install.PackageVersion + ")"
+	}
+	fmt.Fprintln(w, "install method:", method)
+	if install.Capable {
+		fmt.Fprintln(w, "update capable: yes")
+	} else {
+		fmt.Fprintln(w, "update capable: no ("+install.Reason+")")
+	}
+	fmt.Fprintf(w, "trusted release keys: %d compiled in, %d total\n", release.CompiledKeyCount(), len(keys))
+}
+
+func runValidateRules(cfg *config.Config) int {
+	rs, err := agent.LoadRules(cfg.Discovery.RulesDir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "invalid discovery rules:\n"+err.Error())
+		return 1
+	}
+	fmt.Printf("%d discovery rules OK (embedded + %s)\n", len(rs), cfg.Discovery.RulesDir)
+	return 0
+}
+
+// runSelfTest is "-self-test": run by the updater on a freshly extracted binary before switching.
+func runSelfTest(cfg *config.Config, ver string) int {
+	fail := func(format string, a ...any) int {
+		fmt.Fprintf(os.Stderr, "self-test failed: "+format+"\n", a...)
+		return 1
+	}
+	if err := cfg.Validate(true); err != nil {
+		return fail("invalid configuration: %v", err)
+	}
+	if err := os.MkdirAll(cfg.StateDir, 0o750); err != nil {
+		return fail("state dir: %v", err)
+	}
+	f, err := os.CreateTemp(cfg.StateDir, ".self-test-*")
+	if err != nil {
+		return fail("state dir %s not writable: %v", cfg.StateDir, err)
+	}
+	name := f.Name()
+	f.Close()
+	if err := os.Remove(name); err != nil {
+		return fail("state dir %s: %v", cfg.StateDir, err)
+	}
+	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	a, err := agent.New(cfg, ver, log, false)
+	if err != nil {
+		return fail("%v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), selfTestBudget)
+	defer cancel()
+	if err := a.SelfTest(ctx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fail("collectors did not finish within %s", selfTestBudget)
+		}
+		return fail("%v", err)
+	}
+	fmt.Println("self-test OK", ver)
+	return 0
+}
+
+// configHash is "sha256:<hex>" of the configuration file bytes (empty input when there is no file).
+func configHash(path string) string {
+	b, _ := os.ReadFile(filepath.Clean(path))
+	sum := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}

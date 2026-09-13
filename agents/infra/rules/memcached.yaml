@@ -1,0 +1,16 @@
+id: memcached
+name: Memcached
+category: cache
+match:
+  - process: { exe_basename: ["memcached"] }
+  - systemd_unit: { name_regex: "^memcached(@.*)?\\.service$" }
+  - listening_port: { port: 11211, process_exe_basename: ["memcached"] }
+  - container: { image_regex: "(^|/)memcached(:|@|$)" }
+  - package: { name: ["memcached"] }
+version:
+  - package: ["memcached"]
+endpoints:
+  - from: listening_port
+integration:
+  id: memcached
+  auto_enable: true

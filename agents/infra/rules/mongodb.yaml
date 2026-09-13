@@ -1,0 +1,16 @@
+id: mongodb
+name: MongoDB
+category: database
+match:
+  - process: { exe_basename: ["mongod", "mongos"] }
+  - systemd_unit: { name_regex: "^mongodb?\\.service$" }
+  - listening_port: { port: 27017, process_exe_basename: ["mongod", "mongos"] }
+  - container: { image_regex: "(^|/)mongo(db/mongodb-[a-z-]+)?(:|@|$)" }
+  - package: { name_regex: "^mongodb-(org-server|server|server-core)$" }
+version:
+  - package_regex: "^mongodb-(org-server|server-core|server)$"
+endpoints:
+  - from: listening_port
+integration:
+  id: mongodb
+  requires: ["credentials"]

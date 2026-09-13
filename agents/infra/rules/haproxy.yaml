@@ -1,0 +1,15 @@
+id: haproxy
+name: HAProxy
+category: proxy
+match:
+  - process: { exe_basename: ["haproxy"] }
+  - systemd_unit: { name_regex: "^haproxy(@.*)?\\.service$" }
+  - container: { image_regex: "(^|/)haproxy(tech/haproxy-[a-z]+)?(:|@|$)" }
+  - package: { name: ["haproxy"] }
+version:
+  - package: ["haproxy"]
+endpoints:
+  - from: listening_port
+integration:
+  id: haproxy
+  requires: ["stats_endpoint"]

@@ -1,0 +1,109 @@
+{{- if .Values.ingest.enabled }}
+{{- $ctx := dict "root" . "component" "ingest" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+    openlog.io/metrics: "true"
+  {{- with .Values.ingest.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.ingest.service.type }}
+  selector:
+    {{- include "openlog.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    # OTLP/gRPC. appProtocol lets Gateway/mesh implementations use HTTP/2 (h2c) upstream.
+    - name: grpc-otlp
+      port: {{ .Values.ingest.service.grpcPort }}
+      targetPort: grpc-otlp
+      protocol: TCP
+      appProtocol: grpc
+    - name: http-otlp
+      port: {{ .Values.ingest.service.httpPort }}
+      targetPort: http-otlp
+      protocol: TCP
+      appProtocol: http
+    - name: admin
+      port: 9464
+      targetPort: admin
+      protocol: TCP
+      appProtocol: http
+---
+# Headless Service: one DNS A record per ready ingest pod, used by Envoy (STRICT_DNS)
+# or any other client-side / L7 load balancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}-headless
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    {{- include "openlog.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: grpc-otlp
+      port: 4317
+      targetPort: grpc-otlp
+      appProtocol: grpc
+    - name: http-otlp
+      port: 4318
+      targetPort: http-otlp
+      appProtocol: http
+{{- end }}
+{{- if .Values.processor.enabled }}
+{{- $ctx := dict "root" . "component" "processor" }}
+---
+# Metrics-only Service (for ServiceMonitor); the processor receives no traffic.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+    openlog.io/metrics: "true"
+spec:
+  clusterIP: None
+  selector:
+    {{- include "openlog.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: admin
+      port: 9464
+      targetPort: admin
+      appProtocol: http
+{{- end }}
+{{- if .Values.api.enabled }}
+{{- $ctx := dict "root" . "component" "api" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+    openlog.io/metrics: "true"
+  {{- with .Values.api.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.api.service.type }}
+  selector:
+    {{- include "openlog.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http-api
+      port: {{ .Values.api.service.port }}
+      targetPort: http-api
+      protocol: TCP
+      appProtocol: http
+    - name: admin
+      port: 9464
+      targetPort: admin
+      protocol: TCP
+      appProtocol: http
+{{- end }}

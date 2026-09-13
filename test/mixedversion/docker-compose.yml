@@ -1,0 +1,146 @@
+# Mixed-version test (test/mixedversion, `make mixed-version`): release N (0.9.0) and N+1 (0.9.1,
+# with test-only migrations) against the same Kafka, ClickHouse and PostgreSQL.
+# Host ports are in the 28xxx range so the test never collides with a dev or e2e stack.
+name: openlog-mixedtest
+
+x-openlog-env: &openlog-env
+  OPENLOG_LOG_LEVEL: info
+  OPENLOG_KAFKA_BROKERS: kafka:19092
+  OPENLOG_CLICKHOUSE_ADDR: clickhouse:9000
+  OPENLOG_CLICKHOUSE_USER: openlog
+  OPENLOG_CLICKHOUSE_PASSWORD: openlog
+  OPENLOG_CLICKHOUSE_CLUSTER: openlog
+  OPENLOG_AUTH_MODE: postgres
+  OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
+  OPENLOG_POSTGRES_PASSWORD: openlog
+  OPENLOG_COOKIE_SECURE: "false"
+  OPENLOG_AUTH_CACHE_TTL: 10s
+  OPENLOG_KAFKA_PARTITIONS: "3"
+  OPENLOG_KAFKA_REPLICATION_FACTOR: "1"
+  OPENLOG_UPDATE_CHECK: disabled
+  OPENLOG_PROCESSOR_FLUSH_INTERVAL: 1s
+
+x-healthcheck: &healthcheck
+  test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9464/readyz >/dev/null || exit 1"]
+  interval: 3s
+  timeout: 3s
+  retries: 60
+  start_period: 10s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openlog
+      POSTGRES_PASSWORD: openlog
+      POSTGRES_DB: openlog
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  kafka:
+    image: apache/kafka:4.1.0
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_MESSAGE_MAX_BYTES: 12582912
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    environment:
+      CLICKHOUSE_USER: openlog
+      CLICKHOUSE_PASSWORD: openlog
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+    volumes:
+      - ../../deploy/compose/clickhouse/openlog-cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+    ulimits:
+      nofile: {soft: 262144, hard: 262144}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping >/dev/null || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+
+  bootstrap:
+    image: ${MIXED_IMAGE_N}
+    entrypoint: ["/usr/local/bin/openlog-admin", "bootstrap"]
+    environment:
+      <<: *openlog-env
+      OPENLOG_BOOTSTRAP_TENANT_ID: mixed
+      OPENLOG_BOOTSTRAP_ORG_NAME: mixed
+      OPENLOG_BOOTSTRAP_OWNER_EMAIL: owner@mixed.test
+      OPENLOG_BOOTSTRAP_OWNER_PASSWORD: mixed-owner-password
+      OPENLOG_BOOTSTRAP_LICENSE_KEY: mixed-license-key
+      OPENLOG_BOOTSTRAP_API_KEY: ola_mixed-api-key
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  # Release N: allinone (ingest + processor + api), migrates on start.
+  openlog-n:
+    image: ${MIXED_IMAGE_N}
+    environment:
+      <<: *openlog-env
+      OPENLOG_MIGRATE_ON_START: "true"
+    ports: ["127.0.0.1:28080:8080", "127.0.0.1:28318:4318"]
+    healthcheck: *healthcheck
+    stop_grace_period: 40s
+    depends_on:
+      kafka: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+      bootstrap: {condition: service_completed_successfully}
+
+  # Release N+1 migrate (run with `docker compose run --rm migrate-n1 [-plan]`).
+  migrate-n1:
+    profiles: ["n1"]
+    image: ${MIXED_IMAGE_N1}
+    entrypoint: ["/usr/local/bin/openlog-migrate"]
+    environment:
+      <<: *openlog-env
+      OPENLOG_ADMIN_ADDR: ":9465"
+
+  # Release N+1 services, running next to N.
+  openlog-n1:
+    profiles: ["n1"]
+    image: ${MIXED_IMAGE_N1}
+    environment:
+      <<: *openlog-env
+      OPENLOG_MIGRATE_ON_START: "false"
+    ports: ["127.0.0.1:28081:8080", "127.0.0.1:28319:4318"]
+    healthcheck: *healthcheck
+    stop_grace_period: 40s
+
+  api-n1:
+    profiles: ["n1"]
+    image: ${MIXED_IMAGE_N1}
+    entrypoint: ["/usr/local/bin/openlog-api"]
+    environment: *openlog-env
+    ports: ["127.0.0.1:28082:8080"]
+    healthcheck: *healthcheck
+
+  ingest-n1:
+    profiles: ["n1"]
+    image: ${MIXED_IMAGE_N1}
+    entrypoint: ["/usr/local/bin/openlog-ingest"]
+    environment: *openlog-env
+    ports: ["127.0.0.1:28320:4318"]
+    healthcheck: *healthcheck

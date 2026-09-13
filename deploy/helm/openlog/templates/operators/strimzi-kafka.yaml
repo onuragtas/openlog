@@ -1,0 +1,147 @@
+{{- if include "openlog.operators" . }}
+{{- $s := .Values.kafka.strimzi }}
+{{- $name := include "openlog.kafka.name" . }}
+# Strimzi Kafka in KRaft mode with node pools. Requires the Strimzi cluster operator
+# (>= 0.46) watching this namespace.
+apiVersion: {{ $s.apiVersion }}
+kind: Kafka
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "openlog.labels" . | nindent 4 }}
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
+spec:
+  kafka:
+    {{- with $s.version }}
+    version: {{ . | quote }}
+    {{- end }}
+    {{- with $s.metadataVersion }}
+    metadataVersion: {{ . | quote }}
+    {{- end }}
+    listeners:
+      # kafka.strimzi.listener: tls=true serves TLS signed by the cluster CA (Secret
+      # <name>-cluster-ca-cert, mounted into openlog pods); authentication scram-sha-512 or tls
+      # requires the KafkaUser rendered below.
+      - name: {{ ternary "tls" "plain" (not (not $s.listener.tls)) }}
+        port: {{ $s.listenerPort }}
+        type: internal
+        tls: {{ not (not $s.listener.tls) }}
+        {{- with $s.listener.authentication }}
+        authentication:
+          type: {{ . }}
+        {{- end }}
+    config:
+      {{- toYaml $s.config | nindent 6 }}
+  entityOperator:
+    topicOperator:
+      {{- with $s.entityOperator.topicOperator.resources }}
+      resources:
+        {{- toYaml . | nindent 8 }}
+      {{- else }} {}
+      {{- end }}
+    {{- if $s.listener.authentication }}
+    userOperator: {}
+    {{- end }}
+  {{- if $s.kafkaExporter.enabled }}
+  kafkaExporter:
+    groupRegex: ".*"
+    topicRegex: {{ printf "%s\\..*" (.Values.kafka.topicPrefix | replace "." "\\.") | quote }}
+  {{- end }}
+  {{- if $s.cruiseControl.enabled }}
+  cruiseControl: {}
+  {{- end }}
+{{- range $pool := $s.nodePools }}
+---
+apiVersion: {{ $s.apiVersion }}
+kind: KafkaNodePool
+metadata:
+  name: {{ $pool.name }}
+  labels:
+    {{- include "openlog.labels" $ | nindent 4 }}
+    strimzi.io/cluster: {{ $name }}
+spec:
+  replicas: {{ $pool.replicas }}
+  roles:
+    {{- toYaml $pool.roles | nindent 4 }}
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: {{ $pool.storage.size }}
+        {{- with $pool.storage.storageClass }}
+        class: {{ . }}
+        {{- end }}
+        deleteClaim: {{ $pool.storage.deleteClaim }}
+        {{- if has "controller" $pool.roles }}
+        kraftMetadata: shared
+        {{- end }}
+  {{- with $pool.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $pool.jvmOptions }}
+  jvmOptions:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if or $pool.affinity $pool.tolerations $pool.topologySpreadConstraints }}
+  template:
+    pod:
+      {{- with $pool.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $pool.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $pool.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- end }}
+{{- end }}
+{{- with $s.listener.authentication }}
+---
+# Credentials of the openlog services. The User Operator writes the Secret of the same name:
+# scram-sha-512 -> key "password"; tls -> keys "user.crt" / "user.key".
+apiVersion: {{ $s.apiVersion }}
+kind: KafkaUser
+metadata:
+  name: {{ include "openlog.kafka.user" $ }}
+  labels:
+    {{- include "openlog.labels" $ | nindent 4 }}
+    strimzi.io/cluster: {{ $name }}
+spec:
+  authentication:
+    type: {{ . }}
+{{- end }}
+{{- if .Values.kafka.topics.create }}
+{{- $t := .Values.kafka.topics }}
+{{- range $signal := list "metrics" "logs" "traces" }}
+{{- $topic := printf "%s.otlp.%s.v1" $.Values.kafka.topicPrefix $signal }}
+---
+# docs/contracts/kafka.md
+apiVersion: {{ $s.apiVersion }}
+kind: KafkaTopic
+metadata:
+  name: {{ $topic | replace "." "-" | replace "_" "-" | lower | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "openlog.labels" $ | nindent 4 }}
+    strimzi.io/cluster: {{ $name }}
+spec:
+  topicName: {{ $topic }}
+  partitions: {{ int64 $t.partitions }}
+  replicas: {{ int64 $t.replicationFactor }}
+  config:
+    min.insync.replicas: {{ int64 $t.minInsyncReplicas }}
+    retention.ms: {{ int64 $t.retentionMs }}
+    max.message.bytes: {{ int64 $t.maxMessageBytes }}
+    {{- with $t.extraConfig }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

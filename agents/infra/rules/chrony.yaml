@@ -1,0 +1,9 @@
+id: chrony
+name: chrony
+category: system
+match:
+  - process: { exe_basename: ["chronyd"] }
+  - systemd_unit: { name_regex: "^chronyd?\\.service$" }
+  - package: { name: ["chrony"] }
+version:
+  - package: ["chrony"]

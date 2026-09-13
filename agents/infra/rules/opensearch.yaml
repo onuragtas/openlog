@@ -1,0 +1,16 @@
+id: opensearch
+name: OpenSearch
+category: search
+match:
+  - process: { exe_basename: ["java"], cmdline_regex: "org\\.opensearch\\.bootstrap\\.OpenSearch" }
+  - systemd_unit: { name_regex: "^opensearch\\.service$" }
+  - container: { image_regex: "(^|/)opensearch(:|@|$)" }
+  - package: { name: ["opensearch"] }
+version:
+  - package: ["opensearch"]
+  - cmdline_regex: "opensearch-([0-9]+\\.[0-9]+\\.[0-9]+)"
+endpoints:
+  - from: listening_port
+integration:
+  id: opensearch
+  requires: ["credentials"]

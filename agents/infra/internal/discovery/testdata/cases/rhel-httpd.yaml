@@ -1,0 +1,7 @@
+name: httpd on RHEL (no package inventory yet), exe link unreadable, instance from absolute argv[0]
+processes:
+  - { pid: 50, exe: "", comm: httpd, cmdline: "/usr/sbin/httpd -DFOREGROUND", unit: httpd.service }
+units:
+  - { name: httpd.service }
+expect:
+  - { rule_id: apache-httpd, instance: /usr/sbin/httpd, pids: [50], matched_by: [process, systemd_unit] }

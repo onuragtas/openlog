@@ -1,0 +1,17 @@
+id: clickhouse
+name: ClickHouse
+category: database
+match:
+  # clickhouse is a multi-call binary; only the server personality counts.
+  - process: { exe_basename_regex: "^clickhouse(-server)?$", cmdline_regex: "clickhouse(-server|\\s+server)(\\s|$)" }
+  - systemd_unit: { name_regex: "^clickhouse-server\\.service$" }
+  - listening_port: { port: 9000, process_exe_basename: ["clickhouse", "clickhouse-server"] }
+  - container: { image_regex: "(^|/)clickhouse(-server)?(:|@|$)" }
+  - package: { name: ["clickhouse-server"] }
+version:
+  - package: ["clickhouse-server", "clickhouse-common-static"]
+endpoints:
+  - from: listening_port
+integration:
+  id: clickhouse
+  requires: ["credentials"]

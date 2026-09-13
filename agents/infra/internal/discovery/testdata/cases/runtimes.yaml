@@ -1,0 +1,26 @@
+name: application runtimes (APM hints)
+processes:
+  - { pid: 5000, exe: /usr/sbin/php-fpm8.3, cmdline: "php-fpm: master process (/etc/php/8.3/fpm/php-fpm.conf)", unit: php8.3-fpm.service }
+  - { pid: 5001, exe: /usr/sbin/php-fpm8.3, cmdline: "php-fpm: pool www", unit: php8.3-fpm.service }
+  - { pid: 5100, exe: /usr/bin/node, cmdline: "node /srv/app/server.js", unit: app.service }
+  - { pid: 5200, exe: /usr/bin/python3.12, comm: gunicorn, cmdline: "/usr/bin/python3 /usr/bin/gunicorn --workers 4 app:app", unit: web.service }
+  - { pid: 5300, exe: /usr/bin/uwsgi-core, cmdline: "/usr/bin/uwsgi --ini /etc/uwsgi/apps-enabled/app.ini", unit: uwsgi.service }
+  - { pid: 5400, exe: /opt/venv/bin/python3.11, cmdline: "/opt/venv/bin/python /opt/venv/bin/uvicorn main:app --host 0.0.0.0" }
+  - { pid: 5500, exe: /usr/share/dotnet/dotnet, cmdline: "dotnet /srv/api/Api.dll" }
+  - { pid: 5600, exe: /usr/bin/vim, cmdline: "vim /etc/gunicorn.conf.py uvicorn" }
+units:
+  - { name: php8.3-fpm.service }
+  - { name: uwsgi.service }
+packages:
+  - { name: php8.3-fpm, version: 8.3.6-0ubuntu0.24.04.1 }
+  - { name: nodejs, version: 18.19.1+dfsg-6ubuntu5 }
+  - { name: gunicorn, version: 21.2.0-1 }
+  - { name: uwsgi-core, version: 2.0.24-1 }
+  - { name: aspnetcore-runtime-8.0, version: 8.0.4-1 }
+expect:
+  - { rule_id: php-fpm, instance: /usr/sbin/php-fpm8.3, version: /etc/php/8.3/fpm/php-fpm.conf, pids: [5000, 5001], status: not_available }
+  - { rule_id: nodejs, instance: /usr/bin/node, version: 18.19.1 }
+  - { rule_id: gunicorn, instance: /usr/bin/python3.12, version: 21.2.0, pids: [5200] }
+  - { rule_id: uwsgi, instance: /usr/bin/uwsgi-core, version: 2.0.24 }
+  - { rule_id: uvicorn, instance: /opt/venv/bin/python3.11, pids: [5400] }
+  - { rule_id: dotnet, instance: /usr/share/dotnet/dotnet, version: 8.0.4 }

@@ -1,0 +1,20 @@
+# Compose auto-update acceptance test (test/autoupdate): deploy/compose/docker-compose.yml plus a
+# local registry and a test-configured openlog-updater. Project openlog-updtest, host ports 25xxx.
+services:
+  registry:
+    image: registry:2
+    ports: ["127.0.0.1:25000:5000"]
+
+  openlog:
+    # Images come from the local registry; never build here.
+    build: !reset null
+    pull_policy: missing
+
+  openlog-updater:
+    environment:
+      OPENLOG_UPDATER_ENV_FILE: /work/.env
+      OPENLOG_RELEASE_TRUSTED_KEYS_FILE: /work/release-keys
+    volumes:
+      - ${UPDTEST_WORK}:/work
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

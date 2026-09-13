@@ -1,0 +1,18 @@
+name: >-
+  regression from a real container without CAP_SYS_PTRACE: every postgres
+  process runs as another uid, so exe and fd links are unreadable; the
+  master's absolute argv[0] identifies the instance and workers join it
+processes:
+  - { pid: 6115, ppid: 1, exe: "", comm: postgres, cmdline: "/usr/lib/postgresql/15/bin/postgres -D /var/lib/postgresql/15/main -c config_file=/etc/postgresql/15/main/postgresql.conf" }
+  - { pid: 6116, ppid: 6115, exe: "", comm: postgres, cmdline: "postgres: 15/main: checkpointer" }
+  - { pid: 6117, ppid: 6115, exe: "", comm: postgres, cmdline: "postgres: 15/main: background writer" }
+units:
+  - { name: postgresql.service }
+  - { name: postgresql@.service }
+ports:
+  - { address: 127.0.0.1, port: 5432, pid: 0 }
+packages:
+  - { name: postgresql-15, version: 15.8-0+deb12u1 }
+expect:
+  - { rule_id: postgresql, instance: /usr/lib/postgresql/15/bin/postgres, version: "15", pids: [6115, 6116, 6117], units: [postgresql.service], matched_by: [process, systemd_unit, package] }
+exactly_keys: ["postgresql:/usr/lib/postgresql/15/bin/postgres"]

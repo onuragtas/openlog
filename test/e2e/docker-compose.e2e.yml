@@ -1,0 +1,112 @@
+# End-to-end test override for deploy/compose/docker-compose.yml (see docs/operations/e2e.md).
+# Relative paths resolve against deploy/compose (the directory of the first compose file).
+#
+#   docker compose -p openlog-e2e -f deploy/compose/docker-compose.yml -f test/e2e/docker-compose.e2e.yml \
+#     --env-file test/e2e/e2e.env up -d --build --wait
+services:
+  # The base `bootstrap` service creates the e2e organization (tenant e2e-tenant, keys from
+  # e2e.env); this one creates a second organization for the tenant isolation test.
+  bootstrap-other:
+    image: ${OPENLOG_IMAGE:-openlog:dev}
+    entrypoint: ["/usr/local/bin/openlog-admin", "bootstrap"]
+    environment:
+      OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
+      OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
+      OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
+      OPENLOG_BOOTSTRAP_TENANT_ID: ${E2E_OTHER_TENANT_ID:-e2e-other-tenant}
+      OPENLOG_BOOTSTRAP_ORG_NAME: e2e other
+      OPENLOG_BOOTSTRAP_OWNER_EMAIL: ${E2E_OTHER_OWNER_EMAIL:-other@e2e.test}
+      OPENLOG_BOOTSTRAP_OWNER_PASSWORD: ${OPENLOG_BOOTSTRAP_OWNER_PASSWORD:-e2e-owner-password}
+      OPENLOG_BOOTSTRAP_LICENSE_KEY: ${E2E_OTHER_LICENSE_KEY:-e2e-other-key}
+      OPENLOG_BOOTSTRAP_API_KEY: ${E2E_OTHER_API_KEY:-ola_e2e-other-api-key}
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    restart: "no"
+
+  openlog:
+    depends_on:
+      bootstrap-other:
+        condition: service_completed_successfully
+
+  # Debian 12 with nginx, redis, postgresql, a fake mysql client with secrets in its cmdline and the agent.
+  # With E2E_DOCKER=1 (default) it also runs its own dockerd (static binaries from docker:dind; no
+  # bridge, no iptables, vfs storage) with one container, e2e-sleeper, for container inventory and
+  # container.* metrics. That dockerd is private to this container: it needs `privileged` (cgroup
+  # delegation, mounts) but never talks to the host's Docker. A dind *sidecar* would not work: its
+  # containers' cgroups are invisible to the agent here, so container metrics could not be tested.
+  target:
+    build:
+      context: ../../test/e2e/target
+      target: services
+      additional_contexts:
+        agent: ../../agents/infra
+        # agents/infra/go.mod replaces libs/release with ../../libs/release
+        release: ../../libs/release
+      args:
+        AGENT_VERSION: ${E2E_AGENT_VERSION:-0.1.0-e2e}
+    image: openlog-e2e-target:services
+    hostname: e2e-target
+    init: true
+    privileged: true
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "0"
+    environment:
+      E2E_ROLE: target
+      E2E_SERVICES: "1"
+      E2E_DOCKER: ${E2E_DOCKER:-1}
+      E2E_MACHINE_ID: ${E2E_TARGET_MACHINE_ID:-0e2e0000000000000000000000000001}
+      E2E_INVENTORY_INTERVAL: ${E2E_INVENTORY_INTERVAL:-2m}
+      OPENLOG_LICENSE_KEY: ${E2E_LICENSE_KEY:-e2e-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    volumes:
+      - target-data:/data
+      - target-agent-state:/var/lib/openlog-infra-agent
+      - target-docker:/var/lib/docker
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f /usr/bin/openlog-infra-agent >/dev/null && pgrep -x nginx >/dev/null && pgrep -x redis-server >/dev/null && pgrep -x postgres >/dev/null && { [ \"$${E2E_DOCKER:-0}\" != 1 ] || [ \"$$(docker inspect -f '{{.State.Running}}' e2e-sleeper 2>/dev/null)\" = true ]; }"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+    depends_on:
+      openlog:
+        condition: service_healthy
+
+  # Plain Debian 12 with only the agent (different machine-id, no services).
+  plain:
+    build:
+      context: ../../test/e2e/target
+      target: plain
+      additional_contexts:
+        agent: ../../agents/infra
+        # agents/infra/go.mod replaces libs/release with ../../libs/release
+        release: ../../libs/release
+      args:
+        AGENT_VERSION: ${E2E_AGENT_VERSION:-0.1.0-e2e}
+    image: openlog-e2e-target:plain
+    hostname: e2e-plain
+    init: true
+    cap_add: [SYS_PTRACE, DAC_READ_SEARCH]
+    environment:
+      E2E_ROLE: plain
+      E2E_MACHINE_ID: ${E2E_PLAIN_MACHINE_ID:-0e2e0000000000000000000000000002}
+      E2E_INVENTORY_INTERVAL: ${E2E_INVENTORY_INTERVAL:-2m}
+      OPENLOG_LICENSE_KEY: ${E2E_LICENSE_KEY:-e2e-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+    volumes:
+      - plain-agent-state:/var/lib/openlog-infra-agent
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f /usr/bin/openlog-infra-agent >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    depends_on:
+      openlog:
+        condition: service_healthy
+
+volumes:
+  target-data:
+  target-agent-state:
+  target-docker:
+  plain-agent-state:

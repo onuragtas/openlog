@@ -1,0 +1,220 @@
+# openlog `single` profile: one Kafka broker (KRaft), one ClickHouse node with
+# embedded Keeper (cluster `openlog`: 1 shard x 1 replica), PostgreSQL 16 (tenants,
+# users, keys), a one-shot bootstrap (first organization, owner and keys from
+# OPENLOG_BOOTSTRAP_*) and openlog-allinone.
+#
+#   cp .env.example .env && docker compose up -d --build --wait
+name: openlog
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    hostname: postgres
+    environment:
+      POSTGRES_USER: openlog
+      POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
+      POSTGRES_DB: openlog
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # Applies the PostgreSQL migrations and idempotently ensures the organization, owner and
+  # keys from OPENLOG_BOOTSTRAP_* (development defaults; change them for anything shared).
+  bootstrap:
+    image: ${OPENLOG_IMAGE:-openlog:dev}
+    entrypoint: ["/usr/local/bin/openlog-admin", "bootstrap"]
+    environment:
+      OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
+      OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
+      OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
+      OPENLOG_BOOTSTRAP_TENANT_ID: ${OPENLOG_BOOTSTRAP_TENANT_ID:-default}
+      OPENLOG_BOOTSTRAP_ORG_NAME: ${OPENLOG_BOOTSTRAP_ORG_NAME:-Default}
+      OPENLOG_BOOTSTRAP_OWNER_EMAIL: ${OPENLOG_BOOTSTRAP_OWNER_EMAIL:-admin@openlog.local}
+      OPENLOG_BOOTSTRAP_OWNER_PASSWORD: ${OPENLOG_BOOTSTRAP_OWNER_PASSWORD:-openlog-dev-password}
+      OPENLOG_BOOTSTRAP_LICENSE_KEY: ${OPENLOG_BOOTSTRAP_LICENSE_KEY:-dev-license-key}
+      OPENLOG_BOOTSTRAP_API_KEY: ${OPENLOG_BOOTSTRAP_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  kafka:
+    image: apache/kafka:4.1.0
+    hostname: kafka
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_MESSAGE_MAX_BYTES: 12582912
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    ports:
+      - "127.0.0.1:${KAFKA_HOST_PORT:-9092}:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    hostname: clickhouse
+    environment:
+      CLICKHOUSE_USER: ${OPENLOG_CLICKHOUSE_USER:-openlog}
+      CLICKHOUSE_PASSWORD: ${OPENLOG_CLICKHOUSE_PASSWORD:-openlog}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+    volumes:
+      - ./clickhouse/openlog-cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+      - clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "127.0.0.1:${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  openlog:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${OPENLOG_IMAGE:-openlog:dev}
+    environment:
+      OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
+      OPENLOG_KAFKA_BROKERS: kafka:19092
+      OPENLOG_CLICKHOUSE_ADDR: clickhouse:9000
+      OPENLOG_CLICKHOUSE_USER: ${OPENLOG_CLICKHOUSE_USER:-openlog}
+      OPENLOG_CLICKHOUSE_PASSWORD: ${OPENLOG_CLICKHOUSE_PASSWORD:-openlog}
+      OPENLOG_CLICKHOUSE_CLUSTER: openlog
+      OPENLOG_AUTH_MODE: ${OPENLOG_AUTH_MODE:-postgres}
+      OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
+      OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
+      # Plain HTTP on localhost: the session cookie cannot be Secure. Use true behind TLS.
+      OPENLOG_COOKIE_SECURE: ${OPENLOG_COOKIE_SECURE:-false}
+      OPENLOG_SIGNUP_ENABLED: ${OPENLOG_SIGNUP_ENABLED:-false}
+      OPENLOG_AUTH_CACHE_TTL: ${OPENLOG_AUTH_CACHE_TTL:-60s}
+      # Only used with OPENLOG_AUTH_MODE=static.
+      OPENLOG_LICENSE_KEYS: ${OPENLOG_LICENSE_KEYS:-dev-license-key=default}
+      OPENLOG_MIGRATE_ON_START: "true"
+      OPENLOG_KAFKA_PARTITIONS: ${OPENLOG_KAFKA_PARTITIONS:-6}
+      OPENLOG_KAFKA_REPLICATION_FACTOR: "1"
+      OPENLOG_KAFKA_MIN_INSYNC_REPLICAS: ${OPENLOG_KAFKA_MIN_INSYNC_REPLICAS:-1}
+      OPENLOG_KAFKA_RETENTION_MS: ${OPENLOG_KAFKA_RETENTION_MS:-86400000}
+      OPENLOG_KAFKA_MAX_MESSAGE_BYTES: ${OPENLOG_KAFKA_MAX_MESSAGE_BYTES:-12582912}
+      # Release check (UI banner) and agent fleet updates (docs/contracts/config.md).
+      OPENLOG_UPDATE_CHECK: ${OPENLOG_UPDATE_CHECK:-enabled}
+      OPENLOG_UPDATE_CHECK_INTERVAL: ${OPENLOG_UPDATE_CHECK_INTERVAL:-24h}
+      OPENLOG_UPDATE_CHANNEL: ${OPENLOG_UPDATE_CHANNEL:-stable}
+      OPENLOG_RELEASE_INDEX_URL: ${OPENLOG_RELEASE_INDEX_URL:-https://github.com/onuragtas/openlog/releases/latest/download/index.json}
+      OPENLOG_RELEASE_TRUSTED_KEYS_FILE: ${OPENLOG_RELEASE_TRUSTED_KEYS_FILE:-}
+      # Local release mirror (air-gapped): set to /releases, the mount below.
+      OPENLOG_RELEASE_MIRROR_DIR: ${OPENLOG_RELEASE_MIRROR_DIR:-}
+      OPENLOG_RELEASE_SERVE_MIRROR: ${OPENLOG_RELEASE_SERVE_MIRROR:-false}
+      OPENLOG_RELEASE_MIRROR_BASE_URL: ${OPENLOG_RELEASE_MIRROR_BASE_URL:-}
+      OPENLOG_RELEASE_CATALOG_REFRESH: ${OPENLOG_RELEASE_CATALOG_REFRESH:-15m}
+      OPENLOG_FLEET_SYNC_INTERVAL: ${OPENLOG_FLEET_SYNC_INTERVAL:-300s}
+      OPENLOG_FLEET_CONTROLLER_INTERVAL: ${OPENLOG_FLEET_CONTROLLER_INTERVAL:-30s}
+    volumes:
+      # Release mirror and trusted keys files (read-only). Empty unless you put releases there.
+      - ${OPENLOG_RELEASE_HOST_DIR:-./releases}:/releases:ro
+    ports:
+      - "${OPENLOG_OTLP_GRPC_PORT:-4317}:4317"
+      - "${OPENLOG_OTLP_HTTP_PORT:-4318}:4318"
+      - "${OPENLOG_API_PORT:-8080}:8080"
+      - "${OPENLOG_ADMIN_PORT:-9464}:9464"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9464/readyz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  # Optional synthetic load: docker compose --profile loadgen up -d loadgen
+  loadgen:
+    profiles: ["loadgen"]
+    image: ${OPENLOG_IMAGE:-openlog:dev}
+    entrypoint: ["/usr/local/bin/openlog-loadgen"]
+    command: ["-endpoint", "http://openlog:4318", "-license-key", "${OPENLOG_LOADGEN_KEY:-dev-license-key}", "-hosts", "10"]
+    depends_on:
+      openlog:
+        condition: service_healthy
+
+  # Optional automatic updates (docs/operations/upgrading.md):
+  #   docker compose --profile updater up -d openlog-updater
+  # notify (default): report new releases in the UI and GET /api/v1/version.
+  # auto: pg_dump backup -> pull the signed image digest -> openlog-migrate -> recreate `openlog`
+  #       -> health check -> automatic rollback to the previous container on failure.
+  # It controls Docker through the socket (root-equivalent) and runs as root for that reason.
+  openlog-updater:
+    profiles: ["updater"]
+    image: ${OPENLOG_UPDATER_IMAGE:-${OPENLOG_IMAGE:-openlog:dev}}
+    entrypoint: ["/usr/local/bin/openlog-updater"]
+    user: "0:0"
+    environment:
+      OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
+      OPENLOG_UPDATER_MODE: ${OPENLOG_UPDATER_MODE:-notify}
+      OPENLOG_UPDATE_CHANNEL: ${OPENLOG_UPDATE_CHANNEL:-stable}
+      OPENLOG_RELEASE_INDEX_URL: ${OPENLOG_RELEASE_INDEX_URL:-https://github.com/onuragtas/openlog/releases/latest/download/index.json}
+      OPENLOG_RELEASE_TRUSTED_KEYS_FILE: ${OPENLOG_RELEASE_TRUSTED_KEYS_FILE:-}
+      OPENLOG_UPDATER_INTERVAL: ${OPENLOG_UPDATER_INTERVAL:-1h}
+      OPENLOG_UPDATER_MAINTENANCE_WINDOW: ${OPENLOG_UPDATER_MAINTENANCE_WINDOW:-}
+      OPENLOG_UPDATER_HEALTH_TIMEOUT: ${OPENLOG_UPDATER_HEALTH_TIMEOUT:-5m}
+      OPENLOG_UPDATER_BACKUP_KEEP: ${OPENLOG_UPDATER_BACKUP_KEEP:-5}
+      OPENLOG_UPDATER_ENV_FILE: /compose/.env
+      OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
+      OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${OPENLOG_UPDATER_BACKUP_DIR:-./backups}:/backups
+      # The project directory, so OPENLOG_IMAGE in .env follows the running version.
+      - ./:/compose
+      # Same path as in `openlog`, so OPENLOG_RELEASE_TRUSTED_KEYS_FILE=/releases/... works for both.
+      - ${OPENLOG_RELEASE_HOST_DIR:-./releases}:/releases:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kafka-data:
+  clickhouse-data:
+  postgres-data:

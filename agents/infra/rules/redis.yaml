@@ -1,0 +1,21 @@
+id: redis
+name: Redis
+category: database
+match:
+  - process: { exe_basename: ["redis-server"] }
+  - systemd_unit: { name_regex: "^redis(-server)?(@.*)?\\.service$" }
+  - container: { image_regex: "(^|/)redis(-stack(-server)?)?(:|@|$)" }
+  - listening_port: { port: 6379, process_exe_basename: ["redis-server"] }
+  - package: { name: ["redis-server", "redis"] }
+version:
+  - package: ["redis-server", "redis"]
+  - cmdline_regex: "redis-server.*v=(\\S+)"
+endpoints:
+  - from: listening_port
+integration:
+  id: redis
+  auto_enable: true
+  requires: []
+apm_hint: null
+logs:
+  - path: "/var/log/redis/*.log"

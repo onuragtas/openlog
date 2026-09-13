@@ -1,0 +1,16 @@
+id: elasticsearch
+name: Elasticsearch
+category: search
+match:
+  - process: { exe_basename: ["java"], cmdline_regex: "org\\.elasticsearch\\.bootstrap\\.Elasticsearch" }
+  - systemd_unit: { name_regex: "^elasticsearch\\.service$" }
+  - container: { image_regex: "(^|/)elasticsearch(:|@|$)" }
+  - package: { name: ["elasticsearch", "elasticsearch-oss"] }
+version:
+  - package: ["elasticsearch", "elasticsearch-oss"]
+  - cmdline_regex: "elasticsearch-([0-9]+\\.[0-9]+\\.[0-9]+)"
+endpoints:
+  - from: listening_port
+integration:
+  id: elasticsearch
+  requires: ["credentials"]

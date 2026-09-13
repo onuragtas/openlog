@@ -1,0 +1,78 @@
+{{- /*
+Ingress for ingest. OTLP/gRPC is HTTP/2 end to end: the controller must speak
+HTTP/2 (h2c) to the backend and balance per request, e.g. ingress-nginx with
+`nginx.ingress.kubernetes.io/backend-protocol: "GRPC"` (TLS required on the
+client side for gRPC through ingress-nginx). gRPC and HTTP use separate hosts.
+*/ -}}
+{{- if and .Values.ingest.enabled .Values.ingest.ingress.enabled }}
+{{- $ing := .Values.ingest.ingress }}
+{{- $svc := include "openlog.componentName" (dict "root" . "component" "ingest") }}
+{{- range $kind := list "grpc" "http" }}
+{{- $cfg := index $ing $kind }}
+{{- if $cfg.host }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $svc }}-{{ $kind }}
+  labels:
+    {{- include "openlog.componentLabels" (dict "root" $ "component" "ingest") | nindent 4 }}
+  {{- with $cfg.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $ing.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $cfg.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $cfg.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $svc }}
+                port:
+                  name: {{ ternary "grpc-otlp" "http-otlp" (eq $kind "grpc") }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if and .Values.api.enabled .Values.api.ingress.enabled .Values.api.ingress.host }}
+{{- $ing := .Values.api.ingress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "openlog.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "openlog.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+  {{- with $ing.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $ing.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $ing.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $ing.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "openlog.componentName" (dict "root" . "component" "api") }}
+                port:
+                  name: http-api
+{{- end }}

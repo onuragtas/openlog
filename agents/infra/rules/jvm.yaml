@@ -1,0 +1,9 @@
+id: jvm
+name: Java (JVM)
+category: runtime
+match:
+  - process: { exe_basename: ["java"] }
+version:
+  - cmdline_regex: "/jvm/(?:java-|jdk-?|temurin-)?([0-9]+(?:\\.[0-9]+)*)[^/\\s]*/bin/java"
+  - package_regex: "^(openjdk-[0-9]+-jre-headless|openjdk-[0-9]+-jdk-headless|java-[0-9.]+-openjdk-headless|temurin-[0-9]+-jdk)$"
+apm_hint: { language: java, agent: openlog-agent-java }

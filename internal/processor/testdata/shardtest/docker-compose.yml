@@ -1,0 +1,129 @@
+# 2-shard ClickHouse topology for the processor integration test (build tag
+# `integration`) and the direct-vs-distributed insert benchmark.
+#
+#   shard 1: ch-s1r1, ch-s1r2 (2 replicas)    shard 2: ch-s2r1 (1 replica)
+#   keeper:  standalone ClickHouse Keeper
+#
+# The `pipeline` profile adds Kafka, openlog-migrate, openlog-ingest and
+# openlog-processor, running linux binaries from $OPENLOG_BIN_DIR.
+# Host ports are deliberately non-default (191xx) so this project can run next to
+# the `openlog` and `openlog-e2e` stacks.
+name: openlog-shardtest
+
+x-clickhouse: &clickhouse
+  image: clickhouse/clickhouse-server:25.8
+  environment: &chenv
+    CLICKHOUSE_USER: openlog
+    CLICKHOUSE_PASSWORD: openlog
+    CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+  ulimits:
+    nofile: { soft: 262144, hard: 262144 }
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping >/dev/null || exit 1"]
+    interval: 2s
+    timeout: 3s
+    retries: 60
+  depends_on:
+    keeper:
+      condition: service_started
+
+services:
+  keeper:
+    image: clickhouse/clickhouse-server:25.8
+    hostname: keeper
+    entrypoint: ["/usr/bin/clickhouse", "keeper", "--config-file=/etc/clickhouse-keeper/keeper.xml"]
+    volumes:
+      - ./keeper.xml:/etc/clickhouse-keeper/keeper.xml:ro
+
+  ch-s1r1:
+    <<: *clickhouse
+    hostname: ch-s1r1
+    environment: { <<: *chenv, SHARD: "01", REPLICA: ch-s1r1 }
+    volumes: [./cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro]
+    ports: ["127.0.0.1:19101:9000", "127.0.0.1:19111:8123"]
+
+  ch-s1r2:
+    <<: *clickhouse
+    hostname: ch-s1r2
+    environment: { <<: *chenv, SHARD: "01", REPLICA: ch-s1r2 }
+    volumes: [./cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro]
+    ports: ["127.0.0.1:19102:9000", "127.0.0.1:19112:8123"]
+
+  ch-s2r1:
+    <<: *clickhouse
+    hostname: ch-s2r1
+    environment: { <<: *chenv, SHARD: "02", REPLICA: ch-s2r1 }
+    volumes: [./cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro]
+    ports: ["127.0.0.1:19103:9000", "127.0.0.1:19113:8123"]
+
+  kafka:
+    profiles: ["pipeline"]
+    image: apache/kafka:4.1.0
+    hostname: kafka
+    environment:
+      CLUSTER_ID: U2hhcmRUZXN0S2Fma2EwMQ
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:19192
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_MESSAGE_MAX_BYTES: 12582912
+    ports: ["127.0.0.1:19192:9092"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 24
+
+  migrate:
+    profiles: ["pipeline"]
+    image: alpine:3.22
+    entrypoint: ["/opt/openlog/openlog-migrate"]
+    environment: &openlogenv
+      OPENLOG_LOG_LEVEL: info
+      OPENLOG_KAFKA_BROKERS: kafka:19092
+      OPENLOG_CLICKHOUSE_ADDR: ch-s1r1:9000
+      OPENLOG_CLICKHOUSE_USER: openlog
+      OPENLOG_CLICKHOUSE_PASSWORD: openlog
+      OPENLOG_CLICKHOUSE_CLUSTER: openlog
+      OPENLOG_KAFKA_PARTITIONS: "12"
+      OPENLOG_AUTH_MODE: static
+      OPENLOG_LICENSE_KEYS: bench-key=bench
+    volumes: ["${OPENLOG_BIN_DIR:-./bin}:/opt/openlog:ro"]
+    depends_on:
+      kafka: { condition: service_healthy }
+      ch-s1r1: { condition: service_healthy }
+      ch-s1r2: { condition: service_healthy }
+      ch-s2r1: { condition: service_healthy }
+
+  ingest:
+    profiles: ["pipeline"]
+    image: alpine:3.22
+    entrypoint: ["/opt/openlog/openlog-ingest"]
+    environment: *openlogenv
+    volumes: ["${OPENLOG_BIN_DIR:-./bin}:/opt/openlog:ro"]
+    ports: ["127.0.0.1:19318:4318"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  processor:
+    profiles: ["pipeline"]
+    image: alpine:3.22
+    entrypoint: ["/opt/openlog/openlog-processor"]
+    environment:
+      <<: *openlogenv
+      OPENLOG_CLICKHOUSE_ADDR: ${PROCESSOR_CLICKHOUSE_ADDR:-ch-s1r1:9000}
+      OPENLOG_PROCESSOR_INSERT_MODE: ${INSERT_MODE:-direct}
+    volumes: ["${OPENLOG_BIN_DIR:-./bin}:/opt/openlog:ro"]
+    cpus: ${PROCESSOR_CPUS:-2}
+    ports: ["127.0.0.1:19464:9464"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }

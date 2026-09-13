@@ -1,0 +1,65 @@
+{{- if .Values.migrate.enabled }}
+{{- $v := .Values.migrate }}
+{{- $ctx := dict "root" . "component" "migrate" "values" $v }}
+# openlog-migrate applies schema/clickhouse/*.sql (idempotent, ON CLUSTER) and, unless
+# OPENLOG_MIGRATE_SKIP_KAFKA=true, creates the Kafka topics. Runs as a Helm hook; the
+# Job retries with exponential backoff while ClickHouse / Kafka / Keeper become ready.
+# Env is inlined (no ConfigMap) because hooks run before regular release resources.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+  annotations:
+    helm.sh/hook: {{ include "openlog.migrate.hookEvents" . }}
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: {{ $v.hookDeletePolicy }}
+spec:
+  backoffLimit: {{ $v.backoffLimit }}
+  activeDeadlineSeconds: {{ $v.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "openlog.selectorLabels" $ctx | nindent 8 }}
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- include "openlog.podSecurity" . | nindent 6 }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "openlog.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/openlog-migrate"]
+          env:
+            {{- include "openlog.env" $ctx | nindent 12 }}
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "openlog.tls.volumeMounts" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        {{- include "openlog.tls.volumes" . | nindent 8 }}
+{{- end }}

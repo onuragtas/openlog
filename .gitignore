@@ -1,0 +1,10 @@
+.DS_Store
+/bin/
+# Release output, including throwaway test keys (dist/testkeys/).
+/dist/
+/agents/infra/dist/
+# Local compose state: your .env, release mirror and updater backups.
+/deploy/compose/.env
+/deploy/compose/.env.bak
+/deploy/compose/releases/
+/deploy/compose/backups/

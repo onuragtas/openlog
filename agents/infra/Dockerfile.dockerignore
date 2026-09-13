@@ -1,0 +1,9 @@
+# Used instead of the repository root .dockerignore (which excludes agents/) when building with
+# -f agents/infra/Dockerfile from the repository root (BuildKit <Dockerfile>.dockerignore).
+*
+!libs/release/
+!agents/infra/
+agents/infra/dist/
+**/*_test.go
+**/testdata/
+**/.DS_Store

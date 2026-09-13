@@ -1,0 +1,12 @@
+id: containerd
+name: containerd
+category: container
+match:
+  - process: { exe_basename: ["containerd"] }
+  - systemd_unit: { name_regex: "^containerd\\.service$" }
+  - package: { name: ["containerd", "containerd.io"] }
+version:
+  - package: ["containerd.io", "containerd"]
+integration:
+  id: containerd
+  auto_enable: true         # local containerd socket

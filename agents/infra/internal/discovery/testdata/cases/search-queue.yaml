@@ -1,0 +1,25 @@
+name: JVM based search and queue services
+processes:
+  - { pid: 3000, exe: /usr/share/elasticsearch/jdk/bin/java, cmdline: "/usr/share/elasticsearch/jdk/bin/java -Xms1g -Xmx1g -Des.distribution.type=deb -cp /usr/share/elasticsearch/lib/* -m org.elasticsearch.server/org.elasticsearch.bootstrap.Elasticsearch", unit: elasticsearch.service }
+  - { pid: 3100, exe: /usr/share/opensearch/jdk/bin/java, cmdline: "/usr/share/opensearch/jdk/bin/java -Xms1g -cp /usr/share/opensearch/lib/opensearch-2.12.0.jar org.opensearch.bootstrap.OpenSearch -d", unit: opensearch.service }
+  - { pid: 3200, exe: /usr/lib/jvm/java-17-openjdk-amd64/bin/java, cmdline: "/usr/lib/jvm/java-17-openjdk-amd64/bin/java -Xmx1G -cp /opt/kafka/libs/kafka_2.13-3.7.0.jar kafka.Kafka /opt/kafka/config/server.properties", unit: kafka.service }
+  - { pid: 3300, exe: /usr/lib/erlang/erts-13.2.2.5/bin/beam.smp, comm: beam.smp, cmdline: "/usr/lib/erlang/erts-13.2.2.5/bin/beam.smp -W w -- -root /usr/lib/erlang -- -pa /usr/lib/rabbitmq/lib/rabbitmq_server-3.12.1/ebin -noshell -noinput -s rabbit boot", unit: rabbitmq-server.service }
+units:
+  - { name: elasticsearch.service }
+  - { name: opensearch.service }
+  - { name: kafka.service }
+  - { name: rabbitmq-server.service }
+ports:
+  - { address: "::", port: 9200, pid: 3000 }
+  - { address: "::", port: 9092, pid: 3200 }
+  - { address: "::", port: 5672, pid: 3300 }
+packages:
+  - { name: elasticsearch, version: 8.12.2 }
+  - { name: rabbitmq-server, version: 3.12.1-1ubuntu1 }
+expect:
+  - { rule_id: elasticsearch, instance: /usr/share/elasticsearch/jdk/bin/java, version: 8.12.2, ports: [9200], status: needs_configuration }
+  - { rule_id: opensearch, instance: /usr/share/opensearch/jdk/bin/java, version: 2.12.0 }
+  - { rule_id: kafka, instance: /usr/lib/jvm/java-17-openjdk-amd64/bin/java, version: 3.7.0, ports: [9092], matched_by: [process, systemd_unit] }
+  - { rule_id: jvm, instance: /usr/lib/jvm/java-17-openjdk-amd64/bin/java, version: "17" }
+  - { rule_id: rabbitmq, instance: /usr/lib/erlang/erts-13.2.2.5/bin/beam.smp, version: 3.12.1, ports: [5672] }
+forbid: [nodejs, dotnet]

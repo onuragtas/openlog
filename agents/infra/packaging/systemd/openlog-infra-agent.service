@@ -1,0 +1,58 @@
+[Unit]
+Description=openlog infrastructure agent
+Documentation=https://github.com/onuragtas/openlog/agents/infra
+After=network-online.target
+Wants=network-online.target
+# Never give up restarting: self-update exits with status 0 after switching versions, and the
+# automatic rollback relies on further starts of a failing candidate.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=openlog-agent
+Group=openlog-agent
+# /opt/openlog/infra-agent/current -> versions/<version> is switched atomically by the agent
+# (self-update) and by the deb/rpm packages.
+ExecStart=/opt/openlog/infra-agent/current/openlog-infra-agent -config /etc/openlog-infra-agent/config.yaml
+Restart=always
+RestartSec=5
+
+# Read other users' /proc/<pid>/{exe,fd} and root-only files without running as root.
+AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+NoNewPrivileges=yes
+
+StateDirectory=openlog-infra-agent
+StateDirectoryMode=0750
+ConfigurationDirectory=openlog-infra-agent
+
+# Hardening: the agent only reads the host, writes to its state directory and installs its own
+# updates below /opt/openlog/infra-agent (which must be owned by openlog-agent).
+ProtectSystem=strict
+ReadWritePaths=/var/lib/openlog-infra-agent /opt/openlog/infra-agent
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @reboot @swap @raw-io @module @debug @cpu-emulation @obsolete
+# ProcSubset/ProtectProc are intentionally not set: the agent needs all of /proc.
+# The -self-test child of an update runs inside these limits too.
+MemoryMax=100M
+CPUQuota=10%
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

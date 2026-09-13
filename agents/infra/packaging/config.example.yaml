@@ -1,0 +1,75 @@
+# /etc/openlog-infra-agent/config.yaml
+# Every value shown is the default unless marked "required".
+
+license_key: ""                  # required; or env OPENLOG_LICENSE_KEY
+endpoint: ""                     # required, e.g. https://ingest.openlog.example:4318; or env OPENLOG_ENDPOINT
+interval: 10s                    # metrics collection interval (raised automatically, up to 60s, if the agent exceeds 1% CPU)
+inventory_interval: 1h           # full inventory snapshot; also sent at start and on detected changes
+state_dir: /var/lib/openlog-infra-agent   # generated host id is persisted here
+log_level: info                  # debug, info, warn, error
+
+host:
+  root_path: /                   # /host when running in a container with the host root mounted
+  extra_attributes: {}           # e.g. { env: prod, team: payments } — added to every resource
+
+collectors:
+  cpu: true
+  memory: true
+  load: true
+  filesystem: true
+  disk: true
+  network: true
+  uptime: true
+  processes: true
+
+inventory:
+  enabled: true
+
+discovery:
+  enabled: true
+  rules_dir: /etc/openlog-infra-agent/discovery.d   # extra *.yaml rules; same id overrides an embedded rule
+
+buffer:
+  dir: /var/lib/openlog-infra-agent/buffer
+  max_bytes: 268435456           # 256 MiB; 0 disables the disk buffer
+
+export:
+  timeout: 15s
+  max_request_bytes: 4194304     # inventory snapshots are split into requests of at most this size
+
+process_metrics:
+  enabled: true                  # per-process metrics for the top processes (series churn with PIDs)
+  top_n_cpu: 20                  # top N by CPU utilization ...
+  top_n_memory: 20               # ... united with the top N by RSS
+
+containers:
+  enabled: true                  # container inventory (Docker Engine API) + cgroup v2 container metrics
+  docker_socket: /var/run/docker.sock   # host path, resolved under host.root_path; the agent user needs access (docker group = root-equivalent)
+
+logs:
+  enabled: true                  # nothing is read unless files, journald or auto_from_discovery is configured
+  auto_from_discovery: false     # tail the log_paths of discovered services (e.g. /var/log/nginx/*.log)
+  mask_secrets: false            # log bodies are user data: masking (password=***, url userinfo, …) is opt-in
+  parse_severity: true           # guess severity from level words ([error], level=warn, "level":"info", …)
+  start_at: end                  # files present at startup without a saved offset: end | beginning
+  max_line_bytes: 65536          # longer lines/records are truncated
+  rate_limit_lines: 2000         # per file per second; 0 = unlimited; excess stays in the file (no drops)
+  poll_interval: 1s
+  files: []
+  # files:
+  #   - path: /var/log/myapp/*.log          # absolute glob (no **)
+  #     exclude: ["*.gz", "*.1"]            # matched against the full path and the basename
+  #     multiline_start: '^\d{4}-\d{2}-\d{2}'   # a record starts at a matching line (stack traces)
+  #     attributes: { app: billing }
+  journald:
+    enabled: false               # runs "journalctl -o export -f" (journalctl must be available to the agent)
+    journalctl_path: journalctl
+    units: []                    # e.g. [nginx.service]; empty = all
+    priority: ""                 # e.g. warning (emerg..debug or 0..7); empty = all
+
+update:
+  enabled: true                  # apply signed updates ordered by the backend (sync/version reporting runs regardless)
+  install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user
+
+release:
+  trusted_keys_file: ""          # extra base64 Ed25519 release public keys, one per line (added to the compiled-in keys)

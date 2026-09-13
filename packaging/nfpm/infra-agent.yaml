@@ -1,0 +1,84 @@
+# nfpm configuration of the openlog-infra-agent .deb and .rpm (docs/contracts/releases-updates.md §3).
+# Rendered by `make release-packages` (sed replaces these placeholders; paths relative to the repo):
+#   VERSION  SemVer product version (no leading v)   ARCH   amd64 | arm64
+#   STAGE    staged tarball directory (binary, LICENSE, README.md, packaging/)
+#   SCRIPTS  directory of the rendered maintainer scripts (packaging/scripts with @VERSION@ replaced)
+#   MANIFEST_DIR  signed manifest.json(.sig) of this version listing the agent tarballs
+#
+# Layout: the package installs /opt/openlog/infra-agent/versions/<v>/ and its postinstall script
+# switches /opt/openlog/infra-agent/current to it unless the agent already runs a newer version
+# (the agent updates itself, docs/plan/09-releases-updates.md §3).
+name: openlog-infra-agent
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: "1"
+section: admin
+priority: optional
+maintainer: openlog maintainers <https://github.com/onuragtas/openlog>
+vendor: openlog
+homepage: https://github.com/onuragtas/openlog
+license: Apache-2.0
+description: |-
+  openlog infrastructure agent.
+  Collects host metrics, inventory, service discovery and logs and sends them to openlog over
+  OTLP. Updates itself from signed openlog releases.
+
+contents:
+  - dst: /opt/openlog
+    type: dir
+    file_info: {mode: 0755}
+  - dst: /opt/openlog/infra-agent
+    type: dir
+    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+  - dst: /opt/openlog/infra-agent/versions
+    type: dir
+    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+  - dst: /opt/openlog/infra-agent/versions/${VERSION}
+    type: dir
+    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+  - src: ${STAGE}/openlog-infra-agent
+    dst: /opt/openlog/infra-agent/versions/${VERSION}/openlog-infra-agent
+    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+  - src: ${STAGE}/LICENSE
+    dst: /opt/openlog/infra-agent/versions/${VERSION}/LICENSE
+    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+  - src: ${STAGE}/README.md
+    dst: /opt/openlog/infra-agent/versions/${VERSION}/README.md
+    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+  # Signed manifest of this version (tarball artifacts only), used by the agent for rollback_floor.
+  - src: ${MANIFEST_DIR}/manifest.json
+    dst: /opt/openlog/infra-agent/versions/${VERSION}/manifest.json
+    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+  - src: ${MANIFEST_DIR}/manifest.json.sig
+    dst: /opt/openlog/infra-agent/versions/${VERSION}/manifest.json.sig
+    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+  # Convenience entry point; always follows `current`.
+  - src: /opt/openlog/infra-agent/current/openlog-infra-agent
+    dst: /usr/bin/openlog-infra-agent
+    type: symlink
+  # The unit is owned by the agent module (agents/infra/packaging/systemd).
+  - src: ${STAGE}/packaging/systemd/openlog-infra-agent.service
+    dst: /usr/lib/systemd/system/openlog-infra-agent.service
+    file_info: {mode: 0644}
+  - dst: /etc/openlog-infra-agent
+    type: dir
+    file_info: {mode: 0755}
+  - dst: /etc/openlog-infra-agent/discovery.d
+    type: dir
+    file_info: {mode: 0755}
+  # Contains the license key: readable by the agent group only; never overwritten on upgrade.
+  - src: ${STAGE}/packaging/config.example.yaml
+    dst: /etc/openlog-infra-agent/config.yaml
+    type: config|noreplace
+    file_info: {mode: 0640, owner: root, group: openlog-agent}
+  - dst: /var/lib/openlog-infra-agent
+    type: dir
+    file_info: {mode: 0750, owner: openlog-agent, group: openlog-agent}
+
+scripts:
+  preinstall: ${SCRIPTS}/preinstall.sh
+  postinstall: ${SCRIPTS}/postinstall.sh
+  preremove: ${SCRIPTS}/preremove.sh
+  postremove: ${SCRIPTS}/postremove.sh
