@@ -104,13 +104,13 @@ func TestUnixSocketPermissionsAndRestart(t *testing.T) {
 
 	// Oversized datagrams are rejected, not truncated into valid JSON (macOS caps unix datagrams at 2048 bytes).
 	if runtime.GOOS == "linux" {
-	big := make([]byte, MaxDatagramBytes+100)
-	copy(big, msg(t, nil))
-	for i := len(msg(t, nil)); i < len(big); i++ {
-		big[i] = ' '
-	}
-	sendUnix(t, sock, big)
-	waitFor(t, "oversized datagram counted", func() bool { return f.o.Stats.Snapshot().PHP.Messages["malformed"] == 1 })
+		big := make([]byte, MaxDatagramBytes+100)
+		copy(big, msg(t, nil))
+		for i := len(msg(t, nil)); i < len(big); i++ {
+			big[i] = ' '
+		}
+		sendUnix(t, sock, big)
+		waitFor(t, "oversized datagram counted", func() bool { return f.o.Stats.Snapshot().PHP.Messages["malformed"] == 1 })
 	}
 
 	f.Stop()

@@ -86,7 +86,9 @@ func TestDecodeValidation(t *testing.T) {
 		{"sampling above one", msg(t, func(m map[string]any) { m["sampling_ratio"] = 1.5 }), "sampling_ratio"},
 		{"sampling absent", msg(t, func(m map[string]any) { delete(m, "sampling_ratio") }), ""},
 		{"resource non-string", msg(t, func(m map[string]any) { m["resource"].(map[string]any)["service.version"] = 1 }), "must be a string"},
-		{"resource value too long", msg(t, func(m map[string]any) { m["resource"].(map[string]any)["service.name"] = strings.Repeat("s", MaxStringBytes+1) }), "too long"},
+		{"resource value too long", msg(t, func(m map[string]any) {
+			m["resource"].(map[string]any)["service.name"] = strings.Repeat("s", MaxStringBytes+1)
+		}), "too long"},
 		{"kind", msg(t, func(m map[string]any) { span(m, 0)["kind"] = 6 }), "kind"},
 		{"status", msg(t, func(m map[string]any) { span(m, 0)["status"] = 3 }), "status"},
 		{"empty name", msg(t, func(m map[string]any) { span(m, 0)["name"] = "" }), "name"},
@@ -103,7 +105,9 @@ func TestDecodeValidation(t *testing.T) {
 			}
 			span(m, 0)["attrs"] = a
 		}), ""},
-		{"string attr too long", msg(t, func(m map[string]any) { span(m, 0)["attrs"] = map[string]any{"x": strings.Repeat("a", MaxStringBytes+1)} }), "longer than"},
+		{"string attr too long", msg(t, func(m map[string]any) {
+			span(m, 0)["attrs"] = map[string]any{"x": strings.Repeat("a", MaxStringBytes+1)}
+		}), "longer than"},
 		{"string attr at limit", msg(t, func(m map[string]any) { span(m, 0)["attrs"] = map[string]any{"x": strings.Repeat("a", MaxStringBytes)} }), ""},
 		{"null attr", msg(t, func(m map[string]any) { span(m, 0)["attrs"] = map[string]any{"x": nil} }), "null"},
 		{"object attr", msg(t, func(m map[string]any) { span(m, 0)["attrs"] = map[string]any{"x": map[string]any{}} }), "unsupported"},

@@ -106,8 +106,18 @@ integrations:                    # metric integrations bound to discovered servi
   docker:
     enabled: true                # reports Docker Engine API access; container.* metrics come from containers
 
+php_forwarder:                   # receives spans from the openlog PHP extension (docs/contracts/php-agent.md §6)
+  # enabled: unset = on while discovery finds PHP (php-fpm, Apache mod_php, a php CLI binary); true/false wins
+  socket: /run/openlog-infra-agent/php.sock   # unix datagram socket (systemd RuntimeDirectory); "" = UDP only
+  socket_group: auto             # auto = first existing of www-data, nginx, apache, php-fpm; the agent user must be a
+                                 # member of that group (e.g. SupplementaryGroups=www-data in a systemd drop-in)
+  socket_mode: "0660"            # "0666" lets any local user send spans
+  udp_listen: ""                 # e.g. 127.0.0.1:18127 for containers that cannot share the socket file
+  max_pending_traces: 10000      # split messages waiting for their remaining parts
+  reassembly_timeout: 5s         # incomplete traces are exported with openlog.php.incomplete=true
+
 update:
-  enabled: true                 # apply signed updates ordered by the backend (sync/version reporting runs regardless)
+  enabled: true                # apply signed updates ordered by the backend (sync/version reporting runs regardless)
   install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user
 
 release:

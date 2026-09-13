@@ -175,6 +175,31 @@ path matches a discovered glob also gets the discovery id.
 
 **Masking**: log bodies are user data and are not masked unless `logs.mask_secrets: true` (same patterns as command lines, without the MySQL `-p` rule).
 
+## PHP forwarder
+
+The openlog PHP extension (`openlog.so`, `agents/php`) never talks to the network: it writes one JSON datagram per request to
+`/run/openlog-infra-agent/php.sock`, and the agent's `php_forwarder` module converts the spans to OTLP and sends them through the
+same export queue, disk buffer and retries as metrics and logs (`/v1/traces`). A backend outage never affects PHP requests; spans are
+buffered and delivered later. Contract: `openlog/docs/contracts/php-agent.md` §1, §2, §6.
+
+- **Enabled** automatically while discovery finds PHP (a `php-fpm` service, Apache with mod_php, or a `php`/`phpX.Y` binary in
+  `/usr/bin`, `/usr/local/bin`, `/bin`), re-evaluated with every inventory snapshot; `php_forwarder.enabled: true|false` wins.
+  Automatic enabling needs `inventory.enabled` and `discovery.enabled`.
+- **Socket**: directory `0755` (systemd `RuntimeDirectory=openlog-infra-agent`), socket `0660` with group `socket_group`
+  (auto: first existing of `www-data`, `nginx`, `apache`, `php-fpm`). A stale socket from a previous run is replaced; the extension
+  sends unconnected datagrams, so restarts and self-updates need no PHP reload. `socket_mode: "0666"` lets any local user send.
+- **Group handling**: an unprivileged process can only give a file to a group it belongs to. Add the agent user to the PHP-FPM
+  group, either with `usermod -aG www-data openlog-agent` or with a drop-in (`systemctl edit openlog-infra-agent`):
+  `[Service]` / `SupplementaryGroups=www-data`. Without it the socket keeps the agent's group, a warning is logged and
+  `openlog.agent.permission_denied{collector="php_forwarder"}` counts it.
+- **Containers** that cannot share the socket file: `udp_listen: 127.0.0.1:18127` and `openlog.transport=udp://127.0.0.1:18127`.
+- **Input** is validated strictly (60 000-byte datagrams, lowercase hex IDs, ≤ 128 attributes, ≤ 4 KiB strings) and malformed
+  messages are dropped. Split messages are reassembled per (pid, trace_id); after `reassembly_timeout` they are exported with
+  `openlog.php.incomplete=true`. The extension cannot set `host.*`, `os.*` or `openlog.*` resource attributes: the forwarder adds the
+  agent's own, so PHP services link to this host (`host.id`).
+- **Status**: discovered `php-fpm` services report `apm_hint.status` `active` (spans received in the last 10 minutes) or
+  `not_installed`. Self-telemetry: `openlog.agent.php.messages{result}`, `.spans`, `.reassembly_timeouts`, `.pending_traces`.
+
 ## Running
 
 The module depends on `libs/release` in the same repository (`replace … => ../../libs/release`), so build from a full checkout.
@@ -271,7 +296,7 @@ Unknown keys are rejected.
 Reliability:
 - Collection and export are decoupled. Collectors run on their own fixed schedule and only enqueue payloads, so a slow or unavailable ingest never delays or skips a sample.
 - A bounded in-memory queue (64 payloads / 16 MiB) is drained by a single exporter goroutine.
-- Payloads are gzip-compressed and posted to `<endpoint>/v1/metrics` and `/v1/logs` with the `openlog-license-key` header.
+- Payloads are gzip-compressed and posted to `<endpoint>/v1/metrics`, `/v1/logs` and (PHP forwarder) `/v1/traces` with the `openlog-license-key` header.
 - On network errors, 429 or 503 the exporter retries with exponential backoff and jitter, honouring `Retry-After`.
 - The memory queue spills to the on-disk buffer when it is full, or when a send keeps failing. The buffer holds at most `buffer.max_bytes`; when full, the oldest payloads are dropped and counted in `openlog.agent.export.items{outcome="dropped"}`.
 - Every payload gets a sequence number when it is enqueued, and the exporter always sends the lowest pending one, whether it waits in memory or on disk. Delivery therefore stays FIFO across restarts and outages.

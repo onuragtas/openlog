@@ -113,7 +113,7 @@ Cumulative container counters carry no start time.
 
 | Metric | Type | Unit | Attributes |
 |---|---|---|---|
-| `openlog.agent.export.items` | Sum, cumulative, monotonic | `{item}` | `signal` = `metrics`,`logs`; `outcome` = `sent`,`buffered`,`dropped` |
+| `openlog.agent.export.items` | Sum, cumulative, monotonic | `{item}` | `signal` = `metrics`,`logs`,`traces` (`traces` only once the PHP forwarder has started; items = spans); `outcome` = `sent`,`buffered`,`dropped` |
 | `openlog.agent.buffer.usage` | Sum, non-monotonic | `By` | — |
 | `openlog.agent.collector.duration` | Gauge | `s` | `collector` |
 | `openlog.agent.permission_denied` | Sum, cumulative, monotonic | `{error}` | `collector` |
@@ -123,6 +123,10 @@ Cumulative container counters carry no start time.
 | `openlog.agent.integration.collections` | Sum, cumulative, monotonic | `{collection}` | `integration` = integration id (§6); every collection attempt of every instance |
 | `openlog.agent.integration.errors` | Sum, cumulative, monotonic | `{error}` | `integration`; failed collections (status `error` or `needs_configuration`; partial collections are not counted) |
 | `openlog.agent.integration.duration` | Gauge | `s` | `integration`; duration of the latest collection of any instance of the integration |
+| `openlog.agent.php.messages` | Sum, cumulative, monotonic | `{message}` | `result` = `accepted`,`malformed`,`unsupported_version`,`dropped` (PHP forwarder datagrams, php-agent.md §6; emitted once the forwarder has started) |
+| `openlog.agent.php.spans` | Sum, cumulative, monotonic | `{span}` | — (spans handed to the export pipeline) |
+| `openlog.agent.php.reassembly_timeouts` | Sum, cumulative, monotonic | `{trace}` | — (split traces exported incomplete after `reassembly_timeout`) |
+| `openlog.agent.php.pending_traces` | Gauge | `{trace}` | — (traces waiting for missing parts) |
 
 ## 3. Inventory and discovery (OTLP logs)
 
@@ -224,7 +228,9 @@ server messages (e.g. `Access denied for user 'openlog'@'172.18.0.1' (using pass
 
 `-once` runs one collection of every integration before printing, so its `discovered_services` show real statuses.
 
-`apm_hint`, when present: `{"language": "php", "agent": "openlog-agent-php"}`.
+`apm_hint`, when present: `{"language": "php", "agent": "openlog-agent-php", "status": "not_installed"}`. `status` (M2, set by the agent for
+`agent` = `openlog-agent-php`): `active` when the agent's PHP forwarder received valid spans in the last 10 minutes, else `not_installed`
+(php-agent.md §6). A status change triggers an inventory snapshot. Rules cannot set `status`.
 
 `command` is the argv0 basename of the service's main process (lowest PID whose parent is not part of the service; a setproctitle suffix `:` is removed),
 e.g. `redis-server` on Debian where the executable resolves to `redis-check-rdb`. It is a display name only; `instance` keeps the resolved executable. Omitted when the service has no process.

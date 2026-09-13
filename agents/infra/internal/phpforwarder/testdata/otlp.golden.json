@@ -1,0 +1,360 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "deployment.environment.name",
+            "value": {
+              "stringValue": "prod"
+            }
+          },
+          {
+            "key": "php.sapi",
+            "value": {
+              "stringValue": "fpm-fcgi"
+            }
+          },
+          {
+            "key": "process.runtime.name",
+            "value": {
+              "stringValue": "php"
+            }
+          },
+          {
+            "key": "process.runtime.version",
+            "value": {
+              "stringValue": "8.3.11"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "shop-api"
+            }
+          },
+          {
+            "key": "service.namespace",
+            "value": {
+              "stringValue": "shop"
+            }
+          },
+          {
+            "key": "telemetry.distro.name",
+            "value": {
+              "stringValue": "openlog-php"
+            }
+          },
+          {
+            "key": "telemetry.distro.version",
+            "value": {
+              "stringValue": "0.9.1"
+            }
+          },
+          {
+            "key": "telemetry.sdk.language",
+            "value": {
+              "stringValue": "php"
+            }
+          },
+          {
+            "key": "host.id",
+            "value": {
+              "stringValue": "a0de0000000000000000000000000003"
+            }
+          },
+          {
+            "key": "host.name",
+            "value": {
+              "stringValue": "php-host"
+            }
+          },
+          {
+            "key": "host.arch",
+            "value": {
+              "stringValue": "arm64"
+            }
+          },
+          {
+            "key": "os.type",
+            "value": {
+              "stringValue": "linux"
+            }
+          },
+          {
+            "key": "os.name",
+            "value": {
+              "stringValue": "debian"
+            }
+          },
+          {
+            "key": "os.version",
+            "value": {
+              "stringValue": "12"
+            }
+          },
+          {
+            "key": "openlog.agent.name",
+            "value": {
+              "stringValue": "openlog-infra-agent"
+            }
+          },
+          {
+            "key": "openlog.agent.version",
+            "value": {
+              "stringValue": "1.2.3"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "openlog-php",
+            "version": "0.9.1"
+          },
+          "spans": [
+            {
+              "traceId": "TClTYitghsqkZyP0Mwb/tg==",
+              "spanId": "XM8PtVIJNG4=",
+              "parentSpanId": "qqqqqqqqqqo=",
+              "flags": 769,
+              "name": "GET /users/{id}/orders",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": "1789302480000000000",
+              "endTimeUnixNano": "1789302480012345678",
+              "attributes": [
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "500"
+                  }
+                },
+                {
+                  "key": "http.route",
+                  "value": {
+                    "stringValue": "/users/{id}/orders"
+                  }
+                },
+                {
+                  "key": "sampling.ratio",
+                  "value": {
+                    "doubleValue": 0.25
+                  }
+                },
+                {
+                  "key": "openlog.php.dropped_spans",
+                  "value": {
+                    "intValue": "3"
+                  }
+                }
+              ],
+              "events": [
+                {
+                  "timeUnixNano": "1789302480010000000",
+                  "name": "exception",
+                  "attributes": [
+                    {
+                      "key": "exception.message",
+                      "value": {
+                        "stringValue": "boom"
+                      }
+                    },
+                    {
+                      "key": "exception.type",
+                      "value": {
+                        "stringValue": "RuntimeException"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "status": {
+                "message": "boom",
+                "code": "STATUS_CODE_ERROR"
+              }
+            },
+            {
+              "traceId": "TClTYitghsqkZyP0Mwb/tg==",
+              "spanId": "ERERERERERE=",
+              "parentSpanId": "XM8PtVIJNG4=",
+              "flags": 257,
+              "name": "SELECT shop.orders",
+              "kind": "SPAN_KIND_CLIENT",
+              "startTimeUnixNano": "1789302480001000000",
+              "endTimeUnixNano": "1789302480002000000",
+              "attributes": [
+                {
+                  "key": "db.system.name",
+                  "value": {
+                    "stringValue": "mysql"
+                  }
+                },
+                {
+                  "key": "flag",
+                  "value": {
+                    "boolValue": true
+                  }
+                },
+                {
+                  "key": "openlog.php.fast_calls_ns",
+                  "value": {
+                    "doubleValue": 1.5
+                  }
+                },
+                {
+                  "key": "ratios",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "doubleValue": 1
+                        },
+                        {
+                          "doubleValue": 2.5
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "server.port",
+                  "value": {
+                    "intValue": "3306"
+                  }
+                },
+                {
+                  "key": "tags",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "stringValue": "a"
+                        },
+                        {
+                          "stringValue": "b"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "status": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "php.sapi",
+            "value": {
+              "stringValue": "cli"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "cron"
+            }
+          },
+          {
+            "key": "telemetry.sdk.language",
+            "value": {
+              "stringValue": "php"
+            }
+          },
+          {
+            "key": "host.id",
+            "value": {
+              "stringValue": "a0de0000000000000000000000000003"
+            }
+          },
+          {
+            "key": "host.name",
+            "value": {
+              "stringValue": "php-host"
+            }
+          },
+          {
+            "key": "host.arch",
+            "value": {
+              "stringValue": "arm64"
+            }
+          },
+          {
+            "key": "os.type",
+            "value": {
+              "stringValue": "linux"
+            }
+          },
+          {
+            "key": "os.name",
+            "value": {
+              "stringValue": "debian"
+            }
+          },
+          {
+            "key": "os.version",
+            "value": {
+              "stringValue": "12"
+            }
+          },
+          {
+            "key": "openlog.agent.name",
+            "value": {
+              "stringValue": "openlog-infra-agent"
+            }
+          },
+          {
+            "key": "openlog.agent.version",
+            "value": {
+              "stringValue": "1.2.3"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "openlog-php"
+          },
+          "spans": [
+            {
+              "traceId": "CvdlGRbNQ92ESOshHIAxnA==",
+              "spanId": "t61rcWkgMzE=",
+              "flags": 1,
+              "name": "php artisan queue:work",
+              "kind": "SPAN_KIND_INTERNAL",
+              "startTimeUnixNano": "1789302481000000000",
+              "endTimeUnixNano": "1789302481000000005",
+              "attributes": [
+                {
+                  "key": "openlog.php.cli",
+                  "value": {
+                    "boolValue": true
+                  }
+                },
+                {
+                  "key": "sampling.ratio",
+                  "value": {
+                    "doubleValue": 1
+                  }
+                }
+              ],
+              "status": {}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

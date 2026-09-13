@@ -151,17 +151,46 @@ must fail open: any internal error disables instrumentation for the rest of the 
 | Config | Default |
 |---|---|
 | `php_forwarder.enabled` | `true` when discovery finds a PHP runtime (php-fpm, mod_php, php CLI binary), else `false`; explicit value wins |
-| `php_forwarder.socket` | `/run/openlog-infra-agent/php.sock` |
-| `php_forwarder.socket_group` | auto (see §1) |
+| `php_forwarder.socket` | `/run/openlog-infra-agent/php.sock` (empty = no unix listener; then `udp_listen` is required) |
+| `php_forwarder.socket_group` | auto (see §1); `auto`, a group name or a numeric gid |
+| `php_forwarder.socket_mode` | `"0660"`; `"0666"` is the explicit opt-in of §1 (any local user may send) |
 | `php_forwarder.udp_listen` | empty (disabled) |
 | `php_forwarder.max_pending_traces` | `10000` |
 | `php_forwarder.reassembly_timeout` | `5s` |
 
 - Converts messages to OTLP spans (one ResourceSpans per distinct resource) and hands them to the agent's existing export
-  pipeline (queue, disk buffer, retries, `Retry-After`) — PHP data survives backend outages like host metrics.
+  pipeline (queue, disk buffer, retries, `Retry-After`) as `/v1/traces` payloads — PHP data survives backend outages
+  like host metrics. Spans are batched for at most 1 s and up to half of `export.max_request_bytes` per request.
 - Validates input (sizes, hex IDs, value types, attribute count ≤ 128 per span, string values ≤ 4 KiB) and drops
-  malformed messages; never trusts `resource` host keys.
+  malformed messages; never trusts `resource` host keys. Details of the validation (v1):
+  - a datagram longer than 60 000 bytes, invalid JSON or trailing data → `malformed`; valid JSON with `v` ≠ 1 →
+    `unsupported_version`; unknown fields are ignored (additive changes stay compatible within v1);
+  - IDs must be lowercase hex of the exact length and not all zeros; span ids unique within a message; `pid` > 0;
+    `seq` in 0…255; `sampling_ratio` absent = 1; `kind` 1…5, `status` 0…2, `start` > 0;
+  - attribute keys 1…256 bytes; ≤ 128 attributes per span and per event; every string value (attributes, array
+    elements, resource values, names, `status_msg`) ≤ 4 KiB — the extension must truncate, the forwarder does not;
+    arrays must not nest and must be homogeneous (integers and floats mixed become floats); `null` and objects are
+    invalid;
+  - one invalid span drops the whole message.
+- Resource: the allowed extension keys (§2.1) are kept, everything else is dropped silently; the forwarder adds
+  `telemetry.sdk.language=php` and the infra agent's `host.*`, `os.*` and `openlog.agent.*` attributes (not
+  `openlog.entity.type` or `host.extra_attributes`).
+- Span flags: a span whose parent is in the same trace message gets `SPAN_FLAGS_CONTEXT_HAS_IS_REMOTE` (local parent);
+  a span of a complete trace whose parent is not in it (continued from `traceparent`) additionally gets
+  `SPAN_FLAGS_CONTEXT_IS_REMOTE`, so APM entry detection (apm.md §2) does not depend on how spans are batched.
+- Root span: the span without parent; else, for a complete trace, the earliest span whose parent is not in the trace;
+  for an incomplete trace only a single such span. `dropped_spans` is the maximum over the parts.
+- Reassembly limits: `max_pending_traces` and 64 MiB of pending datagrams; beyond either the oldest pending trace is
+  evicted (its parts counted as `dropped`), a duplicate `seq` or a part after `last` is `dropped`. On agent shutdown
+  or when the module is switched off, pending traces are exported as incomplete.
 - Self-telemetry: `openlog.agent.php.messages{result=accepted|malformed|unsupported_version|dropped}`,
-  `openlog.agent.php.spans`, `openlog.agent.php.reassembly_timeouts`, `openlog.agent.php.pending_traces`.
+  `openlog.agent.php.spans`, `openlog.agent.php.reassembly_timeouts`, `openlog.agent.php.pending_traces`
+  (semantic-conventions §2 agent self-telemetry). `accepted` is counted when the message's trace is exported.
 - Discovery: the `php-fpm` rule's `apm_hint` becomes actionable — the UI shows whether `openlog.so` is loaded
   (detected via the forwarder having received data from that host/service in the last 10 min).
+  The agent sets `apm_hint.status` = `active` when the forwarder accepted a valid message in the last 10 min, else
+  `not_installed` (semantic-conventions §3.4), for every discovered service whose hint names `openlog-agent-php`; a
+  status change triggers an inventory snapshot.
+- Permissions: the agent runs as `openlog-agent`; `chgrp` of the socket to the PHP group only works when that user is
+  a member of the group (e.g. systemd drop-in `SupplementaryGroups=www-data`). Otherwise the socket keeps the agent's
+  group, a warning is logged and `openlog.agent.permission_denied{collector=php_forwarder}` is incremented.
