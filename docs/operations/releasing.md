@@ -193,7 +193,8 @@ Binaries accept a manifest if **any** signature line verifies with **any** compi
 2 active keys). Rotation must never leave deployed agents without a key they trust:
 
 1. Generate key 2 offline (`openlog-release keygen`).
-2. Set `OPENLOG_RELEASE_PUBLIC_KEYS=<key1>,<key2>`, add secret `OPENLOG_RELEASE_SIGNING_KEY_2=<seed2>`.
+2. Set `OPENLOG_RELEASE_PUBLIC_KEYS=<key1>,<key2>`, add secret `OPENLOG_RELEASE_SIGNING_KEY_2=<seed2>`,
+   and add key 2 to `release-public-keys.txt` (the default for source builds of the backend image).
    Releases are now signed by both keys (`manifest.json.sig` has two lines) and binaries trust both.
 3. Release and wait until the fleet runs a version that trusts key 2 (Fleet UI version distribution;
    agents older than the rotation-start release only trust key 1).
@@ -244,7 +245,8 @@ Notes:
   `--add-host host.docker.internal:host-gateway`); compose services can serve `dist/` themselves.
 - `dist/index.json` lists every `dist/v*/manifest.json` (all must verify with the current key —
   `make release-clean` after regenerating keys). `dist/v<version>/index.json` is a copy.
-- A binary built **without** `OPENLOG_RELEASE_PUBLIC_KEYS` trusts nothing; tests can instead pass the
+- The backend `Dockerfile` defaults to the official keys in `release-public-keys.txt` when the build arg is
+  empty. Other binaries (`make build`, agents) built **without** `OPENLOG_RELEASE_PUBLIC_KEYS` trust nothing; tests can instead pass the
   key file: backend `OPENLOG_RELEASE_TRUSTED_KEYS_FILE=dist/testkeys/public.key`, agent
   `release.trusted_keys_file`.
 - **Validly signed but broken release** (auto-rollback tests): build `VERSION=0.11.0`, replace

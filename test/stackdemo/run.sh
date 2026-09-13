@@ -451,6 +451,7 @@ history_has_firing() {
 }
 cpu_load() { # start|stop: busy loops on every core of host-plain (the Docker VM's CPUs)
   if [ "$1" = start ]; then
+    # shellcheck disable=SC2016 # expanded by the container's shell
     dc exec -T -d "${HOSTS[1]}" sh -c 'i=0; n=$(nproc); while [ $i -lt $n ]; do timeout 420 sh -c "while :; do :; done" & i=$((i+1)); done; wait'
   else
     dc exec -T "${HOSTS[1]}" sh -c 'pkill -f "while :; do :; done" || true'

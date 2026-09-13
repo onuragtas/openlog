@@ -43,7 +43,7 @@ Edit `deploy/compose/.env`. **Change every development value** before exposing t
 | `OPENLOG_SECRETS_KEY` | generated above; encrypts alert channel secrets — keep it with your backups |
 | `OPENLOG_POSTGRES_PASSWORD`, `OPENLOG_CLICKHOUSE_PASSWORD` | generated above. Set them **before the first start**: PostgreSQL and ClickHouse only apply them when their volumes are created |
 | `OPENLOG_COOKIE_SECURE` | `true` once the UI is served over HTTPS (see step 5), `false` for plain HTTP |
-| `OPENLOG_UPDATE_CHECK` | `disabled` until the first signed GitHub release exists |
+| `OPENLOG_UPDATE_CHECK` | `enabled` (checks GitHub releases for new versions; see step 6) |
 | `OPENLOG_RELEASE_MIRROR_DIR`, `OPENLOG_RELEASE_SERVE_MIRROR` | empty / `false` (only for air-gapped release mirrors) |
 
 The bootstrap values are applied **on first start only**; change the password later in the UI
@@ -111,6 +111,22 @@ A source-built agent has no release keys compiled in, so it does not update itse
   (Prometheus scraping / health checks only).
 
 ### 6. Update, stop, back up
+
+**Automatic updates (recommended):** run the signed release image instead of a source build, and start the updater.
+In `deploy/compose/.env` set `OPENLOG_IMAGE=ghcr.io/onuragtas/openlog:<latest version>`,
+`OPENLOG_UPDATE_CHECK=enabled` and `OPENLOG_UPDATER_MODE=auto` (`notify` only reports new versions), then:
+
+```sh
+docker compose -p openlog -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env up -d --wait
+docker compose -p openlog -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env --profile updater up -d openlog-updater
+```
+
+The updater backs up PostgreSQL, runs migrations, recreates the containers on the new image and rolls back if the
+health check fails. Agents installed from a release update themselves following the fleet policy (Fleet page).
+A source build (`--build`) also trusts the official release key (`release-public-keys.txt`), so version checks and
+agent updates work, and the updater moves it to the release image on the next version.
+
+**Manual update from source:**
 
 ```sh
 git pull

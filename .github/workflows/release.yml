@@ -52,11 +52,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "release $version on channel $channel"
 
+  # Go agent module tags need `make release-prepare VERSION=X.Y.Z` before tagging. A tag without it
+  # still releases the backend and the infra agent; only the Go module tags are skipped (warning).
   go-agent-modules:
     name: Go agent modules prepared for the tag
     needs: prepare
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      prepared: ${{ steps.check.outputs.prepared }}
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
@@ -65,13 +69,21 @@ jobs:
         with:
           go-version-file: agents/go/go.mod
           cache-dependency-path: agents/go/**/go.sum
-      - name: version.go and in-repo requires equal the tag (make release-prepare before tagging)
-        run: scripts/go-agent-release.sh check "$VERSION"
+      - id: check
+        name: version.go and in-repo requires equal the tag (make release-prepare before tagging)
+        run: |
+          if scripts/go-agent-release.sh check "$VERSION"; then
+            echo "prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prepared=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Go agent modules are not prepared for v$VERSION; Go module tags are skipped (make release-prepare VERSION=$VERSION before the next tag)"
+          fi
       - name: modules build without replace against the tagged requires
+        if: steps.check.outputs.prepared == 'true'
         run: scripts/go-agent-release.sh verify "$VERSION"
 
   image:
-    needs: [prepare, go-agent-modules]
+    needs: [prepare]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -192,7 +204,8 @@ jobs:
   # module tag must never be moved. Pre-releases (vX.Y.Z-beta.N) are tagged too; Go treats them as
   # pre-release versions that `go get …@latest` skips. Tags pushed with GITHUB_TOKEN trigger no workflow.
   go-agent-tags:
-    needs: [prepare, release]
+    needs: [prepare, go-agent-modules, release]
+    if: needs.go-agent-modules.outputs.prepared == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

@@ -24,8 +24,11 @@ COPY --from=web /src/web/dist ./web/dist
 ARG VERSION=0.0.0-dev
 ARG COMMIT=unknown
 ARG DATE=
+# Empty: the official keys from release-public-keys.txt (one base64 key per line), so a source build
+# verifies official releases and can update itself to them.
 ARG OPENLOG_RELEASE_PUBLIC_KEYS=
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    OPENLOG_RELEASE_PUBLIC_KEYS="${OPENLOG_RELEASE_PUBLIC_KEYS:-$(grep -v '^#' release-public-keys.txt | tr -s '\n' ',' | sed 's/,$//')}" && \
     mkdir -p /out && go build -ldflags="-s -w \
       -X github.com/onuragtas/openlog/internal/version.Version=${VERSION} \
       -X github.com/onuragtas/openlog/internal/version.Commit=${COMMIT} \
