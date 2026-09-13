@@ -22,3 +22,7 @@ playwright-report/
 /agents/php/ext/**/*.la
 /agents/php/ext/**/.libs/
 /agents/php/ext/**/modules/
+
+# Release signing keys must never be committed (docs/operations/releasing.md).
+openlog-release-key-*.env
+*.release-key.env
