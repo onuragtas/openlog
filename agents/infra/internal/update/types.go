@@ -6,7 +6,11 @@
 // Contract: docs/contracts/releases-updates.md §3.
 package update
 
-import "time"
+import (
+	"time"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/config"
+)
 
 // Update states reported in sync requests.
 const (
@@ -70,6 +74,9 @@ type SyncRequest struct {
 	Agent      AgentInfo `json:"agent"`
 	Update     Report    `json:"update"`
 	ConfigHash string    `json:"config_hash"`
+	// IntegrationsConfigRevision is the applied remote integration config
+	// revision ("" none, "disabled" when integrations.remote_config is false).
+	IntegrationsConfigRevision string `json:"integrations_config_revision"`
 }
 
 // AgentInfo describes the running agent.
@@ -97,6 +104,9 @@ type SyncResponse struct {
 	PollIntervalSeconds int          `json:"poll_interval_seconds"`
 	ServerVersion       string       `json:"server_version"`
 	Update              *Instruction `json:"update"`
+	// IntegrationsConfig is present only when the host's remote integration
+	// config differs from the reported revision (null/absent: keep the current one).
+	IntegrationsConfig *config.RemoteIntegrations `json:"integrations_config"`
 }
 
 // Instruction is an update ordered by the backend. The backend is untrusted: everything that

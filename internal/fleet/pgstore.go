@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/onuragtas/openlog/internal/intsettings"
 )
 
 // PGStore implements Store on PostgreSQL (migrations/postgres/0002_fleet.sql).
@@ -180,7 +182,7 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 	n := len(recs)
 	var (
 		tenant, hostID, name, agentName, version, commit, goos, arch, method = make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n)
-		state, from, to, errMsg, hash                                        = make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n)
+		state, from, to, errMsg, hash, intRev                                = make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n), make([]string, n)
 		capable                                                              = make([]bool, n)
 		changed                                                              = make([]*time.Time, n)
 		syncAt                                                               = make([]time.Time, n)
@@ -190,7 +192,7 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 		h := r.Report
 		tenant[i], hostID[i], name[i], agentName[i], version[i], commit[i] = r.TenantID, h.HostID, h.HostName, h.AgentName, h.Version, h.Commit
 		goos[i], arch[i], method[i], capable[i] = h.OS, h.Arch, h.InstallMethod, h.UpdateCapable
-		state[i], from[i], to[i], errMsg[i], hash[i] = h.UpdateState, h.UpdateFrom, h.UpdateTo, h.UpdateError, h.ConfigHash
+		state[i], from[i], to[i], errMsg[i], hash[i], intRev[i] = h.UpdateState, h.UpdateFrom, h.UpdateTo, h.UpdateError, h.ConfigHash, h.IntegrationsConfigRevision
 		if !h.UpdateChangedAt.IsZero() {
 			t := h.UpdateChangedAt
 			changed[i] = &t
@@ -200,13 +202,14 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 	}
 	_, err := s.pool.Exec(ctx, `INSERT INTO agent_hosts (org_id, host_id, host_name, agent_name, agent_version, agent_commit,
 			agent_os, agent_arch, install_method, update_capable, update_state, update_from, update_to, update_error,
-			update_changed_at, config_hash, first_seen_at, last_sync_at, rollout_id)
+			update_changed_at, config_hash, first_seen_at, last_sync_at, rollout_id, integrations_config_revision)
 		SELECT o.id, r.host_id, r.host_name, r.agent_name, r.version, r.commit, r.os, r.arch, r.method, r.capable, r.state,
-			r.from_v, r.to_v, r.err, r.changed, r.hash, r.sync_at, r.sync_at, r.rollout::uuid
+			r.from_v, r.to_v, r.err, r.changed, r.hash, r.sync_at, r.sync_at, r.rollout::uuid, r.int_rev
 		FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[],
-			$10::bool[], $11::text[], $12::text[], $13::text[], $14::text[], $15::timestamptz[], $16::text[], $17::timestamptz[], $18::text[])
+			$10::bool[], $11::text[], $12::text[], $13::text[], $14::text[], $15::timestamptz[], $16::text[], $17::timestamptz[], $18::text[],
+			$19::text[])
 			AS r(tenant_id, host_id, host_name, agent_name, version, commit, os, arch, method, capable, state, from_v, to_v, err,
-			     changed, hash, sync_at, rollout)
+			     changed, hash, sync_at, rollout, int_rev)
 		JOIN organizations o ON o.tenant_id = r.tenant_id
 		ON CONFLICT (org_id, host_id) DO UPDATE SET host_name = EXCLUDED.host_name, agent_name = EXCLUDED.agent_name,
 			agent_version = EXCLUDED.agent_version, agent_commit = EXCLUDED.agent_commit, agent_os = EXCLUDED.agent_os,
@@ -214,14 +217,15 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 			update_state = EXCLUDED.update_state, update_from = EXCLUDED.update_from, update_to = EXCLUDED.update_to,
 			update_error = EXCLUDED.update_error, update_changed_at = EXCLUDED.update_changed_at, config_hash = EXCLUDED.config_hash,
 			last_sync_at = GREATEST(agent_hosts.last_sync_at, EXCLUDED.last_sync_at),
-			rollout_id = COALESCE(EXCLUDED.rollout_id, agent_hosts.rollout_id)`,
-		tenant, hostID, name, agentName, version, commit, goos, arch, method, capable, state, from, to, errMsg, changed, hash, syncAt, rollout)
+			rollout_id = COALESCE(EXCLUDED.rollout_id, agent_hosts.rollout_id),
+			integrations_config_revision = EXCLUDED.integrations_config_revision`,
+		tenant, hostID, name, agentName, version, commit, goos, arch, method, capable, state, from, to, errMsg, changed, hash, syncAt, rollout, intRev)
 	return err
 }
 
 const hostCols = `org_id::text, host_id, host_name, agent_name, agent_version, agent_commit, agent_os, agent_arch, install_method,
 	update_capable, update_state, update_from, update_to, update_error, update_changed_at, config_hash, first_seen_at, last_sync_at,
-	coalesce(rollout_id::text, '')`
+	coalesce(rollout_id::text, ''), integrations_config_revision`
 
 func scanHost(row pgx.Row) (Host, error) {
 	var (
@@ -230,7 +234,7 @@ func scanHost(row pgx.Row) (Host, error) {
 	)
 	err := row.Scan(&h.OrgID, &h.HostID, &h.HostName, &h.AgentName, &h.Version, &h.Commit, &h.OS, &h.Arch, &h.InstallMethod,
 		&h.UpdateCapable, &h.UpdateState, &h.UpdateFrom, &h.UpdateTo, &h.UpdateError, &changed, &h.ConfigHash, &h.FirstSeenAt,
-		&h.LastSyncAt, &h.RolloutID)
+		&h.LastSyncAt, &h.RolloutID, &h.IntegrationsConfigRevision)
 	if changed != nil {
 		h.UpdateChangedAt = *changed
 	}
@@ -494,6 +498,15 @@ func (s *PGStore) LoadOrgState(ctx context.Context, tenantID string) (OrgState, 
 	}
 	if st.Rollout, err = s.CurrentRollout(ctx, st.OrgID); err != nil {
 		return st, fmt.Errorf("rollout: %w", err)
+	}
+	st.Integrations, err = intsettings.NewPGStore(s.pool).ListSettings(ctx, st.OrgID)
+	switch {
+	case err == nil:
+		st.IntegrationsLoaded = true
+	case intsettings.IsUndefinedTable(err):
+		st.Integrations = nil // 0008_integration_settings not applied yet: updates keep working
+	default:
+		return st, fmt.Errorf("integration settings: %w", err)
 	}
 	return st, nil
 }

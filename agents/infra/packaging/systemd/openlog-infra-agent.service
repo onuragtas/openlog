@@ -51,6 +51,9 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
+# AF_UNIX is required for /run/docker.sock (and php.sock). ProtectSystem=strict does not block connecting to it:
+# connect(2) needs MAY_WRITE on the socket inode, and read-only mounts only refuse writes to regular files, directories
+# and symlinks. Access comes from the docker group, which the packages/install.sh add (see README "Docker access").
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SystemCallArchitectures=native
 SystemCallFilter=@system-service

@@ -5,6 +5,7 @@ import { accountHandlers, authenticate } from "./account";
 import { alertHandlers } from "./alerts";
 import { apmHandlers } from "./apm";
 import { fleetHandlers } from "./fleet";
+import { integrationSettingsHandlers } from "./integrationSettings";
 import * as fx from "./fixtures";
 
 type ErrorCode = "invalid_argument" | "unauthenticated" | "not_found" | "internal" | "timeout";
@@ -237,6 +238,7 @@ export const handlers = [
 
   ...accountHandlers,
   ...fleetHandlers,
+  ...integrationSettingsHandlers,
   ...apmHandlers,
   ...alertHandlers,
 

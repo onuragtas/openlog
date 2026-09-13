@@ -73,6 +73,11 @@ chart README.
 | `OPENLOG_AUTH_NEGATIVE_CACHE_TTL` | `10s` | Unknown keys are re-checked after this long (a newly created key works within this delay on pods that rejected it before) |
 | `OPENLOG_AUTH_CACHE_MAX_STALE` | `15m` | While PostgreSQL is unreachable, keys resolved successfully within this window keep being accepted (`0` = never serve stale entries) |
 
+`postgres` mode: ingest also reads `OPENLOG_SECRETS_KEY` and `OPENLOG_SECRETS_KEY_PREVIOUS` (see `openlog-alert`) to
+decrypt integration setting passwords for agent sync ([releases-updates.md](releases-updates.md) §3). Use the same
+value as on the api pods; without it settings with a password are not delivered (other syncs are unaffected), and an
+invalid value stops the service at start-up.
+
 License key is read from header `openlog-license-key`, then `x-api-key` (alias for senders configured for other OTLP backends), then `Authorization: Bearer <key>` (gRPC: metadata with the same names). Unknown/missing/revoked key → `401` / `UNAUTHENTICATED`.
 
 **License key cache (`postgres` mode).** Each ingest pod keeps an in-memory cache keyed by `sha256(key)`
@@ -163,7 +168,8 @@ Topics that already exist are left as they are (partition count is never changed
 
 ## `openlog-allinone`
 
-Runs ingest + processor + api in one process with all variables above; one shared admin server.
+Runs ingest + processor + api in one process with all variables above (one `OPENLOG_SECRETS_KEY` serves the api,
+ingest sync and alerting); one shared admin server.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -212,7 +218,7 @@ auth); the api serves `/api/v1/fleet/*` and runs the rollout controller on the l
 | `OPENLOG_FLEET_REPORT_QUEUE_SIZE` | `10000` | Sync reports queued per ingest pod for PostgreSQL; when full the oldest is dropped |
 
 Metrics: ingest `openlog_agent_sync_requests_total{code}`, `openlog_agent_sync_decisions_total{reason}`,
-`openlog_release_mirror_requests_total{code}`, `openlog_fleet_policy_cache_total{result}`,
+`openlog_release_mirror_requests_total{code}`, `openlog_agent_sync_integrations_config_total{result}`, `openlog_fleet_policy_cache_total{result}`,
 `openlog_fleet_host_reports_written_total{result}`, `openlog_fleet_host_reports_dropped_total`,
 `openlog_fleet_host_reports_pending`; api (leader) `openlog_fleet_rollout_transitions_total{transition}`,
 `openlog_agent_updates_total{result}`, `openlog_fleet_hosts{version}`; both
@@ -254,12 +260,13 @@ above and `OPENLOG_POSTGRES_*` for its status and audit events. Details: [upgrad
 Alert rule evaluation and notification delivery ([alerting.md](alerting.md)). Run any number of replicas (rules are
 shared through PostgreSQL leases), or let `openlog-allinone` run it (`OPENLOG_ALERT_ENABLED`). Requires
 `OPENLOG_AUTH_MODE=postgres`; uses the common ClickHouse and PostgreSQL variables. `openlog-api` reads the secrets,
-public URL, SMTP and limit variables too (channel encryption, test sends, previews).
+public URL, SMTP and limit variables too (channel encryption, test sends, previews); `openlog-ingest` reads the secrets
+variables (integration setting passwords in agent sync).
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPENLOG_ALERT_ENABLED` | `true` | `openlog-allinone` only: run the evaluator and dispatcher in the process |
-| `OPENLOG_SECRETS_KEY` | `` | Base64 32-byte AES-256-GCM key for channel secrets (`openssl rand -base64 32`). Without it channels cannot be saved, tested or delivered. Same value on every api and alert pod |
+| `OPENLOG_SECRETS_KEY` | `` | Base64 32-byte AES-256-GCM key for channel secrets and integration setting passwords (`openssl rand -base64 32`). Without it channels cannot be saved, tested or delivered, and integration settings cannot store passwords. Same value on every api, alert and ingest pod |
 | `OPENLOG_SECRETS_KEY_PREVIOUS` | `` | Comma-separated old keys still accepted for decryption during a rotation (then run `openlog-alert rotate-secrets`) |
 | `OPENLOG_PUBLIC_URL` | `` | Web UI base URL for links in notifications (`https://openlog.example.com`); empty = no links |
 | `OPENLOG_ALERT_LEASE_TTL` | `30s` | Rule lease lifetime (≥ 5s): a dead pod's rules move after this long |

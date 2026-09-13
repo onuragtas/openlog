@@ -482,6 +482,21 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 - name: OPENLOG_API_TRUSTED_PROXIES
   value: {{ join "," $a.trustedProxies | quote }}
 {{- end }}
+{{- if and (eq $c "ingest") (include "openlog.postgres.enabled" $root) }}
+{{- /* Integration setting passwords in agent sync answers (releases-updates.md §3). */}}
+- name: OPENLOG_SECRETS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.alertSecretsKeyKey" $root }}
+      optional: true
+- name: OPENLOG_SECRETS_KEY_PREVIOUS
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.alertSecretsKeyPreviousKey" $root }}
+      optional: true
+{{- end }}
 {{- if and (has $c (list "api" "alert")) (include "openlog.postgres.enabled" $root) }}
 {{- /* Alerting (docs/contracts/alerting.md): channel secret encryption, links, egress policy, SMTP. */}}
 {{- $al := $root.Values.alert }}

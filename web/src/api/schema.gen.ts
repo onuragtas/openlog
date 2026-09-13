@@ -867,6 +867,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integrations/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Any role (API keys too). Without host_id every setting of the organization; with host_id the settings that apply to that host in application order, plus the host's current and applied revisions. */
+        get: operations["listIntegrationSettings"];
+        put?: never;
+        /** @description Signed-in admin or owner. 409 already_exists for a duplicate scope, integration and match; 409 failed_precondition for a password without OPENLOG_SECRETS_KEY. */
+        post: operations["createIntegrationSetting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/settings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Signed-in admin or owner. Replaces every non-secret field; password omitted or null = keep, "" = clear. */
+        put: operations["updateIntegrationSetting"];
+        post?: never;
+        /** @description Signed-in admin or owner. */
+        delete: operations["deleteIntegrationSetting"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/rule-types": {
         parameters: {
             query?: never;
@@ -1750,6 +1788,67 @@ export interface components {
             };
             ip: string;
             created_at: components["schemas"]["Timestamp"];
+        };
+        /** @enum {string} */
+        IntegrationName: "nginx" | "redis" | "mysql" | "postgresql" | "docker";
+        IntegrationMatch: {
+            port: number | null;
+            container: string;
+            endpoint: string;
+            /** @description discovered_service instance (e.g. an executable path or a container id) */
+            instance: string;
+        };
+        IntegrationMatchInput: {
+            port?: number | null;
+            container?: string;
+            endpoint?: string;
+            instance?: string;
+        };
+        /** @description Fields an integration does not use must be empty (nginx: endpoint; redis, mysql: endpoint, username, password; postgresql: endpoint, username, password, database, databases; docker: none). */
+        IntegrationSettingInput: {
+            /** @description null or "" = all hosts of the organization */
+            host_id?: string | null;
+            integration: components["schemas"]["IntegrationName"];
+            match?: components["schemas"]["IntegrationMatchInput"];
+            /** @default true */
+            enabled: boolean;
+            /** @description nginx: http(s) URL; others: host:port or unix:/absolute/path */
+            endpoint?: string;
+            username?: string;
+            /** @description Write-only. Omitted or null = keep (PUT), "" = clear */
+            password?: string | null;
+            database?: string;
+            databases?: string[];
+        };
+        IntegrationSetting: {
+            id: string;
+            /** @description null = all hosts */
+            host_id: string | null;
+            integration: components["schemas"]["IntegrationName"];
+            match: components["schemas"]["IntegrationMatch"];
+            enabled: boolean;
+            endpoint: string;
+            username: string;
+            password_set: boolean;
+            database: string;
+            databases: string[];
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            updated_by_email: string;
+        };
+        IntegrationSettingsHost: {
+            host_id: string;
+            /** @description Revision sync sends this host now (sha256:…) */
+            revision: string;
+            /** @description Revision the agent reported in its last sync; "" = none */
+            applied_revision: string;
+            applied_at: components["schemas"]["NullableTimestamp"];
+            /** @description The agent reported remote config as disabled */
+            remote_config_disabled: boolean;
+        };
+        IntegrationSettingsList: {
+            items: components["schemas"]["IntegrationSetting"][];
+            host: components["schemas"]["IntegrationSettingsHost"] | null;
         };
         /** @enum {string} */
         FleetMode: "off" | "notify" | "auto";
@@ -4199,6 +4298,114 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listIntegrationSettings: {
+        parameters: {
+            query?: {
+                /** @description Agent host id (host.id); at most 256 bytes */
+                host_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationSettingsList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createIntegrationSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationSettingInput"];
+            };
+        };
+        responses: {
+            /** @description Created setting */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationSetting"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateIntegrationSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationSettingInput"];
+            };
+        };
+        responses: {
+            /** @description Stored setting */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationSetting"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteIntegrationSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAlertRuleTypes: {

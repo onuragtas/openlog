@@ -360,6 +360,11 @@ func (m *Manager) Hosts(ctx context.Context, orgID string, f HostFilter) ([]Host
 	return out, next, nil
 }
 
+// Host returns a stored agent host (ErrNotFound when it never synced).
+func (m *Manager) Host(ctx context.Context, orgID, hostID string) (Host, error) {
+	return m.store.GetHost(ctx, orgID, hostID)
+}
+
 // PutOverride sets hold or pin for a known host.
 func (m *Manager) PutOverride(ctx context.Context, orgID, hostID, action, ver string, a Actor) (Override, error) {
 	o := Override{HostID: hostID, Action: action, UpdatedAt: m.o.Now()}

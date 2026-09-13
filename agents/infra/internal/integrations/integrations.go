@@ -13,6 +13,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
@@ -126,6 +127,42 @@ type Instance struct {
 	Log      *slog.Logger
 	// HostName is the host.name used for service.instance.id of local endpoints.
 	HostName string
+	// Memo keeps values across collector re-creation (e.g. the probed nginx
+	// stub_status URL); nil-safe.
+	Memo *Memo
+}
+
+// Memo is a small per-instance string store.
+type Memo struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+// Get returns a stored value ("" when unset or m is nil).
+func (m *Memo) Get(k string) string {
+	if m == nil {
+		return ""
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.m[k]
+}
+
+// Set stores a value; "" deletes it. No-op on a nil Memo.
+func (m *Memo) Set(k, v string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if v == "" {
+		delete(m.m, k)
+		return
+	}
+	if m.m == nil {
+		m.m = map[string]string{}
+	}
+	m.m[k] = v
 }
 
 // Password resolves the configured password.

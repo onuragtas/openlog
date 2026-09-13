@@ -11,6 +11,8 @@ import (
 	"io"
 	"log/slog"
 	"path"
+	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -92,6 +94,9 @@ type Agent struct {
 	// Integration status fingerprint of the last inventory snapshot.
 	statusFP      uint64
 	statusPending bool
+	// remoteApplied is set by agent sync when a remote integration config was
+	// applied: the next settled status change is sent without statusSnapshotGap.
+	remoteApplied atomic.Bool
 
 	interval      time.Duration
 	lastInventory time.Time
@@ -157,6 +162,9 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 			Config: &cfg.Integrations, Integrations: Registry(cfg, a.ctr), Rules: rs,
 			FS: a.fs, Log: log.With("component", "integrations"), Stats: a.stats, Resource: a.res,
 			AgentName: resource.AgentName, AgentVersion: version, HostName: resource.Hostname(a.fs),
+			// Read at startup (also by -once, so it reports what the service card will say);
+			// written only when agent sync delivers a new config.
+			RemoteStatePath: filepath.Join(cfg.StateDir, integrations.RemoteStateFile),
 		})
 	}
 	for _, w := range cfg.Warnings() {
@@ -209,6 +217,22 @@ func (a *Agent) HostID() string { return a.hostID }
 
 // HostName returns the host name as seen through host.root_path.
 func (a *Agent) HostName() string { return resource.Hostname(a.fs) }
+
+// IntegrationsConfigRevision is the remote integration config revision reported in agent sync.
+func (a *Agent) IntegrationsConfigRevision() string {
+	if a.integ == nil {
+		return ""
+	}
+	return a.integ.RemoteRevision()
+}
+
+// ApplyRemoteIntegrations applies a remote integration config received by agent sync
+// (safe to call from the sync goroutine).
+func (a *Agent) ApplyRemoteIntegrations(rc *config.RemoteIntegrations) {
+	if a.integ != nil && a.integ.SetRemote(rc) {
+		a.remoteApplied.Store(true)
+	}
+}
 
 // OnExportSuccess registers fn to run after every payload the ingest accepted. It must be set
 // before Run and must not block.
@@ -269,7 +293,9 @@ func (a *Agent) CollectInventory(now time.Time) (*logspb.LogsData, []discovery.S
 		start := time.Now()
 		services = a.engine.Discover(d)
 		if a.integ != nil {
-			a.integ.Reconcile(services, d.Containers)
+			// Without the runtime API (docker.sock permission denied) container ports and
+			// addresses come from the containers' network namespaces and docker-proxy.
+			a.integ.Reconcile(services, integrations.ProcessContainers(a.fs, d.Instances, d.Containers))
 			a.integ.Annotate(services)
 			a.statusFP, a.statusPending = a.integ.StatusFingerprint()
 		}
@@ -479,6 +505,11 @@ func (a *Agent) collectRound() {
 			// one per statusSnapshotGap for later transitions.
 			sfp, pending := a.integ.StatusFingerprint()
 			statusChanged = sfp != a.statusFP && ((a.statusPending && !pending) || now.Sub(a.lastInventory) >= statusSnapshotGap)
+			if !pending && a.remoteApplied.Load() {
+				// A remote config was applied and every instance has a result again.
+				statusChanged = statusChanged || sfp != a.statusFP
+				a.remoteApplied.Store(false)
+			}
 		}
 		// apm_hint.status of PHP services flips when spans start or stop arriving.
 		apmChanged := a.engine != nil && !a.lastInventory.IsZero() && a.php.active(time.Now()) != a.apmActive

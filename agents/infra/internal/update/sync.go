@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onuragtas/openlog/agents/infra/internal/config"
 	"github.com/onuragtas/openlog/agents/infra/internal/exporter"
 )
 
@@ -59,6 +60,9 @@ type Syncer struct {
 	Request func() SyncRequest
 	// Handle processes an instruction (may block for the duration of an update).
 	Handle func(context.Context, *Instruction)
+	// Integrations receives the remote integration config of a successful sync
+	// when the backend sent one (optional; must not block for long).
+	Integrations func(*config.RemoteIntegrations)
 	// Kick triggers an immediate sync (state changes).
 	Kick <-chan struct{}
 	// InitialDelay before the first sync; negative means a random delay up to MaxInitialDelay.
@@ -153,6 +157,9 @@ func (s *Syncer) Run(ctx context.Context) {
 				lastErr = ""
 			}
 			interval = ClampPoll(resp.PollIntervalSeconds)
+			if resp.IntegrationsConfig != nil && s.Integrations != nil {
+				s.Integrations(resp.IntegrationsConfig)
+			}
 		}
 		wait = Jitter(interval, rnd())
 		if err == nil && resp.Update != nil {

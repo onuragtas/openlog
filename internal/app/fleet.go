@@ -8,11 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/api"
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/fleet"
 	"github.com/onuragtas/openlog/internal/fleet/catalog"
 	"github.com/onuragtas/openlog/internal/ingest"
+	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/release"
 	"github.com/onuragtas/openlog/internal/tenant"
 )
@@ -47,9 +49,10 @@ func releaseCatalog(ctx context.Context, cfg config.Config, reg prometheus.Regis
 }
 
 // startFleetIngest serves POST /v1/openlog/agent/sync and the release mirror on the OTLP/HTTP
-// listener. pool is nil in static auth mode (sync answers without updates). The returned function
-// waits for the final write of queued sync reports; call it before closing pool.
-func startFleetIngest(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, res tenant.Resolver, svc *ingest.Service, reg prometheus.Registerer, log *slog.Logger) (wait func()) {
+// listener. pool is nil in static auth mode (sync answers without updates or integration config); keys
+// decrypts integration setting passwords. The returned function waits for the final write of queued sync
+// reports; call it before closing pool.
+func startFleetIngest(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, keys *secrets.Keyring, res tenant.Resolver, svc *ingest.Service, reg prometheus.Registerer, log *slog.Logger) (wait func()) {
 	log = log.With("job", "fleet-sync")
 	var (
 		states *fleet.StateCache
@@ -67,10 +70,24 @@ func startFleetIngest(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 	}
 	syncSvc := fleet.NewSyncService(res, states, rec, cat, fleet.SyncOptions{
 		PollInterval: cfg.Fleet.SyncInterval, ServeMirror: cfg.Fleet.ReleaseServeMirror, MirrorBaseURL: cfg.Fleet.ReleaseMirrorBaseURL,
-		Registerer: reg, Log: log,
+		Keys: keys, Registerer: reg, Log: log,
 	})
 	svc.SetHTTPRoutes(syncSvc.Register)
 	return func() { <-done }
+}
+
+// startIntegrationSettingsAPI enables /api/v1/integrations/settings (docs/contracts/api.md). pool is nil in static
+// auth mode, where the endpoints are not available.
+func startIntegrationSettingsAPI(cfg config.Config, pool *pgxpool.Pool, srv *api.Server, log *slog.Logger) error {
+	if pool == nil {
+		return nil
+	}
+	kr, err := alertKeyring(cfg)
+	if err != nil {
+		return err
+	}
+	srv.SetIntegrationSettings(intsettings.NewManager(intsettings.NewPGStore(pool), intsettings.ManagerOptions{Keys: kr, Log: log}))
+	return nil
 }
 
 // startFleetAPI enables the fleet management API and returns the rollout controller, to be run

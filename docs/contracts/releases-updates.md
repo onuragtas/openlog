@@ -80,9 +80,14 @@ Served by `openlog-ingest` on the OTLP HTTP port, same auth as OTLP (`openlog-li
             "update_capable": true},
   "update": {"state": "idle|downloading|verifying|staged|restarting|confirming|succeeded|failed|rolled_back",
              "from_version": "0.2.0", "to_version": "0.3.0", "error": "", "changed_at": "…"},
-  "config_hash": "sha256:…"
+  "config_hash": "sha256:…",
+  "integrations_config_revision": "sha256:…"
 }
 ```
+
+`integrations_config_revision`: revision of the remote integration config the agent has applied (`""` = none;
+`"disabled"` when `integrations.remote_config: false` in the agent config). Stored on the host (`agent_hosts`, at
+most 128 bytes) and shown by `GET /api/v1/integrations/settings?host_id=` as `applied_revision`.
 
 ### Response
 
@@ -90,7 +95,8 @@ Served by `openlog-ingest` on the OTLP HTTP port, same auth as OTLP (`openlog-li
 {
   "poll_interval_seconds": 300,
   "server_version": "0.4.0",
-  "update": null
+  "update": null,
+  "integrations_config": null
 }
 ```
 
@@ -116,6 +122,39 @@ Or, when the policy selects this host for an update:
 - `download_url` may point to the release source or to a backend mirror (`/v1/openlog/releases/<version>/<name>` on ingest). The agent verifies against the **signed manifest's** sha256 and size regardless of URL.
 - `poll_interval_seconds`: server-controlled, clamped by the agent to [60, 3600], ±10% jitter.
 - Unknown fields are ignored on both sides. `404` or `501` from an old backend → the agent disables sync until restart and logs once.
+
+#### Remote integration config
+
+When the host's effective integration settings (edited under `/api/v1/integrations/settings`, stored in
+`integration_settings`) have a revision other than the request's `integrations_config_revision`, the answer carries them:
+
+```json
+"integrations_config": {
+  "revision": "sha256:4f1c…",
+  "items": [
+    {"integration": "redis", "enabled": true, "endpoint": "127.0.0.1:6379", "username": "default",
+     "password": "<plaintext>", "database": "", "databases": []},
+    {"integration": "nginx", "match": {"port": 8080, "container": "", "endpoint": "", "instance": ""},
+     "enabled": true, "endpoint": "http://127.0.0.1:8080/nginx_status", "username": "", "password": "",
+     "database": "", "databases": []}
+  ]
+}
+```
+
+- `null` (or absent, from older servers) = keep the current config. It is also `null` when the revision is unchanged,
+  with `OPENLOG_AUTH_MODE=static`, while PostgreSQL is unavailable and nothing is cached, or when a password cannot be
+  decrypted (ingest logs a warning without secrets; `openlog_agent_sync_integrations_config_total{result="error"}`).
+- `items` is the complete remote config (it replaces the previous one; `[]` = no remote settings) in application order:
+  settings for all hosts first, then settings for this host; within each group settings without `match` first; ties
+  by creation time. `match` is omitted when the setting applies to every instance; `port` is omitted when unset.
+  Fields an integration does not use are empty.
+- Revision = `"sha256:"` + hex sha256 of the JSON `items` array with each password replaced by its stored ciphertext,
+  so it changes with every change, including a new password (re-encrypting with a new key changes it too).
+- The agent applies the items, persists them with the revision (mode 0600) and reports the revision in every following
+  sync. `"disabled"` never matches, so such agents receive the object on every sync and ignore it.
+- Passwords are sent in plaintext inside the (TLS) ingest connection to agents authenticated with the organization's
+  license key; at rest they are encrypted in PostgreSQL with `OPENLOG_SECRETS_KEY`, which ingest therefore needs too.
+- Changes reach an agent within `OPENLOG_FLEET_POLICY_CACHE_TTL` plus one poll interval.
 
 ### Agent verification rules (all must pass or the update is rejected and reported as `failed`)
 

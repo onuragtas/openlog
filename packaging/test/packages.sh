@@ -37,9 +37,14 @@ pkg_install() {
 	if [ "$fmt" = deb ]; then dpkg --force-confdef --force-confold -i "$1"; else rpm -U --replacepkgs "$1"; fi
 }
 pkg1=/r1/openlog-infra-agent_${V1}_linux_${ARCH}.$fmt
+in_docker() { getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx openlog-agent; }
+groupadd --system docker
 
 say "install $pkg1"
 pkg_install "$pkg1"
+say "docker access"
+in_docker
+echo "openlog-agent is in the docker group"
 say "layout"
 readlink $R/current
 test "$(readlink $R/current)" = "versions/$V1"
@@ -70,6 +75,20 @@ pkg_install "$pkg1"
 test "$(readlink $R/current)" = versions/99.0.0 && echo "current still versions/99.0.0"
 rm -rf $R/versions/99.0.0
 ln -sfn versions/$V1 $R/current
+test "$(getent group docker | cut -d: -f4)" = openlog-agent
+echo "docker membership added once"
+
+say "docker access opt-out"
+gpasswd -d openlog-agent docker
+touch /etc/openlog-infra-agent/no-docker-access
+pkg_install "$pkg1"
+if in_docker; then echo "FAIL: opt-out file ignored"; exit 1; fi
+echo "opt-out file respected on reinstall"
+rm /etc/openlog-infra-agent/no-docker-access
+OPENLOG_AGENT_DOCKER_ACCESS=0 pkg_install "$pkg1"
+if in_docker; then echo "FAIL: OPENLOG_AGENT_DOCKER_ACCESS=0 ignored"; exit 1; fi
+test -e /etc/openlog-infra-agent/no-docker-access
+echo "OPENLOG_AGENT_DOCKER_ACCESS=0 respected and recorded"
 
 if [ -n "$V2" ]; then
 	pkg2=/r2/openlog-infra-agent_${V2}_linux_${ARCH}.$fmt

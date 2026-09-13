@@ -69,6 +69,9 @@ type HostReport struct {
 	UpdateError     string
 	UpdateChangedAt time.Time
 	ConfigHash      string
+	// IntegrationsConfigRevision is the remote integration config revision the agent has applied ("" = none,
+	// "disabled" = remote config turned off on the host).
+	IntegrationsConfigRevision string
 }
 
 // Override is a per-host exception to the policy.

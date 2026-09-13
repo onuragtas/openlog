@@ -50,8 +50,13 @@ func (Integration) Hint(inst *integrations.Instance) string {
 	if len(inst.Endpoints) > 0 {
 		ep = inst.Endpoints[0].Display
 	}
-	return `# CREATE ROLE openlog WITH LOGIN PASSWORD '<password>';
-# GRANT pg_monitor TO openlog;
+	return `# PostgreSQL needs a read-only monitoring role; the agent never creates roles itself. Run as a
+# superuser (for a container: docker exec -it <container> psql -U postgres):
+#   CREATE ROLE openlog WITH LOGIN PASSWORD '<password>';
+#   GRANT pg_monitor TO openlog;
+# pg_hba.conf must allow the role from the agent's address (127.0.0.1, or the Docker network for
+# a container). Then enter the user and password in openlog (host → Integrations → PostgreSQL),
+# or in config.yaml:
 integrations:
   postgresql:
     username: openlog

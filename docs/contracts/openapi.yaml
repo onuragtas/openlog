@@ -29,6 +29,7 @@ tags:
   - name: apm
     description: Application performance monitoring derived from traces (apm.md)
   - name: fleet
+  - name: integrations
   - name: alerts
 
 paths:
@@ -1336,6 +1337,77 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/integrations/settings:
+    get:
+      tags: [integrations]
+      operationId: listIntegrationSettings
+      description: >-
+        Any role (API keys too). Without host_id every setting of the organization; with host_id the settings that apply
+        to that host in application order, plus the host's current and applied revisions.
+      parameters:
+        - { name: host_id, in: query, description: "Agent host id (host.id); at most 256 bytes", schema: { type: string } }
+      responses:
+        "200":
+          description: Integration settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationSettingsList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [integrations]
+      operationId: createIntegrationSetting
+      description: Signed-in admin or owner. 409 already_exists for a duplicate scope, integration and match; 409 failed_precondition for a password without OPENLOG_SECRETS_KEY.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationSettingInput" }
+      responses:
+        "201":
+          description: Created setting
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationSetting" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/integrations/settings/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [integrations]
+      operationId: updateIntegrationSetting
+      description: Signed-in admin or owner. Replaces every non-secret field; password omitted or null = keep, "" = clear.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationSettingInput" }
+      responses:
+        "200":
+          description: Stored setting
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationSetting" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [integrations]
+      operationId: deleteIntegrationSetting
+      description: Signed-in admin or owner.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---- Alerting (docs/contracts/alerting.md) ----
   /api/v1/alerts/rule-types:
@@ -2725,6 +2797,87 @@ components:
         details: { type: object, additionalProperties: true }
         ip: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
+
+    IntegrationName: { type: string, enum: [nginx, redis, mysql, postgresql, docker] }
+
+    IntegrationMatch:
+      type: object
+      required: [port, container, endpoint, instance]
+      properties:
+        port: { type: [integer, "null"], minimum: 1, maximum: 65535 }
+        container: { type: string }
+        endpoint: { type: string }
+        instance: { type: string, description: "discovered_service instance (e.g. an executable path or a container id)" }
+
+    IntegrationMatchInput:
+      type: object
+      properties:
+        port: { type: [integer, "null"], minimum: 1, maximum: 65535 }
+        container: { type: string, maxLength: 512 }
+        endpoint: { type: string, maxLength: 512 }
+        instance: { type: string, maxLength: 512 }
+
+    IntegrationSettingInput:
+      type: object
+      required: [integration]
+      description: >-
+        Fields an integration does not use must be empty (nginx: endpoint; redis, mysql: endpoint, username, password;
+        postgresql: endpoint, username, password, database, databases; docker: none).
+      properties:
+        host_id: { type: [string, "null"], maxLength: 256, description: null or "" = all hosts of the organization }
+        integration: { $ref: "#/components/schemas/IntegrationName" }
+        match: { $ref: "#/components/schemas/IntegrationMatchInput" }
+        enabled: { type: boolean, default: true }
+        endpoint: { type: string, maxLength: 512, description: "nginx: http(s) URL; others: host:port or unix:/absolute/path" }
+        username: { type: string, maxLength: 512 }
+        password: { type: [string, "null"], maxLength: 512, description: 'Write-only. Omitted or null = keep (PUT), "" = clear' }
+        database: { type: string, maxLength: 512 }
+        databases:
+          type: array
+          maxItems: 64
+          items: { type: string, maxLength: 512 }
+
+    IntegrationSetting:
+      type: object
+      required: [id, host_id, integration, match, enabled, endpoint, username, password_set, database, databases, created_at, updated_at, updated_by_email]
+      properties:
+        id: { type: string }
+        host_id: { type: [string, "null"], description: null = all hosts }
+        integration: { $ref: "#/components/schemas/IntegrationName" }
+        match: { $ref: "#/components/schemas/IntegrationMatch" }
+        enabled: { type: boolean }
+        endpoint: { type: string }
+        username: { type: string }
+        password_set: { type: boolean }
+        database: { type: string }
+        databases:
+          type: array
+          items: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_by_email: { type: string }
+
+    IntegrationSettingsHost:
+      type: object
+      required: [host_id, revision, applied_revision, applied_at, remote_config_disabled]
+      properties:
+        host_id: { type: string }
+        revision: { type: string, description: "Revision sync sends this host now (sha256:…)" }
+        applied_revision: { type: string, description: 'Revision the agent reported in its last sync; "" = none' }
+        applied_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        remote_config_disabled: { type: boolean, description: The agent reported remote config as disabled }
+
+    IntegrationSettingsList:
+      type: object
+      required: [items, host]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationSetting" }
+        host:
+          oneOf:
+            - { $ref: "#/components/schemas/IntegrationSettingsHost" }
+            - { type: "null" }
 
     FleetMode: { type: string, enum: [off, notify, auto] }
     FleetChannel: { type: string, enum: [stable, beta] }

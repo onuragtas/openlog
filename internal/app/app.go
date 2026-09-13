@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/onuragtas/openlog/internal/admin"
+	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/api"
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
@@ -102,7 +103,8 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 	log = log.With("component", "ingest")
 	var (
 		res    tenant.Resolver
-		pgPool *pgxpool.Pool // nil in static mode
+		pgPool *pgxpool.Pool    // nil in static mode
+		keys   *secrets.Keyring // integration setting passwords in sync answers (postgres mode)
 	)
 	if cfg.AuthMode == "static" {
 		r, err := staticResolver(cfg, log)
@@ -111,6 +113,11 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 		}
 		res = r
 	} else {
+		kr, err := alertKeyring(cfg)
+		if err != nil {
+			return err
+		}
+		keys = kr
 		// No startup wait and no readiness check on PostgreSQL: ingest keeps
 		// accepting cached keys while PostgreSQL is briefly unavailable.
 		pool, err := OpenPostgres(ctx, cfg, "openlog-ingest")
@@ -143,7 +150,7 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 	adm.AddCheck("kafka_topics", topics.Check)
 	svc := ingest.New(cfg.Ingest, cfg.KafkaTopicPrefix, res, prod, log, adm.Registry())
 	// Agent sync + release mirror (internal/fleet); flushes queued reports before the pool closes.
-	defer startFleetIngest(ctx, cfg, pgPool, res, svc, adm.Registry(), log)()
+	defer startFleetIngest(ctx, cfg, pgPool, keys, res, svc, adm.Registry(), log)()
 	err = svc.Run(ctx, ShutdownTimeout)
 	cctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	prod.Close(cctx)
@@ -262,6 +269,9 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	}
 	srv.SetAPM(apmSettings, cfg.APM.DefaultApdexT)
 	if err := startAlertAPI(cfg, pgPool, srv, apmSettings, log); err != nil { // alert.go
+		return err
+	}
+	if err := startIntegrationSettingsAPI(cfg, pgPool, srv, log); err != nil { // fleet.go
 		return err
 	}
 	var apmLinker func(ctx context.Context)

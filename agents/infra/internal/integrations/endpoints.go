@@ -21,7 +21,8 @@ const MaxEndpointCandidates = 8
 //     addresses are reached over loopback),
 //  2. well-known unix sockets that exist under host.root_path,
 //  3. published container ports on the host loopback,
-//  4. container IP addresses with the container's private ports.
+//  4. container IP addresses with the container's private ports,
+//  5. only when nothing else is known, the default port on 127.0.0.1.
 func DeriveEndpoints(t Target, spec EndpointSpec, fs *hostfs.FS) []Endpoint {
 	var out []Endpoint
 	seen := map[string]bool{}
@@ -99,6 +100,13 @@ func DeriveEndpoints(t Target, spec EndpointSpec, fs *hostfs.FS) []Endpoint {
 				add(TCP(ip, p))
 			}
 		}
+	}
+
+	// 5. Nothing known about the service's sockets (a container whose runtime
+	// API and network namespace are unreadable): its default port on loopback,
+	// where a published container port usually is.
+	if len(out) == 0 && spec.DefaultPort > 0 && !skip(spec.DefaultPort) {
+		add(TCP("127.0.0.1", spec.DefaultPort))
 	}
 	return out
 }

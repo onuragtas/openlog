@@ -11,11 +11,14 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/fleet/catalog"
+	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/tenant"
 	"github.com/onuragtas/openlog/internal/version"
 )
@@ -32,9 +35,12 @@ type SyncOptions struct {
 	ServeMirror   bool          // download_url points to this ingest's mirror endpoint
 	MirrorBaseURL string        // external ingest URL for mirror links; empty = derived from the request
 	MaxBodyBytes  int64         // [64 KiB]
-	Registerer    prometheus.Registerer
-	Log           *slog.Logger
-	Now           func() time.Time
+	// Keys decrypts integration setting passwords (OPENLOG_SECRETS_KEY); without it settings with a password
+	// are not delivered.
+	Keys       *secrets.Keyring
+	Registerer prometheus.Registerer
+	Log        *slog.Logger
+	Now        func() time.Time
 }
 
 // SyncService serves the agent sync and release mirror endpoints on ingest.
@@ -45,9 +51,13 @@ type SyncService struct {
 	catalog  *catalog.Catalog // nil: no releases
 	o        SyncOptions
 
-	requests  *prometheus.CounterVec
-	decisions *prometheus.CounterVec
-	mirror    *prometheus.CounterVec
+	requests     *prometheus.CounterVec
+	decisions    *prometheus.CounterVec
+	mirror       *prometheus.CounterVec
+	integrations *prometheus.CounterVec
+
+	warnMu   sync.Mutex
+	lastWarn time.Time
 }
 
 // NewSyncService creates the service. states, recorder and cat may be nil.
@@ -74,9 +84,13 @@ func NewSyncService(res tenant.Resolver, states *StateCache, rec *Recorder, cat 
 		mirror: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "openlog_release_mirror_requests_total", Help: "Release mirror downloads by HTTP status code.",
 		}, []string{"code"}),
+		integrations: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "openlog_agent_sync_integrations_config_total",
+			Help: "Remote integration config in sync answers by result: sent, unchanged, unavailable (settings unknown), error (password not decryptable).",
+		}, []string{"result"}),
 	}
 	if o.Registerer != nil {
-		o.Registerer.MustRegister(s.requests, s.decisions, s.mirror)
+		o.Registerer.MustRegister(s.requests, s.decisions, s.mirror, s.integrations)
 	}
 	return s
 }
@@ -106,7 +120,8 @@ type syncRequest struct {
 		Error       string `json:"error"`
 		ChangedAt   string `json:"changed_at"`
 	} `json:"update"`
-	ConfigHash string `json:"config_hash"`
+	ConfigHash                 string `json:"config_hash"`
+	IntegrationsConfigRevision string `json:"integrations_config_revision"`
 }
 
 // SyncResponse is the sync answer.
@@ -114,6 +129,15 @@ type SyncResponse struct {
 	PollIntervalSeconds int         `json:"poll_interval_seconds"`
 	ServerVersion       string      `json:"server_version"`
 	Update              *UpdateJSON `json:"update"`
+	// IntegrationsConfig is set only when the host's effective settings differ from the revision it reported;
+	// null = keep the current config.
+	IntegrationsConfig *IntegrationsConfigJSON `json:"integrations_config"`
+}
+
+// IntegrationsConfigJSON is the remote integration config of a host.
+type IntegrationsConfigJSON struct {
+	Revision string                  `json:"revision"`
+	Items    []intsettings.AgentItem `json:"items"`
 }
 
 // UpdateJSON is an update order for an agent.
@@ -196,6 +220,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 		Version: clip(req.Agent.Version, 128), Commit: clip(req.Agent.Commit, 64), OS: clip(req.Agent.OS, 32),
 		Arch: clip(req.Agent.Arch, 32), InstallMethod: clip(req.Agent.InstallMethod, 32), UpdateCapable: req.Agent.UpdateCapable,
 		UpdateState: StateIdle, ConfigHash: clip(req.ConfigHash, 128),
+		IntegrationsConfigRevision: clip(strings.TrimSpace(req.IntegrationsConfigRevision), 128),
 	}
 	if u := req.Update; u != nil {
 		if st := clip(strings.TrimSpace(u.State), 32); st != "" {
@@ -213,6 +238,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 		reason := ReasonNoCatalog
 		if st, found, ok := s.states.Get(r.Context(), tenantID); !ok {
 			reason = "policy_unavailable"
+			s.integrations.WithLabelValues("unavailable").Inc()
 		} else if !found {
 			reason = "unknown_organization"
 		} else {
@@ -229,6 +255,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 				resp.Update = s.updateJSON(r, d, st.Policy, now)
 				rolloutID = d.RolloutID
 			}
+			resp.IntegrationsConfig = s.integrationsConfig(st, rep)
 		}
 		s.decisions.WithLabelValues(string(reason)).Inc()
 		if s.recorder != nil {
@@ -241,6 +268,45 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(resp)
+}
+
+// integrationsConfig returns the host's remote integration config when its revision differs from the one the
+// agent reported, or nil (unchanged, settings unknown, or a password that cannot be decrypted: the agent keeps
+// its last config).
+func (s *SyncService) integrationsConfig(st OrgState, rep HostReport) *IntegrationsConfigJSON {
+	if !st.IntegrationsLoaded {
+		s.integrations.WithLabelValues("unavailable").Inc()
+		return nil
+	}
+	eff := intsettings.Effective(st.Integrations, rep.HostID)
+	rev := intsettings.Revision(eff)
+	if rev == rep.IntegrationsConfigRevision {
+		s.integrations.WithLabelValues("unchanged").Inc()
+		return nil
+	}
+	items, err := intsettings.AgentItems(s.o.Keys, eff)
+	if err != nil {
+		s.integrations.WithLabelValues("error").Inc()
+		s.warnDecrypt(st.OrgID, rep.HostID, err)
+		return nil
+	}
+	s.integrations.WithLabelValues("sent").Inc()
+	return &IntegrationsConfigJSON{Revision: rev, Items: items}
+}
+
+// warnDecrypt logs at most once per minute per pod (the error names the setting and key id, never secrets).
+func (s *SyncService) warnDecrypt(orgID, hostID string, err error) {
+	now := s.o.Now()
+	s.warnMu.Lock()
+	quiet := !s.lastWarn.IsZero() && now.Sub(s.lastWarn) < time.Minute
+	if !quiet {
+		s.lastWarn = now
+	}
+	s.warnMu.Unlock()
+	if !quiet {
+		s.o.Log.Warn("cannot decrypt integration setting password; integrations_config not sent (check OPENLOG_SECRETS_KEY)",
+			"org_id", orgID, "host_id", hostID, "err", err)
+	}
 }
 
 func (s *SyncService) updateJSON(r *http.Request, d Decision, p Policy, now time.Time) *UpdateJSON {

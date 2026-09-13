@@ -35,6 +35,9 @@ type IntegrationsConfig struct {
 	MaxConcurrent int `yaml:"max_concurrent"`
 	// MaxInstances limits the number of integration instances.
 	MaxInstances int `yaml:"max_instances"`
+	// RemoteConfig applies integration settings configured in the openlog UI and
+	// delivered by agent sync over this file (remote wins per field, D-039).
+	RemoteConfig bool `yaml:"remote_config"`
 
 	Nginx      IntegrationConfig `yaml:"nginx"`
 	Redis      IntegrationConfig `yaml:"redis"`
@@ -154,7 +157,7 @@ func defaultIntegrations() IntegrationsConfig {
 	on := IntegrationConfig{Enabled: true}
 	return IntegrationsConfig{
 		Enabled: true, Interval: Duration(30 * time.Second), Timeout: Duration(10 * time.Second),
-		MaxConcurrent: 4, MaxInstances: 32,
+		MaxConcurrent: 4, MaxInstances: 32, RemoteConfig: true,
 		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on,
 	}
 }
@@ -280,6 +283,19 @@ func (c *Config) Warnings() []string {
 // Its String/GoString/MarshalText never reveal the value.
 type Secret string
 
+// literalPrefix marks a value that is never interpreted as a reference. Remote
+// integration config uses it so that a password from the backend cannot make
+// the agent read an environment variable or a local file.
+const literalPrefix = "literal:"
+
+// LiteralSecret returns a Secret holding v verbatim ("" stays empty).
+func LiteralSecret(v string) Secret {
+	if v == "" {
+		return ""
+	}
+	return Secret(literalPrefix + v)
+}
+
 // ErrSecretUnset means the referenced environment variable or file is empty/missing.
 var ErrSecretUnset = errors.New("secret not set")
 
@@ -335,6 +351,8 @@ func (s Secret) Resolve() (string, error) {
 	switch {
 	case v == "":
 		return "", nil
+	case strings.HasPrefix(v, literalPrefix):
+		return strings.TrimPrefix(v, literalPrefix), nil
 	case strings.HasPrefix(v, "env:"):
 		name := strings.TrimPrefix(v, "env:")
 		val := os.Getenv(name)

@@ -54,6 +54,8 @@ if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
 fi
 I="sh /repo/scripts/install.sh --base-url $BASE"
 current() { readlink /opt/openlog/infra-agent/current; }
+in_docker() { getent group docker | cut -d: -f4 | tr "," "\n" | grep -qx openlog-agent; }
+getent group docker >/dev/null || groupadd --system docker 2>/dev/null || addgroup -S docker
 
 say "tampered artifact is rejected"
 if sh /repo/scripts/install.sh --base-url "$BASE/.tamper" --version "$STABLE" --license-key k 2>/tmp/tamper.log; then
@@ -83,6 +85,18 @@ $I --endpoint https://ingest2.example.com:4318 2>&1 | tee /tmp/rerun.log
 grep -q "already installed" /tmp/rerun.log
 grep -q "^endpoint: \"https://ingest2.example.com:4318\"" /etc/openlog-infra-agent/config.yaml
 grep -q "^license_key: \"test-license-key\"" /etc/openlog-infra-agent/config.yaml
+
+say "docker access (default on, --no-docker-access persists)"
+in_docker
+test "$(getent group docker | cut -d: -f4)" = openlog-agent
+echo "openlog-agent is in the docker group (once)"
+gpasswd -d openlog-agent docker 2>/dev/null || delgroup openlog-agent docker
+$I --no-docker-access
+test -e /etc/openlog-infra-agent/no-docker-access
+if in_docker; then echo "FAIL: --no-docker-access ignored"; exit 1; fi
+$I
+if in_docker; then echo "FAIL: opt-out not kept on re-run"; exit 1; fi
+echo "opt-out kept on re-run"
 
 if [ -n "$BETA" ]; then
 	say "beta channel upgrade"

@@ -73,6 +73,8 @@ integrations:                    # metric integrations bound to discovered servi
   timeout: 10s                   # per collection (connect + queries), <= interval
   max_concurrent: 4              # collections running at the same time
   max_instances: 32              # further instances report not_available
+  remote_config: true            # apply settings entered in openlog (host → Integrations); remote values win per field.
+                                 # false: only this file configures integrations
   # Credentials: password: env:NAME | file:/absolute/path | literal (warned). They are never logged or sent;
   # env/file references are re-read on every connection. Per-instance "instances" override the defaults for
   # discovered services matching all given match fields: port, endpoint, unit, container (name or id prefix), instance.

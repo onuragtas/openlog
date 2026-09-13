@@ -51,24 +51,37 @@ type Options struct {
 	AgentName    string
 	AgentVersion string
 	HostName     string
+	// RemoteStatePath persists the last remote integration config (0600);
+	// empty disables persistence.
+	RemoteStatePath string
 }
 
 // Manager binds integrations to discovered services and runs their collections.
 type Manager struct {
 	o        Options
-	cfg      *config.IntegrationsConfig
+	base     *config.IntegrationsConfig // config.yaml
 	registry map[string]Integration
 	rules    map[string]*discovery.Rule
 	log      *slog.Logger
 	sem      chan struct{}
 
+	// reconcileMu serializes Reconcile (inventory rounds and remote config updates).
+	reconcileMu sync.Mutex
+
 	mu       sync.Mutex
+	cfg      *config.IntegrationsConfig // effective: config.yaml with remote config applied
+	remote   *config.RemoteIntegrations
 	runners  map[string]*runner
 	pending  map[string][]*metricspb.ResourceMetrics
 	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	slowdown float64
+
+	// Last Reconcile input, replayed when the remote config changes.
+	lastServices []discovery.Service
+	lastCtrs     []containers.Container
+	reconciled   bool
 
 	// Now is the sample clock (tests).
 	Now func() time.Time
@@ -77,7 +90,7 @@ type Manager struct {
 // NewManager creates a manager; nothing runs until Reconcile (and Start for background collection).
 func NewManager(o Options) *Manager {
 	m := &Manager{
-		o: o, cfg: o.Config, registry: map[string]Integration{}, rules: map[string]*discovery.Rule{},
+		o: o, base: o.Config, cfg: o.Config, registry: map[string]Integration{}, rules: map[string]*discovery.Rule{},
 		log: o.Log, runners: map[string]*runner{}, pending: map[string][]*metricspb.ResourceMetrics{},
 		slowdown: 1, Now: time.Now,
 	}
@@ -95,6 +108,7 @@ func NewManager(o Options) *Manager {
 		n = 1
 	}
 	m.sem = make(chan struct{}, n)
+	m.loadRemote()
 	return m
 }
 
@@ -133,14 +147,21 @@ func (m *Manager) SetSlowdown(f float64) {
 
 func (m *Manager) interval(id string) time.Duration {
 	m.mu.Lock()
-	f := m.slowdown
+	f, cfg := m.slowdown, m.cfg
 	m.mu.Unlock()
-	return time.Duration(float64(m.cfg.EffectiveInterval(id)) * f)
+	return time.Duration(float64(cfg.EffectiveInterval(id)) * f)
 }
 
 // Reconcile starts runners for new discovered services, restarts runners whose
 // endpoints or settings changed and stops runners of vanished services.
 func (m *Manager) Reconcile(services []discovery.Service, ctrs []containers.Container) {
+	m.reconcileMu.Lock()
+	defer m.reconcileMu.Unlock()
+	m.mu.Lock()
+	cfg := m.cfg
+	m.lastServices, m.lastCtrs, m.reconciled = slices.Clone(services), slices.Clone(ctrs), true
+	m.mu.Unlock()
+
 	byID := map[string]containers.Container{}
 	for _, c := range ctrs {
 		byID[c.ID] = c
@@ -165,11 +186,11 @@ func (m *Manager) Reconcile(services []discovery.Service, ctrs []containers.Cont
 				t.Containers = append(t.Containers, c)
 			}
 		}
-		r := m.build(integ, t)
+		r := m.build(cfg, integ, t)
 		if r.static == nil {
 			count++
-			if count > m.cfg.MaxInstances {
-				r.static = NotAvailable(fmt.Sprintf("integrations.max_instances (%d) reached", m.cfg.MaxInstances)).(*StatusError)
+			if count > cfg.MaxInstances {
+				r.static = NotAvailable(fmt.Sprintf("integrations.max_instances (%d) reached", cfg.MaxInstances)).(*StatusError)
 				r.setStatus(r.static, "")
 			}
 		}
@@ -212,11 +233,12 @@ func displays(es []Endpoint) []string {
 }
 
 // build derives the instance and decides configuration-level statuses.
-func (m *Manager) build(integ Integration, t Target) *runner {
+func (m *Manager) build(cfg *config.IntegrationsConfig, integ Integration, t Target) *runner {
 	id := integ.ID()
-	ic := m.cfg.Integration(id)
+	ic := cfg.Integration(id)
 	spec := integ.Spec()
-	inst := &Instance{Target: t, Timeout: m.cfg.Timeout.D(), FS: m.o.FS, Log: m.log.With("integration", id, "service", t.Key), HostName: m.o.HostName}
+	inst := &Instance{Target: t, Timeout: cfg.Timeout.D(), FS: m.o.FS, Log: m.log.With("integration", id, "service", t.Key),
+		HostName: m.o.HostName, Memo: &Memo{}}
 	var derived []Endpoint
 	if !spec.NoEndpoint {
 		derived = DeriveEndpoints(t, spec, m.o.FS)
@@ -240,22 +262,24 @@ func (m *Manager) build(integ Integration, t Target) *runner {
 		}
 	}
 	r := &runner{m: m, integ: integ, inst: inst}
-	r.sig = fmt.Sprintf("%s|%v|%v|%v|%s|%s|%t", id, displays(inst.Endpoints), settings.Username, settings.Password.Source(),
-		settings.Database, strings.Join(settings.Databases, ","), instanceEnabled)
+	// The password enters the signature only as a hash so that changed
+	// credentials (e.g. from remote config) restart the instance.
+	r.sig = fmt.Sprintf("%s|%v|%v|%s|%s|%s|%t|%t|%t", id, displays(inst.Endpoints), settings.Username, secretHash(settings.Password),
+		settings.Database, strings.Join(settings.Databases, ","), instanceEnabled, ic.Enabled, cfg.Enabled)
 	r.st = discovery.IntegrationStatus{ID: id, Status: discovery.StatusEnabled}
 
 	hint := func() string { return integ.Hint(inst) }
 	switch {
-	case !m.cfg.Enabled:
+	case !cfg.Enabled:
 		r.static = &StatusError{Status: discovery.StatusNotAvailable, Msg: "integrations are disabled (integrations.enabled: false)", Static: true}
 	case !ic.Enabled:
-		r.static = &StatusError{Status: discovery.StatusNotAvailable, Msg: "disabled in configuration (integrations." + id + ".enabled: false)", Static: true}
+		r.static = &StatusError{Status: discovery.StatusNotAvailable, Msg: "disabled in configuration (integrations." + id + ".enabled: false or disabled in openlog for this host)", Static: true}
 	case !instanceEnabled:
 		r.static = &StatusError{Status: discovery.StatusNotAvailable, Msg: "disabled for this instance in configuration", Static: true}
 	case t.RequiresAny("credentials") && settings.Username == "" && settings.Password == "":
-		r.static = &StatusError{Status: discovery.StatusNeedsConfiguration, Msg: "credentials required: set integrations." + id + ".username and password", Static: true}
+		r.static = &StatusError{Status: discovery.StatusNeedsConfiguration, Msg: "credentials required: set the username and password in openlog (host → Integrations) or integrations." + id + ".username and password", Static: true}
 	case !spec.NoEndpoint && len(inst.Endpoints) == 0:
-		r.static = &StatusError{Status: discovery.StatusNeedsConfiguration, Msg: "no endpoint could be derived from discovery: set integrations." + id + ".endpoint", Static: true}
+		r.static = &StatusError{Status: discovery.StatusNeedsConfiguration, Msg: "no endpoint could be derived from discovery: set the endpoint in openlog (host → Integrations) or integrations." + id + ".endpoint", Static: true}
 	}
 	if r.static != nil {
 		h := ""

@@ -1,13 +1,15 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, BellPlus, CircleAlert, CircleX, Copy, Info, LineChart, Search } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { ArrowLeft, BellPlus, CircleAlert, Info, LineChart, Search } from "lucide-react";
+import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { hostQuery, inventorySearchQuery, metricQuery, servicesQuery, type MetricRequest } from "@/api/queries";
 import { can } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
 import { PANELS, PG_DATABASE, PG_TABLE, type PanelChart } from "@/components/integrations/panels";
+import { ApplyNotice, HostIntegrationToggle, IntegrationConfigPanel, useApplyState } from "@/components/integrations/IntegrationConfig";
+import { isConfigurable } from "@/lib/integration-settings";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
@@ -47,6 +49,19 @@ const listRoute = getRouteApi("/app/integrations");
 
 // ---- panel ----
 
+/** Status explanation for integrations without remote settings (no form, no snippet). */
+function LegacyConfigHelp({ status, error, id }: { status: IntegrationStatus; error?: string; id: string }) {
+  const { t } = useTranslation();
+  const isError = status === "error";
+  return (
+    <Notice tone="warning" testId="integration-config-help">
+      {isError ? t("integrations.panel.errorTitle") : t("integrations.panel.needsConfigTitle")}
+      {error ? `: ${error}. ` : ". "}
+      {t("integrations.panel.noHint", { id })}
+    </Notice>
+  );
+}
+
 function Notice({ tone, children, testId }: { tone: "info" | "warning"; children: React.ReactNode; testId?: string }) {
   const Icon = tone === "warning" ? CircleAlert : Info;
   return (
@@ -57,58 +72,6 @@ function Notice({ tone, children, testId }: { tone: "info" | "warning"; children
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <p className="min-w-0 break-words">{children}</p>
     </div>
-  );
-}
-
-function ConfigHelp({ status, error, hint, id, hostName }: { status: IntegrationStatus; error?: string; hint?: string; id: string; hostName: string }) {
-  const { t } = useTranslation();
-  const titleId = useId();
-  const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
-  const isError = status === "error";
-  const Icon = isError ? CircleX : CircleAlert;
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(hint ?? "");
-      setCopy("copied");
-    } catch {
-      setCopy("failed");
-    }
-  };
-  return (
-    <section
-      aria-labelledby={titleId}
-      data-testid="integration-config-help"
-      className={cn("rounded-xl border p-4", isError ? "border-destructive/40 bg-destructive/10" : "border-warning/50 bg-warning/10")}
-    >
-      <h2 id={titleId} className="flex items-center gap-2 text-base font-semibold">
-        <Icon className={cn("size-4", isError && "text-destructive-text")} aria-hidden="true" />
-        {isError ? t("integrations.panel.errorTitle") : t("integrations.panel.needsConfigTitle")}
-      </h2>
-      {error && <p className="mt-2 font-mono text-sm break-words">{error}</p>}
-      {hint ? (
-        <>
-          <p className="mt-3 text-sm">{t("integrations.panel.hintIntro", { host: hostName })}</p>
-          <div className="mt-2 overflow-hidden rounded-md border bg-card">
-            <div className="flex items-center justify-between gap-2 border-b px-3 py-1.5">
-              <span className="text-xs text-muted-foreground">{t("integrations.panel.hintLabel")}</span>
-              <Button variant="ghost" size="sm" className="min-h-10" onClick={() => void onCopy()}>
-                <Copy aria-hidden="true" />
-                {copy === "copied" ? t("integrations.panel.copied") : t("integrations.panel.copy")}
-              </Button>
-            </div>
-            <pre className="overflow-x-auto p-3 text-xs leading-relaxed" aria-label={t("integrations.panel.hintLabel")}>
-              <code>{hint}</code>
-            </pre>
-          </div>
-          <p className="sr-only" aria-live="polite">
-            {copy === "copied" ? t("integrations.panel.copied") : copy === "failed" ? t("integrations.panel.copyFailed") : ""}
-          </p>
-          {copy === "failed" && <p className="mt-1 text-xs text-destructive-text">{t("integrations.panel.copyFailed")}</p>}
-        </>
-      ) : (
-        <p className="mt-3 text-sm">{t("integrations.panel.noHint", { id })}</p>
-      )}
-    </section>
   );
 }
 
@@ -278,7 +241,10 @@ export function HostIntegrationPage() {
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const host = useQuery(hostQuery(hostId));
   const services = useQuery(servicesQuery(hostId));
-  const canAlert = can(useMe().data?.role, "alerts.write");
+  const role = useMe().data?.role;
+  const canAlert = can(role, "alerts.write");
+  const canManage = can(role, "fleet.manage");
+  const apply = useApplyState(hostId, services.data?.snapshot_time);
   const inst: InstanceRef = { hostId, discoveryId, instance };
 
   if (services.isPending) return <LoadingState />;
@@ -289,6 +255,9 @@ export function HostIntegrationPage() {
   const integ = integrationOf(svc);
   const id: IntegrationId | undefined = isIntegrationId(integ.id) ? integ.id : item ? undefined : integrationForRule(discoveryId);
   const hostName = host.data?.host_name || hostId;
+  // Includes docker, which has no metrics panel but can be switched off per host.
+  const configId = integ.id ?? (item ? undefined : integrationForRule(discoveryId));
+  const configurable = isConfigurable(configId);
   const name = svc?.name || discoveryId;
   const status: IntegrationStatus = item ? integ.status : "not_available";
   const showCharts = !!id && (!item || integ.status === "enabled");
@@ -348,7 +317,25 @@ export function HostIntegrationPage() {
       </div>
 
       {!item && <Notice tone="info">{t("integrations.panel.notInSnapshot")}</Notice>}
-      {item && needsAttention(integ.status) && <ConfigHelp status={integ.status} error={integ.error} hint={integ.hint} id={integ.id ?? discoveryId} hostName={hostName} />}
+      {item && configurable && <ApplyNotice phase={apply.phase} />}
+      {item && needsAttention(integ.status) && (configurable ? (
+        <IntegrationConfigPanel
+          hostId={hostId}
+          hostName={hostName}
+          instance={instance}
+          integration={configId}
+          status={integ.status}
+          error={integ.error}
+          hint={integ.hint}
+          canManage={canManage}
+          onSaved={apply.markSaved}
+        />
+      ) : (
+        <LegacyConfigHelp status={integ.status} error={integ.error} id={integ.id ?? discoveryId} />
+      ))}
+      {item && configurable && (
+        <HostIntegrationToggle hostId={hostId} hostName={hostName} integration={configId} name={name} canManage={canManage} onSaved={apply.markSaved} />
+      )}
       {item && integ.status === "enabled" && integ.error && (
         <Notice tone="warning" testId="integration-partial">
           {t("integrations.panel.partial", { error: integ.error })}

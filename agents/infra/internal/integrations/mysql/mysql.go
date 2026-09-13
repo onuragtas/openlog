@@ -47,9 +47,13 @@ func (Integration) Hint(inst *integrations.Instance) string {
 	if len(inst.Endpoints) > 0 {
 		ep = inst.Endpoints[0].Display
 	}
-	return `# CREATE USER 'openlog'@'localhost' IDENTIFIED BY '<password>';
-# GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'openlog'@'localhost';
-# GRANT SELECT ON performance_schema.* TO 'openlog'@'localhost';
+	return `# MySQL needs a read-only monitoring user; the agent never creates users itself. Run as an
+# administrator (for a container: docker exec -it <container> mysql -uroot -p):
+#   CREATE USER 'openlog'@'%' IDENTIFIED BY '<password>';   -- '%': the agent connects through Docker
+#                                                          -- networks too; use 'localhost' for socket-only servers
+#   GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'openlog'@'%';
+#   GRANT SELECT ON performance_schema.* TO 'openlog'@'%';
+# Then enter the user and password in openlog (host → Integrations → MySQL), or in config.yaml:
 integrations:
   mysql:
     username: openlog

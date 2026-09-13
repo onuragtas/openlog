@@ -12,6 +12,7 @@ package fleet_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,7 +26,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/fleet"
+	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/migrations"
 )
@@ -151,6 +154,72 @@ func TestPGStorePolicyAndOverrides(t *testing.T) {
 		t.Error("second delete reported a row")
 	}
 }
+
+func TestPGIntegrationSettings(t *testing.T) {
+	ctx := context.Background()
+	st := fleet.NewPGStore(pgPool)
+	is := intsettings.NewPGStore(pgPool)
+	org, tenant, user := newOrg(t)
+	kr, err := secrets.NewKeyring(base64.StdEncoding.EncodeToString(make([]byte, 32)), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := intsettings.NewManager(is, intsettings.ManagerOptions{Keys: kr})
+	a := intsettings.Actor{UserID: user, Email: tenant + "@example.com"}
+	pw, host := "pw", "h1"
+	s1, err := m.Create(ctx, org, intsettings.Input{Integration: "postgresql", Endpoint: "127.0.0.1:5432", Password: &pw,
+		Match: &intsettings.Match{Port: ptrInt(5432)}, Databases: []string{"a", "b"}}, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Create(ctx, org, intsettings.Input{Integration: "postgresql", Match: &intsettings.Match{Port: ptrInt(5432)}}, a); !errors.Is(err, intsettings.ErrConflict) {
+		t.Fatalf("duplicate: %v", err)
+	}
+	// The same match for one host is a different scope.
+	if _, err := m.Create(ctx, org, intsettings.Input{Integration: "postgresql", HostID: &host, Match: &intsettings.Match{Port: ptrInt(5432)}}, a); err != nil {
+		t.Fatal(err)
+	}
+	got, err := is.GetSetting(ctx, org, s1.ID)
+	if err != nil || got.PasswordEnc != s1.PasswordEnc || *got.Match.Port != 5432 || fmt.Sprint(got.Databases) != "[a b]" || got.HostID != "" ||
+		got.UpdatedByEmail != a.Email {
+		t.Fatalf("get = %+v, %v", got, err)
+	}
+	if _, err := m.Update(ctx, org, s1.ID, intsettings.Input{Integration: "postgresql", Username: "mon"}, a); err != nil {
+		t.Fatal(err)
+	}
+
+	state, err := st.LoadOrgState(ctx, tenant)
+	if err != nil || !state.IntegrationsLoaded || len(state.Integrations) != 2 {
+		t.Fatalf("org state = %+v, %v", state.Integrations, err)
+	}
+	items, err := intsettings.AgentItems(kr, intsettings.Effective(state.Integrations, "h1"))
+	if err != nil || len(items) != 2 || items[0].Password != "pw" || items[0].Username != "mon" {
+		t.Fatalf("items = %+v, %v", items, err)
+	}
+
+	rev := intsettings.Revision(intsettings.Effective(state.Integrations, "h1"))
+	if err := st.UpsertHosts(ctx, []fleet.HostRecord{{TenantID: tenant, SyncAt: time.Now(),
+		Report: fleet.HostReport{HostID: "h1", IntegrationsConfigRevision: rev}}}); err != nil {
+		t.Fatal(err)
+	}
+	if h, err := st.GetHost(ctx, org, "h1"); err != nil || h.IntegrationsConfigRevision != rev {
+		t.Fatalf("host revision = %q, %v", h.IntegrationsConfigRevision, err)
+	}
+
+	if err := m.Delete(ctx, org, s1.ID, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Delete(ctx, org, s1.ID, a); !errors.Is(err, intsettings.ErrNotFound) {
+		t.Fatalf("second delete: %v", err)
+	}
+	var audits int
+	if err := pgPool.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE org_id = $1 AND action LIKE 'integration_setting.%'
+		AND details::text NOT LIKE '%ol1:%'`, org).Scan(&audits); err != nil || audits != 4 {
+		t.Fatalf("audit rows = %d, %v", audits, err)
+	}
+}
+
+func ptrInt(v int) *int { return &v }
 
 func TestPGStoreHostsBatchUpsert(t *testing.T) {
 	ctx := context.Background()

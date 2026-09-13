@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -272,7 +274,15 @@ func TestStaticStatuses(t *testing.T) {
 		t.Errorf("instance disabled = %+v", st)
 	}
 
+	// Nothing known about the sockets: the default port on loopback.
 	m = testManager(t, f, nil, rulesFor()...)
+	m.Reconcile([]discovery.Service{svc()}, nil)
+	m.CollectOnce(context.Background())
+	if st := status(m, svc()); st.Status != discovery.StatusEnabled || st.Endpoint != "127.0.0.1:7000" {
+		t.Errorf("loopback default port = %+v", st)
+	}
+	// Without a default port no endpoint can be derived.
+	m = testManager(t, &noDefaultPort{f}, nil, rulesFor()...)
 	m.Reconcile([]discovery.Service{svc()}, nil)
 	if st := status(m, svc()); st.Status != discovery.StatusNeedsConfiguration || !strings.Contains(st.Error, "no endpoint") {
 		t.Errorf("no endpoint = %+v", st)
@@ -302,6 +312,81 @@ func TestInstanceOverride(t *testing.T) {
 	}
 	if st := status(m, svc(7000)); st.Endpoint != "unix:/run/svc.sock" {
 		t.Errorf("explicit endpoint = %+v", st)
+	}
+}
+
+type noDefaultPort struct{ *fake }
+
+func (noDefaultPort) Spec() EndpointSpec { return EndpointSpec{} }
+
+func TestRemoteConfigAppliedWithoutRestart(t *testing.T) {
+	f := &fake{results: map[string]error{}}
+	var got config.InstanceSettings
+	state := filepath.Join(t.TempDir(), "state", RemoteStateFile)
+	newManager := func(mutate func(*config.IntegrationsConfig)) *Manager {
+		m := testManager(t, &captureIntegration{fake: f, got: &got}, mutate, rulesFor("credentials")...)
+		m.o.RemoteStatePath = state
+		m.loadRemote()
+		return m
+	}
+	m := newManager(nil)
+	s := svc(7000)
+	m.Reconcile([]discovery.Service{s}, nil)
+	if st := status(m, s); st.Status != discovery.StatusNeedsConfiguration || m.RemoteRevision() != "" {
+		t.Fatalf("before remote config = %+v rev %q", st, m.RemoteRevision())
+	}
+
+	rc := &config.RemoteIntegrations{Revision: "sha256:1", Items: []config.RemoteItem{
+		{Integration: "redis", Enabled: true, Match: &config.RemoteMatch{Instance: "/usr/bin/svc"}, Username: "u", Password: "pw-1"},
+	}}
+	if !m.SetRemote(rc) || m.SetRemote(rc) || m.SetRemote(nil) {
+		t.Fatal("SetRemote must report exactly one change")
+	}
+	m.CollectOnce(context.Background())
+	if st := status(m, s); st.Status != discovery.StatusEnabled || got.Username != "u" {
+		t.Fatalf("after remote config = %+v settings %+v", st, got)
+	}
+	if pw, _ := got.Password.Resolve(); pw != "pw-1" || m.RemoteRevision() != "sha256:1" {
+		t.Errorf("password/revision = %q %q", pw, m.RemoteRevision())
+	}
+	fi, err := os.Stat(state)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("persisted state = %v %v", fi, err)
+	}
+
+	// A changed password restarts the instance.
+	creates := f.creates.Load()
+	rc2 := &config.RemoteIntegrations{Revision: "sha256:2", Items: []config.RemoteItem{
+		{Integration: "redis", Enabled: true, Match: &config.RemoteMatch{Instance: "/usr/bin/svc"}, Username: "u", Password: "pw-2"},
+	}}
+	m.SetRemote(rc2)
+	m.CollectOnce(context.Background())
+	if pw, _ := got.Password.Resolve(); pw != "pw-2" || f.creates.Load() == creates {
+		t.Errorf("password change not applied (%q, creates %d)", pw, f.creates.Load())
+	}
+
+	// Restart: the persisted config is effective before the backend answers.
+	m2 := newManager(nil)
+	m2.Reconcile([]discovery.Service{s}, nil)
+	m2.CollectOnce(context.Background())
+	if st := status(m2, s); st.Status != discovery.StatusEnabled || m2.RemoteRevision() != "sha256:2" {
+		t.Errorf("after restart = %+v rev %q", st, m2.RemoteRevision())
+	}
+
+	// Disable on this host.
+	m2.SetRemote(&config.RemoteIntegrations{Revision: "sha256:3", Items: []config.RemoteItem{{Integration: "redis", Enabled: false}}})
+	if st := status(m2, s); st.Status != discovery.StatusNotAvailable {
+		t.Errorf("disabled remotely = %+v", st)
+	}
+
+	// integrations.remote_config: false ignores remote and persisted config.
+	m3 := newManager(func(c *config.IntegrationsConfig) { c.RemoteConfig = false })
+	m3.Reconcile([]discovery.Service{s}, nil)
+	if m3.SetRemote(rc) || m3.RemoteRevision() != config.RevisionDisabled {
+		t.Error("remote config must be ignored")
+	}
+	if st := status(m3, s); st.Status != discovery.StatusNeedsConfiguration {
+		t.Errorf("opted out = %+v", st)
 	}
 }
 

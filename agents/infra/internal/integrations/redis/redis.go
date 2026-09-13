@@ -43,7 +43,9 @@ func (Integration) Hint(inst *integrations.Instance) string {
 	if len(inst.Endpoints) > 0 {
 		ep = inst.Endpoints[0].Display
 	}
-	return `integrations:
+	return `# Redis requires AUTH. Enter the password (and the ACL user, if any) in openlog
+# (host → Integrations → Redis), or in config.yaml:
+integrations:
   redis:
     instances:
       - match: { endpoint: "` + ep + `" }

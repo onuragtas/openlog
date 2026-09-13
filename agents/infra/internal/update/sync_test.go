@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/config"
 )
 
 func mustB64(t *testing.T, s string) []byte {
@@ -76,11 +78,60 @@ func TestSyncOnceRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestSyncDeliversRemoteIntegrationConfig(t *testing.T) {
+	var revs []string
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req SyncRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		revs = append(revs, req.IntegrationsConfigRevision)
+		if calls.Add(1) == 1 {
+			w.Write([]byte(`{"poll_interval_seconds": 60, "update": null, "integrations_config": {"revision": "sha256:ab",
+				"items": [{"integration": "redis", "match": {"instance": "/usr/bin/redis-server"}, "enabled": true, "password": "pw"}]}}`))
+			return
+		}
+		w.Write([]byte(`{"poll_interval_seconds": 60, "update": null, "integrations_config": null}`))
+	}))
+	defer srv.Close()
+	applied := ""
+	var got []string
+	kick := make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := &Syncer{Endpoint: srv.URL, Kick: kick, InitialDelay: 0, Rand: func() float64 { return 0 },
+		Request: func() SyncRequest { return SyncRequest{IntegrationsConfigRevision: applied} },
+		Integrations: func(rc *config.RemoteIntegrations) {
+			applied = rc.Revision
+			got = append(got, rc.Revision+"/"+rc.Items[0].Match.Instance+"/"+rc.Items[0].Password)
+			kick <- struct{}{}
+		},
+		Handle: func(context.Context, *Instruction) { t.Error("no update expected") },
+	}
+	done := make(chan struct{})
+	go func() { s.Run(ctx); close(done) }()
+	deadline := time.After(5 * time.Second)
+	for calls.Load() < 2 {
+		select {
+		case <-deadline:
+			t.Fatal("second sync did not happen")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	cancel()
+	<-done
+	if len(got) != 1 || got[0] != "sha256:ab//usr/bin/redis-server/pw" {
+		t.Errorf("delivered = %v", got)
+	}
+	if len(revs) < 2 || revs[0] != "" || revs[1] != "sha256:ab" {
+		t.Errorf("reported revisions = %v", revs)
+	}
+}
+
 func TestSyncRequestJSONShape(t *testing.T) {
 	b, _ := json.Marshal(SyncRequest{Agent: AgentInfo{Name: AgentName}, Update: Report{State: StateIdle}})
 	var m map[string]any
 	json.Unmarshal(b, &m)
-	for _, k := range []string{"host_id", "host_name", "agent", "update", "config_hash"} {
+	for _, k := range []string{"host_id", "host_name", "agent", "update", "config_hash", "integrations_config_revision"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("missing %s in %s", k, b)
 		}

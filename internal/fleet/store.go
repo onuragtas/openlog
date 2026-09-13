@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/onuragtas/openlog/internal/intsettings"
 )
 
 // Store errors.
@@ -20,6 +22,11 @@ type OrgState struct {
 	Policy    Policy
 	Overrides map[string]Override // by host id
 	Rollout   *Rollout            // current rollout: newest not superseded, or nil
+	// Integration settings of the organization (all hosts); sync sends each host its effective part.
+	Integrations []intsettings.Setting
+	// IntegrationsLoaded is false when the settings are unknown (table not migrated yet): sync then omits
+	// integrations_config so agents keep their last applied config.
+	IntegrationsLoaded bool
 }
 
 // StoredPolicy is a policy with its metadata.

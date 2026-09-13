@@ -53,17 +53,25 @@ test("integrations: overview, Redis panel with alert preset, needs-configuration
     .poll(() => page.locator("input").evaluateAll((els) => els.map((e) => (e as unknown as { value: string }).value)))
     .toEqual(expect.arrayContaining(["redis.memory.used", "966367642", "redis", "/usr/bin/redis-check-rdb", expect.stringContaining("Memory near maxmemory – web-1")]));
 
-  // db-1 services tab → Redis needs configuration: hint with copy button instead of charts.
+  // db-1 services tab → Redis needs configuration: inline form (remote config) instead of charts, the
+  // config.yaml snippet as a collapsed manual alternative.
   await page.goto(`/hosts/${DB}?tab=services`);
   const redisCard = page.getByTestId("service-card").filter({ hasText: "Needs configuration" });
   await redisCard.getByTestId("open-integration").click();
   const help = page.getByTestId("integration-config-help");
   await expect(help).toContainText("This integration needs configuration");
   await expect(help).toContainText("NOAUTH");
-  await expect(help.locator("pre")).toContainText("env:OPENLOG_REDIS_PASSWORD");
   await expect(page.getByTestId("integration-chart")).toHaveCount(0);
-  await help.getByRole("button", { name: "Copy snippet" }).click();
-  await expect(help.getByRole("button", { name: "Copied" })).toBeVisible();
+  await help.getByLabel("Password").fill("s3cret");
+  await help.getByRole("button", { name: "Save and send to agent" }).click();
+  await expect(page.getByTestId("integration-apply-state")).toContainText("Sent to the agent");
+  await expect(help.getByText("A password is saved. Leave empty to keep it.")).toBeVisible();
+  const manual = help.getByTestId("integration-manual-config");
+  await manual.getByText("Manual configuration (config.yaml)").click();
+  await expect(manual.locator("pre")).toContainText("env:OPENLOG_REDIS_PASSWORD");
+  await manual.getByRole("button", { name: "Copy snippet" }).click();
+  await expect(manual.getByRole("button", { name: "Copied" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Collect Redis metrics on this host" })).toHaveAttribute("aria-checked", "true");
   await shot(page, "integ-mock-needs-config");
 
   // PostgreSQL panel: charts filtered by the instance plus the largest tables.

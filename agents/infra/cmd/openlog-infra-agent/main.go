@@ -142,10 +142,12 @@ func run() int {
 		Endpoint: cfg.Endpoint, LicenseKey: cfg.LicenseKey, UserAgent: update.AgentName + "/" + ver,
 		Client: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "sync"),
 		Handle: mgr.Handle, Kick: mgr.Kick(), InitialDelay: -1,
+		Integrations: a.ApplyRemoteIntegrations,
 		Request: func() update.SyncRequest {
 			return update.SyncRequest{
 				HostID: a.HostID(), HostName: a.HostName(), Agent: mgr.AgentInfo(),
 				Update: mgr.Report(), ConfigHash: configHash(*configPath),
+				IntegrationsConfigRevision: a.IntegrationsConfigRevision(),
 			}
 		},
 	}

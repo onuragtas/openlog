@@ -87,6 +87,44 @@ has_license_key() {
 	grep -Eq '^license_key:[[:space:]]*"?[^"[:space:]#]' "$CONFIG" 2>/dev/null
 }
 
+# Docker access: add the agent user to an existing `docker` group so it can read the Docker Engine API
+# (container names/images, ports and IPs for discovery). Opt-out, also respected on upgrades:
+#   OPENLOG_AGENT_DOCKER_ACCESS=0 (records the opt-out file) or the file /etc/openlog-infra-agent/no-docker-access.
+# Keep in sync with scripts/install.sh.
+DOCKER_OPT_OUT=/etc/openlog-infra-agent/no-docker-access
+docker_added=0
+grant_docker_access() {
+	getent group docker >/dev/null 2>&1 || return 0
+	case ${OPENLOG_AGENT_DOCKER_ACCESS:-1} in
+	0 | false | no | off)
+		mkdir -p "${DOCKER_OPT_OUT%/*}" && touch "$DOCKER_OPT_OUT" 2>/dev/null || true
+		echo "openlog-infra-agent: OPENLOG_AGENT_DOCKER_ACCESS=0: not adding $USER_NAME to the docker group (recorded in $DOCKER_OPT_OUT)"
+		return 0
+		;;
+	esac
+	[ ! -e "$DOCKER_OPT_OUT" ] || return 0
+	if getent group docker | cut -d: -f4 | tr ',' '\n' | grep -qx "$USER_NAME"; then
+		return 0
+	fi
+	if command -v usermod >/dev/null 2>&1; then
+		usermod -aG docker "$USER_NAME" || return 0
+	elif command -v gpasswd >/dev/null 2>&1; then
+		gpasswd -a "$USER_NAME" docker >/dev/null || return 0
+	elif command -v adduser >/dev/null 2>&1; then
+		adduser "$USER_NAME" docker >/dev/null || return 0
+	else
+		echo "openlog-infra-agent: cannot add $USER_NAME to the docker group (no usermod, gpasswd or adduser)"
+		return 0
+	fi
+	docker_added=1
+	cat <<EOF
+openlog-infra-agent: added $USER_NAME to the docker group for container metadata and discovery.
+  Docker group membership is root-equivalent: whoever controls $USER_NAME controls Docker and thus the host.
+  To revert: gpasswd -d $USER_NAME docker && touch $DOCKER_OPT_OUT && systemctl restart ${UNIT%.service}
+EOF
+}
+grant_docker_access
+
 if command -v systemctl >/dev/null 2>&1; then
 	if [ -d /run/systemd/system ]; then
 		systemctl daemon-reload >/dev/null 2>&1 || true
@@ -101,7 +139,8 @@ if command -v systemctl >/dev/null 2>&1; then
 			else
 				echo "openlog-infra-agent: set license_key and endpoint in $CONFIG, then run: systemctl start $UNIT"
 			fi
-		elif [ "$switch" = 1 ]; then
+		elif [ "$switch" = 1 ] || [ "$docker_added" = 1 ]; then
+			# One restart for both a version switch and new supplementary groups (applied at process start).
 			systemctl try-restart "$UNIT" || true
 		fi
 	fi

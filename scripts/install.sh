@@ -14,6 +14,12 @@
 #                         and the index from URL/index.json      [OPENLOG_RELEASE_BASE_URL]
 #   --index-url URL       release index                            [OPENLOG_RELEASE_INDEX_URL]
 #   --no-start            install and configure, but do not (re)start the service
+#   --no-docker-access    do not add openlog-agent to the docker group, now or on later upgrades
+#                         (creates /etc/openlog-infra-agent/no-docker-access) [OPENLOG_AGENT_DOCKER_ACCESS=0]
+#
+# Docker: when a docker group exists, openlog-agent is added to it (container names, ports, IPs).
+# That membership is root-equivalent. Revert: gpasswd -d openlog-agent docker &&
+#   touch /etc/openlog-infra-agent/no-docker-access && systemctl restart openlog-infra-agent
 #
 # Trust model: this bootstrap download relies on HTTPS. The installer fetches manifest.json from
 # the release source and checks the size and SHA-256 of the downloaded package against it. Every
@@ -41,6 +47,9 @@ method=${OPENLOG_INSTALL_METHOD:-auto}
 base_url=${OPENLOG_RELEASE_BASE_URL:-}
 index_url=${OPENLOG_RELEASE_INDEX_URL:-}
 start=1
+docker_access=${OPENLOG_AGENT_DOCKER_ACCESS:-1}
+docker_added=0
+DOCKER_OPT_OUT=$CONFIG_DIR/no-docker-access
 tmpdir=
 
 log() { printf 'openlog-install: %s\n' "$*" >&2; }
@@ -48,7 +57,7 @@ die() {
 	log "error: $*"
 	exit 1
 }
-usage() { sed -n '2,24s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
+usage() { sed -n '2,30s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
 
 cleanup() { [ -z "$tmpdir" ] || rm -rf "$tmpdir"; }
 trap cleanup EXIT INT TERM
@@ -61,6 +70,11 @@ while [ $# -gt 0 ]; do
 		;;
 	--no-start)
 		start=0
+		shift
+		continue
+		;;
+	--no-docker-access)
+		docker_access=0
 		shift
 		continue
 		;;
@@ -123,6 +137,15 @@ x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
 *) die "unsupported architecture $(uname -m) (amd64 and arm64 are supported)" ;;
 esac
+
+case $docker_access in 0 | false | no | off) docker_access=0 ;; *) docker_access=1 ;; esac
+if [ "$docker_access" = 0 ]; then
+	# Persist the opt-out before a package is installed, so its postinstall (and later upgrades) skip it too.
+	mkdir -p "$CONFIG_DIR"
+	touch "$DOCKER_OPT_OUT"
+	OPENLOG_AGENT_DOCKER_ACCESS=0
+	export OPENLOG_AGENT_DOCKER_ACCESS
+fi
 
 # --- helpers ------------------------------------------------------------------------------------
 fetch() { # url dest
@@ -239,6 +262,35 @@ set_config_value() { # key value
 }
 
 has_license_key() { grep -Eq '^license_key:[[:space:]]*"?[^"[:space:]#]' "$CONFIG" 2>/dev/null; }
+
+# Add the agent user to an existing docker group (Docker Engine API: container names, ports, IPs), unless
+# opted out. Idempotent; sets docker_added=1 when the membership is new. Keep in sync with packaging/scripts/postinstall.sh.
+grant_docker_access() {
+	getent group docker >/dev/null 2>&1 || return 0
+	if [ "$docker_access" = 0 ]; then
+		log "not adding $USER_NAME to the docker group (opt-out recorded in $DOCKER_OPT_OUT)"
+		return 0
+	fi
+	[ ! -e "$DOCKER_OPT_OUT" ] || return 0
+	if getent group docker | cut -d: -f4 | tr ',' '\n' | grep -qx "$USER_NAME"; then
+		return 0
+	fi
+	if command -v usermod >/dev/null 2>&1; then
+		usermod -aG docker "$USER_NAME" || return 0
+	elif command -v gpasswd >/dev/null 2>&1; then
+		gpasswd -a "$USER_NAME" docker >/dev/null || return 0
+	elif command -v adduser >/dev/null 2>&1; then
+		adduser "$USER_NAME" docker >/dev/null || return 0
+	else
+		log "warning: cannot add $USER_NAME to the docker group (no usermod, gpasswd or adduser)"
+		return 0
+	fi
+	docker_added=1
+	log "added $USER_NAME to the docker group for container metadata and discovery"
+	log "  docker group membership is root-equivalent: whoever controls $USER_NAME controls Docker and thus the host"
+	log "  revert: gpasswd -d $USER_NAME docker && touch $DOCKER_OPT_OUT && systemctl restart openlog-infra-agent"
+	log "  (or install with --no-docker-access)"
+}
 
 # --- resolve the release ------------------------------------------------------------------------
 tmpdir=$(mktemp -d)
@@ -391,6 +443,9 @@ install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
 [ -z "$endpoint" ] || set_config_value endpoint "$endpoint"
 has_license_key || log "warning: no license_key in $CONFIG; pass --license-key"
 
+# Package installs already did this in their postinstall; then this is a no-op.
+grant_docker_access
+
 # --- service ------------------------------------------------------------------------------------
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
 	systemctl daemon-reload
@@ -398,6 +453,10 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
 	if [ "$start" = 1 ] && has_license_key; then
 		systemctl restart "$UNIT"
 		log "service $UNIT (re)started"
+	elif [ "$docker_added" = 1 ] && [ "$start" = 1 ]; then
+		systemctl try-restart "$UNIT" || true
+	elif [ "$docker_added" = 1 ]; then
+		log "the docker group applies after: systemctl restart $UNIT"
 	fi
 else
 	log "systemd is not running; start the agent with: /usr/bin/openlog-infra-agent -config $CONFIG"

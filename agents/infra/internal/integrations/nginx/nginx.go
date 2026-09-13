@@ -22,7 +22,10 @@ import (
 )
 
 // ProbePaths are tried on every discovered port when the rule has auto_enable.
-var ProbePaths = []string{"/nginx_status", "/stub_status", "/status", "/basic_status", "/server_status"}
+var ProbePaths = []string{"/nginx_status", "/stub_status", "/basic_status", "/status", "/server_status"}
+
+// memoURL is the Instance.Memo key of the stub_status URL found on an endpoint.
+const memoURL = "nginx.stub_status_url "
 
 // Integration is the nginx integration.
 type Integration struct{}
@@ -38,19 +41,38 @@ func (Integration) Spec() integrations.EndpointSpec {
 // Hint implements integrations.Integration.
 func (Integration) Hint(inst *integrations.Instance) string {
 	port := 80
+	var tried []string
 	for _, e := range inst.Endpoints {
 		if e.Network == "tcp" {
-			port = e.Port()
-			break
+			if len(tried) == 0 {
+				port = e.Port()
+			}
+			tried = append(tried, e.Display)
 		}
 	}
-	return fmt.Sprintf(`# nginx: expose stub_status on loopback, e.g.
-#   server { listen 127.0.0.1:%d; location = /nginx_status { stub_status; allow 127.0.0.1; deny all; } }
+	where := ""
+	if len(tried) > 0 {
+		where = " on " + strings.Join(tried, ", ")
+	}
+	return fmt.Sprintf(`# stub_status is not enabled on this nginx: no status page answered%s
+# (tried %s over http and https). The agent never changes the nginx configuration.
+# Add a status location to the server block that listens on port %d, then reload nginx
+# ("nginx -s reload", or "docker exec <container> nginx -s reload" for a container):
+#
+#   location = /nginx_status {
+#       stub_status;
+#       allow 127.0.0.1;
+#       allow 172.16.0.0/12;   # Docker networks (published ports and container addresses)
+#       deny all;
+#   }
+#
+# The agent finds the page automatically on its next attempt. If the page is on another
+# URL, set it in openlog (host → Integrations → nginx) or in config.yaml:
 integrations:
   nginx:
     instances:
       - match: { port: %d }
-        endpoint: http://127.0.0.1:%d/nginx_status`, port, port, port)
+        endpoint: http://127.0.0.1:%d/nginx_status`, where, strings.Join(ProbePaths, ", "), port, port, port)
 }
 
 // New implements integrations.Integration.
@@ -110,27 +132,42 @@ func (c *collector) Collect(ctx context.Context, b *integrations.Batch) error {
 	return nil
 }
 
-// probe finds the stub_status page on the endpoint: plain HTTP first, then HTTPS
-// without certificate verification (probing only reads the public status format).
+// probe finds the stub_status page on the endpoint: plain HTTP first, then
+// HTTPS. Certificates are not verified only on loopback (probing reads the
+// public status format; a remote address keeps verification). A URL found
+// earlier for the endpoint (Instance.Memo) is tried first; only a body that
+// parses as stub_status is accepted.
 func (c *collector) probe(ctx context.Context) (string, error) {
-	insecure := &http.Client{
-		Transport:     &http.Transport{DisableKeepAlives: true, TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		CheckRedirect: c.client.CheckRedirect,
+	httpsClient := c.client
+	if isLoopback(c.hostPort) {
+		httpsClient = &http.Client{
+			Transport:     &http.Transport{DisableKeepAlives: true, TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+			CheckRedirect: c.client.CheckRedirect,
+		}
+	}
+	clientFor := func(u string) *http.Client {
+		if strings.HasPrefix(u, "https:") {
+			return httpsClient
+		}
+		return c.client
+	}
+	if u := c.inst.Memo.Get(memoURL + c.hostPort); u != "" {
+		if _, err := fetch(ctx, clientFor(u), u); err == nil {
+			c.client = clientFor(u)
+			return u, nil
+		}
+		c.inst.Memo.Set(memoURL+c.hostPort, "")
 	}
 	reachable := false
 	for _, scheme := range []string{"http", "https"} {
-		cl := c.client
-		if scheme == "https" {
-			cl = insecure
-		}
+		cl := clientFor(scheme + ":")
 		for _, p := range ProbePaths {
 			u := scheme + "://" + c.hostPort + p
 			_, err := fetch(ctx, cl, u)
 			if err == nil {
 				c.inst.Log.Info("nginx stub_status found", "url", u)
-				if scheme == "https" {
-					c.client = insecure
-				}
+				c.client = cl
+				c.inst.Memo.Set(memoURL+c.hostPort, u)
 				return u, nil
 			}
 			if errors.Is(err, integrations.ErrUnreachable) {
@@ -143,6 +180,15 @@ func (c *collector) probe(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("%s: %w", c.hostPort, integrations.ErrUnreachable)
 	}
 	return "", fmt.Errorf("no stub_status page on %s (tried %s): %w", c.hostPort, strings.Join(ProbePaths, ", "), integrations.ErrTryNext)
+}
+
+func isLoopback(hostPort string) bool {
+	h, _, err := net.SplitHostPort(hostPort)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(h)
+	return (ip != nil && ip.IsLoopback()) || strings.EqualFold(h, "localhost")
 }
 
 var errNotStatus = errors.New("response is not a stub_status page")

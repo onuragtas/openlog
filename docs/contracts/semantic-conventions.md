@@ -344,6 +344,12 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 2. TCP listening ports of the service (integration default port first; `0.0.0.0` → `127.0.0.1`, `::` → `::1`; non-protocol ports skipped: MySQL 33060/33062, Redis 16379);
 3. well-known unix sockets that exist under `host.root_path` (Redis `/run/redis/redis-server.sock`, …; MySQL `/run/mysqld/mysqld.sock`, `/var/lib/mysql/mysql.sock`, …; PostgreSQL `/var/run/postgresql/.s.PGSQL.5432`, …);
 4. container services: published ports on `127.0.0.1:<public port>`, then container IP addresses (Docker `NetworkSettings`) with the container's private ports and the default port.
+   Without the Docker Engine API (no socket, or `permission denied`) the agent derives the same data from the host: for every container id found in
+   process cgroups it reads the container's network namespace through `/proc/<pid>/net/tcp{,6}` (listening TCP ports held by the container's
+   processes; loopback-bound sockets are skipped) and `/proc/<pid>/net/fib_trie` (local non-loopback IPv4 addresses), and maps published ports from
+   `docker-proxy -host-ip … -host-port … -container-ip … -container-port …` command lines. Containers in the host network namespace are skipped
+   (their ports are host listening ports, step 2);
+5. only when no candidate was found: the integration default port on `127.0.0.1` (nginx 80, Redis 6379, MySQL 3306, PostgreSQL 5432).
 
 ### 6.2 Configuration keys
 
@@ -361,16 +367,28 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 | `integrations.postgresql.databases` / `exclude_databases` | `[]` | database allow/deny lists (default: every non-template database with `datallowconn`, max 32) |
 | `integrations.{mysql,postgresql}.top_n_tables` | `50` / `20` | cardinality guard: largest tables/indexes (PostgreSQL, per database) or tables/indexes with most io wait time (MySQL) |
 | `integrations.<id>.instances[]` | `[]` | overrides for services matching **all** given `match` fields: `port` (listening, private or published), `endpoint` (derived candidate), `unit`, `container` (name or ≥ 12-char id prefix), `instance`; plus any setting above and `enabled` |
+| `integrations.remote_config` | `true` | apply integration settings configured in the openlog UI (delivered by agent sync, [releases-updates.md](releases-updates.md) §3, D-039). `false`: ignored; the agent reports revision `disabled` |
 
 Unknown keys and settings an integration does not support (e.g. `integrations.nginx.password`) are configuration errors. Credentials are never
-logged, never included in inventory, statuses or metrics, and never sent to the backend. A hard cap of 20 000 data points per collection applies;
+logged, never included in inventory, statuses or metrics, and never sent to the backend by the agent.
+
+**Remote integration config** (D-039): items of the sync response's `integrations_config` are merged over `config.yaml` in order, remote values
+winning per non-empty field. An item without `match` changes the integration defaults (`integrations.<id>.*`, including `enabled`); an item with
+`match` (`port`, `container`, `endpoint`, `instance`) updates the `config.yaml` instance with an identical match or is added before the configured
+instances. Remote passwords are literal values (never `env:`/`file:` references). Invalid items (e.g. an nginx endpoint that is not a URL) are skipped
+with a warning. The last received config is stored in `<state_dir>/integrations-remote.json` (mode 0600, it contains passwords) and applied at the
+next start before the backend answers. Changes apply without a restart: instances whose endpoint, credentials, database settings or enabled state
+changed are restarted. A hard cap of 20 000 data points per collection applies;
 dropped points turn the collection partial (`error`: `cardinality guard: N data points dropped`).
 
 ### 6.3 nginx (`stub_status`)
 
-Source: `ngx_http_stub_status_module` page. With `auto_enable: true` (nginx rule) the paths `/nginx_status`, `/stub_status`, `/status`,
-`/basic_status`, `/server_status` are probed on every candidate endpoint over `http`, then `https` without certificate verification; the first
-page that parses as `stub_status` is used. No credentials. Resource: §6.1 only.
+Source: `ngx_http_stub_status_module` page. With `auto_enable: true` (nginx rule) and no configured `endpoint`, the paths `/nginx_status`,
+`/stub_status`, `/basic_status`, `/status`, `/server_status` are probed on every candidate endpoint over `http`, then `https` (certificates are
+not verified only for loopback endpoints); the first `200` page that parses as `stub_status` is used. The found URL is remembered per instance and
+tried first when the instance re-probes after a failure (with the instance backoff). When no candidate serves the page the status is
+`needs_configuration` with a hint saying that stub_status is not enabled and showing the nginx `location` snippet; the agent never edits the nginx
+configuration. No credentials. Resource: §6.1 only.
 
 | Metric | Type | Unit | Attributes |
 |---|---|---|---|

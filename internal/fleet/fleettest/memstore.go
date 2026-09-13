@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/internal/fleet"
+	"github.com/onuragtas/openlog/internal/intsettings"
 )
 
 // MemStore is an in-memory fleet.Store. Tenants map to organizations through TenantOrgs, or to
 // "org-" + tenant id when not listed; tenant "unknown" has no organization.
 type MemStore struct {
 	TenantOrgs map[string]string
+	// Integrations, when set, supplies the integration settings of LoadOrgState (nil = none).
+	Integrations intsettings.Store
 
 	mu        sync.Mutex
 	policies  map[string]fleet.Policy
@@ -83,7 +86,15 @@ func (s *MemStore) LoadOrgState(ctx context.Context, tenantID string) (fleet.Org
 	sp, _ := s.GetPolicy(ctx, org)
 	ovs, _ := s.ListOverrides(ctx, org)
 	cur, _ := s.CurrentRollout(ctx, org)
-	return fleet.OrgState{OrgID: org, Policy: sp.Policy, Overrides: ovs, Rollout: cur}, nil
+	st := fleet.OrgState{OrgID: org, Policy: sp.Policy, Overrides: ovs, Rollout: cur, IntegrationsLoaded: true}
+	if s.Integrations != nil {
+		ints, err := s.Integrations.ListSettings(ctx, org)
+		if err != nil {
+			return fleet.OrgState{}, err
+		}
+		st.Integrations = ints
+	}
+	return st, nil
 }
 
 func (s *MemStore) UpsertHosts(_ context.Context, recs []fleet.HostRecord) error {

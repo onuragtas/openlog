@@ -50,7 +50,8 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 | `GET /license-keys`, `GET /api-keys`, `POST /api-keys`, revoke own API keys | | ✓ | ✓ | ✓ |
 | Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ |
 | Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
-| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, rollback), any alert rule or mute, alert channels and test sends | | | ✓ | ✓ |
+| `GET /integrations/settings` | ✓ | ✓ | ✓ | ✓ |
+| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, rollback), integration setting changes, any alert rule or mute, alert channels and test sends | | | ✓ | ✓ |
 | Grant or remove the owner role, invite owners, remove owners | | | | ✓ |
 
 An organization always keeps at least one owner (`409 failed_precondition`).
@@ -450,6 +451,61 @@ down to `to_version`, with the policy's waves; it supersedes the open rollout. `
 lower than that version. `409`: catalog unavailable, no agent runs a newer version, or `to_version` is below the
 `rollback_floor` of the version rolled back from. The controller does not start a new upgrade to the version rolled
 back from; a newer release does.
+
+## Integration settings
+
+Endpoints and credentials of infra agent integrations (`nginx`, `redis`, `mysql`, `postgresql`, `docker`) for all hosts
+of the caller's organization or for one host, delivered to agents through sync ([releases-updates.md](releases-updates.md)
+§3, table: [postgres.md](postgres.md#integration-settings-0008_integration_settings)). Same permissions as Fleet: reads
+need any role (API keys too); changes need a signed-in admin or owner (`403` otherwise, CSRF as usual). Not available with
+`OPENLOG_AUTH_MODE=static` (`404`). Changes reach agents within `OPENLOG_FLEET_POLICY_CACHE_TTL` plus one sync interval.
+Every change is audited (`integration_setting.*`). `host_id` is the agent's host id (the `host_id` of `/hosts` and
+`/fleet/hosts`, the `host.id` resource attribute).
+
+IntegrationSetting:
+```json
+{"id": "…", "host_id": "…" | null, "integration": "redis",
+ "match": {"port": 6380 | null, "container": "", "endpoint": "", "instance": ""},
+ "enabled": true, "endpoint": "127.0.0.1:6380", "username": "default", "password_set": true,
+ "database": "", "databases": [], "created_at": "…", "updated_at": "…", "updated_by_email": "admin@example.com"}
+```
+The password is write-only: it is never returned (`password_set` tells whether one is stored) or logged.
+
+### `GET /api/v1/integrations/settings?host_id=`
+Without `host_id`: every setting of the organization (all-hosts settings first, then by host id). With `host_id`: the
+settings that apply to that host, in the order the agent applies them (all-hosts settings, then the host's; without a
+match first; then by creation time), and the host's revisions:
+```json
+{"items": [IntegrationSetting],
+ "host": {"host_id": "h1", "revision": "sha256:…", "applied_revision": "sha256:…", "applied_at": "…",
+          "remote_config_disabled": false} | null}
+```
+- `revision`: the revision sync sends this host now. `applied_revision`: the revision the agent reported in its last
+  sync (`""` = none yet, or the host never synced); `applied_at`: that sync's time (null when `applied_revision` is
+  `""`). The agent runs the current settings when `applied_revision == revision`. A saved change is pending until the
+  agent's next sync.
+- `remote_config_disabled`: the agent reported `"disabled"` (remote config turned off in its config file).
+- `400` for a `host_id` over 256 bytes.
+
+### `POST /api/v1/integrations/settings` · `PUT /api/v1/integrations/settings/{id}` · `DELETE …/{id}`
+```json
+{"host_id": "h1" | null, "integration": "postgresql",
+ "match": {"port": 5432, "container": "", "endpoint": "", "instance": ""},
+ "enabled": true, "endpoint": "127.0.0.1:5432", "username": "monitor", "password": "…" | null,
+ "database": "postgres", "databases": ["app"]}
+```
+`POST` → `201` IntegrationSetting; `PUT` → `200` (replaces every non-secret field: omitted fields become empty,
+`enabled` defaults to true); `DELETE` → `204`. Only `integration` is required; `host_id` null or `""` = all hosts.
+`password`: omitted or null keeps the stored password on `PUT` (none on `POST`), `""` clears it, a value replaces it;
+changing to an integration without passwords clears it. `404` for an unknown id.
+
+- `400 invalid_argument`: unknown integration; a non-empty field the integration does not use (nginx: `endpoint`;
+  redis, mysql: `endpoint`, `username`, `password`; postgresql: also `database`, `databases`; docker: only `enabled` and
+  `match`); nginx `endpoint` not an `http(s)` URL with a host; other endpoints not `host:port` or
+  `unix:/absolute/path`; `match.port` outside 1–65535; a string over 512 bytes or with control characters;
+  more than 64 `databases` or an empty entry; `host_id` over 256 bytes.
+- `409 already_exists`: another setting has the same host scope, integration and match.
+- `409 failed_precondition`: a password was given but `OPENLOG_SECRETS_KEY` is not configured.
 
 ## Alerting
 

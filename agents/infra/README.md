@@ -61,9 +61,39 @@ Fedora 33+ and CentOS Stream 9. Older Berkeley DB (`/var/lib/rpm/Packages`, RHEL
 `rpm -qa --queryformat …` when an `rpm` binary is available to the agent (with `--root` under `host.root_path`); the scratch container image has none,
 so on those hosts the container image reports no rpm packages.
 
-Docker: the Docker socket is usually `root:docker 0660`. The unprivileged `openlog-agent` user cannot open it with the default capabilities; the
-failure is counted in `openlog.agent.permission_denied{collector="containers"}` and container metrics still come from cgroups (without names/images).
-Adding the user to the `docker` group grants root-equivalent access to the host; decide deliberately.
+Docker: the Docker socket is usually `root:docker 0660`. The packages add `openlog-agent` to the `docker` group by default (see
+[Docker access](#docker-access)). Without access the failure is counted in `openlog.agent.permission_denied{collector="containers"}`, container
+metrics still come from cgroups (without names/images) and integrations derive container ports and addresses from `/proc/<pid>/net` and
+`docker-proxy` instead.
+
+## Docker access
+
+The deb/rpm packages and `scripts/install.sh` add `openlog-agent` to the `docker` group when that group exists, so the agent can
+read the Docker Engine API (container names, images, ports and IPs used to reach nginx, Redis, … in containers). Existing
+members are left alone. A new membership only takes effect after a restart; the installers restart a running service once.
+
+**Docker group membership is root-equivalent:** anyone who controls the `openlog-agent` user can control Docker and thus the host.
+
+Opt out (any of these; the file also stops later upgrades and re-runs from adding it again):
+
+```sh
+curl -fsSL …/install.sh | sudo sh -s -- --no-docker-access …   # creates the opt-out file
+sudo env OPENLOG_AGENT_DOCKER_ACCESS=0 apt-get install ./openlog-infra-agent.deb   # or dnf/rpm; also creates the file
+sudo mkdir -p /etc/openlog-infra-agent && sudo touch /etc/openlog-infra-agent/no-docker-access   # before installing
+```
+
+Plain `sudo VAR=… apt-get …` only works when the sudoers policy allows setting variables; `sudo env VAR=… …` always does.
+
+Revert on an installed host:
+
+```sh
+sudo gpasswd -d openlog-agent docker && sudo touch /etc/openlog-infra-agent/no-docker-access && sudo systemctl restart openlog-infra-agent
+```
+
+To re-enable later, delete the file and re-run the installer (or `usermod -aG docker openlog-agent` and restart). The systemd
+unit's hardening does not block the socket (`AF_UNIX` is allowed; `ProtectSystem=strict` does not prevent connecting to a socket).
+The container image (`packaging/container.yaml`) is not affected: it runs as root and reaches the socket through the host root
+mounted at `/host`.
 
 ## Integrations
 
@@ -72,7 +102,7 @@ receivers, so OTel Collector data fits the same panels):
 
 | Integration | Rules | Source | Credentials | Metrics |
 |---|---|---|---|---|
-| `nginx` | nginx | `stub_status`, probed on discovered ports (`/nginx_status`, `/stub_status`, `/status`, `/basic_status`, `/server_status`; http, then https) | none | `nginx.*` |
+| `nginx` | nginx | `stub_status`, probed on discovered ports (`/nginx_status`, `/stub_status`, `/basic_status`, `/status`, `/server_status`; http, then https — certificates unverified on loopback only) | none | `nginx.*` |
 | `redis` | redis | `INFO` over TCP, TLS or unix socket | optional `password` / ACL `username` | `redis.*` |
 | `mysql` | mysql, mariadb | global status, `performance_schema` io waits (top-N), replica status | required | `mysql.*` |
 | `postgresql` | postgresql | `pg_stat_database`, `pg_stat_bgwriter`/`pg_stat_checkpointer`, `pg_stat_replication`, `pg_locks`, top-N `pg_stat_user_tables`/`indexes` | required | `postgresql.*` |
@@ -81,7 +111,9 @@ receivers, so OTel Collector data fits the same panels):
 How it works: an integration instance starts when discovery finds a service whose rule has the integration id and stops when the service
 disappears. Each instance runs on its own goroutine (`integrations.interval`, default 30 s; `integrations.timeout` 10 s; at most
 `max_concurrent` at once; exponential backoff to 5 min after failures; panics are contained). Endpoints come from the service's listening ports
-(wildcard → loopback), well-known unix sockets, published container ports and container IPs; the first endpoint that answers is used. Every
+(wildcard → loopback), well-known unix sockets, published container ports and container IPs (from the Docker API, or — without socket
+access — from the container's `/proc/<pid>/net/{tcp,tcp6,fib_trie}` and `docker-proxy` command lines), and as a last resort the default port on
+`127.0.0.1`; the first endpoint that answers is used. Every
 instance is its own OTLP resource: host resource + `openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`,
 `service.instance.id`, `server.address`, `server.port`. Self-telemetry: `openlog.agent.integration.{collections,errors,duration}{integration}`.
 
@@ -90,6 +122,13 @@ instance is its own OTLP resource: host resource + `openlog.discovery.id`, `open
 `config.yaml` snippet), `error` (sanitized reason, e.g. `authentication failed: Access denied for user 'openlog'@'10.0.0.5' (using password: YES)`),
 `not_available` (no implementation, disabled). A status change triggers a new inventory snapshot (at most once a minute after the first results).
 `-once` runs every integration once, so `openlog-infra-agent -once | jq '.discovered_services[].integration'` shows what the service card will say.
+
+**Configure from the UI (no SSH):** on a host's integration panel, `needs_configuration`/`error` statuses show a form (endpoint, username,
+password, database, enabled) and a "disable on this host" switch. Settings are stored per organization (all hosts or one host; passwords
+encrypted with `OPENLOG_SECRETS_KEY`, never shown again) and reach the agent with its next sync (≤ 5 min by default). The agent merges them over
+`config.yaml` (remote wins per field), keeps the last received set in `/var/lib/openlog-infra-agent/integrations-remote.json` (0600) and applies
+them without a restart; `journalctl -u openlog-infra-agent | grep "remote integration config"` shows the applied revision. Set
+`integrations.remote_config: false` to manage integrations only through this file (the UI then shows remote config as disabled for the host).
 
 Credentials: `password: env:NAME` (e.g. from a systemd `EnvironmentFile=`), `password: file:/etc/openlog-infra-agent/mysql.password` (mode 0600,
 owned by the agent user) or a literal (a warning is logged). They are read on every connection, never logged, never part of inventory, statuses
@@ -120,6 +159,7 @@ Least-privilege monitoring users:
 
 ```sql
 -- MySQL 8 / MariaDB 10.5+ (MariaDB ≥ 10.5.9: use REPLICA MONITOR instead of REPLICATION CLIENT to read replica status)
+-- For a server in a Docker container the agent connects through the Docker network: use 'openlog'@'%' (or the bridge subnet).
 CREATE USER 'openlog'@'localhost' IDENTIFIED BY '<password>' WITH MAX_USER_CONNECTIONS 3;
 GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'openlog'@'localhost';
 GRANT SELECT ON performance_schema.* TO 'openlog'@'localhost';
@@ -132,10 +172,12 @@ GRANT pg_monitor TO openlog;          -- pg_stat_* incl. replication lag, pg_dat
 ```
 
 ```
-# nginx: stub_status on loopback
-server {
-    listen 127.0.0.1:8080;
-    location = /nginx_status { stub_status; allow 127.0.0.1; deny all; }
+# nginx: stub_status (the agent finds it on any discovered port; it never edits nginx configuration)
+location = /nginx_status {
+    stub_status;
+    allow 127.0.0.1;
+    allow 172.16.0.0/12;   # Docker networks: published ports arrive from the bridge gateway
+    deny all;
 }
 ```
 

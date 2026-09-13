@@ -22,6 +22,7 @@ import (
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/fleet"
+	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/version"
 )
 
@@ -41,6 +42,8 @@ type Server struct {
 	fleet    *fleet.Manager // nil: no fleet endpoints (static auth mode)
 	apm      *apmState      // APM settings (apm.go); nil: default Apdex T
 	alerts   *alert.Manager // nil: no alerting endpoints (alerts.go; static auth mode)
+	// nil: no integration settings endpoints (intsettings.go; static auth mode)
+	intSettings *intsettings.Manager
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -99,6 +102,7 @@ func (s *Server) Handler() http.Handler {
 	s.versionRoutes(mux)
 	s.fleetRoutes(mux)
 	s.alertRoutes(mux)
+	s.integrationSettingsRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})
