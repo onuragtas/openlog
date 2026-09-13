@@ -89,6 +89,10 @@ func TestConditionsAreTenantScoped(t *testing.T) {
 			`{"service_name":` + string(evilJSON) + `,"environment":"prod","metric":"p95_ms","operator":"gt","threshold":500,"group_by":["transaction"]}`,
 			`{"service_name":"checkout","metric":"apdex","operator":"lt","threshold":0.8,"recovery_threshold":0.9,"min_requests":10}`,
 		},
+		TypeAPMNoData: {
+			`{"service_name":` + string(evilJSON) + `,"environment":` + string(evilJSON) + `,"window_seconds":300}`,
+			`{"group_by":["environment","namespace"]}`,
+		},
 		TypeDiscovery: {
 			`{"event":"service_disappeared","match":"redis","filters":[{"field":"host.name","op":"eq","values":[` + string(evilJSON) + `]}]}`,
 			`{"event":"port_opened"}`,

@@ -269,6 +269,7 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		apmLinker = apm.NewLinker(conn, apm.LinkerOptions{
 			Database: cfg.ClickHouseDatabase, Cluster: cfg.ClickHouseCluster, Conn: clickhouse.OptionsFromConfig(cfg.Common),
 			Interval: cfg.APM.LinkInterval, Lookback: cfg.APM.LinkLookback, Delay: cfg.APM.LinkDelay,
+			CatchUp: cfg.APM.LinkCatchUp, CatchUpAt: cfg.APM.CatchUpOffset(), CatchUpBatch: cfg.APM.LinkCatchUpBatch,
 		}, log.With("job", "apm-link"), adm.Registry()).Run
 	}
 	fleetController := startFleetAPI(ctx, cfg, pgPool, srv, adm.Registry(), log)

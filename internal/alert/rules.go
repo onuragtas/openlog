@@ -25,6 +25,7 @@ const (
 	TypeNoData          = "no_data"
 	TypeDiscovery       = "discovery"
 	TypeAPM             = "apm"
+	TypeAPMNoData       = "apm_no_data"
 )
 
 // Severities.
@@ -200,7 +201,7 @@ func (in RuleInput) Validate() (*Definition, error) {
 	}
 	rt, ok := ruleTypes[d.Type]
 	if !ok {
-		return nil, invalid("type", "must be one of metric_threshold, log_match, no_data, discovery, apm")
+		return nil, invalid("type", "must be one of metric_threshold, log_match, no_data, discovery, apm, apm_no_data")
 	}
 	if !rt.Available() {
 		return nil, invalid("type", "rule type %q is not available yet", d.Type)

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { alertRuleQuery } from "@/api/alerts";
 import { PageHeader } from "@/components/AppShell";
 import { ChannelsManager } from "@/components/alerts/ChannelsManager";
+import { EvaluationHistory } from "@/components/alerts/EvaluationHistory";
 import { IncidentDetail, IncidentsList, type IncidentStateFilter } from "@/components/alerts/Incidents";
 import { MutesManager } from "@/components/alerts/MutesManager";
 import { RuleEditor } from "@/components/alerts/RuleEditor";
@@ -127,6 +128,7 @@ export function AlertsRuleEditPage() {
             <RuleStateBadge state={q.data.status.state} />
           </div>
           <RuleEditor key={`${q.data.id}:${q.data.version}`} rule={q.data} onCancel={() => void navigate({ to: "/alerts/rules" })} />
+          <EvaluationHistory rule={q.data} />
         </>
       )}
     </div>

@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,8 @@ import (
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
+	"github.com/onuragtas/openlog/internal/alert"
+	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/migrate"
 	"github.com/onuragtas/openlog/internal/processor"
@@ -378,5 +381,154 @@ func TestAPMSharded(t *testing.T) {
 		if got := links()["frontend->orders via orders:8080"]; got != 751 {
 			t.Errorf("after late span: %v, want 751", got)
 		}
+
+		// Daily catch-up pass (apm.md §6): another late pair, re-linked in 2-minute batches; the pass reports
+		// exactly the call it added.
+		late2 := processor.NewRows()
+		for _, req := range genTraces(1, base.Add(70*time.Second)) {
+			for _, rs := range req.ResourceSpans {
+				for _, ss := range rs.ScopeSpans {
+					for _, sp := range ss.Spans {
+						sp.TraceId = []byte("late-trace-00002")
+						sp.TraceState = ""
+					}
+				}
+			}
+			late2.AddTraces(tenant, base, req)
+		}
+		if err := (processor.DirectWriter{W: sw}).Write(ctx, processor.TableSpans, token+":late2", processor.Columns[processor.TableSpans], late2.Values(processor.TableSpans)); err != nil {
+			t.Fatal(err)
+		}
+		syncReplicas(t, boot, s1r2)
+		catchUp := apm.NewLinker(boot, apm.LinkerOptions{
+			Database: "openlog", Cluster: "openlog", Conn: clickhouse.Options{User: "openlog", Password: "openlog"},
+			ResolveAddr: func(r clickhouse.Replica) string { return shardAddrs[r.Addr()] }, CatchUpBatch: 2 * time.Minute, CatchUpPause: -1,
+		}, log, nil)
+		lateCalls, err := catchUp.CatchUp(ctx, start, end)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Trace 0 calls orders and catalog: two late calls. Other tenants' spans in the same minutes (earlier runs
+		// with OPENLOG_APMSHARD_KEEP) are already linked.
+		if lateCalls != 2 {
+			t.Errorf("catch-up linked %v late calls, want 2", lateCalls)
+		}
+		if got := links()["frontend->orders via orders:8080"]; got != 752 {
+			t.Errorf("after catch-up: %v, want 752", got)
+		}
 	})
+
+	t.Run("apm retention is applied on every replica once", func(t *testing.T) {
+		s2r1 := openCH(t, "127.0.0.1:19203")
+		ttl := func(c clickhouse.Conn, table string) string {
+			var engine string
+			if err := c.QueryRow(ctx, "SELECT engine_full FROM system.tables WHERE database = 'openlog' AND name = ?", table).Scan(&engine); err != nil {
+				t.Fatal(err)
+			}
+			return engine
+		}
+		for _, days := range []int{7, 30} {
+			changed, err := migrate.ApplyAPMRetention(ctx, boot, "openlog", days, log)
+			if err != nil || !changed {
+				t.Fatalf("apply %d days: changed=%v %v", days, changed, err)
+			}
+			for _, c := range []clickhouse.Conn{boot, s1r2, s2r1} {
+				for _, table := range []string{"apm_transactions_1m_local", "apm_services_local"} {
+					if e := ttl(c, table); !strings.Contains(e, "toIntervalDay("+strconv.Itoa(days)+")") {
+						t.Errorf("%s after %d days: %s", table, days, e)
+					}
+				}
+			}
+			if got, err := migrate.AppliedAPMRetention(ctx, boot); err != nil || got != days {
+				t.Errorf("recorded retention %d %v, want %d", got, err, days)
+			}
+			if changed, err := migrate.ApplyAPMRetention(ctx, boot, "openlog", days, log); err != nil || changed {
+				t.Errorf("second apply of %d days: changed=%v %v", days, changed, err)
+			}
+		}
+	})
+
+	t.Run("alert evaluation summaries: one shard per rule, deduplicated retries, tenant-scoped history", func(t *testing.T) {
+		first, err := clickhouse.NewShardedWriter(ctx, boot, clickhouse.ShardedOptions{
+			Conn: clickhouse.Options{User: "openlog", Password: "openlog"}, Database: "openlog", Cluster: "openlog",
+			ResolveAddr: func(r clickhouse.Replica) string { return shardAddrs[r.Addr()] },
+		}, log, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer first.Close()
+		ins := &flakyInserter{first: first, w: sw, fail: 1}
+		w := alert.NewEvaluationWriter(ins, alert.EvaluationWriterOptions{MaxBatch: 1000})
+		end := time.Now().UTC().Truncate(time.Minute)
+		var rules []string
+		for r := range 4 {
+			rule := &alert.Rule{Definition: alert.Definition{Type: alert.TypeMetricThreshold}, ID: fmt.Sprintf("rule-%s-%d", run, r), TenantID: tenant}
+			rules = append(rules, rule.ID)
+			for m := range 3 {
+				w.Add(alert.EvaluationRows(rule, &alert.Plan{EvalEnd: end.Add(time.Duration(m-3) * time.Minute), Result: "ok", Duration: 5 * time.Millisecond,
+					Summaries: []alert.SeriesSummary{{Key: "host.id=a", Labels: map[string]string{"host.id": "a"}, Value: float64(m), State: alert.StateFiring},
+						{Key: "host.id=b", Labels: map[string]string{"host.id": "b"}, Value: math.NaN(), State: alert.StateOK}}}))
+			}
+		}
+		if n := w.Flush(ctx); n != 0 {
+			t.Fatal("the failing insert reported rows")
+		}
+		if n := w.Flush(ctx); n != 36 {
+			t.Fatalf("flush wrote %d rows, want 36", n)
+		}
+		syncEval := func() {
+			for _, c := range []clickhouse.Conn{boot, s1r2} {
+				if err := c.Exec(ctx, "SYSTEM SYNC REPLICA openlog.alert_evaluations_local"); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		syncEval()
+		// The failed attempt wrote its blocks before failing: the retry with the same token must not duplicate them.
+		if n := queryFloat(t, boot, "SELECT toFloat64(count()) FROM openlog.alert_evaluations WHERE tenant_id = ?", tenant); n != 36 {
+			t.Errorf("%v rows, want 36", n)
+		}
+		for _, id := range rules {
+			if n := queryFloat(t, boot, "SELECT toFloat64(count(DISTINCT _shard_num)) FROM openlog.alert_evaluations WHERE tenant_id = ? AND rule_id = ?", tenant, id); n != 1 {
+				t.Errorf("rule %s on %v shards", id, n)
+			}
+		}
+		if n := queryFloat(t, boot, "SELECT toFloat64(count(DISTINCT _shard_num)) FROM openlog.alert_evaluations WHERE tenant_id = ?", tenant); n != 2 {
+			t.Logf("4 rules landed on %v shard(s)", n)
+		}
+		sc, err := query.New(boot, "openlog", 10*time.Second).Scope(tenant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		h, err := alert.EvaluationHistory(ctx, sc, rules[0], end.Add(-time.Hour), end)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(h.Evaluations) != 3 || len(h.Series) != 2 || h.Series[0].Key != "host.id=a" || len(h.Series[0].Points) != 3 ||
+			h.Series[0].Points[2].Value != 2 || h.Series[0].Points[2].State != alert.StateFiring || !math.IsNaN(h.Series[1].Points[0].Value) {
+			t.Errorf("history %+v", h)
+		}
+		other, _ := query.New(boot, "openlog", 10*time.Second).Scope("another-" + tenant)
+		if h, err := alert.EvaluationHistory(ctx, other, rules[0], end.Add(-time.Hour), end); err != nil || len(h.Series)+len(h.Evaluations) != 0 {
+			t.Errorf("another tenant sees %+v %v", h, err)
+		}
+	})
+}
+
+// flakyInserter reports the first calls as failed after they were written (the acknowledgement was lost) through
+// another writer, so the retry through w (without that writer's done cache) relies on ClickHouse deduplication.
+type flakyInserter struct {
+	first, w *clickhouse.ShardedWriter
+	fail     int
+}
+
+func (f *flakyInserter) Insert(ctx context.Context, table string, keyColumns, columns []string, token string, rows [][]any) error {
+	if f.fail > 0 {
+		f.fail--
+		if err := f.first.Insert(ctx, table, keyColumns, columns, token, rows); err != nil {
+			return err
+		}
+		return fmt.Errorf("simulated failure")
+	}
+	return f.w.Insert(ctx, table, keyColumns, columns, token, rows)
 }

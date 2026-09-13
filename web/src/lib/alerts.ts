@@ -111,6 +111,7 @@ const TYPE_DEFAULTS: Record<AlertRuleType, Partial<RuleDraft>> = {
   no_data: { window_seconds: 300, lookback_seconds: 86400, group_by: ["host"], interval_seconds: 60 },
   discovery: { window_seconds: 900, lookback_seconds: 86400, group_by: [], interval_seconds: 300 },
   apm: { window_seconds: 300, operator: "gt", metric: "p95_ms", group_by: [], interval_seconds: 60 },
+  apm_no_data: { window_seconds: 600, lookback_seconds: 86400, group_by: [], interval_seconds: 60 },
 };
 
 export function emptyDraft(type: AlertRuleType = "metric_threshold"): RuleDraft {
@@ -169,7 +170,7 @@ export function changeType(d: RuleDraft, type: AlertRuleType): RuleDraft {
     labels: d.labels,
     flapping: d.flapping,
     version: d.version,
-    filters: type === "apm" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
+    filters: type === "apm" || type === "apm_no_data" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
   };
 }
 
@@ -294,6 +295,15 @@ export function draftToInput(d: RuleDraft): AlertRuleInput {
         missing_data: d.missing_data,
       };
       break;
+    case "apm_no_data":
+      condition = {
+        service_name: d.service_name.trim(),
+        environment: d.environment.trim() === "" ? null : d.environment.trim(),
+        group_by: d.group_by,
+        window_seconds: d.window_seconds,
+        lookback_seconds: d.lookback_seconds,
+      };
+      break;
   }
   const labels: Record<string, string> = {};
   for (const l of d.labels) if (l.key.trim()) labels[l.key.trim()] = l.value;
@@ -382,6 +392,10 @@ export function validateDraft(d: RuleDraft): DraftErrors {
       inRange(e, "window_seconds", d.window_seconds, 60, 21600);
       if (d.min_requests.trim() !== "" && (parseNumber(d.min_requests) ?? -1) < 0) e.min_requests = { key: "number" };
       break;
+    case "apm_no_data":
+      inRange(e, "window_seconds", d.window_seconds, 60, 86400);
+      inRange(e, "lookback_seconds", d.lookback_seconds, Math.max(600, d.window_seconds + 1), 604800);
+      break;
   }
   d.filters.forEach((f, i) => {
     const key = f.field.replace(/^(attr|resource)\./, "");
@@ -421,7 +435,7 @@ export interface RuleEditorSearch {
 
 const AGGS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGS = ["avg", "sum", "min", "max"] as const;
-const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm"];
+const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data"];
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
 const SEVERITIES = ["critical", "warning", "info"] as const;
 

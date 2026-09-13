@@ -98,3 +98,18 @@ export function timeTicks(totalNs: number, count = 5): number[] {
   if (totalNs <= 0) return [0];
   return Array.from({ length: count + 1 }, (_, i) => (totalNs * i) / count);
 }
+
+/**
+ * Tick intervals (the `count` of timeTicks) that fit an axis `widthPx` wide with at least `minLabelPx`
+ * per label, between 1 (start and end only) and `max`. An unmeasured (0) width uses `max`.
+ */
+export function tickCountForWidth(widthPx: number, minLabelPx = 80, max = 4): number {
+  if (!(widthPx > 0)) return max;
+  return Math.max(1, Math.min(max, Math.floor(widthPx / minLabelPx)));
+}
+
+/** Label anchor of tick `i` of `n`: the first starts at its tick, the last ends at it, the rest are centered. */
+export function tickAnchor(i: number, n: number): "start" | "middle" | "end" {
+  if (i === 0) return "start";
+  return i === n - 1 ? "end" : "middle";
+}

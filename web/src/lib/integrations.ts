@@ -39,6 +39,18 @@ export function splitServiceKey(key: string): { discoveryId: string; instance: s
   return { discoveryId: key.slice(0, i), instance: key.slice(i + 1) };
 }
 
+/**
+ * Display name of an instance: the process name (`command`, e.g. `redis-server`) is what operators recognise,
+ * while `instance` is the resolved executable (`/usr/bin/redis-check-rdb` on Debian) or a container id. The
+ * command is primary and the instance secondary; without a command the instance is the only name.
+ */
+export function instanceLabel(s: { command?: string; instance?: string }): { primary: string; secondary?: string } {
+  const command = s.command?.trim() ?? "";
+  const instance = s.instance?.trim() ?? "";
+  if (!command) return { primary: instance };
+  return { primary: command, secondary: instance && instance !== command ? instance : undefined };
+}
+
 /** Resource attribute filters selecting one instance's metrics (`resource.<key>` on /hosts/{id}/metrics). */
 export function instanceResourceFilter(ref: Pick<InstanceRef, "discoveryId" | "instance">): Record<string, string> {
   return { "openlog.discovery.id": ref.discoveryId, "openlog.discovery.instance": ref.instance };
@@ -165,6 +177,8 @@ export interface IntegrationRow {
   key: string;
   discoveryId: string;
   instance: string;
+  /** Process name (argv0 basename); shown instead of `instance` when present, see instanceLabel. */
+  command?: string;
   name: string;
   integration: IntegrationState;
   panel: boolean;
@@ -197,6 +211,7 @@ export function summarizeIntegrations(items: ServiceItem[]): { rows: Integration
       key: it.key,
       discoveryId,
       instance,
+      command: s.command?.trim() || undefined,
       name: s.name || discoveryId,
       integration,
       panel: hasPanel(s) && discoveryId !== "" && instance !== "",
@@ -206,13 +221,13 @@ export function summarizeIntegrations(items: ServiceItem[]): { rows: Integration
   return { rows, counts };
 }
 
-/** Rows with the given status (undefined = all) whose host, service, integration, instance or endpoint contain every term. */
+/** Rows with the given status (undefined = all) whose host, service, integration, command, instance or endpoint contain every term. */
 export function filterIntegrationRows(rows: IntegrationRow[], status: IntegrationStatus | undefined, q: string): IntegrationRow[] {
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
   return rows.filter((r) => {
     if (status && r.integration.status !== status) return false;
     if (terms.length === 0) return true;
-    const text = [r.hostName, r.hostId, r.name, r.discoveryId, r.integration.id ?? "", r.instance, r.integration.endpoint ?? ""].join(" ").toLowerCase();
+    const text = [r.hostName, r.hostId, r.name, r.discoveryId, r.integration.id ?? "", r.command ?? "", r.instance, r.integration.endpoint ?? ""].join(" ").toLowerCase();
     return terms.every((t) => text.includes(t));
   });
 }

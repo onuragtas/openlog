@@ -455,6 +455,41 @@ func TestSecretRotationAndMutes(t *testing.T) {
 	if err := f.store.DeleteMute(ctx, f.orgID, m.ID, f.actor); err != nil {
 		t.Fatal(err)
 	}
+
+	// Recurring mute (§5.2): every day 00:00-23:59 UTC, so it is active now; the stored window is the occurrence.
+	parse := func(s string) (time.Time, error) { return time.Parse(time.RFC3339, s) }
+	vm, err := alert.MuteInput{Name: "nightly", Schedule: &alert.MuteScheduleInput{RRule: "FREQ=DAILY", StartTime: "00:00", EndTime: "23:59"}}.Validate(parse, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rm, err := f.store.CreateMute(ctx, f.orgID, vm, f.actor)
+	if err != nil || rm.Schedule == nil || rm.Schedule.RRule != "FREQ=DAILY" || len(rm.Schedule.Days) != 7 {
+		t.Fatalf("recurring mute %+v %v", rm, err)
+	}
+	if active, err := f.store.ActiveMutes(ctx, f.orgID, now); err != nil || len(active) != 1 || active[0].ID != rm.ID {
+		// 23:59-00:00 UTC is the one minute without an occurrence.
+		if now.Hour() != 23 || now.Minute() != 59 {
+			t.Fatalf("recurring active mutes %+v %v", active, err)
+		}
+	}
+	// Pretend the stored window ended yesterday: the roll moves it to the current occurrence, once.
+	if _, err := pgPool.Exec(ctx, `UPDATE alert_mutes SET starts_at = $2, ends_at = $3 WHERE id = $1`, rm.ID, now.Add(-48*time.Hour), now.Add(-47*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := f.store.RollRecurringMutes(ctx, now); err != nil || n != 1 {
+		t.Fatalf("roll: %d %v", n, err)
+	}
+	if n, _ := f.store.RollRecurringMutes(ctx, now); n != 0 {
+		t.Errorf("second roll moved %d mutes", n)
+	}
+	got, err := f.store.GetMute(ctx, f.orgID, rm.ID)
+	wantStart, wantEnd, _ := rm.Schedule.Window(now)
+	if err != nil || !got.StartsAt.Equal(wantStart) || !got.EndsAt.Equal(wantEnd) {
+		t.Errorf("rolled window %s – %s, want %s – %s (%v)", got.StartsAt, got.EndsAt, wantStart, wantEnd, err)
+	}
+	if list, err := f.store.ListMutes(ctx, f.orgID, false); err != nil || len(list) != 1 {
+		t.Errorf("list mutes %d %v", len(list), err)
+	}
 	var audits int
 	_ = pgPool.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE org_id = $1 AND action LIKE 'alert.%'`, f.orgID).Scan(&audits)
 	if audits < 3 {

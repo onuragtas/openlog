@@ -1,16 +1,19 @@
 // Service map: React Flow canvas (MIT, @xyflow/react) laid out with dagre (lib/apm-map.ts), plus an
 // accessible table of the same connections. Service nodes open the service page.
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
+// Phones: when the fitted graph would be unreadably small, the map starts centered on the focused (or most
+// connected) service at a readable zoom, with a "Fit all" control and a Map/List toggle.
+import { Background, Controls, Handle, MarkerType, Panel, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Link } from "@tanstack/react-router";
-import { Box, Database, Globe, MessageSquare } from "lucide-react";
-import { memo, useEffect, useMemo, useRef } from "react";
+import { Box, Database, Globe, List, Maximize, MessageSquare, Network } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ApmMap, ApmMapNode } from "@/api/apm";
 import { EmptyState } from "@/components/StateViews";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMs, formatRate, formatRpm, parseServiceNodeId } from "@/lib/apm";
-import { layoutMap } from "@/lib/apm-map";
+import { initialMapView, layoutMap } from "@/lib/apm-map";
 import { useIsMobile } from "@/lib/media";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -79,17 +82,11 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520 }: Servi
   const flowRef = useRef<ReactFlowInstance<MapNode, Edge> | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const empty = data.nodes.length === 0;
+  const [view, setView] = useState<"map" | "list">("map");
+  const [centeredOn, setCenteredOn] = useState<string | null>(null);
+  const showList = mobile && view === "list";
 
-  // Keep the whole graph in view when the canvas is resized (rotation, drawer, window size).
-  useEffect(() => {
-    const el = boxRef.current;
-    if (empty || !el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => void flowRef.current?.fitView({ padding: 0.15 }));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [empty]);
-
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, positions } = useMemo(() => {
     const pos = layoutMap(data.nodes, data.edges, { nodeWidth: NODE_W, nodeHeight: NODE_H });
     const nodes: MapNode[] = data.nodes.map((n) => {
       const typeLabel = t(`apm.map.nodeTypes.${n.type}`);
@@ -132,15 +129,56 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520 }: Servi
         animated: e.throughput > 0,
       };
     });
-    return { nodes, edges };
+    return { nodes, edges, positions: pos };
   }, [data, focusId, locale, names, t]);
+
+  const fitAll = useCallback(() => {
+    void flowRef.current?.fitView({ padding: 0.15 });
+    setCenteredOn(null);
+  }, []);
+
+  // Initial viewport: fit, or on a phone center a readable zoom on the focused / most connected node.
+  const applyInitialView = useCallback(() => {
+    const flow = flowRef.current;
+    const el = boxRef.current;
+    if (!flow || !el || el.clientWidth === 0) return;
+    const v = initialMapView({ positions, edges: data.edges, width: el.clientWidth, height: el.clientHeight, compact: mobile, focusId, nodeWidth: NODE_W, nodeHeight: NODE_H });
+    if (v.mode === "fit") {
+      fitAll();
+    } else {
+      void flow.setCenter(v.x, v.y, { zoom: v.zoom });
+      setCenteredOn(v.nodeId);
+    }
+  }, [positions, data.edges, mobile, focusId, fitAll]);
+
+  // Re-apply when the canvas is resized (rotation, drawer, window size, list/map toggle).
+  useEffect(() => {
+    const el = boxRef.current;
+    if (empty || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => applyInitialView());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [empty, applyInitialView]);
 
   if (data.nodes.length === 0) return <EmptyState>{t("apm.map.empty")}</EmptyState>;
 
   return (
     <div className="flex flex-col gap-4">
+      {mobile && (
+        <div role="group" aria-label={t("apm.map.view")} className="flex gap-2" data-testid="map-view-toggle">
+          <Button variant={view === "map" ? "secondary" : "outline"} size="sm" className="min-h-10" aria-pressed={view === "map"} onClick={() => setView("map")}>
+            <Network aria-hidden="true" />
+            {t("apm.map.viewMap")}
+          </Button>
+          <Button variant={view === "list" ? "secondary" : "outline"} size="sm" className="min-h-10" aria-pressed={view === "list"} onClick={() => setView("list")}>
+            <List aria-hidden="true" />
+            {t("apm.map.viewList")}
+          </Button>
+        </div>
+      )}
       <div
         ref={boxRef}
+        hidden={showList}
         className="overflow-hidden rounded-lg border bg-background"
         style={{ height: mobile ? Math.min(height, 420) : height }}
         data-testid="service-map"
@@ -150,12 +188,14 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520 }: Servi
         <ReactFlow
           onInit={(instance) => {
             flowRef.current = instance;
+            applyInitialView();
           }}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
           colorMode={resolved}
-          fitView
+          // Phones pick their initial viewport in applyInitialView (fitting first would flash a tiny graph).
+          fitView={!mobile}
           fitViewOptions={{ padding: 0.15 }}
           minZoom={0.2}
           nodesConnectable={false}
@@ -166,6 +206,19 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520 }: Servi
         >
           <Background gap={20} />
           <Controls showInteractive={false} />
+          {mobile && (
+            <Panel position="top-right" className="flex flex-col items-end gap-1">
+              <Button variant="outline" size="sm" className="min-h-10 bg-card" onClick={fitAll} data-testid="map-fit-all">
+                <Maximize aria-hidden="true" />
+                {t("apm.map.fitAll")}
+              </Button>
+              {centeredOn && (
+                <span className="rounded bg-card/90 px-1.5 py-0.5 text-[11px] text-muted-foreground" aria-live="polite">
+                  {t("apm.map.focusedOn", { name: names.get(centeredOn) ?? centeredOn })}
+                </span>
+              )}
+            </Panel>
+          )}
         </ReactFlow>
       </div>
       <div className="rounded-xl border bg-card">

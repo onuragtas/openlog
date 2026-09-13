@@ -147,6 +147,20 @@ RELEASE_MANIFEST_ARGS = --version $(VERSION) --released-at $(DATE) \
 .PHONY: release-local release-tool release-testkeys release-check release-agent release-packages \
 	release-backend release-helm release-manifest release-index release-serve release-clean
 
+# Go agent modules (docs/operations/releasing.md "Go agent modules"). Before tagging vX.Y.Z:
+#   make release-prepare VERSION=X.Y.Z   bumps agents/go/version.go + in-repo requires; commit the result
+#   make go-agent-release-check VERSION=X.Y.Z   what release.yml enforces on the tagged commit
+#   make go-agent-verify                  builds modules without replace against a local proxy of the tree
+.PHONY: release-prepare go-agent-release-check go-agent-verify
+release-prepare:
+	scripts/go-agent-release.sh prepare "$(VERSION)"
+
+go-agent-release-check:
+	scripts/go-agent-release.sh check "$(VERSION)"
+
+go-agent-verify:
+	scripts/go-agent-release.sh verify
+
 release-local: release-check release-agent release-packages release-backend release-helm release-manifest release-index
 	@rm -rf $(RELEASE_STAGE)
 	@echo "release $(VERSION) ready in $(RELEASE_DIR)"; ls -l $(RELEASE_DIR)
@@ -270,7 +284,7 @@ stack-demo:
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 KUBECONFORM_IMAGE ?= ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
-SHELL_SCRIPTS := scripts/install.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh
+SHELL_SCRIPTS := scripts/install.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh
 
 .PHONY: shellcheck actionlint helm-lint package-test install-test
 shellcheck:

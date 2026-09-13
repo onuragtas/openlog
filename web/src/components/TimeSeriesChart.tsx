@@ -4,7 +4,7 @@ import uPlot from "uplot";
 import { ErrorState, EmptyState } from "@/components/StateViews";
 import { Skeleton } from "@/components/ui/skeleton";
 import { axisTickLabels, measureText, timeFormatter, yAxisSize } from "@/lib/chart-axis";
-import { placeTooltip } from "@/lib/chart-tooltip";
+import { placeTooltip, TOUCH_TOOLTIP_IDLE_MS, TouchTooltipState } from "@/lib/chart-tooltip";
 import { formatDateTime, formatValue, type UnitKind } from "@/lib/format";
 import { useIsMobile } from "@/lib/media";
 import {
@@ -71,7 +71,10 @@ function withAlpha(hex: string, alpha: number): string {
 
 /**
  * Tooltip plugin: shows the hovered time and each visible series' raw value; reports the hovered index.
- * Touch: tapping or dragging horizontally across the plot moves the cursor (uPlot itself follows the mouse only).
+ * Touch (uPlot itself follows the mouse only): tapping or dragging horizontally across the plot moves the
+ * cursor; tapping the same point again, tapping outside the plot, scrolling or TOUCH_TOOLTIP_IDLE_MS without
+ * touches closes it (state in lib/chart-tooltip.ts). Compatibility mouse events right after a touch are
+ * ignored so they cannot reopen a tooltip that a tap just closed.
  */
 function cursorPlugin(
   getLive: () => Live | null,
@@ -81,8 +84,13 @@ function cursorPlugin(
   onIdx: (idx: number | null) => void,
 ): uPlot.Plugin {
   let el: HTMLDivElement | null = null;
-  let onTouch: ((e: PointerEvent) => void) | null = null;
+  let detach: (() => void) | null = null;
+  const touch = new TouchTooltipState();
+  const guard: uPlot.Cursor.MouseListenerFactory = (_u, _targ, handler) => (e) => (touch.suppressMouse(performance.now()) ? null : handler(e));
   return {
+    opts: (_u, opts) => {
+      opts.cursor = { ...opts.cursor, bind: { ...opts.cursor?.bind, mousedown: guard, mouseup: guard, mousemove: guard, mouseleave: guard, mouseenter: guard } };
+    },
     hooks: {
       init: (u) => {
         el = document.createElement("div");
@@ -91,19 +99,67 @@ function cursorPlugin(
         el.setAttribute("aria-hidden", "true");
         u.over.appendChild(el);
         u.over.style.touchAction = "pan-y";
-        onTouch = (e: PointerEvent) => {
-          if (e.pointerType !== "touch") return;
-          const r = u.over.getBoundingClientRect();
-          u.setCursor({ left: e.clientX - r.left, top: e.clientY - r.top });
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const hideCursor = () => u.setCursor({ left: -10, top: -10 });
+        const close = () => {
+          clearTimeout(timer);
+          if (touch.close()) hideCursor();
         };
-        u.over.addEventListener("pointerdown", onTouch);
-        u.over.addEventListener("pointermove", onTouch);
+        const armIdle = () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => (touch.idle(performance.now()) ? close() : armIdle()), TOUCH_TOOLTIP_IDLE_MS);
+        };
+        const at = (e: PointerEvent) => {
+          const r = u.over.getBoundingClientRect();
+          const left = e.clientX - r.left;
+          const idx = u.posToIdx(left);
+          return { left, top: e.clientY - r.top, idx: Number.isFinite(idx) && idx >= 0 ? idx : null };
+        };
+        const onDown = (e: PointerEvent) => {
+          if (e.pointerType !== "touch") return;
+          const p = at(e);
+          if (touch.down(p.idx, p.left, performance.now())) {
+            u.setCursor({ left: p.left, top: p.top });
+            armIdle();
+          } else {
+            clearTimeout(timer);
+            hideCursor();
+          }
+        };
+        const onMove = (e: PointerEvent) => {
+          if (e.pointerType !== "touch") return;
+          const p = at(e);
+          const idx = touch.move(p.idx, p.left, performance.now());
+          if (idx === undefined) return;
+          if (idx === null) {
+            close();
+          } else {
+            u.setCursor({ left: p.left, top: p.top });
+            armIdle();
+          }
+        };
+        const onOutside = (e: PointerEvent) => {
+          if (touch.openIdx !== null && !(e.target instanceof Node && u.over.contains(e.target))) close();
+        };
+        const onScroll = () => {
+          if (touch.openIdx !== null) close();
+        };
+        u.over.addEventListener("pointerdown", onDown);
+        u.over.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerdown", onOutside, true);
+        // Capture: scrolls of any container (e.g. <main>) close the tooltip, not only the window.
+        window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+        detach = () => {
+          clearTimeout(timer);
+          u.over.removeEventListener("pointerdown", onDown);
+          u.over.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerdown", onOutside, true);
+          window.removeEventListener("scroll", onScroll, { capture: true });
+        };
       },
-      destroy: (u) => {
-        if (onTouch) {
-          u.over.removeEventListener("pointerdown", onTouch);
-          u.over.removeEventListener("pointermove", onTouch);
-        }
+      destroy: () => {
+        detach?.();
+        detach = null;
       },
       setCursor: (u) => {
         const idx = u.cursor.idx;

@@ -168,6 +168,7 @@ func init() {
 	register(noDataType{})
 	register(discoveryType{})
 	register(apmType{})
+	register(apmNoDataType{})
 }
 
 // decodeStrict unmarshals raw into v rejecting unknown fields.

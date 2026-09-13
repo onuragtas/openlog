@@ -71,11 +71,18 @@ func (s *Static) Resolve(_ context.Context, key string) (string, error) {
 	return tenant, nil
 }
 
-// KeyFromValues extracts the license key from the openlog-license-key header or
-// an "Authorization: Bearer <key>" header. get returns the first value of a
-// (lower- or canonical-case) header name.
+// HeaderAPIKey is accepted as an alias of HeaderLicenseKey so OTLP senders configured for other
+// backends (e.g. browser SDKs sending "x-api-key") work unchanged.
+const HeaderAPIKey = "x-api-key"
+
+// KeyFromValues extracts the license key from the openlog-license-key header, the x-api-key
+// header or an "Authorization: Bearer <key>" header, in that order. get returns the first value of
+// a (lower- or canonical-case) header name.
 func KeyFromValues(get func(name string) string) string {
 	if k := strings.TrimSpace(get(HeaderLicenseKey)); k != "" {
+		return k
+	}
+	if k := strings.TrimSpace(get(HeaderAPIKey)); k != "" {
 		return k
 	}
 	auth := strings.TrimSpace(get("authorization"))

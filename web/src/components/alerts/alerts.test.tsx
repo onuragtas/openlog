@@ -84,7 +84,7 @@ describe("alerting UI", () => {
     await user.click(screen.getByRole("radio", { name: /Discovery event/ }));
     expect(screen.getByLabelText("Event")).toBeInTheDocument();
     expect(screen.queryByLabelText("For at least")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: /APM/ }));
+    await user.click(screen.getByRole("radio", { name: /^APM(?! service)/ }));
     expect(screen.getByLabelText("Service")).toBeInTheDocument();
     expect(screen.getByLabelText("APM metric")).toHaveValue("p95_ms");
   }, 40_000);

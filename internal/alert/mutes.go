@@ -21,9 +21,13 @@ type MuteInput struct {
 	EndsAt   string        `json:"ends_at"`
 	RuleIDs  []string      `json:"rule_ids"`
 	Matchers []MuteMatcher `json:"matchers"`
+	// Schedule makes the mute recurring; starts_at and ends_at are then ignored (§5.2).
+	Schedule *MuteScheduleInput `json:"schedule"`
 }
 
-// Mute is a stored mute window.
+// Mute is a stored mute window. For a recurring mute StartsAt/EndsAt hold the materialized current or next
+// occurrence (kept up to date by RollRecurringMutes, so binaries without schedule support mute correctly
+// during a rolling upgrade); the schedule is authoritative.
 type Mute struct {
 	ID             string
 	OrgID          string
@@ -33,6 +37,7 @@ type Mute struct {
 	EndsAt         time.Time
 	RuleIDs        []string
 	Matchers       []MuteMatcher
+	Schedule       *MuteSchedule
 	CreatedBy      string
 	CreatedByEmail string
 	CreatedAt      time.Time
@@ -47,12 +52,14 @@ type ValidMute struct {
 	EndsAt   time.Time
 	RuleIDs  []string
 	Matchers []MuteMatcher
+	Schedule *MuteSchedule
 }
 
 const maxMuteSpan = 90 * 24 * time.Hour
 
-// Validate checks a mute write. parseTime accepts RFC3339 or unix milliseconds.
-func (in MuteInput) Validate(parseTime func(string) (time.Time, error)) (*ValidMute, error) {
+// Validate checks a mute write. parseTime accepts RFC3339 or unix milliseconds; now is used for recurring mutes
+// (default schedule start, first occurrence).
+func (in MuteInput) Validate(parseTime func(string) (time.Time, error), now time.Time) (*ValidMute, error) {
 	m := &ValidMute{Name: strings.TrimSpace(in.Name), Comment: in.Comment, RuleIDs: []string{}, Matchers: []MuteMatcher{}}
 	if n := len([]rune(m.Name)); n < 1 || n > 200 {
 		return nil, invalid("name", "must be 1-200 characters")
@@ -61,17 +68,27 @@ func (in MuteInput) Validate(parseTime func(string) (time.Time, error)) (*ValidM
 		return nil, invalid("comment", "must be at most 2000 characters")
 	}
 	var err error
-	if m.StartsAt, err = parseTime(in.StartsAt); err != nil {
-		return nil, invalid("starts_at", "%v", err)
-	}
-	if m.EndsAt, err = parseTime(in.EndsAt); err != nil {
-		return nil, invalid("ends_at", "%v", err)
-	}
-	if !m.EndsAt.After(m.StartsAt) {
-		return nil, invalid("ends_at", "must be after starts_at")
-	}
-	if m.EndsAt.Sub(m.StartsAt) > maxMuteSpan {
-		return nil, invalid("ends_at", "at most 90 days after starts_at")
+	if in.Schedule != nil {
+		if m.Schedule, err = in.Schedule.Validate(parseTime, now); err != nil {
+			return nil, prefixField("schedule", err)
+		}
+		var ok bool
+		if m.StartsAt, m.EndsAt, ok = m.Schedule.Window(now); !ok {
+			return nil, invalid("schedule.until", "the schedule has no occurrence after now")
+		}
+	} else {
+		if m.StartsAt, err = parseTime(in.StartsAt); err != nil {
+			return nil, invalid("starts_at", "%v", err)
+		}
+		if m.EndsAt, err = parseTime(in.EndsAt); err != nil {
+			return nil, invalid("ends_at", "%v", err)
+		}
+		if !m.EndsAt.After(m.StartsAt) {
+			return nil, invalid("ends_at", "must be after starts_at")
+		}
+		if m.EndsAt.Sub(m.StartsAt) > maxMuteSpan {
+			return nil, invalid("ends_at", "at most 90 days after starts_at")
+		}
 	}
 	if len(in.RuleIDs) > 100 {
 		return nil, invalid("rule_ids", "at most 100 rules")
@@ -103,8 +120,24 @@ func (in MuteInput) Validate(parseTime func(string) (time.Time, error)) (*ValidM
 	return m, nil
 }
 
+// Occurrence returns the window of the mute that is active at at or comes next: the fixed window of a one-off
+// mute, the current or next occurrence of a recurring one. ok is false for a recurring mute without further
+// occurrences (the stored, ended window is returned).
+func (m *Mute) Occurrence(at time.Time) (time.Time, time.Time, bool) {
+	if m.Schedule == nil {
+		return m.StartsAt, m.EndsAt, true
+	}
+	if s, e, ok := m.Schedule.Window(at); ok {
+		return s, e, true
+	}
+	return m.StartsAt, m.EndsAt, false
+}
+
 // Active reports whether the mute covers at.
-func (m *Mute) Active(at time.Time) bool { return !at.Before(m.StartsAt) && at.Before(m.EndsAt) }
+func (m *Mute) Active(at time.Time) bool {
+	s, e, ok := m.Occurrence(at)
+	return ok && !at.Before(s) && at.Before(e)
+}
 
 // Matches reports whether the mute applies to an incident of ruleID with labels (ignoring time).
 func (m *Mute) Matches(ruleID string, labels map[string]string) bool {
@@ -140,13 +173,18 @@ func (m *Mute) Matches(ruleID string, labels map[string]string) bool {
 	return true
 }
 
-// MatchingMute returns the active mute with the latest end that applies, or nil.
+// MatchingMute returns the active mute with the latest end that applies, or nil. For a recurring mute the
+// returned copy has StartsAt/EndsAt of its active occurrence (notifications are postponed to its end).
 func MatchingMute(mutes []Mute, ruleID string, labels map[string]string, at time.Time) *Mute {
 	var best *Mute
 	for i := range mutes {
-		m := &mutes[i]
-		if m.Active(at) && m.Matches(ruleID, labels) && (best == nil || m.EndsAt.After(best.EndsAt)) {
-			best = m
+		m := mutes[i]
+		if !m.Active(at) || !m.Matches(ruleID, labels) {
+			continue
+		}
+		m.StartsAt, m.EndsAt, _ = m.Occurrence(at)
+		if best == nil || m.EndsAt.After(best.EndsAt) {
+			best = &m
 		}
 	}
 	return best

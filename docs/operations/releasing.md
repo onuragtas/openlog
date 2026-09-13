@@ -81,7 +81,14 @@ Delete `openlog-release-key-1.env` from any online machine after step 2.
 ## Cutting a release
 
 ```sh
-# master is green (ci.yml, incl. "release dry run")
+# 1. prepare the Go agent modules (one commit, reviewed like any change)
+git switch -c release/0.4.0 master
+make release-prepare VERSION=0.4.0        # agents/go/version.go + in-repo requires → v0.4.0
+git commit -am "release: 0.4.0" && git push -u origin release/0.4.0   # PR → merge to master
+
+# 2. tag the merged commit (master is green: ci.yml, incl. "release dry run")
+git switch master && git pull --ff-only
+make go-agent-release-check VERSION=0.4.0 # the same check release.yml runs
 git tag -s v0.4.0 -m "openlog 0.4.0"      # v0.5.0-beta.1 → channel beta, GitHub pre-release
 git push origin v0.4.0
 ```
@@ -89,9 +96,11 @@ git push origin v0.4.0
 `release.yml` then:
 
 1. `prepare` – version/channel from the tag; fails early if the key variable/secret are missing.
-2. `image` – builds `linux/amd64,linux/arm64` with version + compiled-in keys, pushes
+2. `go-agent-modules` – fails the release (before anything is built) unless the tagged commit is prepared:
+   `scripts/go-agent-release.sh check` and `verify` (see [Go agent modules](#go-agent-modules)).
+3. `image` – builds `linux/amd64,linux/arm64` with version + compiled-in keys, pushes
    `ghcr.io/onuragtas/openlog:<v>` (and `:latest` for stable), outputs the digest.
-3. `release` – `make web`, collects previous releases that have a `manifest.json` via the GitHub API,
+4. `release` – `make web`, collects previous releases that have a `manifest.json` via the GitHub API,
    `make release-local VERSION=<v> RELEASE_IMAGE=ghcr.io/onuragtas/openlog@<digest> …`
    (build → sign → `verify --check-artifacts` → index over all releases → sign → verify), installs
    the amd64 deb/rpm in containers, creates the GitHub release as a draft, uploads everything and
@@ -99,20 +108,59 @@ git push origin v0.4.0
    re-uploaded to the latest stable release, because `releases/latest/download/index.json` (the
    default index URL) serves the latest *stable* release.
 
-Nothing is published if any step fails; a failed draft can be deleted and the tag re-pushed.
+5. `go-agent-tags` – after the GitHub release is published, pushes the Go module tags on the tagged
+   commit (atomic push; see below), then asks `proxy.golang.org` for them (best effort).
 
-### Go agent modules (not yet automated in `release.yml`)
+Nothing is published if any step fails; a failed draft can be deleted and the tag re-pushed. A failed
+`go-agent-tags` job can simply be re-run: tags that already point at the commit are skipped.
+
+### Go agent modules
 
 The Go agent (`agents/go`) is a set of Go modules, so it is released by **Go module tags on the same
-commit** as the product tag (D-025):
+commit** as the product tag (D-025). Go libraries are compiled by the user's build (no `-ldflags`), and
+a module tag must point at a commit whose files already say the version. So the version bump is a
+normal, reviewed commit **before** tagging; CI creates no commits.
 
-1. `make -C agents/go set-version VERSION=X.Y.Z` (Go libraries cannot use `-ldflags`; this updates
-   `agents/go/version.go`).
-2. In that commit, rewrite local `replace`d requires of the submodules (`instrumentation/*`, `examples`)
-   from `v0.0.0` to `vX.Y.Z` and drop the `replace` directives.
-3. Tag the core module first, then the submodules: `agents/go/vX.Y.Z`,
-   `agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z` (optionally `agents/go/examples/vX.Y.Z`).
-4. If the product version ever reaches `v2`, Go module paths need a `/v2` suffix (e.g. `agents/go/v2`).
+`make release-prepare VERSION=X.Y.Z` (`scripts/go-agent-release.sh prepare`):
+
+1. `make -C agents/go set-version` → `const Version = "X.Y.Z"` in `agents/go/version.go`
+   (`telemetry.distro.version`);
+2. every require of an in-repo module in `agents/go/**/go.mod` (today: `instrumentation/chi` → core,
+   `examples` → core + grpc) → `vX.Y.Z` (`go mod edit -require`). The `replace` directives stay: they
+   apply only to the main module (development and CI in this repository) and consumers ignore them,
+   so `go.sum` needs no change and the tree keeps building offline;
+3. runs `check`. Re-running is idempotent. Versions `>= 2.0.0` are refused (module paths would need a
+   `/v2` suffix).
+
+Checks:
+
+| Check | Where | Fails when |
+|---|---|---|
+| `scripts/go-agent-release.sh check X.Y.Z` (`make go-agent-release-check`) | `release.yml` `go-agent-modules` | `version.go` ≠ tag, an in-repo require ≠ `vX.Y.Z`, or a require has no local `replace` |
+| `scripts/go-agent-release.sh verify [X.Y.Z]` (`make go-agent-verify`) | `release.yml` `go-agent-modules`, `ci.yml` `go-agent` | a module that requires in-repo modules does not build **without** its `replace` directives |
+
+`verify` writes a `GOPROXY=file://` directory with every `agents/go` module at the version, built from
+git-tracked files like the proxy's zip of a tag (`scripts/gomodproxy`, nested modules excluded). Then it
+copies each dependent module, drops its `replace` directives, and runs `go build ./...` with
+`GOFLAGS=-mod=mod GOPROXY=file://<local proxy>,file://<module cache>/cache/download,off` in a throwaway
+`GOMODCACHE`. This is deliberately not literally `GOPROXY=off`: the unreleased in-repo versions exist
+only in the local proxy, and third-party modules come read-only from the module cache that
+`go mod download` filled first. Nothing is fetched from the network, and the real module cache never
+receives the unreleased versions. Without an argument, the version is the one the requires use, so the
+ci.yml job also covers master between releases.
+
+Tags (`release.yml` `go-agent-tags`, list from `scripts/go-agent-release.sh tags X.Y.Z`):
+`agents/go/vX.Y.Z` and `agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z` on `$GITHUB_SHA`. `examples`
+is not tagged. They are pushed only after the release is published, because the Go module proxy caches
+a version forever and a module tag must never move. A tag that already exists on another commit fails
+the job and is never moved. Pre-releases get tags too (`agents/go/v0.5.0-beta.1`). Go treats them as
+pre-release versions, and `@latest` ignores them. Tags pushed with `GITHUB_TOKEN` trigger no workflow. If
+tag rulesets cover `agents/**`, allow GitHub Actions to create those tags.
+
+Consumers: `go get github.com/onuragtas/openlog/agents/go@vX.Y.Z` (+ `…/instrumentation/<name>@vX.Y.Z`).
+
+Between releases, `agents/go/version.go` keeps the last prepared version, so `go get …@master`
+pseudo-versions report it as `telemetry.distro.version`.
 
 ## Verifying a release
 

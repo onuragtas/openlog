@@ -774,7 +774,8 @@ func (s *PGStore) RecordTest(ctx context.Context, n Notification, att Attempt, a
 // ---- mutes ----
 
 func (s *PGStore) ListMutes(ctx context.Context, orgID string, includeExpired bool) ([]Mute, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+muteColumns+muteFrom+` WHERE m.org_id = $1 AND ($2 OR m.ends_at > now() - interval '7 days')
+	rows, err := s.pool.Query(ctx, `SELECT `+muteColumns+muteFrom+` WHERE m.org_id = $1 AND ($2 OR m.ends_at > now() - interval '7 days'
+			OR (m.schedule IS NOT NULL AND (m.schedule->>'until' IS NULL OR (m.schedule->>'until')::timestamptz > now() - interval '7 days')))
 		ORDER BY m.ends_at DESC, m.id`, orgID, includeExpired)
 	if err != nil {
 		return nil, err
@@ -806,9 +807,10 @@ func (s *PGStore) CreateMute(ctx context.Context, orgID string, m *ValidMute, ac
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	b := &pgx.Batch{}
-	b.Queue(`INSERT INTO alert_mutes (id, org_id, name, comment, starts_at, ends_at, rule_ids, matchers, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, orgID, m.Name, m.Comment, m.StartsAt, m.EndsAt, nonNilIDs(m.RuleIDs), m.Matchers, nullID(actor.UserID))
-	audit(b, orgID, actor, "alert.mute.create", "alert_mute", id, map[string]any{"name": m.Name, "ends_at": m.EndsAt})
+	b.Queue(`INSERT INTO alert_mutes (id, org_id, name, comment, starts_at, ends_at, rule_ids, matchers, created_by, schedule)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, orgID, m.Name, m.Comment, m.StartsAt, m.EndsAt, nonNilIDs(m.RuleIDs), m.Matchers,
+		nullID(actor.UserID), m.Schedule)
+	audit(b, orgID, actor, "alert.mute.create", "alert_mute", id, map[string]any{"name": m.Name, "ends_at": m.EndsAt, "recurring": m.Schedule != nil})
 	if err := sendBatch(ctx, tx, b); err != nil {
 		return nil, err
 	}
@@ -828,7 +830,8 @@ func (s *PGStore) UpdateMute(ctx context.Context, orgID, id string, m *ValidMute
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	tag, err := tx.Exec(ctx, `UPDATE alert_mutes SET name = $3, comment = $4, starts_at = $5, ends_at = $6, rule_ids = $7, matchers = $8,
-		updated_at = now() WHERE org_id = $1 AND id = $2`, orgID, id, m.Name, m.Comment, m.StartsAt, m.EndsAt, nonNilIDs(m.RuleIDs), m.Matchers)
+		schedule = $9, updated_at = now() WHERE org_id = $1 AND id = $2`, orgID, id, m.Name, m.Comment, m.StartsAt, m.EndsAt, nonNilIDs(m.RuleIDs),
+		m.Matchers, m.Schedule)
 	if err != nil {
 		return nil, mapPGErr(err)
 	}

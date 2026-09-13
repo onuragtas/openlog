@@ -125,6 +125,17 @@ type Plan struct {
 	Events        []IncidentEvent
 	Notifications []Notification
 	Transitions   map[string]int
+	// Summaries is the state of every series after this evaluation (alert_evaluations, §3.6); not persisted
+	// in PostgreSQL.
+	Summaries []SeriesSummary
+}
+
+// SeriesSummary is the outcome of one series in one evaluation.
+type SeriesSummary struct {
+	Key    string
+	Labels map[string]string
+	Value  float64 // NaN = no value
+	State  string  // ok, pending, firing
 }
 
 // Empty reports whether the plan changes nothing but the schedule.
@@ -224,6 +235,7 @@ func BuildPlan(in PlanInput) *Plan {
 		if present {
 			value = sample.Value
 		}
+		p.Summaries = append(p.Summaries, SeriesSummary{Key: key, Labels: next.Labels, Value: value, State: next.state()})
 
 		switch {
 		case out.Open:

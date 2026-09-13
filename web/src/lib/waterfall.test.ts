@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Span } from "@/api/types";
 import { bigTrace, trace } from "@/mocks/fixtures";
-import { layoutWaterfall, timeTicks } from "./waterfall";
+import { layoutWaterfall, tickAnchor, tickCountForWidth, timeTicks } from "./waterfall";
 
 const base = "2026-09-13T10:00:00";
 
@@ -105,4 +105,20 @@ describe("layoutWaterfall at scale", () => {
 describe("timeTicks", () => {
   it("spaces ticks evenly", () => expect(timeTicks(1000, 4)).toEqual([0, 250, 500, 750, 1000]));
   it("handles zero", () => expect(timeTicks(0)).toEqual([0]));
+
+  it("chooses the tick count from the axis width", () => {
+    expect(tickCountForWidth(0)).toBe(4); // unmeasured: desktop default
+    expect(tickCountForWidth(100)).toBe(1); // phone: start and end only, no "0 ns" + "1.03" crowding
+    expect(tickCountForWidth(170)).toBe(2);
+    expect(tickCountForWidth(376)).toBe(4);
+    expect(tickCountForWidth(2000)).toBe(4);
+    expect(tickCountForWidth(40, 80, 4)).toBe(1);
+    expect(timeTicks(4_130_000, tickCountForWidth(150))).toEqual([0, 4_130_000]);
+  });
+
+  it("anchors the first label at the start and the last at the end", () => {
+    expect([0, 1, 2].map((i) => tickAnchor(i, 3))).toEqual(["start", "middle", "end"]);
+    expect([0, 1].map((i) => tickAnchor(i, 2))).toEqual(["start", "end"]);
+    expect(tickAnchor(0, 1)).toBe("start");
+  });
 });

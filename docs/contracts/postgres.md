@@ -195,7 +195,7 @@ Rules, evaluation state, incidents, channels, mutes and the notification outbox 
 
 | Table | Key | Content |
 |---|---|---|
-| `alert_rules` | `id` | `org_id`, `name`, `description`, `type`, `severity`, `enabled`, `interval_seconds`, `for_seconds`, `recovery_for_seconds`, `condition` (jsonb, validated canonical form), `renotify_interval_seconds`, `flapping` (jsonb), `runbook_url`, `labels` (jsonb), `version` (+1 on every change), `created_by`, `updated_by`, timestamps |
+| `alert_rules` | `id` | `org_id`, `name`, `description`, `type` (`apm_no_data` allowed since `0006_alerting_m2`), `severity`, `enabled`, `interval_seconds`, `for_seconds`, `recovery_for_seconds`, `condition` (jsonb, validated canonical form), `renotify_interval_seconds`, `flapping` (jsonb), `runbook_url`, `labels` (jsonb), `version` (+1 on every change), `created_by`, `updated_by`, timestamps |
 | `alert_rule_channels` | (`rule_id`, `channel_id`) | rule → channel (both cascade) |
 | `alert_channels` | `id` | `org_id`, `name`, `type` (`slack`·`email`·`webhook`·`teams`), `enabled`, `config` (jsonb, non-secret), `secrets` (`ol1:<key id>:<AES-256-GCM>` of the secret JSON, AAD `org_id/channel_id`), `secrets_key_id`, `secret_hints` (masked), `created_by`, timestamps |
 | `alert_evaluators` | `instance_id` | evaluator heartbeats (`last_seen`, database clock); rows older than 1 h are pruned |
@@ -203,7 +203,7 @@ Rules, evaluation state, incidents, channels, mutes and the notification outbox 
 | `alert_series_state` | (`rule_id`, `series_key`) | non-ok series (and ok series with flapping history): `labels`, `state`, `pending_since`, `firing_since`, `recovering_since`, `last_value`, `last_seen_at`, `incident_id`, `transitions` (timestamptz[] ≤ 10), `last_notified_at`, `renotify_count` |
 | `alert_incidents` | `id` | `org_id`, `rule_id` (SET NULL on delete), `rule_name`/`rule_type`/`severity` snapshot, `series_key`, `labels`, `summary`, `state` (`open`·`acknowledged`·`resolved`), `value`, `last_value`, `threshold`, `channel_ids` (uuid[] notified at open), `flapping`, `opened_at`, `acknowledged_at/by`, `resolved_at/by`, `resolve_reason`. Partial unique index `alert_incidents_open_uniq (rule_id, series_key) WHERE state <> 'resolved'` |
 | `alert_incident_events` | `id` (identity) | timeline: `incident_id`, `at`, `kind`, `actor_user_id`, `actor_email`, `message` (≤ 4000), `details` |
-| `alert_mutes` | `id` | `org_id`, `name`, `comment`, `starts_at`, `ends_at`, `rule_ids` (uuid[], empty = all), `matchers` (jsonb), `created_by`, timestamps |
+| `alert_mutes` | `id` | `org_id`, `name`, `comment`, `starts_at`, `ends_at`, `rule_ids` (uuid[], empty = all), `matchers` (jsonb), `schedule` (jsonb, `0006_alerting_m2`; NULL = one-off; recurring mutes keep the current or next occurrence in `starts_at`/`ends_at`, rolled forward by dispatchers), `created_by`, timestamps |
 | `alert_notifications` | `id` (+ `seq` identity for ordering) | outbox: `org_id`, `incident_id`, `rule_id`, `channel_id` (SET NULL), `channel_type`, `kind`, `idempotency_key` (UNIQUE), `payload` (jsonb event), `status` (`pending`·`sending`·`delivered`·`failed`·`suppressed`), `attempts`, `next_attempt_at`, `claimed_by`, `claimed_until`, `muted_logged`, `last_error`, `created_at`, `finished_at`. Finished rows older than 30 days are pruned |
 | `alert_delivery_attempts` | `id` (identity) | delivery log: `notification_id` (cascade), `attempt`, `instance_id`, `started_at`, `duration_ms`, `success`, `status_code`, `error` (≤ 2000) |
 

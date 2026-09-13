@@ -52,8 +52,26 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "release $version on channel $channel"
 
-  image:
+  go-agent-modules:
+    name: Go agent modules prepared for the tag
     needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agents/go/go.mod
+          cache-dependency-path: agents/go/**/go.sum
+      - name: version.go and in-repo requires equal the tag (make release-prepare before tagging)
+        run: scripts/go-agent-release.sh check "$VERSION"
+      - name: modules build without replace against the tagged requires
+        run: scripts/go-agent-release.sh verify "$VERSION"
+
+  image:
+    needs: [prepare, go-agent-modules]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -168,3 +186,62 @@ jobs:
           if [ -n "$latest" ] && [ "$latest" != "$TAG" ]; then
             gh release upload "$latest" dist/index.json dist/index.json.sig --clobber
           fi
+
+  # Go module tags on the product tag's commit (agents/go/vX.Y.Z, agents/go/instrumentation/<name>/vX.Y.Z).
+  # Pushed only after the release is published: the Go module proxy caches a version forever, so a
+  # module tag must never be moved. Pre-releases (vX.Y.Z-beta.N) are tagged too; Go treats them as
+  # pre-release versions that `go get …@latest` skips. Tags pushed with GITHUB_TOKEN trigger no workflow.
+  go-agent-tags:
+    needs: [prepare, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: push Go module tags
+        run: |
+          set -euo pipefail
+          refs=()
+          while read -r tag; do
+            remote="$(git ls-remote origin "refs/tags/$tag" |
+              awk '$2 ~ /\^\{\}$/ {peeled=$1} $2 !~ /\^\{\}$/ {plain=$1} END {print (peeled != "" ? peeled : plain)}')"
+            if [ "$remote" = "$GITHUB_SHA" ]; then
+              echo "$tag already points to $GITHUB_SHA"
+            elif [ -n "$remote" ]; then
+              echo "::error::$tag exists on $remote, not on $GITHUB_SHA; Go module tags must never move"
+              exit 1
+            else
+              git tag "$tag" "$GITHUB_SHA"
+              refs+=("refs/tags/$tag")
+            fi
+          done < <(scripts/go-agent-release.sh tags "$VERSION")
+          if [ "${#refs[@]}" -gt 0 ]; then
+            git push --atomic origin "${refs[@]}"
+          fi
+          {
+            echo "### Go agent modules"
+            echo '```sh'
+            while read -r dir; do
+              echo "go get github.com/onuragtas/openlog/$dir@v$VERSION"
+            done < <(scripts/go-agent-release.sh modules)
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agents/go/go.mod
+          cache: false
+      - name: ask the Go module proxy for the new versions (best effort)
+        continue-on-error: true
+        run: |
+          tmp="$(mktemp -d)"
+          while read -r dir; do
+            for attempt in 1 2 3 4 5; do
+              if GOMODCACHE="$tmp" GOFLAGS=-modcacherw go mod download -json "github.com/onuragtas/openlog/$dir@v$VERSION" >/dev/null; then
+                echo "proxy.golang.org serves $dir@v$VERSION"; break
+              fi
+              echo "attempt $attempt: $dir@v$VERSION not yet available"; sleep $((attempt * 15))
+            done
+          done < <(scripts/go-agent-release.sh modules)

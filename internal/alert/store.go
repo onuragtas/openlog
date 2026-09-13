@@ -82,8 +82,11 @@ type OutboxStore interface {
 	ClaimDeliveries(ctx context.Context, instance string, n int, claimTTL time.Duration) ([]*Delivery, error)
 	// FinishDelivery records the outcome if instance still holds the claim.
 	FinishDelivery(ctx context.Context, instance string, d *Delivery, out DeliveryOutcome) error
-	// ActiveMutes returns the mutes of an organization active at at.
+	// ActiveMutes returns the mutes of an organization active at at (recurring mutes: in an occurrence).
 	ActiveMutes(ctx context.Context, orgID string, at time.Time) ([]Mute, error)
+	// RollRecurringMutes moves the stored window (starts_at, ends_at) of recurring mutes whose occurrence ended
+	// before now to their next occurrence and returns the number of mutes moved.
+	RollRecurringMutes(ctx context.Context, now time.Time) (int, error)
 	// PendingCount returns the number of pending and sending rows.
 	PendingCount(ctx context.Context) (int, error)
 	// Prune deletes finished notifications (and attempts) older than before.

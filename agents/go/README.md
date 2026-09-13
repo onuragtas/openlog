@@ -57,7 +57,7 @@ Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**.
 | `OPENLOG_SERVICE_VERSION` | `WithServiceVersion` | — | `service.version` |
 | `OPENLOG_SERVICE_NAMESPACE` | `WithServiceNamespace` | — | `service.namespace` |
 | `OPENLOG_ENVIRONMENT` | `WithEnvironment` | — | `deployment.environment.name` |
-| `OPENLOG_SAMPLING_RATIO` (`OTEL_TRACES_SAMPLER_ARG` with a `*traceidratio` sampler) | `WithSamplingRatio` | `1` | Parent-based head sampling of new traces (0..1). Sampled roots carry `sampling.ratio` when the ratio is below 1 |
+| `OPENLOG_SAMPLING_RATIO` (`OTEL_TRACES_SAMPLER_ARG` with a `*traceidratio` sampler) | `WithSamplingRatio` | `1` | Parent-based head sampling of new traces (0..1), see [Sampling](#sampling) |
 | `OPENLOG_RESOURCE_ATTRIBUTES` (merged over `OTEL_RESOURCE_ATTRIBUTES`) | `WithResourceAttributes` | — | `k=v,k2=v2` (percent-encoded values allowed) |
 | `OPENLOG_HOST_ID` | `WithHostID` | detected | Explicit `host.id` |
 | `OPENLOG_HOST_ROOT` | — | `/` | Prefix for host files when the host root is mounted (e.g. `/host`) |
@@ -74,6 +74,30 @@ Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**.
 flushed every 2 s. Exports time out after 10 s. HTTP `429/502/503/504` and gRPC `UNAVAILABLE`/`RESOURCE_EXHAUSTED`
 are retried with exponential backoff (1 s → 30 s, for up to 1 min), and `Retry-After` / `RetryInfo` from ingest are
 honoured (D-014). When the queue is full, new spans are dropped rather than blocking the application.
+
+## Sampling
+
+`OPENLOG_SAMPLING_RATIO=p` samples new traces with probability `p`. The decision is made once, at the root, and every
+downstream service follows it (parent-based). APM counts stay correct because each stored span is weighted by `1/p`
+([apm.md §4](../../docs/contracts/apm.md)).
+
+The agent uses OpenTelemetry
+[consistent probability sampling](https://opentelemetry.io/docs/specs/otel/trace/tracestate-probability-sampling/):
+
+- **Root spans.** The rejection threshold is `T = (1 − p) · 2^56`. The randomness `R` is the tracestate value
+  `ot=rv:<14 hex>` when present, otherwise the lower 56 bits of the trace id. A trace is sampled when `R ≥ T`.
+  A sampled root gets the attribute `sampling.ratio = p`, and `ot=th:<T>` is written to `tracestate`: 14 hex digits,
+  trailing zeros removed. Examples: `p = 0.25` gives `ot=th:c`, `p = 0.5` gives `ot=th:8`, and `p = 0.1` gives
+  `ot=th:e6666666666666`. Other `ot` sub-keys (such as `rv`) and other vendors' members are kept. When a root is not
+  sampled, any stale `th` is removed.
+- **Downstream services.** W3C `tracestate` travels with `traceparent`, so services in any language can compute `1/p`
+  from `ot=th`. When a Go service's entry span has a sampled remote parent whose tracestate carries `ot=th` (or the
+  legacy `ot=p:<n>`) with `p < 1`, the agent also sets `sampling.ratio = p` on that local entry span. The local
+  `OPENLOG_SAMPLING_RATIO` does not change a decision that was already made upstream.
+- **W3C limits.** The `ot` value is capped at 256 characters: unknown sub-keys are dropped, and `th`/`rv` are kept.
+  The list is capped at 32 members, and the right-most member is dropped when `ot` is added.
+
+`rv` is read but never generated. Trace ids from the SDK are random, so the trace id supplies the randomness.
 
 ## Resource
 
@@ -182,15 +206,17 @@ In short: about 4 µs per sampled HTTP request and about 3 µs per traced SQL st
 the server metrics histogram. Both are negligible next to real network and database latency. At high rates, use
 `OPENLOG_SAMPLING_RATIO` to cut the per-span cost.
 
-## Upgrading
+## Versioning and upgrading
 
-The agent is versioned with the openlog product (D-025): the same `X.Y.Z` for backend, UI and all agents, tagged
-`agents/go/vX.Y.Z` (and `agents/go/instrumentation/<name>/vX.Y.Z`). The backend accepts agents from its last three
-minor versions, so upgrade the agent within that window:
+The agent is versioned with the openlog product (D-025). Backend, UI and all agents share one `X.Y.Z`. Every product
+release `vX.Y.Z` also publishes Go module tags on the same commit: `agents/go/vX.Y.Z` and
+`agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z`. Pre-releases (`vX.Y.Z-beta.N`) are tagged the same way.
+`go get …@latest` skips them, so request them explicitly. The backend accepts agents from its last three minor
+versions, so upgrade the agent within that window:
 
 ```sh
 go get github.com/onuragtas/openlog/agents/go@vX.Y.Z
-go get github.com/onuragtas/openlog/agents/go/instrumentation/grpc@vX.Y.Z   # if used
+go get github.com/onuragtas/openlog/agents/go/instrumentation/grpc@vX.Y.Z   # if used (likewise chi, gin, echo)
 ```
 
 Keep the core and instrumentation modules on the same version. `telemetry.distro.version` reports the version in use.
@@ -204,5 +230,9 @@ make -C agents/go test        # every module
 make -C agents/go vet fmt-check bench
 ```
 
-Each directory with a `go.mod` is its own module. `instrumentation/chi` and `examples` use `replace` directives to
-point at the local core module.
+Each directory with a `go.mod` is its own module. `instrumentation/chi` and `examples` require the in-repo modules at
+the release version and use `replace` directives that point at the local directories. A `replace` only applies to the
+main module, so it affects development in this repository and is ignored by consumers. `make go-agent-verify` (repo
+root, also run by CI) builds these modules without their `replace` directives against a local proxy of the tree. This
+catches requires that would break for consumers. The release flow is described in
+[releasing.md](../../docs/operations/releasing.md#go-agent-modules).

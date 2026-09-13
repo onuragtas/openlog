@@ -122,7 +122,7 @@ func Derive(in *Input) Derived {
 		d.PeerType, d.PeerName = Peer(in.Attributes)
 	}
 	if in.Kind == KindClient {
-		if sys := first(in.Attributes["db.system.name"], in.Attributes["db.system"]); sys != "" {
+		if sys := first(in.Attributes["db.system.name"], in.Attributes["db.system"]); sys != "" && !IsConnectionSpan(in.Name, in.Attributes) {
 			d.DBSystem = sys
 			d.DBName = first(in.Attributes["db.namespace"], in.Attributes["db.name"])
 			stmt := first(in.Attributes["db.query.text"], in.Attributes["db.statement"], in.Name)
@@ -134,6 +134,32 @@ func Derive(in *Input) Derived {
 		d.ErrorType, d.ErrorMessage, d.ErrorGroupID = ErrorGroup(service, d.ServiceNamespace, d.Environment, in, d.HTTPStatusCode)
 	}
 	return d
+}
+
+// connectionOps are the last words of span names / operations that manage connections rather than run queries.
+var connectionOps = map[string]bool{"connect": true, "connection": true, "reconnect": true, "disconnect": true, "close": true,
+	"ping": true, "reset_session": true, "resetsession": true, "reset": true, "acquire": true, "release": true, "handshake": true}
+
+// IsConnectionSpan reports a DB client span that manages a connection (apm.md §7): it has no statement
+// (db.query.text, db.statement) and its operation (db.operation.name, db.operation, else the span name) ends in a
+// connection word, e.g. otelsql sql.connector.connect, sql.conn.reset_session, sql.conn.ping, db.connect, pg.connect.
+// Such spans get no DB columns, so they are not listed as database queries.
+func IsConnectionSpan(name string, attrs map[string]string) bool {
+	if first(attrs["db.query.text"], attrs["db.statement"]) != "" {
+		return false
+	}
+	op := strings.ToLower(strings.TrimSpace(first(attrs["db.operation.name"], attrs["db.operation"], name)))
+	if op == "" {
+		return false
+	}
+	if strings.Contains(op, "connector") {
+		return true
+	}
+	last := op
+	if i := strings.LastIndexAny(op, ". /:"); i >= 0 {
+		last = op[i+1:]
+	}
+	return connectionOps[last]
 }
 
 // IsEntry implements apm.md §2.

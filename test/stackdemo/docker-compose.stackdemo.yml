@@ -6,7 +6,25 @@
 #   registry       registry:2 for the backend images the signed manifests point to (by digest)
 #   host-services  Debian 12 with nginx, redis and postgresql (agent installed with install.sh)
 #   host-plain     Debian 12 without services
+#   alert-receiver webhook receiver of the alert phase (test/alertproof/receiver: verifies the HMAC signature,
+#                  records every request, GET /requests)
+# The apm phase adds the services of test/apmdemo/docker-compose.apmdemo.yml to the same project.
 services:
+  alert-receiver:
+    build:
+      context: ../../test/alertproof/receiver
+    image: openlog-stackdemo/alert-receiver:1
+    environment:
+      HMAC_SECRET: ${STACKDEMO_ALERT_HMAC_SECRET:-stackdemo-alert-hmac-secret}
+    ports:
+      - "127.0.0.1:${STACKDEMO_ALERT_RECEIVER_PORT:-18091}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
   releases:
     image: nginx:1.29-alpine
     volumes:

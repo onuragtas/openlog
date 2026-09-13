@@ -159,10 +159,10 @@ function seed(): MockState {
   ];
   const mutes: AlertMute[] = [
     { id: "m0000000-0000-4000-8000-000000000001", name: "db-1 maintenance", comment: "PostgreSQL major upgrade", starts_at: ago(3 * 3_600_000),
-      ends_at: formatTs(now + 2 * 3_600_000), rule_ids: [], matchers: [{ label: "host.name", op: "eq", value: "db-1" }], active: true,
+      ends_at: formatTs(now + 2 * 3_600_000), rule_ids: [], matchers: [{ label: "host.name", op: "eq", value: "db-1" }], schedule: null, active: true,
       created_by_user_id: GRACE_ID, created_by_email: "grace@example.com", created_at: ago(4 * 3_600_000), updated_at: ago(4 * 3_600_000) },
     { id: "m0000000-0000-4000-8000-000000000002", name: "Weekend load test", comment: "", starts_at: ago(5 * 86_400_000), ends_at: ago(4 * 86_400_000),
-      rule_ids: [RULE.cpu], matchers: [], active: false, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
+      rule_ids: [RULE.cpu], matchers: [], schedule: null, active: false, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
       created_at: ago(6 * 86_400_000), updated_at: ago(6 * 86_400_000) },
   ];
   return { rules, incidents, events, deliveries, channels, mutes, seq: 100 };
@@ -355,6 +355,17 @@ export const alertHandlers = [
     }));
     return HttpResponse.json({ ...r, series });
   })),
+  http.get(`${API}/rules/:id/evaluations`, guarded("read", (info) => {
+    const r = db.rules.find((x) => x.id === idOf(info));
+    if (!r) return fail("not_found", "not found");
+    // A quiet hour of 1-minute evaluations for one series (alerting.md §3.6 shape).
+    const now = Math.floor(Date.now() / 60_000) * 60_000;
+    const at = (i: number) => now - (59 - i) * 60_000;
+    const evaluations = Array.from({ length: 60 }, (_, i) => ({ at: formatTs(at(i)), firing_series: 0, evaluations: 1, errors: 0, duration_ms: 6, max_duration_ms: 6 }));
+    const points = Array.from({ length: 60 }, (_, i) => [at(i), 0.3 + 0.1 * Math.sin(i / 6), "ok"] as [number, number, "ok"]);
+    return HttpResponse.json({ from: formatTs(now - 3_600_000), to: formatTs(now), step_seconds: 60, evaluations,
+      series: [{ series_key: "host.id=web-1", labels: { "host.name": "web-1" }, points }], truncated: false });
+  })),
   http.put(`${API}/rules/:id`, guarded("write", async (info, role) => {
     const i = db.rules.findIndex((x) => x.id === idOf(info));
     if (i < 0) return fail("not_found", "not found");
@@ -482,7 +493,7 @@ export const alertHandlers = [
     if (!Number.isFinite(starts) || !Number.isFinite(ends) || ends <= starts) return fail("invalid_argument", "ends_at: must be after starts_at");
     const now = Date.now();
     const m: AlertMute = { id: uuid(), name: b.name.trim(), comment: b.comment ?? "", starts_at: formatTs(starts), ends_at: formatTs(ends), rule_ids: b.rule_ids ?? [],
-      matchers: b.matchers ?? [], active: starts <= now && now < ends, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
+      matchers: b.matchers ?? [], schedule: null, active: starts <= now && now < ends, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
       created_at: formatTs(now), updated_at: formatTs(now) };
     db.mutes.push(m);
     return HttpResponse.json(m, { status: 201 });

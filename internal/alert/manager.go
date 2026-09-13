@@ -186,6 +186,17 @@ func (m *Manager) Preview(ctx context.Context, sc *query.Scope, orgID string, in
 	return Preview(qctx, sc, d, hours, m.o.Now(), m.o.Delay, lim)
 }
 
+// EvaluationHistory returns the evaluation summaries of a rule of the organization (404 for another org's rule).
+// sc must be the caller's tenant scope.
+func (m *Manager) EvaluationHistory(ctx context.Context, sc *query.Scope, orgID, ruleID string, from, to time.Time) (*History, error) {
+	if _, _, err := m.store.GetRule(ctx, orgID, ruleID); err != nil {
+		return nil, err
+	}
+	qctx, cancel := context.WithTimeout(ctx, m.o.QueryTimeout)
+	defer cancel()
+	return EvaluationHistory(qctx, sc, ruleID, from, to)
+}
+
 // ---- incidents ----
 
 func (m *Manager) ListIncidents(ctx context.Context, orgID string, f IncidentFilter) ([]Incident, string, IncidentCounts, error) {
@@ -329,7 +340,7 @@ func (m *Manager) ListMutes(ctx context.Context, orgID string, includeExpired bo
 }
 
 func (m *Manager) CreateMute(ctx context.Context, orgID string, in MuteInput, parseTime func(string) (time.Time, error), actor Actor) (*Mute, error) {
-	v, err := in.Validate(parseTime)
+	v, err := in.Validate(parseTime, m.o.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +359,7 @@ func (m *Manager) ownedMute(ctx context.Context, orgID, id string, actor Actor, 
 }
 
 func (m *Manager) UpdateMute(ctx context.Context, orgID, id string, in MuteInput, parseTime func(string) (time.Time, error), actor Actor, manageAny bool) (*Mute, error) {
-	v, err := in.Validate(parseTime)
+	v, err := in.Validate(parseTime, m.o.Now())
 	if err != nil {
 		return nil, err
 	}

@@ -181,18 +181,35 @@ Edge RED: `calls` = Σ weight of client spans, `errors` (`is_error`), `avg_ms`, 
   `system.clusters`) and executes `INSERT INTO apm_service_links_1m_local SELECT … FROM spans_local c JOIN spans_local s`
   there. Spans are sharded by `(tenant_id, trace_id)`, so a client span and its child are always on the same shard:
   the join is complete and local.
-- Window: whole minutes in `[now − OPENLOG_APM_LINK_LOOKBACK (10m), now − OPENLOG_APM_LINK_DELAY (1m))`. Every run
-  recomputes every minute of the window (late spans up to the lookback are picked up).
+- Window: whole minutes in `[now − OPENLOG_APM_LINK_LOOKBACK (10m, 1m–24h), now − OPENLOG_APM_LINK_DELAY (1m))`. Every
+  run recomputes every minute of the window (late spans up to the lookback are picked up).
+- **Daily catch-up** (`OPENLOG_APM_LINK_CATCHUP_ENABLED`, default on): once per UTC day, starting at
+  `OPENLOG_APM_LINK_CATCHUP_AT` (default `03:00` UTC, low traffic), the leader re-links the whole previous UTC day in
+  windows of `OPENLOG_APM_LINK_CATCHUP_BATCH` (1h), one window at a time over all shards with `max_threads=2` and a 10 s
+  pause between windows, next to the regular runs (which never cover the same minutes). Spans that arrived later than
+  the lookback but before the pass are linked. The pass is started up to 6 h after its time (a new leader or a restart
+  in that window runs it again — harmless, the result is identical); a failed pass is retried at most every 30 min.
+  Late calls = weighted linked calls per window after the pass minus before it (`FINAL` on the replica used; approximate
+  while replicas lag): `openlog_apm_link_late_calls_total`. Spans later than the next day's pass are not linked.
 - Idempotent: `apm_service_links_1m_local` is a `ReplicatedReplacingMergeTree(computed_at)`; a re-run replaces the
   previous result for the same (tenant, source, target, minute) on that shard. Reads use `FINAL` (applied per shard by
   the Distributed table, then summed across shards).
 - Metrics: `openlog_apm_link_runs_total{result}`, `openlog_apm_link_rows_total`, `openlog_apm_link_duration_seconds`,
-  `openlog_apm_link_lag_seconds` (now − end of the last successfully linked window).
+  `openlog_apm_link_lag_seconds` (now − end of the last successfully linked window),
+  `openlog_apm_link_catchup_runs_total{result}`, `openlog_apm_link_catchup_duration_seconds`,
+  `openlog_apm_link_late_calls_total`.
 
 ## 7. Database queries
 
 Every span of kind `client` with `db.system` (`db.system.name`) is a DB call (instrumentations that emit DB calls as
-`internal` spans are not counted: an ORM's internal span with a client child would count twice).
+`internal` spans are not counted: an ORM's internal span with a client child would count twice), **except
+connection-management spans**: no statement (`db.query.text`, `db.statement` absent or empty) and an operation
+(`db.operation.name` | `db.operation` | span name, lower-cased) that contains `connector` or whose last word (after
+`.`, ` `, `/`, `:`) is `connect`, `connection`, `reconnect`, `disconnect`, `close`, `ping`, `reset_session`,
+`resetsession`, `reset`, `acquire`, `release` or `handshake` — e.g. otelsql `sql.connector.connect`,
+`sql.conn.reset_session`, `sql.conn.ping`, `db.connect`, `pg.connect`. They get no DB columns (`db_system` … `db_operation`
+stay empty, so they are not in `apm_db_queries_1m`); their attribute edge to the database (§5) is kept. Rows aggregated
+before this rule (processor versions without it) stay until their TTL.
 `db_statement_normalized` = normalize(`db.query.text` | `db.statement` | span name):
 
 - comments removed; string literals (`'…'` with `''` escapes, `E'…'`, `$$…$$`) → `?`; numbers, hex (`0x…`), booleans
@@ -220,6 +237,20 @@ fires on the shard that receives the spans block.
 | `apm_error_groups` | AggregatingMergeTree | tenant, service triple, error_group_id | first_seen, last_seen, count, error_type, message, stacktrace, span_name, sample trace ids (≤ 10) | 30 d after last_seen |
 | `apm_services` | AggregatingMergeTree | tenant, service triple | first_seen, last_seen, version, language, sdk, resource attributes | 30 d after last_seen |
 | `apm_service_hosts` | AggregatingMergeTree | tenant, host_id, service triple | first_seen, last_seen, host_name | 30 d after last_seen |
+
+**Retention.** The TTLs above (30 d) are the default of `OPENLOG_APM_RETENTION_DAYS` (1–3650). `openlog-migrate` (and
+`openlog-allinone` with `OPENLOG_MIGRATE_ON_START`) compares it, after applying the migration files, with the value
+recorded in `openlog.table_settings` (`apm_retention_days`; created by the expand migration `0008_table_settings`; no row
+= 30) and, when it differs, runs for each of the eight `_local` tables
+`ALTER TABLE openlog.<table> ON CLUSTER '<cluster>' MODIFY TTL <timestamp | toDateTime(last_seen)> + INTERVAL <days> DAY`,
+then records the new value (a failure part way is repaired by the next run; every ALTER is idempotent). `-plan`
+prints the pending change. **ON CLUSTER:** the statement goes through the distributed DDL queue to every host of the
+cluster and migrate waits for them (`distributed_ddl_task_timeout`, default 180 s; a host that is down applies it when
+it comes back). The tables are `Replicated*`: the metadata change is coordinated through Keeper per shard, so every
+replica ends with the same TTL. ClickHouse then materializes the TTL in an asynchronous mutation per replica
+(`system.mutations`): with `ttl_only_drop_parts` and daily partitions, shortening the retention drops whole expired
+parts (disk space is freed within minutes to hours), lengthening it keeps parts that have not been deleted yet
+(data already removed is not restored). Set the same value on every process that runs migrations.
 
 **Sharding correctness.** Spans are sharded by `cityHash64(tenant_id, trace_id)`, so rows of one aggregate key
 (e.g. a service's transaction in one minute) are spread over **all** shards, and on each shard over several parts.

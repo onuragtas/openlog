@@ -21,6 +21,7 @@ import {
   filterIntegrationRows,
   INTEGRATION_STATUSES,
   instanceAlertSearch,
+  instanceLabel,
   instanceResourceFilter,
   integrationForRule,
   integrationOf,
@@ -33,6 +34,7 @@ import {
   summarizeIntegrations,
   topByLast,
   type IntegrationId,
+  type IntegrationRow,
   type IntegrationStatus,
   type InstanceRef,
 } from "@/lib/integrations";
@@ -215,7 +217,7 @@ function TopTablesCard({ inst, range }: { inst: InstanceRef; range: RangeSpec })
   );
 }
 
-function RecommendedAlerts({ id, inst, range, hostName }: { id: IntegrationId; inst: InstanceRef; range: RangeSpec; hostName: string }) {
+function RecommendedAlerts({ id, inst, range, hostName, instanceName }: { id: IntegrationId; inst: InstanceRef; range: RangeSpec; hostName: string; instanceName: string }) {
   const { t, i18n } = useTranslation();
   const presets = presetsFor(id);
   const refMetrics = [...new Set(presets.flatMap((p) => (typeof p.threshold === "number" ? [] : [p.threshold.ratioOf])))];
@@ -238,7 +240,7 @@ function RecommendedAlerts({ id, inst, range, hostName }: { id: IntegrationId; i
             const title = t(`integrations.alerts.presets.${p.id}.title`);
             const refMetric = typeof p.threshold === "number" ? undefined : p.threshold.ratioOf;
             const reference = refMetric ? latestMax(refs[refMetrics.indexOf(refMetric)]?.data?.series) : null;
-            const s = presetSearch(p, inst, { name: `${title} – ${hostName} (${inst.instance})`, hostName, reference });
+            const s = presetSearch(p, inst, { name: `${title} – ${hostName} (${instanceName})`, hostName, reference });
             // Ratio thresholds show the resolved value, e.g. " (921.6 MiB)"; empty when unavailable.
             const threshold = refMetric && s?.threshold ? ` (${formatValue(Number(s.threshold), p.metric.startsWith("redis.memory") ? "bytes" : "number", i18n.resolvedLanguage)})` : "";
             return (
@@ -290,6 +292,8 @@ export function HostIntegrationPage() {
   const name = svc?.name || discoveryId;
   const status: IntegrationStatus = item ? integ.status : "not_available";
   const showCharts = !!id && (!item || integ.status === "enabled");
+  // Process name first (e.g. redis-server); the executable path (/usr/bin/redis-check-rdb) stays secondary.
+  const label = instanceLabel({ command: svc?.command, instance });
 
   return (
     <div className="flex flex-col gap-4">
@@ -307,6 +311,12 @@ export function HostIntegrationPage() {
           <h1 className="text-xl font-semibold tracking-tight">{t("integrations.panel.title", { name })}</h1>
           {item && <IntegrationStatusBadge status={status} />}
         </div>
+        {label.secondary && (
+          <p className="mt-1 truncate font-mono text-sm font-medium" title={`${t("integrations.panel.command")}: ${label.primary}`} data-testid="integration-command">
+            <span className="sr-only">{t("integrations.panel.command")}: </span>
+            {label.primary}
+          </p>
+        )}
         <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
           <div className="flex gap-1.5">
             <dt className="text-muted-foreground">{t("integrations.panel.host")}</dt>
@@ -318,7 +328,7 @@ export function HostIntegrationPage() {
           </div>
           <div className="flex min-w-0 max-w-full gap-1.5">
             <dt className="shrink-0 text-muted-foreground">{t("integrations.panel.instance")}</dt>
-            <dd className="min-w-0 truncate font-mono" title={instance}>
+            <dd className={cn("min-w-0 truncate font-mono", label.secondary && "text-muted-foreground")} title={instance}>
               {instance}
             </dd>
           </div>
@@ -354,7 +364,7 @@ export function HostIntegrationPage() {
 
       {showCharts && id && (
         <>
-          {canAlert && <RecommendedAlerts id={id} inst={inst} range={range} hostName={hostName} />}
+          {canAlert && <RecommendedAlerts id={id} inst={inst} range={range} hostName={hostName} instanceName={label.primary} />}
           {/* 1 column on phones/tablets, 2 columns from 1024px. */}
           <section aria-label={t("integrations.panel.metrics")} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {PANELS[id].map((chart) => (
@@ -369,6 +379,27 @@ export function HostIntegrationPage() {
 }
 
 // ---- overview ----
+
+/** Command as the name with the executable path below it; just the path when the agent sent no command. */
+function InstanceName({ row, truncate }: { row: IntegrationRow; truncate?: boolean }) {
+  const { t } = useTranslation();
+  const label = instanceLabel(row);
+  const wrap = truncate ? "truncate" : "break-all";
+  return (
+    <div className="min-w-0 font-mono text-xs" title={row.instance}>
+      <p className={cn(wrap, label.secondary ? "font-medium text-foreground" : "text-muted-foreground")}>
+        {label.secondary && <span className="sr-only">{t("integrations.panel.command")}: </span>}
+        {label.primary}
+      </p>
+      {label.secondary && (
+        <p className={cn(wrap, "text-muted-foreground")}>
+          <span className="sr-only">{t("integrations.panel.instance")}: </span>
+          {label.secondary}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function IntegrationsPage() {
   const { t } = useTranslation();
@@ -438,7 +469,7 @@ export function IntegrationsPage() {
                 <Link to="/hosts/$hostId" params={{ hostId: r.hostId }} className="inline-flex min-h-10 items-center self-start text-sm text-primary hover:underline">
                   {r.hostName}
                 </Link>
-                <p className="font-mono text-xs break-all text-muted-foreground">{r.instance}</p>
+                <InstanceName row={r} />
                 {(r.integration.error || r.integration.endpoint) && (
                   <p className={cn("text-xs break-words", r.integration.status === "enabled" && "font-mono")}>
                     {r.integration.status === "enabled" ? r.integration.endpoint : r.integration.error}
@@ -483,8 +514,8 @@ export function IntegrationsPage() {
                   <TableCell>
                     <span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">{r.integration.id}</span>
                   </TableCell>
-                  <TableCell className="hidden max-w-64 truncate font-mono text-xs md:table-cell" title={r.instance}>
-                    {r.instance}
+                  <TableCell className="hidden max-w-64 md:table-cell">
+                    <InstanceName row={r} truncate />
                   </TableCell>
                   <TableCell>
                     <IntegrationStatusBadge status={r.integration.status} />

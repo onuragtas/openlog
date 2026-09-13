@@ -174,6 +174,27 @@ func (c NoDataCondition) Evaluate(ctx context.Context, sc *query.Scope, end time
 	if err != nil {
 		return nil, err
 	}
+	return lastSeenEval(groups, end, lim)
+}
+
+func (c NoDataCondition) Range(ctx context.Context, sc *query.Scope, from, to time.Time, step time.Duration, lim Limits) (*RangeResult, error) {
+	lim = lim.withDefaults()
+	ends := rangeEnds(from, to, step)
+	lb := time.Duration(c.LookbackSeconds) * time.Second
+	l := int(ceilDiv(int64(lb), int64(step)))
+	origin := from.Add(-time.Duration(l) * step)
+	groups, err := c.fetch(ctx, sc, origin, step, l+len(ends), lim)
+	if err != nil {
+		return nil, err
+	}
+	res := lastSeenRange(groups, ends, l, lim)
+	res.Approximate = int64(lb)%int64(step) != 0
+	return res, nil
+}
+
+// lastSeenEval turns the last data point of every group within the lookback (one bucket) into ages (no-data
+// semantics, §2.4): groups without data in the lookback have no sample, so their series expire.
+func lastSeenEval(groups map[string]*lastSeenGroup, end time.Time, lim Limits) (*EvalResult, error) {
 	if len(groups) > lim.MaxSeries {
 		return nil, &LimitError{Msg: fmt.Sprintf("too many series (%d > %d); add filters", len(groups), lim.MaxSeries)}
 	}
@@ -187,17 +208,9 @@ func (c NoDataCondition) Evaluate(ctx context.Context, sc *query.Scope, end time
 	return res, nil
 }
 
-func (c NoDataCondition) Range(ctx context.Context, sc *query.Scope, from, to time.Time, step time.Duration, lim Limits) (*RangeResult, error) {
-	lim = lim.withDefaults()
-	ends := rangeEnds(from, to, step)
-	lb := time.Duration(c.LookbackSeconds) * time.Second
-	l := int(ceilDiv(int64(lb), int64(step)))
-	origin := from.Add(-time.Duration(l) * step)
-	groups, err := c.fetch(ctx, sc, origin, step, l+len(ends), lim)
-	if err != nil {
-		return nil, err
-	}
-	res := &RangeResult{Ends: ends, Unit: "s", Approximate: int64(lb)%int64(step) != 0}
+// lastSeenRange computes ages at every end from per-bucket last data points; the first l buckets precede ends[0].
+func lastSeenRange(groups map[string]*lastSeenGroup, ends []time.Time, l int, lim Limits) *RangeResult {
+	res := &RangeResult{Ends: ends, Unit: "s"}
 	for _, g := range groups {
 		rs := RangeSeries{Key: g.key, Labels: g.labels, Values: nanSlice(len(ends))}
 		for i, e := range ends {
@@ -216,5 +229,5 @@ func (c NoDataCondition) Range(ctx context.Context, sc *query.Scope, from, to ti
 	if len(res.Series) > lim.MaxSeries {
 		res.Series, res.Truncated = res.Series[:lim.MaxSeries], true
 	}
-	return res, nil
+	return res
 }

@@ -83,6 +83,9 @@ type Ingest struct {
 	GRPCAddr       string
 	MaxBodyBytes   int64
 	ProduceTimeout time.Duration
+	// CORSAllowedOrigins enables CORS on OTLP/HTTP for browser senders: "*", exact origins or
+	// subdomain wildcards ("https://*.example.com"). Empty disables CORS.
+	CORSAllowedOrigins []string
 }
 
 // Processor holds openlog-processor variables.
@@ -153,11 +156,25 @@ type Config struct {
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
 type APM struct {
-	LinkEnabled   bool          // OPENLOG_APM_LINK_ENABLED
-	LinkInterval  time.Duration // OPENLOG_APM_LINK_INTERVAL
-	LinkLookback  time.Duration // OPENLOG_APM_LINK_LOOKBACK
-	LinkDelay     time.Duration // OPENLOG_APM_LINK_DELAY
-	DefaultApdexT time.Duration // OPENLOG_APM_DEFAULT_APDEX_T
+	LinkEnabled      bool          // OPENLOG_APM_LINK_ENABLED
+	LinkInterval     time.Duration // OPENLOG_APM_LINK_INTERVAL
+	LinkLookback     time.Duration // OPENLOG_APM_LINK_LOOKBACK
+	LinkDelay        time.Duration // OPENLOG_APM_LINK_DELAY
+	LinkCatchUp      bool          // OPENLOG_APM_LINK_CATCHUP_ENABLED
+	LinkCatchUpAt    string        // OPENLOG_APM_LINK_CATCHUP_AT (HH:MM UTC)
+	LinkCatchUpBatch time.Duration // OPENLOG_APM_LINK_CATCHUP_BATCH
+	DefaultApdexT    time.Duration // OPENLOG_APM_DEFAULT_APDEX_T
+	// RetentionDays is the TTL of the APM tables, applied by openlog-migrate (OPENLOG_APM_RETENTION_DAYS).
+	RetentionDays int
+}
+
+// CatchUpOffset returns OPENLOG_APM_LINK_CATCHUP_AT as the offset from 00:00 UTC (0 when invalid).
+func (a APM) CatchUpOffset() time.Duration {
+	t, err := time.Parse("15:04", a.LinkCatchUpAt)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute
 }
 
 // UpdateCheck configures the release check of openlog-api (docs/contracts/releases-updates.md §5).
@@ -205,10 +222,11 @@ func Load(getenv func(string) string) (Config, error) {
 			},
 		},
 		Ingest: Ingest{
-			HTTPAddr:       p.str("OPENLOG_INGEST_HTTP_ADDR", ":4318"),
-			GRPCAddr:       p.str("OPENLOG_INGEST_GRPC_ADDR", ":4317"),
-			MaxBodyBytes:   p.int64("OPENLOG_INGEST_MAX_BODY_BYTES", 10485760),
-			ProduceTimeout: p.duration("OPENLOG_INGEST_PRODUCE_TIMEOUT", 10*time.Second),
+			HTTPAddr:           p.str("OPENLOG_INGEST_HTTP_ADDR", ":4318"),
+			GRPCAddr:           p.str("OPENLOG_INGEST_GRPC_ADDR", ":4317"),
+			MaxBodyBytes:       p.int64("OPENLOG_INGEST_MAX_BODY_BYTES", 10485760),
+			ProduceTimeout:     p.duration("OPENLOG_INGEST_PRODUCE_TIMEOUT", 10*time.Second),
+			CORSAllowedOrigins: p.list("OPENLOG_INGEST_CORS_ALLOWED_ORIGINS", ""),
 		},
 		Processor: Processor{
 			Group:         p.str("OPENLOG_PROCESSOR_GROUP", "openlog-processor"),
@@ -259,11 +277,15 @@ func Load(getenv func(string) string) (Config, error) {
 		Fleet: loadFleet(&p),
 		Alert: loadAlert(&p),
 		APM: APM{
-			LinkEnabled:   p.bool("OPENLOG_APM_LINK_ENABLED", true),
-			LinkInterval:  p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
-			LinkLookback:  p.duration("OPENLOG_APM_LINK_LOOKBACK", 10*time.Minute),
-			LinkDelay:     p.duration("OPENLOG_APM_LINK_DELAY", time.Minute),
-			DefaultApdexT: p.duration("OPENLOG_APM_DEFAULT_APDEX_T", 500*time.Millisecond),
+			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
+			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
+			LinkLookback:     p.duration("OPENLOG_APM_LINK_LOOKBACK", 10*time.Minute),
+			LinkDelay:        p.duration("OPENLOG_APM_LINK_DELAY", time.Minute),
+			LinkCatchUp:      p.bool("OPENLOG_APM_LINK_CATCHUP_ENABLED", true),
+			LinkCatchUpAt:    p.str("OPENLOG_APM_LINK_CATCHUP_AT", "03:00"),
+			LinkCatchUpBatch: p.duration("OPENLOG_APM_LINK_CATCHUP_BATCH", time.Hour),
+			DefaultApdexT:    p.duration("OPENLOG_APM_DEFAULT_APDEX_T", 500*time.Millisecond),
+			RetentionDays:    int(p.int64("OPENLOG_APM_RETENTION_DAYS", 30)),
 		},
 		Bootstrap: Bootstrap{
 			TenantID:      p.str("OPENLOG_BOOTSTRAP_TENANT_ID", "default"),
@@ -339,6 +361,15 @@ func (c Config) validate(getenv func(string) string) error {
 	}
 	if c.APM.LinkLookback < time.Minute || c.APM.LinkLookback > 24*time.Hour {
 		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_LOOKBACK: must be between 1m and 24h, got %s", c.APM.LinkLookback))
+	}
+	if _, err := time.Parse("15:04", c.APM.LinkCatchUpAt); err != nil {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_CATCHUP_AT: must be HH:MM (UTC), got %q", c.APM.LinkCatchUpAt))
+	}
+	if c.APM.LinkCatchUpBatch < 5*time.Minute || c.APM.LinkCatchUpBatch > 6*time.Hour {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_CATCHUP_BATCH: must be between 5m and 6h, got %s", c.APM.LinkCatchUpBatch))
+	}
+	if c.APM.RetentionDays < 1 || c.APM.RetentionDays > 3650 {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_RETENTION_DAYS: must be between 1 and 3650, got %d", c.APM.RetentionDays))
 	}
 	if c.APM.LinkDelay < 0 || c.APM.LinkDelay > time.Hour {
 		errs = append(errs, fmt.Errorf("OPENLOG_APM_LINK_DELAY: must be between 0 and 1h, got %s", c.APM.LinkDelay))

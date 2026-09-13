@@ -920,6 +920,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/rules/{id}/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description Evaluation history of a rule from ClickHouse `alert_evaluations` (alerting.md §3.6), bucketed to at most 500
+         *     points (`step_seconds` ≥ 10). Viewer and API keys. Default range: the last 24 hours; at most 30 days.
+         */
+        get: operations["listAlertRuleEvaluations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/rules/{id}": {
         parameters: {
             query?: never;
@@ -1898,7 +1920,7 @@ export interface components {
             status_target: string | null;
         };
         /** @enum {string} */
-        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm";
+        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data";
         /** @enum {string} */
         AlertSeverity: "critical" | "warning" | "info";
         /** @enum {string} */
@@ -1942,6 +1964,8 @@ export interface components {
          *     lookback_seconds. apm: service_name, service_namespace, environment, transaction_type, transaction_name,
          *     metric (throughput, error_rate, errors, avg_ms, p50_ms, p95_ms, p99_ms, apdex), group_by (environment,
          *     transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
+         *     apm_no_data (§2.7): service_name ("" = every service), service_namespace, environment, group_by (namespace,
+         *     environment), window_seconds, lookback_seconds.
          */
         AlertCondition: {
             metric?: string;
@@ -2086,6 +2110,35 @@ export interface components {
             truncated: boolean;
             approximate: boolean;
         };
+        AlertRuleEvaluations: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            step_seconds: number;
+            /** @description One entry per bucket with evaluations (rule rows, oldest first) */
+            evaluations: {
+                at: components["schemas"]["Timestamp"];
+                /** @description Maximum number of firing series in the bucket */
+                firing_series: number | null;
+                evaluations: number;
+                errors: number;
+                /** @description Duration of the latest evaluation in the bucket */
+                duration_ms: number;
+                max_duration_ms: number;
+            }[];
+            /** @description At most 50 series, most non-ok buckets first */
+            series: {
+                series_key: string;
+                labels: components["schemas"]["AlertLabels"];
+                /** @description [unix ms of the latest evaluation in the bucket, latest value or null, worst state] */
+                points: [
+                    number,
+                    number | null,
+                    components["schemas"]["AlertSeriesStateName"]
+                ][];
+            }[];
+            /** @description Series or rows were cut */
+            truncated: boolean;
+        };
         AlertIncident: {
             id: string;
             /** @description null when the rule was deleted */
@@ -2189,25 +2242,64 @@ export interface components {
             op: "eq" | "neq" | "contains";
             value: string;
         };
+        /**
+         * @description Recurring mute (alerting.md §5.2): occurrences on the selected local days from start_time to end_time (end ≤ start
+         *     = next day), DST-safe in `timezone`. Give `days` or `rrule`.
+         */
+        AlertMuteScheduleInput: {
+            /**
+             * @description IANA time zone, default UTC
+             * @example Europe/Istanbul
+             */
+            timezone?: string;
+            days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+            /**
+             * @description Subset FREQ=WEEKLY;BYDAY=MO,TU,… or FREQ=DAILY
+             * @example FREQ=WEEKLY;BYDAY=MO,FR
+             */
+            rrule?: string;
+            /** @example 22:00 */
+            start_time: string;
+            /** @example 06:00 */
+            end_time: string;
+            /** @description RFC3339 or unix ms; default now */
+            from?: string | null;
+            /** @description RFC3339 or unix ms; empty = no end */
+            until?: string | null;
+        };
+        AlertMuteSchedule: {
+            timezone: string;
+            days: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+            /** @description Normalized rule when the mute was created with one */
+            rrule: string | null;
+            start_time: string;
+            end_time: string;
+            from: components["schemas"]["Timestamp"];
+            until: components["schemas"]["NullableTimestamp"];
+        };
         AlertMuteInput: {
             name: string;
             comment?: string;
-            /** @description RFC3339 or unix ms */
-            starts_at: string;
-            /** @description RFC3339 or unix ms; after starts_at, at most 90 days later */
-            ends_at: string;
+            /** @description RFC3339 or unix ms; required without schedule (ignored with one) */
+            starts_at?: string;
+            /** @description RFC3339 or unix ms; after starts_at, at most 90 days later; required without schedule */
+            ends_at?: string;
             /** @description Empty = every rule */
             rule_ids?: string[];
             matchers?: components["schemas"]["AlertMuteMatcher"][];
+            schedule?: components["schemas"]["AlertMuteScheduleInput"] | null;
         };
         AlertMute: {
             id: string;
             name: string;
             comment: string;
+            /** @description Recurring mutes: start of the current or next occurrence */
             starts_at: components["schemas"]["Timestamp"];
+            /** @description Recurring mutes: end of the current or next occurrence */
             ends_at: components["schemas"]["Timestamp"];
             rule_ids: string[];
             matchers: components["schemas"]["AlertMuteMatcher"][];
+            schedule: components["schemas"]["AlertMuteSchedule"] | null;
             active: boolean;
             created_by_user_id: string | null;
             created_by_email: string;
@@ -4206,6 +4298,38 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listAlertRuleEvaluations: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix ms (default now − 24h) */
+                from?: string;
+                /** @description RFC3339 or unix ms (default now) */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Evaluation history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleEvaluations"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
         };
     };

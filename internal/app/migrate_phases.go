@@ -101,9 +101,20 @@ func migrateClickHouse(ctx context.Context, cfg config.Config, conn clickhouse.C
 			return err
 		}
 		PrintPlan(opts.out(), steps)
+		if cur, err := migrate.AppliedAPMRetention(ctx, conn); err != nil {
+			fmt.Fprintf(opts.out(), "apm retention: unknown (%v)\n\n", err)
+		} else if cur != cfg.APM.RetentionDays {
+			fmt.Fprintf(opts.out(), "apm retention: %d -> %d days (ALTER TABLE ... ON CLUSTER MODIFY TTL on the APM tables)\n\n", cur, cfg.APM.RetentionDays)
+		} else {
+			fmt.Fprintf(opts.out(), "apm retention: %d days (unchanged)\n\n", cur)
+		}
 		return nil
 	}
-	_, err = migrate.RunGated(ctx, conn, ms, gate, log)
+	if _, err = migrate.RunGated(ctx, conn, ms, gate, log); err != nil {
+		return err
+	}
+	// Settings applied outside migration files (apm.md §8 "Retention"): after the migrations, idempotent.
+	_, err = migrate.ApplyAPMRetention(ctx, conn, cfg.ClickHouseCluster, cfg.APM.RetentionDays, log)
 	return err
 }
 

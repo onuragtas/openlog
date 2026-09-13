@@ -624,15 +624,15 @@ func (s *PGStore) FinishDelivery(ctx context.Context, instance string, d *Delive
 }
 
 const muteColumns = `m.id::text, m.org_id::text, m.name, m.comment, m.starts_at, m.ends_at, COALESCE(m.rule_ids::text[], '{}'), m.matchers,
-	COALESCE(m.created_by::text, ''), COALESCE(u.email, ''), m.created_at, m.updated_at`
+	COALESCE(m.created_by::text, ''), COALESCE(u.email, ''), m.created_at, m.updated_at, m.schedule`
 
 const muteFrom = ` FROM alert_mutes m LEFT JOIN users u ON u.id = m.created_by`
 
 func scanMute(row pgx.Row) (*Mute, error) {
 	m := &Mute{}
-	var matchers []byte
+	var matchers, schedule []byte
 	if err := row.Scan(&m.ID, &m.OrgID, &m.Name, &m.Comment, &m.StartsAt, &m.EndsAt, &m.RuleIDs, &matchers,
-		&m.CreatedBy, &m.CreatedByEmail, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		&m.CreatedBy, &m.CreatedByEmail, &m.CreatedAt, &m.UpdatedAt, &schedule); err != nil {
 		return nil, mapPGErr(err)
 	}
 	_ = json.Unmarshal(matchers, &m.Matchers)
@@ -642,11 +642,20 @@ func scanMute(row pgx.Row) (*Mute, error) {
 	if m.RuleIDs == nil {
 		m.RuleIDs = []string{}
 	}
+	if len(schedule) > 0 && string(schedule) != "null" {
+		var sc MuteSchedule
+		if err := json.Unmarshal(schedule, &sc); err != nil {
+			return nil, fmt.Errorf("mute %s: invalid schedule: %w", m.ID, err)
+		}
+		m.Schedule = &sc
+	}
 	return m, nil
 }
 
+// ActiveMutes loads one-off mutes covering at and every recurring mute, then keeps those in an occurrence.
 func (s *PGStore) ActiveMutes(ctx context.Context, orgID string, at time.Time) ([]Mute, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+muteColumns+muteFrom+` WHERE m.org_id = $1 AND m.starts_at <= $2 AND m.ends_at > $2`, orgID, at)
+	rows, err := s.pool.Query(ctx, `SELECT `+muteColumns+muteFrom+` WHERE m.org_id = $1
+		AND ((m.schedule IS NULL AND m.starts_at <= $2 AND m.ends_at > $2) OR m.schedule IS NOT NULL)`, orgID, at)
 	if err != nil {
 		return nil, err
 	}
@@ -657,9 +666,59 @@ func (s *PGStore) ActiveMutes(ctx context.Context, orgID string, at time.Time) (
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, *m)
+		if m.Active(at) {
+			out = append(out, *m)
+		}
 	}
 	return out, rows.Err()
+}
+
+// RollRecurringMutes implements OutboxStore. The update is conditional on the old window, so concurrent
+// dispatchers write the same result at most once.
+func (s *PGStore) RollRecurringMutes(ctx context.Context, now time.Time) (int, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id::text, schedule, ends_at FROM alert_mutes
+		WHERE schedule IS NOT NULL AND ends_at <= $1
+		  AND (schedule->>'until' IS NULL OR (schedule->>'until')::timestamptz > $1)
+		ORDER BY ends_at LIMIT 1000`, now)
+	if err != nil {
+		return 0, err
+	}
+	type due struct {
+		id   string
+		sc   MuteSchedule
+		ends time.Time
+	}
+	var list []due
+	for rows.Next() {
+		var (
+			d   due
+			raw []byte
+		)
+		if err := rows.Scan(&d.id, &raw, &d.ends); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		if json.Unmarshal(raw, &d.sc) == nil {
+			list = append(list, d)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	moved := 0
+	for _, d := range list {
+		start, end, ok := d.sc.Window(now)
+		if !ok {
+			continue
+		}
+		tag, err := s.pool.Exec(ctx, `UPDATE alert_mutes SET starts_at = $2, ends_at = $3 WHERE id = $1 AND ends_at = $4`, d.id, start, end, d.ends)
+		if err != nil {
+			return moved, err
+		}
+		moved += int(tag.RowsAffected())
+	}
+	return moved, nil
 }
 
 func (s *PGStore) PendingCount(ctx context.Context) (int, error) {

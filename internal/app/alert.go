@@ -16,6 +16,7 @@ import (
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/store/clickhouse"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/version"
 )
@@ -98,11 +99,33 @@ func RunAlert(ctx context.Context, cfg config.Config, adm *admin.Server, log *sl
 	leases := alert.NewLeaseManager(store, alert.LeaseOptions{Instance: instance, Version: version.String(), TTL: a.LeaseTTL,
 		RenewInterval: a.LeaseRenewInterval, Log: log.With("job", "alert-leases"), Registerer: adm.Registry()})
 	apmSettings := apm.PGSettings{Pool: pool}
+	// Evaluation summaries (alert_evaluations): batched direct shard inserts, independent of the processor.
+	var (
+		summaries    alert.EvaluationSink
+		writerDone   = make(chan struct{})
+		stopWriter   = func() {}
+		shardWriters = &lazyShardedInserter{bootstrap: conn, log: log.With("job", "alert-evaluation-history"),
+			opts: clickhouse.ShardedOptions{Conn: clickhouse.OptionsFromConfig(cfg.Common), Database: cfg.ClickHouseDatabase,
+				Cluster: cfg.ClickHouseCluster}}
+	)
+	if a.EvaluationHistory {
+		shardWriters.opts.Conn.MaxConns = 2
+		w := alert.NewEvaluationWriter(shardWriters, alert.EvaluationWriterOptions{Log: log.With("job", "alert-evaluation-history"),
+			Registerer: adm.Registry()})
+		summaries = w
+		var wctx context.Context
+		wctx, stopWriter = context.WithCancel(context.WithoutCancel(ctx))
+		shardWriters.runCtx = wctx
+		go func() { defer close(writerDone); w.Run(wctx) }()
+	} else {
+		close(writerDone)
+	}
+	defer shardWriters.close()
 	ev := alert.NewEvaluator(store, leases, db, alert.EvaluatorOptions{
 		Instance: instance, Delay: a.EvaluationDelay, MaxConcurrent: a.MaxConcurrentEvaluations, TenantMaxConcurrent: a.TenantMaxConcurrent,
 		TenantPerMinute: a.TenantEvaluationsPerMinute, QueryTimeout: a.QueryTimeout, Limits: alert.Limits{MaxSeries: a.MaxSeriesPerRule},
 		PublicURL: a.PublicURL, Log: log.With("job", "alert-evaluator"), Registerer: adm.Registry(),
-		ApdexSettings: apmSettings.List, DefaultApdexT: cfg.APM.DefaultApdexT,
+		ApdexSettings: apmSettings.List, DefaultApdexT: cfg.APM.DefaultApdexT, Summaries: summaries,
 	})
 	disp := alert.NewDispatcher(store, alertSender(cfg), kr, alert.DispatcherOptions{
 		Instance: instance, Workers: a.DispatchWorkers, DeliveryTimeout: a.DeliveryTimeout, MaxAttempts: a.DeliveryMaxAttempts,
@@ -121,9 +144,49 @@ func RunAlert(ctx context.Context, cfg config.Config, adm *admin.Server, log *sl
 		"evaluation_delay", a.EvaluationDelay, "secrets_key", kr.CurrentKeyID())
 	<-ctx.Done()
 	wg.Wait()
+	stopWriter() // final flush after the last evaluation committed
+	<-writerDone
 	stopLeases()
 	<-leasesDone
 	return nil
+}
+
+// lazyShardedInserter creates the direct-insert writer on the first insert, so openlog-alert starts (and
+// evaluates) while ClickHouse or its topology is not available yet; failed inserts are retried by the caller.
+type lazyShardedInserter struct {
+	bootstrap clickhouse.Conn
+	opts      clickhouse.ShardedOptions
+	log       *slog.Logger
+	runCtx    context.Context
+
+	mu sync.Mutex
+	w  *clickhouse.ShardedWriter
+}
+
+func (l *lazyShardedInserter) Insert(ctx context.Context, table string, keyColumns, columns []string, token string, rows [][]any) error {
+	l.mu.Lock()
+	if l.w == nil {
+		w, err := clickhouse.NewShardedWriter(ctx, l.bootstrap, l.opts, l.log, nil) // no registry: processor metric names
+		if err != nil {
+			l.mu.Unlock()
+			return err
+		}
+		l.w = w
+		if l.runCtx != nil {
+			go w.Run(l.runCtx) // topology refresh
+		}
+	}
+	w := l.w
+	l.mu.Unlock()
+	return w.Insert(ctx, table, keyColumns, columns, token, rows)
+}
+
+func (l *lazyShardedInserter) close() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.w != nil {
+		l.w.Close()
+	}
 }
 
 // RotateAlertSecrets re-encrypts channel secrets with the current OPENLOG_SECRETS_KEY (openlog-alert rotate-secrets).

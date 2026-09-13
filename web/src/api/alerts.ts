@@ -27,6 +27,9 @@ export type AlertChannelTestResult = S["AlertChannelTestResult"];
 export type AlertMute = S["AlertMute"];
 export type AlertMuteInput = S["AlertMuteInput"];
 export type AlertMuteMatcher = S["AlertMuteMatcher"];
+export type AlertMuteSchedule = S["AlertMuteSchedule"];
+export type AlertMuteScheduleInput = S["AlertMuteScheduleInput"];
+export type AlertRuleEvaluations = S["AlertRuleEvaluations"];
 export type AlertDelivery = S["AlertDelivery"];
 export type AlertRulePreview = S["AlertRulePreview"];
 export type AlertPreviewSeries = S["AlertPreviewSeries"];
@@ -127,6 +130,20 @@ export const alertPreviewQuery = (input: AlertRuleInput | null, hours: number) =
     placeholderData: keepPreviousData,
     retry: false,
     staleTime: 30_000,
+  });
+
+/** Evaluation history of a saved rule over the last `hours` (GET /alerts/rules/{id}/evaluations). */
+export const alertEvaluationsQuery = (id: string, hours: number) =>
+  queryOptions({
+    queryKey: ["alerts", "evaluations", id, hours],
+    queryFn: async ({ signal }) => {
+      const now = Date.now();
+      const query = { from: String(now - hours * 3_600_000), to: String(now) };
+      // openapi-fetch widens the [ms, value, state] point tuple; the schema type is exact.
+      return unwrap(await api.GET("/api/v1/alerts/rules/{id}/evaluations", { params: { path: { id }, query }, signal })) as AlertRuleEvaluations;
+    },
+    refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
   });
 
 export async function createAlertRule(input: AlertRuleInput): Promise<AlertRule> {

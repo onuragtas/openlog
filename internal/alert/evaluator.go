@@ -35,6 +35,8 @@ type EvaluatorOptions struct {
 	// ApdexSettings resolves per-service Apdex thresholds for APM rules (nil: DefaultApdexT for every service).
 	ApdexSettings ApdexSettingsFunc
 	DefaultApdexT time.Duration
+	// Summaries receives the rows of every committed evaluation (alert_evaluations, §3.6); nil = not recorded.
+	Summaries EvaluationSink
 }
 
 // Evaluator evaluates the rules whose leases this process holds (docs/contracts/alerting.md §3).
@@ -248,6 +250,10 @@ func (e *Evaluator) Evaluate(ctx context.Context, l Lease) string {
 		return e.count("error")
 	}
 	e.leases.Scheduled(l.RuleID, next, end)
+	if e.o.Summaries != nil {
+		// Only committed (fenced) evaluations are recorded, so a window has at most one set of rows.
+		e.o.Summaries.Add(EvaluationRows(rule, plan))
+	}
 	e.hDuration.WithLabelValues(rule.Type).Observe(plan.Duration.Seconds())
 	for to, n := range plan.Transitions {
 		e.cTransitions.WithLabelValues(to).Add(float64(n))

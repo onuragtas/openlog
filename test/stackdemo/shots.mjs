@@ -154,8 +154,35 @@ async function afterBackend() {
   await ctx.close();
 }
 
+async function apm() {
+  const { ctx, page } = await session();
+  await page.goto("/apm");
+  await shot(page, "stack-19-apm-services", () => page.getByText("catalog", { exact: true }).first().waitFor(T), { fullPage: true });
+  await page.goto("/apm/map");
+  await shot(page, "stack-20-apm-map", () => page.getByText("orders").first().waitFor(T));
+  await ctx.close();
+}
+
+async function alert() {
+  const rule = process.env.STACKDEMO_ALERT_RULE_ID;
+  const { ctx, page } = await session();
+  await page.goto("/alerts/incidents");
+  await shot(page, "stack-21-alert-incident", () => page.getByText("stackdemo: CPU busy").first().waitFor(T));
+  if (rule) {
+    await page.goto(`/alerts/rules/${rule}`);
+    await shot(page, "stack-22-alert-evaluation-history", () => page.getByTestId("alert-evaluation-history").waitFor(T), { fullPage: true });
+  }
+  await ctx.close();
+}
+
 for (const g of groups) {
   switch (g) {
+    case "apm":
+      await apm();
+      break;
+    case "alert":
+      await alert();
+      break;
     case "before":
       await before();
       break;

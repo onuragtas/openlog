@@ -10,6 +10,7 @@ import {
   hasPanel,
   hitRatio,
   instanceAlertSearch,
+  instanceLabel,
   instanceResourceFilter,
   integrationForRule,
   integrationOf,
@@ -34,6 +35,16 @@ describe("instance identity", () => {
     expect(splitServiceKey("mysql:tcp:127.0.0.1:3306")).toEqual({ discoveryId: "mysql", instance: "tcp:127.0.0.1:3306" });
     expect(splitServiceKey("nocolon")).toBeNull();
     expect(splitServiceKey(":x")).toBeNull();
+  });
+
+  it("names instances by their command, keeping the executable path secondary", () => {
+    expect(instanceLabel({ command: "redis-server", instance: "/usr/bin/redis-check-rdb" })).toEqual({ primary: "redis-server", secondary: "/usr/bin/redis-check-rdb" });
+    expect(instanceLabel({ command: " nginx ", instance: "nginx" })).toEqual({ primary: "nginx", secondary: undefined });
+    expect(instanceLabel({ command: "redis-server" })).toEqual({ primary: "redis-server", secondary: undefined });
+    // Older agents omit command: the instance stays the name.
+    expect(instanceLabel({ instance: "/usr/sbin/nginx" })).toEqual({ primary: "/usr/sbin/nginx" });
+    expect(instanceLabel({ command: "  ", instance: "/usr/sbin/nginx" })).toEqual({ primary: "/usr/sbin/nginx" });
+    expect(instanceLabel({})).toEqual({ primary: "" });
   });
 
   it("filters metrics by discovery id and instance resource attributes", () => {
@@ -128,18 +139,22 @@ describe("overview", () => {
     { host_id: "h2", host_name: "db-1", key: "postgresql:/usr/lib/postgresql/16/bin/postgres", data: { rule_id: "postgresql", name: "PostgreSQL", instance: "/usr/lib/postgresql/16/bin/postgres", integration: { id: "postgresql", status: "needs_configuration", hint: "x" } } },
     { host_id: "h1", host_name: "web-1", key: "nginx:/usr/sbin/nginx", data: { rule_id: "nginx", name: "NGINX", instance: "/usr/sbin/nginx", integration: { id: "nginx", status: "enabled", endpoint: "http://127.0.0.1/nginx_status" } } },
     { host_id: "h1", host_name: "web-1", key: "sshd:/usr/sbin/sshd", data: { rule_id: "sshd", integration: { status: "not_available" } } },
+    { host_id: "h1", host_name: "web-1", key: "redis:/usr/bin/redis-check-rdb", data: { rule_id: "redis", name: "Redis", instance: "/usr/bin/redis-check-rdb", command: "redis-server", integration: { id: "redis", status: "enabled" } } },
     { host_id: "h1", host_name: "web-1", key: "docker:/usr/bin/dockerd", data: { rule_id: "docker", name: "Docker", instance: "/usr/bin/dockerd", integration: { id: "docker", status: "error", error: "socket missing" } } },
   ];
 
   it("lists services with an integration id, counts statuses and marks panels", () => {
     const { rows, counts } = summarizeIntegrations(items);
-    expect(rows.map((r) => `${r.hostName}/${r.name}/${r.panel}`)).toEqual(["db-1/PostgreSQL/true", "web-1/Docker/false", "web-1/NGINX/true"]);
-    expect(counts).toEqual({ enabled: 1, needs_configuration: 1, error: 1, not_available: 0 });
+    expect(rows.map((r) => `${r.hostName}/${r.name}/${r.panel}`)).toEqual(["db-1/PostgreSQL/true", "web-1/Docker/false", "web-1/NGINX/true", "web-1/Redis/true"]);
+    expect(counts).toEqual({ enabled: 2, needs_configuration: 1, error: 1, not_available: 0 });
+    expect(rows.find((r) => r.name === "Redis")).toMatchObject({ command: "redis-server", instance: "/usr/bin/redis-check-rdb" });
+    expect(rows.find((r) => r.name === "NGINX")!.command).toBeUndefined();
   });
 
   it("filters rows by status and text", () => {
     const { rows } = summarizeIntegrations(items);
-    expect(filterIntegrationRows(rows, "enabled", "").map((r) => r.name)).toEqual(["NGINX"]);
+    expect(filterIntegrationRows(rows, "enabled", "").map((r) => r.name)).toEqual(["NGINX", "Redis"]);
+    expect(filterIntegrationRows(rows, undefined, "redis-server").map((r) => r.name)).toEqual(["Redis"]);
     expect(filterIntegrationRows(rows, undefined, "db-1 postgres").map((r) => r.name)).toEqual(["PostgreSQL"]);
     expect(filterIntegrationRows(rows, undefined, "nginx_status").map((r) => r.name)).toEqual(["NGINX"]);
   });

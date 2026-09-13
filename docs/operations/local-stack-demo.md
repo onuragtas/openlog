@@ -3,7 +3,8 @@
 The M1 closing scenario ([roadmap](../plan/06-roadmap.md), "Tüm sistemin Docker ile ayağa kalkması"), repeatable on
 one machine: signed local releases, the `deploy/compose` stack on the default ports, two Debian 12 "servers" that
 install the agent with `scripts/install.sh`, an agent fleet auto-update, a backend self-update with
-`openlog-updater`, and a restart of the backend without losing metrics.
+`openlog-updater`, a restart of the backend without losing metrics — and for M2 the APM demo services
+(`test/apmdemo`) sending traces to the same stack and an alert rule that fires and resolves with webhook deliveries.
 
 ```sh
 make stack-demo                                   # every phase (about 15 minutes with warm image caches)
@@ -16,15 +17,21 @@ The stack stays up at the end: <http://localhost:8080>, `admin@openlog.local` / 
 
 ```sh
 docker compose -p openlog --project-directory deploy/compose -f deploy/compose/docker-compose.yml \
-  -f test/stackdemo/docker-compose.stackdemo.yml --profile updater down -v --remove-orphans
+  -f test/stackdemo/docker-compose.stackdemo.yml -f test/apmdemo/docker-compose.apmdemo.yml \
+  --profile updater down -v --remove-orphans
 rm -rf deploy/compose/releases deploy/compose/backups
 ```
+
+The APM demo keeps generating load (~8 requests/s) after the demo; stop only it with
+`… stop frontend orders catalog apmdemo-loadgen redis orders-db` (same `docker compose` options).
 
 Requirements: Docker with Compose v2.17+ (4 CPUs / 6 GB free is comfortable), Go 1.26, `make`, `jq`, `curl`, `rsync`;
 for `--screenshots` Node ≥ 20.19 (`web/` is copied to `$TMPDIR/openlog-stackdemo-web`, because node tooling does not
 run inside iCloud-synced checkouts). Host ports: 4317, 4318, 8080, 9464 (openlog), 127.0.0.1:5432/8123/9000/9092
-(dependencies), 127.0.0.1:18090 (release server; 18080 is the e2e API port), 127.0.0.1:5001 (registry; 5000 is AirPlay on macOS). Override with
-the variables in `deploy/compose/.env.example` and `STACKDEMO_RELEASES_PORT` / `STACKDEMO_REGISTRY_PORT`.
+(dependencies), 127.0.0.1:18090 (release server; 18080 is the e2e API port), 127.0.0.1:5001 (registry; 5000 is AirPlay on macOS),
+127.0.0.1:18091 (alert webhook receiver), 18093 (APM demo frontend). Override with the variables in
+`deploy/compose/.env.example` and `STACKDEMO_RELEASES_PORT` / `STACKDEMO_REGISTRY_PORT` / `STACKDEMO_ALERT_RECEIVER_PORT` /
+`STACKDEMO_APM_FRONTEND_PORT`.
 Output (timings, screenshots): `$STACKDEMO_OUT` (default `$TMPDIR/openlog-stackdemo`).
 
 **Test keys only.** Releases are signed with `dist/testkeys` (`make release-testkeys`, git-ignored) and the images and
@@ -40,6 +47,8 @@ agents are built to trust that key. Never publish these builds.
 | `registry` | same | `registry:2`; the signed manifests reference the backend images by digest (`localhost:5001/openlog@sha256:…`) |
 | `host-services` (`demo-web-1`) | same, `test/stackdemo/host` | Debian 12 with nginx, redis, postgresql; agent installed by install.sh |
 | `host-plain` (`demo-plain-1`) | same | Debian 12 without services |
+| `alert-receiver` | same, `test/alertproof/receiver` | webhook receiver of the `alert` phase: verifies `X-Openlog-Signature` (secret `STACKDEMO_ALERT_HMAC_SECRET`), records requests (`GET /requests`) |
+| `frontend`, `orders`, `catalog`, `redis`, `orders-db`, `apmdemo-loadgen` | `test/apmdemo/docker-compose.apmdemo.yml` (`apm` phase) | OpenTelemetry-instrumented Node/Go/PHP services with the stack's license key and ~8 req/s of load; started with `--no-deps`, so the apmdemo override of `openlog` is not applied |
 
 `deploy/compose/releases` is mounted read-only into `openlog` and `openlog-updater` at `/releases` (the base compose
 file does this for everyone: it is where an air-gapped mirror and trusted key files go). The demo `.env` sets:
@@ -76,6 +85,8 @@ its own against a running stack.
 | `fleet` | policy `auto` | one line per 10 s: rollout state, wave, counters, versions (stack-16); both hosts on 0.9.1 (stack-17); in each host `current -> versions/0.9.1`, `-version`, `update-state.json`; ingest `openlog_release_mirror_requests_total` |
 | `backend` | `OPENLOG_UPDATER_MODE=auto` in `.env`, `docker compose up -d openlog-updater` | `/readyz` 0.9.1, updater steps backup → pull → migrate → recreate → health → cleanup → contract-migrate, `backups/*.dump`, `OPENLOG_IMAGE` rewritten to the digest, hosts and metrics still there (stack-18) |
 | `restart` | `docker compose restart postgres kafka clickhouse openlog openlog-updater` | downtime, `system.uptime` samples per host over the restart window with the largest gap (10 s interval → no gap above ~20 s means nothing was lost), `openlog.agent.export.items` by outcome (`buffered` rose, `dropped` 0) |
+| `apm` | `docker compose … -f test/apmdemo/docker-compose.apmdemo.yml up -d --build --no-deps --wait redis orders-db orders catalog frontend apmdemo-loadgen` (`APMDEMO_LICENSE_KEY` = the stack's key) | waits (≤ 10 min each) until `GET /api/v1/apm/services` lists frontend, orders and catalog, `GET /api/v1/apm/map` has the trace-linked edges frontend→orders and frontend→catalog (edge-linking job, 1 min) and error groups appear; prints services (rpm, error rate, p95, Apdex), edges and error groups (stack-19, stack-20) |
+| `alert` | `alert-receiver` up; webhook channel `stackdemo webhook` (HMAC) + test send; `metric_threshold` rule on `demo-plain-1` busy CPU (Σ non-idle `cpu.mode`, avg over 1 min, interval 10 s, flapping off, threshold = clamp(current load + 0.35, 0.5, 0.92), recovery 0.15 lower); busy loops on every core of `host-plain` until the incident opens, then stopped | incident open, signed `incident.opened` at the receiver, incident resolved (`recovered`), signed `incident.resolved`, firing points in `GET /api/v1/alerts/rules/{id}/evaluations`; after 30 s **exactly one** opening and one resolving delivery for the incident (fails otherwise); delivery log; the rule is disabled at the end (stack-21, stack-22). Re-runs delete the previous demo rule and channel |
 
 Screenshots (`--screenshots`, Turkish UI, 1440×900, `$STACKDEMO_OUT/shots`):
 
@@ -96,6 +107,8 @@ Screenshots (`--screenshots`, Turkish UI, 1440×900, `$STACKDEMO_OUT/shots`):
 | `stack-15-update-banner` | "openlog 0.9.1 yayınlandı" for the admin |
 | `stack-16-fleet-rollout`, `stack-17-fleet-done` | rollout in progress, both agents on 0.9.1 |
 | `stack-18-after-backend-update` | version 0.9.1 and the updater's steps |
+| `stack-19-apm-services`, `stack-20-apm-map` | APM services of the demo, service map |
+| `stack-21-alert-incident`, `stack-22-alert-evaluation-history` | the open CPU incident, the rule with its evaluation history |
 
 ## Doing it by hand
 
@@ -133,3 +146,6 @@ the agent detects the container and reports `update_capable: false`.
 | agents stay on 0.9.0 | `GET /api/v1/fleet/hosts` `.update`; host log (`$DC logs host-plain`): `update` messages; policy `mode` |
 | updater `error: current version …` right after `up` | transient: the updater starts before `openlog`; it retries within a minute |
 | backend update `rolled_back` | `GET /api/v1/version` `.updater.steps`; `$DC logs openlog-updater` |
+| `apm` waits for the map | edges need two link runs after the first traces (`OPENLOG_APM_LINK_INTERVAL`, `_DELAY`); `docker compose logs openlog \| grep "apm edge"` |
+| `alert` never fires | the machine is busy: the printed baseline/threshold; the rule's evaluation history (`last_error`, values) in the UI |
+| `alert` delivery counts ≠ 1 | `curl 127.0.0.1:18091/requests \| jq`, `GET /api/v1/alerts/deliveries?incident_id=…` (a failed first attempt is retried, still one accepted delivery) |

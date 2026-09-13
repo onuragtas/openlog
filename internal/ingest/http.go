@@ -33,7 +33,7 @@ func (s *Service) HTTPHandler() http.Handler {
 	if s.extraRoutes != nil {
 		s.extraRoutes(mux)
 	}
-	return mux
+	return withCORS(s.cfg.CORSAllowedOrigins, mux)
 }
 
 var errTooLarge = errors.New("request body too large")

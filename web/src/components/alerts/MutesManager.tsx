@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { alertMutesQuery, alertRulesQuery, createAlertMute, deleteAlertMute, updateAlertMute, type AlertMute, type AlertMuteMatcher, type AlertRule } from "@/api/alerts";
+import { alertMutesQuery, alertRulesQuery, createAlertMute, deleteAlertMute, updateAlertMute, type AlertMute, type AlertMuteInput, type AlertMuteMatcher, type AlertRule } from "@/api/alerts";
 import { can } from "@/api/roles";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
@@ -20,6 +20,17 @@ import { Field } from "./fields";
 
 const parse = (s: string) => Date.parse(s.replace(/(\.\d{3})\d+/, "$1"));
 
+const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+type Day = (typeof DAYS)[number];
+
+function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: AlertRule[]; onDone: () => void }) {
   const { t } = useTranslation();
   const uid = useId();
@@ -31,18 +42,38 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
   const [ends, setEnds] = useState(toDateTimeLocal(mute ? parse(mute.ends_at) : now + 2 * 3_600_000));
   const [ruleIds, setRuleIds] = useState<string[]>(mute?.rule_ids ?? []);
   const [matchers, setMatchers] = useState<AlertMuteMatcher[]>(mute?.matchers ?? []);
+  // Recurring schedule (alerting.md §5.2)
+  const [recurring, setRecurring] = useState(!!mute?.schedule);
+  const [timezone, setTimezone] = useState(mute?.schedule?.timezone ?? browserTimeZone());
+  const [days, setDays] = useState<Day[]>((mute?.schedule?.days as Day[] | undefined) ?? ["mon", "tue", "wed", "thu", "fri"]);
+  const [startTime, setStartTime] = useState(mute?.schedule?.start_time ?? "22:00");
+  const [endTime, setEndTime] = useState(mute?.schedule?.end_time ?? "06:00");
   const id = (n: string) => `${uid}-${n}`;
   const save = useMutation({
     mutationFn: () => {
       const s = fromDateTimeLocal(starts);
       const e = fromDateTimeLocal(ends);
-      const input = {
+      const input: AlertMuteInput = {
         name: name.trim(),
         comment,
-        starts_at: s === null ? starts : new Date(s).toISOString(),
-        ends_at: e === null ? ends : new Date(e).toISOString(),
         rule_ids: ruleIds,
         matchers: matchers.filter((m) => m.label.trim()),
+        ...(recurring
+          ? {
+              schedule: {
+                timezone: timezone.trim(),
+                days: DAYS.filter((d) => days.includes(d)),
+                start_time: startTime,
+                end_time: endTime,
+                from: mute?.schedule?.from ?? null,
+                until: mute?.schedule?.until ?? null,
+              },
+            }
+          : {
+              starts_at: s === null ? starts : new Date(s).toISOString(),
+              ends_at: e === null ? ends : new Date(e).toISOString(),
+              schedule: null,
+            }),
       };
       return mute ? updateAlertMute(mute.id, input) : createAlertMute(input);
     },
@@ -66,13 +97,47 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
         <Field id={id("comment")} label={t("alerts.mutes.comment")}>
           <Input id={id("comment")} value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
-        <Field id={id("starts")} label={t("alerts.mutes.starts")}>
-          <Input id={id("starts")} type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} />
-        </Field>
-        <Field id={id("ends")} label={t("alerts.mutes.ends")}>
-          <Input id={id("ends")} type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />
-        </Field>
+        {!recurring && (
+          <>
+            <Field id={id("starts")} label={t("alerts.mutes.starts")}>
+              <Input id={id("starts")} type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} />
+            </Field>
+            <Field id={id("ends")} label={t("alerts.mutes.ends")}>
+              <Input id={id("ends")} type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />
+            </Field>
+          </>
+        )}
       </div>
+      <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
+        <legend className="px-1 text-sm font-medium">{t("alerts.mutes.recurring")}</legend>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
+          {t("alerts.mutes.recurringToggle")}
+        </label>
+        {recurring && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field id={id("tz")} label={t("alerts.mutes.timezone")}>
+                <Input id={id("tz")} value={timezone} placeholder="Europe/Istanbul" onChange={(e) => setTimezone(e.target.value)} />
+              </Field>
+              <Field id={id("stime")} label={t("alerts.mutes.startTime")}>
+                <Input id={id("stime")} type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              </Field>
+              <Field id={id("etime")} label={t("alerts.mutes.endTime")} hint={t("alerts.mutes.endTimeHint")}>
+                <Input id={id("etime")} type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              </Field>
+            </div>
+            <div role="group" aria-label={t("alerts.mutes.days")} className="flex flex-wrap gap-2">
+              {DAYS.map((d) => (
+                <label key={d} className="flex items-center gap-2 rounded-md border px-2 py-1 text-sm has-checked:border-primary">
+                  <input type="checkbox" checked={days.includes(d)} onChange={(e) => setDays(e.target.checked ? [...days, d] : days.filter((x) => x !== d))} />
+                  {t(`alerts.mutes.dayNames.${d}`)}
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </fieldset>
       <fieldset>
         <legend className="mb-2 text-sm font-medium">
           {t("alerts.mutes.rules")} <span className="font-normal text-muted-foreground">({t("alerts.mutes.allRules")} = —)</span>
@@ -179,7 +244,7 @@ export function MutesManager() {
               {mutes.data.map((m) => {
                 const s = parse(m.starts_at);
                 const e = parse(m.ends_at);
-                const status = now < s ? "scheduled" : now < e ? "active" : "ended";
+                const status = m.schedule ? (m.active ? "active" : now < e ? "scheduled" : "ended") : now < s ? "scheduled" : now < e ? "active" : "ended";
                 const scope = [
                   m.rule_ids.length ? m.rule_ids.map((id) => ruleName.get(id) ?? id).join(", ") : t("alerts.mutes.allRules"),
                   ...m.matchers.map((x) => `${x.label} ${t(`alerts.mutes.ops.${x.op}`)} ${x.value}`),
@@ -191,7 +256,15 @@ export function MutesManager() {
                       {m.comment && <p className="text-xs text-muted-foreground">{m.comment}</p>}
                     </TableCell>
                     <TableCell label={t("alerts.mutes.columns.window")} className="whitespace-nowrap text-sm">
-                      <DateTimeText value={m.starts_at} /> – <DateTimeText value={m.ends_at} />
+                      {m.schedule && (
+                        <p data-testid="mute-schedule">
+                          {m.schedule.days.map((d) => t(`alerts.mutes.dayNames.${d}`)).join(", ")} {m.schedule.start_time}–{m.schedule.end_time} ({m.schedule.timezone})
+                        </p>
+                      )}
+                      <span className={m.schedule ? "text-xs text-muted-foreground" : undefined}>
+                        {m.schedule && `${t("alerts.mutes.occurrence")}: `}
+                        <DateTimeText value={m.starts_at} /> – <DateTimeText value={m.ends_at} />
+                      </span>
                     </TableCell>
                     <TableCell label={t("alerts.mutes.columns.scope")} className="text-sm">
                       {scope.join(" · ")}

@@ -60,6 +60,9 @@ jobs:
         run: make fmt-check vet test
       - name: race
         run: go test -race ./...
+      - name: module requires without replace (local file proxy, no network for in-repo modules)
+        working-directory: .
+        run: scripts/go-agent-release.sh verify
 
   php-ext:
     name: php-ext (${{ matrix.php }}, ${{ matrix.runner }})

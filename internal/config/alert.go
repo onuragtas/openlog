@@ -27,6 +27,8 @@ type Alert struct {
 	MaxSeriesPerRule           int
 	QueryTimeout               time.Duration
 	MaxRulesPerOrg             int
+	// EvaluationHistory writes evaluation summaries to ClickHouse alert_evaluations (OPENLOG_ALERT_EVALUATION_HISTORY).
+	EvaluationHistory bool
 
 	DispatchWorkers          int
 	DeliveryTimeout          time.Duration
@@ -62,6 +64,7 @@ func loadAlert(p *parser) Alert {
 		MaxSeriesPerRule:           int(p.int64("OPENLOG_ALERT_MAX_SERIES_PER_RULE", 1000)),
 		QueryTimeout:               p.duration("OPENLOG_ALERT_QUERY_TIMEOUT", 20*time.Second),
 		MaxRulesPerOrg:             int(p.int64("OPENLOG_ALERT_MAX_RULES_PER_ORG", 1000)),
+		EvaluationHistory:          p.bool("OPENLOG_ALERT_EVALUATION_HISTORY", true),
 		DispatchWorkers:            int(p.int64("OPENLOG_ALERT_DISPATCH_WORKERS", 4)),
 		DeliveryTimeout:            p.duration("OPENLOG_ALERT_DELIVERY_TIMEOUT", 10*time.Second),
 		DeliveryMaxAttempts:        int(p.int64("OPENLOG_ALERT_DELIVERY_MAX_ATTEMPTS", 10)),

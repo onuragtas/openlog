@@ -1,16 +1,18 @@
 // Virtualized DOM waterfall renderer (TanStack Virtual; fixed row height, so
 // 10k+ spans render only the visible rows). Layout math is in lib/waterfall.ts.
 // One scroll container scrolls both ways: the time axis sticks to the top and the
-// span-name column sticks to the left, so narrow screens scroll the timeline sideways.
+// span-name column sticks to the left. Containers below 640px (phones) fit the whole
+// timeline with a narrower name column; the axis picks its tick count from its width.
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { Span } from "@/api/types";
 import { formatDurationNs } from "@/lib/format";
+import { isCompact, useElementWidth } from "@/lib/media";
 import { useTheme } from "@/lib/theme";
 import { colorFor, cn } from "@/lib/utils";
-import { layoutWaterfall, timeTicks, type WaterfallLayout } from "@/lib/waterfall";
+import { layoutWaterfall, tickAnchor, tickCountForWidth, timeTicks, type WaterfallLayout } from "@/lib/waterfall";
 
 export interface WaterfallProps {
   spans: Span[];
@@ -25,15 +27,25 @@ export interface WaterfallProps {
 const INDENT_PX = 14;
 const ROW_PX = 29;
 const AXIS_PX = 24;
-/** Narrower containers scroll the timeline horizontally. */
+/** Wide containers: names get 35%; narrower than MIN_WIDTH, the timeline scrolls horizontally. */
 const MIN_WIDTH = "40rem";
 const GRID = "grid-cols-[minmax(10rem,35%)_1fr]";
+/** Containers narrower than this (phones) fit the whole timeline instead of scrolling it sideways. */
+const COMPACT_PX = 640;
+const COMPACT_MIN_WIDTH = "18rem";
+const COMPACT_GRID = "grid-cols-[minmax(7rem,40%)_1fr]";
+/** Room per time-axis label (e.g. "999.99 ms" in 12px mono) so neighbours never touch. */
+const TICK_LABEL_PX = 80;
 
 export function Waterfall({ spans, selectedSpanId, onSelect, layout: given, maxHeight = "70vh" }: WaterfallProps) {
   const { t } = useTranslation();
   const { resolved } = useTheme();
   const layout = useMemo(() => given ?? layoutWaterfall(spans), [given, spans]);
-  const ticks = timeTicks(layout.totalNs, 4);
+  const [boxRef, boxWidth] = useElementWidth<HTMLDivElement>();
+  const [axisRef, axisWidth] = useElementWidth<HTMLDivElement>();
+  const compact = isCompact(boxWidth, COMPACT_PX);
+  const grid = compact ? COMPACT_GRID : GRID;
+  const ticks = timeTicks(layout.totalNs, tickCountForWidth(axisWidth, TICK_LABEL_PX, 4));
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const rows = layout.rows;
@@ -82,7 +94,7 @@ export function Waterfall({ spans, selectedSpanId, onSelect, layout: given, maxH
   };
 
   return (
-    <div className="flex min-w-0 flex-col text-xs">
+    <div ref={boxRef} className="flex min-w-0 flex-col text-xs">
       <ul className="mb-2 flex flex-wrap gap-x-3 gap-y-1" aria-label={t("trace.fields.service")}>
         {layout.services.map((s) => (
           <li key={s} className="flex min-w-0 items-center gap-1.5">
@@ -92,19 +104,25 @@ export function Waterfall({ spans, selectedSpanId, onSelect, layout: given, maxH
         ))}
       </ul>
       <div ref={scrollRef} className="overflow-auto overscroll-contain [scrollbar-gutter:stable]" style={{ maxHeight }} data-testid="waterfall-scroll">
-        <div style={{ minWidth: MIN_WIDTH }}>
-          <div className={cn("sticky top-0 z-20 grid border-b bg-card text-muted-foreground", GRID)} style={{ height: AXIS_PX }} aria-hidden="true">
+        <div style={{ minWidth: compact ? COMPACT_MIN_WIDTH : MIN_WIDTH }}>
+          <div className={cn("sticky top-0 z-20 grid border-b bg-card text-muted-foreground", grid)} style={{ height: AXIS_PX }} aria-hidden="true">
             <span className="sticky left-0 z-10 bg-card" />
-            <div className="relative mr-10 h-4 self-center">
-              {ticks.map((tk, i) => (
-                <span
-                  key={i}
-                  className="absolute -translate-x-1/2 font-mono whitespace-nowrap first:translate-x-0 last:-translate-x-full"
-                  style={{ left: `${(tk / Math.max(1, layout.totalNs)) * 100}%` }}
-                >
-                  {formatDurationNs(Math.round(tk))}
-                </span>
-              ))}
+            <div ref={axisRef} className="relative mr-10 h-4 self-center" data-testid="waterfall-axis">
+              {ticks.map((tk, i) => {
+                // The first label starts at its tick and the last ends at it, so neither leaves the axis.
+                const anchor = tickAnchor(i, ticks.length);
+                const pct = (tk / Math.max(1, layout.totalNs)) * 100;
+                return (
+                  <span
+                    key={i}
+                    className={cn("absolute font-mono whitespace-nowrap", anchor === "middle" && "-translate-x-1/2")}
+                    style={anchor === "end" ? { right: 0 } : { left: `${pct}%` }}
+                    data-anchor={anchor}
+                  >
+                    {formatDurationNs(Math.round(tk))}
+                  </span>
+                );
+              })}
             </div>
           </div>
           <div
@@ -138,7 +156,7 @@ export function Waterfall({ spans, selectedSpanId, onSelect, layout: given, maxH
                   aria-label={t("trace.spanLabel", { service: s.service_name, name: s.name, duration: formatDurationNs(s.duration_ns) })}
                   className={cn(
                     "group absolute top-0 left-0 grid w-full cursor-pointer items-center border-b border-border/50 bg-card hover:bg-muted",
-                    GRID,
+                    grid,
                     selected && "bg-accent hover:bg-accent",
                   )}
                   style={{ height: ROW_PX, transform: `translateY(${vi.start - AXIS_PX}px)` }}
@@ -151,7 +169,8 @@ export function Waterfall({ spans, selectedSpanId, onSelect, layout: given, maxH
                     <span className="inline-block h-3 w-1 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />
                     {isError && <AlertCircle className="size-3.5 shrink-0 text-destructive-text" aria-hidden="true" />}
                     <span className="truncate font-medium">{s.name}</span>
-                    <span className="truncate text-muted-foreground">{s.service_name}</span>
+                    {/* Phones: the color bar and legend identify the service; the span name gets the room. */}
+                    {!compact && <span className="truncate text-muted-foreground">{s.service_name}</span>}
                     {row.orphan && <span className="shrink-0 text-warning-text">({t("trace.orphan")})</span>}
                   </div>
                   <div className="relative mr-10 h-5">

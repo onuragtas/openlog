@@ -43,7 +43,7 @@ import { DurationField, Field, Section } from "./fields";
 // uPlot is loaded only when a preview is shown.
 const PreviewChart = lazy(() => import("./PreviewChart").then((m) => ({ default: m.PreviewChart })));
 
-const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm"];
+const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data"];
 const AGGREGATIONS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGREGATIONS = ["avg", "sum", "min", "max"] as const;
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
@@ -416,6 +416,23 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
           {groupToggles([{ value: "environment", label: t("alerts.editor.groupEnvironment") }, { value: "transaction", label: t("alerts.editor.groupTransaction") }], false)}
           {thresholdFields}
           {missingField}
+        </>
+      );
+      break;
+    case "apm_no_data":
+      condition = (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id={id("svc")} label={t("alerts.editor.serviceName")} hint={t("alerts.editor.serviceNameAllHint")}>
+              <Input id={id("svc")} value={draft.service_name} placeholder="checkout" onChange={(e) => update({ service_name: e.target.value })} {...describedBy(id("svc"), undefined, t("alerts.editor.serviceNameAllHint"))} />
+            </Field>
+            <Field id={id("env")} label={t("alerts.editor.environment")} hint={t("alerts.editor.environmentHint")}>
+              <Input id={id("env")} value={draft.environment} onChange={(e) => update({ environment: e.target.value })} {...describedBy(id("env"), undefined, t("alerts.editor.environmentHint"))} />
+            </Field>
+            <DurationField id={id("window")} label={t("alerts.editor.window")} seconds={draft.window_seconds} onChange={(s) => update({ window_seconds: s }, "window_seconds")} error={err("window_seconds")} />
+            <DurationField id={id("lookback")} label={t("alerts.editor.lookback")} seconds={draft.lookback_seconds} onChange={(s) => update({ lookback_seconds: s }, "lookback_seconds")} error={err("lookback_seconds")} />
+          </div>
+          {groupToggles([{ value: "namespace", label: t("alerts.editor.groupNamespace") }, { value: "environment", label: t("alerts.editor.groupEnvironment") }], false)}
         </>
       );
       break;

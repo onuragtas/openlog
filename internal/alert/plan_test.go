@@ -220,7 +220,8 @@ func TestRuleValidation(t *testing.T) {
 		t.Errorf("field path: %v %v", err, ve)
 	}
 	infos := RuleTypes()
-	if len(infos) != 5 || infos[4].Type != TypeAPM || !infos[4].Available || infos[4].Reason != "" || !infos[0].Available {
+	if len(infos) != 6 || infos[4].Type != TypeAPM || !infos[4].Available || infos[4].Reason != "" || !infos[0].Available ||
+		infos[5].Type != TypeAPMNoData || !infos[5].Available {
 		t.Errorf("rule types %+v", infos)
 	}
 }

@@ -40,6 +40,27 @@ truncation, exit), PDO, SQL sanitizing, mysqli, pgsql, phpredis, Predis, curl, c
 restore and opcache), Laravel, Symfony, Slim, WordPress, CodeIgniter, Yii (stub classes with the real names), several
 requests per process (php-cgi -T), log correlation. Real framework versions are exercised by `agents/php/demo`.
 
+### Overhead (`agents/php/bench/ext/run.sh`, 2026-09-13, shared arm64 VM)
+
+Laravel 12 / PHP 8.3 FPM (8 static workers, 4 CPUs), `GET /bench/{id}` (Eloquent query + 2 Redis calls), k6 16 VUs,
+3 × 30 s, telemetry exported to the shared openlog on the same VM. Medians (min–max):
+
+| | base | tracer off | tracer on |
+|---|---|---|---|
+| RPS | 1377 (1372–1678) | 1170 (1025–1335) | 1229 (955–1239) |
+| p50 ms | 9.81 | 11.45 | 11.93 |
+| PHP CPU ms/req | 2.520 | 2.896 | 2.993 |
+| RPS vs base | — | −15.0 % | −10.7 % |
+
+**Budget (≤ 3 % / ≤ 7 %) not met on this setup.** Run-to-run spread is ±10 % and "on" beating "off" shows noise;
+the stable signal is +0.4–0.5 ms PHP CPU per request. Findings from profiling: per-call hook cost is ~4 ns on 8.3/8.4
+(the spike measured the same), the tracer costs nothing per call since it switched to stack sampling (per-call
+observation measured ~60 ns/call); the remaining cost is engine observer bookkeeping per request
+(`zend_init_internal_run_time_cache`, observer end handlers), per-request instrumentation of ~7 spans, JSON
+encoding, the send, and the forwarder + ingest competing for the same VM CPU (0.18 ms forwarder CPU/request). An
+A/B with a blackhole transport measured −5 % in one run. A dedicated benchmark host and per-request profiling are the
+next step.
+
 ## Build and install
 
 ```sh
@@ -86,7 +107,7 @@ Development helpers (copy the source to a scratch directory, build inside the of
 | `openlog.transaction_tracer.enabled` | `1` | system, perdir | function-level segments |
 | `openlog.transaction_tracer.threshold_ms` | `500` | all | segments are sent when the transaction takes at least this long or failed |
 | `openlog.transaction_tracer.max_segments` | `2000` | all | |
-| `openlog.transaction_tracer.min_segment_ms` | `1` | all | faster calls are aggregated into the parent's `openlog.php.fast_calls` / `openlog.php.fast_calls_ns` |
+| `openlog.transaction_tracer.min_segment_ms` | `1` | all | stack sampling interval; calls shorter than it appear only when a sample hits them |
 | `openlog.transaction_tracer.max_memory_kb` | `4096` | all | |
 | `openlog.log_level` | `warning` | all | `off`, `error`, `warning`, `info`, `debug`; PHP error log, at most 10 lines per minute per process |
 

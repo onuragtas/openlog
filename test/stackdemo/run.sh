@@ -8,7 +8,7 @@
 #   test/stackdemo/run.sh up agents            # selected phases only
 #   make stack-demo [STACKDEMO_ARGS="--screenshots"]
 #
-# Phases (default order): clean env release up agents policy publish fleet backend restart
+# Phases (default order): clean env release up agents policy publish fleet backend restart apm alert
 #   clean    docker compose down -v, remove the release mirror and backups
 #   env      deploy/compose/.env from .env.example plus the demo settings
 #   release  test keys, backend images FROM and TO (pushed to the local registry), signed releases
@@ -19,10 +19,13 @@
 #   fleet    policy auto: agents download TO from ingest, verify, switch and confirm
 #   backend  openlog-updater auto: backup, pull, migrate, recreate, health check on TO
 #   restart  docker compose restart of the backend; agents buffer, no metric samples lost
+#   apm      test/apmdemo services (Node, Go, PHP + load) against the stack; services, map edges, errors appear
+#   alert    webhook channel + CPU rule on demo-plain-1: CPU load fires it, it resolves, one delivery each
 #
 # Environment: STACKDEMO_FROM (0.9.0), STACKDEMO_TO (0.9.1), STACKDEMO_ARCHES (Docker server arch),
 # STACKDEMO_REGISTRY_PORT (5001), STACKDEMO_OUT (output: timings, screenshots; $TMPDIR/openlog-stackdemo),
-# STACKDEMO_WEB_WORKDIR (copy of web/ for Playwright; $TMPDIR/openlog-stackdemo-web).
+# STACKDEMO_WEB_WORKDIR (copy of web/ for Playwright; $TMPDIR/openlog-stackdemo-web),
+# STACKDEMO_APM_FRONTEND_PORT (18093), STACKDEMO_ALERT_RECEIVER_PORT (18091).
 # Test keys only (dist/testkeys); never use them for a real release.
 set -euo pipefail
 
@@ -46,17 +49,17 @@ for a in "$@"; do
   case $a in
   --screenshots) SCREENSHOTS=1 ;;
   -h | --help)
-    sed -n '2,27s/^# \{0,1\}//p' "$0"
+    sed -n '2,31s/^# \{0,1\}//p' "$0"
     exit 0
     ;;
-  clean | env | release | up | agents | policy | publish | fleet | backend | restart) PHASES+=("$a") ;;
+  clean | env | release | up | agents | policy | publish | fleet | backend | restart | apm | alert) PHASES+=("$a") ;;
   *)
     echo "unknown argument: $a (see --help)" >&2
     exit 2
     ;;
   esac
 done
-[ ${#PHASES[@]} -gt 0 ] || PHASES=(clean env release up agents policy publish fleet backend restart)
+[ ${#PHASES[@]} -gt 0 ] || PHASES=(clean env release up agents policy publish fleet backend restart apm alert)
 
 mkdir -p "$OUT"
 log() { printf '\n\033[1m== %s %s\033[0m\n' "$(date +%T)" "$*"; }
@@ -66,6 +69,17 @@ dc() {
   docker compose -p openlog --project-directory "$CDIR" -f "$CDIR/docker-compose.yml" \
     -f "$ROOT/test/stackdemo/docker-compose.stackdemo.yml" --profile updater "$@"
 }
+
+# dca: dc plus the APM demo services (test/apmdemo). Only used with explicit service lists and --no-deps, so the
+# apmdemo overrides of the `openlog` service are never applied to the running backend.
+dca() {
+  APMDEMO_LICENSE_KEY=$(env_value OPENLOG_BOOTSTRAP_LICENSE_KEY) APMDEMO_FRONTEND_PORT=${STACKDEMO_APM_FRONTEND_PORT:-18093} \
+    docker compose -p openlog --project-directory "$CDIR" -f "$CDIR/docker-compose.yml" \
+    -f "$ROOT/test/stackdemo/docker-compose.stackdemo.yml" -f "$ROOT/test/apmdemo/docker-compose.apmdemo.yml" --profile updater "$@"
+}
+APM_SERVICES=(frontend orders catalog)
+ALERT_RULE_NAME="stackdemo: CPU busy on ${HOST_NAMES[1]}"
+ALERT_CHANNEL_NAME="stackdemo webhook"
 
 env_value() { sed -n "s/^$1=//p" "$CDIR/.env" | tail -n 1; }
 
@@ -124,7 +138,7 @@ screenshot() { # SHOT...: stack-* screenshots (test/stackdemo/shots.mjs)
   mkdir -p "$OUT/shots"
   (cd "$WEB_WORKDIR" && STACKDEMO_BASE_URL="$(api_url)" STACKDEMO_EMAIL="$(env_value OPENLOG_BOOTSTRAP_OWNER_EMAIL)" \
     STACKDEMO_PASSWORD="$(env_value OPENLOG_BOOTSTRAP_OWNER_PASSWORD)" STACKDEMO_SHOTS_DIR="$OUT/shots" STACKDEMO_TO="$TO" \
-    node stackdemo-shots.mjs "$@")
+    STACKDEMO_ALERT_RULE_ID="${ALERT_RULE_ID:-}" node stackdemo-shots.mjs "$@")
 }
 
 # mirror VERSION...: the signed release mirror served to agents (ingest), install.sh, the update
@@ -181,7 +195,7 @@ all_agents_on() { # VERSION
 phase_clean() {
   log "clean: remove the demo stack (compose project openlog), release mirror and backups"
   [ -f "$CDIR/.env" ] || cp "$CDIR/.env.example" "$CDIR/.env"
-  dc down -v --remove-orphans
+  dca down -v --remove-orphans
   rm -rf "$REL" "$CDIR/backups" "$OUT/timings.txt"
 }
 
@@ -379,6 +393,128 @@ phase_restart() {
     api_get "/api/v1/hosts/$id/metrics?name=openlog.agent.export.items&agg=last&group_by=outcome&step=60s" |
       jq -c '[.series[] | {outcome: .attributes.outcome, last: (.points | last)}]'
   done < <(host_ids)
+}
+
+# ---- apm ----------------------------------------------------------------------------------------
+apm_services_listed() {
+  api_get /api/v1/apm/services |
+    jq -e '[.services[].service_name] as $s | ["frontend", "orders", "catalog"] | all(. as $n | $s | index($n) != null)'
+}
+
+apm_map_linked() { # trace-linked service edges (apm.md §5, §6)
+  api_get /api/v1/apm/map |
+    jq -e '[.edges[] | "\(.source | sub("\\|.*"; ""))->\(.target | sub("\\|.*"; ""))"] as $e
+      | ["frontend->orders", "frontend->catalog"] | all(. as $n | $e | index($n) != null)'
+}
+
+apm_errors_seen() {
+  local s n=0
+  for s in "${APM_SERVICES[@]}"; do
+    n=$((n + $(api_get "/api/v1/apm/services/$s/errors" | jq '.groups | length')))
+  done
+  [ "$n" -gt 0 ]
+}
+
+phase_apm() {
+  log "apm: test/apmdemo services against the stack (frontend Node, orders Go + PostgreSQL, catalog PHP + Redis, load)"
+  login
+  local t0
+  t0=$(date +%s)
+  dca up -d --build --no-deps --wait --wait-timeout 900 redis orders-db orders catalog frontend apmdemo-loadgen
+  note "apm: demo services running after $(($(date +%s) - t0))s"
+  wait_until 600 "apm: services frontend, orders, catalog listed (GET /api/v1/apm/services)" apm_services_listed
+  wait_until 600 "apm: service map has trace-linked edges frontend->orders and frontend->catalog" apm_map_linked
+  wait_until 600 "apm: error groups appear (GET /api/v1/apm/services/{s}/errors)" apm_errors_seen
+  api_get /api/v1/apm/services | jq -r '.services[] | "\(.service_name)\t\(.throughput | .*100 | round / 100) rpm\terr \(.error_rate * 10000 | round / 100)%\tp95 \(.p95_ms // 0 | .*10 | round / 10) ms\tapdex \(.apdex)"'
+  api_get /api/v1/apm/map | jq -r '.edges[] | "\(.source | sub("\\|.*"; "")) -> \(.target | sub("\\|.*"; ""))\t\(.throughput | .*10 | round / 10) rpm"'
+  local s
+  for s in "${APM_SERVICES[@]}"; do
+    api_get "/api/v1/apm/services/$s/errors" | jq -r --arg s "$s" '.groups[] | "\($s)\t\(.error_type)\t\(.message)\tcount=\(.count)"'
+  done
+  screenshot apm
+}
+
+# ---- alert --------------------------------------------------------------------------------------
+receiver_url() { echo "http://127.0.0.1:${STACKDEMO_ALERT_RECEIVER_PORT:-18091}"; }
+
+receiver_count() { # INCIDENT_ID EVENT: accepted, correctly signed deliveries of EVENT for the incident
+  curl -fsS "$(receiver_url)/requests" |
+    jq --arg inc "$1" --arg ev "$2" '[.[] | select(.event == $ev and .body.incident.id == $inc and .status == 200 and .signature_valid == true)] | length'
+}
+
+incident_in() { api_get "/api/v1/alerts/incidents?rule_id=$ALERT_RULE_ID&state=$1" | jq -e '.incidents | length > 0'; }
+incident_resolved() { api_get "/api/v1/alerts/incidents/$ALERT_INCIDENT_ID" | jq -e '.state == "resolved"'; }
+delivered_at_least_once() { [ "$(receiver_count "$ALERT_INCIDENT_ID" "$1")" -ge 1 ]; }
+history_has_firing() {
+  api_get "/api/v1/alerts/rules/$ALERT_RULE_ID/evaluations?from=$((ALERT_T0 * 1000))" |
+    jq -e '(.evaluations | length > 0) and ([.series[].points[] | select(.[2] == "firing")] | length > 0)'
+}
+cpu_load() { # start|stop: busy loops on every core of host-plain (the Docker VM's CPUs)
+  if [ "$1" = start ]; then
+    dc exec -T -d "${HOSTS[1]}" sh -c 'i=0; n=$(nproc); while [ $i -lt $n ]; do timeout 420 sh -c "while :; do :; done" & i=$((i+1)); done; wait'
+  else
+    dc exec -T "${HOSTS[1]}" sh -c 'pkill -f "while :; do :; done" || true'
+  fi
+}
+
+phase_alert() {
+  log "alert: webhook channel, CPU rule on ${HOST_NAMES[1]}; load fires it, it resolves, exactly one delivery each"
+  login
+  dc up -d --wait alert-receiver
+  local secret=${STACKDEMO_ALERT_HMAC_SECRET:-stackdemo-alert-hmac-secret} id
+  # Re-runs: remove the rules and channels of earlier runs.
+  for id in $(api_get /api/v1/alerts/rules | jq -r --arg n "$ALERT_RULE_NAME" '.rules[] | select(.name == $n) | .id'); do
+    api_send DELETE "/api/v1/alerts/rules/$id" >/dev/null
+  done
+  for id in $(api_get /api/v1/alerts/channels | jq -r --arg n "$ALERT_CHANNEL_NAME" '.channels[] | select(.name == $n) | .id'); do
+    api_send DELETE "/api/v1/alerts/channels/$id" >/dev/null
+  done
+  local channel
+  channel=$(api_send POST /api/v1/alerts/channels "$(jq -nc --arg n "$ALERT_CHANNEL_NAME" --arg s "$secret" \
+    '{name: $n, type: "webhook", secrets: {url: "http://alert-receiver:8080/webhook", hmac_secret: $s}}')" | jq -r .id)
+  api_send POST "/api/v1/alerts/channels/$channel/test" | jq -c '{success, status_code}'
+
+  # Busy CPU of the host (sum of the non-idle cpu.mode fractions) over 1 minute. The threshold follows the current
+  # load so the rule starts ok on a busy laptop: clamp(baseline + 0.35, 0.5, 0.92), recovery 0.15 lower.
+  local cond rule baseline threshold recovery
+  cond=$(jq -nc --arg h "${HOST_NAMES[1]}" '{metric: "system.cpu.utilization", aggregation: "avg", series_aggregation: "sum",
+    window_seconds: 60, filters: [{field: "host.name", op: "eq", values: [$h]}, {field: "attr.cpu.mode", op: "not_in", values: ["idle"]}],
+    group_by: ["host"], operator: "gt", threshold: 0.9}')
+  baseline=$(api_send POST /api/v1/alerts/rules/preview "$(jq -nc --arg n "$ALERT_RULE_NAME" --argjson c "$cond" \
+    '{rule: {name: $n, type: "metric_threshold", interval_seconds: 10, condition: $c}, hours: 1}')" |
+    jq '[.series[0].points[]? | .[1] | select(. != null)] | last // 0')
+  threshold=$(jq -n --argjson b "$baseline" '[[($b + 0.35), 0.5] | max, 0.92] | min | . * 100 | round / 100')
+  recovery=$(jq -n --argjson t "$threshold" '$t - 0.15 | . * 100 | round / 100')
+  note "alert: CPU busy baseline $baseline, threshold $threshold, recovery $recovery"
+  rule=$(jq -nc --arg n "$ALERT_RULE_NAME" --arg ch "$channel" --argjson c "$cond" --argjson t "$threshold" --argjson r "$recovery" \
+    '{name: $n, type: "metric_threshold", severity: "warning", interval_seconds: 10, channel_ids: [$ch],
+      flapping: {enabled: false, transitions: 4, window_seconds: 3600, hold_seconds: 600},
+      condition: ($c + {threshold: $t, recovery_threshold: $r})}')
+  ALERT_RULE_ID=$(api_send POST /api/v1/alerts/rules "$rule" | jq -r .id)
+  ALERT_T0=$(date +%s)
+  note "alert: rule $ALERT_RULE_ID, channel $channel"
+
+  cpu_load start
+  wait_until 300 "alert: CPU rule fired (incident open)" incident_in open
+  ALERT_INCIDENT_ID=$(api_get "/api/v1/alerts/incidents?rule_id=$ALERT_RULE_ID&state=open" | jq -r '.incidents[0].id')
+  wait_until 120 "alert: incident.opened webhook delivered and signed" delivered_at_least_once incident.opened
+  screenshot alert
+  cpu_load stop
+  wait_until 420 "alert: incident $ALERT_INCIDENT_ID resolved after the load stopped" incident_resolved
+  wait_until 120 "alert: incident.resolved webhook delivered and signed" delivered_at_least_once incident.resolved
+  wait_until 60 "alert: evaluation history has firing points (GET /api/v1/alerts/rules/{id}/evaluations)" history_has_firing
+  sleep 30 # a duplicate or re-notification would arrive within this time
+  local opened resolved
+  opened=$(receiver_count "$ALERT_INCIDENT_ID" incident.opened)
+  resolved=$(receiver_count "$ALERT_INCIDENT_ID" incident.resolved)
+  note "alert: receiver got incident.opened x$opened, incident.resolved x$resolved"
+  api_get "/api/v1/alerts/deliveries?incident_id=$ALERT_INCIDENT_ID" | jq -r '.deliveries[] | "\(.kind)\t\(.status)\tattempts=\(.attempts)"'
+  api_get "/api/v1/alerts/incidents/$ALERT_INCIDENT_ID" | jq -c '{state, resolve_reason, opened_at, resolved_at, summary}'
+  api_send POST "/api/v1/alerts/rules/$ALERT_RULE_ID/disable" | jq -c '{id, enabled}'
+  if [ "$opened" != 1 ] || [ "$resolved" != 1 ]; then
+    echo "expected exactly one opening and one resolving delivery, got $opened and $resolved" >&2
+    return 1
+  fi
 }
 
 for p in "${PHASES[@]}"; do

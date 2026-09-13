@@ -109,13 +109,22 @@ func (d *Dispatcher) ClaimTTL() time.Duration { return d.o.DeliveryTimeout + 30*
 
 // Run delivers notifications until ctx is done. In-flight deliveries finish before it returns.
 func (d *Dispatcher) Run(ctx context.Context) {
-	lastPrune, lastGauge := time.Time{}, time.Time{}
+	lastPrune, lastGauge, lastRoll := time.Time{}, time.Time{}, time.Time{}
 	for ctx.Err() == nil {
 		n, err := d.RunOnce(ctx)
 		if err != nil && ctx.Err() == nil {
 			d.o.Log.Warn("alert dispatcher round failed", "err", err)
 		}
 		now := d.o.Now()
+		if now.Sub(lastRoll) > time.Minute {
+			lastRoll = now
+			// Keeps starts_at/ends_at of recurring mutes on the current occurrence for binaries that ignore schedules.
+			if c, err := d.store.RollRecurringMutes(ctx, now); err != nil {
+				d.o.Log.Debug("rolling recurring mutes failed", "err", err)
+			} else if c > 0 {
+				d.o.Log.Debug("recurring mutes moved to their next occurrence", "mutes", c)
+			}
+		}
 		if now.Sub(lastGauge) > 15*time.Second {
 			lastGauge = now
 			if c, err := d.store.PendingCount(ctx); err == nil {

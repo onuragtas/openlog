@@ -89,8 +89,68 @@ graphics (sparklines, latency histogram) are plain SVG/DOM in `components/apm/Ch
 `components/apm/`, query factories in `api/apm.ts`, pure helpers in `lib/apm.ts`, mocks in `mocks/apm.ts`.
 Definitions: `docs/contracts/apm.md`.
 
+**Integrations.** Metrics panels for services the infra agent discovers and monitors (nginx, Redis,
+MySQL/MariaDB, PostgreSQL). See "Integrations" below.
+
 **Accessibility.** Every input has a label, icon-only buttons have `aria-label`, toggles use `aria-pressed`
 / `aria-expanded`, interactive rows are reachable by keyboard (links/buttons inside rows).
+
+## Integrations
+
+Metrics panels for services that `openlog-infra-agent` discovers and monitors (nginx, Redis, MySQL/MariaDB,
+PostgreSQL). Definitions: `docs/contracts/semantic-conventions.md` §6.
+
+**Routes** (`routes/integrations.tsx`)
+
+| Route | What |
+|---|---|
+| `/integrations` | Overview across hosts: status counts/filter (`?status=`), text search (`?q=`), cards on phones, table from 768px |
+| `/hosts/$hostId/integrations/$discoveryId/$instance` | Panel of one instance: header, config help, recommended alerts, charts |
+| `/hosts/$hostId?tab=services` | Service cards (`routes/host/services-tab.tsx`) link to the panel |
+
+**Data flow.**
+
+1. The overview reads `discovered_service` inventory items on all hosts (`inventorySearchQuery`);
+   `summarizeIntegrations` keeps items with an `integration.id` and counts statuses. The panel reads the host's
+   latest snapshot (`servicesQuery`) and finds the item by key `<rule_id>:<instance>` (`serviceKey`).
+2. An instance is `{ hostId, discoveryId (= rule_id), instance }` (`InstanceRef`). Its metrics are selected with
+   resource attribute filters: `instanceResourceFilter` returns
+   `{ "openlog.discovery.id": …, "openlog.discovery.instance": … }`, which `metricQuery` sends as
+   `resource.openlog.discovery.id=…&resource.openlog.discovery.instance=…` to `GET /hosts/{id}/metrics`.
+3. `integrationOf` normalizes `integration.status` (`enabled`, `needs_configuration`, `error`, `not_available`).
+   `needs_configuration`/`error` show the agent's `hint` (a config.yaml snippet); only `enabled` shows charts.
+   A panel URL for a service missing from the latest snapshot still shows charts of earlier data.
+4. Names: `instance` is the resolved executable (`/usr/bin/redis-check-rdb` on Debian) or a container id; the
+   optional `command` (argv0 basename, `redis-server`) is shown as the primary name via `instanceLabel`, with
+   the path as secondary text. Older agents omit `command`; then the instance is the name. URLs and metric
+   filters always use `instance`.
+
+**Charts.** `components/integrations/panels.ts` defines `PANELS[integrationId]`: each `PanelChart` has an `id`
+(title key `integrations.charts.<id>`), `queries` (`{ key: { name, agg, groupBy? } }`, one request each),
+`unit`, optional `stacked`/`order`/`yMax`, a `build(data, L)` that turns the query results into
+`ChartSeriesInput[]` (using the pure helpers in `lib/integrations.ts`: `sumSeries`, `hitRatio`,
+`differencePoints`, `pgCacheHitRatio`; `L(key)` translates `integrations.series.<key>`), and `alert` (the query
+key a "create alert from this metric" link uses).
+
+**Recommended alerts (presets).** `ALERT_PRESETS` in `lib/integrations.ts`: metric, aggregation, operator,
+window, severity, optional data point attribute filters, and a threshold that is fixed or a ratio of another
+metric's latest value (`{ ratioOf: "redis.maxmemory", ratio: 0.9 }`; unresolvable → the preset shows
+"unavailable"). `presetSearch` turns a preset into `/alerts/rules/new` search params (host + instance resource
+filters, grouped by host) that the rule editor applies with `applyPrefill` (`lib/alerts.ts`). Texts:
+`integrations.alerts.presets.<id>.title|body`. Keep 2–4 presets per integration (unit-tested).
+
+**Adding a panel for a new integration**
+
+1. `lib/integrations.ts`: add the id to `INTEGRATION_IDS`; map discovery rules that use it in
+   `integrationForRule` (e.g. `mariadb` → `mysql`).
+2. `components/integrations/panels.ts`: add `PANELS.<id>` (new `PanelChartId`/`SeriesLabelKey` members);
+   put non-trivial series math in `lib/integrations.ts`.
+3. Optional: presets in `ALERT_PRESETS` (+ `PresetId`); integration-specific cards go next to
+   `TopTablesCard` in `routes/integrations.tsx`.
+4. i18n: `integrations.charts.*`, `integrations.series.*`, `integrations.alerts.presets.*` in `en.ts` and `tr.ts`.
+5. Mocks: a discovered service with an `integration` object in `mocks/fixtures.ts` and metric series for every
+   chart query (MSW applies the `resource.*` filters).
+6. Tests: chart `build` and preset cases in `lib/integrations.test.ts`; `e2e/integrations.spec.ts` for the panel.
 
 ## Adding a screen
 

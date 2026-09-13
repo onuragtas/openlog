@@ -62,6 +62,7 @@ func (s *Server) alertRoutes(mux *http.ServeMux) {
 	route("POST /api/v1/alerts/rules/{id}/disable", alertWrite, s.disableAlertRule)
 	// Preview reads telemetry: it runs through wrap, which binds the query scope to the principal's tenant.
 	mux.Handle("POST /api/v1/alerts/rules/preview", s.wrap("POST /api/v1/alerts/rules/preview", s.previewAlertRule))
+	mux.Handle("GET /api/v1/alerts/rules/{id}/evaluations", s.wrap("GET /api/v1/alerts/rules/{id}/evaluations", s.alertRuleEvaluations))
 	route("GET /api/v1/alerts/incidents", alertRead, s.listAlertIncidents)
 	route("GET /api/v1/alerts/incidents/{id}", alertRead, s.getAlertIncident)
 	route("POST /api/v1/alerts/incidents/{id}/acknowledge", alertWrite, s.ackAlertIncident)
@@ -356,25 +357,44 @@ func alertChannelResponse(c *alert.Channel) alertChannelJSON {
 	return out
 }
 
-type alertMuteJSON struct {
-	ID              string              `json:"id"`
-	Name            string              `json:"name"`
-	Comment         string              `json:"comment"`
-	StartsAt        string              `json:"starts_at"`
-	EndsAt          string              `json:"ends_at"`
-	RuleIDs         []string            `json:"rule_ids"`
-	Matchers        []alert.MuteMatcher `json:"matchers"`
-	Active          bool                `json:"active"`
-	CreatedByUserID *string             `json:"created_by_user_id"`
-	CreatedByEmail  string              `json:"created_by_email"`
-	CreatedAt       string              `json:"created_at"`
-	UpdatedAt       string              `json:"updated_at"`
+type alertMuteScheduleJSON struct {
+	Timezone  string   `json:"timezone"`
+	Days      []string `json:"days"`
+	RRule     *string  `json:"rrule"`
+	StartTime string   `json:"start_time"`
+	EndTime   string   `json:"end_time"`
+	From      string   `json:"from"`
+	Until     *string  `json:"until"`
 }
 
+type alertMuteJSON struct {
+	ID              string                 `json:"id"`
+	Name            string                 `json:"name"`
+	Comment         string                 `json:"comment"`
+	StartsAt        string                 `json:"starts_at"`
+	EndsAt          string                 `json:"ends_at"`
+	RuleIDs         []string               `json:"rule_ids"`
+	Matchers        []alert.MuteMatcher    `json:"matchers"`
+	Schedule        *alertMuteScheduleJSON `json:"schedule"`
+	Active          bool                   `json:"active"`
+	CreatedByUserID *string                `json:"created_by_user_id"`
+	CreatedByEmail  string                 `json:"created_by_email"`
+	CreatedAt       string                 `json:"created_at"`
+	UpdatedAt       string                 `json:"updated_at"`
+}
+
+// alertMuteResponse renders a mute. For a recurring mute starts_at/ends_at are its current or next occurrence
+// (the last one once the schedule has ended).
 func (s *Server) alertMuteResponse(m *alert.Mute) alertMuteJSON {
-	out := alertMuteJSON{ID: m.ID, Name: m.Name, Comment: m.Comment, StartsAt: formatTime(m.StartsAt), EndsAt: formatTime(m.EndsAt),
-		RuleIDs: m.RuleIDs, Matchers: m.Matchers, Active: m.Active(s.now()), CreatedByUserID: optString(m.CreatedBy),
+	now := s.now()
+	start, end, _ := m.Occurrence(now)
+	out := alertMuteJSON{ID: m.ID, Name: m.Name, Comment: m.Comment, StartsAt: formatTime(start), EndsAt: formatTime(end),
+		RuleIDs: m.RuleIDs, Matchers: m.Matchers, Active: m.Active(now), CreatedByUserID: optString(m.CreatedBy),
 		CreatedByEmail: m.CreatedByEmail, CreatedAt: formatTime(m.CreatedAt), UpdatedAt: formatTime(m.UpdatedAt)}
+	if sc := m.Schedule; sc != nil {
+		out.Schedule = &alertMuteScheduleJSON{Timezone: sc.Timezone, Days: sc.Days, RRule: optString(sc.RRule), StartTime: sc.StartTime,
+			EndTime: sc.EndTime, From: formatTime(sc.From), Until: optTime(sc.Until)}
+	}
 	if out.RuleIDs == nil {
 		out.RuleIDs = []string{}
 	}
@@ -567,6 +587,74 @@ func (s *Server) previewAlertRule(w http.ResponseWriter, r *http.Request, sc *qu
 		}
 		for _, inc := range ps.Incidents {
 			sj.Incidents = append(sj.Incidents, incidentJSON{OpenedAt: formatTime(inc.OpenedAt), ResolvedAt: optTime(inc.ResolvedAt), Peak: optFloat(inc.Peak)})
+		}
+		out.Series = append(out.Series, sj)
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+// alertRuleEvaluations serves GET /alerts/rules/{id}/evaluations (alerting.md §3.6): evaluation summaries
+// from ClickHouse, bucketed to at most 500 points per series. Default range: the last 24 hours.
+func (s *Server) alertRuleEvaluations(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
+	noStore(w)
+	p, _ := auth.PrincipalFrom(r.Context())
+	if ae := alertAllowed(p, alertRead); ae != nil {
+		return ae
+	}
+	now := s.now().UTC()
+	from, to := now.Add(-24*time.Hour), now
+	var err error
+	if v := r.URL.Query().Get("from"); v != "" {
+		if from, err = parseTime(v); err != nil {
+			return badRequest("from: %v", err)
+		}
+	}
+	if v := r.URL.Query().Get("to"); v != "" {
+		if to, err = parseTime(v); err != nil {
+			return badRequest("to: %v", err)
+		}
+	}
+	h, err := s.alerts.EvaluationHistory(r.Context(), sc, p.OrgID, r.PathValue("id"), from, to)
+	var ve *alert.ValidationError
+	switch {
+	case errors.As(err, &ve):
+		return &apiError{http.StatusBadRequest, "invalid_argument", ve.Error()}
+	case errors.Is(err, alert.ErrNotFound):
+		return &apiError{http.StatusNotFound, "not_found", "not found"}
+	case err != nil:
+		return err
+	}
+	type evaluationJSON struct {
+		At           string   `json:"at"`
+		FiringSeries *float64 `json:"firing_series"`
+		Evaluations  uint64   `json:"evaluations"`
+		Errors       uint64   `json:"errors"`
+		DurationMs   uint32   `json:"duration_ms"`
+		MaxDuration  uint32   `json:"max_duration_ms"`
+	}
+	type seriesJSON struct {
+		SeriesKey string            `json:"series_key"`
+		Labels    map[string]string `json:"labels"`
+		Points    [][3]any          `json:"points"`
+	}
+	out := struct {
+		From        string           `json:"from"`
+		To          string           `json:"to"`
+		StepSeconds int              `json:"step_seconds"`
+		Evaluations []evaluationJSON `json:"evaluations"`
+		Series      []seriesJSON     `json:"series"`
+		Truncated   bool             `json:"truncated"`
+	}{From: formatTime(h.From), To: formatTime(h.To), StepSeconds: int(h.Step / time.Second), Evaluations: []evaluationJSON{},
+		Series: []seriesJSON{}, Truncated: h.Truncated}
+	for _, e := range h.Evaluations {
+		out.Evaluations = append(out.Evaluations, evaluationJSON{At: formatTime(e.At), FiringSeries: optFloat(e.Firing),
+			Evaluations: e.Evaluations, Errors: e.Errors, DurationMs: e.LastDuration, MaxDuration: e.MaxDuration})
+	}
+	for _, hs := range h.Series {
+		sj := seriesJSON{SeriesKey: hs.Key, Labels: nonNilMap(hs.Labels), Points: make([][3]any, 0, len(hs.Points))}
+		for _, pt := range hs.Points {
+			sj.Points = append(sj.Points, [3]any{pt.At.UnixMilli(), optFloat(pt.Value), pt.State})
 		}
 		out.Series = append(out.Series, sj)
 	}

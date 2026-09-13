@@ -14,10 +14,10 @@ Configuration: [config.md](config.md#openlog-alert). Code: `internal/alert`, `cm
 | Evaluator | `openlog-alert` (N replicas) or `openlog-allinone` (`OPENLOG_ALERT_ENABLED=true`) | Leases rules, evaluates them on schedule, writes state transitions, incidents and outbox rows in **one transaction** |
 | Dispatcher | same processes as the evaluator | Claims outbox rows (`FOR UPDATE SKIP LOCKED`), delivers them, retries, writes the delivery log |
 
-All state is in PostgreSQL (D-006): an `openlog-alert` pod can be killed at any time. ClickHouse is only read, and only
-through the tenant-scoped query layer (`internal/api/query`): the evaluator builds a `query.Scope` from
+All state is in PostgreSQL (D-006): an `openlog-alert` pod can be killed at any time. Telemetry in ClickHouse is only
+read, and only through the tenant-scoped query layer (`internal/api/query`): the evaluator builds a `query.Scope` from
 `organizations.tenant_id` of the rule's organization (never from rule content); every filter value and attribute key is
-a bound query parameter.
+a bound query parameter. The only ClickHouse write is the evaluation history (§3.6), which is not needed for evaluation.
 
 ## 2. Rules
 
@@ -27,7 +27,7 @@ a bound query parameter.
 |---|---|---|---|
 | `name` | string | required | 1–200 chars |
 | `description` | string | `""` | ≤ 2000 chars |
-| `type` | enum | required | `metric_threshold`, `log_match`, `no_data`, `discovery`, `apm` (§2.6) |
+| `type` | enum | required | `metric_threshold`, `log_match`, `no_data`, `discovery`, `apm` (§2.6), `apm_no_data` (§2.7) |
 | `severity` | enum | `warning` | `critical`, `warning`, `info` |
 | `enabled` | bool | `true` | |
 | `interval_seconds` | int | `60` | 10–3600, evaluation period |
@@ -146,6 +146,29 @@ Apdex uses the service's configured T (`apm_service_settings`, exact namespace/e
 else `OPENLOG_APM_DEFAULT_APDEX_T`) resolved per series at evaluation time. Without requests `error_rate`, latency and
 Apdex have no value; `throughput` and `errors` are 0. Series labels always include `service.name`.
 
+### 2.7 `apm_no_data`
+
+A service stopped reporting transactions (the no-data semantics of §2.4 on the APM rollup `apm_transactions_1m`):
+```json
+{"service_name": "checkout", "service_namespace": null, "environment": "prod", "group_by": [],
+ "window_seconds": 600, "lookback_seconds": 86400}
+```
+| Field | Default | Notes |
+|---|---|---|
+| `service_name` | `""` | exact `service.name`; `""` = every service (one series per service) |
+| `service_namespace`, `environment` | `null` | `null` = all, a string (also `""`) = exact match (apm.md §1) |
+| `group_by` | `[]` | `namespace`, `environment`: additional series dimensions (labels `service.namespace`, `environment`) |
+| `window_seconds` | `600` | 60–86400, rounded up to whole minutes |
+| `lookback_seconds` | `86400` | 600–604800, > window, rounded up to whole minutes |
+
+- Expected series = services (per group) with at least one transaction minute within the lookback. Value = seconds
+  from the end of the last minute with transactions to the end of the last complete minute before the window end
+  (a service that reported in the last complete minute has value 0). Breaching when value ≥ `window_seconds`;
+  recovers when transactions arrive again; a series older than the lookback resolves as `expired`.
+- Series labels: `service.name`, plus `service.namespace`/`environment` when grouped or fixed by the condition. Series
+  key: `service.name=…[|service.namespace=…][|environment=…]`.
+- `for_seconds` applies; `interval_seconds` default 60. Entry spans with `sample_weight = 0` do not count (apm.md §4).
+
 ## 3. Evaluation semantics
 
 ### 3.1 Schedule and alignment
@@ -196,6 +219,35 @@ produces one incident and one pair of notifications. Timeline event `flapping` m
   evaluation over budget is `throttled` and retried after one second (it keeps its window).
 - Every ClickHouse query has `max_execution_time` = `OPENLOG_ALERT_QUERY_TIMEOUT` (20 s).
 - `OPENLOG_ALERT_MAX_RULES_PER_ORG` (1000) rules per organization (API, `409 failed_precondition`).
+
+### 3.6 Evaluation history (ClickHouse `alert_evaluations`)
+
+With `OPENLOG_ALERT_EVALUATION_HISTORY=true` (default) every evaluation that **committed** (§4 fencing: at most one set of
+rows per rule window) is summarized in `openlog.alert_evaluations` (`schema/clickhouse/0007_alert_evaluations.sql`):
+
+| Column | Rule row (`series_key = ''`) | Series row |
+|---|---|---|
+| `tenant_id`, `rule_id`, `rule_type` | rule | rule |
+| `evaluated_at` | end of the evaluated window (§3.1) | same |
+| `labels` | `{}` | series labels |
+| `value` | number of firing series | series value (`NULL` = no value) |
+| `state` | `firing` if any series fires, else `pending` if any is pending, else `ok` | state after the evaluation (`ok`, `pending`, `firing`) |
+| `result` | `ok` or `error` (an error evaluation has only the rule row) | `ok` |
+| `duration_ms` | evaluation duration | same |
+
+- **Write path:** independent of the processor. Each evaluator buffers rows and inserts them every 5 s (or per 10 000
+  rows) directly into `alert_evaluations_local` of the shard `cityHash64(tenant_id, rule_id)` selects (D-018, the
+  processor's direct-insert writer; all rows of a rule are on one shard). A failed batch is retried with the same
+  insert deduplication token (never duplicated); while ClickHouse is unavailable at most 100 000 rows are buffered per
+  pod and the oldest are dropped (`openlog_alert_evaluation_rows_total{result="dropped"}`). Rows buffered in a pod that
+  dies are lost (a gap in the history; state and incidents are unaffected). SIGTERM flushes.
+- TTL 30 days (`ttl_only_drop_parts`, daily partitions).
+- **API:** `GET /api/v1/alerts/rules/{id}/evaluations?from&to` (viewer and API keys; default the last 24 h, at most
+  30 days; `404` for a rule of another organization). Rows are bucketed to at most 500 points (`step_seconds` ≥ 10):
+  per series the latest value in the bucket and the worst state (`firing` > `pending` > `ok`); per bucket of rule rows
+  `firing_series` (maximum), `evaluations`, `errors`, `duration_ms` (latest) and `max_duration_ms`. At most 50 series
+  (most non-ok buckets first); `truncated` when series or rows (50 000) were cut. Read through the tenant-scoped query
+  layer (`query.AlertEvaluations`).
 
 ## 4. Rule ownership (leases)
 
@@ -259,6 +311,32 @@ Dispatchers (every `openlog-alert` pod, `OPENLOG_ALERT_DISPATCH_WORKERS` workers
   incident is already resolved it is `suppressed` (and so is its `resolved` row);
 - `resolved` rows are postponed like `opened` rows; `renotify` rows during a mute are `suppressed`.
 Evaluation, incidents and the timeline are not affected by mutes. Incidents show `muted: true` while a mute matches.
+
+**Recurring mutes.** A mute with `schedule` repeats; `starts_at`/`ends_at` of the input are then ignored:
+```json
+{"name": "nightly batch", "rule_ids": [], "matchers": [],
+ "schedule": {"timezone": "Europe/Istanbul", "days": ["mon", "tue", "wed", "thu", "fri"], "start_time": "22:00",
+              "end_time": "06:00", "from": null, "until": null}}
+```
+| Field | Notes |
+|---|---|
+| `timezone` | IANA name (default `UTC`) |
+| `days` | `mon` … `sun` (stored deduplicated, Monday first) — or instead `rrule`: the RFC 5545 subset `FREQ=WEEKLY;BYDAY=MO,TU,…` (no ordinals) or `FREQ=DAILY`, optional `RRULE:` prefix and `INTERVAL=1`; stored normalized with the derived `days`. Other parts (`COUNT`, `UNTIL`, `BYHOUR`, …) → `400` |
+| `start_time`, `end_time` | local `HH:MM`; `end_time` ≤ `start_time` means the next day (max. 23 h 59 min); equal → `400` |
+| `from`, `until` | optional RFC3339 / unix ms bounds; `from` defaults to now; occurrences are clipped to `[from, until)` |
+
+- **Occurrences** start on every selected local date at `start_time` and end at `end_time` (same or next date). They
+  keep local wall-clock times across DST changes (a 01:00–04:00 occurrence lasts 2 h on the night clocks go forward,
+  4 h when they go back). A local time that does not exist (DST gap) moves forward by the gap (02:30 → 03:30); an
+  ambiguous local time is the later instant (after the clocks went back). An occurrence whose converted end is not
+  after its start is skipped.
+- A mute is active inside an occurrence (end exclusive); matching `opened`/`resolved` rows are postponed to the end of
+  the **current occurrence**. Creating a mute whose schedule has no occurrence after now → `400`.
+- Responses: `starts_at`/`ends_at` = the current or next occurrence (the last one after `until`), `schedule` as
+  stored (`null` for one-off mutes), `active`. `GET /mutes` keeps recurring mutes until 7 days after `until`.
+- Storage and mixed versions: `alert_mutes.schedule` (jsonb). `starts_at`/`ends_at` hold the current or next occurrence;
+  dispatchers move them to the next occurrence once a minute after an occurrence ended, so dispatchers of an older
+  version (which ignore `schedule`) mute during the same occurrences.
 
 ### 5.3 Payloads
 
@@ -364,7 +442,9 @@ Writes need a signed-in user (API keys are read-only) and CSRF as usual. Every w
 | `openlog_alert_notifications_total` | `channel_type`, `result` = `delivered`, `retry`, `failed`, `suppressed`, `muted` |
 | `openlog_alert_delivery_duration_seconds` (histogram) | `channel_type` |
 | `openlog_alert_outbox_pending` (gauge) | — |
+| `openlog_alert_evaluation_rows_total` | `result` = `written`, `dropped` (§3.6) |
+| `openlog_alert_evaluation_write_errors_total` | — (failed inserts, retried) |
 
 ## 9. Not in M2
-PagerDuty/Opsgenie (M3); evaluation history summaries in ClickHouse (needs a `schema/clickhouse` table, coordinated
-with the APM migrations); recurring mute schedules; APM conditions (§2.6).
+PagerDuty/Opsgenie (M3); mute schedules beyond weekly days (monthly rules, exceptions/holidays, RRULE `COUNT`/`UNTIL`);
+evaluation history for previews.

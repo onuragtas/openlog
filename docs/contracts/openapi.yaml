@@ -1412,6 +1412,30 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/alerts/rules/{id}/evaluations:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [alerts]
+      operationId: listAlertRuleEvaluations
+      description: |
+        Evaluation history of a rule from ClickHouse `alert_evaluations` (alerting.md §3.6), bucketed to at most 500
+        points (`step_seconds` ≥ 10). Viewer and API keys. Default range: the last 24 hours; at most 30 days.
+      parameters:
+        - { name: from, in: query, description: "RFC3339 or unix ms (default now − 24h)", schema: { type: string } }
+        - { name: to, in: query, description: "RFC3339 or unix ms (default now)", schema: { type: string } }
+      responses:
+        "200":
+          description: Evaluation history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRuleEvaluations" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   /api/v1/alerts/rules/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -2910,7 +2934,7 @@ components:
         status_target: { type: [string, "null"] }
 
     # ---- Alerting (docs/contracts/alerting.md) ----
-    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm] }
+    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data] }
     AlertSeverity: { type: string, enum: [critical, warning, info] }
     AlertOperator: { type: string, enum: [gt, gte, lt, lte] }
     AlertSeriesStateName: { type: string, enum: [ok, pending, firing] }
@@ -2951,6 +2975,8 @@ components:
         lookback_seconds. apm: service_name, service_namespace, environment, transaction_type, transaction_name,
         metric (throughput, error_rate, errors, avg_ms, p50_ms, p95_ms, p99_ms, apdex), group_by (environment,
         transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
+        apm_no_data (§2.7): service_name ("" = every service), service_namespace, environment, group_by (namespace,
+        environment), window_seconds, lookback_seconds.
       properties:
         metric: { type: string }
         service_name: { type: string }
@@ -2968,7 +2994,7 @@ components:
           items: { $ref: "#/components/schemas/AlertFilter" }
         group_by:
           type: array
-          items: { type: string, description: "host, service, attr.<key>, resource.<key>" }
+          items: { type: string, description: "host, service, attr.<key>, resource.<key>; apm: environment, transaction; apm_no_data: namespace, environment" }
         operator: { $ref: "#/components/schemas/AlertOperator" }
         threshold: { type: number }
         recovery_threshold: { type: [number, "null"] }
@@ -3136,6 +3162,45 @@ components:
         truncated: { type: boolean, description: More series matched than returned }
         approximate: { type: boolean }
 
+    AlertRuleEvaluations:
+      type: object
+      required: [from, to, step_seconds, evaluations, series, truncated]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        step_seconds: { type: integer }
+        evaluations:
+          type: array
+          description: One entry per bucket with evaluations (rule rows, oldest first)
+          items:
+            type: object
+            required: [at, firing_series, evaluations, errors, duration_ms, max_duration_ms]
+            properties:
+              at: { $ref: "#/components/schemas/Timestamp" }
+              firing_series: { type: [number, "null"], description: Maximum number of firing series in the bucket }
+              evaluations: { type: integer }
+              errors: { type: integer }
+              duration_ms: { type: integer, description: Duration of the latest evaluation in the bucket }
+              max_duration_ms: { type: integer }
+        series:
+          type: array
+          description: At most 50 series, most non-ok buckets first
+          items:
+            type: object
+            required: [series_key, labels, points]
+            properties:
+              series_key: { type: string }
+              labels: { $ref: "#/components/schemas/AlertLabels" }
+              points:
+                type: array
+                description: "[unix ms of the latest evaluation in the bucket, latest value or null, worst state]"
+                items:
+                  type: array
+                  prefixItems: [{ type: integer }, { type: [number, "null"] }, { $ref: "#/components/schemas/AlertSeriesStateName" }]
+                  minItems: 3
+                  maxItems: 3
+        truncated: { type: boolean, description: Series or rows were cut }
+
     AlertIncident:
       type: object
       required: [id, rule_id, rule_name, rule_type, severity, state, series_key, labels, summary, value, last_value, threshold, flapping, muted,
@@ -3274,14 +3339,45 @@ components:
         op: { type: string, enum: [eq, neq, contains] }
         value: { type: string }
 
+    AlertMuteScheduleInput:
+      type: object
+      description: |
+        Recurring mute (alerting.md §5.2): occurrences on the selected local days from start_time to end_time (end ≤ start
+        = next day), DST-safe in `timezone`. Give `days` or `rrule`.
+      required: [start_time, end_time]
+      properties:
+        timezone: { type: string, description: "IANA time zone, default UTC", example: Europe/Istanbul }
+        days:
+          type: array
+          items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        rrule: { type: string, description: "Subset FREQ=WEEKLY;BYDAY=MO,TU,… or FREQ=DAILY", example: "FREQ=WEEKLY;BYDAY=MO,FR" }
+        start_time: { type: string, pattern: "^\\d{2}:\\d{2}$", example: "22:00" }
+        end_time: { type: string, pattern: "^\\d{2}:\\d{2}$", example: "06:00" }
+        from: { type: [string, "null"], description: "RFC3339 or unix ms; default now" }
+        until: { type: [string, "null"], description: "RFC3339 or unix ms; empty = no end" }
+
+    AlertMuteSchedule:
+      type: object
+      required: [timezone, days, rrule, start_time, end_time, from, until]
+      properties:
+        timezone: { type: string }
+        days:
+          type: array
+          items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        rrule: { type: [string, "null"], description: Normalized rule when the mute was created with one }
+        start_time: { type: string }
+        end_time: { type: string }
+        from: { $ref: "#/components/schemas/Timestamp" }
+        until: { $ref: "#/components/schemas/NullableTimestamp" }
+
     AlertMuteInput:
       type: object
-      required: [name, starts_at, ends_at]
+      required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         comment: { type: string, maxLength: 2000 }
-        starts_at: { type: string, description: RFC3339 or unix ms }
-        ends_at: { type: string, description: "RFC3339 or unix ms; after starts_at, at most 90 days later" }
+        starts_at: { type: string, description: "RFC3339 or unix ms; required without schedule (ignored with one)" }
+        ends_at: { type: string, description: "RFC3339 or unix ms; after starts_at, at most 90 days later; required without schedule" }
         rule_ids:
           type: array
           description: Empty = every rule
@@ -3289,22 +3385,30 @@ components:
         matchers:
           type: array
           items: { $ref: "#/components/schemas/AlertMuteMatcher" }
+        schedule:
+          oneOf:
+            - { $ref: "#/components/schemas/AlertMuteScheduleInput" }
+            - { type: "null" }
 
     AlertMute:
       type: object
-      required: [id, name, comment, starts_at, ends_at, rule_ids, matchers, active, created_by_user_id, created_by_email, created_at, updated_at]
+      required: [id, name, comment, starts_at, ends_at, rule_ids, matchers, schedule, active, created_by_user_id, created_by_email, created_at, updated_at]
       properties:
         id: { type: string }
         name: { type: string }
         comment: { type: string }
-        starts_at: { $ref: "#/components/schemas/Timestamp" }
-        ends_at: { $ref: "#/components/schemas/Timestamp" }
+        starts_at: { $ref: "#/components/schemas/Timestamp", description: "Recurring mutes: start of the current or next occurrence" }
+        ends_at: { $ref: "#/components/schemas/Timestamp", description: "Recurring mutes: end of the current or next occurrence" }
         rule_ids:
           type: array
           items: { type: string }
         matchers:
           type: array
           items: { $ref: "#/components/schemas/AlertMuteMatcher" }
+        schedule:
+          oneOf:
+            - { $ref: "#/components/schemas/AlertMuteSchedule" }
+            - { type: "null" }
         active: { type: boolean }
         created_by_user_id: { type: [string, "null"] }
         created_by_email: { type: string }
