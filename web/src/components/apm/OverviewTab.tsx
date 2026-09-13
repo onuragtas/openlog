@@ -21,7 +21,7 @@ export function OverviewTab({ scope, range, onOpenTransaction, onViewAll }: { sc
   return (
     <div className="flex flex-col gap-4">
       {overview.data && <RedTiles red={overview.data.totals} apdexTMs={overview.data.apdex_t_ms} />}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard title={t("apm.metrics.throughput")}>
           <TimeSeriesChart {...common} title={t("apm.metrics.throughput")} unit="number" series={[{ label: t("apm.metrics.throughput"), points: metricPoints(points, "throughput") }]} />
         </ChartCard>

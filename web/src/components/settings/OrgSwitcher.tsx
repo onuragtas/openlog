@@ -32,7 +32,7 @@ export function OrgSwitcher({ className }: { className?: string }) {
           <NativeSelect
             id={id}
             value={current.id}
-            className="h-8 max-w-48 text-xs"
+            className="h-8 max-w-32 min-w-0 text-xs sm:max-w-48"
             onChange={(e) => {
               setSelectedOrg(e.target.value);
               queryClient.clear();
@@ -56,7 +56,7 @@ export function OrgSwitcher({ className }: { className?: string }) {
           {t(`settings.roles.${me.role}`)}
         </Badge>
       )}
-      {me.user && <span className="hidden truncate text-xs text-muted-foreground md:inline">{me.user.email}</span>}
+      {me.user && <span className="hidden truncate text-xs text-muted-foreground lg:inline">{me.user.email}</span>}
     </div>
   );
 }

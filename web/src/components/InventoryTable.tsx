@@ -1,7 +1,8 @@
 // Virtualized inventory table (TanStack Table + TanStack Virtual). Rows can be
-// expanded to show the item's JSON data; row heights are measured.
+// expanded to show the item's JSON data; row heights are measured. In narrow
+// containers (phones) each row becomes a two-line card: key, then host/category and summary.
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ExpandedState } from "@tanstack/react-table";
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ExpandedState, type Row as TableRowModel } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -10,50 +11,66 @@ import type { InventoryItem, InventorySearchItem } from "@/api/types";
 import { JsonView } from "@/components/JsonView";
 import { translateOptional } from "@/i18n/dynamic";
 import { displayKey, summarize } from "@/lib/inventory";
+import { isCompact, useElementWidth } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
 type Row = InventoryItem & Partial<Pick<InventorySearchItem, "host_id" | "host_name">>;
 
 const col = createColumnHelper<Row>();
 
+/** Below this container width the table switches to card rows. */
+const COMPACT_BELOW = 640;
+const COMPACT_GRID = "2.75rem minmax(0,1fr)";
+
+function ExpandButton({ row }: { row: TableRowModel<Row> }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={row.getToggleExpandedHandler()}
+      aria-expanded={row.getIsExpanded()}
+      aria-label={row.getIsExpanded() ? t("common.collapse") : t("common.expand")}
+      className="rounded p-1 hover:bg-accent pointer-coarse:p-2.5"
+    >
+      {row.getIsExpanded() ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
+    </button>
+  );
+}
+
+function HostLink({ item }: { item: Row }) {
+  if (!item.host_id) return null;
+  return (
+    <Link
+      to="/hosts/$hostId"
+      params={{ hostId: item.host_id }}
+      search={{ tab: "inventory", category: item.category, iq: item.key }}
+      className="truncate font-medium text-primary hover:underline"
+    >
+      {item.host_name || item.host_id}
+    </Link>
+  );
+}
+
 export function InventoryTable({ items, showCategory = true, showHost = false, height = "60vh" }: { items: Row[]; showCategory?: boolean; showHost?: boolean; height?: string }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [measureRef, width] = useElementWidth<HTMLDivElement>();
+  const compact = isCompact(width, COMPACT_BELOW);
 
   const columns = useMemo(
     () => [
       col.display({
         id: "expand",
         header: () => <span className="sr-only">{t("common.expand")}</span>,
-        cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={row.getToggleExpandedHandler()}
-            aria-expanded={row.getIsExpanded()}
-            aria-label={row.getIsExpanded() ? t("common.collapse") : t("common.expand")}
-            className="rounded p-1 hover:bg-accent"
-          >
-            {row.getIsExpanded() ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
-          </button>
-        ),
+        cell: ({ row }) => <ExpandButton row={row} />,
       }),
       ...(showHost
         ? [
             col.accessor((r) => r.host_name || r.host_id || "", {
               id: "host",
               header: () => t("inventory.columns.host"),
-              cell: ({ row }) =>
-                row.original.host_id ? (
-                  <Link
-                    to="/hosts/$hostId"
-                    params={{ hostId: row.original.host_id }}
-                    search={{ tab: "inventory", category: row.original.category, iq: row.original.key }}
-                    className="truncate font-medium text-primary hover:underline"
-                  >
-                    {row.original.host_name || row.original.host_id}
-                  </Link>
-                ) : null,
+              cell: ({ row }) => <HostLink item={row.original} />,
             }),
           ]
         : []),
@@ -82,9 +99,9 @@ export function InventoryTable({ items, showCategory = true, showHost = false, h
     [t, showCategory, showHost],
   );
 
-  const gridTemplate = ["2.5rem", showHost ? "minmax(7rem,12rem)" : null, showCategory ? "minmax(7rem,11rem)" : null, "minmax(10rem,1fr)", "minmax(8rem,1.3fr)"]
-    .filter(Boolean)
-    .join(" ");
+  const gridTemplate = compact
+    ? COMPACT_GRID
+    : ["2.5rem", showHost ? "minmax(7rem,12rem)" : null, showCategory ? "minmax(7rem,11rem)" : null, "minmax(10rem,1fr)", "minmax(8rem,1.3fr)"].filter(Boolean).join(" ");
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table is not compiler-compatible yet
   const table = useReactTable({
@@ -101,28 +118,41 @@ export function InventoryTable({ items, showCategory = true, showHost = false, h
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 36,
+    estimateSize: () => (compact ? 64 : 36),
     overscan: 12,
-    getItemKey: (i) => rows[i]!.id,
+    // The layout is part of the key: switching remounts rows so their new heights are measured.
+    getItemKey: (i) => `${compact ? "c" : "w"}|${rows[i]!.id}`,
   });
 
   return (
-    <div role="table" aria-rowcount={rows.length + 1} className="rounded-xl border bg-card text-sm">
+    <div ref={measureRef} role="table" aria-rowcount={rows.length + 1} className="rounded-xl border bg-card text-sm">
       <div role="rowgroup" className="border-b">
         {table.getHeaderGroups().map((hg) => (
           <div role="row" key={hg.id} className="grid items-center px-2" style={{ gridTemplateColumns: gridTemplate }}>
-            {hg.headers.map((h) => (
-              <div role="columnheader" key={h.id} className="h-9 content-center px-2 text-xs font-medium text-muted-foreground">
-                {flexRender(h.column.columnDef.header, h.getContext())}
-              </div>
-            ))}
+            {compact ? (
+              <>
+                <div role="columnheader" className="h-9">
+                  <span className="sr-only">{t("common.expand")}</span>
+                </div>
+                <div role="columnheader" className="h-9 content-center truncate px-2 text-xs font-medium text-muted-foreground">
+                  {t("inventory.columns.key")} · {t("inventory.columns.summary")}
+                </div>
+              </>
+            ) : (
+              hg.headers.map((h) => (
+                <div role="columnheader" key={h.id} className="h-9 content-center px-2 text-xs font-medium text-muted-foreground">
+                  {flexRender(h.column.columnDef.header, h.getContext())}
+                </div>
+              ))
+            )}
           </div>
         ))}
       </div>
-      <div ref={scrollRef} role="rowgroup" className="overflow-auto" style={{ height }} data-testid="inventory-scroll">
+      <div ref={scrollRef} role="rowgroup" className="overflow-auto overscroll-contain" style={{ height }} data-testid="inventory-scroll">
         <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((vi) => {
             const row = rows[vi.index]!;
+            const item = row.original;
             return (
               <div
                 key={vi.key}
@@ -133,16 +163,36 @@ export function InventoryTable({ items, showCategory = true, showHost = false, h
                 className={cn("absolute top-0 left-0 w-full border-b border-border/60", row.getIsExpanded() && "bg-muted/40")}
                 style={{ transform: `translateY(${vi.start}px)` }}
               >
-                <div className="grid items-center px-2 hover:bg-muted/50" style={{ gridTemplateColumns: gridTemplate }}>
-                  {row.getVisibleCells().map((cell) => (
-                    <div role="cell" key={cell.id} className="flex h-9 min-w-0 items-center px-2 text-xs">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                {compact ? (
+                  <div className="grid items-start px-2 hover:bg-muted/50" style={{ gridTemplateColumns: gridTemplate }}>
+                    <div role="cell" className="flex min-h-10 items-center">
+                      <ExpandButton row={row} />
                     </div>
-                  ))}
-                </div>
+                    <div role="cell" className="flex min-w-0 flex-col gap-0.5 px-2 py-2 text-xs">
+                      <span className="truncate font-mono text-sm" title={item.key}>
+                        {displayKey(item)}
+                      </span>
+                      {((showHost && item.host_id) || showCategory) && (
+                        <span className="flex min-w-0 items-center gap-2">
+                          {showHost && <HostLink item={item} />}
+                          {showCategory && <span className="truncate text-muted-foreground">{translateOptional(`inventory.categories.${item.category}`, item.category)}</span>}
+                        </span>
+                      )}
+                      <span className="truncate font-mono text-muted-foreground">{summarize(item.data)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid items-center px-2 hover:bg-muted/50" style={{ gridTemplateColumns: gridTemplate }}>
+                    {row.getVisibleCells().map((cell) => (
+                      <div role="cell" key={cell.id} className="flex h-9 min-w-0 items-center px-2 text-xs">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {row.getIsExpanded() && (
-                  <div className="px-4 pb-3 pl-12">
-                    <JsonView value={row.original.data} label={row.original.key} />
+                  <div className={compact ? "px-3 pb-3" : "px-4 pb-3 pl-12"}>
+                    <JsonView value={item.data} label={item.key} />
                   </div>
                 )}
               </div>

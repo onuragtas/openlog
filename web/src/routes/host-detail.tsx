@@ -74,9 +74,9 @@ export function HostDetailPage() {
               ["host.fields.id", h.host_id],
             ] as const
           ).map(([k, v]) => (
-            <div key={k} className="flex gap-1.5">
-              <dt className="text-muted-foreground">{t(k)}</dt>
-              <dd className="font-mono">{v || "–"}</dd>
+            <div key={k} className="flex min-w-0 gap-1.5">
+              <dt className="shrink-0 text-muted-foreground">{t(k)}</dt>
+              <dd className="min-w-0 font-mono break-all">{v || "–"}</dd>
             </div>
           ))}
         </dl>

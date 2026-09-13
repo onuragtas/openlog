@@ -30,19 +30,28 @@ export interface MetricRequest {
   range: RangeSpec;
   agg?: Aggregation;
   groupBy?: string[];
+  /** Exact-match resource attribute filters (`resource.<key>`; allowlisted keys, see api.md), e.g. one integration instance. */
+  resource?: Record<string, string>;
 }
+
+const resourceEntries = (r?: Record<string, string>) => Object.entries(r ?? {}).sort(([a], [b]) => a.localeCompare(b));
 
 export const metricQuery = (r: MetricRequest) =>
   queryOptions({
-    queryKey: ["metric", r.hostId, r.name, r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.agg ?? "", r.groupBy?.join(",") ?? ""],
+    queryKey: [
+      "metric", r.hostId, r.name, r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.agg ?? "", r.groupBy?.join(",") ?? "",
+      ...(r.resource ? [JSON.stringify(resourceEntries(r.resource))] : []),
+    ],
     queryFn: async ({ signal }) => {
       const { from, to } = resolveRange(r.range, Date.now());
+      // `resource.<key>` parameters are sent as flat query keys (openapi-fetch would serialize an object as deepObject).
+      const resource = Object.fromEntries(resourceEntries(r.resource).map(([k, v]) => [`resource.${k}`, v]));
       // openapi-fetch widens the MetricPoint tuple to number[]; the schema type is exact.
       const data = unwrap(
         await api.GET("/api/v1/hosts/{host_id}/metrics", {
           params: {
             path: { host_id: r.hostId },
-            query: { name: r.name, from: String(from), to: String(to), agg: r.agg, group_by: r.groupBy?.join(",") || undefined },
+            query: { name: r.name, from: String(from), to: String(to), agg: r.agg, group_by: r.groupBy?.join(",") || undefined, ...(resource as object) },
           },
           signal,
         }),

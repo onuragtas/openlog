@@ -195,10 +195,10 @@ function ChannelRow({ channel, canManage, onEdit }: { channel: AlertChannel; can
       <TableCell className="whitespace-nowrap">
         <ChannelTypeLabel type={channel.type} />
       </TableCell>
-      <TableCell className="max-w-xs truncate font-mono text-xs" title={destination}>
+      <TableCell label={t("alerts.channels.columns.destination")} className="max-w-xs truncate font-mono text-xs max-md:break-all" title={destination}>
         {destination}
       </TableCell>
-      <TableCell className="whitespace-nowrap text-sm">
+      <TableCell label={t("alerts.channels.columns.last")} className="whitespace-nowrap text-sm">
         {channel.last_delivery ? (
           <span className="inline-flex items-center gap-2">
             <Badge variant={channel.last_delivery.status === "delivered" ? "success" : "destructive"}>{t(`alerts.deliveries.statuses.${channel.last_delivery.status}`)}</Badge>
@@ -210,8 +210,8 @@ function ChannelRow({ channel, canManage, onEdit }: { channel: AlertChannel; can
       </TableCell>
       <TableCell>
         {canManage && (
-          <div className="flex flex-col items-end gap-1">
-            <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-col items-end gap-1 max-md:items-start">
+            <div className="flex flex-wrap justify-end gap-2 max-md:justify-start">
               <Button type="button" variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate()}>
                 {t("alerts.channels.test")}
               </Button>
@@ -264,7 +264,7 @@ export function ChannelsManager() {
         <EmptyState>{t("alerts.channels.empty")}</EmptyState>
       ) : (
         <div className="rounded-xl border bg-card">
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("alerts.channels.columns.name")}</TableHead>

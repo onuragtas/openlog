@@ -107,14 +107,18 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
 ## 3. Function-level traces (transaction tracer)
 
 - The extension records a **bounded segment tree** of userland function calls for every sampled request, in memory only.
+  The tree is built from **wall-clock stack samples** taken every `min_segment_ms` and at the start and end of every
+  instrumented span (observing every call costs ~60 ns per call, > 1 ms on a framework request; measured).
 - It is **sent only if** the transaction duration ≥ `openlog.transaction_tracer.threshold_ms` (default **500 ms**) or the
   transaction ended with an error; otherwise discarded at request end.
-- Limits: `openlog.transaction_tracer.max_segments` (default **2000**), `min_segment_ms` (default **1 ms**; faster calls
-  are not individual spans but add to the parent's `openlog.php.fast_calls` and `openlog.php.fast_calls_ns`), memory cap
-  `openlog.transaction_tracer.max_memory_kb` (default **4096**). Reaching a limit stops recording and increments
+- Limits: `openlog.transaction_tracer.max_segments` (default **2000**), `min_segment_ms` (default **1 ms**; the sampling
+  interval: calls shorter than it appear only when a sample hits them, consecutive calls of the same function from the
+  same frame without a sample in between form one segment), memory cap `openlog.transaction_tracer.max_memory_kb`
+  (default **4096**), sampled call depth 256 (outermost frames). Reaching a limit stops recording and increments
   `dropped_spans`.
 - Segment spans: kind 1, name `Class::method` or `function`, attributes `code.function.name`, `code.namespace`,
-  `code.file.path`, `code.line.number`, `openlog.php.segment="function"`.
+  `code.file.path`, `code.line.number`, `openlog.php.segment="function"`, `openlog.php.samples` (number of samples the
+  segment is based on; start/end are ± half an interval).
 - Internal functions are traced only when in the instrumented set (datastores, HTTP, `sleep`/`usleep`, `file_*` on
   remote streams) — they appear as their own client/internal spans, not as function segments.
 - Overhead budget (enforced by benchmarks in CI): tracer disabled ≤ 3 % RPS; enabled with default thresholds ≤ 7 % RPS on

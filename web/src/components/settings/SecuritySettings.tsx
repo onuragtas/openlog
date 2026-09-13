@@ -121,7 +121,7 @@ export function SecuritySettings() {
         ) : sessions.data.length === 0 ? (
           <EmptyState>{t("settings.security.sessionsEmpty")}</EmptyState>
         ) : (
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("settings.columns.device")}</TableHead>
@@ -145,11 +145,13 @@ export function SecuritySettings() {
                       {s.current && <Badge variant="success">{t("settings.security.current")}</Badge>}
                     </div>
                   </TableCell>
-                  <TableCell className="hidden font-mono text-xs md:table-cell">{s.ip || "–"}</TableCell>
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell label={t("settings.columns.ip")} className="hidden font-mono text-xs md:table-cell">
+                    {s.ip || "–"}
+                  </TableCell>
+                  <TableCell label={t("settings.columns.signedIn")} className="hidden md:table-cell">
                     <DateTimeText value={s.created_at} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell label={t("settings.columns.lastActive")}>
                     <DateTimeText value={s.last_seen_at} relative />
                   </TableCell>
                   <TableCell className="text-right">

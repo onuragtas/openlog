@@ -57,7 +57,7 @@ export function ErrorsTab({ scope, range, selected, onSelect }: { scope: Service
                       <TableCell className="max-w-[32rem]">
                         <button
                           type="button"
-                          className="flex max-w-full flex-col items-start text-left"
+                          className="flex max-w-full flex-col items-start text-left max-md:max-w-[55vw]"
                           aria-label={t("apm.errors.open", { type: g.error_type })}
                           aria-pressed={g.group_id === selected}
                           onClick={() => onSelect(g.group_id)}

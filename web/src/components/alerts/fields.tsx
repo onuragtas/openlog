@@ -106,7 +106,7 @@ export function DurationField({
 export function Section({ title, children, description }: { title: string; children: ReactNode; description?: string }) {
   const id = `section-${title.replace(/\W+/g, "-").toLowerCase()}`;
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-4">
       <div>
         <h2 id={id} className="text-base font-semibold">
           {title}

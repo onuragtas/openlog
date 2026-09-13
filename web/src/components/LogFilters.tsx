@@ -76,28 +76,28 @@ function LogFiltersForm({ value, onApply, showHost = true, showService = true, s
               <option value="journald">{t("logs.sourceJournald")}</option>
             </NativeSelect>
           </div>
-          <div className="flex w-64 flex-col gap-1.5">
+          <div className="flex w-full flex-col gap-1.5 sm:w-64">
             <Label htmlFor={`${id}-file`}>{t("logs.fileLabel")}</Label>
             <Input id={`${id}-file`} value={draft.file ?? ""} placeholder={t("logs.filePlaceholder")} onChange={set("file")} className="font-mono" />
           </div>
-          <div className="flex w-40 flex-col gap-1.5">
+          <div className="flex w-full flex-col gap-1.5 sm:w-40">
             <Label htmlFor={`${id}-disc`}>{t("logs.discoveryLabel")}</Label>
             <Input id={`${id}-disc`} value={draft.discovery ?? ""} placeholder={t("logs.discoveryPlaceholder")} onChange={set("discovery")} />
           </div>
-          <div className="flex w-44 flex-col gap-1.5">
+          <div className="flex w-full flex-col gap-1.5 sm:w-44">
             <Label htmlFor={`${id}-unit`}>{t("logs.unitLabel")}</Label>
             <Input id={`${id}-unit`} value={draft.unit ?? ""} placeholder={t("logs.unitPlaceholder")} onChange={set("unit")} className="font-mono" />
           </div>
         </>
       )}
       {showService && (
-        <div className="flex w-40 flex-col gap-1.5">
+        <div className="flex w-full flex-col gap-1.5 sm:w-40">
           <Label htmlFor={`${id}-svc`}>{t("logs.serviceLabel")}</Label>
           <Input id={`${id}-svc`} value={draft.service} placeholder={t("logs.servicePlaceholder")} onChange={set("service")} />
         </div>
       )}
       {showHost && (
-        <div className="flex w-56 flex-col gap-1.5">
+        <div className="flex w-full flex-col gap-1.5 sm:w-56">
           <Label htmlFor={`${id}-host`}>{t("logs.hostLabel")}</Label>
           <Input id={`${id}-host`} value={draft.host} placeholder={t("logs.hostPlaceholder")} onChange={set("host")} className="font-mono" />
         </div>

@@ -97,13 +97,28 @@ export const handlers = [
     const agg = url.searchParams.get("agg") ?? "";
     if (agg && !["avg", "min", "max", "sum", "last", "rate"].includes(agg)) return apiError("invalid_argument", "agg must be one of avg, min, max, sum, last, rate");
     const groupBy = (url.searchParams.get("group_by") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    const rollup = r.to - r.from > 6 * 3_600_000;
+    for (const g of groupBy) {
+      if (g.startsWith("resource.") && !fx.METRIC_RESOURCE_KEYS.includes(g.slice(9))) return apiError("invalid_argument", `group_by: ${g}: unsupported resource attribute`);
+    }
+    // resource.<key>=<value>: allowlisted resource attribute filters (api.md).
+    const resFilters: [string, string][] = [];
+    for (const [pname, value] of url.searchParams.entries()) {
+      if (!pname.startsWith("resource.")) continue;
+      const key = pname.slice("resource.".length);
+      if (!fx.METRIC_RESOURCE_KEYS.includes(key)) return apiError("invalid_argument", `resource.${key}: unsupported resource attribute filter`);
+      if (!value || url.searchParams.getAll(pname).length !== 1) return apiError("invalid_argument", `resource.${key}: exactly one non-empty value is required`);
+      resFilters.push([key, value]);
+    }
+    const hasResource = resFilters.length > 0 || groupBy.some((g) => g.startsWith("resource."));
+    const rollup = r.to - r.from > 6 * 3_600_000 && !hasResource;
     const unit = rollup ? 60 : 10;
     let step = Math.max(unit, Math.floor((r.to - r.from) / 1000 / 300));
     if (step % unit) step += unit - (step % unit);
 
-    const def = fx.METRICS[name];
+    const baseDef = fx.METRICS[name];
     const known = Object.values(fx.HOST_IDS).includes(params.hostId as never) && params.hostId !== fx.HOST_IDS.worker;
+    const matching = baseDef?.series.filter((s) => resFilters.every(([k, v]) => (s.resource ?? {})[k] === v)) ?? [];
+    const def = baseDef && matching.length > 0 ? { ...baseDef, series: matching } : undefined;
     if (!def || !known) {
       return HttpResponse.json({ metric: { name, type: "", unit: "" }, step: `${step}s`, series: [] });
     }
@@ -115,7 +130,8 @@ export const handlers = [
     const dataFrom = params.hostId === fx.HOST_IDS.db ? Math.max(r.from, Date.now() - 5 * 60_000) : r.from;
     const startBucket = Math.ceil(dataFrom / 1000 / step) * step;
     for (const s of def.series) {
-      const attrs = groupBy.length > 0 ? Object.fromEntries(Object.entries(s.attributes).filter(([k]) => groupBy.includes(k))) : s.attributes;
+      const all = { ...s.attributes, ...Object.fromEntries(Object.entries(s.resource ?? {}).map(([k, v]) => [`resource.${k}`, v])) };
+      const attrs = groupBy.length > 0 ? Object.fromEntries(Object.entries(all).filter(([k]) => groupBy.includes(k))) : s.attributes;
       const key = JSON.stringify(Object.entries(attrs).sort());
       const entry = merged.get(key) ?? { attributes: attrs, points: new Map<number, number>(), counts: new Map<number, number>() };
       merged.set(key, entry);

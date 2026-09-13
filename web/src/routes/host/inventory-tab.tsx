@@ -35,7 +35,7 @@ export function HostInventoryTab({ hostId }: { hostId: string }) {
 
   return (
     <section className="flex flex-col gap-3" aria-label={t("inventory.title")}>
-      <div role="group" aria-label={t("inventory.categoriesLabel")} className="flex flex-wrap gap-1">
+      <div role="group" aria-label={t("inventory.categoriesLabel")} className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
         {tabs.map((c) => (
           <button
             key={c.category || "all"}
@@ -43,7 +43,7 @@ export function HostInventoryTab({ hostId }: { hostId: string }) {
             aria-pressed={category === c.category}
             onClick={() => void navigate({ search: (prev) => ({ ...prev, category: c.category || undefined }), replace: true })}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-accent",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium whitespace-nowrap hover:bg-accent pointer-coarse:py-2.5",
               category === c.category && "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
             )}
           >

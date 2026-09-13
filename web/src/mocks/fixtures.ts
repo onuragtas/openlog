@@ -79,13 +79,24 @@ function packages(host: string): InventoryItem[] {
 
 function services(host: string): InventoryItem[] {
   const svc = (s: DiscoveredService): InventoryItem => ({ category: "discovered_service", key: `${s.rule_id}:${s.instance}`, data: s });
+  // Integration objects as the agent reports them (semantic-conventions §3.4): web-1's Redis collects,
+  // db-1's Redis requires a password (needs_configuration + hint).
+  const redisIntegration: DiscoveredService["integration"] =
+    host === "web-1"
+      ? { id: "redis", status: "enabled", endpoint: "127.0.0.1:6379" }
+      : {
+          id: "redis",
+          status: "needs_configuration",
+          error: "authentication required: NOAUTH Authentication required.",
+          hint: "integrations:\n  redis:\n    instances:\n      - match: {port: 6379}\n        # ACL user with +info +ping, or omit username for requirepass\n        username: openlog\n        password: env:OPENLOG_REDIS_PASSWORD\n",
+        };
   const list: InventoryItem[] = [
     svc({
       // Real agents report the resolved executable (a redis-check-rdb symlink target) as instance.
       rule_id: "redis", name: "Redis", category: "database", instance: "/usr/bin/redis-check-rdb", command: "redis-server", version: "7.0.15",
       matched_by: ["process", "systemd_unit", "listening_port"], pids: [812],
       ports: [{ protocol: "tcp", address: "127.0.0.1", port: 6379 }], systemd_units: ["redis-server.service"],
-      packages: ["dpkg:redis-server"], container_ids: [], integration: { id: "redis", status: "needs_configuration" }, apm_hint: null,
+      packages: ["dpkg:redis-server"], container_ids: [], integration: redisIntegration, apm_hint: null,
     }),
     svc({
       rule_id: "sshd", name: "OpenSSH", category: "system", instance: "/usr/sbin/sshd", version: "9.6p1",
@@ -99,12 +110,34 @@ function services(host: string): InventoryItem[] {
         rule_id: "nginx", name: "NGINX", category: "web_server", instance: "/usr/sbin/nginx", command: "nginx", version: "1.24.0",
         matched_by: ["process", "listening_port"], pids: [901, 902, 903],
         ports: [{ protocol: "tcp", address: "0.0.0.0", port: 443 }, { protocol: "tcp", address: "0.0.0.0", port: 80 }, { protocol: "tcp", address: "::", port: 80 }],
-        integration: { id: "nginx", status: "enabled" }, apm_hint: null,
+        integration: { id: "nginx", status: "enabled", endpoint: "http://127.0.0.1:80/nginx_status" }, apm_hint: null,
       }),
       svc({
         rule_id: "php-fpm", name: "PHP-FPM", category: "runtime", instance: "/usr/sbin/php-fpm8.3", version: "8.3.6",
         matched_by: ["process", "systemd_unit"], pids: [1201, 1202], systemd_units: ["php8.3-fpm.service"], packages: ["dpkg:php8.3-fpm"],
         integration: { status: "not_available" }, apm_hint: { language: "php", agent: "openlog-agent-php" },
+      }),
+    );
+  }
+  if (host === "db-1") {
+    list.push(
+      svc({
+        rule_id: "postgresql", name: "PostgreSQL", category: "database", instance: "/usr/lib/postgresql/16/bin/postgres", command: "postgres", version: "16.4",
+        matched_by: ["process", "systemd_unit", "listening_port"], pids: [700, 731, 732],
+        ports: [{ protocol: "tcp", address: "127.0.0.1", port: 5432 }], systemd_units: ["postgresql@16-main.service"], packages: ["dpkg:postgresql-16"],
+        integration: { id: "postgresql", status: "enabled", endpoint: "127.0.0.1:5432" }, apm_hint: null,
+      }),
+      svc({
+        rule_id: "mariadb", name: "MariaDB", category: "database", instance: "/usr/sbin/mariadbd", command: "mariadbd", version: "11.4.3",
+        matched_by: ["process", "listening_port"], pids: [955], ports: [{ protocol: "tcp", address: "127.0.0.1", port: 3306 }],
+        integration: { id: "mysql", status: "enabled", endpoint: "127.0.0.1:3306", error: "replica status: permission denied: Error 1227: Access denied; you need (at least one of) the REPLICA MONITOR privilege(s)" },
+        apm_hint: null,
+      }),
+      svc({
+        rule_id: "redis", name: "Redis", category: "database", instance: "3f2a9c1e5b7d4a60b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4", command: "redis-server", version: "7.4.1",
+        matched_by: ["process", "container"], pids: [2210], container_ids: ["3f2a9c1e5b7d4a60b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4"],
+        integration: { id: "redis", status: "error", error: "no endpoint reachable (172.18.0.5:6379): dial tcp 172.18.0.5:6379: connect: connection refused" },
+        apm_hint: null,
       }),
     );
   }
@@ -283,8 +316,15 @@ export interface MetricDef {
   type: "gauge" | "sum";
   unit: string;
   monotonic?: boolean;
-  series: { attributes: Record<string, string>; value: (tSec: number, rate: boolean) => number }[];
+  /** `resource`: resource attributes (filterable with resource.<key>, groupable as group_by=resource.<key>). */
+  series: { attributes: Record<string, string>; resource?: Record<string, string>; value: (tSec: number, rate: boolean) => number }[];
 }
+
+/** Resource attribute keys accepted as metric resource filters (internal/api/metrics.go). */
+export const METRIC_RESOURCE_KEYS = [
+  "openlog.discovery.id", "openlog.discovery.instance", "openlog.integration.id", "service.instance.id", "server.address", "server.port",
+  "postgresql.database.name", "postgresql.table.name", "postgresql.index.name",
+];
 
 const wave = (t: number, period: number, phase = 0) => (Math.sin((t / period) * Math.PI * 2 + phase) + 1) / 2;
 const noise = (t: number, seed: number) => {
@@ -348,4 +388,92 @@ export const METRICS: Record<string, MetricDef> = {
       value: (t: number) => (k === 0 ? 2.5e5 : 9e4) * (0.6 + wave(t, 2400, k)) * (0.8 + 0.4 * noise(Math.floor(t / 30), 7 + k)),
     })),
   },
+  ...integrationMetrics(),
 };
+
+// ---- integration metrics (semantic-conventions §6) ----
+
+/** Resources of the mock integration instances; they match the discovered services above (a function: METRICS is built before later consts initialize). */
+function integrationResources() {
+  return {
+  nginx: { "openlog.discovery.id": "nginx", "openlog.discovery.instance": "/usr/sbin/nginx", "openlog.integration.id": "nginx", "service.instance.id": "web-1:80", "server.address": "127.0.0.1", "server.port": "80" },
+  redis: { "openlog.discovery.id": "redis", "openlog.discovery.instance": "/usr/bin/redis-check-rdb", "openlog.integration.id": "redis", "service.instance.id": "web-1:6379", "server.address": "127.0.0.1", "server.port": "6379", "redis.version": "7.0.15" },
+  postgresql: { "openlog.discovery.id": "postgresql", "openlog.discovery.instance": "/usr/lib/postgresql/16/bin/postgres", "openlog.integration.id": "postgresql", "service.instance.id": "db-1:5432", "server.address": "127.0.0.1", "server.port": "5432" },
+  mariadb: { "openlog.discovery.id": "mariadb", "openlog.discovery.instance": "/usr/sbin/mariadbd", "openlog.integration.id": "mysql", "service.instance.id": "5b0e1c52-7a41-5d8e-9c1f-2a3b4c5d6e7f", "server.address": "127.0.0.1", "server.port": "3306", "mysql.instance.endpoint": "127.0.0.1:3306" },
+  };
+}
+
+type MockSeries = MetricDef["series"][number];
+
+function integrationMetrics(): Record<string, MetricDef> {
+  const { nginx: N, redis: R, postgresql: P, mariadb: M } = integrationResources();
+  const epoch = 1_757_000_000;
+  // Monotonic counters: `rate` → per-second rate, otherwise a growing cumulative value.
+  const counter = (resource: Record<string, string>, attributes: Record<string, string>, perSec: (t: number) => number): MockSeries => ({
+    attributes, resource, value: (t, rate) => (rate ? perSec(t) : Math.round(perSec(t) * (t - epoch))),
+  });
+  const gauge = (resource: Record<string, string>, attributes: Record<string, string>, f: (t: number) => number): MockSeries => ({ attributes, resource, value: (t) => f(t) });
+  const mono = (unit: string, series: MockSeries[]): MetricDef => ({ type: "sum", unit, monotonic: true, series });
+  const pdb = (db: string) => ({ ...P, "postgresql.database.name": db });
+  const ptable = (db: string, table: string) => ({ ...P, "postgresql.database.name": db, "postgresql.table.name": table });
+  const tables: [string, string, number][] = [
+    ["app", "public.orders", 7.2e9], ["app", "public.order_items", 4.1e9], ["app", "public.events", 2.3e9], ["app", "public.customers", 9.5e8],
+    ["app", "public.sessions", 3.1e8], ["postgres", "public.pgbench_accounts", 1.3e8],
+  ];
+  const load = (t: number, seed: number) => 0.7 + 0.6 * wave(t, 1800, seed) + 0.1 * noise(Math.floor(t / 30), seed);
+  const MiB = 2 ** 20;
+  return {
+    // nginx
+    "nginx.requests": mono("{requests}", [counter(N, {}, (t) => 38 * load(t, 11))]),
+    "nginx.connections_accepted": mono("{connections}", [counter(N, {}, (t) => 2.4 * load(t, 12))]),
+    "nginx.connections_handled": mono("{connections}", [counter(N, {}, (t) => 2.4 * load(t, 12) * 0.985)]),
+    "nginx.connections_current": {
+      type: "sum", unit: "{connections}",
+      series: ([["active", 1], ["reading", 0.03], ["writing", 0.11], ["waiting", 0.86]] as const).map(([state, share]) => gauge(N, { state }, (t) => Math.round(150 * load(t, 13) * share))),
+    },
+    // Redis
+    "redis.commands": { type: "gauge", unit: "{ops}/s", series: [gauge(R, {}, (t) => Math.round(900 * load(t, 21)))] },
+    "redis.memory.used": { type: "gauge", unit: "By", series: [gauge(R, {}, (t) => Math.round(1024 * MiB * (0.6 + 0.22 * wave(t, 5400))))] },
+    "redis.memory.rss": { type: "gauge", unit: "By", series: [gauge(R, {}, (t) => Math.round(1024 * MiB * (0.68 + 0.22 * wave(t, 5400))))] },
+    "redis.maxmemory": { type: "gauge", unit: "By", series: [gauge(R, {}, () => 1024 * MiB)] },
+    "redis.clients.connected": { type: "sum", unit: "{client}", series: [gauge(R, {}, (t) => Math.round(40 * load(t, 22)))] },
+    "redis.clients.blocked": { type: "sum", unit: "{client}", series: [gauge(R, {}, (t) => Math.round(2 * wave(t, 900)))] },
+    "redis.keyspace.hits": mono("{hit}", [counter(R, {}, (t) => 720 * load(t, 23))]),
+    "redis.keyspace.misses": mono("{miss}", [counter(R, {}, (t) => 45 + 40 * wave(t, 3600, 1))]),
+    "redis.keys.evicted": mono("{key}", [counter(R, {}, (t) => Math.max(0, 4 * wave(t, 5400) - 3))]),
+    "redis.keys.expired": mono("{event}", [counter(R, {}, (t) => 3 * load(t, 24))]),
+    "redis.connections.rejected": mono("{connection}", [counter(R, {}, () => 0)]),
+    "redis.replication.offset": { type: "gauge", unit: "By", series: [gauge(R, {}, (t) => (t - epoch) * 1500)] },
+    // MySQL / MariaDB
+    "mysql.query.count": mono("1", [counter(M, {}, (t) => 140 * load(t, 31))]),
+    "mysql.query.client.count": mono("1", [counter(M, {}, (t) => 128 * load(t, 31))]),
+    "mysql.query.slow.count": mono("1", [counter(M, {}, (t) => Math.max(0, 0.3 * wave(t, 2700) - 0.1))]),
+    "mysql.commands": mono("1", ([["select", 96], ["insert", 14], ["update", 9], ["delete", 2]] as const).map(([command, r]) => counter(M, { command }, (t) => r * load(t, 32)))),
+    "mysql.threads": {
+      type: "sum", unit: "1",
+      series: [
+        gauge(M, { kind: "connected" }, (t) => Math.round(26 * load(t, 33))), gauge(M, { kind: "running" }, (t) => Math.round(1 + 4 * wave(t, 600))),
+        gauge(M, { kind: "cached" }, () => 7), gauge(M, { kind: "created" }, () => 1482),
+      ],
+    },
+    "mysql.buffer_pool.usage": { type: "sum", unit: "By", series: [gauge(M, { status: "dirty" }, (t) => Math.round(9 * MiB * load(t, 34))), gauge(M, { status: "clean" }, () => 96 * MiB)] },
+    "mysql.buffer_pool.limit": { type: "sum", unit: "By", series: [gauge(M, {}, () => 128 * MiB)] },
+    "mysql.row_operations": mono("1", ([["read", 2400], ["inserted", 14], ["updated", 9], ["deleted", 2]] as const).map(([operation, r]) => counter(M, { operation }, (t) => r * load(t, 35)))),
+    "mysql.row_locks": mono("1", [counter(M, { kind: "waits" }, (t) => 0.5 * wave(t, 1200)), counter(M, { kind: "time" }, (t) => 14 * wave(t, 1200))]),
+    "mysql.locks": mono("1", [counter(M, { kind: "immediate" }, (t) => 52 * load(t, 36)), counter(M, { kind: "waited" }, (t) => 0.08 * wave(t, 1500))]),
+    // PostgreSQL (instance, database and table resources)
+    "postgresql.connection.max": { type: "gauge", unit: "{connections}", series: [gauge(P, {}, () => 100)] },
+    "postgresql.backends": { type: "sum", unit: "1", series: [gauge(pdb("app"), {}, (t) => Math.round(22 * load(t, 41))), gauge(pdb("postgres"), {}, () => 2)] },
+    "postgresql.commits": mono("1", [counter(pdb("app"), {}, (t) => 48 * load(t, 42)), counter(pdb("postgres"), {}, () => 0.2)]),
+    "postgresql.rollbacks": mono("1", [counter(pdb("app"), {}, (t) => 0.6 * wave(t, 2000))]),
+    "postgresql.db_size": { type: "sum", unit: "By", series: [gauge(pdb("app"), {}, (t) => Math.round(1.49e10 + 2e8 * wave(t, 86400))), gauge(pdb("postgres"), {}, () => 7_901_987)] },
+    "postgresql.deadlocks": mono("{deadlock}", [counter(pdb("app"), {}, (t) => Math.max(0, 0.02 * wave(t, 3000) - 0.014))]),
+    "postgresql.table.size": { type: "sum", unit: "By", series: tables.map(([db, table, size]) => gauge(ptable(db, table), {}, () => size)) },
+    "postgresql.operations": mono("1", ([["ins", 12], ["upd", 8], ["del", 1], ["hot_upd", 5]] as const).map(([operation, r]) => counter(ptable("app", "public.orders"), { operation }, (t) => r * load(t, 43)))),
+    "postgresql.blocks_read": mono("1", ([["heap_hit", 1800], ["heap_read", 42], ["idx_hit", 2400], ["idx_read", 11], ["toast_hit", 20], ["toast_read", 1]] as const).map(([source, r]) => counter(ptable("app", "public.orders"), { source }, (t) => r * load(t, source.endsWith("read") ? 44 : 45)))),
+    "postgresql.wal.lag": {
+      type: "gauge", unit: "s",
+      series: ([["write", 0], ["flush", 0], ["replay", 1]] as const).map(([operation, base]) => gauge(P, { operation, replication_client: "10.0.1.31" }, (t) => Math.round(base * (1 + 3 * wave(t, 1800))))),
+    },
+  };
+}

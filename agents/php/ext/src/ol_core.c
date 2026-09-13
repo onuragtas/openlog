@@ -1,12 +1,12 @@
 /*
- * Request state: bounded arena, node table, span stack, transaction tracer.
+ * Request state: bounded arena, node table, span stack.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Nodes (spans and function segments) live in fixed-size chunks addressed by index; a node's parent is an index,
- * always smaller than the node's own index. The transaction tracer allocates a segment node when a userland
- * function starts and gives it back when the call turns out to be fast (< min_segment_ms): a fast call has no
- * surviving children, so its node is the last allocated one and is popped in O(1); otherwise it is marked dead and
- * skipped at emission (its children are re-parented to the nearest emitted ancestor).
+ * always smaller than the node's own index. Nodes that are not sent (discarded spans, segments of a fast
+ * transaction) are skipped at emission and their children re-parented to the nearest emitted ancestor. Function
+ * segments come from the sampler (ol_sampler.c); every span start and end takes a sample so that the span's parent
+ * is the innermost function segment.
  */
 #include "ol.h"
 
@@ -203,6 +203,7 @@ uint32_t ol_node_new(uint8_t kind, uint8_t flags, uint32_t parent)
 	n->events = NULL;
 	n->fast_ns = 0;
 	n->parent = parent;
+	n->seg_parent = OL_NONE;
 	n->emit_parent = OL_NONE;
 	n->fast_calls = 0;
 	n->nattrs = 0;
@@ -290,7 +291,7 @@ uint64_t ol_current_span_id(void)
 
 uint32_t ol_span_begin_flags(zend_execute_data *ex, const char *name, uint8_t kind, uint8_t flags)
 {
-	uint32_t parent, eff_span, idx;
+	uint32_t parent, eff_span, idx, seg = OL_NONE;
 	ol_frame *f;
 
 	if (!OL_REC()) {
@@ -298,11 +299,19 @@ uint32_t ol_span_begin_flags(zend_execute_data *ex, const char *name, uint8_t ki
 	}
 	parent = ol_current_parent();
 	eff_span = ol_current_span();
+	if (OLG(tracing)) {
+		seg = ol_sample_now(EG(current_execute_data));
+	}
 	idx = ol_node_new(kind, flags, parent);
 	if (idx == OL_NONE) {
 		OLG(dropped)++;
 	} else {
-		ol_node_at(idx)->name = name;
+		ol_node *n = ol_node_at(idx);
+		n->name = name;
+		/* inside another instrumented span that span stays the parent; else the innermost function segment */
+		if (parent == 0) {
+			n->seg_parent = seg;
+		}
 	}
 	f = ol_push_frame();
 	if (f == NULL) {
@@ -337,6 +346,13 @@ ol_node *ol_span_end(zend_execute_data *ex)
 
 	if (!OLG(active) || st->depth == 0) {
 		return NULL;
+	}
+	if (OLG(tracing)) {
+		/* a call that blocked for at least one interval: extend the functions that waited in it */
+		ol_node *top = ol_node_at(st->f[st->depth - 1].node);
+		if (top && ol_mono_ns() - top->start >= OLG(sample_interval_ns)) {
+			ol_sample_now(EG(current_execute_data));
+		}
 	}
 	if (st->overflow) {
 		/* frames beyond the stack limit were never pushed */
@@ -374,55 +390,24 @@ ol_node *ol_span_end(zend_execute_data *ex)
 
 uint32_t ol_span_detached(const char *name, uint8_t kind)
 {
-	uint32_t idx;
+	uint32_t idx, parent, seg = OL_NONE;
 	if (!OL_REC()) {
 		return OL_NONE;
 	}
-	idx = ol_node_new(kind, 0, ol_current_parent());
+	parent = ol_current_parent();
+	if (OLG(tracing)) {
+		seg = ol_sample_now(EG(current_execute_data));
+	}
+	idx = ol_node_new(kind, 0, parent);
 	if (idx == OL_NONE) {
 		OLG(dropped)++;
 		return OL_NONE;
 	}
 	ol_node_at(idx)->name = name;
+	if (parent == 0) {
+		ol_node_at(idx)->seg_parent = seg;
+	}
 	return idx;
-}
-
-/* ---------------- transaction tracer ---------------- */
-
-void ol_tracer_begin(zend_execute_data *ex)
-{
-	ol_frame *f;
-	ol_frame *t;
-	uint32_t parent, eff_span, idx = OL_NONE;
-
-	/* copy what is needed from the top frame: ol_push_frame() may realloc the stack */
-	t = ol_stack_top();
-	parent = t ? t->eff : (OLG(nnodes) ? 0 : OL_NONE);
-	eff_span = t ? t->eff_span : (OLG(nnodes) ? 0 : OL_NONE);
-	if (!OLG(tracer_full)) {
-		if (OLG(seg_bytes) + sizeof(ol_node) > OLG(seg_bytes_cap)) {
-			OLG(tracer_full) = true;
-		} else {
-			idx = ol_node_new(OL_KIND_INTERNAL, OL_NF_SEGMENT, parent);
-			if (idx != OL_NONE) {
-				OLG(seg_bytes) += sizeof(ol_node);
-			} else {
-				OLG(tracer_full) = true;
-			}
-		}
-	}
-	f = ol_push_frame();
-	if (f == NULL) {
-		if (idx != OL_NONE) {
-			ol_node_at(idx)->flags |= OL_NF_DEAD;
-		}
-		return;
-	}
-	f->ex = ex;
-	f->node = idx;
-	f->eff = idx != OL_NONE ? idx : parent;
-	f->eff_span = eff_span;
-	f->type = OL_FT_TRACER;
 }
 
 /* Gives back a span that turned out not to be needed (e.g. PDO::prepare without error). */
@@ -458,95 +443,6 @@ void ol_close_open_nodes(void)
 		n->dur = now - n->start;
 		n->flags |= OL_NF_ENDED;
 	}
-}
-
-static void ol_segment_describe(ol_node *n, zend_function *fn)
-{
-	zend_string *fname = fn->common.function_name;
-	zend_class_entry *scope = fn->common.scope;
-	size_t before = OLG(arena_total);
-	char buf[512];
-	int len;
-
-	if (scope && fname) {
-		len = snprintf(buf, sizeof(buf), "%s::%s", ZSTR_VAL(scope->name), ZSTR_VAL(fname));
-	} else {
-		len = snprintf(buf, sizeof(buf), "%s", fname ? ZSTR_VAL(fname) : "{main}");
-	}
-	if (len < 0) {
-		len = 0;
-	} else if ((size_t) len >= sizeof(buf)) {
-		len = sizeof(buf) - 1;
-	}
-	n->name = ol_strdup(buf, (size_t) len, sizeof(buf));
-	if (fname) {
-		ol_attr_str(n, "code.function.name", ZSTR_VAL(fname), ZSTR_LEN(fname));
-	}
-	if (scope) {
-		ol_attr_str(n, "code.namespace", ZSTR_VAL(scope->name), ZSTR_LEN(scope->name));
-	}
-	if (fn->type == ZEND_USER_FUNCTION && fn->op_array.filename) {
-		ol_attr_str(n, "code.file.path", ZSTR_VAL(fn->op_array.filename), ZSTR_LEN(fn->op_array.filename));
-		ol_attr_int(n, "code.line.number", fn->op_array.line_start);
-	}
-	ol_attr_static(n, "openlog.php.segment", "function");
-	/* approximate accounting of the strings and attributes of this segment */
-	OLG(seg_bytes) += 384 + (OLG(arena_total) - before);
-}
-
-void ol_tracer_end(zend_execute_data *ex, zend_function *fn)
-{
-	ol_stack *st = OLG(stack);
-	ol_frame *f;
-	ol_node *n, *p;
-	uint64_t dur;
-
-	if (st->depth == 0) {
-		return;
-	}
-	f = &st->f[st->depth - 1];
-	if (f->ex != ex || f->type != OL_FT_TRACER) {
-		if (st->overflow) {
-			st->overflow--;
-		}
-		return;
-	}
-	st->depth--;
-	if (f->node == OL_NONE) {
-		/* not recorded (limit): count as dropped only if it would have been kept */
-		return;
-	}
-	n = ol_node_at(f->node);
-	if (n == NULL) {
-		return;
-	}
-	dur = ol_mono_ns() - n->start;
-	n->dur = dur;
-	n->flags |= OL_NF_ENDED;
-	if (dur < OLG(min_segment_ns)) {
-		p = ol_node_at(n->parent);
-		if (p) {
-			p->fast_calls += 1 + n->fast_calls;
-			p->fast_ns += dur;
-		}
-		if (f->node == OLG(nnodes) - 1) {
-			OLG(nnodes)--; /* no surviving children: give the node back */
-		} else {
-			n->flags |= OL_NF_DEAD;
-		}
-		if (OLG(seg_bytes) >= sizeof(ol_node)) {
-			OLG(seg_bytes) -= sizeof(ol_node);
-		}
-		return;
-	}
-	if (OLG(seg_kept) >= (uint32_t) OLG(tt_max_segments) || OLG(seg_bytes) > OLG(seg_bytes_cap)) {
-		n->flags |= OL_NF_DEAD;
-		OLG(dropped)++;
-		OLG(tracer_full) = true;
-		return;
-	}
-	OLG(seg_kept)++;
-	ol_segment_describe(n, fn);
 }
 
 /* ---------------- attributes ---------------- */

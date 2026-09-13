@@ -109,7 +109,7 @@ export function RolloutPanel({ summary, canManage }: { summary: FleetSummary; ca
         {history.data && history.data.length > 1 && (
           <details className="text-sm">
             <summary className="cursor-pointer text-muted-foreground">{t("fleet.rollout.history")}</summary>
-            <Table className="mt-2">
+            <Table className="mt-2" mobile="stack">
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("fleet.rollout.columns.rollout")}</TableHead>
@@ -124,13 +124,13 @@ export function RolloutPanel({ summary, canManage }: { summary: FleetSummary; ca
                     <TableCell>
                       <RolloutTitle rollout={r} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:w-auto">
                       <StateBadge state={r.state} />
                     </TableCell>
-                    <TableCell className="text-xs tabular-nums">
+                    <TableCell label={t("fleet.rollout.columns.progress")} className="text-xs tabular-nums">
                       {r.counters.succeeded} ✓ · {r.counters.failed + r.counters.rolled_back} ✗ · {r.counters.pending} …
                     </TableCell>
-                    <TableCell>
+                    <TableCell label={t("fleet.rollout.columns.started")}>
                       <DateTimeText value={r.created_at} relative />
                     </TableCell>
                   </TableRow>

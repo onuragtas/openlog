@@ -44,6 +44,8 @@ static PHP_GSHUTDOWN_FUNCTION(openlog)
 {
 	int i;
 	ol_chunk *c = openlog_globals->arena_first;
+	ol_sampler_stop(openlog_globals->sampler);
+	openlog_globals->sampler = NULL;
 	for (i = 0; i < OL_MAX_CHUNKS; i++) {
 		free(openlog_globals->chunks[i]);
 		openlog_globals->chunks[i] = NULL;
@@ -123,7 +125,8 @@ PHP_RINIT_FUNCTION(openlog)
 	OLG(dropped) = 0;
 	OLG(seg_bytes) = 0;
 	OLG(seg_bytes_cap) = OLG(tt_max_memory_kb) > 0 ? (uint64_t) OLG(tt_max_memory_kb) * 1024 : 0;
-	OLG(min_segment_ns) = OLG(tt_min_segment_ms) > 0 ? (uint64_t) OLG(tt_min_segment_ms) * 1000000ULL : 0;
+	OLG(sample_interval_ns) = (uint64_t) (OLG(tt_min_segment_ms) > 0 ? OLG(tt_min_segment_ms) : 1) * 1000000ULL;
+	OLG(path_depth) = 0;
 	OLG(tracer_full) = false;
 	OLG(route) = NULL;
 	OLG(route_prio) = 0;
@@ -149,6 +152,9 @@ PHP_RINIT_FUNCTION(openlog)
 	OLG(c_requests)++;
 	ol_request_context();
 	OLG(tracing) = OLG(recording) && OLG(tt_enabled) && OLG(tt_max_segments) > 0 && OLG(seg_bytes_cap) > 0;
+	if (OLG(tracing) && !ol_sampler_arm()) {
+		OLG(tracing) = false;
+	}
 	return SUCCESS;
 }
 
@@ -161,6 +167,7 @@ static void ol_finalize_root(void)
 	if (root == NULL) {
 		return;
 	}
+	ol_sampler_finish();
 	ol_close_open_nodes();
 	root->dur = ol_mono_ns() - OLG(req_mono);
 	root->flags |= OL_NF_ENDED;
@@ -246,6 +253,8 @@ static void ol_request_cleanup(void)
 	}
 	ol_fiber_stacks_free();
 	ol_stack_reset(&OLG(main_stack));
+	OLG(path_depth) = 0;
+	ol_segs_release();
 	ol_arena_release();
 	for (i = 2; i < OL_MAX_CHUNKS && OLG(chunks)[i]; i++) {
 		free(OLG(chunks)[i]);
@@ -262,6 +271,7 @@ PHP_RSHUTDOWN_FUNCTION(openlog)
 	if (!OLG(enabled)) {
 		return SUCCESS;
 	}
+	ol_sampler_disarm();
 	if (OLG(active) && OLG(recording)) {
 		ol_finalize_root();
 		ol_emit();

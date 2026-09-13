@@ -32,12 +32,12 @@ export function AlertsLayout() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t("alerts.title")} subtitle={t("alerts.subtitle")} />
-      <nav aria-label={t("alerts.tabs.sections")} className="-mt-2 flex gap-1 overflow-x-auto border-b">
+      <nav aria-label={t("alerts.tabs.sections")} className="-mt-2 flex gap-1 overflow-x-auto border-b [scrollbar-width:none]">
         {TABS.map((tab) => (
           <Link
             key={tab.to}
             to={tab.to}
-            className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:font-medium data-[status=active]:text-foreground"
+            className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap pointer-coarse:py-2.5 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:font-medium data-[status=active]:text-foreground"
           >
             {t(tab.label)}
           </Link>

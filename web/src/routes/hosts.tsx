@@ -70,7 +70,7 @@ export function HostsPage() {
         ) : hosts.length === 0 ? (
           <EmptyState>{t("hosts.noMatch", { q })}</EmptyState>
         ) : (
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("hosts.columns.name")}</TableHead>
@@ -105,9 +105,13 @@ export function HostsPage() {
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{h.os_description}</TableCell>
-                    <TableCell className="hidden font-mono text-xs md:table-cell">{h.arch}</TableCell>
-                    <TableCell className="hidden font-mono text-xs md:table-cell">{h.agent_version}</TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell label={t("hosts.columns.arch")} className="hidden font-mono text-xs md:table-cell">
+                      {h.arch}
+                    </TableCell>
+                    <TableCell label={t("hosts.columns.agent")} className="hidden font-mono text-xs md:table-cell">
+                      {h.agent_version}
+                    </TableCell>
+                    <TableCell label={t("hosts.columns.lastSeen")} className="whitespace-nowrap">
                       <time dateTime={h.last_seen} title={formatDateTime(seen, locale)}>
                         {formatRelative(seen, now, locale)}
                       </time>

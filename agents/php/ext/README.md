@@ -132,10 +132,16 @@ exceptions only when reported by Laravel (`Handler::report`/`reportThrowable`, h
 or Symfony (`HttpKernel::handleThrowable`, HTTP exceptions < 500 ignored). Exceptions inside instrumented calls mark
 the client span.
 
-**Transaction tracer**: every userland function call of a sampled request is a candidate segment (kind 1,
-`Class::method`, `code.function.name`, `code.namespace`, `code.file.path`, `code.line.number`,
-`openlog.php.segment=function`); `sleep`/`usleep`/`time_nanosleep` appear as internal spans. Fast calls give their
-node back immediately (O(1)); segments are sent only when the transaction is slow or failed.
+**Transaction tracer** (stack sampling): a sampler thread per PHP process (idle between requests) sets
+`EG(vm_interrupt)` every `min_segment_ms`; at the next safe point the userland call stack is walked and merged into
+a segment tree (kind 1, `Class::method`, `code.function.name`, `code.namespace`, `code.file.path`,
+`code.line.number`, `openlog.php.segment=function`, `openlog.php.samples`). Every instrumented span takes a sample at
+its start and end, so blocking DB/HTTP/sleep time is attributed to the right functions and the span's parent is the
+innermost function segment. `sleep`/`usleep`/`time_nanosleep` appear as internal spans. No per-call cost (observing
+every call measured ~60 ns/call, > 1 ms per framework request). Calls shorter than the interval appear only when a
+sample hits them; consecutive calls of one function from the same frame without a sample in between form one
+segment; depth is limited to the outermost 256 frames. Segments are sent only when the transaction is slow or
+failed.
 
 ## Architecture
 

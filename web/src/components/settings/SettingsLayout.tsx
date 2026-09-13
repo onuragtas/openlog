@@ -22,12 +22,12 @@ export function SettingsLayout() {
         title={t("settings.title")}
         subtitle={me?.organization && role ? t("settings.subtitle", { org: me.organization.name, role: t(`settings.roles.${role}`) }) : undefined}
       />
-      <nav aria-label={t("settings.tabs.label")} className="mb-4 flex flex-wrap gap-1 border-b">
+      <nav aria-label={t("settings.tabs.label")} className="mb-4 flex gap-1 overflow-x-auto border-b [scrollbar-width:none]">
         {TABS.filter((tab) => tab.permission === null || can(role, tab.permission)).map((tab) => (
           <Link
             key={tab.to}
             to={tab.to}
-            className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:font-medium data-[status=active]:text-foreground"
+            className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap text-muted-foreground pointer-coarse:py-2.5 hover:text-foreground data-[status=active]:border-primary data-[status=active]:font-medium data-[status=active]:text-foreground"
           >
             {t(tab.label)}
           </Link>

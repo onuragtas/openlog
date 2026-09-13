@@ -196,26 +196,9 @@ static void ol_error_cb(int type, const char *file, const unsigned int line, con
 /* ---------------- PHP >= 8.0: Observer API ---------------- */
 
 #if PHP_VERSION_ID >= 80000
-static void ol_obs_tracer_begin(zend_execute_data *ex)
-{
-	if (OLG(tracing)) {
-		ol_tracer_begin(ex);
-	}
-}
-
-static void ol_obs_tracer_end(zend_execute_data *ex, zval *rv)
-{
-	if (OLG(tracing)) {
-		ol_tracer_end(ex, ex->func);
-	}
-}
-
 static void ol_obs_hook_begin(zend_execute_data *ex)
 {
 	const ol_hook *h = ol_hook_lookup(ex->func);
-	if (OLG(tracing) && ZEND_USER_CODE(ex->func->type)) {
-		ol_tracer_begin(ex);
-	}
 	if (h && h->begin && ol_hook_runs(h)) {
 		h->begin(ex, h);
 	}
@@ -226,9 +209,6 @@ static void ol_obs_hook_end(zend_execute_data *ex, zval *rv)
 	const ol_hook *h = ol_hook_lookup(ex->func);
 	if (h && h->end && ol_hook_runs(h)) {
 		h->end(ex, rv, h);
-	}
-	if (OLG(tracing) && ZEND_USER_CODE(ex->func->type)) {
-		ol_tracer_end(ex, ex->func);
 	}
 }
 
@@ -253,12 +233,10 @@ static zend_observer_fcall_handlers ol_obs_init(zend_execute_data *ex)
 	if (fn->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE) {
 		return h;
 	}
+	/* only instrumented functions are observed; the transaction tracer samples instead (ol_sampler.c) */
 	if (ol_hook_lookup(fn)) {
 		h.begin = ol_obs_hook_begin;
 		h.end = ol_obs_hook_end;
-	} else if (ZEND_USER_CODE(fn->type) && OLG(tt_enabled)) {
-		h.begin = ol_obs_tracer_begin;
-		h.end = ol_obs_tracer_end;
 	}
 	return h;
 }
@@ -283,7 +261,7 @@ static void ol_execute_ex(zend_execute_data *ex)
 {
 	zend_function *fn = ex->func;
 	const ol_hook *h;
-	bool tr, run_end;
+	bool run_end;
 	zval *rv;
 	zval this_copy;
 
@@ -294,27 +272,23 @@ static void ol_execute_ex(zend_execute_data *ex)
 	if (fn->common.function_name == NULL) {
 		bool top = ex->prev_execute_data == NULL;
 		ol_prev_execute_ex(ex);
-		if (top && EG(exception)) {
+		if (top && OL_EXCEPTION()) {
 			ol_uncaught_exception(EG(exception));
 		}
 		return;
 	}
 	h = ol_hook_lookup(fn);
-	tr = OLG(tracing);
-	if (h == NULL && !tr) {
+	if (h == NULL) {
 		ol_prev_execute_ex(ex);
 		return;
 	}
 	/* the frame is freed when execute_ex returns: keep what the end handlers need */
 	rv = ex->return_value;
 	ZVAL_UNDEF(&this_copy);
-	if (tr) {
-		ol_tracer_begin(ex);
-	}
-	if (h && h->begin && ol_hook_runs(h)) {
+	if (h->begin && ol_hook_runs(h)) {
 		h->begin(ex, h);
 	}
-	run_end = h && h->end;
+	run_end = h->end != NULL;
 	if (run_end && Z_TYPE(ex->This) == IS_OBJECT) {
 		ZVAL_COPY(&this_copy, &ex->This);
 	}
@@ -327,11 +301,19 @@ static void ol_execute_ex(zend_execute_data *ex)
 		ZVAL_UNDEF(&OLG(end_this));
 	}
 	zval_ptr_dtor(&this_copy);
-	if (tr && OLG(tracing)) {
-		ol_tracer_end(ex, fn);
-	}
 }
 #endif
+
+/* zend_interrupt_function: transaction tracer samples (chained) */
+static void (*ol_prev_interrupt)(zend_execute_data *ex);
+
+static void ol_interrupt(zend_execute_data *ex)
+{
+	ol_sampler_interrupt(ex);
+	if (ol_prev_interrupt) {
+		ol_prev_interrupt(ex);
+	}
+}
 
 #if PHP_VERSION_ID < 80200
 static void ol_execute_internal(zend_execute_data *ex, zval *rv)
@@ -394,11 +376,16 @@ int ol_hooks_minit(void)
 	ol_prev_execute_internal = zend_execute_internal;
 	zend_execute_internal = ol_execute_internal;
 #endif
+	ol_prev_interrupt = zend_interrupt_function;
+	zend_interrupt_function = ol_interrupt;
 	return SUCCESS;
 }
 
 void ol_hooks_mshutdown(void)
 {
+	if (zend_interrupt_function == ol_interrupt) {
+		zend_interrupt_function = ol_prev_interrupt;
+	}
 #if PHP_VERSION_ID < 80000
 	if (zend_execute_ex == ol_execute_ex) {
 		zend_execute_ex = ol_prev_execute_ex;

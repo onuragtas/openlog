@@ -1,16 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
-import { Code2, Plug } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Code2, LineChart } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { servicesQuery } from "@/api/queries";
 import type { DiscoveredService, InventoryItem } from "@/api/types";
+import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateOptional } from "@/i18n/dynamic";
 import { formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { hasPanel, integrationOf } from "@/lib/integrations";
 import { formatPort } from "@/lib/ports";
 import { parseTimeParam } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -27,24 +30,18 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ruby: "Ruby",
 };
 
-type IntegrationStatus = NonNullable<NonNullable<DiscoveredService["integration"]>["status"]>;
-
-const STATUS_VARIANT: Record<IntegrationStatus, "success" | "warning" | "muted"> = {
-  enabled: "success",
-  needs_configuration: "warning",
-  not_available: "muted",
-};
-
 export function asService(item: InventoryItem): DiscoveredService {
   return item.data && typeof item.data === "object" ? (item.data as DiscoveredService) : {};
 }
 
-function ServiceCard({ item }: { item: InventoryItem }) {
+function ServiceCard({ item, hostId }: { item: InventoryItem; hostId: string }) {
   const { t } = useTranslation();
   const id = useId();
   const [apmOpen, setApmOpen] = useState(false);
   const s = asService(item);
-  const status: IntegrationStatus = s.integration?.status ?? "not_available";
+  const integration = integrationOf(s);
+  const status = integration.status;
+  const panel = hasPanel(s) && !!s.rule_id && !!s.instance;
   const hint = s.apm_hint ?? null;
   const language = hint?.language ? (LANGUAGE_NAMES[hint.language.toLowerCase()] ?? hint.language) : "";
   const name = s.name || s.rule_id || item.key;
@@ -67,10 +64,7 @@ function ServiceCard({ item }: { item: InventoryItem }) {
               </p>
             )}
           </div>
-          <Badge variant={STATUS_VARIANT[status] ?? "muted"} title={t("services.integrationHint")}>
-            <Plug aria-hidden="true" />
-            {t(`services.integration.${status}`)}
-          </Badge>
+          <IntegrationStatusBadge status={status} label={t(`services.integration.${status}`)} title={integration.error ?? t("services.integrationHint")} />
         </div>
       </CardHeader>
       <CardContent>
@@ -117,6 +111,19 @@ function ServiceCard({ item }: { item: InventoryItem }) {
           )}
         </dl>
       </CardContent>
+      {panel && (
+        <CardFooter className={cn("flex-col items-stretch gap-2 pt-3", "border-t")}>
+          <Link
+            to="/hosts/$hostId/integrations/$discoveryId/$instance"
+            params={{ hostId, discoveryId: s.rule_id!, instance: s.instance! }}
+            className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10" })}
+            data-testid="open-integration"
+          >
+            <LineChart aria-hidden="true" />
+            {t("services.openIntegration")}
+          </Link>
+        </CardFooter>
+      )}
       {hint && (
         <CardFooter className="flex-col items-stretch gap-2 border-t pt-3">
           <Button variant="outline" size="sm" aria-expanded={apmOpen} aria-controls={`${id}-apm`} onClick={() => setApmOpen((o) => !o)}>
@@ -151,14 +158,19 @@ export function HostServicesTab({ hostId }: { hostId: string }) {
         <h2 id="services-title" className="text-base font-semibold">
           {t("services.title")}
         </h2>
-        {snap !== null && <span className="text-xs text-muted-foreground">{t("services.snapshotAt", { when: formatRelative(snap, now, i18n.resolvedLanguage ?? "en") })}</span>}
+        <div className="flex flex-wrap items-baseline justify-end gap-x-3 gap-y-1">
+          {snap !== null && <span className="text-xs text-muted-foreground">{t("services.snapshotAt", { when: formatRelative(snap, now, i18n.resolvedLanguage ?? "en") })}</span>}
+          <Link to="/integrations" className="text-xs text-primary hover:underline">
+            {t("services.allIntegrations")}
+          </Link>
+        </div>
       </div>
       {items.length === 0 ? (
         <EmptyState>{t("services.empty")}</EmptyState>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {items.map((it) => (
-            <ServiceCard key={it.key} item={it} />
+            <ServiceCard key={it.key} item={it} hostId={hostId} />
           ))}
         </div>
       )}

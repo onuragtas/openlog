@@ -1269,10 +1269,18 @@ export interface components {
             systemd_units?: string[];
             packages?: string[];
             container_ids?: string[];
+            /** @description Running integration of the service (semantic-conventions §3.4, §6). */
             integration?: {
+                /** @description Integration id: nginx, redis, mysql, postgresql, docker, … */
                 id?: string;
                 /** @enum {string} */
-                status?: "enabled" | "needs_configuration" | "not_available";
+                status?: "enabled" | "needs_configuration" | "error" | "not_available";
+                /** @description Sanitized reason (≤ 256 bytes, never credentials); also set on partial collections with status enabled. */
+                error?: string;
+                /** @description Multi-line config.yaml snippet that configures the instance (with needs_configuration); shown verbatim. */
+                hint?: string;
+                /** @description Endpoint of the last successful collection (host:port, unix:<path> or the nginx status URL). */
+                endpoint?: string;
             };
             apm_hint?: null | {
                 language?: string;
@@ -2440,8 +2448,26 @@ export interface operations {
                 step?: string;
                 /** @description Default `avg` for gauges, `rate` for monotonic sums, `last` for non-monotonic sums. */
                 agg?: components["schemas"]["Aggregation"];
-                /** @description Comma-separated attribute keys; series are merged by these keys. Default all attributes. */
+                /**
+                 * @description Comma-separated attribute keys; series are merged by these keys. Default all attributes.
+                 *     `resource.<key>` (allowlisted keys as for `resource` filters) groups by a resource attribute; the series
+                 *     attributes then contain `resource.<key>`.
+                 */
                 group_by?: string;
+                /**
+                 * @description `resource.<key>=<value>`: exact-match resource attribute filters (AND-ed, one value per key, at most 4).
+                 *     Allowed keys: `openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`,
+                 *     `service.instance.id`, `server.address`, `server.port`, `postgresql.database.name`,
+                 *     `postgresql.table.name`, `postgresql.index.name`. Other keys, empty/repeated values or values over
+                 *     1024 bytes → 400. Requests with resource filters or resource groupings read raw data points (no rollup).
+                 * @example {
+                 *       "resource.openlog.discovery.id": "redis",
+                 *       "resource.openlog.discovery.instance": "/usr/bin/redis-server"
+                 *     }
+                 */
+                resource?: {
+                    [key: string]: string;
+                };
             };
             header?: never;
             path: {

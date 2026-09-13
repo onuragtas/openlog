@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import uPlot from "uplot";
 import { ErrorState, EmptyState } from "@/components/StateViews";
 import { Skeleton } from "@/components/ui/skeleton";
-import { axisTickLabels, timeFormatter } from "@/lib/chart-axis";
+import { axisTickLabels, measureText, timeFormatter, yAxisSize } from "@/lib/chart-axis";
+import { placeTooltip } from "@/lib/chart-tooltip";
 import { formatDateTime, formatValue, type UnitKind } from "@/lib/format";
+import { useIsMobile } from "@/lib/media";
 import {
   alignSeries,
   dataStartHint,
@@ -43,8 +45,9 @@ export interface TimeSeriesChartProps {
   hidden?: readonly string[];
 }
 
-/** Legend entries shown before "show all". */
+/** Legend entries shown before "show all" (fewer on phones). */
 const LEGEND_COLLAPSED = 6;
+const LEGEND_COLLAPSED_MOBILE = 3;
 const AXIS_FONT = "12px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 interface Live {
@@ -66,20 +69,10 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-function measureText(text: string): number {
-  try {
-    const ctx = document.createElement("canvas").getContext("2d");
-    if (ctx) {
-      ctx.font = AXIS_FONT;
-      return ctx.measureText(text).width;
-    }
-  } catch {
-    // no canvas (tests)
-  }
-  return text.length * 7;
-}
-
-/** Tooltip plugin: shows the hovered time and each visible series' raw value; reports the hovered index. */
+/**
+ * Tooltip plugin: shows the hovered time and each visible series' raw value; reports the hovered index.
+ * Touch: tapping or dragging horizontally across the plot moves the cursor (uPlot itself follows the mouse only).
+ */
 function cursorPlugin(
   getLive: () => Live | null,
   fmt: (v: number | null) => string,
@@ -88,13 +81,29 @@ function cursorPlugin(
   onIdx: (idx: number | null) => void,
 ): uPlot.Plugin {
   let el: HTMLDivElement | null = null;
+  let onTouch: ((e: PointerEvent) => void) | null = null;
   return {
     hooks: {
       init: (u) => {
         el = document.createElement("div");
-        el.className = "pointer-events-none absolute z-10 hidden rounded-md border bg-card px-2 py-1 text-xs text-card-foreground shadow-md";
+        el.className =
+          "pointer-events-none absolute z-10 hidden max-w-[min(20rem,calc(100vw-2rem))] rounded-md border bg-card px-2 py-1 text-xs text-card-foreground shadow-md";
         el.setAttribute("aria-hidden", "true");
         u.over.appendChild(el);
+        u.over.style.touchAction = "pan-y";
+        onTouch = (e: PointerEvent) => {
+          if (e.pointerType !== "touch") return;
+          const r = u.over.getBoundingClientRect();
+          u.setCursor({ left: e.clientX - r.left, top: e.clientY - r.top });
+        };
+        u.over.addEventListener("pointerdown", onTouch);
+        u.over.addEventListener("pointermove", onTouch);
+      },
+      destroy: (u) => {
+        if (onTouch) {
+          u.over.removeEventListener("pointerdown", onTouch);
+          u.over.removeEventListener("pointermove", onTouch);
+        }
       },
       setCursor: (u) => {
         const idx = u.cursor.idx;
@@ -121,21 +130,28 @@ function cursorPlugin(
           const row = document.createElement("div");
           row.className = "flex items-center gap-2 whitespace-nowrap";
           const dot = document.createElement("span");
-          dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.c}`;
+          dot.style.cssText = `display:inline-block;flex-shrink:0;width:8px;height:8px;border-radius:2px;background:${r.c}`;
           const label = document.createElement("span");
-          label.className = "text-muted-foreground";
+          label.className = "min-w-0 truncate text-muted-foreground";
           label.textContent = r.l;
           const val = document.createElement("span");
-          val.className = "ml-auto pl-3 font-mono";
+          val.className = "ml-auto shrink-0 pl-3 font-mono";
           val.textContent = fmt(r.v);
           row.append(dot, label, val);
           el.appendChild(row);
         }
         el.classList.remove("hidden");
-        const w = el.offsetWidth;
-        const flip = left + w + 16 > u.over.clientWidth;
-        el.style.left = `${flip ? left - w - 12 : left + 12}px`;
-        el.style.top = `${Math.max(0, (u.cursor.top ?? 0) - 10)}px`;
+        const pos = placeTooltip({
+          x: left,
+          y: u.cursor.top ?? 0,
+          width: el.offsetWidth,
+          height: el.offsetHeight,
+          areaWidth: u.over.clientWidth,
+          areaHeight: u.over.clientHeight,
+          leftRoom: u.over.offsetLeft,
+        });
+        el.style.left = `${pos.left}px`;
+        el.style.top = `${pos.top}px`;
       },
     },
   };
@@ -148,11 +164,11 @@ interface LegendItem {
   visible: boolean;
 }
 
-function ChartLegend({ items, time, since, onToggle }: { items: LegendItem[]; time: string; since: string | null; onToggle: (i: number) => void }) {
+function ChartLegend({ items, time, since, collapsedCount, onToggle }: { items: LegendItem[]; time: string; since: string | null; collapsedCount: number; onToggle: (i: number) => void }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const overflow = items.length > LEGEND_COLLAPSED;
-  const shown = overflow && !expanded ? items.slice(0, LEGEND_COLLAPSED) : items;
+  const overflow = items.length > collapsedCount;
+  const shown = overflow && !expanded ? items.slice(0, collapsedCount) : items;
   return (
     <div className="mt-2 flex flex-wrap items-start gap-x-2 gap-y-1 text-xs">
       <ul aria-label={t("charts.legend")} className={cn("flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-0.5", expanded && "max-h-28 overflow-y-auto")}>
@@ -160,13 +176,13 @@ function ChartLegend({ items, time, since, onToggle }: { items: LegendItem[]; ti
           {t("charts.time")}: <span className="font-mono text-foreground">{time}</span>
         </li>
         {shown.map((it, i) => (
-          <li key={it.label} className="min-w-0">
+          <li key={it.label} className="min-w-0 max-w-full">
             <button
               type="button"
               aria-pressed={it.visible}
               title={t("charts.toggleSeries", { label: it.label })}
               onClick={() => onToggle(i)}
-              className="inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
+              className="inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted pointer-coarse:py-2"
             >
               <span
                 aria-hidden="true"
@@ -174,7 +190,7 @@ function ChartLegend({ items, time, since, onToggle }: { items: LegendItem[]; ti
                 style={{ borderColor: it.color, background: it.visible ? it.color : "transparent" }}
               />
               <span className={cn("truncate", it.visible ? "text-foreground" : "text-muted-foreground line-through")}>{it.label}</span>
-              {it.visible && <span className="font-mono text-muted-foreground">{it.value}</span>}
+              {it.visible && <span className="shrink-0 font-mono text-muted-foreground">{it.value}</span>}
             </button>
           </li>
         ))}
@@ -182,8 +198,8 @@ function ChartLegend({ items, time, since, onToggle }: { items: LegendItem[]; ti
       <div className="ml-auto flex items-center gap-2">
         {since && <span className="py-0.5 text-muted-foreground">{since}</span>}
         {overflow && (
-          <button type="button" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)} className="rounded px-1 py-0.5 font-medium text-primary hover:underline">
-            {expanded ? t("charts.legendLess") : t("charts.legendMore", { count: items.length - LEGEND_COLLAPSED })}
+          <button type="button" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)} className="rounded px-1 py-0.5 font-medium text-primary hover:underline pointer-coarse:py-2">
+            {expanded ? t("charts.legendLess") : t("charts.legendMore", { count: items.length - collapsedCount })}
           </button>
         )}
       </div>
@@ -195,11 +211,13 @@ function ChartLegend({ items, time, since, onToggle }: { items: LegendItem[]; ti
  * Responsive, theme-aware uPlot wrapper. Data transformation lives in
  * lib/series.ts (tested separately). The plot is rebuilt only when its
  * structure (series labels, unit, theme, language, size options) changes;
- * data refreshes and legend toggles go through setSeries/setData.
+ * data refreshes and legend toggles go through setSeries/setData, and
+ * container width changes (resize, rotation, drawer) go through setSize.
  */
 export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden }: TimeSeriesChartProps) {
   const { t, i18n } = useTranslation();
   const { resolved } = useTheme();
+  const mobile = useIsMobile();
   const locale = i18n.resolvedLanguage ?? "en";
   const containerRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -232,12 +250,16 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = Math.floor(entries[0]?.contentRect.width ?? 0);
-      setWidth((prev) => (Math.abs(prev - w) >= 1 ? w : prev));
-    });
+    const update = (w: number) => setWidth((prev) => (Math.abs(prev - w) >= 1 ? w : prev));
+    const onOrientation = () => update(Math.floor(el.getBoundingClientRect().width));
+    window.addEventListener("orientationchange", onOrientation);
+    if (typeof ResizeObserver === "undefined") return () => window.removeEventListener("orientationchange", onOrientation);
+    const ro = new ResizeObserver((entries) => update(Math.floor(entries[0]?.contentRect.width ?? 0)));
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", onOrientation);
+    };
   }, [hasData]);
 
   // Create the plot when its structure changes.
@@ -250,7 +272,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
     const axisColor = cssVar("--chart-axis", "#6b7280");
     const gridColor = cssVar("--chart-grid", "#e5e7eb");
     // Half the widest time label, so the last x tick label is not clipped.
-    const rightPad = Math.ceil(measureText(timeFormatter(locale).format(new Date(2026, 0, 1, 23, 58))) / 2) + 6;
+    const rightPad = Math.ceil(measureText(timeFormatter(locale).format(new Date(2026, 0, 1, 23, 58)), AXIS_FONT) / 2) + 6;
 
     const opts: uPlot.Options = {
       width: widthRef.current,
@@ -287,7 +309,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
           font: AXIS_FONT,
           grid: { stroke: gridColor, width: 1 },
           ticks: { stroke: gridColor, width: 1 },
-          size: 64,
+          size: yAxisSize(AXIS_FONT),
           values: (_u, vals) => vals.map((v) => fmt(v)),
         },
       ],
@@ -374,6 +396,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
         items={items}
         time={lv.time !== null ? formatDateTime(lv.time * 1000, locale) : "–"}
         since={since}
+        collapsedCount={mobile ? LEGEND_COLLAPSED_MOBILE : LEGEND_COLLAPSED}
         onToggle={(i) => {
           const label = aligned.labels[i]!;
           setOverrides((o) => ({ ...o, [label]: !(visible[i] !== false) }));

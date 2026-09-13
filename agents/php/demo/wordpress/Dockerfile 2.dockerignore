@@ -1,9 +1,0 @@
-*
-!ext/
-!demo/
-ext/**/*.o
-ext/**/*.lo
-ext/**/.libs
-ext/modules
-ext/autom4te.cache
-demo/forwarder

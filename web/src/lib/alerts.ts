@@ -409,11 +409,50 @@ export interface RuleEditorSearch {
   /** "attr.cpu.mode=idle": excluded attribute value (not_in filter). */
   exclude?: string;
   name?: string;
+  /** JSON array of AlertFilter ({field, op, values}), e.g. an integration instance's resource attributes. */
+  filters?: string;
+  operator?: string;
+  threshold?: string;
+  /** window_seconds */
+  window?: string;
+  forSeconds?: string;
+  severity?: string;
 }
 
 const AGGS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGS = ["avg", "sum", "min", "max"] as const;
 const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm"];
+const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
+const SEVERITIES = ["critical", "warning", "info"] as const;
+
+/** Parses the `filters` prefill (JSON); invalid entries are dropped, at most 20 are kept. */
+export function parsePrefillFilters(raw: string | undefined): FilterDraft[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: FilterDraft[] = [];
+  for (const f of parsed) {
+    if (!f || typeof f !== "object") continue;
+    const { field, op, values } = f as { field?: unknown; op?: unknown; values?: unknown };
+    if (typeof field !== "string" || field === "" || field.length > 140) continue;
+    if (!(FILTER_OPS as readonly string[]).includes(String(op))) continue;
+    if (!Array.isArray(values) || values.length === 0 || values.length > 100 || !values.every((v) => typeof v === "string")) continue;
+    out.push({ field, op: op as FilterOp, values: (values as string[]).join(", ") });
+    if (out.length === 20) break;
+  }
+  return out;
+}
+
+const intIn = (s: string | undefined, min: number, max: number): number | null => {
+  if (!s || !/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return n >= min && n <= max ? n : null;
+};
 
 export function applyPrefill(s: RuleEditorSearch): RuleDraft {
   const type = TYPES.includes(s.type as AlertRuleType) ? (s.type as AlertRuleType) : "metric_threshold";
@@ -427,6 +466,14 @@ export function applyPrefill(s: RuleEditorSearch): RuleDraft {
     const [field, value] = s.exclude.split("=", 2);
     if (field && value) d.filters.push({ field, op: "not_in", values: value });
   }
+  d.filters.push(...parsePrefillFilters(s.filters).filter((f) => f.field !== "host.id" || !s.host));
+  if (s.operator && (OPERATORS as readonly string[]).includes(s.operator)) d.operator = s.operator as AlertOperator;
+  if (s.threshold !== undefined && s.threshold.trim() !== "" && Number.isFinite(Number(s.threshold))) d.threshold = s.threshold.trim();
+  const window = intIn(s.window, 10, 86400);
+  if (window !== null) d.window_seconds = window;
+  const forSeconds = intIn(s.forSeconds, 0, 86400);
+  if (forSeconds !== null) d.for_seconds = forSeconds;
+  if (s.severity && (SEVERITIES as readonly string[]).includes(s.severity)) d.severity = s.severity as AlertSeverity;
   if (s.name) d.name = s.name;
   else if (s.metric) d.name = s.hostName ? `${s.metric} on ${s.hostName}` : s.metric;
   return d;

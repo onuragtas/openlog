@@ -64,7 +64,7 @@ export function ApmServicesPage() {
         title={t("apm.title")}
         subtitle={t("apm.subtitle")}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="contents">
             <label htmlFor={ids.env} className="sr-only">
               {t("apm.environment")}
             </label>

@@ -146,7 +146,11 @@ static void w_span(ol_w *w, ol_node *n, uint32_t idx, bool with_fast)
 	W_LIT(w, "{\"id\":");
 	w_id(w, n->id);
 	W_LIT(w, ",\"parent\":");
-	w_id(w, p ? p->id : (idx == 0 ? OLG(remote_parent) : 0));
+	if (with_fast && n->seg_parent != OL_NONE && n->seg_parent < OLG(nsegs)) {
+		w_id(w, OLG(segs)[n->seg_parent].id); /* function trace sent: the innermost function segment */
+	} else {
+		w_id(w, p ? p->id : (idx == 0 ? OLG(remote_parent) : 0));
+	}
 	W_LIT(w, ",\"name\":");
 	w_str(w, n->name && *n->name ? n->name : "php");
 	W_LIT(w, ",\"kind\":");
@@ -398,6 +402,63 @@ static bool ol_send_part(ol_w *w, int seq, bool last)
 
 #define OL_TAIL_RESERVE 96
 
+/* zend_string value, UTF-8 cleaned and truncated to 4 KiB */
+static void w_zstr(ol_w *w, zend_string *s)
+{
+	char buf[OL_STR_MAX + 1];
+	size_t n = ol_utf8_clean(buf, ZSTR_VAL(s), ZSTR_LEN(s), OL_STR_MAX);
+	w_strn(w, buf, n);
+}
+
+/* A sampled function segment (ol_sampler.c) as a kind 1 span. Times are ± half a sampling interval. */
+static void w_segment(ol_w *w, ol_seg *s, ol_node *root)
+{
+	uint64_t half = OLG(sample_interval_ns) / 2;
+	uint64_t start = s->first > OLG(req_mono) + half ? s->first - half : OLG(req_mono);
+	uint64_t end = s->last + half;
+	char name[1100];
+	size_t nl;
+
+	W_LIT(w, "{\"id\":");
+	w_id(w, s->id);
+	W_LIT(w, ",\"parent\":");
+	w_id(w, s->parent != OL_NONE && s->parent < OLG(nsegs) ? OLG(segs)[s->parent].id : root->id);
+	W_LIT(w, ",\"name\":");
+	if (s->cname) {
+		nl = (size_t) snprintf(name, sizeof(name), "%.*s::%.*s", (int) (ZSTR_LEN(s->cname) > 512 ? 512 : ZSTR_LEN(s->cname)),
+			ZSTR_VAL(s->cname), (int) (ZSTR_LEN(s->fname) > 512 ? 512 : ZSTR_LEN(s->fname)), ZSTR_VAL(s->fname));
+	} else {
+		nl = (size_t) snprintf(name, sizeof(name), "%.*s", (int) (ZSTR_LEN(s->fname) > 1024 ? 1024 : ZSTR_LEN(s->fname)), ZSTR_VAL(s->fname));
+	}
+	if (nl >= sizeof(name)) {
+		nl = sizeof(name) - 1;
+	}
+	{
+		char clean[sizeof(name)];
+		size_t cl = ol_utf8_clean(clean, name, nl, sizeof(name) - 1);
+		w_strn(w, clean, cl);
+	}
+	W_LIT(w, ",\"kind\":1,\"start\":");
+	w_u64(w, ol_unix_of(start));
+	W_LIT(w, ",\"dur\":");
+	w_u64(w, end > start ? end - start : 0);
+	W_LIT(w, ",\"status\":0,\"attrs\":{\"code.function.name\":");
+	w_zstr(w, s->fname);
+	if (s->cname) {
+		W_LIT(w, ",\"code.namespace\":");
+		w_zstr(w, s->cname);
+	}
+	if (s->file) {
+		W_LIT(w, ",\"code.file.path\":");
+		w_zstr(w, s->file);
+		W_LIT(w, ",\"code.line.number\":");
+		w_u64(w, s->line);
+	}
+	W_LIT(w, ",\"openlog.php.segment\":\"function\",\"openlog.php.samples\":");
+	w_u64(w, s->samples);
+	W_LIT(w, "}}");
+}
+
 static inline bool ol_emitted(ol_node *n, bool segs)
 {
 	return !(n->flags & OL_NF_DEAD) && (!(n->flags & OL_NF_SEGMENT) || segs);
@@ -415,7 +476,7 @@ void ol_emit(void)
 	if (root == NULL) {
 		return;
 	}
-	segs = OLG(seg_kept) > 0 &&
+	segs = (OLG(seg_kept) > 0 || OLG(nsegs) > 0) &&
 		(root->dur >= (uint64_t) OLG(tt_threshold_ms) * 1000000ULL || root->status == OL_STATUS_ERROR);
 
 	/* effective parents: nearest emitted ancestor (parents always have smaller indices) */
@@ -456,17 +517,25 @@ void ol_emit(void)
 		OLG(p_dropped_messages)++;
 		return;
 	}
-	for (i = 0; i < nn; i++) {
-		ol_node *n = ol_node_at(i);
+	for (i = 0; i < nn + (segs ? OLG(nsegs) : 0); i++) {
 		size_t mark;
-		if (!ol_emitted(n, segs)) {
-			continue;
+		if (i < nn) {
+			ol_node *n = ol_node_at(i);
+			if (!ol_emitted(n, segs)) {
+				continue;
+			}
+			mark = w.len;
+			if (any_in_part) {
+				W_LIT(&w, ",");
+			}
+			w_span(&w, n, i, segs);
+		} else {
+			mark = w.len;
+			if (any_in_part) {
+				W_LIT(&w, ",");
+			}
+			w_segment(&w, &OLG(segs)[i - nn], root);
 		}
-		mark = w.len;
-		if (any_in_part) {
-			W_LIT(&w, ",");
-		}
-		w_span(&w, n, i, segs);
 		if (w.ok) {
 			any_in_part = true;
 			continue;

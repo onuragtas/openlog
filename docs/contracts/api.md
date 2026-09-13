@@ -185,10 +185,19 @@ organization is indistinguishable from an unknown one. Parameter errors (`400`) 
 | `name` | required | metric name |
 | `step` | auto (≈ 300 points) | Go duration, min `10s` |
 | `agg` | `avg` for gauges, `rate` for monotonic sums, `last` for non-monotonic sums | `avg`, `min`, `max`, `sum`, `last`, `rate` |
-| `group_by` | all attributes | comma-separated attribute keys; series are merged by these keys |
+| `group_by` | all attributes | comma-separated attribute keys; series are merged by these keys. `resource.<key>` (allowed keys below) groups by a resource attribute, reported as `resource.<key>` in `attributes` |
+| `resource.<key>` | — | exact-match resource attribute filter (AND-ed, one value per key, at most 4) |
 
 `rate` = per-second increase per series per step (counter resets clamp to 0), then summed across merged series.
-Ranges longer than 6h read from the 1-minute rollup table.
+Ranges longer than 6h read from the 1-minute rollup table, except requests with `resource.*` filters or groupings
+(the rollup has no resource attributes), which read raw data points (30-day retention).
+
+Allowed `resource.<key>` keys — integration instance identity and PostgreSQL entities (semantic-conventions §6.1, §6.5):
+`openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`, `service.instance.id`, `server.address`,
+`server.port`, `postgresql.database.name`, `postgresql.table.name`, `postgresql.index.name`. Any other key, an empty or
+repeated value, or a value longer than 1024 bytes → `400 invalid_argument` (reported before the host check). Values are
+bound query parameters. Integration panels select one instance with
+`?resource.openlog.discovery.id=redis&resource.openlog.discovery.instance=/usr/bin/redis-server`.
 
 ```json
 {"metric": {"name": "system.cpu.utilization", "type": "gauge", "unit": "1"}, "step": "60s",

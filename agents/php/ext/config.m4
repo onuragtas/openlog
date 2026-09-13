@@ -6,7 +6,10 @@ PHP_ARG_ENABLE([openlog],
 
 if test "$PHP_OPENLOG" != "no"; then
   OPENLOG_SOURCES="src/ol_module.c src/ol_core.c src/ol_context.c src/ol_json.c src/ol_hooks.c src/ol_util.c \
-    src/inst_frameworks.c src/inst_datastores.c src/inst_http.c"
+    src/ol_sampler.c src/inst_frameworks.c src/inst_datastores.c src/inst_http.c"
+  dnl The transaction tracer's sampler thread.
+  PHP_ADD_LIBRARY(pthread, 1, OPENLOG_SHARED_LIBADD)
+  PHP_SUBST(OPENLOG_SHARED_LIBADD)
   PHP_NEW_EXTENSION(openlog, $OPENLOG_SOURCES, $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -Wall -Wno-unused-parameter -Wno-missing-field-initializers -fvisibility=hidden)
   PHP_ADD_BUILD_DIR([$ext_builddir/src])
   PHP_ADD_INCLUDE([$ext_srcdir/src])

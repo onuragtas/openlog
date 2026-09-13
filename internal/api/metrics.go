@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,16 +79,27 @@ func (s *Server) hostMetrics(w http.ResponseWriter, r *http.Request, sc *query.S
 	if agg != "" && !validAggs[agg] {
 		return badRequest("agg must be one of avg, min, max, sum, last, rate")
 	}
-	if err := requireHost(r, sc, hostID); err != nil {
-		return err
-	}
-	var groupBy []string
+	var groupBy, resGroup []string
 	for _, k := range strings.Split(qp.Get("group_by"), ",") {
 		if k = strings.TrimSpace(k); k != "" {
 			groupBy = append(groupBy, k)
+			if rk, ok := strings.CutPrefix(k, "resource."); ok {
+				if !metricResourceKeys[rk] {
+					return badRequest("group_by: resource.%s: unsupported resource attribute (supported: %s)", truncate(rk, 64), strings.Join(MetricResourceKeys(), ", "))
+				}
+				resGroup = append(resGroup, rk)
+			}
 		}
 	}
-	rollup := to.Sub(from) > rollupMinRange
+	resFilters, err := parseMetricResourceFilters(qp)
+	if err != nil {
+		return err
+	}
+	if err := requireHost(r, sc, hostID); err != nil {
+		return err
+	}
+	// The 1-minute rollup has no resource attributes: resource filters and groupings read raw points.
+	rollup := to.Sub(from) > rollupMinRange && len(resFilters) == 0 && len(resGroup) == 0
 	step, err := chooseStep(qp.Get("step"), from, to, rollup)
 	if err != nil {
 		return err
@@ -100,6 +112,7 @@ func (s *Server) hostMetrics(w http.ResponseWriter, r *http.Request, sc *query.S
 		Where("host_id = {host_id:String}").Param("host_id", hostID).
 		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp <= fromUnixTimestamp64Nano({t_to:Int64})").
 		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano())
+	addMetricResourceFilters(metaQ, resFilters)
 	mrows, err := sc.Query(r.Context(), metaQ)
 	if err != nil {
 		return err
@@ -144,8 +157,14 @@ func (s *Server) hostMetrics(w http.ResponseWriter, r *http.Request, sc *query.S
 			"min(value_min) AS vmin", "max(value_max) AS vmax", "sum(value_sum) AS vsum",
 			"toUInt64(sum(value_count)) AS vcnt", "argMaxMerge(value_last) AS vlast")
 	} else {
+		attrsExpr := "any(attributes) AS attrs"
+		if len(resGroup) > 0 {
+			// Grouped resource attributes join the data point attributes as "resource.<key>".
+			attrsExpr = "any(mapUpdate(CAST(attributes, 'Map(String, String)'), mapApply((k, v) -> (concat('resource.', k), v), " +
+				"mapFilter((k, v) -> has({res_group:Array(String)}, k), CAST(resource_attributes, 'Map(String, String)'))))) AS attrs"
+		}
 		inner = sc.From(query.Metrics).Columns(
-			"series_id", "any(attributes) AS attrs",
+			"series_id", attrsExpr,
 			"toStartOfInterval(timestamp, toIntervalSecond({step:UInt32})) AS t",
 			"min(value) AS vmin", "max(value) AS vmax", "sum(value) AS vsum",
 			"toUInt64(count()) AS vcnt", "argMax(value, timestamp) AS vlast")
@@ -156,6 +175,10 @@ func (s *Server) hostMetrics(w http.ResponseWriter, r *http.Request, sc *query.S
 		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
 		Param("step", uint32(step/time.Second)).
 		GroupBy("series_id", "t")
+	addMetricResourceFilters(inner, resFilters)
+	if len(resGroup) > 0 {
+		inner.Param("res_group", resGroup)
+	}
 
 	source := inner
 	var aggExpr string
@@ -240,6 +263,71 @@ func (s *Server) hostMetrics(w http.ResponseWriter, r *http.Request, sc *query.S
 	resp["series"] = series
 	writeJSON(w, http.StatusOK, resp)
 	return nil
+}
+
+// metricResourceKeys are the resource attributes accepted as `resource.<key>=<value>` filters and
+// `group_by=resource.<key>` on GET /hosts/{host_id}/metrics: integration instance identity and
+// PostgreSQL entities (semantic-conventions §6.1, §6.5). The allowlist keeps queries on attributes
+// the infra agent sets.
+var metricResourceKeys = map[string]bool{
+	"openlog.discovery.id":       true,
+	"openlog.discovery.instance": true,
+	"openlog.integration.id":     true,
+	"service.instance.id":        true,
+	"server.address":             true,
+	"server.port":                true,
+	"postgresql.database.name":   true,
+	"postgresql.table.name":      true,
+	"postgresql.index.name":      true,
+}
+
+const maxMetricResourceFilters = 4
+
+// MetricResourceKeys returns the supported metric resource attribute keys, sorted.
+func MetricResourceKeys() []string {
+	keys := make([]string, 0, len(metricResourceKeys))
+	for k := range metricResourceKeys {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+type attrFilter struct{ key, value string }
+
+// parseMetricResourceFilters validates resource.<key>=<value> parameters (sorted by key).
+func parseMetricResourceFilters(qp url.Values) ([]attrFilter, error) {
+	var keys []string
+	for p := range qp {
+		if k, ok := strings.CutPrefix(p, "resource."); ok {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	if len(keys) > maxMetricResourceFilters {
+		return nil, badRequest("at most %d resource.* filters", maxMetricResourceFilters)
+	}
+	out := make([]attrFilter, 0, len(keys))
+	for _, k := range keys {
+		if !metricResourceKeys[k] {
+			return nil, badRequest("resource.%s: unsupported resource attribute filter (supported: %s)", truncate(k, 64), strings.Join(MetricResourceKeys(), ", "))
+		}
+		vals := qp["resource."+k]
+		if len(vals) != 1 || vals[0] == "" || len(vals[0]) > maxAttrFilterValueBytes {
+			return nil, badRequest("resource.%s: exactly one non-empty value of at most %d bytes is required", k, maxAttrFilterValueBytes)
+		}
+		out = append(out, attrFilter{k, vals[0]})
+	}
+	return out, nil
+}
+
+// addMetricResourceFilters adds one bound `resource_attributes[key] = value` condition per filter.
+func addMetricResourceFilters(q *query.Select, fs []attrFilter) {
+	for i, f := range fs {
+		n := strconv.Itoa(i)
+		q.Where("resource_attributes[{res_key_"+n+":String}] = {res_value_"+n+":String}").
+			Param("res_key_"+n, f.key).Param("res_value_"+n, f.value)
+	}
 }
 
 // formatStep renders the step in whole seconds, e.g. "60s".

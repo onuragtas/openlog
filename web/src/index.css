@@ -125,3 +125,62 @@
 .uplot .u-select {
   background: color-mix(in oklch, var(--primary) 18%, transparent);
 }
+
+/* Responsive */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* Phones: captions and badges get 13px (body text is 14px). */
+@media (max-width: 767px) {
+  :root {
+    --text-xs: 0.8125rem;
+  }
+}
+/* React Flow controls: touch-sized buttons. */
+@media (pointer: coarse) {
+  .react-flow__controls-button {
+    width: 40px;
+    height: 40px;
+  }
+  .react-flow__controls-button svg {
+    max-width: 16px;
+    max-height: 16px;
+  }
+}
+
+/* Sheets (components/ui/sheet.tsx) */
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheet-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes sheet-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes sheet-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-overlay[data-state="open"] {
+    animation: sheet-fade 150ms ease-out;
+  }
+  .sheet[data-state="open"][data-side="left"] {
+    animation: sheet-in-left 200ms ease-out;
+  }
+  .sheet[data-state="open"][data-side="right"] {
+    animation: sheet-in-right 200ms ease-out;
+  }
+  .sheet[data-state="open"][data-side="bottom"] {
+    animation: sheet-in-bottom 200ms ease-out;
+  }
+}

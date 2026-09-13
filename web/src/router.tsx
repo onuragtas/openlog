@@ -14,6 +14,8 @@ import { validateRangeSearch, type RangeSpec } from "@/lib/time";
 // Screens are code-split per route (uPlot only loads with host detail).
 const HostsPage = lazyRouteComponent(() => import("@/routes/hosts"), "HostsPage");
 const HostDetailPage = lazyRouteComponent(() => import("@/routes/host-detail"), "HostDetailPage");
+const HostIntegrationPage = lazyRouteComponent(() => import("@/routes/integrations"), "HostIntegrationPage");
+const IntegrationsPage = lazyRouteComponent(() => import("@/routes/integrations"), "IntegrationsPage");
 const LogsPage = lazyRouteComponent(() => import("@/routes/logs"), "LogsPage");
 const TracePage = lazyRouteComponent(() => import("@/routes/trace"), "TracePage");
 const InventorySearchPage = lazyRouteComponent(() => import("@/routes/inventory-search"), "InventorySearchPage");
@@ -142,6 +144,27 @@ const hostDetailRoute = createRoute({
     lunit: str(s.lunit),
   }),
   component: HostDetailPage,
+});
+
+// ---- Integrations (routes/integrations.tsx) ----
+
+/** Panel of one integration instance: `$instance` is the discovered service instance (URL-encoded). */
+const hostIntegrationRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/hosts/$hostId/integrations/$discoveryId/$instance",
+  component: HostIntegrationPage,
+});
+
+export interface IntegrationsSearch {
+  status?: string;
+  q?: string;
+}
+
+const integrationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/integrations",
+  validateSearch: (s: Record<string, unknown>): IntegrationsSearch => ({ status: str(s.status), q: str(s.q) }),
+  component: IntegrationsPage,
 });
 
 export interface LogsSearch {
@@ -306,6 +329,12 @@ export interface AlertRuleNewSearch {
   groupBy?: string;
   exclude?: string;
   name?: string;
+  filters?: string;
+  operator?: string;
+  threshold?: string;
+  window?: string;
+  forSeconds?: string;
+  severity?: string;
 }
 
 const alertsRuleNewRoute = createRoute({
@@ -321,6 +350,12 @@ const alertsRuleNewRoute = createRoute({
     groupBy: typeof s.groupBy === "string" ? s.groupBy : undefined,
     exclude: str(s.exclude),
     name: str(s.name),
+    filters: str(s.filters),
+    operator: str(s.operator),
+    threshold: str(s.threshold),
+    window: str(s.window),
+    forSeconds: str(s.forSeconds),
+    severity: str(s.severity),
   }),
   component: AlertsRuleNewPage,
 });
@@ -349,6 +384,8 @@ export const routeTree = rootRoute.addChildren([
     indexRoute,
     hostsRoute,
     hostDetailRoute,
+    hostIntegrationRoute,
+    integrationsRoute,
     apmServicesRoute,
     apmServiceRoute,
     apmMapRoute,

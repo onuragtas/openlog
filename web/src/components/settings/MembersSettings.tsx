@@ -88,7 +88,7 @@ export function MembersSettings() {
         ) : members.data.length === 0 ? (
           <EmptyState>{t("settings.members.empty")}</EmptyState>
         ) : (
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("settings.columns.member")}</TableHead>
@@ -130,7 +130,7 @@ export function MembersSettings() {
                         <Badge variant="secondary">{t(`settings.roles.${m.role}`)}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
+                    <TableCell label={t("settings.columns.joined")} className="hidden md:table-cell">
                       <DateTimeText value={m.joined_at} />
                     </TableCell>
                     <TableCell className="text-right">
@@ -196,7 +196,7 @@ export function MembersSettings() {
           ) : invitations.data.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("settings.members.pendingEmpty")}</p>
           ) : (
-            <Table>
+            <Table mobile="stack">
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("settings.columns.email")}</TableHead>
@@ -211,12 +211,14 @@ export function MembersSettings() {
               <TableBody>
                 {invitations.data.map((inv) => (
                   <TableRow key={inv.id}>
-                    <TableCell>{inv.email}</TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:w-auto max-md:break-all">{inv.email}</TableCell>
+                    <TableCell className="max-md:w-auto">
                       <Badge variant="secondary">{t(`settings.roles.${inv.role}`)}</Badge>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">{inv.invited_by_email}</TableCell>
-                    <TableCell>
+                    <TableCell label={t("settings.columns.invitedBy")} className="hidden break-all md:table-cell">
+                      {inv.invited_by_email}
+                    </TableCell>
+                    <TableCell label={t("settings.columns.expires")}>
                       <DateTimeText value={inv.expires_at} relative />
                     </TableCell>
                     <TableCell className="text-right">

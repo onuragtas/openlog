@@ -62,6 +62,59 @@ func TestUnknownHostIs404(t *testing.T) {
 	}
 }
 
+func TestMetricResourceFilters(t *testing.T) {
+	s, conn := newTestServer(t)
+	conn.hostKnown = true
+	h := s.Handler()
+	q := url.Values{
+		"name":                                {"redis.memory.used"},
+		"from":                                {"2026-09-13T00:00:00Z"},
+		"to":                                  {"2026-09-13T23:00:00Z"}, // > 6h: would read the rollup without filters
+		"resource.openlog.discovery.id":       {"redis"},
+		"resource.openlog.discovery.instance": {"/usr/bin/redis-server'; DROP TABLE x --"},
+		"group_by":                            {"db,resource.postgresql.database.name"},
+	}
+	rec := get(t, h, "/api/v1/hosts/h1/metrics?"+q.Encode())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body)
+	}
+	// Statements: host check, metadata. The mock returns no metadata rows, so no data query runs;
+	// the metadata query must carry the filters.
+	meta := conn.sql[len(conn.sql)-1]
+	for _, want := range []string{
+		"(resource_attributes[{res_key_0:String}] = {res_value_0:String})",
+		"(resource_attributes[{res_key_1:String}] = {res_value_1:String})",
+	} {
+		if !strings.Contains(meta, want) {
+			t.Errorf("filter %q missing: %s", want, meta)
+		}
+	}
+	for _, leaked := range []string{"redis", "DROP", "discovery"} {
+		if strings.Contains(meta, leaked) {
+			t.Errorf("value %q interpolated into SQL: %s", leaked, meta)
+		}
+	}
+
+	for _, bad := range []struct{ query, want string }{
+		{"resource.host.name=web-1", "resource.host.name: unsupported resource attribute filter"},
+		{"resource.tenant_id=other", "unsupported resource attribute filter"},
+		{"resource.openlog.discovery.id=", "exactly one non-empty value"},
+		{"resource.openlog.discovery.id=a&resource.openlog.discovery.id=b", "exactly one non-empty value"},
+		{"resource.server.port=" + strings.Repeat("1", 1025), "at most 1024 bytes"},
+		{"group_by=resource.env", "group_by: resource.env: unsupported resource attribute"},
+		{"resource.server.port=1&resource.server.address=a&resource.service.instance.id=b&resource.openlog.integration.id=c&resource.openlog.discovery.id=d", "at most 4 resource.* filters"},
+	} {
+		s, conn := newTestServer(t) // unknown host: parameter errors come before the existence check
+		rec := get(t, s.Handler(), "/api/v1/hosts/h1/metrics?name=x&"+bad.query)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), bad.want) {
+			t.Errorf("%s: status %d body %s", truncate(bad.query, 60), rec.Code, rec.Body)
+		}
+		if len(conn.sql) != 0 {
+			t.Errorf("%s: query executed despite invalid filter", truncate(bad.query, 60))
+		}
+	}
+}
+
 func TestLogAttributeFilters(t *testing.T) {
 	s, conn := newTestServer(t)
 	h := s.Handler()

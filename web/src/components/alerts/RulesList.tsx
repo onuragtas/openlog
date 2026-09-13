@@ -27,14 +27,16 @@ function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: 
         </Link>
         {rule.status.last_error && <p className="max-w-sm truncate text-xs text-destructive-text">{rule.status.last_error}</p>}
       </TableCell>
-      <TableCell className="whitespace-nowrap">{t(`alerts.types.${rule.type}`)}</TableCell>
-      <TableCell>
+      <TableCell label={t("alerts.rules.columns.type")} className="whitespace-nowrap">
+        {t(`alerts.types.${rule.type}`)}
+      </TableCell>
+      <TableCell className="max-md:w-auto">
         <SeverityBadge severity={rule.severity} />
       </TableCell>
-      <TableCell>
+      <TableCell className="max-md:w-auto">
         <RuleStateBadge state={rule.status.state} />
       </TableCell>
-      <TableCell>
+      <TableCell className="max-md:w-auto">
         <span className="inline-flex items-center gap-1">
           {rule.channel_ids.map((id) => {
             const c = channelTypes.get(id);
@@ -47,12 +49,12 @@ function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: 
           })}
         </span>
       </TableCell>
-      <TableCell className="whitespace-nowrap text-sm">
+      <TableCell label={t("alerts.rules.columns.evaluated")} className="whitespace-nowrap text-sm">
         {rule.status.last_evaluated_at ? <DateTimeText value={rule.status.last_evaluated_at} relative /> : <span className="text-muted-foreground">{t("alerts.rules.notEvaluated")}</span>}
       </TableCell>
       <TableCell>
         {editable && (
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 max-md:justify-start">
             <label className="inline-flex items-center gap-2 text-sm">
               <input type="checkbox" role="switch" aria-label={t("alerts.rules.toggle", { name: rule.name })} checked={rule.enabled} disabled={toggle.isPending} onChange={() => toggle.mutate()} />
               <span className="sr-only lg:not-sr-only">{rule.enabled ? t("alerts.rules.disable") : t("alerts.rules.enable")}</span>
@@ -90,7 +92,7 @@ export function RulesList() {
         <EmptyState>{t("alerts.rules.empty")}</EmptyState>
       ) : (
         <div className="rounded-xl border bg-card">
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("alerts.rules.columns.name")}</TableHead>

@@ -103,7 +103,7 @@ export function ApiKeysSettings() {
         ) : keys.data.length === 0 ? (
           <EmptyState icon={<KeyRound className="size-5" aria-hidden="true" />}>{t("settings.apiKeys.empty")}</EmptyState>
         ) : (
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("settings.columns.name")}</TableHead>
@@ -121,18 +121,20 @@ export function ApiKeysSettings() {
               {keys.data.map((k) => (
                 <TableRow key={k.id}>
                   <TableCell className="font-medium">{k.name}</TableCell>
-                  <TableCell>
+                  <TableCell label={t("settings.columns.key")}>
                     <code className="font-mono text-xs">{k.prefix}</code>
                     <span aria-hidden="true">…</span>
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell">{k.created_by_email || "–"}</TableCell>
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
+                    {k.created_by_email || "–"}
+                  </TableCell>
+                  <TableCell label={t("settings.columns.lastUsed")} className="hidden md:table-cell">
                     <DateTimeText value={k.last_used_at} relative />
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell label={t("settings.columns.expires")} className="hidden md:table-cell">
                     <DateTimeText value={k.expires_at} />
                   </TableCell>
-                  <TableCell>{status(k)}</TableCell>
+                  <TableCell className="max-md:w-auto">{status(k)}</TableCell>
                   <TableCell className="text-right">
                     {canRevoke(k) && (
                       <ConfirmButton

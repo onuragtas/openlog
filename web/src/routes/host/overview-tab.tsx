@@ -159,7 +159,7 @@ export function HostOverviewTab({ hostId }: { hostId: string }) {
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const canAlert = can(useMe().data?.role, "alerts.write");
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {OVERVIEW_CHARTS.map((def) => (
         <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} canAlert={canAlert} />
       ))}

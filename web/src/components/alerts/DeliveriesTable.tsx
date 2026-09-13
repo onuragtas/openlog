@@ -10,7 +10,7 @@ export function DeliveriesTable({ deliveries }: { deliveries: AlertDelivery[] })
   const { t } = useTranslation();
   if (deliveries.length === 0) return <EmptyState className="py-4">{t("alerts.deliveries.empty")}</EmptyState>;
   return (
-    <Table>
+    <Table mobile="stack">
       <TableHeader>
         <TableRow>
           <TableHead>{t("alerts.deliveries.columns.channel")}</TableHead>
@@ -29,7 +29,7 @@ export function DeliveriesTable({ deliveries }: { deliveries: AlertDelivery[] })
                 {d.channel_name || d.channel_type}
               </span>
             </TableCell>
-            <TableCell>{t(`alerts.deliveries.kinds.${d.kind}`)}</TableCell>
+            <TableCell label={t("alerts.deliveries.columns.kind")}>{t(`alerts.deliveries.kinds.${d.kind}`)}</TableCell>
             <TableCell>
               <Badge variant={d.status === "delivered" ? "success" : d.status === "failed" ? "destructive" : d.status === "suppressed" ? "muted" : "warning"}>
                 {t(`alerts.deliveries.statuses.${d.status}`)}
@@ -49,7 +49,7 @@ export function DeliveriesTable({ deliveries }: { deliveries: AlertDelivery[] })
                 ))}
               </ol>
             </TableCell>
-            <TableCell className="whitespace-nowrap">
+            <TableCell label={t("alerts.deliveries.columns.created")} className="whitespace-nowrap">
               <DateTimeText value={d.created_at} relative />
             </TableCell>
           </TableRow>

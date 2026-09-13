@@ -101,6 +101,7 @@ typedef struct ol_node {
 	ol_event *events;
 	uint64_t fast_ns;
 	uint32_t parent;
+	uint32_t seg_parent;  /* innermost sampled function segment when the span started, or OL_NONE */
 	uint32_t emit_parent; /* computed at emission */
 	uint32_t fast_calls;
 	uint16_t nattrs;
@@ -133,6 +134,27 @@ typedef struct ol_chunk {
 	size_t size;
 	char data[1];
 } ol_chunk;
+
+/* one level of the sampled userland call path (transaction tracer) */
+#define OL_PATH_MAX 256
+typedef struct ol_pathent {
+	zend_execute_data *ex;
+	zend_function *fn;
+	uint32_t seg;      /* index into OLG(segs) or OL_NONE */
+} ol_pathent;
+
+/* a sampled function segment; turned into a span only when the function trace is sent */
+typedef struct ol_seg {
+	uint64_t id;
+	uint64_t first;    /* monotonic ns of the first / last sample containing the frame */
+	uint64_t last;
+	zend_string *fname; /* referenced (released at request end) */
+	zend_string *cname;
+	zend_string *file;
+	uint32_t line;
+	uint32_t parent;   /* parent segment index or OL_NONE (root) */
+	uint32_t samples;
+} ol_seg;
 
 /* one registered hook */
 struct ol_hook;
@@ -194,7 +216,13 @@ ZEND_BEGIN_MODULE_GLOBALS(openlog)
 	double applied_ratio;
 	uint64_t req_mono;
 	uint64_t req_unix;
-	uint64_t min_segment_ns;
+	uint64_t sample_interval_ns;
+	void *sampler;               /* ol_sampler of this process/thread */
+	ol_pathent path[OL_PATH_MAX];
+	uint32_t path_depth;
+	ol_seg *segs;
+	uint32_t nsegs;
+	uint32_t segs_cap;
 	uint64_t seg_bytes;
 	uint64_t seg_bytes_cap;
 
@@ -299,8 +327,6 @@ bool ol_span_is_open(zend_execute_data *ex);
 uint32_t ol_span_detached(const char *name, uint8_t kind);
 void ol_node_finish(uint32_t idx);
 void ol_node_discard(uint32_t idx);
-void ol_tracer_begin(zend_execute_data *ex);
-void ol_tracer_end(zend_execute_data *ex, zend_function *fn);
 void ol_fiber_stacks_free(void);
 void ol_close_open_nodes(void);
 void ol_attr_str(ol_node *n, const char *key, const char *s, size_t len);
@@ -317,6 +343,15 @@ void ol_fail(const char *reason);
 void ol_log(int level, const char *fmt, ...) ZEND_ATTRIBUTE_FORMAT(printf, 2, 3);
 void ol_fiber_switch(void *from, void *to);
 void ol_fiber_destroy(void *ctx);
+
+/* ---- ol_sampler.c ---- */
+bool ol_sampler_arm(void);
+void ol_sampler_disarm(void);
+void ol_sampler_stop(void *sampler);
+void ol_sampler_interrupt(zend_execute_data *ex);
+void ol_sampler_finish(void);
+void ol_segs_release(void);
+uint32_t ol_sample_now(zend_execute_data *ex);
 
 /* ---- ol_context.c ---- */
 bool ol_parse_traceparent(const char *tp, size_t len, uint8_t *trace_id, uint64_t *parent, uint8_t *flags);

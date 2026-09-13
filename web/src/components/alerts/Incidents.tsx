@@ -96,7 +96,7 @@ export function IncidentsList({
         </EmptyState>
       ) : (
         <div className="rounded-xl border bg-card">
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("alerts.incidents.columns.state")}</TableHead>
@@ -112,7 +112,7 @@ export function IncidentsList({
                 const end = inc.resolved_at ? parse(inc.resolved_at) : now;
                 return (
                   <TableRow key={inc.id} data-testid="incident-row">
-                    <TableCell>
+                    <TableCell className="max-md:w-auto">
                       <div className="flex flex-wrap gap-1">
                         <IncidentStateBadge state={inc.state} />
                         {inc.muted && (
@@ -124,7 +124,7 @@ export function IncidentsList({
                         {inc.flapping && <Badge variant="outline">{t("alerts.incidents.flapping")}</Badge>}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:w-auto">
                       <SeverityBadge severity={inc.severity} />
                     </TableCell>
                     <TableCell className="max-w-xl">
@@ -132,11 +132,13 @@ export function IncidentsList({
                         {inc.summary || inc.rule_name}
                       </Link>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{inc.rule_name}</TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell label={t("alerts.incidents.columns.rule")} className="whitespace-nowrap">
+                      {inc.rule_name}
+                    </TableCell>
+                    <TableCell label={t("alerts.incidents.columns.opened")} className="whitespace-nowrap">
                       <DateTimeText value={inc.opened_at} relative />
                     </TableCell>
-                    <TableCell className="whitespace-nowrap font-mono text-xs">{formatDurationShort(Math.max(0, (end - parse(inc.opened_at)) / 1000))}</TableCell>
+                    <TableCell label={t("alerts.incidents.columns.duration")} className="whitespace-nowrap font-mono text-xs">{formatDurationShort(Math.max(0, (end - parse(inc.opened_at)) / 1000))}</TableCell>
                   </TableRow>
                 );
               })}
@@ -266,8 +268,8 @@ export function IncidentDetail({ id }: { id: string }) {
                   {t("alerts.incident.resolve")}
                 </Button>
               ) : (
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="flex flex-col gap-1">
+                <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
+                  <div className="flex w-full flex-col gap-1 sm:w-auto">
                     <label htmlFor={`${uid}-rnote`} className="text-sm font-medium">
                       {t("alerts.incident.resolveNote")}
                     </label>
@@ -275,7 +277,7 @@ export function IncidentDetail({ id }: { id: string }) {
                       id={`${uid}-rnote`}
                       value={resolveNote}
                       onChange={(e) => setResolveNote(e.target.value)}
-                      className="h-9 w-72 rounded-md border border-input bg-background px-3 text-sm"
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-72 pointer-coarse:h-10 pointer-coarse:text-base"
                     />
                   </div>
                   <Button type="button" disabled={resolve.isPending} onClick={() => resolve.mutate()}>

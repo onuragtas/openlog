@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
-import { axisTickLabels, timeFormatter } from "@/lib/chart-axis";
+import { axisTickLabels, timeFormatter, yAxisSize } from "@/lib/chart-axis";
 import type { PreviewBand } from "@/lib/alerts";
 import { formatDateTime, formatValue, type UnitKind } from "@/lib/format";
 import { alignSeries, type ChartSeriesInput } from "@/lib/series";
@@ -119,7 +119,7 @@ export function PreviewChart({ series, unit, threshold, recoveryThreshold, bands
       scales: { x: { time: true, range: () => [from / 1000, to / 1000] }, y: { range: () => [min < 0 ? min - pad : Math.max(0, min - pad), max + pad] } },
       axes: [
         { stroke: axis, font: AXIS_FONT, space: 64, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 }, values: (_u, splits, _i, _s, incr) => axisTickLabels(splits, incr, locale) },
-        { stroke: axis, font: AXIS_FONT, size: 64, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 }, values: (_u, vals) => vals.map((v) => fmt(v)) },
+        { stroke: axis, font: AXIS_FONT, size: yAxisSize(AXIS_FONT), grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 }, values: (_u, vals) => vals.map((v) => fmt(v)) },
       ],
       series: [{}, ...aligned.labels.map((label, i) => ({ label, stroke: paletteColor(i, resolved), width: 1.5, spanGaps: false, points: { show: false } }))],
       plugins: [overlay],

@@ -129,8 +129,25 @@ paths:
           schema: { $ref: "#/components/schemas/Aggregation" }
         - name: group_by
           in: query
-          description: Comma-separated attribute keys; series are merged by these keys. Default all attributes.
+          description: |
+            Comma-separated attribute keys; series are merged by these keys. Default all attributes.
+            `resource.<key>` (allowlisted keys as for `resource` filters) groups by a resource attribute; the series
+            attributes then contain `resource.<key>`.
           schema: { type: string, example: cpu.mode }
+        - name: resource
+          in: query
+          style: form
+          explode: true
+          description: |
+            `resource.<key>=<value>`: exact-match resource attribute filters (AND-ed, one value per key, at most 4).
+            Allowed keys: `openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`,
+            `service.instance.id`, `server.address`, `server.port`, `postgresql.database.name`,
+            `postgresql.table.name`, `postgresql.index.name`. Other keys, empty/repeated values or values over
+            1024 bytes → 400. Requests with resource filters or resource groupings read raw data points (no rollup).
+          schema:
+            type: object
+            additionalProperties: { type: string }
+          example: { "resource.openlog.discovery.id": redis, "resource.openlog.discovery.instance": /usr/bin/redis-server }
       responses:
         "200":
           description: OK
@@ -2061,11 +2078,21 @@ components:
           items: { type: string }
         integration:
           type: object
+          description: Running integration of the service (semantic-conventions §3.4, §6).
           properties:
-            id: { type: string }
+            id: { type: string, description: "Integration id: nginx, redis, mysql, postgresql, docker, …" }
             status:
               type: string
-              enum: [enabled, needs_configuration, not_available]
+              enum: [enabled, needs_configuration, error, not_available]
+            error:
+              type: string
+              description: Sanitized reason (≤ 256 bytes, never credentials); also set on partial collections with status enabled.
+            hint:
+              type: string
+              description: Multi-line config.yaml snippet that configures the instance (with needs_configuration); shown verbatim.
+            endpoint:
+              type: string
+              description: Endpoint of the last successful collection (host:port, unix:<path> or the nginx status URL).
         apm_hint:
           oneOf:
             - type: "null"

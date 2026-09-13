@@ -42,7 +42,7 @@ export function TransactionTable({ transactions, apdexTMs, onOpen, selected }: {
             <TableCell className="max-w-[28rem]">
               <button
                 type="button"
-                className="block max-w-full truncate text-left font-medium hover:underline"
+                className="block max-w-full truncate text-left font-medium hover:underline max-md:max-w-[50vw]"
                 title={tx.transaction_name}
                 aria-label={t("apm.transactions.open", { name: tx.transaction_name })}
                 aria-pressed={tx.transaction_name === selected}
@@ -154,7 +154,7 @@ function TransactionDetail({ scope, range, name, onClose, onShowTraces }: { scop
         ) : (
           <>
             <RedTiles red={q.data.totals} apdexTMs={q.data.apdex_t_ms} />
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <ChartCard title={t("apm.transactions.histogram")}>
                 <LatencyHistogram bins={q.data.histogram} />
               </ChartCard>
@@ -170,7 +170,7 @@ function TransactionDetail({ scope, range, name, onClose, onShowTraces }: { scop
                 ) : (
                   <ul className="flex flex-col divide-y text-sm" data-testid="slowest-traces">
                     {q.data.slowest.map((s) => (
-                      <li key={s.span_id} className="flex items-center justify-between gap-3 py-1.5">
+                      <li key={s.span_id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-1.5">
                         <Link to="/traces/$traceId" params={{ traceId: s.trace_id }} search={{ span: s.span_id }} className="font-mono text-xs text-primary hover:underline" aria-label={t("apm.traces.openTrace", { id: s.trace_id })}>
                           {s.trace_id.slice(0, 16)}…
                         </Link>

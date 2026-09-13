@@ -77,7 +77,7 @@ export function LicenseKeysSettings() {
         ) : keys.data.length === 0 ? (
           <EmptyState icon={<KeyRound className="size-5" aria-hidden="true" />}>{t("settings.licenseKeys.empty")}</EmptyState>
         ) : (
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("settings.columns.name")}</TableHead>
@@ -97,18 +97,20 @@ export function LicenseKeysSettings() {
               {keys.data.map((k) => (
                 <TableRow key={k.id}>
                   <TableCell className="font-medium">{k.name}</TableCell>
-                  <TableCell>
+                  <TableCell label={t("settings.columns.key")}>
                     <code className="font-mono text-xs">{k.prefix}</code>
                     <span aria-hidden="true">…</span>
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell">{k.created_by_email || "–"}</TableCell>
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
+                    {k.created_by_email || "–"}
+                  </TableCell>
+                  <TableCell label={t("settings.columns.created")} className="hidden md:table-cell">
                     <DateTimeText value={k.created_at} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell label={t("settings.columns.lastUsed")}>
                     <DateTimeText value={k.last_used_at} relative />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-md:w-auto">
                     {k.revoked_at ? <Badge variant="muted">{t("settings.revoked")}</Badge> : <Badge variant="success">{t("settings.active")}</Badge>}
                   </TableCell>
                   {canManage && (

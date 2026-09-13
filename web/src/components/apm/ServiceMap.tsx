@@ -1,16 +1,17 @@
 // Service map: React Flow canvas (MIT, @xyflow/react) laid out with dagre (lib/apm-map.ts), plus an
 // accessible table of the same connections. Service nodes open the service page.
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { Background, Controls, Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Link } from "@tanstack/react-router";
 import { Box, Database, Globe, MessageSquare } from "lucide-react";
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { ApmMap, ApmMapNode } from "@/api/apm";
 import { EmptyState } from "@/components/StateViews";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMs, formatRate, formatRpm, parseServiceNodeId } from "@/lib/apm";
 import { layoutMap } from "@/lib/apm-map";
+import { useIsMobile } from "@/lib/media";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,19 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520 }: Servi
   const { resolved } = useTheme();
   const locale = i18n.resolvedLanguage ?? "en";
   const names = useMemo(() => new Map(data.nodes.map((n) => [n.id, n.name])), [data.nodes]);
+  const mobile = useIsMobile();
+  const flowRef = useRef<ReactFlowInstance<MapNode, Edge> | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const empty = data.nodes.length === 0;
+
+  // Keep the whole graph in view when the canvas is resized (rotation, drawer, window size).
+  useEffect(() => {
+    const el = boxRef.current;
+    if (empty || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => void flowRef.current?.fitView({ padding: 0.15 }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [empty]);
 
   const { nodes, edges } = useMemo(() => {
     const pos = layoutMap(data.nodes, data.edges, { nodeWidth: NODE_W, nodeHeight: NODE_H });
@@ -125,8 +139,18 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520 }: Servi
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-lg border bg-background" style={{ height }} data-testid="service-map" role="region" aria-label={t("apm.map.canvas")}>
+      <div
+        ref={boxRef}
+        className="overflow-hidden rounded-lg border bg-background"
+        style={{ height: mobile ? Math.min(height, 420) : height }}
+        data-testid="service-map"
+        role="region"
+        aria-label={t("apm.map.canvas")}
+      >
         <ReactFlow
+          onInit={(instance) => {
+            flowRef.current = instance;
+          }}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}

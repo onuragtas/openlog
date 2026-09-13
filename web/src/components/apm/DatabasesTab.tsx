@@ -58,7 +58,7 @@ export function DatabasesTab({ scope, range, sort, onSort }: { scope: ServiceSco
               {q.data.map((d) => (
                 <TableRow key={`${d.db_system}|${d.db_name}|${d.statement}`}>
                   <TableCell className="max-w-[36rem]">
-                    <code className="block truncate font-mono text-xs" title={d.statement}>
+                    <code className="block truncate font-mono text-xs max-md:max-w-[50vw]" title={d.statement}>
                       {d.statement}
                     </code>
                   </TableCell>

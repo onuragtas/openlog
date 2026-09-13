@@ -163,7 +163,7 @@ export function MutesManager() {
         <EmptyState>{t("alerts.mutes.empty")}</EmptyState>
       ) : (
         <div className="rounded-xl border bg-card">
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("alerts.mutes.columns.name")}</TableHead>
@@ -190,16 +190,18 @@ export function MutesManager() {
                       <span className="font-medium">{m.name}</span>
                       {m.comment && <p className="text-xs text-muted-foreground">{m.comment}</p>}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
+                    <TableCell label={t("alerts.mutes.columns.window")} className="whitespace-nowrap text-sm">
                       <DateTimeText value={m.starts_at} /> – <DateTimeText value={m.ends_at} />
                     </TableCell>
-                    <TableCell className="text-sm">{scope.join(" · ")}</TableCell>
-                    <TableCell>
+                    <TableCell label={t("alerts.mutes.columns.scope")} className="text-sm">
+                      {scope.join(" · ")}
+                    </TableCell>
+                    <TableCell className="max-md:w-auto">
                       <Badge variant={status === "active" ? "warning" : status === "scheduled" ? "secondary" : "muted"}>{t(`alerts.mutes.${status}`)}</Badge>
                     </TableCell>
                     <TableCell>
                       {canEditOwned(me?.role, m.created_by_user_id, me?.user?.id) && (
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2 max-md:justify-start">
                           <Button type="button" variant="outline" size="sm" onClick={() => setEditing(m)}>
                             {t("alerts.mutes.edit")}
                           </Button>
