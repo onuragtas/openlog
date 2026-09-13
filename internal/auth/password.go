@@ -29,7 +29,7 @@ var DefaultPasswordParams = PasswordParams{Memory: 19 * 1024, Time: 2, Threads: 
 
 // Password length limits (bytes for the maximum, characters for the minimum).
 const (
-	MinPasswordLen = 12
+	MinPasswordLen = 8
 	MaxPasswordLen = 256
 )
 

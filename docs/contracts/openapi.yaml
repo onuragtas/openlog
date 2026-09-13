@@ -2441,7 +2441,7 @@ components:
       required: [email, password, organization_name]
       properties:
         email: { type: string }
-        password: { type: string, minLength: 12 }
+        password: { type: string, minLength: 8 }
         name: { type: string }
         organization_name: { type: string }
 
@@ -2450,7 +2450,7 @@ components:
       required: [current_password, new_password]
       properties:
         current_password: { type: string }
-        new_password: { type: string, minLength: 12 }
+        new_password: { type: string, minLength: 8 }
 
     NameRequest:
       type: object

@@ -28,7 +28,7 @@ export function InvitePage() {
     retry: false,
     staleTime: Infinity,
   });
-  const minLength = useQuery(authConfigQuery()).data?.password_min_length ?? 12;
+  const minLength = useQuery(authConfigQuery()).data?.password_min_length ?? 8;
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

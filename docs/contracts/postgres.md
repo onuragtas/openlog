@@ -35,7 +35,7 @@ Nothing that grants access is stored in plaintext:
 | API key | `ola_` + 48 hex chars | `api_keys.key_hash = sha256(key)`, `key_prefix` = first 12 chars |
 | Invitation token | `oli_` + 48 hex chars | `invitations.token_hash = sha256(token)` |
 | Session token (cookie) | 32 random bytes, base64url | `sessions.token_hash = sha256(token)` |
-| Password | user-chosen, 12–256 chars | `users.password_hash` = argon2id PHC string (`m=19456,t=2,p=1`, 16-byte salt, 32-byte key) |
+| Password | user-chosen, 8–256 chars | `users.password_hash` = argon2id PHC string (`m=19456,t=2,p=1`, 16-byte salt, 32-byte key) |
 
 Keys are high-entropy random values, so an unsalted SHA-256 is sufficient and allows an indexed lookup.
 Keys are shown once, in the response that creates them. Operator-chosen keys given to

@@ -30,7 +30,7 @@ Edit `deploy/compose/.env`. **Change every development value** before exposing t
 
 | Variable | Set to |
 |---|---|
-| `OPENLOG_BOOTSTRAP_OWNER_EMAIL` / `OPENLOG_BOOTSTRAP_OWNER_PASSWORD` | your admin login (password ≥ 12 characters) |
+| `OPENLOG_BOOTSTRAP_OWNER_EMAIL` / `OPENLOG_BOOTSTRAP_OWNER_PASSWORD` | your admin login (password ≥ 8 characters) |
 | `OPENLOG_BOOTSTRAP_LICENSE_KEY` | ingest key for agents, e.g. `olk_$(openssl rand -hex 24)` |
 | `OPENLOG_SECRETS_KEY` | `openssl rand -base64 32` (encrypts alert channel secrets; keep it with your backups) |
 | `OPENLOG_POSTGRES_PASSWORD`, `OPENLOG_CLICKHOUSE_PASSWORD` | `openssl rand -hex 16` each |

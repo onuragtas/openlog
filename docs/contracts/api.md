@@ -58,7 +58,7 @@ An organization always keeps at least one owner (`409 failed_precondition`).
 ## Auth endpoints
 
 ### `GET /api/v1/auth/config` (public)
-`{"mode": "postgres", "signup_enabled": false, "password_min_length": 12}`
+`{"mode": "postgres", "signup_enabled": false, "password_min_length": 8}`
 
 ### `POST /api/v1/auth/login` (public)
 Body `{"email": "…", "password": "…"}`. `200` sets the session cookie and returns the **Me** object. `401` for any
@@ -109,7 +109,7 @@ or has a pending invitation.
 `{"organization_name", "email", "role", "expires_at", "user_exists"}`; `404` when invalid, used, revoked or expired.
 
 ### `POST /api/v1/invitations/accept` (public) `{"token", "password", "name"}`
-New user: creates the account with `password` (policy: 12–256 characters). Existing user (`user_exists`): `password`
+New user: creates the account with `password` (policy: 8–256 characters). Existing user (`user_exists`): `password`
 must be their current password. Adds the membership, signs in (cookie) and returns **Me** with the user's default
 organization (send `X-Openlog-Org-Id` to switch).
 

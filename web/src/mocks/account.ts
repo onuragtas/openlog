@@ -199,7 +199,7 @@ const param = (info: Info, name: string) => String(info.params[name] ?? "");
 const API = "*/api/v1";
 
 export const accountHandlers = [
-  http.get(`${API}/auth/config`, () => HttpResponse.json({ mode: "postgres", signup_enabled: false, password_min_length: 12 })),
+  http.get(`${API}/auth/config`, () => HttpResponse.json({ mode: "postgres", signup_enabled: false, password_min_length: 8 })),
 
   http.post(`${API}/auth/login`, async ({ request }) => {
     const { email, password } = await body<{ email: string; password: string }>(request);
@@ -226,7 +226,7 @@ export const accountHandlers = [
   http.post(`${API}/auth/password`, sessionOnly(async (_ctx, { request }) => {
     const b = await body<{ current_password: string; new_password: string }>(request);
     if (b.current_password !== MOCK_PASSWORD) return fail("permission_denied", "current password is incorrect");
-    if ((b.new_password ?? "").length < 12) return fail("invalid_argument", "password must be at least 12 characters");
+    if ((b.new_password ?? "").length < 8) return fail("invalid_argument", "password must be at least 8 characters");
     return noContent();
   })),
 
@@ -300,7 +300,7 @@ export const accountHandlers = [
   http.post(`${API}/invitations/accept`, async ({ request }) => {
     const b = await body<{ token: string; password: string; name: string }>(request);
     if (b.token !== MOCK_INVITE_TOKEN) return fail("not_found", "invitation is invalid or has expired");
-    if ((b.password ?? "").length < 12) return fail("invalid_argument", "password must be at least 12 characters");
+    if ((b.password ?? "").length < 8) return fail("invalid_argument", "password must be at least 8 characters");
     mockAuth.signIn();
     return HttpResponse.json(me({ org: db.orgs[0]!, role: db.orgs[0]!.role, kind: "session" }));
   }),

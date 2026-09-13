@@ -23,7 +23,7 @@ export function SecuritySettings() {
   const qc = useQueryClient();
   const me = useMe().data;
   const isSession = me?.auth === "session";
-  const minLength = useQuery(authConfigQuery()).data?.password_min_length ?? 12;
+  const minLength = useQuery(authConfigQuery()).data?.password_min_length ?? 8;
   const sessions = useQuery({ ...sessionsQuery(), enabled: isSession });
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
