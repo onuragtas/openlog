@@ -72,6 +72,22 @@ describe("fleet policy and rollout", () => {
     expect(screen.getAllByText("Paused").length).toBeGreaterThan(0);
   });
 
+  it("deploys an active rollout to all agents now", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderHarness(true);
+
+    await user.click(await screen.findByRole("radio", { name: /Automatic/ }));
+    await user.click(screen.getByRole("button", { name: "Save policy" }));
+    expect(await screen.findByRole("heading", { name: "Upgrade to 0.4.0" })).toBeInTheDocument();
+    expect(screen.getByText(/Deploy now skips the remaining waits/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Deploy now" }));
+    await user.click(screen.getByRole("button", { name: "Confirm: deploy to all agents" }));
+    expect(await screen.findByText(/Wave 3 of 3|Completed/, { selector: "[data-testid=rollout-wave]" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Deploy now" })).not.toBeInTheDocument();
+  });
+
   it("is read-only for viewers", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     setSelectedOrg(MOCK_STAGING_ORG_ID);

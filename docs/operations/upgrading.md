@@ -63,6 +63,24 @@ and stores the result in PostgreSQL. Every pod serves it in `GET /api/v1/version
 ```
 
 - Admins and owners see a banner "openlog 0.9.1 is available — Release notes" (dismissed per version in the browser).
+- **Settings → Organization → Version and updates** has two buttons for admins and owners (not on installations
+  with `OPENLOG_SIGNUP_ENABLED=true`):
+  - **Check now** runs the release check immediately and asks `openlog-updater` to check too (at most once per
+    30 s); no need to wait for the daily check or `OPENLOG_UPDATER_INTERVAL`.
+  - **Update now** (shown when a newer release is known and an updater reports) asks the updater to install that
+    release now — also in `notify` mode, since an admin confirmed it. The confirmation has a checkbox
+    "Install now, also outside the maintenance window"; without it the request fails outside
+    `OPENLOG_UPDATER_MAINTENANCE_WINDOW`. The page shows the request state and the updater's steps (backup, pull,
+    migrate, recreate, health, rolled back/succeeded), keeps its data while `openlog` is recreated
+    ("The server is restarting… reconnecting") and offers a reload when the new version answers.
+  - The Compose updater picks requests up within `OPENLOG_UPDATER_REQUEST_POLL` (10 s). The page says so when the
+    updater does not poll (stopped, or an updater container older than this feature: recreate it with
+    `docker compose --profile updater up -d openlog-updater`). Requests no updater picks up expire after 15 min.
+    On Kubernetes the CronJob handles requests at its next run (§4).
+  - Mechanism and audit actions: [releases-updates.md §5.1](../contracts/releases-updates.md), D-041.
+- Fleet (agents): **Deploy now** on an active rollout skips the remaining wave soak times (100 % at once). Agents
+  waiting for a wave sync every `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL` (60 s), so they start within about a minute;
+  maintenance windows of the policy and the halt threshold still apply.
 - Everyone sees "openlog was updated to X — Reload" when API responses carry a different `X-Openlog-Version`
   than the backend that served the open page (after an upgrade old lazy-loaded UI chunks no longer exist).
 - `OPENLOG_UPDATE_CHECK=disabled` turns the check off; `OPENLOG_RELEASE_INDEX_URL` points to a mirror
@@ -100,6 +118,7 @@ docker compose logs -f openlog-updater
 | `OPENLOG_RELEASE_INDEX_URL` | GitHub latest `index.json` | mirror URL |
 | `OPENLOG_RELEASE_TRUSTED_KEYS_FILE` | – | extra public keys (release images have the official keys compiled in) |
 | `OPENLOG_UPDATER_INTERVAL` | `1h` | check interval |
+| `OPENLOG_UPDATER_REQUEST_POLL` | `10s` | how often "Check now" / "Update now" requests from the UI are read from PostgreSQL (`update_requests`) |
 | `OPENLOG_UPDATER_MAINTENANCE_WINDOW` | – (any time) | UTC, e.g. `sat,sun 02:00-05:00; mon-fri 03:00-03:30` (`*` = every day; `end <= start` crosses midnight) |
 | `OPENLOG_UPDATER_HEALTH_TIMEOUT` | `5m` | how long the new version has to become ready |
 | `OPENLOG_UPDATER_SERVICES` | `openlog` | compose services to recreate |
@@ -194,6 +213,14 @@ RBAC (Role in the release namespace): `get`,`patch` on the three Deployments by 
 Jobs; `get`,`list` pods and `get` pods/log. The status goes to PostgreSQL (`GET /api/v1/version`) and
 the audit log. There is no backup step on Kubernetes: configure CloudNativePG backups or your managed
 database's snapshots.
+
+"Check now" / "Update now" in the UI: the CronJob has no long-running process to poll, so each run first handles
+the requests queued since the previous run (an `apply` request installs in `notify` mode too). To act on a request
+right away, start a run from the CronJob:
+
+```sh
+kubectl -n <namespace> create job --from=cronjob/<fullname>-updater openlog-updater-now-$(date +%s)
+```
 
 Caveat: the updater changes Deployments outside Helm. The next `helm upgrade` sets the image from
 `image.tag` again — set it to the running version (or use GitOps, where the updater should stay in

@@ -165,6 +165,42 @@ type LogsConfig struct {
 	RateLimitLines    int           `yaml:"rate_limit_lines"`
 	Files             []LogFile     `yaml:"files"`
 	Journald          JournaldInput `yaml:"journald"`
+	Containers        ContainerLogs `yaml:"containers"`
+}
+
+// Container log sources (logs.containers.source).
+const (
+	ContainerLogSourceAuto = "auto" // json-file log when readable, else the Docker Engine API
+	ContainerLogSourceFile = "file"
+	ContainerLogSourceAPI  = "api"
+)
+
+// ContainerLogs configures automatic collection of container stdout/stderr (Docker).
+type ContainerLogs struct {
+	Enabled bool `yaml:"enabled"`
+	// Source: auto, file (json-file logs only) or api (GET /containers/{id}/logs).
+	Source         string           `yaml:"source"`
+	MaxContainers  int              `yaml:"max_containers"`
+	RateLimitLines int              `yaml:"rate_limit_lines"`
+	Include        []ContainerMatch `yaml:"include"`
+	Exclude        []ContainerMatch `yaml:"exclude"`
+	// DockerDir is the host path of Docker's containers directory, used to find json-file
+	// logs when the Docker Engine API is not accessible.
+	DockerDir string `yaml:"docker_containers_dir"`
+}
+
+// ContainerMatch selects containers; every non-empty field must match (globs, filepath.Match syntax).
+type ContainerMatch struct {
+	Name           string `yaml:"name"`
+	Image          string `yaml:"image"`
+	ComposeProject string `yaml:"compose_project"`
+	ComposeService string `yaml:"compose_service"`
+	// Label is "key" (label present) or "key=value" (value is a glob).
+	Label string `yaml:"label"`
+}
+
+func (m ContainerMatch) empty() bool {
+	return m.Name == "" && m.Image == "" && m.ComposeProject == "" && m.ComposeService == "" && m.Label == ""
 }
 
 // LogFile is one file tailing input.
@@ -247,6 +283,10 @@ func Default() *Config {
 			Enabled: true, ParseSeverity: true, PollInterval: Duration(time.Second), StartAt: "end",
 			MaxLineBytes: 64 << 10, RateLimitLines: 2000,
 			Journald: JournaldInput{JournalctlPath: "journalctl"},
+			Containers: ContainerLogs{
+				Enabled: true, Source: ContainerLogSourceAuto, MaxContainers: 100, RateLimitLines: 1000,
+				DockerDir: "/var/lib/docker/containers",
+			},
 		},
 		Integrations: defaultIntegrations(),
 		Update:       UpdateConfig{Enabled: true, InstallRoot: DefaultInstallRoot},
@@ -401,6 +441,34 @@ func (l *LogsConfig) validate() []error {
 		if f.MultilineStart != "" {
 			if _, err := regexp.Compile(f.MultilineStart); err != nil {
 				add("logs.files[%d].multiline_start: %v", i, err)
+			}
+		}
+	}
+	if c := l.Containers; c.Enabled {
+		switch c.Source {
+		case ContainerLogSourceAuto, ContainerLogSourceFile, ContainerLogSourceAPI:
+		default:
+			add("logs.containers.source must be auto, file or api")
+		}
+		if c.MaxContainers < 1 || c.MaxContainers > 1000 {
+			add("logs.containers.max_containers must be between 1 and 1000")
+		}
+		if c.RateLimitLines < 0 {
+			add("logs.containers.rate_limit_lines must be >= 0 (0 = unlimited)")
+		}
+		if !strings.HasPrefix(c.DockerDir, "/") {
+			add("logs.containers.docker_containers_dir must be an absolute path")
+		}
+		for name, list := range map[string][]ContainerMatch{"include": c.Include, "exclude": c.Exclude} {
+			for i, m := range list {
+				if m.empty() {
+					add("logs.containers.%s[%d] must set name, image, compose_project, compose_service or label", name, i)
+				}
+				for _, g := range []string{m.Name, m.Image, m.ComposeProject, m.ComposeService, m.Label} {
+					if _, err := filepath.Match(g, ""); err != nil {
+						add("logs.containers.%s[%d]: invalid glob %q", name, i, g)
+					}
+				}
 			}
 		}
 	}

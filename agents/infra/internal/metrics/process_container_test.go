@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/onuragtas/openlog/agents/infra/internal/containers"
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs/hostfstest"
 	"github.com/onuragtas/openlog/agents/infra/internal/procfs"
 	"github.com/onuragtas/openlog/agents/infra/internal/testfixtures"
@@ -216,6 +217,48 @@ func TestContainersCollector(t *testing.T) {
 	}
 	if dp := points(ms["container.cpu.time"])[0]; attr(dp, "container.runtime") == "" {
 		t.Errorf("runtime attribute missing: %v", dp)
+	}
+	// Without Docker metadata every cgroup container is reported running.
+	if v := find(t, ms["openlog.container.status"], "container.id", id, "openlog.container.state", "running"); v != 1 {
+		t.Errorf("status = %v", v)
+	}
+	if ms["container.restarts"] != nil {
+		t.Error("restarts need Docker metadata")
+	}
+}
+
+func TestContainerStatusWithDockerMetadata(t *testing.T) {
+	now := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	run, old, recent := strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
+	meta := map[string]containers.Container{
+		run: {ID: run, Name: "shop-orders-1", Runtime: "docker", Image: "openlog-apmdemo/orders:1", State: "running", Health: "healthy",
+			Labels: map[string]string{"com.docker.compose.project": "shop", "com.docker.compose.service": "orders"}},
+		old:    {ID: old, Name: "old", Runtime: "docker", Image: "busybox", State: "exited", FinishedAt: "2026-09-01T00:00:00Z"},
+		recent: {ID: recent, Name: "job", Runtime: "docker", Image: "busybox", State: "exited", FinishedAt: "2026-09-14T11:30:00Z"},
+	}
+	ct := meta[run]
+	ct.Apply(containers.Details{StartedAt: time.Date(2026, 9, 14, 11, 0, 0, 0, time.UTC), RestartCount: 2})
+	meta[run] = ct
+	c := &Containers{cgroups: map[string]containers.Cgroup{run: {ID: run, Runtime: "docker"}}}
+	status, restarts := c.statusPoints(meta, map[string]bool{run: true}, now)
+	if len(status) != 2 || len(restarts) != 1 || restarts[0].Int != 2 {
+		t.Fatalf("status %d points, restarts %+v", len(status), restarts)
+	}
+	got := map[string]map[string]string{}
+	for _, p := range status {
+		m := map[string]string{}
+		for _, kv := range p.Attrs {
+			m[kv.Key] = kv.Value.GetStringValue()
+		}
+		got[m["container.id"]] = m
+	}
+	r := got[run]
+	if r["openlog.container.state"] != "running" || r["openlog.container.health"] != "healthy" || r["openlog.container.started_at"] != "2026-09-14T11:00:00Z" ||
+		r["docker.compose.project"] != "shop" || r["docker.compose.service"] != "orders" || r["container.name"] != "shop-orders-1" {
+		t.Errorf("running container attributes %v", r)
+	}
+	if got[recent]["openlog.container.state"] != "exited" || got[old] != nil {
+		t.Errorf("stopped containers: recent %v, old %v", got[recent], got[old])
 	}
 }
 

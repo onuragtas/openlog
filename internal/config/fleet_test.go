@@ -16,7 +16,7 @@ func TestFleetDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := c.Fleet
-	if f.SyncInterval != 5*time.Minute || f.PolicyCacheTTL != 15*time.Second || f.CatalogRefresh != 15*time.Minute ||
+	if f.SyncInterval != 5*time.Minute || f.RolloutSyncInterval != time.Minute || f.PolicyCacheTTL != 15*time.Second || f.CatalogRefresh != 15*time.Minute ||
 		f.ControllerInterval != 30*time.Second || f.HostStaleAfter != 24*time.Hour || f.ReportQueueSize != 10000 ||
 		f.ReleaseMirrorDir != "" || f.ReleaseServeMirror {
 		t.Errorf("defaults = %+v", f)
@@ -31,6 +31,7 @@ func TestFleetValidation(t *testing.T) {
 		"serve mirror without dir": {map[string]string{"OPENLOG_RELEASE_SERVE_MIRROR": "true"}, "requires OPENLOG_RELEASE_MIRROR_DIR"},
 		"cache ttl too long":       {map[string]string{"OPENLOG_FLEET_POLICY_CACHE_TTL": "31s"}, "OPENLOG_FLEET_POLICY_CACHE_TTL"},
 		"sync interval too short":  {map[string]string{"OPENLOG_FLEET_SYNC_INTERVAL": "30s"}, "OPENLOG_FLEET_SYNC_INTERVAL"},
+		"rollout sync too short":   {map[string]string{"OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL": "10s"}, "OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL"},
 		"refresh too short":        {map[string]string{"OPENLOG_RELEASE_CATALOG_REFRESH": "1s"}, "OPENLOG_RELEASE_CATALOG_REFRESH"},
 		"bad mirror base url":      {map[string]string{"OPENLOG_RELEASE_MIRROR_BASE_URL": "ingest:4318"}, "OPENLOG_RELEASE_MIRROR_BASE_URL"},
 		"bad queue size":           {map[string]string{"OPENLOG_FLEET_REPORT_QUEUE_SIZE": "0"}, "OPENLOG_FLEET_REPORT_QUEUE_SIZE"},

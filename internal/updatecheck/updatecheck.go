@@ -160,6 +160,16 @@ func (c *Checker) nextDue(st State, found bool) time.Duration {
 	return time.Until(st.CheckedAt.Add(iv))
 }
 
+// CheckNow performs a check immediately and stores it ("Check now" in the UI, rate-limited by the
+// caller). Any pod may call it: the leader's Run sees the fresh checked_at and waits a full interval.
+func (c *Checker) CheckNow(ctx context.Context) error {
+	st, _, err := c.store.LoadCheck(ctx)
+	if err != nil {
+		return err
+	}
+	return c.store.SaveCheck(ctx, c.Check(ctx, st))
+}
+
 // Check performs one check and returns the new state (prev keeps the last good release on error).
 func (c *Checker) Check(ctx context.Context, prev State) State {
 	now := c.now().UTC()
@@ -223,7 +233,15 @@ func NewReader(cfg Config, currentVersion string, store Store, updater UpdaterLo
 	if err != nil {
 		v = lib.Version{} // 0.0.0: every release is newer
 	}
-	return &Reader{cfg: cfg, current: v, store: store, updater: updater, ttl: 30 * time.Second}
+	// Short cache: the version page polls every few seconds while an update runs.
+	return &Reader{cfg: cfg, current: v, store: store, updater: updater, ttl: 5 * time.Second}
+}
+
+// Invalidate drops the cached information (after "Check now").
+func (r *Reader) Invalidate() {
+	r.mu.Lock()
+	r.cached = nil
+	r.mu.Unlock()
 }
 
 // Info returns the cached or freshly loaded information.

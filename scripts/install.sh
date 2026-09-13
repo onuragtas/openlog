@@ -28,6 +28,9 @@
 #
 # Re-running the installer is safe: it upgrades to the requested/latest version, keeps an agent
 # that already updated itself to a newer version, and updates license key and endpoint when given.
+# Every run reconciles the installation with the running release (`openlog-infra-agent -reconcile`:
+# systemd unit, account, docker group, root-owned install root). Hosts installed before the unit's
+# privileged pre-start step existed need one re-run (or package upgrade) to get full self-updates.
 set -eu
 
 GITHUB_RELEASES=https://github.com/onuragtas/openlog/releases
@@ -240,7 +243,7 @@ switch_current() { # version
 	tmp="$ROOT/.current.$$"
 	rm -f "$tmp"
 	ln -s "versions/$1" "$tmp"
-	chown -h "$USER_NAME:$USER_NAME" "$tmp" 2>/dev/null || true
+	chown -h root:root "$tmp" 2>/dev/null || true
 	if ! mv -Tf "$tmp" "$ROOT/current" 2>/dev/null; then
 		rm -f "$ROOT/current" && mv -f "$tmp" "$ROOT/current"
 	fi
@@ -263,8 +266,19 @@ set_config_value() { # key value
 
 has_license_key() { grep -Eq '^license_key:[[:space:]]*"?[^"[:space:]#]' "$CONFIG" 2>/dev/null; }
 
-# Add the agent user to an existing docker group (Docker Engine API: container names, ports, IPs), unless
-# opted out. Idempotent; sets docker_added=1 when the membership is new. Keep in sync with packaging/scripts/postinstall.sh.
+# trusted_dir DIR: DIR and everything below it are owned by root and not writable by group or others.
+# Root executes the current binary (ExecStartPre=+), so a version an older agent wrote itself is not kept.
+trusted_dir() {
+	[ -d "$1" ] && [ ! -L "$1" ] || return 1
+	[ -z "$(find "$1" \( ! -user 0 -o -perm -0020 -o -perm -0002 -o -type l \) -print 2>/dev/null | head -n 1)" ]
+}
+
+# reconcile_supported BINARY: the release has `-reconcile` (unit, account, docker group, ownership).
+reconcile_supported() { [ -x "$1" ] && "$1" -help 2>&1 | grep -q -- -reconcile; }
+
+# Legacy steps for releases without `-reconcile`: add the agent user to an existing docker group (Docker Engine API:
+# container names, ports, IPs), unless opted out. Idempotent; sets docker_added=1 when the membership is new. Newer
+# releases implement the same rules in `openlog-infra-agent -reconcile`.
 grant_docker_access() {
 	getent group docker >/dev/null 2>&1 || return 0
 	if [ "$docker_access" = 0 ]; then
@@ -353,10 +367,17 @@ running=$(running_version)
 install=1
 if [ -n "$running" ] && [ -x "$ROOT/current/openlog-infra-agent" ]; then
 	cmp=$(semver_cmp "$running" "$version")
-	if [ "$cmp" = 1 ] && [ "$explicit_version" = 0 ]; then
+	legacy=0
+	trusted_dir "$ROOT/versions/$running" || legacy=1
+	if [ "$legacy" = 1 ] && [ "$cmp" = 1 ] && [ "$explicit_version" = 0 ]; then
+		# Written by an older agent's self-update and writable by it: re-install the same version from the release.
+		log "the agent runs $running from a directory writable by $USER_NAME; re-installing $running root-owned"
+		version=$running
+		manifest_url=$releases/v$version/manifest.json
+	elif [ "$cmp" = 1 ] && [ "$explicit_version" = 0 ]; then
 		log "the agent already runs $running (newer than $version); keeping it"
 		install=0
-	elif [ "$cmp" = 0 ] && { [ "$method" = tarball ] || package_installed "$method"; }; then
+	elif [ "$cmp" = 0 ] && [ "$legacy" = 0 ] && { [ "$method" = tarball ] || package_installed "$method"; }; then
 		log "openlog-infra-agent $version is already installed"
 		install=0
 	fi
@@ -400,23 +421,26 @@ if [ "$install" = 1 ]; then
 		top=$tmpdir/x/openlog-infra-agent_${version}_linux_${arch}
 		[ -x "$top/openlog-infra-agent" ] || die "unexpected archive layout in $name"
 		ensure_user
-		mkdir -p "$ROOT/versions"
+		# Root-owned: root executes the current binary in the unit's privileged pre-start step.
+		install -d -m 0755 -o root -g root "$ROOT" "$ROOT/versions"
 		dest=$ROOT/versions/$version
 		rm -rf "$dest.new"
 		cp -R "$top" "$dest.new"
 		# The signed manifest of the installed version; the agent needs it for rollback_floor.
 		fetch "$manifest_url.sig" "$dest.new/manifest.json.sig"
 		cp "$tmpdir/manifest.json" "$dest.new/manifest.json"
+		chown -R root:root "$dest.new"
+		chmod -R go-w "$dest.new"
 		rm -rf "$dest"
 		mv "$dest.new" "$dest"
-		chown -R "$USER_NAME:$USER_NAME" "$ROOT"
 		mkdir -p "$CONFIG_DIR/discovery.d"
 		if [ ! -f "$CONFIG" ]; then
 			cp "$dest/packaging/config.example.yaml" "$CONFIG"
 			chown "root:$USER_NAME" "$CONFIG"
 			chmod 0640 "$CONFIG"
 		fi
-		if [ -d /etc/systemd/system ]; then
+		if ! reconcile_supported "$dest/openlog-infra-agent" && [ -d /etc/systemd/system ]; then
+			# Older release: -reconcile below installs the unit otherwise.
 			cp "$dest/packaging/systemd/$UNIT" "/etc/systemd/system/$UNIT"
 			chmod 0644 "/etc/systemd/system/$UNIT"
 		fi
@@ -443,8 +467,18 @@ install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
 [ -z "$endpoint" ] || set_config_value endpoint "$endpoint"
 has_license_key || log "warning: no license_key in $CONFIG; pass --license-key"
 
-# Package installs already did this in their postinstall; then this is a no-op.
-grant_docker_access
+# --- reconcile ----------------------------------------------------------------------------------
+# systemd unit, account, docker group (opt-out above), ownership: the same step the agent's privileged pre-start
+# step runs after every self-update. Package installs already ran it in their postinstall; then this is a no-op.
+bin=$ROOT/current/openlog-infra-agent
+restart_needed=0
+if reconcile_supported "$bin"; then
+	out=$("$bin" -reconcile -reconcile-context install -config "$CONFIG") || log "warning: reconcile reported errors (see above)"
+	case $out in *restart-required*) restart_needed=1 ;; esac
+else
+	grant_docker_access
+	restart_needed=$docker_added
+fi
 
 # --- service ------------------------------------------------------------------------------------
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
@@ -453,10 +487,10 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
 	if [ "$start" = 1 ] && has_license_key; then
 		systemctl restart "$UNIT"
 		log "service $UNIT (re)started"
-	elif [ "$docker_added" = 1 ] && [ "$start" = 1 ]; then
+	elif [ "$restart_needed" = 1 ] && [ "$start" = 1 ]; then
 		systemctl try-restart "$UNIT" || true
-	elif [ "$docker_added" = 1 ]; then
-		log "the docker group applies after: systemctl restart $UNIT"
+	elif [ "$restart_needed" = 1 ]; then
+		log "the new unit or docker group applies after: systemctl restart $UNIT"
 	fi
 else
 	log "systemd is not running; start the agent with: /usr/bin/openlog-infra-agent -config $CONFIG"

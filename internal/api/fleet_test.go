@@ -166,6 +166,17 @@ func TestFleetRolloutsAPI(t *testing.T) {
 	if rec := e.owner.do(http.MethodPost, "/api/v1/fleet/rollouts/"+r.ID+"/resume", nil); rec.Code != http.StatusOK {
 		t.Fatalf("resume: %d %s", rec.Code, rec.Body)
 	}
+	// Deploy now: skip the remaining soak times, straight to the last wave.
+	rec = e.owner.do(http.MethodPost, "/api/v1/fleet/rollouts/"+r.ID+"/deploy-now", nil)
+	if dn := decode[map[string]any](t, rec); rec.Code != http.StatusOK || dn["current_wave"] != float64(2) || dn["wave_percent"] != float64(100) || dn["next_wave_at"] != nil {
+		t.Fatalf("deploy now: %d %s", rec.Code, rec.Body)
+	}
+	if rec := e.owner.do(http.MethodPost, "/api/v1/fleet/rollouts/"+r.ID+"/deploy-now", nil); rec.Code != http.StatusConflict {
+		t.Fatalf("deploy now in last wave: %d %s", rec.Code, rec.Body)
+	}
+	if acts := e.fleet.AuditActions(); len(acts) == 0 || acts[len(acts)-1] != "fleet.rollout.deploy_now" {
+		t.Fatalf("audit = %v", acts)
+	}
 	if rec := e.owner.do(http.MethodPost, "/api/v1/fleet/rollouts/00000000-0000-4000-8000-999999999999/pause", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown rollout: %d", rec.Code)
 	}

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info, Pause, Play, Undo2 } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fleetRolloutsQuery, pauseRollout, resumeRollout, rollbackFleet, type FleetRollout, type FleetSummary } from "@/api/fleet";
+import { deployRolloutNow, fleetRolloutsQuery, pauseRollout, resumeRollout, rollbackFleet, type FleetRollout, type FleetSummary } from "@/api/fleet";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +39,9 @@ export function RolloutPanel({ summary, canManage }: { summary: FleetSummary; ca
   const pause = useMutation({ mutationFn: pauseRollout, onSettled: invalidate });
   const resume = useMutation({ mutationFn: resumeRollout, onSettled: invalidate });
   const rollback = useMutation({ mutationFn: rollbackFleet, onSettled: invalidate });
-  const busy = pause.isPending || resume.isPending || rollback.isPending;
+  const deployNow = useMutation({ mutationFn: deployRolloutNow, onSettled: invalidate });
+  const busy = pause.isPending || resume.isPending || rollback.isPending || deployNow.isPending;
+  const canDeployNow = rollout?.state === "active" && rollout.current_wave < rollout.waves.length - 1;
 
   return (
     <Card aria-labelledby={`${id}-title`}>
@@ -69,6 +71,14 @@ export function RolloutPanel({ summary, canManage }: { summary: FleetSummary; ca
                 confirmLabel={t("fleet.rollout.confirmPause")}
                 pending={busy}
                 onConfirm={() => pause.mutate(rollout.id)}
+              />
+            )}
+            {canDeployNow && (
+              <ConfirmAction
+                label={t("fleet.rollout.deployNow")}
+                confirmLabel={t("fleet.rollout.confirmDeployNow")}
+                pending={busy}
+                onConfirm={() => deployNow.mutate(rollout.id)}
               />
             )}
             {(rollout?.state === "paused" || rollout?.state === "halted") && (
@@ -104,7 +114,8 @@ export function RolloutPanel({ summary, canManage }: { summary: FleetSummary; ca
             </div>
           </div>
         )}
-        <FormError error={pause.error ?? resume.error ?? rollback.error} />
+        {canManage && canDeployNow && <p className="text-xs text-muted-foreground">{t("fleet.rollout.deployNowHelp")}</p>}
+        <FormError error={pause.error ?? resume.error ?? rollback.error ?? deployNow.error} />
 
         {history.data && history.data.length > 1 && (
           <details className="text-sm">

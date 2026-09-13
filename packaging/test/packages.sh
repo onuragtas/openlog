@@ -50,12 +50,24 @@ readlink $R/current
 test "$(readlink $R/current)" = "versions/$V1"
 ls -la $R $R/versions/$V1
 getent passwd openlog-agent
-test "$(stat -c %U:%G $R/versions/$V1/openlog-infra-agent)" = openlog-agent:openlog-agent
+stat -c "%n %U:%G %a" $R $R/versions $R/versions/$V1 $R/versions/$V1/openlog-infra-agent
+test "$(stat -c %U:%G:%a $R)" = root:root:755
+test "$(stat -c %U:%G:%a $R/versions)" = root:root:755
+test "$(stat -c %U:%G:%a $R/versions/$V1/openlog-infra-agent)" = root:root:755
+test "$(stat -c %U:%G:%a /var/lib/openlog-infra-agent)" = openlog-agent:openlog-agent:750
+echo "install root and versions are root-owned"
+test "$(stat -c %U:%a $R/reconcile-status.json)" = root:644
+grep -q "\"version\": \"$V1\"" $R/reconcile-status.json
+grep -q "\"context\": \"package\"" $R/reconcile-status.json
+echo "reconciled by postinstall"
 test -s $R/versions/$V1/manifest.json && test -s $R/versions/$V1/manifest.json.sig && echo "signed manifest present"
 grep -q "\"version\": \"$V1\"" $R/versions/$V1/manifest.json
 if [ "$fmt" = deb ]; then dpkg -S /opt/openlog/infra-agent | grep -q "^openlog-infra-agent:" && echo "dpkg owner of /opt/openlog/infra-agent: openlog-infra-agent"; else rpm -qf /opt/openlog/infra-agent; fi
 test -f /usr/lib/systemd/system/openlog-infra-agent.service
-grep -E "^(User|ExecStart)=" /usr/lib/systemd/system/openlog-infra-agent.service
+grep -E "^(User|ExecStartPre|ExecStart)=" /usr/lib/systemd/system/openlog-infra-agent.service
+grep -qx "ExecStartPre=-+/opt/openlog/infra-agent/current/openlog-infra-agent -apply -config /etc/openlog-infra-agent/config.yaml" /usr/lib/systemd/system/openlog-infra-agent.service
+if grep -q "ReadWritePaths=.*/opt/openlog" /usr/lib/systemd/system/openlog-infra-agent.service; then echo "FAIL: agent may write the install root"; exit 1; fi
+test ! -e /etc/systemd/system/openlog-infra-agent.service && echo "no unit written to /etc for a package install"
 stat -c "%n %U:%G %a" /etc/openlog-infra-agent/config.yaml /var/lib/openlog-infra-agent
 test "$(stat -c %G:%a /etc/openlog-infra-agent/config.yaml)" = openlog-agent:640
 if [ -e /etc/systemd/system/multi-user.target.wants/openlog-infra-agent.service ]; then echo "unit enabled"; else echo "systemctl not available: unit not enabled (expected without systemd)"; fi
@@ -68,7 +80,13 @@ echo "# local edit" >> /etc/openlog-infra-agent/config.yaml
 pkg_install "$pkg1"
 grep -q "# local edit" /etc/openlog-infra-agent/config.yaml && echo "config kept"
 
-say "reinstall keeps a newer self-updated version"
+say "-apply without a staged update (no systemd: runs as root like ExecStartPre=+)"
+$R/current/openlog-infra-agent -apply -config /etc/openlog-infra-agent/config.yaml
+test "$(stat -c %U:%a $R/apply-status.json)" = root:644
+grep -q "\"current\": \"$V1\"" $R/apply-status.json
+test "$(readlink $R/current)" = "versions/$V1" && echo "apply is a no-op"
+
+say "reinstall keeps a newer root-owned self-updated version"
 mkdir -p $R/versions/99.0.0 && cp $R/versions/$V1/openlog-infra-agent $R/versions/99.0.0/
 ln -sfn versions/99.0.0 $R/current
 pkg_install "$pkg1"
@@ -77,6 +95,24 @@ rm -rf $R/versions/99.0.0
 ln -sfn versions/$V1 $R/current
 test "$(getent group docker | cut -d: -f4)" = openlog-agent
 echo "docker membership added once"
+
+say "reinstall replaces a newer version writable by openlog-agent (legacy self-update)"
+mkdir -p $R/versions/99.0.1 && cp $R/versions/$V1/openlog-infra-agent $R/versions/99.0.1/
+chown -R openlog-agent:openlog-agent $R/versions/99.0.1
+ln -sfn versions/99.0.1 $R/current
+pkg_install "$pkg1"
+test "$(readlink $R/current)" = "versions/$V1"
+test ! -e $R/versions/99.0.1
+echo "untrusted newer version replaced by the package version and removed"
+
+say "reinstall migrates a legacy agent-owned layout"
+chown -R openlog-agent:openlog-agent $R
+rm -f /etc/openlog-infra-agent/no-docker-access
+pkg_install "$pkg1"
+test "$(stat -c %U:%G $R $R/versions $R/versions/$V1 $R/versions/$V1/openlog-infra-agent $R/versions/$V1/manifest.json | sort -u)" = root:root
+test -z "$(find $R ! -user root)"
+$R/current/openlog-infra-agent -version | grep -F "$V1"
+echo "layout root-owned again, agent still runs"
 
 say "docker access opt-out"
 gpasswd -d openlog-agent docker

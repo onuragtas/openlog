@@ -17,6 +17,7 @@ export type Permission =
   | "api_keys.revoke_any"
   | "audit.read"
   | "fleet.manage"
+  | "updates.request"
   | "alerts.write"
   | "alerts.manage";
 
@@ -32,6 +33,7 @@ const MIN_ROLE: Record<Permission, Role> = {
   "api_keys.revoke_any": "admin",
   "audit.read": "admin",
   "fleet.manage": "admin",
+  "updates.request": "admin",
   // Alerting: members create rules/mutes (and change their own) and work on incidents; admins manage all + channels.
   "alerts.write": "member",
   "alerts.manage": "admin",

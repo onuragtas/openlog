@@ -409,6 +409,18 @@ export const fleetHandlers = [
     return HttpResponse.json(r);
   })),
 
+  http.post(`${API}/rollouts/:id/deploy-now`, write(({ params }) => {
+    const r = db.rollouts.find((x) => x.id === params.id);
+    if (!r) return fail("not_found", "not found");
+    if (r.state !== "active") return fail("failed_precondition", `only an active rollout can be deployed to all agents (rollout is ${r.state})`);
+    if (r.current_wave >= r.waves.length - 1) return fail("failed_precondition", "the rollout is already in its last wave");
+    r.current_wave = r.waves.length - 1;
+    r.wave_percent = r.waves[r.current_wave] ?? 100;
+    r.wave_started_at = formatTs(Date.now());
+    r.next_wave_at = null;
+    return HttpResponse.json(r);
+  })),
+
   http.post(`${API}/rollback`, write(async ({ request }) => {
     const b = await body<{ to_version: string }>(request);
     const to = b.to_version ?? "";

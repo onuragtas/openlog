@@ -30,6 +30,11 @@ type Env struct {
 	UpdatesEnabled bool
 	// HaveTrustedKeys reports whether this build has release keys (compiled in or from a file).
 	HaveTrustedKeys bool
+	// InvocationID is systemd's $INVOCATION_ID of this start ("" outside systemd).
+	InvocationID string
+	// Privileged is set for "-apply"/"-reconcile": only the method and the layout are detected, and a
+	// container is only assumed when OPENLOG_AGENT_CONTAINER=1 (installers run inside containers too).
+	Privileged bool
 }
 
 // Install is the detected install method.
@@ -45,6 +50,14 @@ type Install struct {
 	VersionDir string
 	// PackageVersion is the deb/rpm package version, when packaged.
 	PackageVersion string
+	// Mode is ModeStaged or ModeLegacy when Capable.
+	Mode string
+	// Notice is an operator action to report (NoticeUnitOutdated).
+	Notice string
+	// Apply is the privileged pre-start step's status for this start (nil: it did not run).
+	Apply *ApplyStatus
+	// Reconcile is the last reconcile status (nil: never ran).
+	Reconcile *ReconcileStatus
 }
 
 // Detect determines the install method and whether this agent may update itself.
@@ -90,6 +103,18 @@ func Detect(env Env) Install {
 		}
 	}
 
+	if env.Privileged {
+		return in
+	}
+	// Staged mode needs the privileged pre-start step to have run for this very start (same systemd
+	// invocation); otherwise the unit predates it and only the legacy binary swap is possible.
+	if st, err := LoadApplyStatus(in.InstallRoot); err == nil && env.InvocationID != "" && st.InvocationID == env.InvocationID {
+		in.Apply = st
+	} else {
+		in.Notice = NoticeUnitOutdated
+	}
+	in.Reconcile, _ = LoadReconcileStatus(in.InstallRoot)
+
 	switch {
 	case !env.UpdatesEnabled:
 		in.Reason = "updates disabled by configuration (update.enabled=false)"
@@ -98,12 +123,14 @@ func Detect(env Env) Install {
 	default:
 		if fi, err := os.Lstat(filepath.Join(in.InstallRoot, "current")); err != nil || fi.Mode()&os.ModeSymlink == 0 {
 			in.Reason = "install root has no current symlink"
+		} else if in.Apply != nil {
+			in.Mode, in.Capable = ModeStaged, true
 		} else if err := checkWritable(in.InstallRoot); err != nil {
-			in.Reason = "install root not writable: " + err.Error()
+			in.Reason = "install root not writable: " + err.Error() + " (" + NoticeUnitOutdated + ")"
 		} else if err := checkWritable(filepath.Join(in.InstallRoot, "versions")); err != nil {
-			in.Reason = "versions directory not writable: " + err.Error()
+			in.Reason = "versions directory not writable: " + err.Error() + " (" + NoticeUnitOutdated + ")"
 		} else {
-			in.Capable = true
+			in.Mode, in.Capable = ModeLegacy, true
 		}
 	}
 	return in
@@ -127,6 +154,9 @@ func isContainer(env Env) bool {
 	case "1", "true", "yes":
 		return true
 	case "0", "false", "no":
+		return false
+	}
+	if env.Privileged {
 		return false
 	}
 	for _, p := range []string{"/.dockerenv", "/run/.containerenv"} {

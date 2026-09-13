@@ -78,7 +78,19 @@ tarball) ls -l /etc/systemd/system/openlog-infra-agent.service 2>/dev/null || ec
 esac
 stat -c "%n %U:%G %a" /etc/openlog-infra-agent/config.yaml /opt/openlog/infra-agent/current
 test -s "/opt/openlog/infra-agent/versions/$STABLE/manifest.json" && test -s "/opt/openlog/infra-agent/versions/$STABLE/manifest.json.sig" && echo "signed manifest in versions/$STABLE"
-test "$(stat -c %U /opt/openlog/infra-agent/versions)" = openlog-agent
+test "$(stat -c %U:%a /opt/openlog/infra-agent/versions)" = root:755
+test -z "$(find /opt/openlog/infra-agent ! -user root)" && echo "install root is root-owned"
+test "$(stat -c %U /opt/openlog/infra-agent/reconcile-status.json)" = root
+case $method in
+tarball) test ! -d /etc/systemd/system || grep -q "^ExecStartPre=-+" /etc/systemd/system/openlog-infra-agent.service ;;
+esac
+
+say "re-run replaces a current version written by an older self-update (writable by openlog-agent)"
+chown -R openlog-agent /opt/openlog/infra-agent/versions/$STABLE
+$I 2>&1 | tee /tmp/legacy.log
+grep -q "re-installing\|already installed" /tmp/legacy.log
+test -z "$(find /opt/openlog/infra-agent ! -user root)" && echo "root-owned again"
+test "$(current)" = "versions/$STABLE"
 
 say "re-run (idempotent), new endpoint"
 $I --endpoint https://ingest2.example.com:4318 2>&1 | tee /tmp/rerun.log

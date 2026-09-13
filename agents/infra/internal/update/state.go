@@ -30,6 +30,16 @@ type State struct {
 	// Counted is true once a terminal result was added to openlog.agent.update.attempts. A
 	// result produced right before an exit (rollback at startup) is counted by the next process.
 	Counted bool `json:"counted,omitempty"`
+
+	// Staged mode. The privileged "-apply" reads these fields as untrusted input.
+	// Staged is the version waiting in <state_dir>/updates/<v>/ for the next start.
+	Staged string `json:"staged,omitempty"`
+	// ConfirmedVersion/ConfirmedAt record the last confirmation (not reset by staging).
+	ConfirmedVersion string    `json:"confirmed_version,omitempty"`
+	ConfirmedAt      time.Time `json:"confirmed_at,omitzero"`
+	// RollbackRequest names the running candidate that asks "-apply" to switch back (watchdog).
+	RollbackRequest string `json:"rollback_request,omitempty"`
+	RollbackReason  string `json:"rollback_reason,omitempty"`
 }
 
 // terminal reports whether the status is a final result of an attempt.

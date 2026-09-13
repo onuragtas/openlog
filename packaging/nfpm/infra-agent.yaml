@@ -5,9 +5,10 @@
 #   SCRIPTS  directory of the rendered maintainer scripts (packaging/scripts with @VERSION@ replaced)
 #   MANIFEST_DIR  signed manifest.json(.sig) of this version listing the agent tarballs
 #
-# Layout: the package installs /opt/openlog/infra-agent/versions/<v>/ and its postinstall script
-# switches /opt/openlog/infra-agent/current to it unless the agent already runs a newer version
-# (the agent updates itself, docs/plan/09-releases-updates.md §3).
+# Layout: the package installs /opt/openlog/infra-agent/versions/<v>/ (root-owned: root executes the
+# current binary in the unit's privileged pre-start step) and its postinstall script switches
+# /opt/openlog/infra-agent/current to it unless the agent already runs a newer, root-owned version
+# (the agent updates itself, docs/contracts/releases-updates.md §3).
 name: openlog-infra-agent
 arch: ${ARCH}
 platform: linux
@@ -31,29 +32,29 @@ contents:
     file_info: {mode: 0755}
   - dst: /opt/openlog/infra-agent
     type: dir
-    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0755, owner: root, group: root}
   - dst: /opt/openlog/infra-agent/versions
     type: dir
-    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0755, owner: root, group: root}
   - dst: /opt/openlog/infra-agent/versions/${VERSION}
     type: dir
-    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0755, owner: root, group: root}
   - src: ${STAGE}/openlog-infra-agent
     dst: /opt/openlog/infra-agent/versions/${VERSION}/openlog-infra-agent
-    file_info: {mode: 0755, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0755, owner: root, group: root}
   - src: ${STAGE}/LICENSE
     dst: /opt/openlog/infra-agent/versions/${VERSION}/LICENSE
-    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0644, owner: root, group: root}
   - src: ${STAGE}/README.md
     dst: /opt/openlog/infra-agent/versions/${VERSION}/README.md
-    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0644, owner: root, group: root}
   # Signed manifest of this version (tarball artifacts only), used by the agent for rollback_floor.
   - src: ${MANIFEST_DIR}/manifest.json
     dst: /opt/openlog/infra-agent/versions/${VERSION}/manifest.json
-    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0644, owner: root, group: root}
   - src: ${MANIFEST_DIR}/manifest.json.sig
     dst: /opt/openlog/infra-agent/versions/${VERSION}/manifest.json.sig
-    file_info: {mode: 0644, owner: openlog-agent, group: openlog-agent}
+    file_info: {mode: 0644, owner: root, group: root}
   # Convenience entry point; always follows `current`.
   - src: /opt/openlog/infra-agent/current/openlog-infra-agent
     dst: /usr/bin/openlog-infra-agent

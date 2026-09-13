@@ -65,7 +65,30 @@ const (
 	MaxExtractBytes = 512 << 20
 	// DownloadTimeout bounds one archive download.
 	DownloadTimeout = 10 * time.Minute
+
+	// UnitName is the systemd service installed by the packages and install.sh.
+	UnitName = "openlog-infra-agent.service"
+	// AgentUser is the account the service runs as (User= in the unit).
+	AgentUser = "openlog-agent"
+	// UpdatesDir below state_dir holds releases staged by the agent for "-apply" (staged mode).
+	UpdatesDir = "updates"
+	// ArchiveFile is the staged release archive in <state_dir>/updates/<v>/.
+	ArchiveFile = "archive.tar.gz"
 )
+
+// Update modes (how an update reaches the install root).
+const (
+	// ModeStaged: the agent stages a verified release in state_dir; the unit's privileged
+	// pre-start step ("ExecStartPre=+… -apply") re-verifies, installs and reconciles it.
+	ModeStaged = "staged"
+	// ModeLegacy: an old unit without the pre-start step; the agent replaces the binary itself
+	// (only possible while versions/ is writable by the agent user).
+	ModeLegacy = "legacy"
+)
+
+// NoticeUnitOutdated is reported when the privileged pre-start step did not run for this start.
+const NoticeUnitOutdated = "unit outdated: the privileged pre-start step (ExecStartPre=+… -apply) did not run, so updates cannot change " +
+	"the systemd unit, groups or ownership; run the package upgrade (apt/dnf) or install.sh once to enable full updates"
 
 // SyncRequest is the body of POST /v1/openlog/agent/sync.
 type SyncRequest struct {
@@ -77,6 +100,8 @@ type SyncRequest struct {
 	// IntegrationsConfigRevision is the applied remote integration config
 	// revision ("" none, "disabled" when integrations.remote_config is false).
 	IntegrationsConfigRevision string `json:"integrations_config_revision"`
+	// Reconcile is the last result of the privileged reconcile step (absent when it never ran).
+	Reconcile *ReconcileReport `json:"reconcile,omitempty"`
 }
 
 // AgentInfo describes the running agent.
@@ -88,6 +113,19 @@ type AgentInfo struct {
 	Arch          string `json:"arch"`
 	InstallMethod string `json:"install_method"`
 	UpdateCapable bool   `json:"update_capable"`
+	// UpdateMode is ModeStaged, ModeLegacy or "" (not update capable).
+	UpdateMode string `json:"update_mode,omitempty"`
+	// UpdateNotice is an operator action, e.g. NoticeUnitOutdated.
+	UpdateNotice string `json:"update_notice,omitempty"`
+}
+
+// ReconcileReport summarizes ReconcileStatus in sync requests.
+type ReconcileReport struct {
+	Version     string `json:"version"`
+	At          string `json:"at"`
+	UnitChanged bool   `json:"unit_changed"`
+	Docker      string `json:"docker"`
+	Error       string `json:"error"`
 }
 
 // Report is the update state reported to the backend.

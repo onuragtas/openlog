@@ -11,11 +11,18 @@ StartLimitIntervalSec=0
 Type=simple
 User=openlog-agent
 Group=openlog-agent
-# /opt/openlog/infra-agent/current -> versions/<version> is switched atomically by the agent
-# (self-update) and by the deb/rpm packages.
+# /opt/openlog/infra-agent/current -> versions/<version> (root-owned) is switched atomically by the
+# pre-start step below and by the deb/rpm packages.
+# Privileged pre-start step ("+": runs as root without User= and the sandbox below; "-": a failure never blocks the
+# start). It installs an update the agent staged in /var/lib/openlog-infra-agent/updates after re-verifying its signed
+# manifest with the keys compiled into this root-owned binary, rolls back an unconfirmed update, and reconciles the
+# installation with the release that starts (this unit, account, docker group, ownership). It exits 0 on errors.
+ExecStartPre=-+/opt/openlog/infra-agent/current/openlog-infra-agent -apply -config /etc/openlog-infra-agent/config.yaml
 ExecStart=/opt/openlog/infra-agent/current/openlog-infra-agent -config /etc/openlog-infra-agent/config.yaml
 Restart=always
 RestartSec=5
+# The pre-start step may run a candidate's self-test (30 s) before the agent starts.
+TimeoutStartSec=180
 
 # Read other users' /proc/<pid>/{exe,fd} and root-only files without running as root.
 AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
@@ -33,10 +40,10 @@ ConfigurationDirectory=openlog-infra-agent
 RuntimeDirectory=openlog-infra-agent
 RuntimeDirectoryMode=0755
 
-# Hardening: the agent only reads the host, writes to its state directory and installs its own
-# updates below /opt/openlog/infra-agent (which must be owned by openlog-agent).
+# Hardening: the agent only reads the host and writes to its state directory, where it also stages updates.
+# It cannot write /opt/openlog/infra-agent: only the root pre-start step installs releases there.
 ProtectSystem=strict
-ReadWritePaths=/var/lib/openlog-infra-agent /opt/openlog/infra-agent
+ReadWritePaths=/var/lib/openlog-infra-agent
 ProtectHome=read-only
 PrivateTmp=yes
 PrivateDevices=yes

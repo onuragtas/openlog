@@ -42,6 +42,9 @@ func run() int {
 	once := flag.Bool("once", false, "collect one round of metrics, inventory and discovery, print the OTLP payload as JSON and exit (nothing is sent)")
 	validateRules := flag.Bool("validate-rules", false, "validate the embedded and configured discovery rules and exit")
 	selfTest := flag.Bool("self-test", false, "parse the configuration, run every collector once without sending and check the state directory is writable; exit 0 on success")
+	apply := flag.Bool("apply", false, "privileged pre-start step run as root by the systemd unit (ExecStartPre=+): install a staged update after verifying it again, roll back an unconfirmed one, reconcile the installation; always exits 0")
+	reconcile := flag.Bool("reconcile", false, "as root: make the installation match this release (systemd unit, service account, docker group, ownership); prints restart-required when the service must restart")
+	reconcileContext := flag.String("reconcile-context", update.ReconcileManual, "who runs -reconcile: apply, package, install or manual")
 	flag.Parse()
 
 	explicit := false
@@ -51,6 +54,12 @@ func run() int {
 		}
 	})
 	ver := version.Current()
+	if *apply {
+		return runApply(*configPath, explicit, ver)
+	}
+	if *reconcile {
+		return runReconcile(*configPath, explicit, ver, *reconcileContext)
+	}
 
 	// Without an explicit -config a missing default file is fine: the agent can
 	// be configured through OPENLOG_* environment variables alone.
@@ -89,6 +98,7 @@ func run() int {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 
 	var mgr *update.Manager
+	var install update.Install
 	if !*once {
 		// Update startup check first: a candidate that cannot even load its configuration must
 		// still count its start attempts and roll back.
@@ -98,9 +108,14 @@ func run() int {
 		} else if _, err := os.Stat(*configPath); err == nil {
 			cfgPath = *configPath
 		}
-		mgr = newUpdateManager(logCfg, cfgPath, ver, log)
+		mgr, install = newUpdateManager(logCfg, cfgPath, ver, log)
 		if mgr.Startup() {
 			log.Warn("exiting after rollback; the service manager restarts the previous version")
+			return 0
+		}
+		if restartForUnit(install) {
+			log.Warn("the systemd unit was updated before this start; exiting once so the service manager starts under it",
+				"unit", install.Reconcile.UnitPath)
 			return 0
 		}
 		if beforeRun != nil {
@@ -148,6 +163,7 @@ func run() int {
 				HostID: a.HostID(), HostName: a.HostName(), Agent: mgr.AgentInfo(),
 				Update: mgr.Report(), ConfigHash: configHash(*configPath),
 				IntegrationsConfigRevision: a.IntegrationsConfigRevision(),
+				Reconcile:                  install.Reconcile.Report(),
 			}
 		},
 	}
@@ -172,7 +188,7 @@ func run() int {
 	return 0
 }
 
-func newUpdateManager(cfg *config.Config, cfgPath, ver string, log *slog.Logger) *update.Manager {
+func newUpdateManager(cfg *config.Config, cfgPath, ver string, log *slog.Logger) (*update.Manager, update.Install) {
 	keys, err := release.TrustedKeys(cfg.Release.TrustedKeysFile)
 	if err != nil {
 		log.Warn("release keys unusable; updates cannot be applied", "error", err)
@@ -182,13 +198,17 @@ func newUpdateManager(cfg *config.Config, cfgPath, ver string, log *slog.Logger)
 	install := update.Detect(update.Env{
 		Executable: exe, InstallRoot: cfg.Update.InstallRoot,
 		UpdatesEnabled: cfg.Update.Enabled, HaveTrustedKeys: len(keys) > 0,
+		InvocationID: os.Getenv("INVOCATION_ID"),
 	})
 	log.Info("install detected", "version", ver, "install_method", install.Method, "update_capable", install.Capable,
-		"reason", install.Reason, "version_dir", install.VersionDir)
+		"update_mode", install.Mode, "reason", install.Reason, "version_dir", install.VersionDir)
+	if install.Notice != "" && install.VersionDir != "" && install.Method != update.MethodContainer {
+		log.Warn(install.Notice)
+	}
 	return update.NewManager(update.Options{
 		StateDir: cfg.StateDir, ConfigPath: cfgPath, Version: ver, Commit: version.Commit,
 		Install: install, Trusted: keys, Endpoint: cfg.Endpoint, LicenseKey: cfg.LicenseKey, Log: log,
-	})
+	}), install
 }
 
 func printVersion(w io.Writer, cfg *config.Config) {
@@ -213,7 +233,7 @@ func printVersion(w io.Writer, cfg *config.Config) {
 	}
 	fmt.Fprintln(w, "install method:", method)
 	if install.Capable {
-		fmt.Fprintln(w, "update capable: yes")
+		fmt.Fprintln(w, "update capable: yes ("+install.Mode+")")
 	} else {
 		fmt.Fprintln(w, "update capable: no ("+install.Reason+")")
 	}

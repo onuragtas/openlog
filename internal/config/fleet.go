@@ -20,6 +20,8 @@ type Fleet struct {
 	CatalogRefresh time.Duration
 	// SyncInterval is poll_interval_seconds sent to agents.
 	SyncInterval time.Duration
+	// RolloutSyncInterval is poll_interval_seconds for agents waiting for a later wave of an active rollout.
+	RolloutSyncInterval time.Duration
 	// PolicyCacheTTL bounds how long ingest serves a cached policy/rollout (≤ 30s).
 	PolicyCacheTTL time.Duration
 	// ControllerInterval is the rollout controller period (api leader).
@@ -37,6 +39,7 @@ func loadFleet(p *parser) Fleet {
 		ReleaseMirrorBaseURL: p.str("OPENLOG_RELEASE_MIRROR_BASE_URL", ""),
 		CatalogRefresh:       p.duration("OPENLOG_RELEASE_CATALOG_REFRESH", 15*time.Minute),
 		SyncInterval:         p.duration("OPENLOG_FLEET_SYNC_INTERVAL", 300*time.Second),
+		RolloutSyncInterval:  p.duration("OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL", 60*time.Second),
 		PolicyCacheTTL:       p.duration("OPENLOG_FLEET_POLICY_CACHE_TTL", 15*time.Second),
 		ControllerInterval:   p.duration("OPENLOG_FLEET_CONTROLLER_INTERVAL", 30*time.Second),
 		HostStaleAfter:       p.duration("OPENLOG_FLEET_HOST_STALE_AFTER", 24*time.Hour),
@@ -59,6 +62,9 @@ func (f Fleet) validate() []error {
 	}
 	if f.SyncInterval < time.Minute || f.SyncInterval > time.Hour {
 		errs = append(errs, errors.New("OPENLOG_FLEET_SYNC_INTERVAL must be between 1m and 1h (agents clamp to that range)"))
+	}
+	if f.RolloutSyncInterval < time.Minute || f.RolloutSyncInterval > time.Hour {
+		errs = append(errs, errors.New("OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL must be between 1m and 1h (agents clamp to that range)"))
 	}
 	if f.PolicyCacheTTL <= 0 || f.PolicyCacheTTL > 30*time.Second {
 		errs = append(errs, errors.New("OPENLOG_FLEET_POLICY_CACHE_TTL must be > 0 and <= 30s"))

@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -197,6 +198,16 @@ func TopDir(version, os, arch string) string {
 // RunSelfTest runs "<binary> -self-test [-config <configPath>]" and requires exit 0 within
 // timeout (rule 7).
 func RunSelfTest(ctx context.Context, binary, configPath string, timeout time.Duration) error {
+	return runSelfTest(ctx, binary, configPath, timeout, nil)
+}
+
+// RunSelfTestAs is RunSelfTest with the privileges of uid:gid (no supplementary groups): "-apply"
+// runs as root but tests the candidate the way the service runs it.
+func RunSelfTestAs(ctx context.Context, binary, configPath string, timeout time.Duration, uid, gid int) error {
+	return runSelfTest(ctx, binary, configPath, timeout, &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid), Groups: []uint32{}})
+}
+
+func runSelfTest(ctx context.Context, binary, configPath string, timeout time.Duration, cred *syscall.Credential) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	args := []string{"-self-test"}
@@ -204,6 +215,10 @@ func RunSelfTest(ctx context.Context, binary, configPath string, timeout time.Du
 		args = append(args, "-config", configPath)
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
+	if cred != nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: cred}
+		cmd.Dir = "/"
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

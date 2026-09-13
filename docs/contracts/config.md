@@ -212,6 +212,7 @@ auth); the api serves `/api/v1/fleet/*` and runs the rollout controller on the l
 | `OPENLOG_RELEASE_MIRROR_BASE_URL` | `` | External base URL of ingest for mirror links (e.g. `https://ingest.example.com`); empty = scheme (`X-Forwarded-Proto`/TLS) and `Host` of the sync request |
 | `OPENLOG_RELEASE_CATALOG_REFRESH` | `15m` | Catalog refresh period (≥ 10s); after a failure it retries every minute. The last verified catalog stays in use; an index with an older `generated_at` is rejected |
 | `OPENLOG_FLEET_SYNC_INTERVAL` | `300s` | `poll_interval_seconds` returned to agents (1m–1h) |
+| `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL` | `60s` | `poll_interval_seconds` for agents waiting for a later wave of an active rollout (1m–1h, at most `OPENLOG_FLEET_SYNC_INTERVAL`), so "Deploy now" reaches them quickly |
 | `OPENLOG_FLEET_POLICY_CACHE_TTL` | `15s` | Ingest caches each organization's policy, overrides and current rollout this long (> 0, ≤ 30s) |
 | `OPENLOG_FLEET_CONTROLLER_INTERVAL` | `30s` | Rollout controller period on the api leader (wave advance, halt, completion, auto-created rollouts) |
 | `OPENLOG_FLEET_HOST_STALE_AFTER` | `24h` | Agents that did not sync for this long are ignored by rollouts and the summary counts |
@@ -245,6 +246,7 @@ delete their row on graceful shutdown; `openlog-migrate` uses the rows to gate c
 
 `openlog-updater` (Compose service in profile `updater`, or the Helm CronJob with `-k8s -once`) additionally reads
 `OPENLOG_UPDATER_MODE` (`off`, `notify` (default), `auto`), `OPENLOG_UPDATER_INTERVAL` (`1h`),
+`OPENLOG_UPDATER_REQUEST_POLL` (`10s`, UI update requests in `update_requests`; Compose only),
 `OPENLOG_UPDATER_MAINTENANCE_WINDOW` (UTC, e.g. `sat,sun 02:00-05:00; mon-fri 03:00-04:00`; empty = any time),
 `OPENLOG_UPDATER_HEALTH_TIMEOUT` (`5m`), `OPENLOG_UPDATER_IMAGE_REPOSITORY` (mirror repository, digest kept),
 Compose: `OPENLOG_UPDATER_SERVICES` (`openlog`), `OPENLOG_UPDATER_HEALTH_URLS` (`http://openlog:9464/readyz`),

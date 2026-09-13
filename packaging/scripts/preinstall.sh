@@ -1,6 +1,6 @@
 #!/bin/sh
 # openlog-infra-agent preinstall (deb preinst / rpm %pre): create the service account before the
-# package files, which are owned by it, are unpacked.
+# package files are unpacked (the state directory and the configuration's group belong to it).
 set -e
 
 USER_NAME=openlog-agent

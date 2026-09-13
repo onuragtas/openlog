@@ -405,6 +405,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/version/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check for a new release now
+         * @description Signed-in admins and owners (403 for API keys, lower roles, and when `OPENLOG_SIGNUP_ENABLED=true`).
+         *     Runs the api release check immediately and queues a `check` request for openlog-updater (picked up
+         *     within `OPENLOG_UPDATER_REQUEST_POLL`, default 10 s). At most once per 30 s per installation (429 with
+         *     `Retry-After`). Audit action `update.check_requested`. Returns the fresh version information.
+         */
+        post: operations["requestUpdateCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/version/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask openlog-updater to install a release now
+         * @description Signed-in admins and owners (same rules as `/version/check`). Queues an `apply` request; the updater
+         *     installs `target_version` also in `notify` mode, only if it is still the release it would select, and
+         *     outside `OPENLOG_UPDATER_MAINTENANCE_WINDOW` only with `ignore_maintenance_window: true`. Follow the
+         *     progress in `GET /api/v1/version` (`update_requests.latest`, `updater.state`, `updater.steps`).
+         *     409 when the target is not newer than the running version, no updater reports, the updater mode is
+         *     `off`, an update is running, or an apply request is already open; 429 within 30 s of the previous apply
+         *     request. Audit action `update.apply_requested`.
+         */
+        post: operations["requestUpdateApply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/config": {
         parameters: {
             query?: never;
@@ -845,6 +894,28 @@ export interface paths {
         put?: never;
         /** @description Paused or halted rollouts. Restarts the soak time; failures of a halted rollout are acknowledged. */
         post: operations["resumeFleetRollout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fleet/rollouts/{id}/deploy-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Active rollouts that are not in their last wave: skips the remaining soak times and moves to the last
+         *     wave (100 %). Agents get the update at their next sync (agents waiting for a wave sync every
+         *     `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL`, default 60 s); the halt threshold and maintenance windows still
+         *     apply. Audit action `fleet.rollout.deploy_now`.
+         */
+        post: operations["deployFleetRolloutNow"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1633,6 +1704,8 @@ export interface components {
             name: string;
         };
         VersionInfo: {
+            /** @description "Check now" / "Update now" channel to openlog-updater; null in OPENLOG_AUTH_MODE=static. */
+            update_requests: components["schemas"]["UpdateRequests"] | null;
             /**
              * @description SemVer product version; dev builds 0.0.0-dev+<commit>
              * @example 0.9.1
@@ -1647,6 +1720,39 @@ export interface components {
             update_check: "enabled" | "disabled" | "failed";
             /** @description Status reported by openlog-updater (null when no updater runs). See docs/operations/upgrading.md. */
             updater: components["schemas"]["UpdaterStatus"] | null;
+        };
+        UpdateRequests: {
+            /** @description The caller may use POST /version/check and /version/update (signed-in admin or owner, signup disabled). */
+            can_request: boolean;
+            /** @description A Compose updater polled update_requests recently (picks up requests within seconds). The Kubernetes CronJob never listens; it handles requests at its next scheduled run. */
+            updater_listening: boolean;
+            /** Format: date-time */
+            updater_polled_at: string | null;
+            /** @description The newest request (any action); null when none was made. */
+            latest: components["schemas"]["UpdateRequest"] | null;
+        };
+        UpdateRequest: {
+            id: string;
+            /** @enum {string} */
+            action: "check" | "apply";
+            /** @description apply only; empty for check */
+            target_version: string;
+            ignore_maintenance_window: boolean;
+            /**
+             * @description expired: no updater picked the request up within 15 minutes
+             * @enum {string}
+             */
+            state: "pending" | "running" | "done" | "failed" | "expired";
+            /** @description Result reported by the updater (e.g. the reason a request failed) */
+            message: string;
+            /** @description Only for callers with can_request */
+            requested_by_email: string | null;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: date-time */
+            picked_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
         };
         AvailableRelease: {
             /** @example 0.9.2 */
@@ -2500,7 +2606,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description resource_exhausted (sign-in rate limit), with Retry-After */
+        /** @description resource_exhausted (sign-in rate limit, update request rate limit), with Retry-After */
         TooManyRequests: {
             headers: {
                 [name: string]: unknown;
@@ -3367,6 +3473,63 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    requestUpdateCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Version information after the check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    requestUpdateApply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @example 0.9.1 */
+                    target_version: string;
+                    /** @default false */
+                    ignore_maintenance_window?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Queued request */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getAuthConfig: {
@@ -4256,6 +4419,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Active rollout */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetRollout"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deployFleetRolloutNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rollout in its last wave */
             200: {
                 headers: {
                     [name: string]: unknown;

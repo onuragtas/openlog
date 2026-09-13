@@ -37,6 +37,7 @@ Amaç: Ekiplerin birbirini beklemeden çalışabileceği sözleşmeler ve uçtan
 - Agent: Debian'da `redis-server → redis-check-rdb` gibi symlink'lerde kullanıcıya gösterilecek servis adı/instance (sözleşme şu an çözülmüş exe yolunu istiyor)
 
 - Sürümler ve otomatik güncelleme (09, D-025–D-029) ✅: `libs/release` (imza/manifest), `openlog-release` + imzalı yerel release, deb/rpm + `install.sh`, GitHub Actions (CI + release; GitHub'da henüz çalışmadı), agent kendini güncelleme + otomatik geri dönüş, filo politikası/dalgalar/durdurma + Filo ekranı, backend sürüm kontrolü + UI bandı, expand/contract migration + N/N+1 testi, Compose updater (yedek → migrate → yeniden oluştur → geri dönüş), Helm updater CronJob (gerçek cluster'da denenmedi)
+  - Manuel güncelleme (D-041): Ayarlar → Organizasyon → "Sürüm ve güncellemeler" sayfasında "Şimdi kontrol et" (api kontrolü + updater'a istek, 30 sn hız sınırı) ve "Şimdi güncelle" (`update_requests` tablosu, Compose updater 10 sn'de alır, `notify` modunda da uygular, bakım penceresi dışı için açık onay; sayfa api yeniden başlarken bağlantıyı kaybetmeden izler). Filo sayfasında "Şimdi dağıt" (dalga beklemelerini atlar; dalga bekleyen agent'lar 60 sn'de bir sync yapar). Kubernetes CronJob istekleri bir sonraki çalışmasında işler.
 
 ### Ara adım — Tüm sistemin Docker ile ayağa kalkması (M1 kapanışı) ✅ 2026-09-13
 

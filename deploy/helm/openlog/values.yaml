@@ -740,6 +740,8 @@ envoy:
 # images to image.tag, so set image.tag to the running version before upgrading.
 # RBAC: get/patch on this release's ingest/processor/api Deployments, create/get Jobs,
 # get/list pods and pods/log in the release namespace.
+# "Update now" in the UI (update_requests in PostgreSQL) is handled at the next scheduled run;
+# to run it right away: kubectl -n <namespace> create job --from=cronjob/<fullname>-updater <name>.
 # -----------------------------------------------------------------------------
 updater:
   enabled: false

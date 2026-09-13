@@ -31,10 +31,14 @@ const (
 
 // SyncOptions configure SyncService. Zero values take the defaults in brackets.
 type SyncOptions struct {
-	PollInterval  time.Duration // poll_interval_seconds [300s]
-	ServeMirror   bool          // download_url points to this ingest's mirror endpoint
-	MirrorBaseURL string        // external ingest URL for mirror links; empty = derived from the request
-	MaxBodyBytes  int64         // [64 KiB]
+	PollInterval time.Duration // poll_interval_seconds [300s]
+	// RolloutPollInterval is poll_interval_seconds for hosts waiting for a later wave of an active
+	// rollout, so "Deploy now" (or the next wave) reaches them within about a minute [60s; capped at
+	// PollInterval].
+	RolloutPollInterval time.Duration
+	ServeMirror         bool   // download_url points to this ingest's mirror endpoint
+	MirrorBaseURL       string // external ingest URL for mirror links; empty = derived from the request
+	MaxBodyBytes        int64  // [64 KiB]
 	// Keys decrypts integration setting passwords (OPENLOG_SECRETS_KEY); without it settings with a password
 	// are not delivered.
 	Keys       *secrets.Keyring
@@ -65,6 +69,10 @@ func NewSyncService(res tenant.Resolver, states *StateCache, rec *Recorder, cat 
 	if o.PollInterval <= 0 {
 		o.PollInterval = 300 * time.Second
 	}
+	if o.RolloutPollInterval <= 0 {
+		o.RolloutPollInterval = 60 * time.Second
+	}
+	o.RolloutPollInterval = min(o.RolloutPollInterval, o.PollInterval)
 	if o.MaxBodyBytes <= 0 {
 		o.MaxBodyBytes = 64 << 10
 	}
@@ -251,6 +259,9 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 			}
 			d := Decide(in)
 			reason = d.Reason
+			if d.Reason == ReasonNotInWave {
+				resp.PollIntervalSeconds = int(s.o.RolloutPollInterval / time.Second)
+			}
 			if d.Offer() {
 				resp.Update = s.updateJSON(r, d, st.Policy, now)
 				rolloutID = d.RolloutID

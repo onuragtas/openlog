@@ -12,6 +12,7 @@ import (
 	"github.com/onuragtas/openlog/internal/release"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/updatecheck"
+	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
 )
 
@@ -46,6 +47,7 @@ func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 	if apmLinker != nil {
 		leader.Add("apm-edge-linking", apmLinker) // internal/apm, per shard
 	}
+	var checkNow func(context.Context) error
 	if uc.Enabled {
 		keys, err := release.TrustedKeys(uc.TrustedKeysFile)
 		if err != nil {
@@ -53,7 +55,10 @@ func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 		}
 		checker := updatecheck.NewChecker(uc, store, updatecheck.FetchLatest(release.NewFetcher(keys)), log.With("job", "update-check"))
 		leader.Add("update-check", checker.Run)
+		checkNow = checker.CheckNow // "Check now": any pod, rate-limited through update_requests
 	}
+	// "Check now" / "Update now" (update_requests, D-041); needs user accounts (postgres auth mode).
+	srv.SetUpdateRequests(updatereq.PGQueue{Pool: pool}, checkNow)
 	go leader.Run(ctx)
 }
 

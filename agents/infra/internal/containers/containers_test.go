@@ -1,8 +1,12 @@
 package containers
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +18,8 @@ import (
 
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs"
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs/hostfstest"
+
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 )
 
 const dockerList = `[
@@ -23,6 +29,94 @@ const dockerList = `[
  {"Id":"aaaa000000000000000000000000000000000000000000000000000000000001","Names":["/old"],"Image":"sha256:deadbeef","ImageID":"sha256:deadbeef",
   "Created":0,"State":"exited","Labels":null,"Ports":[]}
 ]`
+
+const dockerInspect = `{"Id":"bbbb","RestartCount":3,"LogPath":"/var/lib/docker/containers/bbbb/bbbb-json.log",
+ "State":{"Status":"running","StartedAt":"2026-09-14T09:00:00.5Z","FinishedAt":"0001-01-01T00:00:00Z","ExitCode":0,"Health":{"Status":"unhealthy"}},
+ "HostConfig":{"LogConfig":{"Type":"json-file","Config":{}}},"Config":{"Tty":false}}`
+
+func frame(stream byte, payload string) []byte {
+	b := []byte{stream, 0, 0, 0, 0, 0, 0, 0}
+	binary.BigEndian.PutUint32(b[4:], uint32(len(payload)))
+	return append(b, payload...)
+}
+
+func TestParseInspectAndHealth(t *testing.T) {
+	d, err := ParseInspect([]byte(dockerInspect))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.RestartCount != 3 || !d.FinishedAt.IsZero() || d.StartedAt.Format(time.RFC3339Nano) != "2026-09-14T09:00:00.5Z" || d.Health != "unhealthy" {
+		t.Errorf("details = %+v", d)
+	}
+	if d, _ := ParseInspect([]byte(`{"State":{"Health":{"Status":"none"}}}`)); d.Health != "" {
+		t.Errorf("health none = %q", d.Health)
+	}
+	for status, want := range map[string]string{"Up 2 hours (healthy)": "healthy", "Up 1 second (health: starting)": "starting",
+		"Up 5 minutes (unhealthy)": "unhealthy", "Exited (0) 3 days ago": ""} {
+		if got := HealthFromStatus(status); got != want {
+			t.Errorf("%q → %q", status, got)
+		}
+	}
+	c := Container{State: "exited"}
+	c.Apply(Details{ExitCode: 137, FinishedAt: time.Date(2026, 9, 14, 1, 2, 3, 0, time.UTC)})
+	if c.ExitCode != 137 || c.FinishedAt != "2026-09-14T01:02:03Z" || !c.Inspected() {
+		t.Errorf("apply = %+v", c)
+	}
+}
+
+func TestAttributes(t *testing.T) {
+	kv := func(attrs []*commonpb.KeyValue) map[string]string {
+		m := map[string]string{}
+		for _, a := range attrs {
+			if arr := a.Value.GetArrayValue(); arr != nil {
+				m[a.Key] = arr.Values[0].GetStringValue()
+				continue
+			}
+			m[a.Key] = a.Value.GetStringValue()
+		}
+		return m
+	}
+	id := strings.Repeat("a", 64)
+	if got := kv(Attributes(id, "containerd", nil)); !reflect.DeepEqual(got, map[string]string{"container.id": id, "container.runtime": "containerd"}) {
+		t.Errorf("without metadata: %v", got)
+	}
+	meta := &Container{ID: id, Name: "shop-orders-1", Runtime: "docker", Image: "openlog-apmdemo/orders:1", Labels: map[string]string{
+		"com.docker.compose.project": "shop", "com.docker.compose.service": "orders",
+		"io.kubernetes.pod.name": "orders-7d9", "io.kubernetes.pod.namespace": "prod", "io.kubernetes.container.name": "app"}}
+	want := map[string]string{"container.id": id, "container.name": "shop-orders-1", "container.image.name": "openlog-apmdemo/orders",
+		"container.image.tags": "1", "container.runtime": "docker", "docker.compose.project": "shop", "docker.compose.service": "orders",
+		"k8s.pod.name": "orders-7d9", "k8s.namespace.name": "prod", "k8s.container.name": "app"}
+	if got := kv(Attributes(id, "", meta)); !reflect.DeepEqual(got, want) {
+		t.Errorf("with metadata: %v", got)
+	}
+}
+
+func TestFrameReaderAndTimestamps(t *testing.T) {
+	raw := NewFrameReader(strings.NewReader("tty output\n"), true)
+	if s, p, err := raw.Next(); err != nil || s != StreamStdout || string(p) != "tty output\n" {
+		t.Errorf("raw = %d %q %v", s, p, err)
+	}
+	if _, _, err := raw.Next(); !errors.Is(err, io.EOF) {
+		t.Errorf("raw EOF = %v", err)
+	}
+	big := []byte{1, 0, 0, 0, 0xff, 0xff, 0xff, 0xff}
+	if _, _, err := NewFrameReader(bytes.NewReader(big), false).Next(); !errors.Is(err, ErrFrameTooLarge) {
+		t.Errorf("oversized frame = %v", err)
+	}
+	if _, _, err := NewFrameReader(bytes.NewReader(frame(1, "abc")[:9]), false).Next(); !errors.Is(err, io.EOF) {
+		t.Errorf("truncated frame = %v", err)
+	}
+	ts, rest, ok := SplitTimestamp([]byte("2026-09-14T10:00:00.123456789Z GET / 200"))
+	if !ok || string(rest) != "GET / 200" || ts.Nanosecond() != 123456789 {
+		t.Errorf("split = %v %q %v", ts, rest, ok)
+	}
+	if _, rest, ok := SplitTimestamp([]byte("no timestamp here")); ok || string(rest) != "no timestamp here" {
+		t.Error("line without timestamp")
+	}
+	if got := SinceParam(time.Unix(1757757600, 5)); got != "1757757600.000000005" || SinceParam(time.Time{}) != "0" {
+		t.Errorf("since = %s", got)
+	}
+}
 
 func TestParseDockerList(t *testing.T) {
 	cs, err := ParseDockerList([]byte(strings.Replace(dockerList, "xxxxxxxxxx", strings.Repeat("é", 200), 1)))
@@ -111,6 +205,17 @@ func serveDocker(t *testing.T, sock string) {
 		t.Fatal(err)
 	}
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/containers/bbbb000000000000000000000000000000000000000000000000000000000002/json":
+			_, _ = w.Write([]byte(dockerInspect))
+			return
+		case r.URL.Path == "/containers/bbbb000000000000000000000000000000000000000000000000000000000002/logs":
+			// Two multiplexed frames: a stdout line and a stderr line split over two frames.
+			_, _ = w.Write(frame(StreamStdout, "2026-09-14T10:00:00.000000001Z hello\n"))
+			_, _ = w.Write(frame(StreamStderr, "2026-09-14T10:00:01Z oops"))
+			_, _ = w.Write(frame(StreamStderr, "\n"))
+			return
+		}
 		if r.URL.Path != "/containers/json" || r.URL.Query().Get("all") != "1" {
 			http.NotFound(w, r)
 			return
@@ -133,6 +238,37 @@ func TestSourceList(t *testing.T) {
 	fp := src.Fingerprint()
 	if cached, _ := src.List(context.Background(), time.Minute); len(cached) != 2 || src.Fingerprint() != fp || fp == 0 {
 		t.Error("cache/fingerprint")
+	}
+	// The running container was inspected (the exited one's inspect fails and keeps the list data).
+	c := cs[1]
+	if !c.Inspected() || c.RestartCount != 3 || c.StartedAt != "2026-09-14T09:00:00.5Z" || c.Health != "unhealthy" ||
+		c.LogDriver != "json-file" || c.LogPath != "/var/lib/docker/containers/bbbb/bbbb-json.log" || c.Tty {
+		t.Errorf("inspected container = %+v", c)
+	}
+	if cs[0].Inspected() {
+		t.Errorf("exited container = %+v", cs[0])
+	}
+
+	body, err := src.Stream(context.Background(), "/containers/"+c.ID+"/logs?follow=1&stdout=1&stderr=1&timestamps=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer body.Close()
+	fr := NewFrameReader(body, false)
+	var got []string
+	for {
+		stream, p, err := fr.Next()
+		if err != nil {
+			break
+		}
+		got = append(got, fmt.Sprintf("%d:%s", stream, p))
+	}
+	want := []string{"1:2026-09-14T10:00:00.000000001Z hello\n", "2:2026-09-14T10:00:01Z oops", "2:\n"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("frames = %q", got)
+	}
+	if _, err := src.Stream(context.Background(), "/containers/nope/logs"); err == nil {
+		t.Error("stream of an unknown container must fail")
 	}
 
 	empty := NewSource(hostfs.New(shortTempDir(t)), "/var/run/docker.sock")

@@ -24,11 +24,13 @@ const (
 
 // Config is parsed from OPENLOG_UPDATER_* (and the shared release variables).
 type Config struct {
-	Mode               string
-	Channel            string
-	IndexURL           string
-	TrustedKeysFile    string
-	Interval           time.Duration
+	Mode            string
+	Channel         string
+	IndexURL        string
+	TrustedKeysFile string
+	Interval        time.Duration
+	// RequestPoll is how often update_requests ("Check now" / "Update now" in the UI) are polled.
+	RequestPoll        time.Duration
 	MaintenanceWindows []Window
 	HealthTimeout      time.Duration
 	// ImageRepository replaces the repository of the manifest image (mirrors); the digest is kept.
@@ -91,6 +93,7 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		IndexURL:        str("OPENLOG_RELEASE_INDEX_URL", updatecheck.DefaultIndexURL),
 		TrustedKeysFile: str("OPENLOG_RELEASE_TRUSTED_KEYS_FILE", ""),
 		Interval:        dur("OPENLOG_UPDATER_INTERVAL", time.Hour),
+		RequestPoll:     dur("OPENLOG_UPDATER_REQUEST_POLL", 10*time.Second),
 		HealthTimeout:   dur("OPENLOG_UPDATER_HEALTH_TIMEOUT", 5*time.Minute),
 		ImageRepository: str("OPENLOG_UPDATER_IMAGE_REPOSITORY", ""),
 

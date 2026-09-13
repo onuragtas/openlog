@@ -48,6 +48,7 @@ func (s *Server) fleetRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/fleet/rollouts", false, s.fleetRollouts)
 	route("POST /api/v1/fleet/rollouts/{id}/pause", true, s.pauseRollout)
 	route("POST /api/v1/fleet/rollouts/{id}/resume", true, s.resumeRollout)
+	route("POST /api/v1/fleet/rollouts/{id}/deploy-now", true, s.deployRolloutNow)
 	route("POST /api/v1/fleet/rollback", true, s.fleetRollback)
 }
 
@@ -342,6 +343,15 @@ func (s *Server) pauseRollout(w http.ResponseWriter, r *http.Request, p *auth.Pr
 
 func (s *Server) resumeRollout(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
 	ro, err := s.fleet.Resume(r.Context(), p.OrgID, r.PathValue("id"), s.actor(r, p))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, rolloutResponse(&ro))
+	return nil
+}
+
+func (s *Server) deployRolloutNow(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ro, err := s.fleet.DeployNow(r.Context(), p.OrgID, r.PathValue("id"), s.actor(r, p))
 	if err != nil {
 		return err
 	}

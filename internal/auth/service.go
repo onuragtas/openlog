@@ -459,6 +459,12 @@ func (s *Service) Me(ctx context.Context, p *Principal) (MeResult, error) {
 	return res, nil
 }
 
+// Audit records an event performed by p in p's organization (best effort, like the service's own
+// events), for API operations outside this package (e.g. update requests).
+func (s *Service) Audit(ctx context.Context, p *Principal, meta ClientMeta, action, targetType, targetID string, details map[string]any) {
+	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, action, targetType, targetID, details)
+}
+
 // ---- helpers ----
 
 func (s *Service) audit(ctx context.Context, orgID, actorID, actorEmail string, meta ClientMeta, action, targetType, targetID string, details map[string]any) {

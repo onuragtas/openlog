@@ -10,6 +10,51 @@ Runs as a hosted service or self-hosted, from a single machine up to a horizonta
 This is the `single` profile: PostgreSQL, Kafka, ClickHouse and `openlog-allinone` (ingest + processor + API +
 web UI + alert evaluator) on one host. For Kubernetes see [deploy/helm/openlog](deploy/helm/openlog/README.md).
 
+### Quick install (one command)
+
+On a Linux server with Docker Engine and the Compose v2 plugin (or add `--install-docker`):
+
+```sh
+curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install-server.sh |
+  sudo sh -s -- --email you@example.com
+```
+
+It runs the signed release image `ghcr.io/onuragtas/openlog:<version>` with **automatic updates enabled**
+(`openlog-updater` in `auto` mode: PostgreSQL backup, migrations, health check, rollback on failure). Steps:
+
+1. checks Docker, Compose v2, RAM, disk and free ports (warnings only for RAM, disk and ports);
+2. resolves the latest stable release (or `--version`) and downloads that tag's `deploy/compose` files (no git);
+3. creates `/opt/openlog-server/.env` (mode 0600) with random PostgreSQL/ClickHouse passwords,
+   `OPENLOG_SECRETS_KEY`, an `olk_…` license key and your owner login;
+4. starts the stack and the updater (`docker compose -p openlog …`) and waits until `/readyz` answers;
+5. prints the UI URL, the license key, the agent install command and backup instructions.
+
+Asked on the terminal when not given: the owner email and password (empty = generate one, printed once).
+Re-running is safe: `.env` and all secrets are kept, the compose files are replaced by the requested/latest
+release and the stack is updated.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--email EMAIL` | prompt | owner (admin) email; required without a terminal |
+| `--password PASS` | prompt, else generated | owner password, 8–256 characters (env `OPENLOG_OWNER_PASSWORD` keeps it out of `ps`) |
+| `--version X.Y.Z` | latest on the channel | release to install; an older version than the running one is refused |
+| `--channel stable\|beta` | `stable` | release channel |
+| `--dir DIR` | `/opt/openlog-server` | installation directory (`docker-compose.yml`, `.env`, `backups/`) |
+| `--updater auto\|notify\|off` | `auto` | `notify` only reports new releases in the UI |
+| `--domain HOST` | – | public address behind your TLS reverse proxy: sets `OPENLOG_PUBLIC_URL=https://HOST` and `OPENLOG_COOKIE_SECURE=true` and prints a Caddy example (`http://HOST` keeps plain HTTP) |
+| `--cors-origins LIST` | – | browser OTLP origins for ingest `:4318` |
+| `--project NAME` | `openlog` | compose project name |
+| `--install-docker` | off | install Docker with `get.docker.com` when missing |
+| `--no-start` | off | only write the files |
+
+Then continue with [4. Install the infra agent](#4-install-the-infra-agent-on-your-hosts) (the installer prints the
+command) and [5. Applications, HTTPS and firewall](#5-applications-https-and-firewall). Manage the stack with
+`docker compose -p openlog -f /opt/openlog-server/docker-compose.yml --env-file /opt/openlog-server/.env …`.
+
+### Manual install
+
+The same result step by step, or from source.
+
 ### 1. Requirements
 
 - Linux server with **Docker Engine 24+** and the **Docker Compose v2 plugin** (`docker compose version`)
@@ -162,7 +207,7 @@ More options: [deploy/compose/README.md](deploy/compose/README.md).
 ## Releases
 
 Pushing a tag `vX.Y.Z` runs `.github/workflows/release.yml`: multi-arch image `ghcr.io/onuragtas/openlog:<v>`, agent
-tarballs and deb/rpm, Helm chart, signed `manifest.json`/`index.json` and `install.sh` on a GitHub Release.
+tarballs and deb/rpm, Helm chart, signed `manifest.json`/`index.json`, `install.sh` and `install-server.sh` on a GitHub Release.
 One-time repository setup (signing key, secret, variable, permissions): [docs/operations/releasing.md](docs/operations/releasing.md).
 
 ## Documentation

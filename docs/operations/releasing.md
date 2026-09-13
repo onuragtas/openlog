@@ -16,7 +16,7 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `openlog-release` CLI (`keygen`, `build-manifest`, `sign`, `build-index`, `verify`, `archive`) | `cmd/openlog-release`, uses `libs/release` |
 | Build targets | root `Makefile` (`release-*`, `shellcheck`, `actionlint`, `helm-lint`, `package-test`, `install-test`) |
 | deb/rpm | `packaging/nfpm/infra-agent.yaml`, `packaging/scripts/*.sh` (nfpm runs in the pinned `goreleaser/nfpm` image) |
-| Installer | `scripts/install.sh` (attached to every release) |
+| Installers | `scripts/install.sh` (agent) and `scripts/install-server.sh` (Compose server), attached to every release |
 | CI | `.github/workflows/ci.yml` (incl. a signed release dry run), `.github/workflows/release.yml` |
 
 ### Release contents (`dist/v<version>/`)
@@ -31,6 +31,7 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `manifest.json`, `manifest.json.sig` | signed |
 | `index.json`, `index.json.sig` | signed; all releases, newest first |
 | `install.sh` | not in the manifest (bootstrap, see [install.sh trust model](#installsh)) |
+| `install-server.sh` | not in the manifest (server bootstrap, see [install-server.sh](#install-serversh)) |
 
 `build-manifest` picks up artifacts by these file names; unknown files are ignored. It fills
 `compatibility` with `oldest_supported_agent = X.(Y-2).0` and `rollback_floor = X.(Y-1).0`; override with
@@ -324,3 +325,26 @@ Re-running is idempotent: same version → only config/service are updated; newe
 an agent that already updated itself past the requested version is kept unless `--version` is given
 explicitly. Without systemd (containers, Alpine/OpenRC) the agent is installed and configured but
 must be started by the local service manager.
+
+## install-server.sh
+
+```sh
+curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install-server.sh |
+  sudo sh -s -- --email you@example.com
+```
+
+Installs the `single` Compose profile in `/opt/openlog-server` with `OPENLOG_IMAGE=ghcr.io/onuragtas/openlog:<v>`
+and `openlog-updater` in `auto` mode (flags: README "Quick install"). `make release-local` copies it next to
+`install.sh`; like `install.sh` it is not in the manifest.
+
+The compose files are **not** a release asset: the script downloads the GitHub source archive of the tag
+(`https://github.com/onuragtas/openlog/archive/refs/tags/v<v>.tar.gz`, ~2 MB) and uses its `deploy/compose/`
+(`docker-compose.yml`, `.env.example`, `clickhouse/`). This works for every published release without a new
+artifact, and the files always match the image of the same tag. `--bundle-url` points it at a mirror (any
+`tar.gz` containing `deploy/compose/`). Trust: HTTPS only for this bootstrap; later updates are verified by
+`openlog-updater` against the signed manifest. The `build:` section of the compose file is unused (the release
+image is pulled, never built).
+
+Test: `packaging/test/install-server.sh [VERSION]` runs it in a privileged `docker:28-dind` container against
+the published release (fresh install, login, idempotent re-run, upgrade to the latest release, refused
+downgrade). It needs internet access and is not part of CI.

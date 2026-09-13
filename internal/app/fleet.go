@@ -69,7 +69,7 @@ func startFleetIngest(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 		close(done)
 	}
 	syncSvc := fleet.NewSyncService(res, states, rec, cat, fleet.SyncOptions{
-		PollInterval: cfg.Fleet.SyncInterval, ServeMirror: cfg.Fleet.ReleaseServeMirror, MirrorBaseURL: cfg.Fleet.ReleaseMirrorBaseURL,
+		PollInterval: cfg.Fleet.SyncInterval, RolloutPollInterval: cfg.Fleet.RolloutSyncInterval, ServeMirror: cfg.Fleet.ReleaseServeMirror, MirrorBaseURL: cfg.Fleet.ReleaseMirrorBaseURL,
 		Keys: keys, Registerer: reg, Log: log,
 	})
 	svc.SetHTTPRoutes(syncSvc.Register)

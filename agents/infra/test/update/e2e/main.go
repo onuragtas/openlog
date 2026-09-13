@@ -191,12 +191,14 @@ func tarball(top string, files map[string]fileEntry) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// step is one stage of the scripted scenario.
+// step is one stage of the scripted scenario. Steps without an action send no instruction (the
+// host-side script acts); a gated step sends its instruction once <gates>/<gate> exists.
 type step struct {
 	name    string
 	action  string
 	version string
 	tamper  bool
+	gate    string
 	done    func(r update.SyncRequest) bool
 }
 
@@ -205,37 +207,62 @@ func serve(args []string) error {
 	listen := fs.String("listen", "127.0.0.1:8080", "listen address")
 	releases := fs.String("releases", "", "releases directory")
 	arch := fs.String("arch", "", "linux architecture")
+	gates := fs.String("gates", "", "directory of gate files created by scenario.sh")
 	fs.Parse(args)
 
 	logf := func(format string, a ...any) {
 		fmt.Printf("%s server: %s\n", time.Now().UTC().Format("15:04:05.000"), fmt.Sprintf(format, a...))
 	}
-	failedWith := func(version, text string) func(update.SyncRequest) bool {
+	staged := func(r update.SyncRequest) bool {
+		return r.Agent.UpdateMode == update.ModeStaged && r.Agent.UpdateNotice == "" && r.Agent.UpdateCapable
+	}
+	failedWith := func(running, version, text string) func(update.SyncRequest) bool {
 		return func(r update.SyncRequest) bool {
-			return r.Agent.Version == "0.9.1" && r.Update.State == update.StateFailed && r.Update.ToVersion == version && strings.Contains(r.Update.Error, text)
+			return r.Agent.Version == running && r.Update.State == update.StateFailed && r.Update.ToVersion == version && strings.Contains(r.Update.Error, text)
 		}
 	}
 	steps := []step{
-		{name: "auto update 0.9.0 -> 0.9.1 and confirm", action: update.ActionUpgrade, version: "0.9.1",
+		{name: "legacy unit: binary-only update 0.9.0 -> 0.9.1, reported as unit outdated", action: update.ActionUpgrade, version: "0.9.1",
 			done: func(r update.SyncRequest) bool {
-				return r.Agent.Version == "0.9.1" && r.Update.State == update.StateSucceeded && r.Update.ToVersion == "0.9.1"
+				return r.Agent.Version == "0.9.1" && r.Update.State == update.StateSucceeded && r.Update.ToVersion == "0.9.1" &&
+					r.Agent.UpdateMode == update.ModeLegacy && strings.Contains(r.Agent.UpdateNotice, "unit outdated")
 			}},
-		{name: "broken 0.9.2 staged, fails to start, rolls back to 0.9.1", action: update.ActionUpgrade, version: "0.9.2",
+		{name: "after the one-time bootstrap the privileged pre-start step runs (staged mode)",
 			done: func(r update.SyncRequest) bool {
-				return r.Agent.Version == "0.9.1" && r.Update.State == update.StateRolledBack && r.Update.ToVersion == "0.9.2"
+				return r.Agent.Version == "0.9.1" && staged(r) && r.Reconcile != nil && r.Reconcile.Docker == update.DockerNoGroup
 			}},
-		{name: "tampered manifest (0.9.3) rejected", action: update.ActionUpgrade, version: "0.9.3", tamper: true,
-			done: failedWith("0.9.3", "signature")},
-		{name: "archive with sha256 mismatch (0.9.4) rejected", action: update.ActionUpgrade, version: "0.9.4",
-			done: failedWith("0.9.4", "sha256 mismatch")},
+		{name: "staged update 0.9.1 -> 0.9.2 with a new unit and docker group, confirmed", action: update.ActionUpgrade, version: "0.9.2", gate: "docker",
+			done: func(r update.SyncRequest) bool {
+				return r.Agent.Version == "0.9.2" && r.Update.State == update.StateSucceeded && r.Update.ToVersion == "0.9.2" && staged(r) &&
+					r.Reconcile != nil && (r.Reconcile.Docker == update.DockerAdded || r.Reconcile.Docker == update.DockerMember)
+			}},
+		{name: "broken 0.9.3 installed by -apply, fails to start, rolled back to 0.9.2 by -apply", action: update.ActionUpgrade, version: "0.9.3",
+			done: func(r update.SyncRequest) bool {
+				return r.Agent.Version == "0.9.2" && r.Update.State == update.StateRolledBack && r.Update.ToVersion == "0.9.3" && staged(r)
+			}},
+		{name: "tampered manifest (0.9.4) rejected", action: update.ActionUpgrade, version: "0.9.4", tamper: true,
+			done: failedWith("0.9.2", "0.9.4", "signature")},
+		{name: "archive with sha256 mismatch (0.9.5) rejected", action: update.ActionUpgrade, version: "0.9.5",
+			done: failedWith("0.9.2", "0.9.5", "sha256 mismatch")},
 		{name: "downgrade to 0.9.0 without rollback action rejected", action: update.ActionUpgrade, version: "0.9.0",
-			done: failedWith("0.9.0", "not newer")},
-		{name: "rollback to 0.8.0 below rollback_floor 0.9.0 rejected", action: update.ActionRollback, version: "0.8.0",
-			done: failedWith("0.8.0", "rollback_floor")},
-		{name: "rollback action to 0.9.0 applied and confirmed", action: update.ActionRollback, version: "0.9.0",
+			done: failedWith("0.9.2", "0.9.0", "not newer")},
+		{name: "rollback to 0.8.0 below rollback_floor 0.9.1 rejected", action: update.ActionRollback, version: "0.8.0",
+			done: failedWith("0.9.2", "0.8.0", "rollback_floor")},
+		{name: "update staged by the agent user with a forged manifest rejected by -apply",
+			done: failedWith("0.9.2", "0.9.9", "signature")},
+		{name: "signed update staged with the archive symlinked out of the state dir rejected by -apply",
+			done: failedWith("0.9.2", "0.9.3", "staged archive")},
+		{name: "rollback action to 0.9.1 applied by -apply and confirmed", action: update.ActionRollback, version: "0.9.1", gate: "rollback",
 			done: func(r update.SyncRequest) bool {
-				return r.Agent.Version == "0.9.0" && r.Update.State == update.StateSucceeded && r.Update.ToVersion == "0.9.0"
+				return r.Agent.Version == "0.9.1" && r.Update.State == update.StateSucceeded && r.Update.ToVersion == "0.9.1" && staged(r)
 			}},
+	}
+	gateOpen := func(s step) bool {
+		if s.gate == "" {
+			return true
+		}
+		_, err := os.Stat(filepath.Join(*gates, s.gate))
+		return err == nil
 	}
 
 	var mu sync.Mutex
@@ -266,9 +293,13 @@ func serve(args []string) error {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		logf("sync  agent=%s method=%s capable=%v state=%s from=%s to=%s error=%q (otlp metrics=%d logs=%d)",
-			req.Agent.Version, req.Agent.InstallMethod, req.Agent.UpdateCapable, req.Update.State,
-			req.Update.FromVersion, req.Update.ToVersion, req.Update.Error, otlp["/v1/metrics"], otlp["/v1/logs"])
+		rec := "none"
+		if req.Reconcile != nil {
+			rec = fmt.Sprintf("%s unit_changed=%v docker=%s error=%q", req.Reconcile.Version, req.Reconcile.UnitChanged, req.Reconcile.Docker, req.Reconcile.Error)
+		}
+		logf("sync  agent=%s method=%s capable=%v mode=%s notice=%q state=%s from=%s to=%s error=%q reconcile=[%s] (otlp metrics=%d logs=%d)",
+			req.Agent.Version, req.Agent.InstallMethod, req.Agent.UpdateCapable, req.Agent.UpdateMode, req.Agent.UpdateNotice, req.Update.State,
+			req.Update.FromVersion, req.Update.ToVersion, req.Update.Error, rec, otlp["/v1/metrics"], otlp["/v1/logs"])
 		if cur < len(steps) && steps[cur].done(req) {
 			logf("STEP %d PASSED: %s", cur+1, steps[cur].name)
 			cur++
@@ -279,7 +310,7 @@ func serve(args []string) error {
 			}
 		}
 		resp := update.SyncResponse{PollIntervalSeconds: 60, ServerVersion: "0.9.9"}
-		if cur < len(steps) {
+		if cur < len(steps) && steps[cur].action != "" && gateOpen(steps[cur]) {
 			ins, err := instructionFor(steps[cur], cur, *releases, *arch, "http://"+*listen+"/releases")
 			if err != nil {
 				logf("SCENARIO FAILED: %v", err)

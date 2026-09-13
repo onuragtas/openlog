@@ -263,33 +263,64 @@ openlog-infra-agent -validate-rules -config /etc/openlog-infra-agent/config.yaml
 # Parse the config, run every collector once without sending, check state_dir is writable (exit 0/1).
 openlog-infra-agent -self-test -config /etc/openlog-infra-agent/config.yaml
 
-# Run as a service (tarball layout; deb/rpm packages install the same layout).
+# Run as a service (tarball layout; deb/rpm packages install the same layout). The install root is root-owned.
 V=0.4.0
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin openlog-agent
-sudo install -d -o openlog-agent -g openlog-agent /opt/openlog/infra-agent /opt/openlog/infra-agent/versions
-sudo install -D -o openlog-agent -m 0755 dist/openlog-infra-agent-linux-amd64 /opt/openlog/infra-agent/versions/$V/openlog-infra-agent
-sudo install -o openlog-agent -m 0644 manifest.json manifest.json.sig /opt/openlog/infra-agent/versions/$V/   # from the release
+sudo install -d -m 0755 /opt/openlog/infra-agent /opt/openlog/infra-agent/versions
+sudo install -D -m 0755 dist/openlog-infra-agent-linux-amd64 /opt/openlog/infra-agent/versions/$V/openlog-infra-agent
+sudo install -m 0644 manifest.json manifest.json.sig /opt/openlog/infra-agent/versions/$V/   # from the release
 sudo ln -sfn versions/$V /opt/openlog/infra-agent/current
 sudo install -D -m 0640 packaging/config.example.yaml /etc/openlog-infra-agent/config.yaml
-sudo install -m 0644 packaging/systemd/openlog-infra-agent.service /etc/systemd/system/
-sudo systemctl enable --now openlog-infra-agent
+# Creates openlog-agent, installs the systemd unit, sets ownership, docker group (see "Docker access").
+sudo /opt/openlog/infra-agent/current/openlog-infra-agent -reconcile -config /etc/openlog-infra-agent/config.yaml
+sudo systemctl daemon-reload && sudo systemctl enable --now openlog-infra-agent
 ```
 
 The systemd unit runs as `openlog-agent` with `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE`, which are needed to read other users'
 `/proc/<pid>/exe` and fd links. Anything it cannot read is skipped and counted in `openlog.agent.permission_denied`.
-It uses `Restart=always` (the agent exits with status 0 to restart into an update) and may write `/opt/openlog/infra-agent`.
+It uses `Restart=always` (the agent exits with status 0 to restart into an update). The agent can write only
+`/var/lib/openlog-infra-agent`; the unit's privileged pre-start step (`ExecStartPre=-+… -apply`, root) installs updates.
 
 ## Self-update
 
-Contract: `openlog/docs/contracts/releases-updates.md` §3. Layout:
+Contract: `openlog/docs/contracts/releases-updates.md` §3. A self-update is equivalent to installing the new
+package or re-running `install.sh`: besides the binary, the new release's systemd unit, account, docker group
+membership and file ownership are applied.
+
+> **Upgrading from 0.1.x (once per host):** units installed before the privileged pre-start step only let the agent
+> swap its binary. Run the package upgrade (`apt install --only-upgrade openlog-infra-agent`, `dnf upgrade
+> openlog-infra-agent`) or re-run `install.sh` once. Until then the agent keeps updating binary-only (while
+> `versions/` is still writable by `openlog-agent`) and reports `update_notice: "unit outdated: …"`.
+
+Layout:
 
 ```
-/opt/openlog/infra-agent/
+/opt/openlog/infra-agent/                        # root:root 0755; the agent cannot write here
   versions/0.3.0/{openlog-infra-agent, manifest.json, manifest.json.sig, LICENSE, README.md, packaging/}
   versions/0.4.0/…
   current -> versions/0.4.0
+  apply-status.json                              # written by -apply (root), read by the agent
+  reconcile-status.json                          # written by -reconcile (root), reported in sync as "reconcile"
 /var/lib/openlog-infra-agent/update-state.json   # previous, candidate, attempts, staged_at, confirmed + reported state
+/var/lib/openlog-infra-agent/updates/<v>/        # staged release: archive.tar.gz, manifest.json, manifest.json.sig
 ```
+
+- **Staged mode** (unit with `ExecStartPre=-+/opt/openlog/infra-agent/current/openlog-infra-agent -apply`): the agent
+  (unprivileged, sandboxed) verifies, downloads, extracts and self-tests the release, keeps only the archive, manifest and
+  signature in `updates/<v>/`, records it in its state and exits 0. On the restart, `-apply` runs as root from the
+  root-owned current binary and treats everything in the state directory as hostile: it verifies the signature again
+  with the keys compiled into itself (rules 1–5), copies the archive into the install root while checking size and
+  sha256 (no symlink escapes out of the state directory, no FIFOs), extracts it root-owned (rule 6), runs the
+  candidate's `-self-test` as `openlog-agent` (rule 7), switches `current` and runs the new binary's `-reconcile`.
+  The configuration and `release.trusted_keys_file` are ignored by `-apply` unless only root can change them.
+- **Reconcile** (`-reconcile`, also run by the deb/rpm postinstall and `install.sh`): creates the account if missing;
+  makes the install root root-owned (legacy trees written by an older agent: the current one is copied into a root-owned
+  directory, others are removed); `/var/lib/openlog-infra-agent` `openlog-agent` 0750; `config.yaml` `root:openlog-agent`
+  0640 (never rewritten); installs the unit embedded in the binary (deb/rpm: `/usr/lib/systemd/system`, not when a full
+  override exists in `/etc/systemd/system`; tarball: `/etc/systemd/system`; drop-ins are never touched) and runs
+  `systemctl daemon-reload`; docker group as in [Docker access](#docker-access). When the unit changed during `-apply`,
+  the agent exits once right after starting so systemd starts it under the new unit (only once per unit content).
+- **Legacy mode** (unit without the pre-start step): the old binary-only switch below, only while `versions/` is
+  writable by the agent; reported as `update_mode: "legacy"` with the `unit outdated` notice.
 
 - **Sync:** a separate goroutine posts `POST <endpoint>/v1/openlog/agent/sync` (same license key header) with version, commit, install method,
   `update_capable`, the last update state and a config hash. The first sync runs within 10 s of start, then every `poll_interval_seconds`
@@ -298,7 +329,8 @@ Contract: `openlog/docs/contracts/releases-updates.md` §3. Layout:
 - **Install method:** `container` (`/.dockerenv`, `/run/.containerenv`, a container cgroup, or `OPENLOG_AGENT_CONTAINER=1`; `=0` turns detection
   off), `dev` (the running binary is not `install_root/versions/<v>/openlog-infra-agent`), `deb` (dpkg's `openlog-infra-agent.list` owns
   `install_root`), `rpm` (package `openlog-infra-agent` in rpmdb.sqlite), otherwise `tarball`. `update_capable` requires tarball/deb/rpm,
-  `update.enabled`, trusted release keys, a `current` symlink and a writable install root. `-version` prints all of this, including the package version.
+  `update.enabled`, trusted release keys, a `current` symlink and either `-apply` having run for this start (same systemd
+  `$INVOCATION_ID`: staged mode) or a writable install root (legacy mode). `-version` prints all of this, including the package version.
 - **Verification** (in contract order; rule 8 is checked right after rules 1–5, before anything is downloaded):
   1. manifest signature from a trusted key (compiled-in keys + `release.trusted_keys_file`; none → `no trusted release keys`);
   2. `product`, `schema`, `version == target_version`;
@@ -310,13 +342,15 @@ Contract: `openlog/docs/contracts/releases-updates.md` §3. Layout:
   7. `<new binary> -self-test -config <config>` exits 0 within 30 s;
   8. not update capable → `not update capable`.
   A download from the ingest host (backend mirror) carries the license key; other hosts never see it.
-- **Stage/switch:** the verified tree plus `manifest.json`/`.sig` becomes `versions/<v>/`, the state `{previous, candidate, attempts: 0, staged_at}`
+- **Stage/switch (legacy mode):** the verified tree plus `manifest.json`/`.sig` becomes `versions/<v>/`, the state `{previous, candidate, attempts: 0, staged_at}`
   is written, `current` is replaced atomically (temp symlink + rename) and the agent exits with status 0 after flushing its queue.
-- **Startup check** (first thing in `main`, before the configuration is validated): an unconfirmed candidate counts a start attempt; on the
-  4th start or 5 minutes after staging, `current` goes back to `previous`, the state becomes `rolled_back` and the process exits.
-  A running candidate that does not confirm within 5 minutes rolls back the same way.
-- **Confirm:** the first successful OTLP export of the candidate sets `confirmed`, reports `succeeded` and prunes `versions/` to current + previous
-  (plus the version a deb/rpm package owns).
+  In staged mode `-apply` does this as root on the next start (see above).
+- **Startup check:** staged mode: `-apply` counts the starts of an unconfirmed candidate in its root-owned status and on the 4th start,
+  5 minutes after the switch, or when the running candidate's watchdog asks for it, switches back to the previous version *it* recorded
+  (a root-owned directory; the agent's state file cannot choose the target); the agent reports `rolled_back`. Legacy mode: the same
+  check runs first thing in `main` and switches `current` itself.
+- **Confirm:** the first successful OTLP export of the candidate sets `confirmed`, reports `succeeded`; `versions/` is pruned to current + previous
+  (plus the version a deb/rpm package owns), by `-apply` on the next start in staged mode.
 - A failed instruction is not retried for the same action/version/rollout for 1 hour; a rolled-back one never. `not_before` is waited for
   and instructions past `deadline` are ignored (a deadline passing during staging fails the attempt).
 
@@ -398,11 +432,12 @@ Gunicorn, uWSGI, Uvicorn, .NET, sshd, cron, chrony, ntpd.
 ## Layout
 
 ```
-cmd/openlog-infra-agent   flags: -config -version -once -validate-rules -self-test
+cmd/openlog-infra-agent   flags: -config -version -once -validate-rules -self-test -apply -reconcile [-reconcile-context]
 internal/config        YAML config, env overrides, validation
 internal/version       build version, commit, date (ldflags)
 internal/release       trusted release keys (ldflags + release.trusted_keys_file)
-internal/update        sync client, install detection, manifest verification, download/extract, stage/confirm/rollback
+internal/update        sync client, install detection, manifest verification, download/extract, stage/confirm/rollback,
+                       privileged apply (-apply) and reconcile (-reconcile)
 internal/hostfs        root-path aware file access (+ statfs, linux only)
 internal/procfs        pure procfs parsers
 internal/resource      host.id chain and resource attributes
@@ -417,6 +452,6 @@ internal/exporter      OTLP/HTTP client, retry, request splitting
 internal/buffer        on-disk FIFO retry buffer
 internal/agent         scheduler, change fingerprint, resource budget
 rules/                 embedded discovery catalog
-packaging/             systemd unit, example configs
+packaging/             systemd unit (embedded by packaging.go; the packages and install.sh use the same file), example configs
 test/update            self-update end-to-end scenario (Debian 12 container)
 ```

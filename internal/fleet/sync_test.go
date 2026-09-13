@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -234,5 +235,54 @@ func TestSyncWindowAndStoreOutage(t *testing.T) {
 	e2.store.SetErr(errors.New("connection refused"))
 	if resp := decodeSync(t, e2.post(agentBody, nil)); resp.Update != nil {
 		t.Fatalf("update offered without policy: %+v", resp)
+	}
+}
+
+// Hosts waiting for a later wave sync every RolloutPollInterval, so "Deploy now" reaches them within
+// about a minute instead of a full sync interval.
+func TestSyncShortPollWhileWaitingForWave(t *testing.T) {
+	ctx := context.Background()
+	setup := func(t *testing.T) (*syncEnv, *fleet.Rollout, string) {
+		e := newSyncEnv(t, fleet.SyncOptions{PollInterval: 300 * time.Second})
+		r := &fleet.Rollout{OrgID: e.store.OrgOf(tenantID), Action: fleet.ActionUpgrade, ToVersion: "0.4.0", Waves: []int{50, 100},
+			WaveSoakMinutes: 60, State: fleet.RolloutActive, CreatedAt: e.now.Add(-time.Minute), WaveStartedAt: e.now.Add(-time.Minute)}
+		if err := e.store.CreateRollout(ctx, r, ""); err != nil {
+			t.Fatal(err)
+		}
+		// A host outside the first (50 %) wave.
+		for i := 0; ; i++ {
+			host := fmt.Sprintf("host-%d", i)
+			if fleet.Bucket(host, r.ID) >= 50 {
+				return e, r, strings.Replace(agentBody, `"host_id":"h1"`, `"host_id":"`+host+`"`, 1)
+			}
+		}
+	}
+
+	e, _, body := setup(t)
+	if resp := decodeSync(t, e.post(body, nil)); resp.Update != nil || resp.PollIntervalSeconds != 60 {
+		t.Fatalf("waiting for wave: %+v", resp)
+	}
+
+	e, r, body := setup(t)
+	m := fleet.NewManager(e.store, e.cat, fleet.ManagerOptions{Now: func() time.Time { return e.now }})
+	got, err := m.DeployNow(ctx, r.OrgID, r.ID, fleet.Actor{Email: "admin@example.com"})
+	if err != nil || got.CurrentWave != 1 || !got.WaveStartedAt.Equal(e.now) {
+		t.Fatalf("deploy now = %+v, %v", got, err)
+	}
+	if resp := decodeSync(t, e.post(body, nil)); resp.Update == nil || resp.Update.TargetVersion != "0.4.0" || resp.PollIntervalSeconds != 300 {
+		t.Fatalf("after deploy now: %+v", resp)
+	}
+	if acts := e.store.AuditActions(); len(acts) == 0 || acts[len(acts)-1] != "fleet.rollout.deploy_now" {
+		t.Fatalf("audit = %v", acts)
+	}
+	var pe *fleet.PreconditionError
+	if _, err := m.DeployNow(ctx, r.OrgID, r.ID, fleet.Actor{}); !errors.As(err, &pe) {
+		t.Fatalf("second deploy now = %v", err)
+	}
+	if _, err := m.Pause(ctx, r.OrgID, r.ID, fleet.Actor{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.DeployNow(ctx, r.OrgID, r.ID, fleet.Actor{}); !errors.As(err, &pe) {
+		t.Fatalf("deploy now of a paused rollout = %v", err)
 	}
 }

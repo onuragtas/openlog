@@ -120,7 +120,10 @@ Or, when the policy selects this host for an update:
 ```
 
 - `download_url` may point to the release source or to a backend mirror (`/v1/openlog/releases/<version>/<name>` on ingest). The agent verifies against the **signed manifest's** sha256 and size regardless of URL.
-- `poll_interval_seconds`: server-controlled, clamped by the agent to [60, 3600], ±10% jitter.
+- `poll_interval_seconds`: server-controlled, clamped by the agent to [60, 3600], ±10% jitter. Ingest answers
+  `OPENLOG_FLEET_SYNC_INTERVAL` (300 s), and `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL` (60 s) to hosts that an active
+  rollout will update in a later wave (decision `not_in_wave`), so the next wave or "Deploy now"
+  (`POST /api/v1/fleet/rollouts/{id}/deploy-now`) reaches them within about a minute plus the policy cache TTL.
 - Unknown fields are ignored on both sides. `404` or `501` from an old backend → the agent disables sync until restart and logs once.
 
 #### Remote integration config
@@ -169,20 +172,40 @@ When the host's effective integration settings (edited under `/api/v1/integratio
 
 Additional agent behavior:
 - Container detection: `/.dockerenv`, `/run/.containerenv`, container cgroup, or `OPENLOG_AGENT_CONTAINER=1`; `OPENLOG_AGENT_CONTAINER=0` disables detection (for test setups that run the tarball layout inside a container).
-- `update_capable` additionally requires `update.enabled`, trusted keys, an existing `current` symlink and a writable install root. For deb/rpm the package must be named `openlog-infra-agent`.
+- `update_capable` additionally requires `update.enabled`, trusted keys, an existing `current` symlink and either the privileged pre-start step having run for this start (staged mode) or an install root writable by the agent (legacy mode). For deb/rpm the package must be named `openlog-infra-agent`.
+- Optional request fields (older backends ignore them): `agent.update_mode` (`staged` | `legacy` | absent), `agent.update_notice` (operator action, e.g. `"unit outdated: …"` when the unit predates the pre-start step), and `reconcile` `{version, at, unit_changed, docker: added|member|opt_out|no_group|error, error}` from the last reconcile.
 - Installers (deb/rpm/`install.sh`) place `manifest.json` and `manifest.json.sig` in `versions/<v>/`; without them rollback from that version is refused (floor unknown). A deb/rpm cannot contain the published manifest (it lists the package's own sha256), so packages embed a second manifest for the same version, signed with the same key, listing only the agent tarballs; `version`, `channel`, `released_at`, `compatibility` and `images` are identical to the published one. `install.sh` tarball installs store the published manifest.
 - A failed instruction with the same action/version/rollout is not retried for 1 h; a rolled-back version is never retried automatically.
 - Downloads send the license key only when the URL host equals the ingest endpoint host.
-- Limitation: a candidate that crashes before `main` runs (e.g. during package init) is not counted and restart-loops; the systemd unit uses `StartLimitIntervalSec=0`, so recovery requires the next release or manual action.
+- Limitation: in staged mode start attempts are counted by `-apply`, so a candidate whose `main` crashes early still rolls back, as long as the candidate's own `-apply` runs (it ran successfully right after the switch). A candidate whose binary cannot start at all restart-loops (`StartLimitIntervalSec=0`) and needs the next release or manual action.
 
 ### Update state machine and rollback
 
-State file `<state_dir>/update-state.json`: `{previous, candidate, attempts, staged_at, confirmed}`.
+State file `<state_dir>/update-state.json`: `{previous, candidate, attempts, staged_at, confirmed}` plus, in staged mode, `{staged, confirmed_version, confirmed_at, rollback_request, rollback_reason}`.
 
+Staged mode (unit with the privileged pre-start step, see below):
+- **Stage (agent, unprivileged):** after rules 1-8 download, extract and self-test inside the sandbox; keep `archive.tar.gz`, `manifest.json`, `manifest.json.sig` in `<state_dir>/updates/<v>/`; write state `{staged: v, candidate: v, previous, staged_at}`; exit 0.
+- **Apply (root, next start):** re-verify and install (see below), record the candidate `{version, previous, switched_at, attempts: 1}` in the root-owned `apply-status.json`, switch `current`, run the new binary's `-reconcile`.
+- **Startup:** `-apply` increments `attempts` of its recorded candidate on every start (not for the one restart caused by a changed unit). If `attempts > 3`, `now - switched_at > 5 min`, or the running candidate set `rollback_request` (its watchdog: no confirmation within 5 min), it switches `current` back to the recorded `previous` (must be a root-owned tree) and runs its `-reconcile`. The agent maps the result of its start (`apply-status.json` with its `$INVOCATION_ID`: `switched`, `rejected`, `rolled_back`, `rollback_failed`) to the reported state.
+- **Confirm:** after the first successful OTLP export on the candidate, set `confirmed`, `confirmed_version`, `confirmed_at`, report `succeeded`. The next `-apply` accepts the confirmation only if `confirmed_at` is after its `switched_at`, forgets the candidate and prunes versions except current + previous (+ the deb/rpm package version).
+
+Legacy mode (unit without the pre-start step; only while `versions/` is writable by the agent):
 - **Stage:** extract to `<install_root>/versions/<v>/`, self-test, write state `{candidate, previous, attempts: 0}`, atomically replace the `current` symlink (create temp symlink + rename), exit with code 0 (systemd restarts).
 - **Startup (first thing in `main`):** if `candidate == running version` and not `confirmed`, increment `attempts`. If `attempts > 3` or `now - staged_at > 5 min`: switch `current` back to `previous`, set state `rolled_back`, exit (restart into previous).
 - **Confirm:** after the first successful OTLP export on the candidate, set `confirmed: true`, report `succeeded`, prune versions except current + previous.
 - `install_root` default `/opt/openlog/infra-agent`. Legacy installs without the layout report `update_capable=false` until migrated by the installer/package.
+
+### Privileged apply and reconcile
+
+A self-update must be equivalent to installing the new package or re-running `install.sh`: unit changes, group membership, ownership and future install steps must reach self-updated hosts. The agent runs as `openlog-agent` and must not be able to become root, so it cannot install them itself, and root must never execute anything the agent user could have written.
+
+- **Ownership:** `<install_root>`, `versions/`, every version tree and `current` are `root:root`, not writable by others; the unit gives the agent no write access there (`ReadWritePaths=/var/lib/openlog-infra-agent`). `state_dir` is `openlog-agent` 0750; `config.yaml` `root:openlog-agent` 0640.
+- **Unit:** `ExecStartPre=-+/opt/openlog/infra-agent/current/openlog-infra-agent -apply -config /etc/openlog-infra-agent/config.yaml` (`+`: root, without `User=` and the sandbox; `-`: never blocks the start), `TimeoutStartSec=180`. The executed binary is the root-owned current version.
+- **`-apply`** (always exits 0; no network; no-op outside the versions layout or when not root): (1) secure the layout: install root and `versions/` root-owned 0755; a version tree containing anything not root-owned, writable by others, a symlink or a special file is untrusted: the current one is copied (directories and regular files only, through `os.Root`) into a root-owned tree, others are deleted; untrusted status files are deleted. (2) Candidate check and rollback (above). (3) Staged update, with every file under `state_dir` treated as hostile: version name must be SemVer, action `upgrade`/`rollback`; files are opened through `os.Root(state_dir)` (symlinks cannot escape), must be regular files (no FIFO) within size limits (manifest 1 MiB, signature 64 KiB, archive = signed size); rules 1-5 with the keys compiled into this binary and its own version/manifest; the archive is copied into `versions/.<v>.partial` and size + sha256 are checked on the copy (the digest is not reported); extraction with rule 6 as root; the extracted tree must be trusted; `-self-test` of the candidate as `openlog-agent` (uid/gid from `/etc/passwd`, no supplementary groups; rule 7); rename to `versions/<v>`; switch. A staged update is processed once (`handled_staged_at`). (4) `-reconcile` of the version that starts (a re-exec after a switch or rollback, so the new release's code runs). The configuration and `release.trusted_keys_file` are used only if they and all parent directories are changeable by root only; otherwise defaults and compiled-in keys.
+- **`-reconcile`** (run by `-apply`, deb/rpm postinstall and `install.sh`; idempotent; prints `restart-required` for installers): create the account if missing; secure the layout; fix state dir and config ownership/modes (config content is never written); install the unit embedded in the binary (`agents/infra/packaging/systemd/openlog-infra-agent.service`, the file the packages ship) when its content differs — deb/rpm: the packaged `/usr/lib/systemd/system` path (a package upgrade replaces it and its postinstall reconciles again with the current, possibly newer binary; `dpkg --verify`/`rpm -V` may report it modified while a newer self-updated version runs), skipped when `/etc/systemd/system/openlog-infra-agent.service` fully overrides it; tarball: `/etc/systemd/system`; drop-ins are never touched — then `systemctl daemon-reload`; docker group membership (D-040 rules and opt-outs); `/usr/bin` symlink for tarball installs. Result: root-owned `<install_root>/reconcile-status.json`, reported as `reconcile`.
+- **Restart for a new unit:** when `-apply`'s reconcile changed the unit, the agent started in that invocation exits 0 once before running, so systemd restarts it under the new definition. Loop guard: not again for the same unit content written again in the next start. New supplementary groups need no restart (the main process is spawned after `-apply`).
+- **Existing installs (bootstrap):** units from before this step have no `ExecStartPre`; the agent detects that `-apply` did not run for its start (`apply-status.json` `invocation_id` ≠ `$INVOCATION_ID`), keeps the legacy binary-only update while `versions/` is writable, and reports `update_mode: legacy` with `update_notice: "unit outdated: …"`. One package upgrade or `install.sh` run installs the new unit and secures the layout. A current version written by a legacy self-update is not trusted by the installers: postinstall switches to the package version, `install.sh` re-installs the running version from the release source.
+- **Residual trust:** the bootstrap trusts the binary that is current when root first runs it (a host whose agent user was already compromised before the migration is not recovered by it). Docker group membership remains root-equivalent (D-040).
 
 ## 4. Fleet update policy (backend)
 
@@ -216,6 +239,35 @@ Stored in PostgreSQL (see [postgres.md](postgres.md), tables `agent_update_polic
 - Additive: the response also has `"updater": {…} | null`, the status of `openlog-updater`
   (docs/operations/upgrading.md, openapi `UpdaterStatus`). `/readyz` bodies contain `"version"`; gRPC responses of
   ingest carry `x-openlog-version` header metadata.
+- Additive: `"update_requests": {"can_request", "updater_listening", "updater_polled_at", "latest"} | null` (§5.1).
+
+### 5.1 Update requests ("Check now" / "Update now", D-041)
+
+The UI does not talk to `openlog-updater` directly. The request channel is the PostgreSQL table `update_requests`
+(migration `0009`, docs/contracts/postgres.md), which both updater engines already reach with the DSN they use for
+their status document:
+
+- `POST /api/v1/version/check` (admin/owner, not with `OPENLOG_SIGNUP_ENABLED=true`) inserts `action=check` and runs
+  the api release check synchronously (any pod; stored in `update_check`, so the leader's 24 h schedule restarts).
+  `POST /api/v1/version/update {"target_version", "ignore_maintenance_window"}` inserts `action=apply`. Both are
+  limited to one request per action per 30 s for the whole installation (`429` + `Retry-After`; a transaction-level
+  advisory lock serializes pods); a second `apply` while one is `pending`/`running` → `409`.
+- **Compose updater:** polls every `OPENLOG_UPDATER_REQUEST_POLL` (10 s): expires `pending` rows older than 15 min
+  (`expired`), claims the oldest `pending` row (`UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED)` → `running`),
+  handles it and stores `done`/`failed` + `message`. Every 30 s it writes `system_state` key `updater_poll`
+  `{engine, mode, poll_seconds, polled_at}`; the api reports `updater_listening` when `polled_at` is at most
+  max(90 s, 3 polls) old. On start it marks rows left `running` as `failed` (interrupted).
+- **Kubernetes CronJob** (`-k8s -once`): handles all `pending` rows first (a handled request includes the check),
+  so requests apply at the next scheduled run; it never writes `updater_poll`.
+- `check` = one regular run (mode rules unchanged). `apply` = install now, also in `notify` mode: only if the
+  release the updater selects is still `target_version` (else `failed`, "check again"); outside
+  `OPENLOG_UPDATER_MAINTENANCE_WINDOW` only with `ignore_maintenance_window`; `OPENLOG_UPDATER_MODE=off` → `failed`.
+  A version in `failed_versions` may be retried by an explicit request. The update itself is the normal
+  backup → pull → migrate → recreate → health → rollback flow; audit `updater.update_started` carries
+  `request_id` and `requested_by`. The api audits `update.check_requested` / `update.apply_requested`.
+- The UI polls `GET /api/v1/version` every 2 s while a request is open or `updater.state = updating`, keeps the
+  last answer while the api container is recreated ("server is restarting…") and reloads on the new
+  `X-Openlog-Version`.
 
 ## 6. Migrations for rolling updates
 

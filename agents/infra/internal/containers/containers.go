@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs"
+	"github.com/onuragtas/openlog/agents/infra/internal/otlputil"
+
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 )
 
 // Limits applied to container metadata.
@@ -49,9 +52,77 @@ type Container struct {
 	Created string            `json:"created,omitempty" yaml:"created"`
 	Labels  map[string]string `json:"labels" yaml:"labels"`
 	Ports   []Port            `json:"ports" yaml:"ports"`
+	// Health is healthy, unhealthy or starting; empty without a healthcheck.
+	Health string `json:"health,omitempty" yaml:"health"`
+	// From GET /containers/{id}/json (inspect.go); empty until inspected.
+	StartedAt    string `json:"started_at,omitempty" yaml:"started_at"`
+	FinishedAt   string `json:"finished_at,omitempty" yaml:"finished_at"`
+	RestartCount int    `json:"restart_count" yaml:"restart_count"`
+	ExitCode     int    `json:"exit_code,omitempty" yaml:"exit_code"`
 	// IPs are the container's network addresses (Docker NetworkSettings); used
 	// by integrations to reach services, not part of the inventory body.
 	IPs []string `json:"-" yaml:"ips"`
+	// Log source of the container (container log collection), not part of the inventory body.
+	LogPath   string `json:"-" yaml:"-"`
+	LogDriver string `json:"-" yaml:"-"`
+	Tty       bool   `json:"-" yaml:"-"`
+
+	inspected bool
+}
+
+// Inspected reports whether the inspect details (start time, restart count, log source) are set.
+func (c *Container) Inspected() bool { return c.inspected }
+
+// Container attribute keys derived from Docker metadata (semantic-conventions §2 container metrics).
+const (
+	AttrID             = "container.id"
+	AttrName           = "container.name"
+	AttrImageName      = "container.image.name"
+	AttrImageTags      = "container.image.tags"
+	AttrRuntime        = "container.runtime"
+	AttrComposeProject = "docker.compose.project"
+	AttrComposeService = "docker.compose.service"
+	AttrK8sPod         = "k8s.pod.name"
+	AttrK8sNamespace   = "k8s.namespace.name"
+	AttrK8sContainer   = "k8s.container.name"
+)
+
+// labelAttributes maps container labels to attributes: Docker Compose labels and the CRI
+// labels that Kubernetes (dockershim, cri-dockerd) sets on Docker containers.
+var labelAttributes = []struct{ label, attr string }{
+	{"com.docker.compose.project", AttrComposeProject},
+	{"com.docker.compose.service", AttrComposeService},
+	{"io.kubernetes.pod.name", AttrK8sPod},
+	{"io.kubernetes.pod.namespace", AttrK8sNamespace},
+	{"io.kubernetes.container.name", AttrK8sContainer},
+}
+
+// Attributes returns the container identity attributes: container.id always, name, image,
+// compose and Kubernetes names when Docker metadata (meta) is available, container.runtime when known.
+func Attributes(id, runtime string, meta *Container) []*commonpb.KeyValue {
+	attrs := []*commonpb.KeyValue{otlputil.Str(AttrID, id)}
+	if meta != nil && meta.ID != "" {
+		runtime = meta.Runtime
+		if meta.Name != "" {
+			attrs = append(attrs, otlputil.Str(AttrName, meta.Name))
+		}
+		if meta.Image != "" {
+			name, tags := ImageName(meta.Image)
+			attrs = append(attrs, otlputil.Str(AttrImageName, name))
+			if len(tags) > 0 {
+				attrs = append(attrs, otlputil.StrSlice(AttrImageTags, tags))
+			}
+		}
+		for _, la := range labelAttributes {
+			if v := meta.Labels[la.label]; v != "" {
+				attrs = append(attrs, otlputil.Str(la.attr, v))
+			}
+		}
+	}
+	if runtime != "" {
+		attrs = append(attrs, otlputil.Str(AttrRuntime, runtime))
+	}
+	return attrs
 }
 
 // ImageName splits an image reference into the name and tags used for the
@@ -91,6 +162,9 @@ type Source struct {
 	at      time.Time
 	cached  []Container
 	lastErr error
+	details map[string]detailEntry
+	// sock is the socket path of the last successful listing (used for log streams).
+	sock string
 }
 
 // NewSource returns a source for the Docker socket at a host path.
@@ -158,7 +232,13 @@ func (s *Source) list(ctx context.Context) ([]Container, error) {
 	for _, sock := range s.socketCandidates() {
 		body, err := s.get(ctx, sock, "/containers/json?all=1")
 		if err == nil {
-			return ParseDockerList(body)
+			cs, err := ParseDockerList(body)
+			if err != nil {
+				return nil, err
+			}
+			s.sock = sock
+			s.inspect(ctx, sock, cs)
+			return cs, nil
 		}
 		switch {
 		case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOENT), errors.Is(err, syscall.ECONNREFUSED):
@@ -176,6 +256,50 @@ func (s *Source) list(ctx context.Context) ([]Container, error) {
 	return nil, lastErr
 }
 
+func unixClient(sock string) *http.Client {
+	return &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", sock)
+		},
+		DisableKeepAlives: true,
+	}}
+}
+
+// Stream issues a streaming GET (e.g. /containers/{id}/logs?follow=1) and returns the
+// response body; only ctx bounds it. The socket of the last listing is used, else the
+// candidates in order.
+func (s *Source) Stream(ctx context.Context, uri string) (io.ReadCloser, error) {
+	s.mu.Lock()
+	socks := s.socketCandidates()
+	if s.sock != "" {
+		socks = append([]string{s.sock}, socks...)
+	}
+	s.mu.Unlock()
+	var lastErr error = ErrNoRuntime
+	for _, sock := range socks {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker"+uri, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := unixClient(sock).Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("containers: %s: %w", sock, err)
+			if errors.Is(err, fs.ErrPermission) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+				return nil, lastErr
+			}
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			return nil, fmt.Errorf("docker API %s: HTTP %d: %s", uri, resp.StatusCode, strings.TrimSpace(string(msg)))
+		}
+		return resp.Body, nil
+	}
+	return nil, lastErr
+}
+
 func (s *Source) get(ctx context.Context, sock, uri string) ([]byte, error) {
 	timeout := s.Timeout
 	if timeout <= 0 {
@@ -183,18 +307,11 @@ func (s *Source) get(ctx context.Context, sock, uri string) ([]byte, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	client := &http.Client{Transport: &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "unix", sock)
-		},
-		DisableKeepAlives: true,
-	}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker"+uri, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.Do(req)
+	resp, err := unixClient(sock).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +333,7 @@ type dockerContainer struct {
 	ImageID string            `json:"ImageID"`
 	Created int64             `json:"Created"`
 	State   string            `json:"State"`
+	Status  string            `json:"Status"`
 	Labels  map[string]string `json:"Labels"`
 	Ports   []struct {
 		IP          string `json:"IP"`
@@ -240,7 +358,7 @@ func ParseDockerList(body []byte) ([]Container, error) {
 	out := make([]Container, 0, len(raw))
 	for _, r := range raw {
 		c := Container{ID: r.ID, Runtime: "docker", Image: r.Image, ImageID: r.ImageID, State: r.State,
-			Labels: map[string]string{}, Ports: []Port{}}
+			Health: HealthFromStatus(r.Status), Labels: map[string]string{}, Ports: []Port{}}
 		if len(r.Names) > 0 {
 			c.Name = strings.TrimPrefix(r.Names[0], "/")
 		}

@@ -214,7 +214,7 @@ func (c *Containers) Collect(now time.Time) ([]*metricspb.Metric, error) {
 		c.cgroups = containers.FindCgroups(c.FS)
 		c.walkedAt = now
 	}
-	if len(c.cgroups) == 0 {
+	if len(c.cgroups) == 0 && len(meta) == 0 {
 		return nil, listErr
 	}
 
@@ -246,7 +246,11 @@ func (c *Containers) Collect(now time.Time) ([]*metricspb.Metric, error) {
 		}
 		st := ReadCgroup(c.FS, cg.Path)
 		readNetwork(c.FS, &st)
-		attrs := containerAttrs(cg, meta[id])
+		var m *containers.Container
+		if ct, ok := meta[id]; ok {
+			m = &ct
+		}
+		attrs := containers.Attributes(id, cg.Runtime, m)
 		seen[id] = true
 		if st.HasCPU {
 			cpuTime = append(cpuTime, otlputil.DoublePoint(float64(st.CPUUsageUsec)/1e6, attrs...))
@@ -292,6 +296,7 @@ func (c *Containers) Collect(now time.Time) ([]*metricspb.Metric, error) {
 			delete(c.prevCPU, id)
 		}
 	}
+	status, restarts := c.statusPoints(meta, seen, now)
 	var out []*metricspb.Metric
 	add := func(m *metricspb.Metric, n int) {
 		if n > 0 {
@@ -306,29 +311,88 @@ func (c *Containers) Collect(now time.Time) ([]*metricspb.Metric, error) {
 	add(otlputil.Sum("container.blockio.io", "By", true, time.Time{}, now, bio...), len(bio))
 	add(otlputil.Sum("container.blockio.operations", "{operation}", true, time.Time{}, now, bops...), len(bops))
 	add(otlputil.Sum("container.network.io", "By", true, time.Time{}, now, netio...), len(netio))
+	add(otlputil.Gauge("openlog.container.status", "1", now, status...), len(status))
+	add(otlputil.Sum("container.restarts", "{restart}", true, time.Time{}, now, restarts...), len(restarts))
 	return out, listErr
 }
 
-func containerAttrs(cg containers.Cgroup, meta containers.Container) []*commonpb.KeyValue {
-	attrs := []*commonpb.KeyValue{otlputil.Str("container.id", cg.ID)}
-	runtime := cg.Runtime
-	if meta.ID != "" {
-		runtime = meta.Runtime
-		if meta.Name != "" {
-			attrs = append(attrs, otlputil.Str("container.name", meta.Name))
+// Container status attributes (semantic-conventions §2 container metrics).
+const (
+	attrContainerState     = "openlog.container.state"
+	attrContainerHealth    = "openlog.container.health"
+	attrContainerStartedAt = "openlog.container.started_at"
+)
+
+// Status reporting limits: stopped containers are reported while they stopped (or were
+// created) within statusRecent; at most maxStatusContainers containers per sample.
+const (
+	statusRecent        = 24 * time.Hour
+	maxStatusContainers = 500
+)
+
+// recentlyActive reports whether a non-running container finished, started or was created within statusRecent.
+func recentlyActive(ct containers.Container, now time.Time) bool {
+	for _, v := range []string{ct.FinishedAt, ct.StartedAt, ct.Created} {
+		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
+			return now.Sub(t) < statusRecent
 		}
-		if meta.Image != "" {
-			name, tags := containers.ImageName(meta.Image)
-			attrs = append(attrs, otlputil.Str("container.image.name", name))
-			if len(tags) > 0 {
-				attrs = append(attrs, otlputil.StrSlice("container.image.tags", tags))
+	}
+	return false
+}
+
+// statusPoints builds openlog.container.status (value 1 per container, state attributes) and
+// container.restarts for listed containers and for cgroup containers without Docker metadata.
+func (c *Containers) statusPoints(meta map[string]containers.Container, live map[string]bool, now time.Time) (status, restarts []otlputil.Point) {
+	ids := make([]string, 0, len(meta)+len(live))
+	for id := range meta {
+		ids = append(ids, id)
+	}
+	for id := range live {
+		if _, ok := meta[id]; !ok {
+			ids = append(ids, id)
+		}
+	}
+	sortStrings(ids)
+	// Running containers first, so the cap never hides them behind old stopped ones.
+	running := func(id string) bool { ct, ok := meta[id]; return (ok && ct.State == "running") || (!ok && live[id]) }
+	ordered := make([]string, 0, len(ids))
+	for _, pass := range []bool{true, false} {
+		for _, id := range ids {
+			if running(id) == pass {
+				ordered = append(ordered, id)
 			}
 		}
 	}
-	if runtime != "" {
-		attrs = append(attrs, otlputil.Str("container.runtime", runtime))
+	for _, id := range ordered {
+		if len(status) >= maxStatusContainers {
+			break
+		}
+		ct, hasMeta := meta[id]
+		state := "running" // a container cgroup exists
+		if hasMeta {
+			state = ct.State
+			if state != "running" && state != "paused" && state != "restarting" && !live[id] && !recentlyActive(ct, now) {
+				continue
+			}
+		}
+		var m *containers.Container
+		if hasMeta {
+			m = &ct
+		}
+		attrs := containers.Attributes(id, c.cgroups[id].Runtime, m)
+		sattrs := withAttr(attrs, attrContainerState, state)
+		if hasMeta && ct.Health != "" {
+			sattrs = append(sattrs, otlputil.Str(attrContainerHealth, ct.Health))
+		}
+		if hasMeta && ct.StartedAt != "" {
+			sattrs = append(sattrs, otlputil.Str(attrContainerStartedAt, ct.StartedAt))
+		}
+		status = append(status, otlputil.IntPoint(1, sattrs...))
+		if hasMeta && ct.Inspected() {
+			restarts = append(restarts, otlputil.IntPoint(int64(ct.RestartCount), attrs...))
+		}
 	}
-	return attrs
+	return status, restarts
 }
 
 func withAttr(base []*commonpb.KeyValue, k, v string) []*commonpb.KeyValue {

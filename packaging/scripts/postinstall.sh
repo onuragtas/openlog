@@ -2,7 +2,9 @@
 # openlog-infra-agent postinstall (deb postinst / rpm %post).
 #
 # Switches /opt/openlog/infra-agent/current to the packaged version atomically, unless the agent
-# already runs a newer version (it may have updated itself past the package), then enables and
+# already runs a newer version (it may have updated itself past the package), then reconciles the
+# installation (`openlog-infra-agent -reconcile`: systemd unit, account, docker group, ownership; the
+# same step the agent's privileged pre-start step runs after every self-update) and enables and
 # (re)starts the systemd service. @VERSION@ is replaced by `make release-packages`.
 #
 # Arguments: deb "configure <old-version>" (old version empty on first install); rpm "1" (install)
@@ -53,7 +55,15 @@ semver_cmp() {
 	}'
 }
 
-install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$ROOT" "$ROOT/versions"
+# trusted_dir DIR: DIR and everything below it are owned by root and not writable by group or others.
+# Root executes the current binary (ExecStartPre=+), so a version an older agent wrote itself is not kept.
+trusted_dir() {
+	[ -d "$1" ] && [ ! -L "$1" ] || return 1
+	[ -z "$(find "$1" \( ! -user 0 -o -perm -0020 -o -perm -0002 -o -type l \) -print 2>/dev/null | head -n 1)" ]
+}
+
+# The install root is root-owned: only the privileged pre-start step and the packages install releases.
+install -d -m 0755 -o root -g root "$ROOT" "$ROOT/versions"
 install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
 
 switch=1
@@ -61,25 +71,24 @@ if [ -L "$ROOT/current" ]; then
 	running=$(readlink "$ROOT/current")
 	running=${running%/}
 	running=${running##*/}
-	if [ -x "$ROOT/current/openlog-infra-agent" ] && [ "$(semver_cmp "$running" "$VERSION")" = 1 ]; then
+	if [ "$running" = "$VERSION" ]; then
 		switch=0
-		echo "openlog-infra-agent: the agent runs $running, newer than package $VERSION; keeping it"
-	elif [ "$running" = "$VERSION" ]; then
-		switch=0
+	elif [ -x "$ROOT/current/openlog-infra-agent" ] && [ "$(semver_cmp "$running" "$VERSION")" = 1 ]; then
+		if trusted_dir "$ROOT/versions/$running"; then
+			switch=0
+			echo "openlog-infra-agent: the agent runs $running, newer than package $VERSION; keeping it"
+		else
+			echo "openlog-infra-agent: $running is writable by $USER_NAME (installed by an older self-update) and cannot be trusted; switching to $VERSION, the agent updates itself again"
+		fi
 	fi
 fi
 if [ "$switch" = 1 ]; then
 	tmp="$ROOT/.current.$$"
 	rm -f "$tmp"
 	ln -s "versions/$VERSION" "$tmp"
-	chown -h "$USER_NAME:$USER_NAME" "$tmp" 2>/dev/null || true
+	chown -h root:root "$tmp" 2>/dev/null || true
 	mv -Tf "$tmp" "$ROOT/current"
 	echo "openlog-infra-agent: $ROOT/current -> versions/$VERSION"
-fi
-
-if [ "$first_install" = 1 ] && [ -f "$CONFIG" ]; then
-	chgrp "$USER_NAME" "$CONFIG" 2>/dev/null || true
-	chmod 0640 "$CONFIG"
 fi
 
 has_license_key() {
@@ -87,43 +96,14 @@ has_license_key() {
 	grep -Eq '^license_key:[[:space:]]*"?[^"[:space:]#]' "$CONFIG" 2>/dev/null
 }
 
-# Docker access: add the agent user to an existing `docker` group so it can read the Docker Engine API
-# (container names/images, ports and IPs for discovery). Opt-out, also respected on upgrades:
-#   OPENLOG_AGENT_DOCKER_ACCESS=0 (records the opt-out file) or the file /etc/openlog-infra-agent/no-docker-access.
-# Keep in sync with scripts/install.sh.
-DOCKER_OPT_OUT=/etc/openlog-infra-agent/no-docker-access
-docker_added=0
-grant_docker_access() {
-	getent group docker >/dev/null 2>&1 || return 0
-	case ${OPENLOG_AGENT_DOCKER_ACCESS:-1} in
-	0 | false | no | off)
-		mkdir -p "${DOCKER_OPT_OUT%/*}" && touch "$DOCKER_OPT_OUT" 2>/dev/null || true
-		echo "openlog-infra-agent: OPENLOG_AGENT_DOCKER_ACCESS=0: not adding $USER_NAME to the docker group (recorded in $DOCKER_OPT_OUT)"
-		return 0
-		;;
-	esac
-	[ ! -e "$DOCKER_OPT_OUT" ] || return 0
-	if getent group docker | cut -d: -f4 | tr ',' '\n' | grep -qx "$USER_NAME"; then
-		return 0
-	fi
-	if command -v usermod >/dev/null 2>&1; then
-		usermod -aG docker "$USER_NAME" || return 0
-	elif command -v gpasswd >/dev/null 2>&1; then
-		gpasswd -a "$USER_NAME" docker >/dev/null || return 0
-	elif command -v adduser >/dev/null 2>&1; then
-		adduser "$USER_NAME" docker >/dev/null || return 0
-	else
-		echo "openlog-infra-agent: cannot add $USER_NAME to the docker group (no usermod, gpasswd or adduser)"
-		return 0
-	fi
-	docker_added=1
-	cat <<EOF
-openlog-infra-agent: added $USER_NAME to the docker group for container metadata and discovery.
-  Docker group membership is root-equivalent: whoever controls $USER_NAME controls Docker and thus the host.
-  To revert: gpasswd -d $USER_NAME docker && touch $DOCKER_OPT_OUT && systemctl restart ${UNIT%.service}
-EOF
-}
-grant_docker_access
+# Reconcile with the release that runs from now on (the newest logic when the agent is newer than the package).
+# Docker access opt-out (also respected on upgrades and self-updates): OPENLOG_AGENT_DOCKER_ACCESS=0 (recorded in
+# the file) or the file /etc/openlog-infra-agent/no-docker-access.
+bin=$ROOT/current/openlog-infra-agent
+"$bin" -help 2>&1 | grep -q -- -reconcile || bin=$ROOT/versions/$VERSION/openlog-infra-agent
+restart_needed=0
+out=$("$bin" -reconcile -reconcile-context package -config "$CONFIG") || echo "openlog-infra-agent: reconcile reported errors (see above)"
+case $out in *restart-required*) restart_needed=1 ;; esac
 
 if command -v systemctl >/dev/null 2>&1; then
 	if [ -d /run/systemd/system ]; then
@@ -139,8 +119,8 @@ if command -v systemctl >/dev/null 2>&1; then
 			else
 				echo "openlog-infra-agent: set license_key and endpoint in $CONFIG, then run: systemctl start $UNIT"
 			fi
-		elif [ "$switch" = 1 ] || [ "$docker_added" = 1 ]; then
-			# One restart for both a version switch and new supplementary groups (applied at process start).
+		elif [ "$switch" = 1 ] || [ "$restart_needed" = 1 ]; then
+			# One restart for a version switch, a new unit and new supplementary groups (applied at process start).
 			systemctl try-restart "$UNIT" || true
 		fi
 	fi

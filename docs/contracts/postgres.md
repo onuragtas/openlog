@@ -112,7 +112,8 @@ created. Accepting marks the invitation and inserts the membership in one transa
 | `user.login`, `user.logout`, `user.password_change`, `user.password_reset`, `session.revoke` | session / user |
 | `fleet.policy.update` (`details.from`/`to`) | policy (organization id) |
 | `fleet.host_override.set` (`details.action`/`version`), `fleet.host_override.delete` | agent_host |
-| `fleet.rollout.pause`, `fleet.rollout.resume`, `fleet.rollback` (`details.from_version`/`to_version`) | rollout |
+| `fleet.rollout.pause`, `fleet.rollout.resume`, `fleet.rollout.deploy_now` (`details.from_wave`/`wave`), `fleet.rollback` (`details.from_version`/`to_version`) | rollout |
+| `update.check_requested`, `update.apply_requested` (`details.from`/`to`/`ignore_maintenance_window`/`engine`) | update_request |
 | `fleet.rollout.create`, `fleet.rollout.advance`, `fleet.rollout.halt`, `fleet.rollout.complete`, `fleet.rollout.supersede` (actor email `openlog-controller`, no user) | rollout |
 | `integration_setting.create`, `integration_setting.update`, `integration_setting.delete` (`details.integration`/`host_id`/`changed`/`password_changed`) | integration_setting |
 
@@ -267,6 +268,15 @@ by `openlog-migrate` (live = `last_seen` within 5 minutes). Index on `last_seen`
 |---|---|---|
 | `update_check` | api leader (advisory lock `postgres.LeaderLock` = `0x6f6c2d6c656164`, shared with other leader jobs) | `{channel, checked_at, last_success_at, error, latest: {version, notes_url, released_at}}` |
 | `updater` | `openlog-updater` | the `UpdaterStatus` of GET /api/v1/version |
+| `updater_poll` | Compose `openlog-updater`, every 30 s | `{engine, mode, poll_seconds, polled_at}` (`update_requests.updater_listening`) |
+
+### `update_requests` (`0009_update_requests`)
+"Check now" / "Update now" from the UI to `openlog-updater` (releases-updates.md §5.1, D-041). `id` uuid, `action`
+(`check|apply`), `target_version`, `ignore_maintenance_window`, `state` (`pending|running|done|failed|expired`),
+`message` (≤ 2000), `org_id` and `requested_by` (SET NULL on delete), `requested_by_email`, `requested_at`,
+`picked_at`, `finished_at`. Indexes: `requested_at DESC`; partial `(requested_at) WHERE state = 'pending'` for the
+updater's poll. Inserts are serialized by `pg_advisory_xact_lock(0x6f6c2d7570647271)` (rate limit: one request per
+action per 30 s; one open `apply`). The table stays small (a few rows per admin action); rows are not pruned.
 
 Updater events are also written to `audit_log` with `org_id NULL`, `actor_email = 'openlog-updater'`,
 `action` `updater.update_{available,started,succeeded,failed,rolled_back,rollback_failed}`,

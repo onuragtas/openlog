@@ -129,6 +129,12 @@ Entegrasyonlar agent içinde modül olarak durur; aynı kural katalogu hangi ent
 - Varsayılan: `openlog-agent` kullanıcısı + gerekli capability'ler (`CAP_DAC_READ_SEARCH`, `CAP_SYS_PTRACE` — başka kullanıcıların `/proc/<pid>/exe` ve soket inode'larını okumak için).
 - Root olmadan çalıştırıldığında erişilemeyen öğeler atlanır ve kapsam eksikliği `openlog.agent.permission_denied` sayacıyla raporlanır.
 - Container içinde çalışırken host dosya sistemi `/host` altına bağlanır; `host.root_path` ayarı ile tüm yollar buna göre çözülür.
+- **Güncelleme yetkisi (D-042):** agent `/opt/openlog/infra-agent` altına yazamaz (root sahipli). Kendi kendini güncellerken yalnızca
+  doğrulanmış sürümü `/var/lib/openlog-infra-agent/updates/<v>/` altına hazırlar ve çıkar; unit'in root olarak çalışan ön adımı
+  (`ExecStartPre=-+… -apply`) imzayı kendi gömülü anahtarlarıyla yeniden doğrular, sürümü root sahipli kurar, geri dönüşü yönetir ve
+  yeni sürümün `-reconcile` adımını çalıştırır: systemd unit, kullanıcı, docker grubu, dizin sahiplikleri. Böylece bir güncelleme paketi
+  veya `install.sh`'i yeniden kurmakla eşdeğerdir. Eski unit'li kurulumlar bir kez paket yükseltmesi veya `install.sh` ister; o zamana
+  kadar yalnızca binary değişir ve sync'te `update_notice: "unit outdated…"` raporlanır.
 
 ## 8. Konfigürasyon
 
@@ -163,3 +169,7 @@ buffer:
 ## 9. Paketleme
 
 `.deb`, `.rpm`, statik binary tarball, Docker imajı, `install.sh` (dağıtımı algılar, paket deposunu ekler, servisi başlatır), systemd unit, Kubernetes DaemonSet (M4).
+
+Kurulum adımlarının tek uygulaması agent binary'sindedir: `openlog-infra-agent -reconcile` (unit `agents/infra/packaging/systemd`
+dosyasından `go:embed` ile gömülü; paketler ve `install.sh` aynı dosyayı kullanır). deb/rpm postinstall, `install.sh` ve her
+kendi kendini güncelleme sonrası `-apply` bu adımı çağırır.

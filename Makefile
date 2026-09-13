@@ -111,7 +111,7 @@ web-test:
 #   make release-testkeys
 #   make release-local VERSION=0.9.0 RELEASE_TESTKEYS=1 RELEASE_BASE_URL=http://127.0.0.1:18090
 #
-# Output: $(DIST)/v$(VERSION)/ (artifacts, manifest.json(.sig), index.json(.sig), install.sh) and
+# Output: $(DIST)/v$(VERSION)/ (artifacts, manifest.json(.sig), index.json(.sig), install.sh, install-server.sh) and
 # $(DIST)/index.json(.sig) covering every $(DIST)/v*/manifest.json.
 # ---------------------------------------------------------------------------------------------
 # Releases root; artifacts are served from $(RELEASE_BASE_URL)/v$(VERSION)/<name>.
@@ -246,7 +246,7 @@ release-helm:
 
 release-manifest: release-tool
 	@set -euo pipefail; \
-	cp scripts/install.sh $(RELEASE_DIR)/install.sh; chmod 0755 $(RELEASE_DIR)/install.sh; \
+	for s in install.sh install-server.sh; do cp scripts/$$s $(RELEASE_DIR)/$$s; chmod 0755 $(RELEASE_DIR)/$$s; done; \
 	rm -f $(RELEASE_DIR)/manifest.json $(RELEASE_DIR)/manifest.json.sig; \
 	$(RELEASE_TOOL) build-manifest $(RELEASE_MANIFEST_ARGS) --dist $(RELEASE_DIR); \
 	$(RELEASE_TOOL) sign --key-env OPENLOG_RELEASE_SIGNING_KEY $(RELEASE_DIR)/manifest.json; \
@@ -284,7 +284,7 @@ stack-demo:
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 KUBECONFORM_IMAGE ?= ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
-SHELL_SCRIPTS := scripts/install.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh
+SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh
 
 .PHONY: shellcheck actionlint helm-lint package-test install-test
 shellcheck:

@@ -44,6 +44,9 @@ const (
 	ActReadAudit         Action = "audit.read"
 	ActReadFleet         Action = "fleet.read"
 	ActManageFleet       Action = "fleet.manage"
+	// ActRequestUpdate is "Check now" / "Update now" of the backend (installation-wide; the API also
+	// refuses it when OPENLOG_SIGNUP_ENABLED=true, where organization admins are not operators).
+	ActRequestUpdate Action = "updates.request"
 	// Alerting (docs/contracts/alerting.md §7): members write their own rules and mutes and work on incidents;
 	// admins change any rule or mute and manage channels.
 	ActReadAlerts   Action = "alerts.read"
@@ -67,6 +70,7 @@ var minRole = map[Action]Role{
 	ActReadAudit:         RoleAdmin,
 	ActReadFleet:         RoleViewer,
 	ActManageFleet:       RoleAdmin,
+	ActRequestUpdate:     RoleAdmin,
 	ActReadAlerts:        RoleViewer,
 	ActWriteAlerts:       RoleMember,
 	ActManageAlerts:      RoleAdmin,

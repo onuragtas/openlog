@@ -94,6 +94,11 @@ export async function resumeRollout(id: string): Promise<FleetRollout> {
   return unwrap(await api.POST("/api/v1/fleet/rollouts/{id}/resume", { params: { path: { id } } }));
 }
 
+/** Skips the remaining soak times: the rollout moves to its last wave (100 %). */
+export async function deployRolloutNow(id: string): Promise<FleetRollout> {
+  return unwrap(await api.POST("/api/v1/fleet/rollouts/{id}/deploy-now", { params: { path: { id } } }));
+}
+
 export async function rollbackFleet(toVersion: string): Promise<FleetRollout> {
   return unwrap(await api.POST("/api/v1/fleet/rollback", { body: { to_version: toVersion } }));
 }

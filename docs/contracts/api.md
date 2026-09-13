@@ -51,7 +51,7 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 | Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ |
 | Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
 | `GET /integrations/settings` | ✓ | ✓ | ✓ | ✓ |
-| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, rollback), integration setting changes, any alert rule or mute, alert channels and test sends | | | ✓ | ✓ |
+| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, deploy now, rollback), integration setting changes, any alert rule or mute, alert channels and test sends, `POST /version/check` and `POST /version/update` (signed-in users only; refused for everyone when `OPENLOG_SIGNUP_ENABLED=true`) | | | ✓ | ✓ |
 | Grant or remove the owner role, invite owners, remove owners | | | | ✓ |
 
 An organization always keeps at least one owner (`409 failed_precondition`).
@@ -167,7 +167,28 @@ Actions: see [postgres.md](postgres.md#audit_log).
 release of `OPENLOG_UPDATE_CHANNEL` when it is newer than the answering pod. `updater` is the status document of
 `openlog-updater` (`engine`, `mode`, `state`: `off|error|up_to_date|available|waiting_for_maintenance_window|updating|succeeded|failed|rolled_back|rollback_failed`,
 `current_version`, `target_version`, `steps[]`, `failed_versions[]`, `history[]`, …; see openapi `UpdaterStatus`).
+`update_requests` (null in static mode): `{"can_request", "updater_listening", "updater_polled_at", "latest": UpdateRequest | null}`;
+`can_request` = the caller may use the two endpoints below; `latest.requested_by_email` only when `can_request`.
 Every API response (including errors and the UI) carries `X-Openlog-Version`.
+
+### `POST /api/v1/version/check` (admin, owner; postgres auth mode)
+"Check now": queues an update request `action=check` for `openlog-updater` and runs the api release check
+immediately (`OPENLOG_UPDATE_CHECK=enabled`), then returns `200` with the `GET /version` body. At most one check
+request per 30 s for the whole installation: `429 resource_exhausted` with `Retry-After` (seconds). Audit
+`update.check_requested` (target `update_request`). API keys, lower roles, and every caller when
+`OPENLOG_SIGNUP_ENABLED=true` (organization admins are not server operators) → `403`.
+
+### `POST /api/v1/version/update` `{"target_version", "ignore_maintenance_window"?: false}` (admin, owner)
+"Update now": `202` with the queued `UpdateRequest` `{"id", "action": "apply", "target_version",
+"ignore_maintenance_window", "state": "pending|running|done|failed|expired", "message", "requested_by_email",
+"requested_at", "picked_at", "finished_at"}`. The updater installs the release also in `notify` mode, only when it
+still selects `target_version`, and outside its maintenance window only with `ignore_maintenance_window: true`
+(releases-updates.md §5.1). `400` invalid version; `409 failed_precondition` when the version is not newer than the
+answering pod, no updater reports, `OPENLOG_UPDATER_MODE=off`, an update is running or an apply request is already
+open; `429` within 30 s of the previous apply request. Audit `update.apply_requested` (`details.from`, `to`,
+`ignore_maintenance_window`, `engine`). Progress: poll `GET /version` (`update_requests.latest`, `updater.state`,
+`updater.steps`); the Compose updater picks requests up within `OPENLOG_UPDATER_REQUEST_POLL` (10 s), the Kubernetes
+CronJob at its next run.
 
 ## Hosts
 
@@ -444,6 +465,13 @@ the failure rate allows).
 Return the rollout. Pause: only `active` (`409 failed_precondition` otherwise). Resume: `paused` or `halted`; the
 soak time of the current wave restarts, and for a halted rollout the failures so far are acknowledged (no longer
 counted towards the halt threshold). `404` for unknown ids.
+
+### `POST /api/v1/fleet/rollouts/{id}/deploy-now`
+"Deploy now": returns the rollout moved to its last wave (100 %), `wave_started_at` = now, `next_wave_at` null.
+Only an `active` rollout that is not in its last wave (`409 failed_precondition` otherwise). The halt threshold and
+the policy's maintenance windows still apply; agents get the update at their next sync, and agents waiting for a
+wave are told to sync every `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL` (60 s). Audit `fleet.rollout.deploy_now`
+(`details.from_wave`, `wave`, `percent`).
 
 ### `POST /api/v1/fleet/rollback` `{"to_version"}`
 Creates a rollback rollout (`201`, Rollout) from the current upgrade rollout's target (or the newest running version)

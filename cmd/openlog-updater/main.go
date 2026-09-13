@@ -23,6 +23,7 @@ import (
 	"github.com/onuragtas/openlog/internal/release"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/updater"
+	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
 )
 
@@ -55,6 +56,7 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger, k8s, once boo
 
 	var stores []updater.StatusStore
 	var audit updater.Auditor
+	var requests updatereq.Poller
 	if !k8s {
 		stores = append(stores, updater.FileStore{Path: filepath.Join(ucfg.BackupDir, "updater-status.json")})
 	}
@@ -66,8 +68,10 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger, k8s, once boo
 		defer pool.Close()
 		stores = append(stores, updater.PostgresStore{Pool: pool})
 		audit = updater.PostgresAuditor{Store: postgres.NewStore(pool), Log: log}
+		// "Check now" / "Update now" from the UI (update_requests, D-041).
+		requests = updatereq.PGQueue{Pool: pool}
 	} else {
-		log.Warn("OPENLOG_POSTGRES_DSN is not set: the updater status is not shown in GET /api/v1/version and not audited")
+		log.Warn("OPENLOG_POSTGRES_DSN is not set: the updater status is not shown in GET /api/v1/version, not audited, and UI update requests are not received")
 	}
 
 	var engine updater.Engine
@@ -91,11 +95,20 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger, k8s, once boo
 	}
 	runner := &updater.Runner{
 		Cfg: ucfg, Engine: engine, Source: release.NewFetcher(keys),
-		Store: updater.MultiStore{Stores: stores, Log: log}, Audit: audit, Log: log,
+		Store: updater.MultiStore{Stores: stores, Log: log}, Audit: audit, Log: log, Requests: requests,
 	}
 	if once {
 		if err := engine.Recover(ctx); err != nil {
 			return err
+		}
+		// Kubernetes CronJob: requests made since the last run are handled first; a handled request
+		// already includes a check.
+		n, err := runner.RunRequests(ctx)
+		if n > 0 {
+			return err
+		}
+		if err != nil {
+			log.Warn("cannot read update requests", "err", err)
 		}
 		return runner.RunOnce(ctx)
 	}

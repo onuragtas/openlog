@@ -23,6 +23,7 @@ import (
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/fleet"
 	"github.com/onuragtas/openlog/internal/intsettings"
+	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
 )
 
@@ -38,7 +39,9 @@ type Server struct {
 	latency  *prometheus.HistogramVec
 	ui       http.Handler
 	srv      *http.Server
-	versions VersionSource  // nil: GET /api/v1/version reports the build only
+	versions VersionSource   // nil: GET /api/v1/version reports the build only
+	updates  updatereq.Queue // nil: no update requests (updates.go; static auth mode)
+	checkNow func(ctx context.Context) error
 	fleet    *fleet.Manager // nil: no fleet endpoints (static auth mode)
 	apm      *apmState      // APM settings (apm.go); nil: default Apdex T
 	alerts   *alert.Manager // nil: no alerting endpoints (alerts.go; static auth mode)
@@ -100,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	s.apmRoutes(mux)
 	s.accountRoutes(mux)
 	s.versionRoutes(mux)
+	s.updateRoutes(mux)
 	s.fleetRoutes(mux)
 	s.alertRoutes(mux)
 	s.integrationSettingsRoutes(mux)

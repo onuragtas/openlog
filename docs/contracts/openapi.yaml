@@ -674,6 +674,61 @@ paths:
               schema: { $ref: "#/components/schemas/VersionInfo" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /api/v1/version/check:
+    post:
+      tags: [system]
+      operationId: requestUpdateCheck
+      summary: Check for a new release now
+      description: |
+        Signed-in admins and owners (403 for API keys, lower roles, and when `OPENLOG_SIGNUP_ENABLED=true`).
+        Runs the api release check immediately and queues a `check` request for openlog-updater (picked up
+        within `OPENLOG_UPDATER_REQUEST_POLL`, default 10 s). At most once per 30 s per installation (429 with
+        `Retry-After`). Audit action `update.check_requested`. Returns the fresh version information.
+      responses:
+        "200":
+          description: Version information after the check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/version/update:
+    post:
+      tags: [system]
+      operationId: requestUpdateApply
+      summary: Ask openlog-updater to install a release now
+      description: |
+        Signed-in admins and owners (same rules as `/version/check`). Queues an `apply` request; the updater
+        installs `target_version` also in `notify` mode, only if it is still the release it would select, and
+        outside `OPENLOG_UPDATER_MAINTENANCE_WINDOW` only with `ignore_maintenance_window: true`. Follow the
+        progress in `GET /api/v1/version` (`update_requests.latest`, `updater.state`, `updater.steps`).
+        409 when the target is not newer than the running version, no updater reports, the updater mode is
+        `off`, an update is running, or an apply request is already open; 429 within 30 s of the previous apply
+        request. Audit action `update.apply_requested`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_version]
+              properties:
+                target_version: { type: string, example: "0.9.1" }
+                ignore_maintenance_window: { type: boolean, default: false }
+      responses:
+        "202":
+          description: Queued request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpdateRequest" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /api/v1/auth/config:
     get:
       tags: [auth]
@@ -1306,6 +1361,28 @@ paths:
       responses:
         "200":
           description: Active rollout
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FleetRollout" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/fleet/rollouts/{id}/deploy-now:
+    post:
+      tags: [fleet]
+      operationId: deployFleetRolloutNow
+      description: |
+        Active rollouts that are not in their last wave: skips the remaining soak times and moves to the last
+        wave (100 %). Agents get the update at their next sync (agents waiting for a wave sync every
+        `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL`, default 60 s); the halt threshold and maintenance windows still
+        apply. Audit action `fleet.rollout.deploy_now`.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Rollout in its last wave
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FleetRollout" }
@@ -2017,7 +2094,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     TooManyRequests:
-      description: resource_exhausted (sign-in rate limit), with Retry-After
+      description: resource_exhausted (sign-in rate limit, update request rate limit), with Retry-After
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -2602,8 +2679,13 @@ components:
 
     VersionInfo:
       type: object
-      required: [version, commit, date, latest_available, update_check, updater]
+      required: [version, commit, date, latest_available, update_check, updater, update_requests]
       properties:
+        update_requests:
+          description: '"Check now" / "Update now" channel to openlog-updater; null in OPENLOG_AUTH_MODE=static.'
+          oneOf:
+            - $ref: "#/components/schemas/UpdateRequests"
+            - { type: "null" }
         version: { type: string, description: "SemVer product version; dev builds 0.0.0-dev+<commit>", example: "0.9.1" }
         commit: { type: string }
         date: { type: string, description: Build time (RFC3339) or empty }
@@ -2618,6 +2700,45 @@ components:
           oneOf:
             - $ref: "#/components/schemas/UpdaterStatus"
             - { type: "null" }
+
+    UpdateRequests:
+      type: object
+      required: [can_request, updater_listening, updater_polled_at, latest]
+      properties:
+        can_request:
+          type: boolean
+          description: The caller may use POST /version/check and /version/update (signed-in admin or owner, signup disabled).
+        updater_listening:
+          type: boolean
+          description: A Compose updater polled update_requests recently (picks up requests within seconds). The Kubernetes CronJob never listens; it handles requests at its next scheduled run.
+        updater_polled_at:
+          type: [string, "null"]
+          format: date-time
+        latest:
+          description: The newest request (any action); null when none was made.
+          oneOf:
+            - $ref: "#/components/schemas/UpdateRequest"
+            - { type: "null" }
+
+    UpdateRequest:
+      type: object
+      required: [id, action, target_version, ignore_maintenance_window, state, message, requested_by_email, requested_at, picked_at, finished_at]
+      properties:
+        id: { type: string }
+        action: { type: string, enum: [check, apply] }
+        target_version: { type: string, description: "apply only; empty for check" }
+        ignore_maintenance_window: { type: boolean }
+        state:
+          type: string
+          enum: [pending, running, done, failed, expired]
+          description: "expired: no updater picked the request up within 15 minutes"
+        message: { type: string, description: Result reported by the updater (e.g. the reason a request failed) }
+        requested_by_email:
+          type: [string, "null"]
+          description: Only for callers with can_request
+        requested_at: { type: string, format: date-time }
+        picked_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
 
     AvailableRelease:
       type: object

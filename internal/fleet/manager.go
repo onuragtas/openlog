@@ -453,6 +453,31 @@ func (m *Manager) Resume(ctx context.Context, orgID, id string, a Actor) (Rollou
 	return r, nil
 }
 
+// DeployNow skips the remaining soak times of an active rollout: it moves straight to the last wave
+// (100 %), so every remaining host is offered the update at its next sync. The failure-rate halt
+// and the policy's maintenance windows still apply.
+func (m *Manager) DeployNow(ctx context.Context, orgID, id string, a Actor) (Rollout, error) {
+	r, err := m.store.GetRollout(ctx, orgID, id)
+	if err != nil {
+		return Rollout{}, err
+	}
+	if r.State != RolloutActive {
+		return Rollout{}, preconditionf("only an active rollout can be deployed to all agents (rollout is %s)", r.State)
+	}
+	last := len(r.Waves) - 1
+	if last < 0 || r.CurrentWave >= last {
+		return Rollout{}, preconditionf("the rollout is already in its last wave")
+	}
+	fromWave := r.CurrentWave
+	now := m.o.Now()
+	r.CurrentWave, r.WaveStartedAt, r.UpdatedAt = last, now, now
+	if err := m.store.UpdateRollout(ctx, &r, RolloutActive); err != nil {
+		return Rollout{}, conflictAsPrecondition(err)
+	}
+	m.audit(ctx, orgID, a, "fleet.rollout.deploy_now", "rollout", id, map[string]any{"from_wave": fromWave, "wave": last, "percent": r.Waves[last]})
+	return r, nil
+}
+
 func conflictAsPrecondition(err error) error {
 	if errors.Is(err, ErrConflict) {
 		return preconditionf("the rollout changed concurrently; reload and try again")

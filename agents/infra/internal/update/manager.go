@@ -146,16 +146,32 @@ func (m *Manager) AgentInfo() AgentInfo {
 	return AgentInfo{
 		Name: AgentName, Version: m.o.Version, Commit: m.o.Commit, OS: m.o.OS, Arch: m.o.Arch,
 		InstallMethod: m.o.Install.Method, UpdateCapable: m.o.Install.Capable,
+		UpdateMode: m.o.Install.Mode, UpdateNotice: m.o.Install.Notice,
 	}
 }
 
-// Startup runs first thing in main. When the running binary is an unconfirmed candidate it
-// counts the start attempt; after MaxStartAttempts starts or ConfirmWindow since staging it
-// switches current back to the previous version and returns true: the process must exit so the
-// service manager starts the previous version.
+// Startup runs first thing in main.
+//
+// Legacy mode: when the running binary is an unconfirmed candidate it counts the start attempt;
+// after MaxStartAttempts starts or ConfirmWindow since staging it switches current back to the
+// previous version and returns true: the process must exit so the service manager starts the
+// previous version.
+//
+// Staged mode: attempts and rollbacks are handled by the privileged "-apply" before this start; the
+// agent takes over its result (switched, rejected, rolled back) into the reported state.
 func (m *Manager) Startup() (exit bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.o.Install.Mode == ModeStaged {
+		m.startupStagedLocked()
+		return false
+	}
+	if m.st.Staged != "" {
+		m.st.Staged, m.st.Candidate = "", ""
+		m.setLocked(StateFailed, "staged update "+m.st.ToVersion+" not installed: "+NoticeUnitOutdated)
+		m.settled.Store(true)
+		os.RemoveAll(filepath.Join(m.o.StateDir, UpdatesDir))
+	}
 	now := m.o.Now()
 	switch {
 	case m.pendingCandidate():
@@ -177,6 +193,57 @@ func (m *Manager) Startup() (exit bool) {
 		m.setLocked(StateFailed, fmt.Sprintf("started version %s instead of candidate %s", m.o.Version, m.st.ToVersion))
 	}
 	return false
+}
+
+// startupStagedLocked applies the result of this start's "-apply" to the state.
+func (m *Manager) startupStagedLocked() {
+	a := m.o.Install.Apply
+	if a == nil {
+		a = &ApplyStatus{}
+	}
+	defer func() {
+		m.settled.Store(!m.pendingCandidate())
+		if m.st.Staged == "" {
+			os.RemoveAll(filepath.Join(m.o.StateDir, UpdatesDir))
+		}
+	}()
+	cand := m.st.Candidate
+	switch {
+	case a.Result == ApplyRolledBack && cand != "" && a.FromVersion == cand:
+		m.st.Candidate, m.st.Staged, m.st.RollbackRequest, m.st.RollbackReason = "", "", "", ""
+		m.setLocked(StateRolledBack, a.Error)
+		m.log.Error("the update was rolled back before this start", "candidate", cand, "running", m.o.Version, "reason", a.Error)
+	case a.Result == ApplyRollbackFailed && cand != "" && a.FromVersion == cand:
+		m.st.Candidate, m.st.RollbackRequest, m.st.RollbackReason = "", "", ""
+		m.st.Confirmed = true
+		m.setLocked(StateFailed, a.Error)
+		m.log.Error("the update failed and could not be rolled back; staying on this version", "error", a.Error)
+	case a.Result == ApplyRejected && m.st.Staged != "" && a.ToVersion == m.st.Staged:
+		m.st.Candidate, m.st.Staged = "", ""
+		m.setLocked(StateFailed, a.Error)
+		m.log.Error("staged update rejected by the privileged pre-start step", "target", a.ToVersion, "error", a.Error)
+	case a.Result == ApplySwitched && a.ToVersion == m.o.Version && m.st.Staged == m.o.Version:
+		m.st.Staged = ""
+		m.st.Attempts = 1
+		m.setLocked(StateConfirming, "")
+		m.log.Info("running an unconfirmed update; waiting for the first successful export", "version", m.o.Version, "previous", m.st.Previous)
+	case m.st.Staged != "":
+		msg := "staged update " + m.st.Staged + " was not installed by the privileged pre-start step"
+		if a.Error != "" {
+			msg += ": " + a.Error
+		}
+		m.st.Staged, m.st.Candidate = "", ""
+		m.setLocked(StateFailed, msg)
+	case m.pendingCandidate():
+		if c := a.Candidate; c != nil && c.Version == m.o.Version {
+			m.st.Attempts = c.Attempts
+		}
+		m.setLocked(StateConfirming, "")
+	case cand != "" && cand != m.o.Version && !m.st.Confirmed &&
+		(m.st.Status == StateRestarting || m.st.Status == StateConfirming || m.st.Status == StateStaged):
+		m.st.Candidate = ""
+		m.setLocked(StateFailed, fmt.Sprintf("started version %s instead of candidate %s", m.o.Version, m.st.ToVersion))
+	}
 }
 
 // rollbackLocked switches current back to the previous version. It returns true when the switch
@@ -251,9 +318,13 @@ func (m *Manager) Confirm() {
 		return
 	}
 	m.st.Confirmed = true
+	m.st.ConfirmedVersion, m.st.ConfirmedAt = m.o.Version, m.o.Now().UTC()
 	m.setLocked(StateSucceeded, "")
 	m.settled.Store(true)
 	m.log.Info("update confirmed after a successful export", "version", m.o.Version, "previous", m.st.Previous)
+	if m.o.Install.Mode == ModeStaged {
+		return // "-apply" prunes root-owned versions at the next start
+	}
 	keep := []string{m.o.Install.VersionDir, m.st.Previous}
 	if m.o.Install.PackageVersion != "" {
 		keep = append(keep, packageUpstreamVersion(m.o.Install.PackageVersion)) // owned by dpkg/rpm
@@ -292,7 +363,16 @@ func (m *Manager) Run(ctx context.Context) {
 		m.mu.Unlock()
 		return
 	}
-	exit := m.rollbackLocked(fmt.Sprintf("version %s did not confirm within %s (no successful export)", m.o.Version, m.o.ConfirmWindow))
+	reason := fmt.Sprintf("version %s did not confirm within %s (no successful export)", m.o.Version, m.o.ConfirmWindow)
+	exit := true
+	if m.o.Install.Mode == ModeStaged {
+		// Only root can switch current: ask the next "-apply" to roll back.
+		m.log.Error("update did not confirm; restarting so the privileged pre-start step rolls back", "reason", reason)
+		m.st.RollbackRequest, m.st.RollbackReason = m.o.Version, reason
+		m.setLocked(StateRestarting, reason)
+	} else {
+		exit = m.rollbackLocked(reason)
+	}
 	m.mu.Unlock()
 	if exit {
 		m.stopForRestart(ctx)
@@ -407,6 +487,9 @@ func (m *Manager) stage(ctx context.Context, ins *Instruction, deadline time.Tim
 		m.log.Warn("update requested but this install cannot update itself", "install_method", m.o.Install.Method, "reason", m.o.Install.Reason)
 		return ruleErr(8, ErrNotCapable)
 	}
+	if m.o.Install.Mode == ModeStaged {
+		return m.stageForApply(ctx, v, deadline)
+	}
 
 	ver := v.Version.String()
 	versions := filepath.Join(root, "versions")
@@ -479,6 +562,83 @@ func (m *Manager) stage(ctx context.Context, ins *Instruction, deadline time.Tim
 		m.st.Candidate = ""
 		return err
 	}
+	m.setLocked(StateRestarting, "")
+	return nil
+}
+
+// stageForApply is staging in staged mode: download, extract and self-test inside the sandbox, then
+// keep the verified archive, manifest and signature in <state_dir>/updates/<v>/ and restart. The
+// privileged "-apply" of the next start verifies everything again before installing.
+func (m *Manager) stageForApply(ctx context.Context, v *Verified, deadline time.Time) error {
+	ver := v.Version.String()
+	updates := filepath.Join(m.o.StateDir, UpdatesDir)
+	if err := os.RemoveAll(updates); err != nil {
+		return err
+	}
+	partial := filepath.Join(updates, "."+ver+".partial")
+	if err := os.MkdirAll(partial, 0o750); err != nil {
+		return err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			os.RemoveAll(updates)
+		}
+	}()
+
+	m.mu.Lock()
+	m.setLocked(StateDownloading, "")
+	m.mu.Unlock()
+	archive := filepath.Join(partial, ArchiveFile)
+	if err := Download(ctx, m.o.HTTPClient, v.DownloadURL, m.downloadHeader(v.DownloadURL), archive, v.Artifact.Size, v.Artifact.SHA256); err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	m.setLocked(StateVerifying, "")
+	m.mu.Unlock()
+	extract := filepath.Join(partial, "extract")
+	if err := ExtractTarGz(archive, extract, TopDir(ver, m.o.OS, m.o.Arch), MaxExtractBytes); err != nil {
+		return err
+	}
+	bin := filepath.Join(extract, BinaryName)
+	if fi, err := os.Lstat(bin); err != nil || !fi.Mode().IsRegular() {
+		return ruleErr(6, "archive has no regular file %s", BinaryName)
+	}
+	if err := os.Chmod(bin, 0o755); err != nil {
+		return err
+	}
+	// Fails early, before a restart, for candidates that cannot run on this host.
+	if err := RunSelfTest(ctx, bin, m.o.ConfigPath, m.o.SelfTestTimeout); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(extract); err != nil {
+		return err
+	}
+	if err := writeFileAtomic(filepath.Join(partial, ManifestFile), v.ManifestBytes, 0o640); err != nil {
+		return err
+	}
+	if err := writeFileAtomic(filepath.Join(partial, SignatureFile), v.Signature, 0o640); err != nil {
+		return err
+	}
+	if !deadline.IsZero() && m.o.Now().After(deadline) {
+		return fmt.Errorf("deadline %s passed before the restart", deadline.UTC().Format(time.RFC3339))
+	}
+	if err := os.Rename(partial, filepath.Join(updates, ver)); err != nil {
+		return err
+	}
+	ok = true
+	syncDir(updates)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.st.Previous = m.o.Install.VersionDir
+	m.st.Candidate, m.st.Staged = ver, ver
+	m.st.Attempts = 0
+	m.st.StagedAt = m.o.Now().UTC()
+	m.st.Confirmed = false
+	m.st.RollbackRequest, m.st.RollbackReason = "", ""
+	m.setLocked(StateStaged, "")
 	m.setLocked(StateRestarting, "")
 	return nil
 }
