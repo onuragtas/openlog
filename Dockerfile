@@ -2,7 +2,9 @@
 # One image containing every openlog backend binary. Default entrypoint: openlog-allinone.
 
 # Web UI (embedded into openlog-api / openlog-allinone via web/embed.go).
-FROM node:22-alpine AS web
+# The web and Go stages run on the build machine's platform and cross-compile (no QEMU emulation
+# in multi-arch builds); only the final stage is per target platform.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 COPY web/scripts ./scripts
@@ -10,7 +12,9 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+ARG TARGETOS=linux
+ARG TARGETARCH
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath
 COPY go.mod go.sum ./
@@ -29,7 +33,7 @@ ARG DATE=
 ARG OPENLOG_RELEASE_PUBLIC_KEYS=
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     OPENLOG_RELEASE_PUBLIC_KEYS="${OPENLOG_RELEASE_PUBLIC_KEYS:-$(grep -v '^#' release-public-keys.txt | tr -s '\n' ',' | sed 's/,$//')}" && \
-    mkdir -p /out && go build -ldflags="-s -w \
+    mkdir -p /out && GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w \
       -X github.com/onuragtas/openlog/internal/version.Version=${VERSION} \
       -X github.com/onuragtas/openlog/internal/version.Commit=${COMMIT} \
       -X github.com/onuragtas/openlog/internal/version.Date=${DATE} \

@@ -8,11 +8,47 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch or PR cancels the running workflow. Skipped path-filtered jobs
+# compare against the last successful master run, so a cancelled run's changes are still tested.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    name: changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      php: ${{ steps.diff.outputs.php }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            base="$PR_BASE"
+          else
+            base="$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci --branch master --event push --status success \
+              --limit 1 --json headSha --jq '.[0].headSha // ""' || true)"
+          fi
+          php=true
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            files="$(git diff --name-only "$base" HEAD)"
+            printf 'changed since %s:\n%s\n' "$base" "$files"
+            grep -qE '^(agents/php/|\.github/workflows/ci\.yml$)' <<<"$files" || php=false
+          fi
+          echo "php=$php" >> "$GITHUB_OUTPUT"
+
+
   go:
     name: go (root, libs/release, agents/infra)
     runs-on: ubuntu-24.04
@@ -66,6 +102,8 @@ jobs:
 
   php-ext:
     name: php-ext (${{ matrix.php }}, ${{ matrix.runner }})
+    needs: changes
+    if: needs.changes.outputs.php == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     strategy:
