@@ -131,6 +131,13 @@ if ($Msi) {
         Get-Content -LiteralPath $log -Tail 80 -ErrorAction SilentlyContinue | Write-Host
         Fail "msiexec /x exited with $($p.ExitCode) (log: $log)"
     }
+    if ((Test-Path -LiteralPath $Current) -or (Test-Path -LiteralPath $Root)) {
+        # Diagnostics for a left-over install root: the removal actions in the MSI log and what is still there.
+        Select-String -LiteralPath $log -Pattern 'OpenlogRemoveCurrentLink|RemoveFolders|OPENLOG_REMOVE_ROOT|WixQuietExec' |
+            Select-Object -Last 40 | ForEach-Object { Write-Host $_.Line }
+        Get-ChildItem -LiteralPath $Root -Force -ErrorAction SilentlyContinue |
+            Format-Table Name, Attributes, @{ n = 'Target'; e = { @($_.Target) -join ',' } } -AutoSize | Out-String | Write-Host
+    }
     Assert-ServiceRemoved 'msi'
     if (Test-Path -LiteralPath $Root) { Fail "msi: $Root still exists after uninstall" }
     if (Test-Path -LiteralPath 'HKLM:\SOFTWARE\openlog\infra-agent') {

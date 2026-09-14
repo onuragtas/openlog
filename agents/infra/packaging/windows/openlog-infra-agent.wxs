@@ -150,10 +150,20 @@
     <CustomAction Id="OpenlogDeleteService" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
                   Execute="deferred" Impersonate="no" Return="ignore" />
 
+    <!-- The agent's current link (os.Symlink, a directory symbolic link) is not removed by RemoveFolderEx. rmdir removes
+         only the link itself, never the version directory it points to; del covers a file link. Failures are ignored:
+         a real directory named current is left alone. -->
+    <SetProperty Id="OpenlogRemoveCurrentLink" Sequence="execute" Before="OpenlogRemoveCurrentLink"
+                 Value="&quot;[System64Folder]cmd.exe&quot; /d /c if exist &quot;[INSTALLROOT]current&quot; (rmdir &quot;[INSTALLROOT]current&quot; || del /f /q &quot;[INSTALLROOT]current&quot;)" />
+    <CustomAction Id="OpenlogRemoveCurrentLink" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
     <InstallExecuteSequence>
       <Custom Action="OpenlogUninstallService" Before="RemoveFiles"
               Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="OpenlogDeleteService" After="OpenlogUninstallService"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="OpenlogRemoveCurrentLink" After="OpenlogDeleteService"
               Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
 
       <Custom Action="OpenlogConfigure" After="WriteRegistryValues" Condition="NOT REMOVE~=&quot;ALL&quot;" />
