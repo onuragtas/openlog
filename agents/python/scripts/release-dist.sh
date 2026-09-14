@@ -23,6 +23,8 @@ esac
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 export PYV="$pyv" RUN_TESTS="${RUN_TESTS:-1}"
+# the sampler unit tests read the Go sampler fixtures of the Node.js agent (tests/unit/test_sampler.py: ../../node)
+fixtures="$here/../node/test/interop"
 
 # shellcheck disable=SC2016 # expanded by the inner shell
 build='set -e
@@ -41,16 +43,20 @@ cp "dist/openlog_agent-$PYV-py3-none-any.whl" "dist/openlog_agent-$PYV.tar.gz" "
 if [ "${PY_BUILD:-docker}" = local ]; then
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
-  tar -C "$here" --exclude=dist --exclude=build --exclude=.pytest_cache --exclude=__pycache__ -cf - . | tar -C "$work" -xf -
-  (cd "$work" && OUT="$out" sh -c "$build")
+  mkdir -p "$work/python" "$work/node/test/interop"
+  tar -C "$here" --exclude=dist --exclude=build --exclude=.pytest_cache --exclude=__pycache__ -cf - . | tar -C "$work/python" -xf -
+  cp -R "$fixtures/." "$work/node/test/interop/"
+  (cd "$work/python" && OUT="$out" sh -c "$build")
 else
-  docker run --rm -v "$here":/src:ro -v "$out":/out -v "${PY_PACK_CACHE:-openlog-python-pack-pip}":/root/.cache/pip \
+  docker run --rm -v "$here":/src:ro -v "$fixtures":/src-node-interop:ro -v "$out":/out \
+    -v "${PY_PACK_CACHE:-openlog-python-pack-pip}":/root/.cache/pip \
     -e PYV -e RUN_TESTS -e OUT=/out -e PIP_ROOT_USER_ACTION=ignore -e PIP_DISABLE_PIP_VERSION_CHECK=1 \
     "python:${PYTHON_VERSION:-3.12}-slim" sh -c '
       set -e
-      mkdir -p /work
-      tar -C /src --exclude=dist --exclude=build --exclude=.pytest_cache --exclude=__pycache__ -cf - . | tar -C /work -xf -
-      cd /work
+      mkdir -p /work/python /work/node/test/interop
+      tar -C /src --exclude=dist --exclude=build --exclude=.pytest_cache --exclude=__pycache__ -cf - . | tar -C /work/python -xf -
+      cp -R /src-node-interop/. /work/node/test/interop/
+      cd /work/python
       sh -c "$1"
       chown "$(stat -c %u:%g /out)" "/out/openlog_agent-$PYV-py3-none-any.whl" "/out/openlog_agent-$PYV.tar.gz"' release-dist "$build"
 fi

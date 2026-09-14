@@ -115,6 +115,12 @@ internal static class OpenLogSetup
         };
     }
 
+    // RecordException does not exist on every target-framework build of the instrumentations: the net462 build of
+    // OpenTelemetry.Instrumentation.SqlClient that .NET Framework apps load has no such property, so setting it directly
+    // from this netstandard2.0 assembly fails with MissingMethodException. Set it only where it exists.
+    private static void TryRecordException(object options) =>
+        options.GetType().GetProperty("RecordException")?.SetValue(options, true);
+
     /// <summary>Sampler, sources, instrumentations, openlog processors and (optionally) the OTLP exporter.</summary>
     internal static void ConfigureTracing(TracerProviderBuilder b, OpenLogConfig cfg, Diag diag, bool addExporter)
     {
@@ -136,11 +142,11 @@ internal static class OpenLogSetup
 #endif
         if (cfg.IsEnabled(Instrumentations.HttpClient))
         {
-            b.AddHttpClientInstrumentation(o => o.RecordException = true);
+            b.AddHttpClientInstrumentation(o => TryRecordException(o));
         }
         if (cfg.IsEnabled(Instrumentations.SqlClient))
         {
-            b.AddSqlClientInstrumentation(o => o.RecordException = true);
+            b.AddSqlClientInstrumentation(o => TryRecordException(o));
         }
         foreach (var (name, source) in NativeSources)
         {

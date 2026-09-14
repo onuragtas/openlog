@@ -347,7 +347,7 @@ jobs:
         run: test/autoinstrumentation.sh
       - name: package
         if: matrix.dotnet == '9.0'
-        run: dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -o "$RUNNER_TEMP/nupkg"
+        run: dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -p:PackageOutputPath="$RUNNER_TEMP/nupkg"
 
   dotnet-agent-netfx:
     name: dotnet-agent-netfx (.NET Framework 4.8, ASP.NET 4.x under IIS Express / IIS)

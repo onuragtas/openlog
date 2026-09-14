@@ -51,7 +51,7 @@ test-autoinstrumentation:
 	DOTNET_VERSION=$(DOTNET_VERSION) DOTNET_TEST_VOLUME_PREFIX=$(DOTNET_TEST_VOLUME_PREFIX) test/autoinstrumentation.sh
 
 pack:
-	$(RUN) 'dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -p:OpenLogVersion=$(VERSION) -o /src/artifacts/nupkg'
+	$(RUN) 'dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -p:OpenLogVersion=$(VERSION) -p:PackageOutputPath=/src/artifacts/nupkg'
 
 bench:
 	$(RUN) 'dotnet run -c Release --project bench/OpenLog.Agent.Bench/OpenLog.Agent.Bench.csproj -f $(TFM) $(TFM_PROPS)'

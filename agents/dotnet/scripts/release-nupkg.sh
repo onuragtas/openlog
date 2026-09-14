@@ -25,7 +25,8 @@ build='set -e
 if [ "$RUN_TESTS" = 1 ]; then
   dotnet test test/OpenLog.Agent.Tests/OpenLog.Agent.Tests.csproj -c Release -p:OpenLogVersion="$VERSION" $TEST_PROPS
 fi
-dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -p:OpenLogVersion="$VERSION" -o "$OUT"'
+# -p:PackageOutputPath instead of -o: the .NET 10 SDK passes -o to MSBuild without --property: (MSB1008)
+dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -p:OpenLogVersion="$VERSION" -p:PackageOutputPath="$OUT"'
 
 if [ "${DOTNET_BUILD:-docker}" = local ]; then
   work="$(mktemp -d)"
