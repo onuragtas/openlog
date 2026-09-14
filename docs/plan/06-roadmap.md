@@ -94,3 +94,60 @@ Otomatik güncelleme, filo, TLS ve M1 kalanları birleştirildikten sonra, sıf�
   - .NET agent (`agents/dotnet`, D-074) ✅: NuGet `OpenLog.Agent` (OpenTelemetry .NET 1.18, `net8.0` + `netstandard2.0`), `builder.Services.AddOpenLog()` / `OpenLogAgent.Start()`, kodsuz kullanım için OTel automatic instrumentation eklentisi (önizleme); `OPENLOG_*` yapılandırması, host.id zinciri, container.id, Go örnekleyicisinin portu (Go fikstürleri) + W3C random bayrağı, Go ile aynı SQL temizleme, lisans başlığı, gzip; testler: xUnit birim + OTLP yakalamayla entegrasyon (ASP.NET Core minimal API/MVC, HttpClient, gRPC, ILogger korelasyonu ve log ihracı, runtime/process metrikleri, PostgreSQL/Npgsql, EF Core, MySqlConnector, StackExchange.Redis; .NET 8 ve 9), ek yük ölçümü; CI `dotnet-agent` (.NET 8/9), release'te NuGet (`NUGET_API_KEY`). Automatic instrumentation eklentisi önizlemeden çıktı: sabitlenmiş OTel .NET automatic instrumentation 1.16.0 (sha256) ile otomatik test (`test/autoinstrumentation.sh`, CI .NET 8/9; eklenti `net/` dizinine kurulur, uygulama dizini çalışmıyor); MassTransit 8.5 (RabbitMQ) ve Confluent.Kafka 2.15 testleri (producer→consumer iz sürekliliği, messaging öznitelikleri); SqlClient testi SQL Server 2022'ye (CI, amd64) ve arm64'te Azure SQL Edge'e karşı; .NET Framework 4.8/ASP.NET 4.x örneği Linux CI'da derleniyor; Windows'ta çalışan test eklendi: CI `dotnet-agent-netfx` (windows-latest) örneği IIS Express'te (yoksa IIS'te) `TelemetryHttpModule` + OpenLog.Agent ile çalıştırıyor, OTLP yakalama konsol uygulamasıyla (`test/OpenLog.NetFx.SmokeTest`, entegrasyon testlerinin yakalama sunucusu) span'leri doğruluyor (`test/netfx/run-iis.ps1`; Linux'ta derleme + site düzeni doğrulandı, ilk Windows CI koşusu betiği doğrulayacak). Kalan: `dotnet-agent-netfx`'in ilk CI koşusunun doğrulanması, paylaşılan openlog'da canlı doğrulama.
 - Tail-based sampling — uygulandı (D-075, D-076): `openlog-sampler` (ham traces topic → trace başına tampon → tenant politikası → `traces.sampled` topic), `ot=th` ile birleşik head × tail ağırlıkları, Settings → APM örnekleme (politika + önizleme), Helm Deployment + lag HPA, allinone içinde; `docs/operations/tail-sampling.md`. Kalan: sampler Deployment/PDB/HPA'nın gerçek cluster'da denenmesi (chart render'ı doğrulandı; kind denemesi disk yetmediği için yapılamadı, lag HPA'sı metrics adapter ister)
 - Veri ekleme ("Add data") akışı ✅: New Relic benzeri rehberli kurulum sayfası (`/add-data`, derin bağlantılar `/add-data/linux`, `/add-data/apm/node` …, üst çubukta düğme): Linux (install.sh/deb/rpm/tarball), Docker konteyner agent'ı, Kubernetes Helm, Go/Node.js/Python/Java/.NET/PHP APM, sunucu/konteyner/tarayıcı/OpenTelemetry logları, OTel SDK değişkenleri ve Collector YAML'ı, nginx/Redis/MySQL/PostgreSQL entegrasyonları için bu sunucunun uç noktası ve lisans anahtarıyla doldurulmuş kopyala-yapıştır komutlar (saf ve birim testli `buildInstallCommands`, kabuk/YAML kaçışları, URL'de anahtar yok, maskeli gösterim); anahtar adımı: satır içi oluşturma (admin, bir kez gösterilir), yapıştırma (tarayıcıda kalır) veya yer tutucu; "Veri bekleniyor…" doğrulaması (yeni sunucu, APM servisi, küme, log kaydı) ve sorun giderme ipuçları. Backend: `GET /api/v1/onboarding` (uç noktalar, sürüm/kanal, CORS, özellik bayrakları; gizli bilgi yok), `OPENLOG_INGEST_PUBLIC_URL` / `OPENLOG_INGEST_PUBLIC_GRPC_URL`. Hosts/APM/Logs/Kubernetes/Containers boş durumları ve sunucu Servisler sekmesindeki APM kartı (dile göre gerçek ürün adı, `apm_hint.status`, PHP için filo ile kurulum) ilgili karta bağlanır. Dil agent paketleri kayıt defteri olmadan da kurulur: her GitHub sürümüne `openlog-node-<v>.tgz`, `openlog_agent-<v>-py3-none-any.whl` (+ sdist) ve `OpenLog.Agent.<v>.nupkg` (`.sha256` ile, imzalı manifestte `node-agent`/`python-agent`/`dotnet-agent`) eklenir; `GET /api/v1/onboarding` `agent_packages` ile npm/PyPI/nuget.org'da sürümün olup olmadığını (1 saat önbellek, çevrimdışı → unknown) bildirir ve komutlar yalnız `available` olduğunda kayıt defterini, aksi halde GitHub sürüm dosyalarını kullanır (canlı doğrulamada npm/PyPI/NuGet 404 bulgusu). Kalan: gerçek sunucularda uçtan uca kurulum doğrulaması, Windows/macOS sunucular, npm/PyPI/NuGet hesaplarıyla ilk kayıt defteri yayını.
+
+## v1.0 — Tamamlanma kriterleri
+
+Durum (2026-09-14): **geliştirme tamamlandı.** M0–M4 maddeleri kodda; her maddenin ayrıntısı ve kalan küçük notları
+yukarıdaki satırlarda. Aşağıdaki üç liste v1.0'ı "tamamlandı" saymak için gerekenleri ayırır: kodda bitenler, uzun süren
+doğrulamalar (proje sahibi çalıştırır) ve hesap/altyapı gerektiren operasyonel adımlar.
+
+### Kodda tamamlananlar
+
+- Altyapı izleme: Linux infra agent (metrik, envanter, keşif, loglar, container/CRI, D-Bus systemd, entegrasyonlar,
+  SSH'sız uzaktan yapılandırma, imzalı kendini güncelleme + root `-apply`/`-reconcile`, PHP agent filo kurulumu).
+- APM: Go, Node.js, Python, Java, .NET, PHP agent'ları; hata gelen kutusu, servis haritası, log ↔ trace, deployment
+  işaretleri, tail-based sampling.
+- Platform: çok kiracılı PostgreSQL + ClickHouse, OQL sorgu dili ve dashboard'lar (filtre, sürüm geçmişi, paylaşım,
+  zamanlanmış rapor + PNG renderer), alarmlar ve şablonlar, SSO/SCIM (OIDC, SAML, SLO, back-channel), kota ve kullanım
+  ölçümü, katmanlı saklama (S3), Kubernetes entegrasyonu, "Veri ekle" rehberli kurulum, TR/EN arayüz ve e-postalar.
+- Dağıtım: Compose (`install-server.sh`), Helm (`openlog`, `openlog-agent`), imzalı release'ler, backend/agent otomatik
+  güncelleme, manuel güncelleme düğmeleri.
+- Son geliştirme turundaki kısa kontroller: Go build/vet/gofmt, Go birim testleri, web tsc/eslint, hedefli vitest,
+  helm lint, compose config, actionlint + shellcheck.
+
+### Uzun süren doğrulamalar (proje sahibi çalıştırır)
+
+| Doğrulama | Komut |
+|---|---|
+| Uçtan uca backend + agent | `make e2e` |
+| Güncelleme / geri dönüş / N↔N+1 | `make updater-acceptance`, `make mixed-version`, `make stack-demo` |
+| TLS | `make tlstest` |
+| Katmanlı saklama + yedek/geri yükleme | `TIEREDTEST_BACKUP=1 make tieredtest` |
+| Paketler ve kurulum betikleri | `make package-test`, `make install-test` |
+| Agent kendini güncelleme (systemd) | `make -C agents/infra test-update-e2e` |
+| Web arayüzü | `cd web && npx vitest run && npx playwright test` |
+| PostgreSQL entegrasyon | `OPENLOG_TEST_POSTGRES_DSN=… go test -tags integration ./internal/...` |
+| SSO (Keycloak) | `test/sso/keycloak_test.go` başındaki komutlar |
+| PHP extension matrisi | `make -C agents/php ext-matrix` (+ `ext-asan`, `ext-compat`, `soak`) |
+| Dil agent'ları | `make -C agents/node test-integration`, `make -C agents/python test-integration`, `make -C agents/dotnet test-integration test-autoinstrumentation`, `agents/java/test/run.sh` |
+| Kubernetes (kind) | `deploy/helm/test/kind-validate.sh` (katmanlı saklama, tail sampling ve agent chart adımları henüz uçtan uca koşmadı) |
+| Paylaşılan stack'te canlı doğrulama | `docs/operations/live-validation-2026-09-14.md` kontrol listesi |
+
+### Operasyonel adımlar (hesap veya altyapı gerekir)
+
+- Registry yayınları: `NPM_TOKEN`, PyPI pending publisher + `pypi` environment + `PYPI_PUBLISH=true`, `NUGET_API_KEY`;
+  Maven Central. Yayın yokken "Veri ekle" komutları GitHub release'indeki paketleri kullanır.
+- GHCR: `openlog`, `openlog-infra-agent`, `openlog-renderer` imajları ve (isteğe bağlı `HELM_OCI_PUSH=true`) chart
+  paketleri public yapılmalı.
+- Gerçek sunucuda son kontrol (deb + Docker'da nginx/redis), gerçek Kubernetes cluster'ı, AWS S3 / SSE-KMS / IRSA.
+- Ayrılmış makinede ek yük ölçümleri (PHP, Node.js, Java, .NET).
+- Okta ve Entra ID ile SSO doğrulaması; Windows CI job'ı `dotnet-agent-netfx` ilk çalışması.
+
+### Kapsam dışı ve bilinen kısıtlar
+
+- Windows/macOS host agent'ı v1.0 dışında (D-102). Ödeme sağlayıcısı entegrasyonu ve SaaS altyapısı proje sahibinin
+  kararını bekliyor (`docs/operations/saas.md`).
+- Altinity operator 0.27.3: `disableInsecure` ve plaintext Keeper 2181'in kapatılması (operator probe/istemci sertifikası).
+- PHP tam modda izleyici kapalıyken ek yük hedefin üstünde (hafif mod `openlog.userland_hooks=0` hedefe yakın).
+- NestJS 12'de Nest seviyesinde span yok (upstream); route adları `--import` veya `OpenLogNestInterceptor` ile doğru.
+- Tail sampling at-least-once: çökme/rebalance'ta tutulan span'ler çift olabilir (D-076).

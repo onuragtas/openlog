@@ -3,7 +3,9 @@
 Open-source observability platform — infrastructure monitoring, APM, logs and alerts — built from scratch.
 Runs as a hosted service or self-hosted, from a single machine up to a horizontally scaled cluster.
 
-> Status: **M1 done, M2 in progress** (alerting, integrations, APM, Go and PHP agents). Not production ready yet.
+> Status: **v1.0 development complete** (M0–M4: infrastructure, logs, APM with Go/Node.js/Python/Java/.NET/PHP
+> agents, alerting, OQL dashboards, Kubernetes, SSO/SCIM, quotas, tiered storage). Long-running validation and the
+> operational release steps are listed in [the roadmap](docs/plan/06-roadmap.md#v10--tamamlanma-kriterleri).
 
 ## Install on a server (Docker Compose, single machine)
 
