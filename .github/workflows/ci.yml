@@ -131,7 +131,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe'
-          go build -trimpath -o $exe ./cmd/openlog-infra-agent
+          # The version the zip/MSI steps below package; test-install.ps1 checks that -version reports it.
+          $ldflags = "-X github.com/onuragtas/openlog/agents/infra/internal/version.Version=0.0.${{ github.run_number }}"
+          go build -trimpath -ldflags $ldflags -o $exe ./cmd/openlog-infra-agent
           if ($LASTEXITCODE -ne 0) { throw "go build failed" }
           & $exe -version
           if ($LASTEXITCODE -ne 0) { throw "-version failed" }
