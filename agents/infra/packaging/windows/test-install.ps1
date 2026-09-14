@@ -32,7 +32,10 @@ $Current = Join-Path $Root 'current'
 $Exe = Join-Path $Current 'openlog-infra-agent.exe'
 $DataDir = Join-Path $env:ProgramData 'openlog\infra-agent'
 $Config = Join-Path $DataDir 'config.yaml'
-$ExpectedImagePath = "`"$Current\openlog-infra-agent.exe`" -config `"$Config`""
+# The agent writes the ImagePath with Go's syscall.EscapeArg (reconcile_windows.go): an argument is quoted only when
+# it contains a space, tab or double quote. The exe below Program Files must be quoted (unquoted service path).
+function Format-ServiceArg([string]$Arg) { if ($Arg -match '[ \t"]') { return "`"$Arg`"" } return $Arg }
+$ExpectedImagePath = "$(Format-ServiceArg "$Current\openlog-infra-agent.exe") -config $(Format-ServiceArg $Config)"
 $LicenseKey = 'ci-test-key-7f3a9b2e'
 $EndpointUrl = 'http://127.0.0.1:4318'
 
