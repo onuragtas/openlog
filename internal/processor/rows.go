@@ -17,8 +17,9 @@ const (
 )
 
 // Tables lists all tables in insert order. Hosts go last so a host only
-// appears once its telemetry has been written.
-var Tables = []string{TableMetrics, TableLogs, TableSpans, TableInventoryItems, TableInventorySnapshots, TableHosts}
+// appears once its telemetry has been written. The re-link queue follows spans:
+// a queued minute's late spans are stored before the leader can read the row.
+var Tables = []string{TableMetrics, TableLogs, TableSpans, TableRelinkQueue, TableInventoryItems, TableInventorySnapshots, TableHosts, TableUsageIngest}
 
 // Columns per table; Values() of each row type follows the same order.
 var Columns = map[string][]string{
@@ -39,6 +40,8 @@ var Columns = map[string][]string{
 		"agent_version", "resource_attributes", "last_seen"},
 	TableInventoryItems:     {"tenant_id", "host_id", "snapshot_id", "snapshot_time", "category", "item_key", "data"},
 	TableInventorySnapshots: {"tenant_id", "host_id", "snapshot_id", "snapshot_time", "item_count"},
+	TableRelinkQueue:        {"tenant_id", "minute", "trace_id", "spans", "enqueued_at"},
+	TableUsageIngest:        {"tenant_id", "hour", "signal", "requests", "bytes"}, // usage.go
 }
 
 // MetricRow is one data point.

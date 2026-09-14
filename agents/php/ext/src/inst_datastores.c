@@ -34,11 +34,63 @@ static zend_ulong ol_handle_key(zval *z)
 	return 0;
 }
 
-static HashTable *ol_table(HashTable **t)
+/*
+ * Connection and statement state lives for the whole PHP request (emalloc, not the transaction arena): a long-running
+ * worker (inst_workers.c) opens its connections once and handles many transactions with them. Spans copy the values.
+ */
+static void pfree(const char **slot)
+{
+	if (*slot) {
+		efree((char *) *slot);
+		*slot = NULL;
+	}
+}
+
+static void pset(const char **slot, const char *s, size_t len, size_t max)
+{
+	char *d;
+	pfree(slot);
+	if (s == NULL) {
+		return;
+	}
+	if (len > max) {
+		len = max;
+	}
+	d = emalloc(len + 1);
+	len = ol_utf8_clean(d, s, len, max);
+	d[len] = '\0';
+	*slot = d;
+}
+
+static void pset_zv(const char **slot, zval *z, size_t max)
+{
+	if (z && Z_TYPE_P(z) == IS_STRING) {
+		pset(slot, Z_STRVAL_P(z), Z_STRLEN_P(z), max);
+	} else {
+		pfree(slot);
+	}
+}
+
+static void conn_dtor(zval *zv)
+{
+	ol_conn *c = Z_PTR_P(zv);
+	pfree(&c->host);
+	pfree(&c->db);
+	efree(c);
+}
+
+static void stmt_dtor(zval *zv)
+{
+	ol_stmt *s = Z_PTR_P(zv);
+	pfree(&s->sql);
+	efree(s);
+}
+
+static HashTable *ol_table(HashTable **t, dtor_func_t dtor)
 {
 	if (*t == NULL) {
 		ALLOC_HASHTABLE(*t);
-		zend_hash_init(*t, 8, NULL, NULL, 0);
+		zend_hash_init(*t, 8, NULL, dtor, 0);
 	}
 	return *t;
 }
@@ -51,15 +103,13 @@ static ol_conn *conn_get(zend_ulong key, bool create)
 	}
 	c = OLG(conns) ? zend_hash_index_find_ptr(OLG(conns), key) : NULL;
 	if (c == NULL && create) {
-		c = ol_alloc(sizeof(ol_conn));
-		if (c) {
-			memset(c, 0, sizeof(*c));
-			zend_hash_index_update_ptr(ol_table(&OLG(conns)), key, c);
-		}
+		c = ecalloc(1, sizeof(ol_conn));
+		zend_hash_index_update_ptr(ol_table(&OLG(conns), conn_dtor), key, c);
 	}
 	return c;
 }
 
+/* transaction (arena) copy, for values that are not kept */
 static const char *zstr_copy(zval *z, size_t max)
 {
 	return (z && Z_TYPE_P(z) == IS_STRING) ? ol_strdup(Z_STRVAL_P(z), Z_STRLEN_P(z), max) : NULL;
@@ -72,13 +122,13 @@ static void conn_attrs(ol_node *n, const char *system, ol_conn *c)
 		return;
 	}
 	if (c->host && *c->host) {
-		ol_attr_static(n, "server.address", c->host);
+		ol_attr_cstr(n, "server.address", c->host);
 	}
 	if (c->port > 0) {
 		ol_attr_int(n, "server.port", c->port);
 	}
 	if (c->db && *c->db) {
-		ol_attr_static(n, "db.namespace", c->db);
+		ol_attr_cstr(n, "db.namespace", c->db);
 	}
 }
 
@@ -259,14 +309,20 @@ static void mysqli_connect_end(zend_execute_data *ex, zval *rv, const ol_hook *h
 	host = ol_arg(ex, base);
 	db = ol_arg(ex, base + 3);
 	port = ol_arg(ex, base + 4);
-	c->host = zstr_copy(host, 256);
-	if (c->host && strncmp(c->host, "p:", 2) == 0) {
-		c->host += 2; /* persistent connection prefix */
+	{
+		const char *hs = host && Z_TYPE_P(host) == IS_STRING ? Z_STRVAL_P(host) : "";
+		size_t hl = host && Z_TYPE_P(host) == IS_STRING ? Z_STRLEN_P(host) : 0;
+		if (hl >= 2 && strncmp(hs, "p:", 2) == 0) {
+			hs += 2; /* persistent connection prefix */
+			hl -= 2;
+		}
+		if (hl == 0) {
+			hs = "localhost";
+			hl = 9;
+		}
+		pset(&c->host, hs, hl, 256);
 	}
-	if (c->host == NULL || *c->host == '\0') {
-		c->host = "localhost";
-	}
-	c->db = zstr_copy(db, 256);
+	pset_zv(&c->db, db, 256);
 	c->port = port && Z_TYPE_P(port) == IS_LONG ? Z_LVAL_P(port) : 3306;
 }
 
@@ -275,7 +331,7 @@ static void mysqli_select_db_end(zend_execute_data *ex, zval *rv, const ol_hook 
 	zval *link = my_link(ex, h, rv), *db = ol_arg(ex, MY_BASE(h->arg));
 	ol_conn *c = conn_get(ol_handle_key(link), true);
 	if (c && rv && Z_TYPE_P(rv) == IS_TRUE) {
-		c->db = zstr_copy(db, 256);
+		pset_zv(&c->db, db, 256);
 	}
 }
 
@@ -302,15 +358,11 @@ static void stmt_store(zend_ulong key, zval *sql, zend_ulong link)
 	}
 	s = OLG(stmts) ? zend_hash_index_find_ptr(OLG(stmts), key) : NULL;
 	if (s == NULL) {
-		s = ol_alloc(sizeof(ol_stmt));
-		if (s == NULL) {
-			return;
-		}
-		memset(s, 0, sizeof(*s));
-		zend_hash_index_update_ptr(ol_table(&OLG(stmts)), key, s);
+		s = ecalloc(1, sizeof(ol_stmt));
+		zend_hash_index_update_ptr(ol_table(&OLG(stmts), stmt_dtor), key, s);
 	}
 	if (sql && Z_TYPE_P(sql) == IS_STRING) {
-		s->sql = ol_strdup(Z_STRVAL_P(sql), Z_STRLEN_P(sql), OL_STR_MAX);
+		pset(&s->sql, Z_STRVAL_P(sql), Z_STRLEN_P(sql), OL_STR_MAX);
 		s->len = s->sql ? strlen(s->sql) : 0;
 	}
 	if (link) {
@@ -380,12 +432,12 @@ static void pg_conninfo(ol_conn *c, const char *s, size_t len)
 		hs = at ? at + 1 : p;
 		{
 			const char *colon = memchr(hs, ':', (size_t) (he - hs));
-			c->host = ol_strdup(hs, (size_t) ((colon ? colon : he) - hs), 256);
+			pset(&c->host, hs, (size_t) ((colon ? colon : he) - hs), 256);
 			c->port = colon ? ZEND_STRTOL(colon + 1, NULL, 10) : 5432;
 		}
 		if (slash) {
 			const char *q = memchr(slash, '?', (size_t) (end - slash));
-			c->db = ol_strdup(slash + 1, (size_t) ((q ? q : end) - slash - 1), 256);
+			pset(&c->db, slash + 1, (size_t) ((q ? q : end) - slash - 1), 256);
 		}
 		return;
 	}
@@ -414,10 +466,10 @@ static void pg_conninfo(ol_conn *c, const char *s, size_t len)
 				while (i < len && !isspace((unsigned char) s[i])) i++;
 				ve = i;
 			}
-			if (ke - ks == 4 && strncmp(s + ks, "host", 4) == 0) c->host = ol_strdup(s + vs, ve - vs, 256);
-			else if (ke - ks == 8 && strncmp(s + ks, "hostaddr", 8) == 0 && c->host == NULL) c->host = ol_strdup(s + vs, ve - vs, 256);
+			if (ke - ks == 4 && strncmp(s + ks, "host", 4) == 0) pset(&c->host, s + vs, ve - vs, 256);
+			else if (ke - ks == 8 && strncmp(s + ks, "hostaddr", 8) == 0 && c->host == NULL) pset(&c->host, s + vs, ve - vs, 256);
 			else if (ke - ks == 4 && strncmp(s + ks, "port", 4) == 0) c->port = ZEND_STRTOL(s + vs, NULL, 10);
-			else if (ke - ks == 6 && strncmp(s + ks, "dbname", 6) == 0) c->db = ol_strdup(s + vs, ve - vs, 256);
+			else if (ke - ks == 6 && strncmp(s + ks, "dbname", 6) == 0) pset(&c->db, s + vs, ve - vs, 256);
 		}
 	}
 }
@@ -484,15 +536,15 @@ static void pg_prepare_begin(zend_execute_data *ex, const ol_hook *h)
 	zval *name = ol_arg(ex, with_conn ? 2 : 1), *sql = ol_arg(ex, with_conn ? 3 : 2);
 	char key[300];
 	size_t klen;
-	const char *copy;
+	ol_stmt *s;
 	if (sql == NULL || Z_TYPE_P(sql) != IS_STRING) {
 		return;
 	}
 	pg_stmt_key(key, sizeof(key), pg_conn_key(with_conn ? ol_arg(ex, 1) : NULL), name, &klen);
-	copy = ol_strdup(Z_STRVAL_P(sql), Z_STRLEN_P(sql), OL_STR_MAX);
-	if (copy) {
-		zend_hash_str_update_ptr(ol_table(&OLG(stmts)), key, klen, (void *) copy);
-	}
+	s = ecalloc(1, sizeof(ol_stmt));
+	pset(&s->sql, Z_STRVAL_P(sql), Z_STRLEN_P(sql), OL_STR_MAX);
+	s->len = s->sql ? strlen(s->sql) : 0;
+	zend_hash_str_update_ptr(ol_table(&OLG(stmts), stmt_dtor), key, klen, s);
 }
 
 /* pg_execute([$conn,] $name, $params) */
@@ -503,10 +555,10 @@ static void pg_execute_begin(zend_execute_data *ex, const ol_hook *h)
 	zend_ulong conn = pg_conn_key(with_conn ? ol_arg(ex, 1) : NULL);
 	char key[300];
 	size_t klen;
-	const char *sql;
+	ol_stmt *s;
 	pg_stmt_key(key, sizeof(key), conn, ol_arg(ex, with_conn ? 2 : 1), &klen);
-	sql = OLG(stmts) ? zend_hash_str_find_ptr(OLG(stmts), key, klen) : NULL;
-	pg_span(ex, conn, sql, sql ? strlen(sql) : 0);
+	s = OLG(stmts) ? zend_hash_str_find_ptr(OLG(stmts), key, klen) : NULL;
+	pg_span(ex, conn, s ? s->sql : NULL, s ? s->len : 0);
 }
 
 /* ---------------- phpredis ---------------- */
@@ -518,9 +570,16 @@ static void redis_connect_end(zend_execute_data *ex, zval *rv, const ol_hook *h)
 	if (c == NULL) {
 		return;
 	}
-	c->host = zstr_copy(host, 256);
-	if (c->host && (strncmp(c->host, "tcp://", 6) == 0 || strncmp(c->host, "tls://", 6) == 0)) {
-		c->host += 6;
+	if (host && Z_TYPE_P(host) == IS_STRING) {
+		const char *hs = Z_STRVAL_P(host);
+		size_t hl = Z_STRLEN_P(host);
+		if (hl >= 6 && (strncmp(hs, "tcp://", 6) == 0 || strncmp(hs, "tls://", 6) == 0)) {
+			hs += 6;
+			hl -= 6;
+		}
+		pset(&c->host, hs, hl, 256);
+	} else {
+		pfree(&c->host);
 	}
 	c->port = port && Z_TYPE_P(port) == IS_LONG && Z_LVAL_P(port) > 0 ? Z_LVAL_P(port) : (c->host && c->host[0] == '/' ? 0 : 6379);
 }
@@ -593,7 +652,7 @@ static void redis_select_end(zend_execute_data *ex, zval *rv, const ol_hook *h)
 	if (c && db && Z_TYPE_P(db) == IS_LONG && rv && Z_TYPE_P(rv) == IS_TRUE) {
 		char buf[24];
 		int l = snprintf(buf, sizeof(buf), ZEND_LONG_FMT, Z_LVAL_P(db));
-		c->db = ol_strdup(buf, (size_t) l, sizeof(buf));
+		pset(&c->db, buf, (size_t) l, sizeof(buf));
 	}
 }
 

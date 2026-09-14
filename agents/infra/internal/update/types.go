@@ -7,6 +7,7 @@
 package update
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
@@ -102,6 +103,8 @@ type SyncRequest struct {
 	IntegrationsConfigRevision string `json:"integrations_config_revision"`
 	// Reconcile is the last result of the privileged reconcile step (absent when it never ran).
 	Reconcile *ReconcileReport `json:"reconcile,omitempty"`
+	// PHPAgent is the PHP runtime inventory and PHP agent installation state (phpagent.Report, php-agent.md §7.3).
+	PHPAgent any `json:"php_agent,omitempty"`
 }
 
 // AgentInfo describes the running agent.
@@ -145,6 +148,8 @@ type SyncResponse struct {
 	// IntegrationsConfig is present only when the host's remote integration
 	// config differs from the reported revision (null/absent: keep the current one).
 	IntegrationsConfig *config.RemoteIntegrations `json:"integrations_config"`
+	// PHPAgent is the fleet's PHP agent settings for this host (phpagent.Remote; null/absent: keep the last ones).
+	PHPAgent json.RawMessage `json:"php_agent,omitempty"`
 }
 
 // Instruction is an update ordered by the backend. The backend is untrusted: everything that

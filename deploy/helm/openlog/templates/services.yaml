@@ -77,6 +77,27 @@ spec:
       targetPort: admin
       appProtocol: http
 {{- end }}
+{{- if .Values.tailSampling.enabled }}
+{{- $ctx := dict "root" . "component" "sampler" }}
+---
+# Metrics-only Service (for ServiceMonitor); the sampler receives no traffic.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+    openlog.io/metrics: "true"
+spec:
+  clusterIP: None
+  selector:
+    {{- include "openlog.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: admin
+      port: 9464
+      targetPort: admin
+      appProtocol: http
+{{- end }}
 {{- if .Values.api.enabled }}
 {{- $ctx := dict "root" . "component" "api" }}
 ---

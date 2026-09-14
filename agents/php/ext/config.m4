@@ -5,8 +5,8 @@ PHP_ARG_ENABLE([openlog],
   [yes])
 
 if test "$PHP_OPENLOG" != "no"; then
-  OPENLOG_SOURCES="src/ol_module.c src/ol_core.c src/ol_context.c src/ol_json.c src/ol_hooks.c src/ol_util.c \
-    src/ol_sampler.c src/inst_frameworks.c src/inst_datastores.c src/inst_http.c"
+  OPENLOG_SOURCES="src/ol_module.c src/ol_core.c src/ol_context.c src/ol_json.c src/ol_text.c src/ol_hooks.c src/ol_util.c \
+    src/ol_sampler.c src/inst_frameworks.c src/inst_datastores.c src/inst_http.c src/inst_workers.c"
   dnl The transaction tracer's sampler thread.
   PHP_ADD_LIBRARY(pthread, 1, OPENLOG_SHARED_LIBADD)
   PHP_SUBST(OPENLOG_SHARED_LIBADD)

@@ -39,7 +39,9 @@ Plan and rationale: [../plan/09-releases-updates.md](../plan/09-releases-updates
 }
 ```
 
-- `component` values: `infra-agent` (later `php-agent`, …). `format`: `tar.gz`, `deb`, `rpm`.
+- `component` values: `infra-agent`, `backend`, `php-agent` (php-agent.md §7.1: `openlog-php-agent_<v>_linux_<arch>.tar.gz`
+  with the modules of every PHP ABI and `openlog-php-install`, plus `.deb`/`.rpm`/`.apk`). `format`: `tar.gz`, `deb`,
+  `rpm`, `apk`. Consumers ignore components and formats they do not know, so new ones do not change `schema`.
 - Tarball layout: a single top-level directory `openlog-infra-agent_<v>_linux_<arch>/` containing `openlog-infra-agent`, `LICENSE`, `README.md`, `packaging/`.
 - `compatibility.min_upgrade_from`: agents/backends older than this must upgrade through an intermediate version.
 - `compatibility.rollback_floor`: the lowest version a rollback may target from this version.
@@ -158,6 +160,25 @@ When the host's effective integration settings (edited under `/api/v1/integratio
 - Passwords are sent in plaintext inside the (TLS) ingest connection to agents authenticated with the organization's
   license key; at rest they are encrypted in PostgreSQL with `OPENLOG_SECRETS_KEY`, which ingest therefore needs too.
 - Changes reach an agent within `OPENLOG_FLEET_POLICY_CACHE_TTL` plus one poll interval.
+
+#### PHP agent
+
+Agents report their PHP runtimes and PHP agent installation in the request (`php_agent`, php-agent.md §7.3 item 8;
+bounded by ingest: 64 runtimes, clipped strings) and ingest answers the host's fleet settings (null without a policy
+store):
+
+```json
+"php_agent": {"mode": "auto", "version": "agent", "reload": "graceful", "exclude_bins": [],
+  "target_version": "0.4.0", "manifest": "<base64 of manifest.json>", "signature": "…",
+  "download_url": "https://…/openlog-php-agent_0.4.0_linux_amd64.tar.gz", "reason": "offer"}
+```
+
+- `mode` is the host's override or the policy's; `target_version` is set with `reason=offer` (with manifest, signature
+  and a download URL, the backend mirror when enabled) and `reason=up_to_date` (without them); otherwise it is `""` and
+  the agent keeps what is installed. Decision reasons: api.md "Fleet" (`php_agent.status`).
+- The agent applies these settings instead of `config.yaml` unless `php_agent.remote_config: false`, and verifies the
+  manifest like an update instruction (signature, schema, version, a `php-agent` `tar.gz` artifact for its platform,
+  rollback floor of the installed PHP agent for downgrades).
 
 ### Agent verification rules (all must pass or the update is rejected and reported as `failed`)
 

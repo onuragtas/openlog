@@ -2,7 +2,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { saveFleetPolicy, type FleetChannel, type FleetMode, type FleetPolicy, type FleetPolicyInput, type FleetTarget, type MaintenanceWindow } from "@/api/fleet";
+import {
+  saveFleetPolicy,
+  type FleetChannel,
+  type FleetMode,
+  type FleetPHPAgentMode,
+  type FleetPolicy,
+  type FleetPolicyInput,
+  type FleetTarget,
+  type MaintenanceWindow,
+} from "@/api/fleet";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +29,26 @@ interface FormState {
   soak: string;
   haltPct: string;
   windows: MaintenanceWindow[];
+  phpMode: FleetPHPAgentMode;
+  phpVersion: string;
+  phpReload: "none" | "graceful";
+  phpExclude: string;
 }
+
+const PHP_MODES: FleetPHPAgentMode[] = ["off", "manual", "auto"];
+
+const excludeLines = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
 
 function toForm(p: FleetPolicy): FormState {
   return {
+    phpMode: p.php_agent.mode,
+    phpVersion: p.php_agent.version,
+    phpReload: p.php_agent.reload,
+    phpExclude: p.php_agent.exclude_bins.join("\n"),
     mode: p.mode,
     channel: p.channel,
     target: p.target,
@@ -56,7 +81,9 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
   const haltOk = form.haltPct.trim() !== "" && Number.isFinite(halt) && halt >= 0 && halt <= 100;
   const pinnedOk = form.target !== "pinned" || isVersion(form.pinned);
   const windowErrors = form.windows.map((w) => windowError(w));
-  const valid = !waves.error && soakOk && haltOk && pinnedOk && windowErrors.every((e) => e === null);
+  const phpVersionOk = form.phpVersion.trim() === "agent" || isVersion(form.phpVersion);
+  const phpExcludeOk = excludeLines(form.phpExclude).length <= 50;
+  const valid = !waves.error && soakOk && haltOk && pinnedOk && windowErrors.every((e) => e === null) && phpVersionOk && phpExcludeOk;
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(policy));
 
   const save = useMutation({
@@ -80,6 +107,7 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
       wave_soak_minutes: soak,
       halt_failure_rate: halt / 100,
       maintenance_windows: form.windows,
+      php_agent: { mode: form.phpMode, version: form.phpVersion.trim(), reload: form.phpReload, exclude_bins: excludeLines(form.phpExclude) },
     });
   };
 
@@ -278,6 +306,66 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
               <Plus aria-hidden="true" />
               {t("fleet.policy.addWindow")}
             </Button>
+          </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-3 border-t pt-4" aria-describedby={`${id}-php-desc`}>
+          <legend className="text-sm font-medium">{t("fleet.policy.php.title")}</legend>
+          <p id={`${id}-php-desc`} className="text-xs text-muted-foreground">
+            {t("fleet.policy.php.description")}
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-php-mode`}>{t("fleet.policy.php.mode")}</Label>
+              <NativeSelect id={`${id}-php-mode`} value={form.phpMode} aria-describedby={`${id}-php-mode-help`} onChange={(e) => set("phpMode", e.target.value as FleetPHPAgentMode)}>
+                {PHP_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {t(`fleet.policy.php.modes.${m}`)}
+                  </option>
+                ))}
+              </NativeSelect>
+              <p id={`${id}-php-mode-help`} className="text-xs text-muted-foreground">
+                {t(`fleet.policy.php.modeHelp.${form.phpMode}`)}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-php-version`}>{t("fleet.policy.php.version")}</Label>
+              <Input
+                id={`${id}-php-version`}
+                value={form.phpVersion}
+                placeholder="agent"
+                aria-invalid={!phpVersionOk}
+                aria-describedby={`${id}-php-version-help`}
+                onChange={(e) => set("phpVersion", e.target.value)}
+              />
+              <p id={`${id}-php-version-help`} className={cn("text-xs", phpVersionOk ? "text-muted-foreground" : "text-destructive-text")}>
+                {phpVersionOk ? t("fleet.policy.php.versionHelp") : t("fleet.policy.php.versionError")}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-php-reload`}>{t("fleet.policy.php.reload")}</Label>
+              <NativeSelect id={`${id}-php-reload`} value={form.phpReload} onChange={(e) => set("phpReload", e.target.value as FormState["phpReload"])}>
+                <option value="none">{t("fleet.policy.php.reloads.none")}</option>
+                <option value="graceful">{t("fleet.policy.php.reloads.graceful")}</option>
+              </NativeSelect>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-php-exclude`}>{t("fleet.policy.php.excludeBins")}</Label>
+            <textarea
+              id={`${id}-php-exclude`}
+              rows={2}
+              value={form.phpExclude}
+              placeholder="/usr/bin/php7.4"
+              spellCheck={false}
+              aria-invalid={!phpExcludeOk}
+              aria-describedby={`${id}-php-exclude-help`}
+              onChange={(e) => set("phpExclude", e.target.value)}
+              className="w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 aria-invalid:border-destructive"
+            />
+            <p id={`${id}-php-exclude-help`} className={cn("text-xs", phpExcludeOk ? "text-muted-foreground" : "text-destructive-text")}>
+              {phpExcludeOk ? t("fleet.policy.php.excludeBinsHelp") : t("fleet.policy.php.excludeBinsError")}
+            </p>
           </div>
         </fieldset>
       </fieldset>

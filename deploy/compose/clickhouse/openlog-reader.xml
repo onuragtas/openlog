@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!--
+  Read-only ClickHouse user of openlog-api / openlog-alert tenant queries (D-047), mounted into
+  /etc/clickhouse-server/users.d/. The password comes from OPENLOG_CLICKHOUSE_READ_PASSWORD in the
+  clickhouse container; openlog uses OPENLOG_CLICKHOUSE_READ_USER=openlog_reader.
+    * readonly=2: SELECT only, but the per-query limits (max_memory_usage, ...) may be set by openlog
+    * grants: SELECT on the openlog database only (no system tables, no other databases)
+  openlog-migrate, the processor, APM edge linking and alert evaluation history keep the writer user.
+-->
+<clickhouse>
+    <profiles>
+        <openlog_readonly>
+            <readonly>2</readonly>
+            <allow_ddl>0</allow_ddl>
+            <allow_introspection_functions>0</allow_introspection_functions>
+        </openlog_readonly>
+    </profiles>
+
+    <users>
+        <openlog_reader>
+            <password from_env="OPENLOG_CLICKHOUSE_READ_PASSWORD"/>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>openlog_readonly</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT SELECT ON openlog.*</query>
+            </grants>
+        </openlog_reader>
+    </users>
+</clickhouse>

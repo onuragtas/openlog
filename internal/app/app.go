@@ -19,7 +19,6 @@ import (
 	"github.com/onuragtas/openlog/internal/admin"
 	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/api"
-	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
@@ -29,6 +28,7 @@ import (
 	"github.com/onuragtas/openlog/internal/queue"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
 	"github.com/onuragtas/openlog/internal/store/postgres"
+	"github.com/onuragtas/openlog/internal/tailsampling"
 	"github.com/onuragtas/openlog/internal/tenant"
 	"github.com/onuragtas/openlog/web"
 )
@@ -128,7 +128,7 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 		pgPool = pool
 		cached := tenant.NewCached(postgres.NewStore(pool), tenant.CacheOptions{
 			TTL: cfg.AuthCache.TTL, NegativeTTL: cfg.AuthCache.NegativeTTL, MaxStale: cfg.AuthCache.MaxStale,
-			Registerer: adm.Registry(), Log: log,
+			Hasher: KeyHasher(cfg), Registerer: adm.Registry(), Log: log,
 		})
 		done := make(chan struct{})
 		defer func() { <-done }() // final last_used_at flush before the pool closes
@@ -149,6 +149,9 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 	go topics.Run(ctx)
 	adm.AddCheck("kafka_topics", topics.Check)
 	svc := ingest.New(cfg.Ingest, cfg.KafkaTopicPrefix, res, prod, log, adm.Registry())
+	svc.SetSplitTraces(cfg.TailSampling.Enabled) // one record per trace id for openlog-sampler (D-075)
+	// SaaS mode quota enforcement (usage.go, D-080).
+	startIngestQuota(ctx, cfg, pgPool, svc, adm.Registry(), log)
 	// Agent sync + release mirror (internal/fleet); flushes queued reports before the pool closes.
 	defer startFleetIngest(ctx, cfg, pgPool, keys, res, svc, adm.Registry(), log)()
 	err = svc.Run(ctx, ShutdownTimeout)
@@ -191,17 +194,20 @@ func RunProcessor(ctx context.Context, cfg config.Config, adm *admin.Server, log
 	if err != nil {
 		return err
 	}
-	cl, err := queue.NewConsumerClient(cfg.KafkaBrokers, cfg.Processor.Group, cfg.KafkaTopicPrefix, log, append(kopts, events.KafkaOpts()...)...)
+	// With tail sampling the processor reads the sampled traces topic instead of the raw one (D-075).
+	consumeTopics := queue.ProcessorTopics(cfg.KafkaTopicPrefix, cfg.TailSampling.Enabled)
+	cl, err := queue.NewConsumerClientTopics(cfg.KafkaBrokers, cfg.Processor.Group, consumeTopics, log, append(kopts, events.KafkaOpts()...)...)
 	if err != nil {
 		return err
 	}
 	adm.AddCheck("kafka_consumer", cl.Ping)
 	defer cl.Close() // leaves the consumer group
-	topics := queue.NewTopicWatcher(cl, queue.Topics(cfg.KafkaTopicPrefix), log)
+	topics := queue.NewTopicWatcher(cl, consumeTopics, log)
 	go topics.Run(ctx)
 	adm.AddCheck("kafka_topics", topics.Check)
 	p := processor.New(cfg.Processor, cfg.KafkaTopicPrefix, cl, writer, log, adm.Registry())
 	p.SetPartitionEvents(events)
+	p.SetRelink(processor.RelinkOptions{Enabled: cfg.APM.RelinkEnabled, After: cfg.APM.RelinkAfter, MaxAge: cfg.APM.RelinkMaxAge}) // apm.md §6
 	go p.RunLagMonitor(ctx, 15*time.Second, func(ctx context.Context) ([]queue.PartitionLag, error) {
 		return queue.MemberLag(ctx, cl, cfg.Processor.Group)
 	})
@@ -240,12 +246,16 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		adm.AddCheck("postgres", pool.Ping)
 		pgPool = pool
 		store := postgres.NewStore(pool)
-		svc = auth.NewService(store, auth.Config{
+		acfg := auth.Config{
 			SessionTTL: a.SessionTTL, SessionIdleTimeout: a.SessionIdleTimeout,
 			CookieSecure: a.CookieSecure, CookieDomain: a.CookieDomain, SignupEnabled: a.SignupEnabled,
 			LoginMaxFailures: a.LoginMaxFailures, LoginWindow: a.LoginWindow, InvitationTTL: a.InvitationTTL,
 			TrustedProxies: proxies,
-		}, log)
+		}
+		if err := applyAccountOptions(&acfg, cfg, log); err != nil { // accounts.go
+			return err
+		}
+		svc = auth.NewService(store, acfg, log)
 		if !a.CookieSecure {
 			log.Warn("OPENLOG_COOKIE_SECURE=false: session cookies are sent over plain HTTP (development only)")
 		}
@@ -257,21 +267,39 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		return err
 	}
 	defer conn.Close()
-	db := query.New(conn, cfg.ClickHouseDatabase, cfg.API.QueryTimeout)
+	db, closeDB, err := openQueryDB(ctx, cfg, conn, "api", cfg.API.QueryTimeout, log)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
 	adm.AddCheck("clickhouse", db.Ping)
 	srv := api.New(cfg.API, db, authn, log, adm.Registry())
 	if svc != nil {
 		srv.SetAccounts(svc)
+		startSSO(ctx, cfg, pgPool, svc, srv, log) // sso.go (D-077, D-078)
 	}
 	var apmSettings apm.SettingsStore // nil in static mode: default Apdex T
 	if pgPool != nil {
 		apmSettings = apm.PGSettings{Pool: pgPool}
 	}
 	srv.SetAPM(apmSettings, cfg.APM.DefaultApdexT)
+	if pgPool != nil {
+		srv.SetAPMErrorStates(apm.PGErrorStates{Pool: pgPool}) // error inbox workflow (apm.md §3.4)
+	}
 	if err := startAlertAPI(cfg, pgPool, srv, apmSettings, log); err != nil { // alert.go
 		return err
 	}
 	if err := startIntegrationSettingsAPI(cfg, pgPool, srv, log); err != nil { // fleet.go
+		return err
+	}
+	startDashboardAPI(pgPool, srv) // dashboards.go
+	if pgPool != nil {             // tail sampling policies (D-075); static mode serves the read-only default
+		srv.SetTailSampling(tailsampling.PGStore{Pool: pgPool}, cfg.TailSampling.Enabled)
+	} else {
+		srv.SetTailSampling(nil, cfg.TailSampling.Enabled)
+	}
+	usageTasks, err := startUsageAPI(ctx, cfg, pgPool, conn, db, srv, adm.Registry(), log) // usage.go (D-079..D-081)
+	if err != nil {
 		return err
 	}
 	var apmLinker func(ctx context.Context)
@@ -280,10 +308,12 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 			Database: cfg.ClickHouseDatabase, Cluster: cfg.ClickHouseCluster, Conn: clickhouse.OptionsFromConfig(cfg.Common),
 			Interval: cfg.APM.LinkInterval, Lookback: cfg.APM.LinkLookback, Delay: cfg.APM.LinkDelay,
 			CatchUp: cfg.APM.LinkCatchUp, CatchUpAt: cfg.APM.CatchUpOffset(), CatchUpBatch: cfg.APM.LinkCatchUpBatch,
+			Relink: cfg.APM.RelinkEnabled, RelinkInterval: cfg.APM.RelinkInterval, RelinkMaxMinutes: cfg.APM.RelinkMaxMinutes,
+			RelinkMaxAge: cfg.APM.RelinkMaxAge,
 		}, log.With("job", "apm-link"), adm.Registry()).Run
 	}
 	fleetController := startFleetAPI(ctx, cfg, pgPool, srv, adm.Registry(), log)
-	startLeaderTasks(ctx, cfg, pgPool, srv, log, fleetController, apmLinker)
+	startLeaderTasks(ctx, cfg, pgPool, srv, log, fleetController, apmLinker, usageTasks...)
 	if cfg.API.UIEnabled {
 		srv.SetUI(web.Handler(web.Dist()))
 		log.Info("web UI enabled", "path", "/")

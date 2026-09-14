@@ -59,6 +59,8 @@ type caseFile struct {
 	Expect     []struct {
 		RuleID    string   `yaml:"rule_id"`
 		Instance  string   `yaml:"instance"`
+		Display   *string  `yaml:"display_instance"` // nil: not checked; "" must be omitted
+		Command   string   `yaml:"command"`
 		Version   string   `yaml:"version"`
 		MatchedBy []string `yaml:"matched_by"`
 		PIDs      []int    `yaml:"pids"`
@@ -143,6 +145,12 @@ func TestRuleCases(t *testing.T) {
 				if s == nil {
 					t.Errorf("expected %s (instance %q) not discovered; got %v", e.RuleID, e.Instance, keys(got))
 					continue
+				}
+				if e.Display != nil && s.DisplayInstance != *e.Display {
+					t.Errorf("%s: display_instance = %q, want %q", s.Key(), s.DisplayInstance, *e.Display)
+				}
+				if e.Command != "" && s.Command != e.Command {
+					t.Errorf("%s: command = %q, want %q", s.Key(), s.Command, e.Command)
 				}
 				if e.Version != "" && s.Version != e.Version {
 					t.Errorf("%s: version = %q, want %q", s.Key(), s.Version, e.Version)

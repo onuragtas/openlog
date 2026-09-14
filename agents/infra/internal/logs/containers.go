@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
@@ -230,7 +232,7 @@ func (m *Manager) selectContainers(cs []containers.Container) []containers.Conta
 // containerMode decides how a container's log is read: "file", "api" or "" (not readable).
 func (m *Manager) containerMode(c *containers.Container, fromAPI bool) string {
 	fileOK := func() bool {
-		if c.LogPath == "" || (c.LogDriver != "" && c.LogDriver != "json-file") {
+		if c.LogPath == "" || (c.LogDriver != "" && c.LogDriver != "json-file" && c.LogDriver != containers.LogDriverCRI) {
 			return false
 		}
 		f, err := os.Open(m.fs.Path(c.LogPath))
@@ -240,8 +242,9 @@ func (m *Manager) containerMode(c *containers.Container, fromAPI bool) string {
 		f.Close()
 		return true
 	}
-	// Tty decides the stream framing; it is known once the container was inspected.
-	apiOK := fromAPI && c.Inspected()
+	// Tty decides the stream framing; it is known once the container was inspected. CRI runtimes
+	// have no log stream endpoint: their logs are only read from the file.
+	apiOK := fromAPI && c.Inspected() && c.LogDriver != containers.LogDriverCRI
 	switch m.cfg.Containers.Source {
 	case config.ContainerLogSourceFile:
 		if fileOK() {
@@ -379,7 +382,8 @@ func (m *Manager) containerSources(now time.Time) []*source {
 			} else if m.cfg.StartAt == "end" {
 				since = m.started
 			}
-			srcs = append(srcs, &source{glob: c.LogPath, ctr: cl, ctrState: c.State, ctrFinished: c.FinishedAt, since: since})
+			srcs = append(srcs, &source{glob: c.LogPath, ctr: cl, ctrState: c.State, ctrFinished: c.FinishedAt, since: since,
+				multiline: m.containerMultiline(&c), ctrCRI: c.LogDriver == containers.LogDriverCRI})
 		case config.ContainerLogSourceAPI:
 			wantAPI[c.ID] = true
 			m.ensureStream(&c, cl, now)
@@ -480,12 +484,13 @@ func (m *Manager) ensureStream(c *containers.Container, cl *ctrLog, now time.Tim
 		}
 	}
 	m.streams[c.ID] = st
-	go m.runStream(ctx, st, c.ID, c.Tty, cl.res, since)
+	go m.runStream(ctx, st, c.ID, c.Tty, cl.res, since, m.containerMultiline(c))
 }
 
 // runStream reads one container's log stream into m.ctrEntries (rate limited per container;
-// a full channel blocks the stream, which keeps unread data in Docker).
-func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty bool, res *resourcepb.Resource, since time.Time) {
+// a full channel blocks the stream, which keeps unread data in Docker). With a multiline pattern
+// lines are grouped per stream; a ticker flushes records idle for multilineFlush.
+func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty bool, res *resourcepb.Resource, since time.Time, multiline *regexp.Regexp) {
 	defer close(st.done)
 	uri := "/containers/" + id + "/logs?follow=1&stdout=1&stderr=1&timestamps=1&since=" + containers.SinceParam(since)
 	body, err := m.ctrSrc.Stream(ctx, uri)
@@ -498,10 +503,8 @@ func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty b
 	defer body.Close()
 	rate := float64(m.cfg.Containers.RateLimitLines)
 	tokens, refill := rate, time.Now()
-	send := func(stream int, line []byte, ts time.Time, truncated bool) bool {
-		if !since.IsZero() && !ts.IsZero() && ts.Before(since) {
-			return true // engines round since down to seconds
-		}
+	// send hands a record to the batch; ts is the time of its first line, last the stream position.
+	send := func(stream int, line []byte, ts, last time.Time, truncated bool) bool {
 		if rate > 0 {
 			now := time.Now()
 			tokens, refill = min(rate, tokens+now.Sub(refill).Seconds()*rate), now
@@ -517,11 +520,47 @@ func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty b
 		}
 		rec, n := m.containerRecord(line, streamName(stream), ts, truncated, time.Now())
 		select {
-		case m.ctrEntries <- containerEntry{id: id, res: res, rec: rec, n: n, ts: ts}:
+		case m.ctrEntries <- containerEntry{id: id, res: res, rec: rec, n: n, ts: last}:
 			return true
 		case <-ctx.Done():
 			return false
 		}
+	}
+	var mu sync.Mutex // guards g and send (the flusher goroutine emits too)
+	g := &multilineGrouper{re: multiline, maxBytes: m.cfg.MaxLineBytes}
+	lineEmit := func(stream int, line []byte, ts time.Time, truncated bool) bool {
+		if !since.IsZero() && !ts.IsZero() && ts.Before(since) {
+			return true // engines round since down to seconds
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		return g.push(stream, line, ts, 0, truncated, time.Now(), send)
+	}
+	if multiline != nil {
+		stop := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tick := time.NewTicker(multilineFlush / 2)
+			defer tick.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ctx.Done():
+					return
+				case now := <-tick.C:
+					mu.Lock()
+					g.flushIdle(now, multilineFlush, send)
+					mu.Unlock()
+				}
+			}
+		}()
+		defer func() {
+			close(stop)
+			wg.Wait()
+		}()
 	}
 	sp := &lineSplitter{raw: tty, maxBytes: m.cfg.MaxLineBytes}
 	fr := containers.NewFrameReader(body, tty)
@@ -532,11 +571,14 @@ func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty b
 				st.err = err
 			}
 			if ctx.Err() == nil {
-				sp.flush(send)
+				sp.flush(lineEmit)
+				mu.Lock()
+				g.flushAll(send)
+				mu.Unlock()
 			}
 			return
 		}
-		if !sp.push(stream, p, send) {
+		if !sp.push(stream, p, lineEmit) {
 			return
 		}
 	}
@@ -581,55 +623,87 @@ func (m *Manager) stopStreams() {
 	}
 }
 
-// handleContainerLine parses one json-file line of a container log (partial messages are joined).
+// handleContainerLine parses one json-file (or CRI format) line of a container log; partial messages are joined.
 func (m *Manager) handleContainerLine(t *tailer, line []byte, start int64, truncated bool) {
-	e, ok := parseDockerJSON(line)
-	if !ok {
-		m.emitContainerFileRecord(t, line, "", time.Time{}, truncated)
-		return
+	var ts time.Time
+	var stream string
+	var msg []byte
+	complete := true
+	if t.src.ctrCRI {
+		var partial, ok bool
+		if ts, stream, partial, msg, ok = parseCRILine(line); !ok {
+			m.containerLine(t, 0, append([]byte(nil), line...), time.Time{}, start, truncated)
+			return
+		}
+		complete = !partial
+	} else {
+		e, ok := parseDockerJSON(line)
+		if !ok {
+			m.containerLine(t, 0, append([]byte(nil), line...), time.Time{}, start, truncated)
+			return
+		}
+		ts, stream, complete = e.Time, e.Stream, strings.HasSuffix(e.Log, "\n")
+		msg = []byte(strings.TrimSuffix(e.Log, "\n"))
 	}
-	idx := streamIndex(e.Stream)
+	idx := streamIndex(stream)
 	p := &t.dpart[idx]
 	if !p.started {
-		if !t.since.IsZero() && e.Time.Before(t.since) {
+		if !t.since.IsZero() && ts.Before(t.since) {
 			m.batch.files[t.key] = fileCheckpoint{gen: t.gen, offset: t.commitOffset()}
 			return // before logs.start_at=end or already read
 		}
-		p.start, p.ts = start, e.Time
+		p.start, p.ts = start, ts
 	}
-	msg := e.Log
-	last := strings.HasSuffix(msg, "\n")
-	p.add([]byte(strings.TrimSuffix(msg, "\n")), m.cfg.MaxLineBytes)
+	p.add(msg, m.cfg.MaxLineBytes)
 	p.truncated = p.truncated || truncated
-	if last {
+	if complete {
 		m.completeContainerPart(t, idx)
 	}
 }
 
 func (m *Manager) completeContainerPart(t *tailer, idx int) {
 	p := &t.dpart[idx]
-	body := append([]byte(nil), p.buf...)
-	ts, truncated := p.ts, p.truncated
+	body := bytes.TrimSuffix(append([]byte(nil), p.buf...), []byte{'\r'})
+	ts, start, truncated := p.ts, p.start, p.truncated
 	p.reset()
-	m.emitContainerFileRecord(t, []byte(strings.TrimSuffix(string(body), "\r")), streamName(idx), ts, truncated)
+	m.containerLine(t, idx, body, ts, start, truncated)
 }
 
-// flushContainerParts emits unterminated messages (idle file, close).
+// containerLine passes a complete line (owned by the callee) through multiline grouping.
+func (m *Manager) containerLine(t *tailer, idx int, body []byte, ts time.Time, start int64, truncated bool) {
+	t.mgroup.re, t.mgroup.maxBytes = t.src.multiline, m.cfg.MaxLineBytes
+	t.mgroup.push(idx, body, ts, start, truncated, m.now(), m.fileGroupEmit(t))
+}
+
+func (m *Manager) fileGroupEmit(t *tailer) groupEmitFunc {
+	return func(stream int, body []byte, ts, last time.Time, truncated bool) bool {
+		m.emitContainerFileRecord(t, body, streamName(stream), ts, last, truncated)
+		return true
+	}
+}
+
+// flushContainerParts emits unterminated messages and pending multiline records (idle file, close).
 func (m *Manager) flushContainerParts(t *tailer) {
 	for i := range t.dpart {
 		if t.dpart[i].started {
 			m.completeContainerPart(t, i)
 		}
 	}
+	t.mgroup.flushAll(m.fileGroupEmit(t))
 }
 
-func (m *Manager) emitContainerFileRecord(t *tailer, body []byte, stream string, ts time.Time, truncated bool) {
+// flushContainerGroups emits multiline records of streams idle for multilineFlush.
+func (m *Manager) flushContainerGroups(t *tailer, now time.Time) {
+	t.mgroup.flushIdle(now, multilineFlush, m.fileGroupEmit(t))
+}
+
+func (m *Manager) emitContainerFileRecord(t *tailer, body []byte, stream string, ts, last time.Time, truncated bool) {
 	rec, n := m.containerRecord(body, stream, ts, truncated, m.now())
 	if m.rateLimit(t) > 0 {
 		t.tokens--
 	}
-	if cl := t.src.ctr; ts.After(cl.lastTS) {
-		cl.lastTS = ts
+	if cl := t.src.ctr; last.After(cl.lastTS) {
+		cl.lastTS = last
 	}
 	m.add(t.src.ctr.res, rec, n)
 	m.batch.files[t.key] = fileCheckpoint{gen: t.gen, offset: t.commitOffset()}

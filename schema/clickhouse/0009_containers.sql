@@ -41,7 +41,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS openlog.containers_mv ON CLUSTER '{cluste
 TO openlog.containers_local
 AS SELECT
     tenant_id,
-    host_id,
+    hid AS host_id,
     cid AS container_id,
     min(ts) AS first_seen,
     max(ts) AS last_seen,
@@ -62,7 +62,7 @@ AS SELECT
     argMaxState(attrs, status_ts) AS attributes
 FROM
 (
-    SELECT tenant_id, toString(host_id) AS host_id, lower(attributes['container.id']) AS cid, toString(host_name) AS hname,
+    SELECT tenant_id, toString(host_id) AS hid, lower(attributes['container.id']) AS cid, toString(host_name) AS hname,
            value, timestamp AS ts, CAST(attributes, 'Map(String, String)') AS attrs,
            if(metric_name = 'openlog.container.status', timestamp, toDateTime64(0, 9, 'UTC')) AS status_ts,
            if(metric_name = 'container.restarts', timestamp, toDateTime64(0, 9, 'UTC')) AS restarts_ts
@@ -70,7 +70,7 @@ FROM
     -- container.cpu.time: containers of agents that do not send openlog.container.status yet
     WHERE metric_name IN ('openlog.container.status', 'container.restarts', 'container.cpu.time') AND attributes['container.id'] != ''
 )
-GROUP BY tenant_id, host_id, container_id;
+GROUP BY tenant_id, hid, cid;
 
 CREATE TABLE IF NOT EXISTS openlog.containers ON CLUSTER '{cluster}'
 AS openlog.containers_local
@@ -114,7 +114,7 @@ FROM
     FROM openlog.spans_local
     WHERE resource_attributes['container.id'] != '' AND service_name != ''
 )
-GROUP BY tenant_id, container_id, service_name, service_namespace, deployment_environment;
+GROUP BY tenant_id, cid, service_name, service_namespace, deployment_environment;
 
 CREATE TABLE IF NOT EXISTS openlog.apm_service_containers ON CLUSTER '{cluster}'
 AS openlog.apm_service_containers_local

@@ -1,0 +1,130 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openlog-agent"
+dynamic = ["version"]
+description = "openlog APM agent for Python: an OpenTelemetry distribution sending traces, metrics and logs over OTLP"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "openlog contributors" }]
+keywords = ["openlog", "opentelemetry", "apm", "tracing", "observability", "django", "flask", "fastapi"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: Django",
+  "Framework :: FastAPI",
+  "Framework :: Flask",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Monitoring",
+  "Typing :: Typed",
+]
+# OpenTelemetry packages are pinned exactly (D-073). OpenTelemetry Python 1.42 / contrib 0.63 dropped Python 3.9, so
+# 3.9 installs the last release line that supports it. Keep both lines in sync with tests/requirements-*.txt.
+dependencies = [
+  # Python >= 3.10
+  "opentelemetry-api==1.44.0; python_version >= '3.10'",
+  "opentelemetry-sdk==1.44.0; python_version >= '3.10'",
+  "opentelemetry-exporter-otlp-proto-http==1.44.0; python_version >= '3.10'",
+  "opentelemetry-instrumentation==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-aiohttp-client==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-asyncpg==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-celery==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-django==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-fastapi==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-flask==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-grpc==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-httpx==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-logging==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-mysqlclient==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-psycopg==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-psycopg2==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-pymysql==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-redis==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-requests==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-sqlalchemy==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-starlette==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-urllib==0.65b0; python_version >= '3.10'",
+  "opentelemetry-instrumentation-urllib3==0.65b0; python_version >= '3.10'",
+  # Python 3.9
+  "opentelemetry-api==1.41.1; python_version < '3.10'",
+  "opentelemetry-sdk==1.41.1; python_version < '3.10'",
+  "opentelemetry-exporter-otlp-proto-http==1.41.1; python_version < '3.10'",
+  "opentelemetry-instrumentation==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-aiohttp-client==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-asyncpg==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-celery==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-django==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-fastapi==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-flask==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-grpc==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-httpx==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-logging==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-mysqlclient==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-psycopg==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-psycopg2==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-pymysql==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-redis==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-requests==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-sqlalchemy==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-starlette==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-urllib==0.62b1; python_version < '3.10'",
+  "opentelemetry-instrumentation-urllib3==0.62b1; python_version < '3.10'",
+]
+
+[project.optional-dependencies]
+# OPENLOG_PROTOCOL=grpc
+grpc = [
+  "opentelemetry-exporter-otlp-proto-grpc==1.44.0; python_version >= '3.10'",
+  "opentelemetry-exporter-otlp-proto-grpc==1.41.1; python_version < '3.10'",
+]
+
+[project.urls]
+Homepage = "https://github.com/onuragtas/openlog"
+Documentation = "https://github.com/onuragtas/openlog/tree/main/agents/python#readme"
+Source = "https://github.com/onuragtas/openlog/tree/main/agents/python"
+Issues = "https://github.com/onuragtas/openlog/issues"
+
+[project.scripts]
+openlog-instrument = "openlog_agent.cli:main"
+
+[project.entry-points.opentelemetry_distro]
+openlog = "openlog_agent.distro:OpenlogDistro"
+
+[project.entry-points.opentelemetry_configurator]
+openlog = "openlog_agent.distro:OpenlogConfigurator"
+
+[tool.hatch.version]
+path = "src/openlog_agent/version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openlog_agent"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/openlog_agent", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "UP006", "UP007", "UP035", "UP045", "B010"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E741"]

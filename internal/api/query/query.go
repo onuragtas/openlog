@@ -8,6 +8,7 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -18,6 +19,8 @@ import (
 
 	ch "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+
+	"github.com/onuragtas/openlog/internal/config"
 )
 
 // Table is a readable table. Its field is unexported so handlers can only use
@@ -46,10 +49,22 @@ var (
 	ApmServices       = Table{"apm_services"}
 	ApmServiceHosts   = Table{"apm_service_hosts"}
 
+	// APM GA (schema 0035_apm_ga, apm.md §3.3, §12): error group occurrences per dimension and spans per
+	// service.version per minute; aggregating tables, always re-aggregate with GROUP BY.
+	ApmErrorGroupDims    = Table{"apm_error_group_dims"}
+	ApmServiceVersions1m = Table{"apm_service_versions_1m"}
+
 	// Containers and service <-> container links (semantic-conventions §2, apm.md §1); aggregating
 	// tables, always re-aggregate with GROUP BY.
 	Containers           = Table{"containers"}
 	ApmServiceContainers = Table{"apm_service_containers"}
+
+	// Kubernetes entities (schema 0040–0042, semantic-conventions §7.6); aggregating tables, always
+	// re-aggregate with GROUP BY.
+	K8sClusters  = Table{"k8s_clusters"}
+	K8sNodes     = Table{"k8s_nodes"}
+	K8sWorkloads = Table{"k8s_workloads"}
+	K8sPods      = Table{"k8s_pods"}
 
 	// AlertEvaluations holds alert evaluation summaries (docs/contracts/alerting.md §3.6).
 	AlertEvaluations = Table{"alert_evaluations"}
@@ -62,9 +77,11 @@ var ErrInvalid = errors.New("invalid query")
 
 // DB wraps a ClickHouse connection.
 type DB struct {
-	conn     driver.Conn
-	database string
-	settings ch.Settings
+	conn        driver.Conn
+	database    string
+	timeoutSecs int
+	component   string
+	limits      func(tenant string) config.QueryLimits
 }
 
 // New creates a DB. queryTimeout sets max_execution_time for every query.
@@ -73,8 +90,98 @@ func New(conn driver.Conn, database string, queryTimeout time.Duration) *DB {
 	if secs < 1 {
 		secs = 1
 	}
-	return &DB{conn: conn, database: database, settings: ch.Settings{"max_execution_time": secs}}
+	return &DB{conn: conn, database: database, timeoutSecs: secs}
 }
+
+// SetLimits applies per-tenant limits (OPENLOG_QUERY_*, D-047) to every query and names the component
+// ("api", "alert") in log_comment. Call before serving.
+func (db *DB) SetLimits(component string, q config.Query) {
+	db.component = component
+	db.limits = q.Limits
+}
+
+// SetLimitsFunc is SetLimits with a custom per-tenant lookup (plan query limits, internal/app usage.go).
+func (db *DB) SetLimitsFunc(component string, limits func(tenant string) config.QueryLimits) {
+	db.component = component
+	db.limits = limits
+}
+
+// Settings returns the ClickHouse settings of every query of tenant: max_execution_time, the tenant's
+// limits (only those > 0) and log_comment {"component","tenant_id"} for system.query_log.
+func (db *DB) Settings(tenant string) ch.Settings {
+	s := ch.Settings{"max_execution_time": db.timeoutSecs}
+	if db.limits != nil {
+		l := db.limits(tenant)
+		for name, v := range map[string]int64{"max_memory_usage": l.MaxMemoryUsage, "max_rows_to_read": l.MaxRowsToRead, "max_bytes_to_read": l.MaxBytesToRead} {
+			if v > 0 {
+				s[name] = v
+			}
+		}
+	}
+	comment, _ := json.Marshal(map[string]string{"component": db.component, "tenant_id": tenant})
+	s["log_comment"] = string(comment)
+	return s
+}
+
+// LimitError reports a query stopped by a ClickHouse limit or quota.
+type LimitError struct {
+	// Limit names what was exceeded: max_memory_usage, max_rows_to_read, max_bytes_to_read, quota,
+	// max_concurrent_queries or server_memory.
+	Limit string
+	// Retryable is true for limits that depend on load (quota, concurrency, server memory), false when
+	// the query itself is too expensive.
+	Retryable bool
+	Err       error
+}
+
+func (e *LimitError) Error() string {
+	return "query limit exceeded (" + e.Limit + "): " + e.Err.Error()
+}
+func (e *LimitError) Unwrap() error { return e.Err }
+
+// limitCodes maps ClickHouse error codes to limits.
+var limitCodes = map[int32]LimitError{
+	158: {Limit: "max_rows_to_read"},                        // TOO_MANY_ROWS
+	201: {Limit: "quota", Retryable: true},                  // QUOTA_EXCEEDED
+	202: {Limit: "max_concurrent_queries", Retryable: true}, // TOO_MANY_SIMULTANEOUS_QUERIES
+	241: {Limit: "max_memory_usage"},                        // MEMORY_LIMIT_EXCEEDED
+	307: {Limit: "max_bytes_to_read"},                       // TOO_MANY_BYTES
+	396: {Limit: "max_rows_to_read"},                        // TOO_MANY_ROWS_OR_BYTES
+}
+
+// AsLimitError reports whether err is (or wraps) a ClickHouse limit error.
+func AsLimitError(err error) (*LimitError, bool) {
+	var le *LimitError
+	if errors.As(err, &le) {
+		return le, true
+	}
+	var ex *ch.Exception
+	if !errors.As(err, &ex) {
+		return nil, false
+	}
+	l, ok := limitCodes[ex.Code]
+	if !ok {
+		return nil, false
+	}
+	if ex.Code == 241 && strings.Contains(ex.Message, "(total)") {
+		// The server as a whole is out of memory, not this query.
+		l = LimitError{Limit: "server_memory", Retryable: true}
+	}
+	l.Err = err
+	return &l, true
+}
+
+func classify(err error) error {
+	if le, ok := AsLimitError(err); ok {
+		return le
+	}
+	return err
+}
+
+// limitRows classifies errors that arrive while streaming a result.
+type limitRows struct{ driver.Rows }
+
+func (r limitRows) Err() error { return classify(r.Rows.Err()) }
 
 // Ping checks connectivity.
 func (db *DB) Ping(ctx context.Context) error { return db.conn.Ping(ctx) }
@@ -136,7 +243,7 @@ func (q *Select) fail(format string, args ...any) {
 // forbidden matches fragment content that could escape the tenant boundary:
 // references to tenant_id, other tables/databases, sub-queries, statement
 // terminators and comments.
-var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_services|apm_service_hosts|containers|apm_service_containers|alert_evaluations)(_local|_mv)?\b)`)
+var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_error_group_dims|apm_service_versions_1m|apm_services|apm_service_hosts|containers|apm_service_containers|k8s_clusters|k8s_nodes|k8s_workloads|k8s_pods|alert_evaluations)(_local|_mv)?\b)`)
 
 func (q *Select) check(frags ...string) bool {
 	for _, f := range frags {
@@ -355,8 +462,13 @@ func (s *Scope) Query(ctx context.Context, q *Select) (Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx = ch.Context(ctx, ch.WithParameters(ch.Parameters(params)), ch.WithSettings(s.db.settings))
-	return s.db.conn.Query(ctx, sql)
+	// quota_key = tenant: a ClickHouse quota keyed by client key counts each tenant separately.
+	ctx = ch.Context(ctx, ch.WithParameters(ch.Parameters(params)), ch.WithSettings(s.db.Settings(s.tenant)), ch.WithQuotaKey(s.tenant))
+	rows, err := s.db.conn.Query(ctx, sql)
+	if err != nil {
+		return nil, classify(err)
+	}
+	return limitRows{rows}, nil
 }
 
 // ParamNames returns the sorted parameter names of a built query (for tests/logging).

@@ -1,4 +1,4 @@
-export type UnitKind = "percent" | "bytes" | "bytesPerSec" | "number" | "ms";
+export type UnitKind = "percent" | "bytes" | "bytesPerSec" | "number" | "ms" | "s";
 
 const BYTE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 
@@ -30,6 +30,9 @@ export function formatValue(v: number | null | undefined, kind: UnitKind, locale
       return `${formatBytes(v)}/s`;
     case "ms":
       return Math.abs(v) >= 1000 ? `${formatNumber(v / 1000, locale)} s` : `${formatNumber(v, locale)} ms`;
+    case "s":
+      // seconds (e.g. OQL `duration`): sub-second values read better in ms
+      return v !== 0 && Math.abs(v) < 1 ? `${formatNumber(v * 1000, locale)} ms` : `${formatNumber(v, locale)} s`;
     default:
       return formatNumber(v, locale);
   }

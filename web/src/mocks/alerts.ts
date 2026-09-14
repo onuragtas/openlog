@@ -13,6 +13,10 @@ import type {
   AlertRuleInput,
   AlertRulePreview,
   AlertRuleTypeInfo,
+  AlertHolidayCalendar,
+  AlertMuteScheduleInput,
+  AlertTemplate,
+  AlertTemplateRenderInput,
 } from "@/api/alerts";
 import type { Role } from "@/api/roles";
 import { authenticate } from "./account";
@@ -36,6 +40,7 @@ interface MockState {
   deliveries: AlertDelivery[];
   channels: AlertChannel[];
   mutes: AlertMute[];
+  calendars: AlertHolidayCalendar[];
   seq: number;
 }
 
@@ -159,13 +164,17 @@ function seed(): MockState {
   ];
   const mutes: AlertMute[] = [
     { id: "m0000000-0000-4000-8000-000000000001", name: "db-1 maintenance", comment: "PostgreSQL major upgrade", starts_at: ago(3 * 3_600_000),
-      ends_at: formatTs(now + 2 * 3_600_000), rule_ids: [], matchers: [{ label: "host.name", op: "eq", value: "db-1" }], schedule: null, active: true,
+      ends_at: formatTs(now + 2 * 3_600_000), rule_ids: [], matchers: [{ label: "host.name", op: "eq", value: "db-1" }], schedule: null, upcoming: [], active: true,
       created_by_user_id: GRACE_ID, created_by_email: "grace@example.com", created_at: ago(4 * 3_600_000), updated_at: ago(4 * 3_600_000) },
     { id: "m0000000-0000-4000-8000-000000000002", name: "Weekend load test", comment: "", starts_at: ago(5 * 86_400_000), ends_at: ago(4 * 86_400_000),
-      rule_ids: [RULE.cpu], matchers: [], schedule: null, active: false, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
+      rule_ids: [RULE.cpu], matchers: [], schedule: null, upcoming: [], active: false, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
       created_at: ago(6 * 86_400_000), updated_at: ago(6 * 86_400_000) },
   ];
-  return { rules, incidents, events, deliveries, channels, mutes, seq: 100 };
+  const calendars: AlertHolidayCalendar[] = [
+    { id: "h0000000-0000-4000-8000-000000000001", name: "TR public holidays", description: "", dates: ["01-01", "04-23", "05-01", "05-19", "07-15", "08-30", "10-29"], mute_count: 0,
+      created_by_email: "admin@openlog.local", created_at: formatTs(now - 86_400_000), updated_at: formatTs(now - 86_400_000) },
+  ];
+  return { rules, incidents, events, deliveries, channels, mutes, calendars, seq: 100 };
 }
 
 let db = seed();
@@ -205,7 +214,10 @@ function validateRule(r: Partial<AlertRuleInput>): string | null {
   if (!r.name?.trim()) return "name: must be 1-200 characters";
   if (!r.type) return "type: must be one of metric_threshold, log_match, no_data, discovery, apm";
   const c = r.condition ?? {};
-  if ((r.type === "metric_threshold" || r.type === "log_match" || r.type === "apm") && (c.threshold === undefined || c.threshold === null)) return "condition.threshold: required";
+  const oql = (r.type as string) === "oql";
+  if ((r.type === "metric_threshold" || r.type === "log_match" || r.type === "apm" || oql) && (c.threshold === undefined || c.threshold === null)) return "condition.threshold: required";
+  if (oql && !c.query?.trim()) return "condition.query: required";
+  if (oql && (c.window_seconds ?? 0) < 60) return "condition.window_seconds: must be 60-21600";
   if (r.type === "metric_threshold" && !c.metric) return "condition.metric: required, at most 256 bytes";
   if (r.type === "apm" && !c.service_name) return "condition.service_name: required, at most 512 bytes";
   return null;
@@ -302,7 +314,7 @@ export function mockPreview(input: AlertRuleInput, hours: number, now = Date.now
     }
     return { key: `host.id=${h.id}`, labels: { "host.id": h.id, "host.name": h.name }, points, transitions, incidents };
   });
-  const hasOperator = input.type === "metric_threshold" || input.type === "log_match" || input.type === "apm";
+  const hasOperator = input.type === "metric_threshold" || input.type === "log_match" || input.type === "apm" || (input.type as string) === "oql";
   return {
     from: formatTs(from), to: formatTs(to), step_seconds: step / 1000, operator: hasOperator ? op : null, threshold, recovery_threshold: recovery,
     unit: input.type === "metric_threshold" && (c.metric ?? "").endsWith("utilization") ? "1" : input.type === "apm" ? "ms" : "", series, truncated: false, approximate: false,
@@ -325,11 +337,164 @@ const RULE_TYPES: AlertRuleTypeInfo[] = [
   { type: "no_data", available: true, reason: "" },
   { type: "discovery", available: true, reason: "" },
   { type: "apm", available: true, reason: "" },
+  { type: "apm_error", available: true, reason: "" },
+  // OQL rules (not in openapi.yaml's AlertRuleType enum yet)
+  { type: "oql" as AlertRuleTypeInfo["type"], available: true, reason: "" },
 ];
 
 const canChange = (role: Role, createdBy: string | null) => RANK[role] >= RANK.admin || createdBy === MOCK_USER_ID;
 
+// ---- templates, holiday calendars, schedule previews ----
+
+const lbl = (en: string, tr: string) => ({ en, tr });
+const P = {
+  host: { key: "host_id", kind: "host", required: false, default: "", label: lbl("Host (empty = all hosts)", "Host (boş = tüm hostlar)") },
+  hostName: { key: "host_name", kind: "text", required: false, default: "", label: lbl("Host name", "Host adı") },
+  discovery: { key: "discovery_id", kind: "text", required: false, default: "", label: lbl("Discovery rule id", "Keşif kuralı kimliği") },
+  instance: { key: "instance", kind: "instance", required: false, default: "", label: lbl("Instance", "Instance") },
+  window: { key: "window_seconds", kind: "duration", unit: "seconds", required: true, default: 300, min: 60, max: 21600, label: lbl("Window", "Pencere") },
+  service: { key: "service_name", kind: "service", required: true, default: "", label: lbl("Service", "Servis") },
+} as const satisfies Record<string, AlertTemplate["params"][number]>;
+
+export const MOCK_TEMPLATES: AlertTemplate[] = [
+  { id: "host_disk_full", category: "host", rule_type: "metric_threshold", severity: "critical", metric: "system.filesystem.utilization",
+    name: lbl("Disk almost full", "Disk dolmak üzere"), description: lbl("A filesystem is fuller than the threshold.", "Bir dosya sistemi eşikten daha dolu."),
+    params: [P.host, P.hostName, { key: "threshold", kind: "number", unit: "ratio", required: true, default: 0.9, min: 0.01, max: 1, label: lbl("Disk usage above", "Disk kullanımı şunun üstünde") }, P.window] },
+  { id: "container_restarts", category: "container", rule_type: "metric_threshold", severity: "warning", metric: "container.restarts",
+    name: lbl("Container restarting", "Konteyner yeniden başlıyor"), description: lbl("A container restarted within the window.", "Bir konteyner pencere içinde yeniden başladı."),
+    params: [P.host, P.hostName, { key: "restarts", kind: "number", unit: "count", required: true, default: 1, min: 1, max: 1000, label: lbl("Restarts at least", "En az yeniden başlatma") }, P.window] },
+  { id: "apm_error_rate", category: "apm", rule_type: "apm", severity: "critical",
+    name: lbl("High error rate", "Yüksek hata oranı"), description: lbl("The share of failed transactions is above the threshold.", "Hatalı transaction oranı eşiğin üstünde."),
+    params: [P.service, { key: "threshold", kind: "number", unit: "ratio", required: true, default: 0.05, min: 0.001, max: 1, label: lbl("Error rate above", "Hata oranı şunun üstünde") }, P.window] },
+  { id: "redis_memory_high", category: "integration", integration: "redis", rule_type: "metric_threshold", severity: "critical", metric: "redis.memory.used", reference_metric: "redis.maxmemory",
+    name: lbl("Redis memory near maxmemory", "Redis belleği maxmemory sınırına yakın"), description: lbl("Used memory is above the given share of maxmemory.", "Kullanılan bellek maxmemory'nin verilen oranının üstünde."),
+    params: [P.host, P.hostName, P.discovery, P.instance, { key: "ratio", kind: "number", unit: "ratio", required: true, default: 0.9, min: 0.01, max: 1, label: lbl("Share of maxmemory", "maxmemory oranı") }, P.window] },
+  { id: "redis_evicted_keys", category: "integration", integration: "redis", rule_type: "metric_threshold", severity: "warning", metric: "redis.keys.evicted",
+    name: lbl("Redis evicting keys", "Redis anahtar çıkarıyor"), description: lbl("Keys are evicted because maxmemory was reached.", "maxmemory sınırına ulaşıldığı için anahtarlar çıkarılıyor."),
+    params: [P.host, P.hostName, P.discovery, P.instance, { key: "threshold", kind: "number", unit: "per_second", required: true, default: 0, min: 0, max: 1e9, label: lbl("Evictions per second above", "Saniyede çıkarma şunun üstünde") }, P.window] },
+  { id: "mysql_replica_lag", category: "integration", integration: "mysql", rule_type: "metric_threshold", severity: "critical", metric: "mysql.replica.time_behind_source",
+    name: lbl("MySQL replication lag", "MySQL replikasyon gecikmesi"), description: lbl("The replica is behind its source by more than the threshold.", "Replika kaynağının eşikten daha fazla gerisinde."),
+    params: [P.host, P.hostName, P.discovery, P.instance, { key: "threshold", kind: "number", unit: "seconds", required: true, default: 30, min: 1, max: 86400, label: lbl("Lag above (s)", "Gecikme şunun üstünde (sn)") }, P.window] },
+  // Kubernetes (internal/alert templates, category kubernetes)
+  ...(() => {
+    const K = "kubernetes" as const;
+    const cluster = { key: "cluster_name", kind: "text", required: false, default: "", label: lbl("Cluster name (empty = all)", "Küme adı (boş = tümü)") } as const;
+    const namespace = { key: "namespace", kind: "text", required: false, default: "", label: lbl("Namespace (empty = all)", "Namespace (boş = tümü)") } as const;
+    const list: AlertTemplate[] = [
+      { id: "k8s_pod_crashloop", category: K, rule_type: "metric_threshold", severity: "critical", metric: "openlog.k8s.pod.status",
+        name: lbl("Pod crash looping", "Pod sürekli yeniden başlıyor"), description: lbl("A pod is in CrashLoopBackOff.", "Bir pod CrashLoopBackOff durumunda."), params: [cluster, namespace, P.window] },
+      { id: "k8s_pod_not_ready", category: K, rule_type: "metric_threshold", severity: "warning", metric: "openlog.k8s.pod.status",
+        name: lbl("Pod not ready", "Pod hazır değil"), description: lbl("A running pod fails its readiness checks.", "Çalışan bir pod hazırlık kontrollerini geçemiyor."), params: [cluster, namespace, P.window] },
+      { id: "k8s_node_not_ready", category: K, rule_type: "metric_threshold", severity: "critical", metric: "k8s.node.condition",
+        name: lbl("Node not ready", "Node hazır değil"), description: lbl("A node's Ready condition is false or unknown.", "Bir node'un Ready koşulu false ya da unknown."), params: [cluster, P.window] },
+      { id: "k8s_workload_replicas_unavailable", category: K, rule_type: "metric_threshold", severity: "warning", metric: "openlog.k8s.workload.unavailable",
+        name: lbl("Workload replicas unavailable", "Workload replikaları kullanılamıyor"), description: lbl("A workload has fewer available replicas than desired.", "Bir workload'un kullanılabilir replika sayısı istenenden az."),
+        params: [cluster, namespace, { key: "kind", kind: "text", required: false, default: "", label: lbl("Kind (empty = all)", "Tür (boş = tümü)") }, P.window] },
+    ];
+    return list;
+  })(),
+];
+
+/** Simplified server rendering (internal/alert/templates.go): enough for previews and creation in the mock UI. */
+function renderTemplate(t: AlertTemplate, input: Partial<AlertTemplateRenderInput>): { rule: AlertRuleInput; reference: { metric: string; value: number; ratio: number } | null } | Response {
+  const params = (input.params ?? {}) as Record<string, string | number>;
+  for (const k of Object.keys(params)) if (!t.params.some((p) => p.key === k)) return fail("invalid_argument", `params.${k}: unknown parameter for template ${t.id}`);
+  const v = (key: string) => params[key] ?? t.params.find((p) => p.key === key)?.default;
+  for (const p of t.params) if (p.required && (v(p.key) === "" || v(p.key) === undefined)) return fail("invalid_argument", `params.${p.key}: required`);
+  const lang = input.language === "tr" ? "tr" : "en";
+  const hostId = String(v("host_id") ?? "");
+  const instance = String(v("instance") ?? "");
+  const filters = [...(hostId ? [{ field: "host.id", op: "eq" as const, values: [hostId] }] : []),
+    ...(instance ? [{ field: "resource.openlog.discovery.instance", op: "eq" as const, values: [instance] }] : [])];
+  let reference = null;
+  let threshold = Number(v("threshold") ?? 0);
+  if (t.reference_metric) {
+    if (!instance) return fail("invalid_argument", "params.instance: this template needs one instance");
+    reference = { metric: t.reference_metric, value: 1073741824, ratio: Number(v("ratio")) };
+    threshold = Math.round(reference.value * reference.ratio);
+  }
+  if (t.id === "container_restarts") threshold = (Number(v("restarts")) - 0.5) / Number(v("window_seconds"));
+  const target = String(v("service_name") || instance || v("host_name") || hostId || "");
+  const condition = t.rule_type === "apm"
+    ? { service_name: String(v("service_name")), metric: "error_rate", window_seconds: Number(v("window_seconds")), operator: "gt" as const, threshold }
+    : { metric: t.metric!, aggregation: "avg" as const, window_seconds: Number(v("window_seconds")), filters, group_by: ["host"], operator: "gt" as const, threshold };
+  return {
+    rule: { name: input.name || `${t.name[lang]}${target ? ` – ${target}` : ""}`, description: t.description[lang], type: t.rule_type, severity: t.severity, condition,
+      channel_ids: input.channel_ids ?? [], labels: { "openlog.template": t.id } } as AlertRuleInput,
+    reference,
+  };
+}
+
+/** Naive occurrence preview: weekly days or day-of-month rules in UTC, exceptions applied. */
+function previewOccurrences(s: Partial<AlertMuteScheduleInput>): { starts_at: string; ends_at: string }[] | Response {
+  if (!s.start_time || !s.end_time) return fail("invalid_argument", "schedule.start_time: must be HH:MM");
+  const monthDays = /BYMONTHDAY=([-\d,]+)/.exec(s.rrule ?? "")?.[1]?.split(",").map(Number);
+  if (s.rrule && s.rrule.startsWith("FREQ=MONTHLY") && !monthDays && !/BYDAY=/.test(s.rrule)) return fail("invalid_argument", "schedule.rrule: FREQ=MONTHLY requires BYMONTHDAY or BYDAY");
+  const skip = new Set([...(s.exdates ?? []), ...db.calendars.filter((c) => s.holiday_calendar_ids?.includes(c.id)).flatMap((c) => c.dates)]);
+  const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const [sh, sm] = s.start_time.split(":").map(Number);
+  const [eh, em] = s.end_time.split(":").map(Number);
+  const out: { starts_at: string; ends_at: string }[] = [];
+  const base = new Date();
+  for (let i = 0; i < 400 && out.length < 5; i++) {
+    const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + i));
+    const iso = d.toISOString().slice(0, 10);
+    const ok = monthDays ? monthDays.includes(d.getUTCDate()) : s.rrule?.startsWith("FREQ=MONTHLY") ? d.getUTCDate() <= 7 && d.getUTCDay() === 1 : (s.days ?? []).includes(days[d.getUTCDay()] as never);
+    if (!ok || skip.has(iso) || skip.has(iso.slice(5))) continue;
+    const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), sh, sm);
+    let end = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), eh, em);
+    if (end <= start) end += 86_400_000;
+    out.push({ starts_at: formatTs(start), ends_at: formatTs(end) });
+  }
+  return out;
+}
+
+export const alertTemplateHandlers = [
+  http.get(`${API}/templates`, guarded("read", ({ request }) => {
+    const url = new URL(request.url);
+    const category = url.searchParams.get("category");
+    const integration = url.searchParams.get("integration");
+    return HttpResponse.json({ templates: MOCK_TEMPLATES.filter((t) => (!category || t.category === category) && (!integration || t.integration === integration)) });
+  })),
+  http.post(`${API}/templates/:id/render`, guarded("read", async (info) => {
+    const t = MOCK_TEMPLATES.find((x) => x.id === idOf(info));
+    if (!t) return fail("not_found", "no such template");
+    const res = renderTemplate(t, await json<AlertTemplateRenderInput>(info.request));
+    return res instanceof Response ? res : HttpResponse.json(res);
+  })),
+  http.post(`${API}/mutes/preview`, guarded("read", async ({ request }) => {
+    const b = await json<{ schedule: AlertMuteScheduleInput }>(request);
+    const res = previewOccurrences(b.schedule ?? {});
+    return res instanceof Response ? res : HttpResponse.json({ occurrences: res });
+  })),
+  http.get(`${API}/holiday-calendars`, guarded("read", () => HttpResponse.json({ calendars: [...db.calendars].sort((a, b) => a.name.localeCompare(b.name)) }))),
+  http.post(`${API}/holiday-calendars`, guarded("manage", async ({ request }) => {
+    const b = await json<AlertHolidayCalendar>(request);
+    if (!b.name?.trim()) return fail("invalid_argument", "name: must be 1-200 characters");
+    const now = formatTs(Date.now());
+    const c: AlertHolidayCalendar = { id: uuid(), name: b.name.trim(), description: b.description ?? "", dates: [...(b.dates ?? [])].sort(), mute_count: 0, created_by_email: "admin@openlog.local", created_at: now, updated_at: now };
+    db.calendars.push(c);
+    return HttpResponse.json(c, { status: 201 });
+  })),
+  http.put(`${API}/holiday-calendars/:id`, guarded("manage", async (info) => {
+    const c = db.calendars.find((x) => x.id === idOf(info));
+    if (!c) return fail("not_found", "not found");
+    const b = await json<AlertHolidayCalendar>(info.request);
+    Object.assign(c, { name: b.name ?? c.name, description: b.description ?? c.description, dates: [...(b.dates ?? c.dates)].sort(), updated_at: formatTs(Date.now()) });
+    return HttpResponse.json(c);
+  })),
+  http.delete(`${API}/holiday-calendars/:id`, guarded("manage", (info) => {
+    const c = db.calendars.find((x) => x.id === idOf(info));
+    if (!c) return fail("not_found", "not found");
+    if (db.mutes.some((m) => m.schedule?.holiday_calendar_ids.includes(c.id))) return fail("failed_precondition", "the holiday calendar is used by recurring mutes; remove it from them first");
+    db.calendars = db.calendars.filter((x) => x.id !== c.id);
+    return new HttpResponse(null, { status: 204 });
+  })),
+];
+
 export const alertHandlers = [
+  // Before /mutes/:id so that /mutes/preview is not taken as an id.
+  ...alertTemplateHandlers,
   http.get(`${API}/rule-types`, guarded("read", () => HttpResponse.json({ types: RULE_TYPES }))),
   http.get(`${API}/rules`, guarded("read", () => HttpResponse.json({ rules: [...db.rules].sort((a, b) => a.name.localeCompare(b.name)) }))),
   http.post(`${API}/rules/preview`, guarded("read", async ({ request }) => {
@@ -493,7 +658,7 @@ export const alertHandlers = [
     if (!Number.isFinite(starts) || !Number.isFinite(ends) || ends <= starts) return fail("invalid_argument", "ends_at: must be after starts_at");
     const now = Date.now();
     const m: AlertMute = { id: uuid(), name: b.name.trim(), comment: b.comment ?? "", starts_at: formatTs(starts), ends_at: formatTs(ends), rule_ids: b.rule_ids ?? [],
-      matchers: b.matchers ?? [], schedule: null, active: starts <= now && now < ends, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
+      matchers: b.matchers ?? [], schedule: null, upcoming: [], active: starts <= now && now < ends, created_by_user_id: MOCK_USER_ID, created_by_email: "admin@openlog.local",
       created_at: formatTs(now), updated_at: formatTs(now) };
     db.mutes.push(m);
     return HttpResponse.json(m, { status: 201 });

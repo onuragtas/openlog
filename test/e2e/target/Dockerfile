@@ -57,7 +57,7 @@ ENTRYPOINT ["/usr/local/bin/e2e-entrypoint"]
 
 FROM plain AS services
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx redis-server postgresql \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx redis-server postgresql systemd \
     && rm -rf /var/lib/apt/lists/* \
     # Without try_files a missing file logs "[error] open() ... failed" to error.log (test/e2e agent_logs).
     && sed -i '/try_files/d' /etc/nginx/sites-available/default \

@@ -3,10 +3,15 @@
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import { accountHandlers, authenticate } from "./account";
 import { alertHandlers } from "./alerts";
-import { apmHandlers } from "./apm";
+import { apmHandlers, transactionTraceIds } from "./apm";
 import { containerHandlers, containerLogs } from "./containers";
+import { kubernetesHandlers, kubernetesLogs } from "./kubernetes";
 import { fleetHandlers } from "./fleet";
 import { integrationSettingsHandlers } from "./integrationSettings";
+import { dashboardHandlers } from "./dashboards";
+import { oqlHandlers } from "./oql";
+import { usageHandlers } from "./usage";
+import { ssoHandlers } from "./sso";
 import * as fx from "./fixtures";
 
 type ErrorCode = "invalid_argument" | "unauthenticated" | "not_found" | "internal" | "timeout";
@@ -216,21 +221,56 @@ export const handlers = [
       attrFilters.push([key, value]);
     }
     const containerId = (p.get("container_id") ?? "").toLowerCase();
+    const spanId = (p.get("span_id") ?? "").toLowerCase();
+    if (spanId && !/^[0-9a-f]{16}$/.test(spanId)) return apiError("invalid_argument", "span_id must be 16 hex characters");
+    const txn = p.get("transaction") ?? "";
+    const txnService = p.get("transaction_service") ?? "";
+    if (!!txn !== !!txnService) return apiError("invalid_argument", "transaction and transaction_service must be set together");
+    const txnTraces = txn ? new Set(transactionTraceIds(txnService, txn)) : null;
+    // Opaque cursor (the real API encodes the last row); here the offset into the filtered listing.
+    let offset = 0;
+    const cursor = p.get("cursor");
+    if (cursor) {
+      try {
+        const o = (JSON.parse(atob(cursor)) as { o?: unknown }).o;
+        if (typeof o !== "number" || !Number.isInteger(o) || o < 0) throw new Error("bad cursor");
+        offset = o;
+      } catch {
+        return apiError("invalid_argument", "cursor: invalid");
+      }
+    }
     const now = Date.now();
-    const list = [...fx.logs(now), ...containerLogs(now)].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).filter((l) => {
+    // APM log records with trace context (the mock trace's spans), for log ↔ trace navigation.
+    const traceLogs = fx.trace(now).slice(0, 4).map((sp, i) => ({
+      timestamp: sp.start,
+      severity_text: i === 3 ? "ERROR" : "INFO",
+      severity_number: i === 3 ? 17 : 9,
+      body: `checkout flow: ${sp.name}`,
+      host_id: "",
+      service_name: sp.service_name,
+      trace_id: fx.TRACE_ID,
+      span_id: sp.span_id,
+      attributes: {} as Record<string, string>,
+      resource_attributes: { "service.name": sp.service_name } as Record<string, string>,
+    }));
+    const list = [...fx.logs(now), ...containerLogs(now), ...kubernetesLogs(now), ...traceLogs].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).filter((l) => {
       const ts = Date.parse(l.timestamp);
       if (ts < r.from || ts > r.to) return false;
       if (p.get("host_id") && l.host_id !== p.get("host_id")) return false;
       if (p.get("service") && l.service_name !== p.get("service")) return false;
       if (q && !l.body.toLowerCase().includes(q)) return false;
       if (traceId && l.trace_id !== traceId) return false;
+      if (spanId && l.span_id !== spanId) return false;
+      if (txnTraces && !txnTraces.has(l.trace_id)) return false;
       if (containerId && l.resource_attributes["container.id"] !== containerId) return false;
+      if (p.get("k8s_pod_uid") && l.resource_attributes["k8s.pod.uid"] !== p.get("k8s_pod_uid")) return false;
       if (p.get("compose_service") && l.resource_attributes["docker.compose.service"] !== p.get("compose_service")) return false;
       if (sevMin !== null && l.severity_number < sevMin) return false;
       if (attrFilters.some(([k, v]) => l.attributes[k] !== v)) return false;
       return true;
     });
-    return HttpResponse.json({ logs: list.slice(0, lim) });
+    const end = offset + lim;
+    return HttpResponse.json({ logs: list.slice(offset, end), next_cursor: end < list.length ? btoa(JSON.stringify({ o: end })) : null });
   })),
 
   http.get(`${API}/traces/:traceId`, authed(({ params }) => {
@@ -245,8 +285,13 @@ export const handlers = [
   ...fleetHandlers,
   ...integrationSettingsHandlers,
   ...containerHandlers,
+  ...kubernetesHandlers,
   ...apmHandlers,
   ...alertHandlers,
+  ...oqlHandlers,
+  ...dashboardHandlers,
+  ...usageHandlers,
+  ...ssoHandlers,
 
   http.all(`${API}/*`, () => apiError("not_found", "no such endpoint")),
 ];

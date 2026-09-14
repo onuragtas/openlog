@@ -1,11 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { Activity, Bell, Boxes, Container, LogOut, Menu, MoreVertical, Plug, Rocket, ScrollText, Server, Settings, X } from "lucide-react";
+import { Activity, Bell, Boxes, Container, LayoutDashboard, LogOut, Menu, MoreVertical, Plug, Rocket, ScrollText, SearchCode, Server, Settings, Ship, X } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
 import { logout, useMe } from "@/api/account";
+import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { OrgSwitcher } from "@/components/settings/OrgSwitcher";
+import { UsageBanner } from "@/components/settings/UsageBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TimeRangePicker } from "@/components/TimeRangePicker";
 import { Badge } from "@/components/ui/badge";
@@ -18,9 +20,12 @@ import type { RangeSpec } from "@/lib/time";
 const NAV = [
   { to: "/hosts", icon: Server, label: "nav.hosts" },
   { to: "/containers", icon: Container, label: "nav.containers" },
+  { to: "/kubernetes", icon: Ship, label: "nav.kubernetes" },
   { to: "/integrations", icon: Plug, label: "nav.integrations" },
   { to: "/apm", icon: Activity, label: "nav.apm" },
   { to: "/logs", icon: ScrollText, label: "nav.logs" },
+  { to: "/query", icon: SearchCode, label: "nav.query" },
+  { to: "/dashboards", icon: LayoutDashboard, label: "nav.dashboards" },
   { to: "/inventory", icon: Boxes, label: "nav.inventorySearch" },
   { to: "/fleet", icon: Rocket, label: "nav.fleet" },
   { to: "/alerts", icon: Bell, label: "nav.alerts" },
@@ -186,6 +191,8 @@ export function AppShell() {
           <MoreMenu />
         </header>
         <UpdateBanner />
+        <EmailVerificationBanner />
+        <UsageBanner />
         <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>

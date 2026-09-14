@@ -17,6 +17,10 @@ type MuteScheduleInput struct {
 	EndTime   string   `json:"end_time"`
 	From      string   `json:"from"`
 	Until     string   `json:"until"`
+	// ExDates are local dates (YYYY-MM-DD or YYYYMMDD) on which no occurrence starts (RFC 5545 EXDATE subset).
+	ExDates []string `json:"exdates"`
+	// HolidayCalendarIDs name holiday calendars of the organization whose dates are exceptions too.
+	HolidayCalendarIDs []string `json:"holiday_calendar_ids"`
 }
 
 // MuteSchedule is a validated recurring schedule, stored as alert_mutes.schedule (jsonb).
@@ -28,8 +32,14 @@ type MuteSchedule struct {
 	EndTime   string     `json:"end_time"`        // HH:MM local; ≤ start_time = next day
 	From      time.Time  `json:"from"`
 	Until     *time.Time `json:"until,omitempty"`
+	// Exceptions (§5.2): occurrences starting on these local dates are skipped.
+	ExDates            []string `json:"exdates,omitempty"`
+	HolidayCalendarIDs []string `json:"holiday_calendar_ids,omitempty"`
 
-	loc *time.Location
+	loc      *time.Location
+	rec      *recurrence // parsed RRule of a monthly schedule (nil: weekly days)
+	parsed   bool
+	holidays map[string]bool // YYYY-MM-DD and MM-DD entries of the referenced calendars (SetHolidays)
 }
 
 var weekdays = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
@@ -55,70 +65,6 @@ func parseClock(field, v string) (int, error) {
 		return 0, invalid(field, "must be HH:MM between 00:00 and 23:59")
 	}
 	return h*60 + m, nil
-}
-
-// ParseRRule accepts the subset FREQ=WEEKLY;BYDAY=MO,TU,… and FREQ=DAILY (every day), optionally prefixed with
-// "RRULE:". It returns the days (mon … sun) and the normalized rule.
-func ParseRRule(s string) ([]string, string, error) {
-	s = strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(s)), "RRULE:"))
-	var freq string
-	var byDay []string
-	for _, part := range strings.Split(s, ";") {
-		if part == "" {
-			continue
-		}
-		k, v, ok := strings.Cut(part, "=")
-		if !ok {
-			return nil, "", fmt.Errorf("invalid part %q", part)
-		}
-		switch k {
-		case "FREQ":
-			freq = v
-		case "BYDAY":
-			for _, d := range strings.Split(v, ",") {
-				if _, ok := rruleDays[d]; !ok {
-					return nil, "", fmt.Errorf("invalid BYDAY value %q (MO … SU without ordinals)", d)
-				}
-				byDay = append(byDay, d)
-			}
-		case "INTERVAL":
-			if v != "1" {
-				return nil, "", fmt.Errorf("only INTERVAL=1 is supported")
-			}
-		default:
-			return nil, "", fmt.Errorf("unsupported part %s (supported: FREQ=WEEKLY;BYDAY=… or FREQ=DAILY)", k)
-		}
-	}
-	var days []string
-	switch freq {
-	case "WEEKLY":
-		if len(byDay) == 0 {
-			return nil, "", fmt.Errorf("FREQ=WEEKLY requires BYDAY")
-		}
-		for _, d := range byDay {
-			days = append(days, rruleDays[d])
-		}
-	case "DAILY":
-		if len(byDay) > 0 {
-			return nil, "", fmt.Errorf("FREQ=DAILY does not take BYDAY; use FREQ=WEEKLY")
-		}
-		days = append(days, weekdays...)
-	default:
-		return nil, "", fmt.Errorf("FREQ must be WEEKLY or DAILY")
-	}
-	days = normalizeDays(days)
-	if freq == "DAILY" {
-		return days, "FREQ=DAILY", nil
-	}
-	codes := make([]string, 0, len(days))
-	for _, d := range days {
-		for code, name := range rruleDays {
-			if name == d {
-				codes = append(codes, code)
-			}
-		}
-	}
-	return days, "FREQ=WEEKLY;BYDAY=" + strings.Join(codes, ","), nil
 }
 
 // normalizeDays deduplicates and orders days mon … sun.
@@ -151,8 +97,13 @@ func (in MuteScheduleInput) Validate(parseTime func(string) (time.Time, error), 
 	case len(in.Days) > 0 && strings.TrimSpace(in.RRule) != "":
 		return nil, invalid("days", "give days or rrule, not both")
 	case strings.TrimSpace(in.RRule) != "":
-		if s.Days, s.RRule, err = ParseRRule(in.RRule); err != nil {
+		rec, err := parseRecurrence(in.RRule)
+		if err != nil {
 			return nil, invalid("rrule", "%v", err)
+		}
+		s.Days, s.RRule = rec.days, rec.normalized
+		if rec.freq == freqMonthly {
+			s.rec, s.parsed = rec, true
 		}
 	case len(in.Days) > 0:
 		for i, d := range in.Days {
@@ -195,6 +146,22 @@ func (in MuteScheduleInput) Validate(parseTime func(string) (time.Time, error), 
 		}
 		s.Until = &u
 	}
+	if s.ExDates, err = normalizeExDates(in.ExDates); err != nil {
+		return nil, err
+	}
+	if len(in.HolidayCalendarIDs) > maxMuteCalendars {
+		return nil, invalid("holiday_calendar_ids", "at most %d calendars", maxMuteCalendars)
+	}
+	seen := map[string]bool{}
+	for i, id := range in.HolidayCalendarIDs {
+		if !ValidUUID(id) {
+			return nil, invalid(fmt.Sprintf("holiday_calendar_ids[%d]", i), "not a valid id")
+		}
+		if id = strings.ToLower(id); !seen[id] {
+			seen[id] = true
+			s.HolidayCalendarIDs = append(s.HolidayCalendarIDs, id)
+		}
+	}
 	return s, nil
 }
 
@@ -216,6 +183,47 @@ func (s *MuteSchedule) hasDay(wd time.Weekday) bool {
 		}
 	}
 	return false
+}
+
+// recurrence returns the parsed monthly rule, or nil for weekly/daily schedules (which use Days).
+func (s *MuteSchedule) recurrence() *recurrence {
+	if !s.parsed {
+		s.parsed = true
+		if strings.HasPrefix(s.RRule, "FREQ="+freqMonthly) {
+			if rec, err := parseRecurrence(s.RRule); err == nil {
+				s.rec = rec
+			}
+		}
+	}
+	return s.rec
+}
+
+// SetHolidays sets the dates of the holiday calendars the schedule references (YYYY-MM-DD, or MM-DD for every
+// year). Stores call it after loading a mute; without it only exdates are exceptions.
+func (s *MuteSchedule) SetHolidays(dates []string) {
+	s.holidays = make(map[string]bool, len(dates))
+	for _, d := range dates {
+		s.holidays[d] = true
+	}
+}
+
+// startsOn reports whether an occurrence starts on the local date of day (noon in the schedule's zone): the
+// weekday or monthly rule matches and the date is not an exception.
+func (s *MuteSchedule) startsOn(day time.Time) bool {
+	if rec := s.recurrence(); rec != nil {
+		if !rec.matches(day.Year(), day.Month(), day.Day()) {
+			return false
+		}
+	} else if !s.hasDay(day.Weekday()) {
+		return false
+	}
+	date := day.Format(time.DateOnly)
+	for _, x := range s.ExDates {
+		if x == date {
+			return false
+		}
+	}
+	return !s.holidays[date] && !s.holidays[date[5:]]
 }
 
 // occurrenceOn returns the occurrence starting on the local date y-m-d. Local times are converted with
@@ -243,10 +251,11 @@ func (s *MuteSchedule) Window(at time.Time) (time.Time, time.Time, bool) {
 		ref = s.From
 	}
 	local := ref.In(loc)
-	// Start one day early (an overnight occurrence that began yesterday); 9 days cover every weekday.
-	for i := -1; i < 8; i++ {
+	// Start one day early (an overnight occurrence that began yesterday). Weekly schedules find an occurrence
+	// within 9 days; monthly rules and exceptions may skip months, so the scan is bounded by maxScanDays.
+	for i := -1; i < maxScanDays; i++ {
 		day := time.Date(local.Year(), local.Month(), local.Day()+i, 12, 0, 0, 0, loc)
-		if !s.hasDay(day.Weekday()) {
+		if !s.startsOn(day) {
 			continue
 		}
 		start, end, ok := s.occurrenceOn(day.Year(), day.Month(), day.Day())

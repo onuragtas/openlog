@@ -40,28 +40,71 @@ truncation, exit), PDO, SQL sanitizing, mysqli, pgsql, phpredis, Predis, curl, c
 restore and opcache), Laravel, Symfony, Slim, WordPress, CodeIgniter, Yii (stub classes with the real names), several
 requests per process (php-cgi -T), log correlation. Real framework versions are exercised by `agents/php/demo`.
 
-### Overhead (`agents/php/bench/ext/run.sh`, 2026-09-13, shared arm64 VM)
+### Overhead (2026-09-14, PHP 8.3 NTS, arm64 VM shared with other workloads; D-057)
 
-Laravel 12 / PHP 8.3 FPM (8 static workers, 4 CPUs), `GET /bench/{id}` (Eloquent query + 2 Redis calls), k6 16 VUs,
-3 × 30 s, telemetry exported to the shared openlog on the same VM. Medians (min–max):
+`before` = extension source before D-057, `after` = current; `off` = tracer disabled, `on` = defaults,
+`lean` = `openlog.userland_hooks=0` (+ tracer off).
 
-| | base | tracer off | tracer on |
+**Instructions per request** (callgrind, `bench/ext/micro/run.sh`, `php-cgi -T`, deterministic):
+
+| App | base | before off | after off | before on | after on | lean |
+|---|---|---|---|---|---|---|
+| plain PHP (57 PDO SQLite statements, ~2k calls) | 2.59 M | +1.12 M (+43 %) | +0.58 M (+23 %) | +1.16 M | +0.63 M | +0.35 M (+13 %) |
+| Laravel 12 `GET /health` (~18k calls) | 7.26 M | +1.78 M (+24.5 %) | +1.79 M | +1.80 M | +1.81 M | +0.27 M (+3.7 %) |
+
+Where the Laravel cost is: the engine's Observer API, ~100 instructions per userland *and* internal call on 8.0–8.3
+(8.4: 50–65) once an fcall observer is registered, even for functions it does not observe, plus
+`zend_init_internal_run_time_cache` per request (8.2/8.3). The extension cannot remove it except by not registering the
+observer (lean mode). Our own code was the main cost only in span-heavy requests (JSON escaping, SQL sanitizing,
+UTF-8 cleaning); that part halved.
+
+**HTTP** (`bench/ext/http/run.sh`: PHP-FPM 8 static workers on 4 pinned CPUs, nginx, wrk 16 connections, datagram
+sink instead of a forwarder, 5 interleaved rounds × 15 s). Medians, p25–p75 (min–max):
+
+| Laravel `GET /bench/{id}` (Eloquent + 2 Redis) | RPS | PHP CPU µs/req | Δ CPU vs base |
 |---|---|---|---|
-| RPS | 1377 (1372–1678) | 1170 (1025–1335) | 1229 (955–1239) |
-| p50 ms | 9.81 | 11.45 | 11.93 |
-| PHP CPU ms/req | 2.520 | 2.896 | 2.993 |
-| RPS vs base | — | −15.0 % | −10.7 % |
+| base | 1068 (1002–1172, 946–1218) | 2909 (2899–2923) | — |
+| before, tracer off | 826 (810–868) | 3364 (3161–3562) | +455 µs (+15.6 %) |
+| before, tracer on | 898 (752–902) | 3348 (3323–3510) | +439 µs (+15.1 %) |
+| after, tracer off | 893 (879–1005) | 3309 (3191–3375) | +400 µs (+13.8 %) |
+| after, tracer on | 1044 (986–1118) | 3106 (3042–3229) | +197 µs (+6.8 %) |
+| after, lean | 1008 (988–1062) | 3032 (3007–3137) | +123 µs (+4.2 %) |
 
-**Budget (≤ 3 % / ≤ 7 %) not met on this setup.** Run-to-run spread is ±10 % and "on" beating "off" shows noise;
-the stable signal is +0.4–0.5 ms PHP CPU per request. Findings from profiling: per-call hook cost is ~4 ns on 8.3/8.4
-(the spike measured the same), the tracer costs nothing per call since it switched to stack sampling (per-call
-observation measured ~60 ns/call); the remaining cost is engine observer bookkeeping per request
-(`zend_init_internal_run_time_cache`, observer end handlers), per-request instrumentation of ~7 spans, JSON
-encoding, the send, and the forwarder + ingest competing for the same VM CPU (0.18 ms forwarder CPU/request). An
-A/B with a blackhole transport measured −5 % in one run. A dedicated benchmark host and per-request profiling are the
-next step.
+| plain PHP (57 statements; earlier run, before the sampler warm-up change) | RPS | PHP CPU µs/req | Δ CPU |
+|---|---|---|---|
+| base | 10428 (10258–10907) | 295 (289–303) | — |
+| before off / on | 7880 / 7482 | 431 / 463 | +136 / +168 µs |
+| after off / on / lean | 7652 / 7610 / 8160 | 400 / 409 / 394 | +105 / +114 / +99 µs |
+
+**Budget (≤ 3 % tracer off / ≤ 7 % on) still not met in full mode.** RPS spread between rounds is ±10–20 % on this
+VM (other agents' containers were loading it), so RPS deltas below ~10 % are not significant; PHP CPU per request is
+the stable signal. "After, on" measuring lower CPU than "after, off" in the Laravel run is inside that noise (both
+have the same instruction count). Lean mode is within the budget by instructions (+3.7 %) and CPU (+4.2 %) but gives
+up framework hooks. A dedicated benchmark host is still needed to confirm the RPS budget.
+
+**Soak** (`bench/ext/soak/run.sh`, 10 min, 4 FPM workers without recycling, tracer on, threshold 50 ms, Laravel mix
+incl. exceptions and slow traces + plain app): 332 k requests, no worker replaced, no signal in the FPM log, RSS
+after the first quarter −376…−420 KiB per worker (no growth): PASS.
 
 ## Build and install
+
+Packages (D-059, contract §7): `openlog-php-agent_<v>_linux_<arch>.deb|.rpm|.apk` contain `openlog.so` for every PHP
+ABI (7.1–8.4 × NTS/ZTS × glibc/musl; glibc modules need glibc ≥ 2.28, i.e. RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu
+20.04+) and enable it for every PHP runtime found (`php`, `php-cgi`, `php-fpm`; Debian `mods-available`, RHEL/Remi,
+Alpine, `/usr/local`). PHP-FPM / Apache are not restarted; reload them, or:
+
+```sh
+openlog-php-install status            # runtimes, ABI, enabled/loaded (--json for tooling)
+openlog-php-install install --reload  # (re)enable and reload php-fpm/apache units
+openlog-php-install uninstall
+```
+
+The tarball `openlog-php-agent_<v>_linux_<arch>.tar.gz` has the same tree (`modules/<api>-<nts|zts>-<libc>/openlog.so`,
+`bin/openlog-php-install`) for hosts without a package manager or for images; release builds:
+`agents/php/packaging/build-artifacts.sh <version> <out>` (package install test: `agents/php/packaging/test.sh`).
+The fleet installation through the infra agent is specified in the contract (§7.3).
+
+From source:
 
 ```sh
 cd agents/php/ext
@@ -93,6 +136,13 @@ Development helpers (copy the source to a scratch directory, build inside the of
 | `build/dev-build.sh 8.3` | compile only (`8.3`, `7.4-zts`, `8.3-cli-alpine`, …) |
 | `build/test-one.sh 8.3 [tests/…]` | compile + phpt (datastore tests skip) |
 | `build/run-matrix.sh` | full matrix: 7.1…8.4 NTS glibc + 7.4/8.3 ZTS and musl, with MariaDB/PostgreSQL/Redis containers (network `openlog-php-test`) |
+| `VERSIONS="" EXTRA="8.3-asan" build/run-matrix.sh` | AddressSanitizer + UBSan debug PHP built from source (`build/Dockerfile.asan`), openlog.so with the same sanitizers; any sanitizer report fails (`make -C agents/php ext-asan`) |
+| `VERSIONS="" EXTRA="8.3-xdebug 8.3-ddtrace 8.3-newrelic 8.3-jit 8.3-swoole" build/run-matrix.sh` | full suite with another agent / debugger / JIT / Swoole loaded (`build/Dockerfile.compat`, downloads from pecl, GitHub, download.newrelic.com) |
+| `fuzz/run.sh` | libFuzzer + ASan/UBSan on `src/ol_text.c` (`FUZZ_SECONDS`, default 60) |
+| `../bench/ext/micro/run.sh` | per-request cost: `php-cgi -T` timing + callgrind instructions, plain PHP and Laravel; `SRC_A=<older ext>` for A/B |
+| `../bench/ext/http/run.sh` | PHP-FPM + nginx + wrk: RPS, latency, PHP CPU per request; base / off / on / lean (+ A/B) |
+| `../bench/ext/soak/run.sh` | `MINUTES` of mixed load on 4 long-lived FPM workers; fails on worker RSS growth or crashes |
+| `../packaging/build-artifacts.sh` | release tarball + deb/rpm/apk for the host architecture |
 
 ## Settings (`php.ini`)
 
@@ -110,6 +160,7 @@ Development helpers (copy the source to a scratch directory, build inside the of
 | `openlog.transaction_tracer.min_segment_ms` | `1` | all | stack sampling interval; calls shorter than it appear only when a sample hits them |
 | `openlog.transaction_tracer.max_memory_kb` | `4096` | all | |
 | `openlog.log_level` | `warning` | all | `off`, `error`, `warning`, `info`, `debug`; PHP error log, at most 10 lines per minute per process |
+| `openlog.userland_hooks` | `1` | system | `0` = lean mode: no fcall observer (PHP 8) / `zend_execute_ex` override (7.x), so the engine's per-call observer cost disappears; only internal functions are instrumented (PDO, mysqli, pgsql, phpredis, curl, streams, sleep). Lost: framework route names, framework-reported exceptions, Predis, long-running worker transactions; uncaught exceptions are recorded from the fatal error. See "Overhead" |
 
 PHP functions (log correlation, custom naming): `openlog\trace_id(): string`, `openlog\span_id(): string`,
 `openlog\traceparent(): string`, `openlog\set_transaction_name(string $name): bool`, `openlog\is_sampled(): bool`,
@@ -143,7 +194,9 @@ numeric and hex literals with `?`, removes comments and collapses whitespace; pl
 
 **Outbound HTTP** (kind 3): `curl_exec`, `curl_multi_add_handle` … `curl_multi_remove_handle`, `file_get_contents` /
 `fopen` on `http(s)://`. Guzzle (sync `CurlHandler`, `CurlMultiHandler`, `StreamHandler`), Laravel `Http::` and
-Symfony HttpClient are covered through these. `traceparent` (+ `tracestate`) is injected — also for unsampled requests
+Symfony HttpClient are covered through these; with Guzzle 7 async requests (promises, `Pool`) every request is one
+client span from `curl_multi_add_handle` to `curl_multi_remove_handle` carrying its own `traceparent`
+(`tests/043-guzzle-async.phpt`, real library: `build/test-guzzle.sh`). `traceparent` (+ `tracestate`) is injected — also for unsampled requests
 (flags `00`) — unless the application already set a `traceparent` header. Attributes: `http.request.method`,
 `url.full` (credentials removed), `server.address`, `server.port`, `http.response.status_code`, `error.type`.
 
@@ -154,7 +207,9 @@ or Symfony (`HttpKernel::handleThrowable`, HTTP exceptions < 500 ignored). Excep
 the client span.
 
 **Transaction tracer** (stack sampling): a sampler thread per PHP process (idle between requests) sets
-`EG(vm_interrupt)` every `min_segment_ms`; at the next safe point the userland call stack is walked and merged into
+`EG(vm_interrupt)` every `min_segment_ms` — every 10 ms during the first 100 ms of a request, since function traces are
+only sent for slow or failed requests and a wake-up per millisecond measurably cost fast requests (~150 µs PHP CPU on a
+7 ms Laravel request); at the next safe point the userland call stack is walked and merged into
 a segment tree (kind 1, `Class::method`, `code.function.name`, `code.namespace`, `code.file.path`,
 `code.line.number`, `openlog.php.segment=function`, `openlog.php.samples`). Every instrumented span takes a sample at
 its start and end, so blocking DB/HTTP/sleep time is attributed to the right functions and the span's parent is the
@@ -163,6 +218,19 @@ every call measured ~60 ns/call, > 1 ms per framework request). Calls shorter th
 sample hits them; consecutive calls of one function from the same frame without a sample in between form one
 segment; depth is limited to the outermost 256 frames. Segments are sent only when the transaction is slow or
 failed.
+
+**Long-running workers** (D-058, `src/inst_workers.c`): one transaction per request, named and attributed like a web
+request, for Laravel Octane (`Laravel\Octane\Worker::handle`; status from `SwooleClient`/`RoadRunnerClient::respond`),
+RoadRunner (`Spiral\RoadRunner\Http\HttpWorker::waitRequest` … `respond`/`respondStream`; covers PSR7Worker and Octane
+on RoadRunner) and Swoole/OpenSwoole HTTP servers (the callable registered with `Server::on('request', …)` or
+`Coroutine\Http\Server::handle()` … `Response::end`/`redirect`/`sendfile`, status from `Response::status`). The worker
+process's own CLI transaction is dropped at the first request, nothing is recorded or propagated between requests, and
+connection attributes (DSN, host, database) survive requests. When requests overlap in one process (Swoole coroutines)
+they are never mixed: while more than one is in progress, child spans, route names and the function tracer stop for
+all of them and each request is recorded with its root span only (`openlog.php.concurrent=true`); outgoing
+`traceparent` headers and `openlog\traceparent()` use the request whose handler is on the current coroutine's stack,
+and nothing when none is. Not covered: FrankenPHP worker mode, lean mode. Tests: `tests/041-workers.phpt` (Octane and
+RoadRunner classes), `tests/042-swoole.phpt` (real Swoole server, 4 concurrent requests; image `8.3-swoole`).
 
 ## Architecture
 
@@ -173,7 +241,11 @@ failed.
   (separate stacks per fiber), bounded arena (64 KiB chunks; base 8 MiB + `max_memory_kb`), retained between requests.
   Handlers read engine data only (arguments, `$this`, properties without `__get`); the only PHP functions the agent
   calls are `curl_setopt`/`curl_getinfo`/`curl_errno`/`curl_error` and Predis `getId()`, with exceptions suppressed.
-- `src/ol_json.c` — dependency-free JSON encoder; messages larger than 60 000 bytes are split (same `pid` +
+- `src/ol_text.c` — PHP-independent text code on every span's path: JSON writer, UTF-8 cleaning/truncation, SQL
+  sanitizing and operation extraction, path/route normalization, `traceparent` parsing (table-driven character
+  classes, 8-byte scans; fuzzed by `fuzz/run.sh`). Query analysis is cached per request by query text (`ol_util.c`).
+- `src/inst_workers.c` — transactions of long-running workers (Octane, RoadRunner, Swoole) and concurrency rules.
+- `src/ol_json.c` — message encoding; messages larger than 60 000 bytes are split (same `pid` +
   `trace_id`, `seq` 0…255, `last` on the final part, `resource`/`sampling_ratio`/`function_trace` repeated). Every
   string is UTF-8 cleaned and ≤ 4 KiB, ≤ 64 attributes per span. `sendto(MSG_DONTWAIT)` on an unconnected socket;
   on `EAGAIN` a split message may retry for at most ~2 ms (the kernel's datagram queue is short), never more.
@@ -192,7 +264,30 @@ failed.
   agent sees the first one's header and keeps it. Not recommended in production.
 - **Opcache / JIT**: supported. On 7.x, overriding `zend_execute_ex` makes every userland call recursive in C (same as
   Xdebug/New Relic); very deep recursion needs a larger C stack.
-- **Swoole / RoadRunner / Octane** long-running workers: one transaction per process lifetime (phase 2).
+
+Tested together (full phpt suite with the other extension loaded first, PHP 8.3 NTS, arm64, 2026-09-14;
+`build/run-matrix.sh` tags `8.3-xdebug`, `-ddtrace`, `-newrelic`, `-jit`, `-swoole`):
+
+| Loaded with | phpt | Notes |
+|---|---|---|
+| Xdebug 3.4 `xdebug.mode=coverage` | 28 / 0 / 1 | `develop,coverage`: 23 / 6 — all six are Xdebug behaviour, no crash, openlog data unchanged: `var_dump()` gains a `file:line` prefix (5 tests) and `xdebug.max_nesting_level=512` aborts the 3000-deep recursion test |
+| Datadog ddtrace (latest `datadog-setup.php`, CLI tracing on) | 26 / 2 / 1 | ddtrace replaces the `traceparent` header openlog injected into curl (the last tracer wins); ddtrace re-dispatches `Predis\Client::executeCommand`, so openlog records nested duplicate Predis spans. Fixed while testing: ddtrace's closures (without `ZEND_ACC_CLOSURE`) matched `redis::*` |
+| New Relic PHP agent (latest, daemon not running) | 28 / 0 / 1 | — |
+| OPcache JIT (`opcache.jit=tracing`, CLI and CGI) | 28 / 0 / 1 | — |
+| Swoole 6 | 3 / 0 / 0 (worker, lean, Swoole tests) | `tests/042-swoole.phpt`: 4 concurrent coroutine requests |
+
+## Robustness
+
+- **AddressSanitizer + UBSan** (`VERSIONS="" EXTRA="8.3-asan" build/run-matrix.sh`, CI job `php-ext (8.3-asan)`): PHP
+  8.3 debug build from source with `--enable-address-sanitizer --enable-undefined-sanitizer`, openlog.so and phpredis
+  built with the same flags, `USE_ZEND_ALLOC=0`, leak detection on; reports go to files and fail the run. Result:
+  28 passed / 0 failed / 1 skipped (Swoole), 0 sanitizer reports (image build ~3 min).
+- **Fuzzing** (`fuzz/run.sh`, CI job `php-ext-fuzz`, 120 s): libFuzzer + ASan/UBSan on `src/ol_text.c` — UTF-8
+  cleaning/truncation, JSON string writer (decoded output must equal the input; a writer with a too small capacity must
+  stop inside its buffer), numbers, SQL sanitizing and operation extraction, path/route normalization, traceparent
+  parse/format round trip. 60 s local run: 6.7 M executions, 12 405 corpus units, no finding.
+- **Soak** (`../bench/ext/soak/run.sh`): see "Overhead".
+- **Swoole / RoadRunner / Octane**: one transaction per handled request, see "Long-running workers".
 
 ## Troubleshooting
 

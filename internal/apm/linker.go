@@ -34,10 +34,24 @@ type LinkerOptions struct {
 	CatchUpAt    time.Duration
 	CatchUpBatch time.Duration
 	CatchUpPause time.Duration
+	// Relink re-links the minutes of late spans enqueued by the processor (apm_relink_queue, relink.go) every
+	// RelinkInterval (default 5m), at most RelinkMaxMinutes per pass (default 120), none older than RelinkMaxAge
+	// (default 7 days).
+	Relink           bool
+	RelinkInterval   time.Duration
+	RelinkMaxMinutes int
+	RelinkMaxAge     time.Duration
 }
 
 // catchUpWindow is how long after CatchUpAt a missed catch-up pass is still started (leader change, restart).
 const catchUpWindow = 6 * time.Hour
+
+// Background passes (Linker.background): at most one of the catch-up and re-link passes runs at a time.
+const (
+	bgNone int32 = iota
+	bgCatchUp
+	bgRelink
+)
 
 // Linker computes trace-linked service edges (client span -> child server span of another
 // service) on every shard with INSERT ... SELECT over the shard's local tables. Spans are
@@ -60,10 +74,18 @@ type Linker struct {
 
 	catchUpDone    time.Time // start of the last day caught up successfully
 	catchUpTried   time.Time // last attempt (failures are retried at most every 30 minutes)
-	catchingUp     atomic.Bool
+	background     atomic.Int32
 	catchUpRuns    *prometheus.CounterVec
 	lateCalls      prometheus.Counter
 	catchUpSeconds prometheus.Histogram
+
+	relink        *relinkState // nil until the first pass after Run starts
+	relinkStarted time.Time
+	relinkRuns    *prometheus.CounterVec
+	relinkMinutes prometheus.Counter
+	relinkLate    prometheus.Counter
+	relinkBacklog prometheus.Gauge
+	relinkSeconds prometheus.Histogram
 }
 
 // NewLinker creates the job. bootstrap is a connection through OPENLOG_CLICKHOUSE_ADDR; reg may be nil.
@@ -89,6 +111,15 @@ func NewLinker(bootstrap clickhouse.Conn, opts LinkerOptions, log *slog.Logger, 
 	if opts.CatchUpPause == 0 {
 		opts.CatchUpPause = 10 * time.Second
 	}
+	if opts.RelinkInterval <= 0 {
+		opts.RelinkInterval = 5 * time.Minute
+	}
+	if opts.RelinkMaxMinutes <= 0 {
+		opts.RelinkMaxMinutes = 120
+	}
+	if opts.RelinkMaxAge <= 0 {
+		opts.RelinkMaxAge = 7 * 24 * time.Hour
+	}
 	l := &Linker{opts: opts, bootstrap: bootstrap, log: log, now: time.Now, conns: map[string]clickhouse.Conn{},
 		runs: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "openlog_apm_link_runs_total", Help: "Edge-linking job runs over all shards, by result.",
@@ -110,6 +141,22 @@ func NewLinker(bootstrap clickhouse.Conn, opts LinkerOptions, log *slog.Logger, 
 			Name: "openlog_apm_link_catchup_duration_seconds", Help: "Duration of one daily catch-up pass over all shards.",
 			Buckets: prometheus.ExponentialBuckets(1, 2, 14),
 		}),
+		relinkRuns: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "openlog_apm_relink_runs_total", Help: "Late-span re-link passes, by result (skipped: the catch-up or a previous pass was running).",
+		}, []string{"result"}),
+		relinkMinutes: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "openlog_apm_relink_minutes_total", Help: "Queued minutes re-linked on every shard by the late-span re-link pass.",
+		}),
+		relinkLate: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "openlog_apm_relink_late_calls_total", Help: "Weighted client calls linked by the late-span re-link pass that were not linked before.",
+		}),
+		relinkBacklog: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "openlog_apm_relink_backlog_minutes", Help: "Queued minutes left for the next re-link pass after the last pass (OPENLOG_APM_RELINK_MAX_MINUTES, failures).",
+		}),
+		relinkSeconds: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "openlog_apm_relink_duration_seconds", Help: "Duration of one late-span re-link pass over all shards.",
+			Buckets: prometheus.ExponentialBuckets(0.05, 2, 16),
+		}),
 	}
 	l.lag = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "openlog_apm_link_lag_seconds", Help: "Time since the end of the last window linked on every shard.",
@@ -129,8 +176,12 @@ func NewLinker(bootstrap clickhouse.Conn, opts LinkerOptions, log *slog.Logger, 
 	for _, r := range []string{"ok", "error"} {
 		l.catchUpRuns.WithLabelValues(r)
 	}
+	for _, r := range []string{"ok", "error", "skipped"} {
+		l.relinkRuns.WithLabelValues(r)
+	}
 	if reg != nil {
-		reg.MustRegister(l.runs, l.rows, l.duration, l.lag, l.catchUpRuns, l.lateCalls, l.catchUpSeconds)
+		reg.MustRegister(l.runs, l.rows, l.duration, l.lag, l.catchUpRuns, l.lateCalls, l.catchUpSeconds,
+			l.relinkRuns, l.relinkMinutes, l.relinkLate, l.relinkBacklog, l.relinkSeconds)
 	}
 	return l
 }
@@ -138,7 +189,12 @@ func NewLinker(bootstrap clickhouse.Conn, opts LinkerOptions, log *slog.Logger, 
 // Run links every Interval until ctx is done, and starts the daily catch-up pass when it is due.
 func (l *Linker) Run(ctx context.Context) {
 	l.log.Info("apm edge linking started", "interval", l.opts.Interval.String(), "lookback", l.opts.Lookback.String(), "delay", l.opts.Delay.String(),
-		"catch_up", l.opts.CatchUp, "catch_up_at", l.opts.CatchUpAt.String(), "catch_up_batch", l.opts.CatchUpBatch.String())
+		"catch_up", l.opts.CatchUp, "catch_up_at", l.opts.CatchUpAt.String(), "catch_up_batch", l.opts.CatchUpBatch.String(),
+		"relink", l.opts.Relink, "relink_interval", l.opts.RelinkInterval.String(), "relink_max_minutes", l.opts.RelinkMaxMinutes)
+	// A new leader re-reads the last relinkRescan of the queue (re-linking again is harmless).
+	l.mu.Lock()
+	l.relink, l.relinkStarted = nil, time.Time{}
+	l.mu.Unlock()
 	var wg sync.WaitGroup
 	defer func() {
 		wg.Wait()
@@ -151,6 +207,7 @@ func (l *Linker) Run(ctx context.Context) {
 		}
 		cancel()
 		l.maybeCatchUp(ctx, &wg)
+		l.maybeRelink(ctx, &wg)
 		select {
 		case <-ctx.Done():
 			return
@@ -175,7 +232,8 @@ func CatchUpDue(now time.Time, at time.Duration, done time.Time) (time.Time, tim
 }
 
 // maybeCatchUp starts the catch-up pass in the background (regular runs continue meanwhile; they cover the
-// last lookback, the pass the previous day, so they never write the same minutes).
+// last lookback, the pass the previous day, so they never write the same minutes). While a re-link pass runs, the
+// catch-up waits for the next loop iteration.
 func (l *Linker) maybeCatchUp(ctx context.Context, wg *sync.WaitGroup) {
 	if !l.opts.CatchUp {
 		return
@@ -186,17 +244,20 @@ func (l *Linker) maybeCatchUp(ctx context.Context, wg *sync.WaitGroup) {
 	if due && now.Sub(l.catchUpTried) < 30*time.Minute {
 		due = false
 	}
+	if due && !l.background.CompareAndSwap(bgNone, bgCatchUp) {
+		due = false
+	}
 	if due {
 		l.catchUpTried = now
 	}
 	l.mu.Unlock()
-	if !due || !l.catchingUp.CompareAndSwap(false, true) {
+	if !due {
 		return
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer l.catchingUp.Store(false)
+		defer l.background.Store(bgNone)
 		began := time.Now()
 		late, err := l.CatchUp(ctx, from, to)
 		if err != nil {

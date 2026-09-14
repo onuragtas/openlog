@@ -3,7 +3,7 @@ import { getRouteApi, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { alertRuleQuery } from "@/api/alerts";
+import { alertRuleQuery, alertTemplateRenderQuery } from "@/api/alerts";
 import { PageHeader } from "@/components/AppShell";
 import { ChannelsManager } from "@/components/alerts/ChannelsManager";
 import { EvaluationHistory } from "@/components/alerts/EvaluationHistory";
@@ -13,16 +13,21 @@ import { RuleEditor } from "@/components/alerts/RuleEditor";
 import { RulesList } from "@/components/alerts/RulesList";
 import { RuleStateBadge } from "@/components/alerts/badges";
 import { ErrorState, LoadingState } from "@/components/StateViews";
-import { applyPrefill } from "@/lib/alerts";
+import { TemplateGallery } from "@/components/alerts/TemplateGallery";
+import { Button } from "@/components/ui/button";
+import { applyPrefill, draftFromInput } from "@/lib/alerts";
+import { templateLanguage, TEMPLATE_CATEGORIES } from "@/lib/alert-templates";
 
 const incidentsRoute = getRouteApi("/app/alerts/incidents");
 const incidentRoute = getRouteApi("/app/alerts/incidents/$incidentId");
 const ruleNewRoute = getRouteApi("/app/alerts/rules/new");
+const templatesRoute = getRouteApi("/app/alerts/templates");
 const ruleRoute = getRouteApi("/app/alerts/rules/$ruleId");
 
 const TABS = [
   { to: "/alerts/incidents", label: "alerts.tabs.incidents" },
   { to: "/alerts/rules", label: "alerts.tabs.rules" },
+  { to: "/alerts/templates", label: "alerts.tabs.templates" },
   { to: "/alerts/channels", label: "alerts.tabs.channels" },
   { to: "/alerts/mutes", label: "alerts.tabs.mutes" },
 ] as const;
@@ -88,23 +93,73 @@ export function AlertsRulesPage() {
   return <RulesList />;
 }
 
+function parseTemplateParams(raw: string | undefined): Record<string, unknown> {
+  try {
+    const v: unknown = JSON.parse(raw ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 export function AlertsRuleNewPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const search = ruleNewRoute.useSearch();
   const navigate = useNavigate();
   const key = JSON.stringify(search);
+  // A recommended template is rendered by the server and opened as a draft (alerting.md §2.8).
+  const rendered = useQuery(
+    alertTemplateRenderQuery(search.template ?? "", search.template ? { params: parseTemplateParams(search.tparams), language: templateLanguage(i18n.resolvedLanguage) } : null),
+  );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initial = useMemo(() => applyPrefill(search), [key]);
+  const initial = useMemo(() => (search.template ? (rendered.data ? draftFromInput(rendered.data.rule) : undefined) : applyPrefill(search)), [key, rendered.data]);
   return (
     <div className="flex flex-col gap-3">
       <BackLink to="/alerts/rules" label={t("alerts.editor.back")} />
       <h2 className="text-lg font-semibold">{t("alerts.editor.newTitle")}</h2>
-      <RuleEditor
-        key={key}
-        initial={initial}
-        onSaved={(r) => void navigate({ to: "/alerts/rules/$ruleId", params: { ruleId: r.id } })}
-        onCancel={() => void navigate({ to: "/alerts/rules" })}
-      />
+      {search.template && rendered.isError ? (
+        <ErrorState error={rendered.error} onRetry={() => void rendered.refetch()} />
+      ) : !initial ? (
+        <LoadingState />
+      ) : (
+        <RuleEditor
+          key={`${key}:${rendered.dataUpdatedAt}`}
+          initial={initial}
+          onSaved={(r) => void navigate({ to: "/alerts/rules/$ruleId", params: { ruleId: r.id } })}
+          onCancel={() => void navigate({ to: "/alerts/rules" })}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Recommended alert templates: hosts, containers, APM services and integrations. */
+export function AlertsTemplatesPage() {
+  const { t } = useTranslation();
+  const search = templatesRoute.useSearch();
+  const navigate = useNavigate({ from: "/alerts/templates" });
+  const target = { hostId: search.host, hostName: search.hostName, serviceName: search.service };
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">{t("alerts.templates.intro")}</p>
+      <div role="group" aria-label={t("alerts.templates.filter")} className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" className="min-h-10" variant={search.category ? "outline" : "secondary"} aria-pressed={!search.category}
+          onClick={() => void navigate({ search: (prev) => ({ ...prev, category: undefined, integration: undefined }), replace: true })}>
+          {t("alerts.templates.all")}
+        </Button>
+        {TEMPLATE_CATEGORIES.map((c) => (
+          <Button key={c} type="button" size="sm" className="min-h-10" variant={search.category === c ? "secondary" : "outline"} aria-pressed={search.category === c}
+            onClick={() => void navigate({ search: (prev) => ({ ...prev, category: c, integration: undefined }), replace: true })}>
+            {t(`alerts.templates.categories.${c}`)}
+          </Button>
+        ))}
+      </div>
+      {(search.hostName || search.host || search.service) && (
+        <p className="text-sm" data-testid="template-target">
+          {t("alerts.templates.targetFor", { target: search.service ?? search.hostName ?? search.host ?? "" })}
+        </p>
+      )}
+      <TemplateGallery key={JSON.stringify(search)} category={search.category} integration={search.integration} target={target} columns="3" />
     </div>
   );
 }

@@ -97,7 +97,7 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 			if err != nil {
 				return res, err
 			}
-			owner = User{Email: email, Name: name, PasswordHash: hash, CreatedAt: now}
+			owner = User{Email: email, Name: name, PasswordHash: hash, CreatedAt: now, EmailVerifiedAt: &now}
 		default:
 			return res, err
 		}
@@ -108,7 +108,7 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 		if err := ValidateCustomKey(spec.LicenseKey, MinProvidedKeyLen); err != nil {
 			return res, fmt.Errorf("bootstrap license key: %s", err.(*Error).Message)
 		}
-		info, err := s.store.LookupLicenseKey(ctx, HashSecret(spec.LicenseKey))
+		info, err := s.store.LookupLicenseKey(ctx, s.cfg.KeyHasher.Candidates(spec.LicenseKey))
 		if err == nil && info.TenantID != spec.TenantID {
 			return res, errors.New("the bootstrap license key already belongs to another organization")
 		} else if err != nil && !errors.Is(err, tenant.ErrUnknownKey) {
@@ -119,7 +119,7 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 		if len(spec.APIKey) < MinProvidedKeyLen {
 			return res, fmt.Errorf("API key must be at least %d characters", MinProvidedKeyLen)
 		}
-		_, keyOrg, err := s.store.LookupAPIKey(ctx, HashSecret(spec.APIKey))
+		_, keyOrg, err := s.store.LookupAPIKey(ctx, s.cfg.KeyHasher.Candidates(spec.APIKey))
 		if err == nil && keyOrg.TenantID != spec.TenantID {
 			return res, errors.New("the bootstrap API key already belongs to another organization")
 		} else if err != nil && !errors.Is(err, ErrNotFound) {
@@ -162,14 +162,15 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 	res.Org = org
 
 	if spec.LicenseKey != "" {
-		info, err := s.store.LookupLicenseKey(ctx, HashSecret(spec.LicenseKey))
+		info, err := s.store.LookupLicenseKey(ctx, s.cfg.KeyHasher.Candidates(spec.LicenseKey))
 		switch {
 		case err == nil:
 			if info.TenantID != org.TenantID {
 				return res, errors.New("the bootstrap license key already belongs to another organization")
 			}
 		case errors.Is(err, tenant.ErrUnknownKey):
-			k := LicenseKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.LicenseKey), Hash: HashSecret(spec.LicenseKey), Custom: true, CreatedBy: owner.ID, CreatedAt: now}
+			hash, legacy := s.keyHashes(spec.LicenseKey)
+			k := LicenseKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.LicenseKey), Hash: hash, LegacyHashes: legacy, Custom: true, CreatedBy: owner.ID, CreatedAt: now}
 			if err := s.store.CreateLicenseKey(ctx, &k); err != nil {
 				if errors.Is(err, ErrAlreadyExists) {
 					return res, errors.New("the bootstrap license key exists but was revoked; choose another key")
@@ -185,7 +186,7 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 		if len(spec.APIKey) < MinProvidedKeyLen {
 			return res, fmt.Errorf("API key must be at least %d characters", MinProvidedKeyLen)
 		}
-		k, keyOrg, err := s.store.LookupAPIKey(ctx, HashSecret(spec.APIKey))
+		k, keyOrg, err := s.store.LookupAPIKey(ctx, s.cfg.KeyHasher.Candidates(spec.APIKey))
 		switch {
 		case err == nil:
 			if keyOrg.ID != org.ID {
@@ -195,7 +196,7 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 				return res, errors.New("the bootstrap API key was revoked; choose another key")
 			}
 		case errors.Is(err, ErrNotFound):
-			nk := APIKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.APIKey), Hash: HashSecret(spec.APIKey), Scope: "read", CreatedBy: owner.ID, CreatedAt: now}
+			nk := APIKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.APIKey), Hash: s.cfg.KeyHasher.Hash(spec.APIKey), Scope: "read", CreatedBy: owner.ID, CreatedAt: now}
 			if err := s.store.CreateAPIKey(ctx, &nk); err != nil {
 				return res, err
 			}

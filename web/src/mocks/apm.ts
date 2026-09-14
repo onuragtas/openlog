@@ -1,8 +1,23 @@
 // MSW handlers for the APM endpoints (internal/api/apm.go, docs/contracts/api.md "APM"): a small
 // shop (frontend → orders → postgresql, frontend → catalog → redis) with deterministic series.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { ApmDbQuery, ApmErrorGroup, ApmMapEdge, ApmMapNode, ApmPoint, ApmRed, ApmService, ApmSettings, ApmTraceResult, ApmTransaction } from "@/api/apm";
-import { authenticate } from "./account";
+import type {
+  ApmDbQuery,
+  ApmDeployment,
+  ApmErrorActivity,
+  ApmErrorComment,
+  ApmErrorGroup,
+  ApmErrorStatus,
+  ApmMapEdge,
+  ApmMapNode,
+  ApmPoint,
+  ApmRed,
+  ApmService,
+  ApmSettings,
+  ApmTraceResult,
+  ApmTransaction,
+} from "@/api/apm";
+import { authenticate, MOCK_EMAIL, mockMembers, mockUser } from "./account";
 import { formatTs, HOST_IDS, TRACE_ID } from "./fixtures";
 
 const API = "*/api/v1";
@@ -11,6 +26,7 @@ const ENV = "prod";
 
 type Code = "invalid_argument" | "not_found" | "permission_denied";
 const STATUS: Record<Code, number> = { invalid_argument: 400, not_found: 404, permission_denied: 403 };
+const HOURS = 3_600_000;
 const fail = (code: Code, message: string) => HttpResponse.json({ error: { code, message } }, { status: STATUS[code] });
 
 function authed(resolver: HttpResponseResolver): HttpResponseResolver {
@@ -180,7 +196,12 @@ const PHP_STACK = [
   "#2 {main}",
 ].join("\n");
 
-const GROUPS: Record<string, (ApmErrorGroup & { stacktrace: string; last_message: string })[]> = {
+type GroupSeed = Pick<ApmErrorGroup, "group_id" | "error_type" | "message" | "count" | "total_count" | "first_seen" | "last_seen" | "last_trace_id" | "last_span_name" | "sparkline"> & {
+  stacktrace: string;
+  last_message: string;
+};
+
+const GROUPS: Record<string, GroupSeed[]> = {
   orders: [
     { group_id: "5a1f0c9e3b2d4e71", error_type: "*errors.errorString", message: "order <n>: inventory shard <n> unavailable", last_message: "order 68: inventory shard 0 unavailable", count: 0, total_count: 412, first_seen: null, last_seen: null, last_trace_id: TRACE_ID, last_span_name: "GET /orders/{id}", sparkline: [], stacktrace: GO_STACK },
   ],
@@ -224,10 +245,10 @@ function mapData(w: { from: number; to: number; step: number }, focus?: string):
   const mins = minutes(w);
   const node = (p: Profile): ApmMapNode => {
     const r = red(p, mins);
-    return { id: svcId(p.name), type: "service", name: p.name, service_namespace: NS, environment: ENV, requests: r.requests, throughput: r.throughput, error_rate: r.error_rate, avg_ms: r.avg_ms, p95_ms: r.p95_ms, apdex: r.apdex };
+    return { id: svcId(p.name), type: "service", name: p.name, service_namespace: NS, environment: ENV, requests: r.requests, throughput: r.throughput, error_rate: r.error_rate, avg_ms: r.avg_ms, p95_ms: r.p95_ms, apdex: r.apdex, host_count: p.name === "frontend" ? 2 : 1, container_count: p.name === "frontend" ? 3 : 1 };
   };
   const dep = (type: ApmMapNode["type"], name: string, rpm: number, p95: number): ApmMapNode => ({
-    id: `${type}:${name}`, type, name, service_namespace: "", environment: "", requests: rpm * mins, throughput: rpm, error_rate: 0, avg_ms: p95 / 3, p95_ms: p95, apdex: null,
+    id: `${type}:${name}`, type, name, service_namespace: "", environment: "", requests: rpm * mins, throughput: rpm, error_rate: 0, avg_ms: p95 / 3, p95_ms: p95, apdex: null, host_count: 0, container_count: 0,
   });
   const edge = (source: string, target: string, type: ApmMapEdge["target_type"], rpm: number, errorRate: number, p95: number): ApmMapEdge => ({
     id: `${source}->${target}`, source, target, target_type: type, calls: rpm * mins, throughput: rpm, errors: rpm * mins * errorRate, error_rate: errorRate, avg_ms: p95 / 3, p95_ms: p95,
@@ -277,6 +298,102 @@ function traces(w: { from: number; to: number }, url: URL): ApmTraceResult[] {
   }
   if (url.searchParams.get("sort") === "duration") out.sort((a, b) => b.duration_ms - a.duration_ms);
   return out.slice(0, Number(url.searchParams.get("limit") ?? 50));
+}
+
+// ---- error workflow (in memory; reset with resetMockApm) ----
+
+type Workflow = Pick<ApmErrorGroup, "status" | "assignee" | "resolved_at" | "resolved_in_version" | "resolved_by_email" | "regressed_at" | "regression_count" | "updated_at" | "updated_by_email">;
+
+const workflow = new Map<string, Workflow>();
+const comments = new Map<string, ApmErrorComment[]>();
+const activity = new Map<string, ApmErrorActivity[]>();
+
+const defaultWorkflow = (): Workflow => ({ status: "unresolved", assignee: null, resolved_at: null, resolved_in_version: "", resolved_by_email: "", regressed_at: null, regression_count: 0, updated_at: null, updated_by_email: "" });
+
+function seedWorkflow(): void {
+  workflow.clear();
+  comments.clear();
+  activity.clear();
+  // UpstreamError (frontend) was resolved in 1.4.1 and regressed after the 1.4.2 deployment.
+  const now = Date.now();
+  workflow.set("0b7d3e5f9a1c2d44", { ...defaultWorkflow(), regressed_at: formatTs(now - 30 * 60_000), regression_count: 1, updated_at: formatTs(now - 30 * 60_000) });
+  activity.set("0b7d3e5f9a1c2d44", [
+    { action: "apm.error_group.update", actor_email: MOCK_EMAIL, details: { status: { from: "unresolved", to: "resolved" }, resolved_in_version: "1.4.1" }, created_at: formatTs(now - 5 * HOURS) },
+    { action: "apm.error_group.regressed", actor_email: "openlog-apm", details: { version: "1.4.2" }, created_at: formatTs(now - 30 * 60_000) },
+  ]);
+}
+seedWorkflow();
+
+function serviceOfGroup(id: string): string | undefined {
+  return Object.keys(GROUPS).find((svc) => GROUPS[svc]!.some((g) => g.group_id === id));
+}
+
+function inboxGroups(p: Profile, w: { from: number; to: number; step: number }): ApmErrorGroup[] {
+  return groupsFor(p.name, w).map(({ stacktrace: _s, last_message: _m, ...g }) => ({
+    ...g,
+    service_name: p.name,
+    service_namespace: NS,
+    environment: ENV,
+    ...(workflow.get(g.group_id) ?? defaultWorkflow()),
+    comment_count: comments.get(g.group_id)?.length ?? 0,
+  }));
+}
+
+function inbox(url: URL, services: Profile[], w: { from: number; to: number; step: number }): Response {
+  const p = url.searchParams;
+  const statusParam = p.get("status") ?? "all";
+  const statuses = statusParam === "all" ? null : statusParam.split(",");
+  if (statuses && !statuses.every((st) => ["unresolved", "resolved", "ignored"].includes(st))) return fail("invalid_argument", "status must be all or a comma-separated list of unresolved, resolved, ignored");
+  let assignee = p.get("assignee") ?? "any";
+  if (assignee === "me") assignee = mockUser().id;
+  const q = (p.get("q") ?? "").toLowerCase();
+  const sort = p.get("sort") ?? "count";
+  let all = services.flatMap((s) => inboxGroups(s, w));
+  if (assignee === "none") all = all.filter((g) => !g.assignee);
+  else if (assignee !== "any") all = all.filter((g) => g.assignee?.user_id === assignee);
+  if (q) all = all.filter((g) => [g.error_type, g.message, g.service_name, g.last_span_name].join(" ").toLowerCase().includes(q));
+  const counts = { unresolved: 0, resolved: 0, ignored: 0 };
+  for (const g of all) counts[g.status]++;
+  let groups = statuses ? all.filter((g) => statuses.includes(g.status)) : all;
+  const key = sort === "last_seen" ? (g: ApmErrorGroup) => Date.parse(g.last_seen ?? "") : sort === "first_seen" ? (g: ApmErrorGroup) => Date.parse(g.first_seen ?? "") : (g: ApmErrorGroup) => g.count;
+  groups = [...groups].sort((a, b) => key(b) - key(a));
+  return HttpResponse.json({ groups: groups.slice(0, Number(p.get("limit") ?? 50)), step: `${w.step}s`, counts, truncated: false, workflow: true });
+}
+
+/** Trace ids of a transaction (logs mock: GET /logs?transaction=&transaction_service=). */
+export function transactionTraceIds(service: string, transaction: string): string[] {
+  return (TRANSACTIONS[service] ?? []).some((t) => t.name === transaction) ? [TRACE_ID] : [];
+}
+
+type WriteCtx = { role: string; kind: string };
+
+function writer(request: Request): WriteCtx | Response {
+  const ctx = authenticate(request);
+  if (ctx instanceof Response) return ctx;
+  if (ctx.kind !== "session") return fail("permission_denied", "this operation requires a signed-in user; API keys are read-only");
+  if (ctx.role === "viewer") return fail("permission_denied", `your role (${ctx.role}) does not allow this operation`);
+  return ctx;
+}
+
+function addActivity(id: string, a: Omit<ApmErrorActivity, "created_at" | "actor_email">): void {
+  const list = activity.get(id) ?? [];
+  list.push({ ...a, actor_email: MOCK_EMAIL, created_at: formatTs(Date.now()) });
+  activity.set(id, list);
+}
+
+// ---- deployments ----
+
+function deploymentsFor(service: string, now: number): ApmDeployment[] {
+  const at = (ms: number) => Math.floor((now - ms) / 60_000) * 60_000;
+  const d = (t: number, version: string, previous: string, initial = false, rollback = false): ApmDeployment => ({ timestamp: formatTs(t), t, service_namespace: NS, environment: ENV, version, previous_version: previous, initial, rollback });
+  switch (service) {
+    case "orders":
+      return [d(at(40 * 60_000), "1.4.2", "1.4.1")];
+    case "frontend":
+      return [d(at(6 * HOURS), "1.4.1", "1.4.0"), d(at(50 * 60_000), "1.4.2", "1.4.1")];
+    default:
+      return [];
+  }
 }
 
 function withService(fn: (p: Profile, url: URL, w: { from: number; to: number; step: number }, params: Record<string, string>) => Response): HttpResponseResolver {
@@ -356,7 +473,117 @@ export const apmHandlers = [
     });
   })),
 
-  http.get(`${API}/apm/services/:service/errors`, withService((p, _url, w) => HttpResponse.json({ groups: groupsFor(p.name, w).map(({ stacktrace: _s, last_message: _m, ...g }) => g), step: `${w.step}s` }))),
+  http.get(`${API}/apm/services/:service/errors`, withService((p, url, w) => inbox(url, [p], w))),
+
+  http.get(`${API}/apm/errors`, authed(({ request }) => {
+    const url = new URL(request.url);
+    const w = window(url);
+    if (w instanceof Response) return w;
+    const env = url.searchParams.get("environment");
+    const ns = url.searchParams.get("namespace");
+    const svc = url.searchParams.get("service");
+    const services = (env !== null && env !== ENV) || (ns !== null && ns !== NS) ? [] : PROFILES.filter((p) => !svc || p.name === svc);
+    return inbox(url, services, w);
+  })),
+
+  http.patch(`${API}/apm/errors/groups`, async ({ request }) => {
+    const ctx = writer(request);
+    if (ctx instanceof Response) return ctx;
+    const body = (await request.json().catch(() => ({}))) as { group_ids?: unknown; status?: unknown; assignee_user_id?: unknown; resolved_in_version?: unknown };
+    const ids = Array.isArray(body.group_ids) ? body.group_ids.map((v) => String(v).toLowerCase()) : [];
+    if (ids.length === 0 || ids.length > 500 || !ids.every((id) => /^[0-9a-f]{16}$/.test(id))) return fail("invalid_argument", "group_ids must list 1-500 error groups");
+    const status = body.status as ApmErrorStatus | undefined;
+    if (status !== undefined && !["unresolved", "resolved", "ignored"].includes(status)) return fail("invalid_argument", "invalid error group change: status must be unresolved, resolved or ignored");
+    const version = typeof body.resolved_in_version === "string" ? body.resolved_in_version.trim() : undefined;
+    if (version && status !== "resolved") return fail("invalid_argument", "invalid error group change: resolved_in_version needs status resolved");
+    const assigneeId = typeof body.assignee_user_id === "string" ? body.assignee_user_id : undefined;
+    if (status === undefined && assigneeId === undefined && version === undefined) return fail("invalid_argument", "invalid error group change: nothing to change");
+    const member = assigneeId ? mockMembers().find((m) => m.user_id === assigneeId) : undefined;
+    if (assigneeId && !member) return fail("invalid_argument", "assignee is not a member of the organization");
+    const missing = ids.filter((id) => !serviceOfGroup(id));
+    if (missing.length) return fail("not_found", `unknown error groups: ${missing.join(", ")}`);
+    const now = formatTs(Date.now());
+    const groups = ids.map((id) => {
+      const cur = workflow.get(id) ?? defaultWorkflow();
+      const next: Workflow = { ...cur, updated_at: now, updated_by_email: MOCK_EMAIL };
+      const details: Record<string, unknown> = {};
+      if (status !== undefined) {
+        if (status !== cur.status) details.status = { from: cur.status, to: status };
+        next.status = status;
+        next.resolved_at = status === "resolved" ? now : null;
+        next.resolved_in_version = status === "resolved" ? (version ?? "") : "";
+        next.resolved_by_email = status === "resolved" ? MOCK_EMAIL : "";
+        if (version) details.resolved_in_version = version;
+      }
+      if (assigneeId !== undefined) {
+        if ((cur.assignee?.user_id ?? "") !== assigneeId) details.assignee_user_id = { from: cur.assignee?.user_id ?? "", to: assigneeId };
+        next.assignee = member ? { user_id: member.user_id, email: member.email, name: member.name } : null;
+      }
+      workflow.set(id, next);
+      if (Object.keys(details).length) addActivity(id, { action: "apm.error_group.update", details });
+      return { group_id: id, service_name: serviceOfGroup(id)!, service_namespace: NS, environment: ENV, ...next, comment_count: comments.get(id)?.length ?? 0 };
+    });
+    return HttpResponse.json({ groups });
+  }),
+
+  http.get(`${API}/apm/errors/groups/:groupId/comments`, authed(({ params }) => HttpResponse.json({ comments: comments.get(String(params.groupId).toLowerCase()) ?? [] }))),
+
+  http.post(`${API}/apm/errors/groups/:groupId/comments`, async ({ request, params }) => {
+    const ctx = writer(request);
+    if (ctx instanceof Response) return ctx;
+    const id = String(params.groupId).toLowerCase();
+    if (!serviceOfGroup(id)) return fail("not_found", "error group not found");
+    const body = (await request.json().catch(() => ({}))) as { body?: unknown };
+    const text = typeof body.body === "string" ? body.body.trim() : "";
+    if (!text || new TextEncoder().encode(text).length > 4000) return fail("invalid_argument", "invalid error group change: body must be 1-4000 bytes");
+    const user = mockUser();
+    const c: ApmErrorComment = { id: crypto.randomUUID(), author_user_id: user.id, author_email: user.email, author_name: user.name, body: text, created_at: formatTs(Date.now()) };
+    comments.set(id, [...(comments.get(id) ?? []), c]);
+    addActivity(id, { action: "apm.error_group.comment", details: { comment_id: c.id } });
+    return HttpResponse.json(c, { status: 201 });
+  }),
+
+  http.delete(`${API}/apm/errors/groups/:groupId/comments/:commentId`, ({ request, params }) => {
+    const ctx = writer(request);
+    if (ctx instanceof Response) return ctx;
+    const id = String(params.groupId).toLowerCase();
+    const list = comments.get(id) ?? [];
+    const c = list.find((x) => x.id === params.commentId);
+    if (!c || (c.author_user_id !== mockUser().id && ctx.role !== "admin" && ctx.role !== "owner")) return fail("not_found", "comment not found");
+    comments.set(id, list.filter((x) => x !== c));
+    addActivity(id, { action: "apm.error_group.comment_delete", details: { comment_id: c.id } });
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get(`${API}/apm/services/:service/deployments`, withService((p, _url, w) =>
+    HttpResponse.json({ deployments: deploymentsFor(p.name, Date.now()).filter((d) => d.t >= w.from && d.t <= w.to), gap_seconds: 1800 }),
+  )),
+
+  http.get(`${API}/apm/services/:service/deployments/compare`, withService((p, url) => {
+    const atParam = url.searchParams.get("at");
+    if (!atParam) return fail("invalid_argument", "at is required");
+    const at = /^\d+$/.test(atParam) ? Number(atParam) : Date.parse(atParam);
+    if (!Number.isFinite(at) || at >= Date.now()) return fail("invalid_argument", "at must be in the past");
+    const win = url.searchParams.get("window") ?? "30m";
+    const m = /^(\d+)(m|h)$/.exec(win);
+    const secs = m ? Number(m[1]) * (m[2] === "h" ? 3600 : 60) : NaN;
+    if (!(secs >= 300 && secs <= 86400)) return fail("invalid_argument", "window must be a duration between 5m0s and 24h0m0s");
+    const minute = Math.floor(at / 60_000) * 60_000;
+    const mins = secs / 60;
+    const worse = p.name === "orders";
+    const before = red(p, mins);
+    const after = red({ ...p, p95: p.p95 * (worse ? 1.35 : 0.9), p99: p.p99 * (worse ? 1.3 : 0.9), errorRate: p.errorRate * (worse ? 2 : 0.8), apdex: Math.max(0, p.apdex - (worse ? 0.07 : -0.02)) }, mins);
+    const iso = (t: number) => formatTs(t);
+    const first = GROUPS[p.name]?.[0];
+    return HttpResponse.json({
+      at: iso(minute),
+      window_seconds: secs,
+      apdex_t_ms: settingsFor(p.name).apdex_t_ms,
+      before: { from: iso(minute - secs * 1000), to: iso(minute), ...before },
+      after: { from: iso(minute), to: iso(Math.min(minute + secs * 1000, Date.now())), ...after },
+      new_error_groups: worse && first ? [{ group_id: first.group_id, error_type: first.error_type, message: first.message, first_seen: iso(minute + 4 * 60_000), total_count: 57 }] : [],
+    });
+  })),
 
   http.get(`${API}/apm/services/:service/errors/:groupId`, withService((p, _url, w, params) => {
     const id = String(params.groupId).toLowerCase();
@@ -364,14 +591,30 @@ export const apmHandlers = [
     const g = groupsFor(p.name, w).find((x) => x.group_id === id);
     if (!g) return fail("not_found", "error group not found");
     const { sparkline, ...rest } = g;
+    const now = Date.now();
+    const aff = (value: string, count: number, name = "") => ({ value, name, count, first_seen: formatTs(now - 3 * 86_400_000), last_seen: formatTs(now - 20_000) });
     return HttpResponse.json({
       ...rest,
+      service_name: p.name,
+      service_namespace: NS,
+      environment: ENV,
+      ...(workflow.get(id) ?? defaultWorkflow()),
+      comment_count: comments.get(id)?.length ?? 0,
       first_seen: g.first_seen ?? formatTs(0),
       last_seen: g.last_seen ?? formatTs(0),
       last_span_id: "eee19b7ec3c1b174",
       step: `${w.step}s`,
       series: sparkline,
-      samples: Array.from({ length: 6 }, (_, i) => ({ trace_id: i === 0 ? TRACE_ID : `${(i + 7).toString(16).padStart(8, "0")}${"e".repeat(24)}`, span_id: `${i}${"f".repeat(15)}`, timestamp: formatTs(w.to - i * 61_000), span_name: g.last_span_name, transaction_name: g.last_span_name, duration_ms: 3.2 + i, message: g.last_message })),
+      samples: Array.from({ length: 6 }, (_, i) => ({ trace_id: i === 0 ? TRACE_ID : `${(i + 7).toString(16).padStart(8, "0")}${"e".repeat(24)}`, span_id: `${i}${"f".repeat(15)}`, timestamp: formatTs(w.to - i * 61_000), span_name: g.last_span_name, transaction_name: g.last_span_name, duration_ms: 3.2 + i, message: g.last_message, version: i < 4 ? "1.4.2" : "1.4.1", host_id: HOST_IDS.web })),
+      affected: {
+        versions: [aff("1.4.2", Math.round(g.total_count * 0.7)), aff("1.4.1", Math.round(g.total_count * 0.3))],
+        hosts: [aff(HOST_IDS.web, g.total_count, "web-1")],
+        containers: [aff("c0ffee".padEnd(64, "0"), g.total_count, `${p.name}-1`)],
+        transactions: [aff(g.last_span_name, g.total_count)],
+      },
+      comments: comments.get(id) ?? [],
+      activity: [...(activity.get(id) ?? [])].reverse(),
+      workflow: true,
     });
   })),
 
@@ -426,7 +669,28 @@ export const apmHandlers = [
     const url = new URL(request.url);
     const w = window(url);
     if (w instanceof Response) return w;
-    return HttpResponse.json(mapData(w, url.searchParams.get("service") ?? undefined));
+    const service = url.searchParams.get("service");
+    const env = url.searchParams.get("environment");
+    const ns = url.searchParams.get("namespace");
+    if (!service && ((env !== null && env !== ENV) || (ns !== null && ns !== NS))) return HttpResponse.json({ nodes: [], edges: [] });
+    return HttpResponse.json(mapData(w, service ?? undefined));
+  })),
+
+  http.get(`${API}/apm/map/path`, authed(({ request }) => {
+    const url = new URL(request.url);
+    const w = window(url);
+    if (w instanceof Response) return w;
+    const service = url.searchParams.get("service");
+    const txn = url.searchParams.get("transaction");
+    if (!service || !txn) return fail("invalid_argument", "service and transaction are required");
+    if (service === "frontend" && txn.includes("orders")) {
+      return HttpResponse.json({ trace_count: 12, nodes: ["db:postgresql/orders", svcId("frontend"), svcId("orders")], edges: [`${svcId("frontend")}->${svcId("orders")}`, `${svcId("orders")}->db:postgresql/orders`] });
+    }
+    if (service === "catalog" || (service === "frontend" && txn.includes("products"))) {
+      return HttpResponse.json({ trace_count: 8, nodes: ["db:redis", svcId("catalog"), svcId("frontend")], edges: [`${svcId("frontend")}->${svcId("catalog")}`, `${svcId("catalog")}->db:redis`] });
+    }
+    const known = (TRANSACTIONS[service] ?? []).some((t) => t.name === txn);
+    return HttpResponse.json({ trace_count: known ? 5 : 0, nodes: known ? [svcId(service)] : [], edges: [] });
   })),
 
   http.get(`${API}/apm/traces`, authed(({ request }) => {
@@ -442,4 +706,5 @@ export const apmHandlers = [
 /** Test helper: forget stored Apdex settings. */
 export function resetMockApm(): void {
   settings.clear();
+  seedWorkflow();
 }

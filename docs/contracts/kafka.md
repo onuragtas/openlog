@@ -10,7 +10,13 @@ Producer: `openlog-ingest`. Consumer: `openlog-processor` (consumer group `openl
 |---|---|---|
 | `<prefix>.otlp.metrics.v1` | protobuf `ExportMetricsServiceRequest` | `<tenant_id>/<host.id>` of the first resource having `host.id`, else `<tenant_id>/<service.name>`, else `<tenant_id>/` |
 | `<prefix>.otlp.logs.v1` | protobuf `ExportLogsServiceRequest` | same rule as metrics |
-| `<prefix>.otlp.traces.v1` | protobuf `ExportTraceServiceRequest` | `<tenant_id>/<hex trace_id of the first span>` |
+| `<prefix>.otlp.traces.v1` | protobuf `ExportTraceServiceRequest` | `<tenant_id>/<hex trace_id of the first span>`; with tail sampling enabled one record **per trace id** (`<tenant_id>/<hex trace_id>`) |
+| `<prefix>.otlp.traces.sampled.v1` | protobuf `ExportTraceServiceRequest`: the kept spans of one trace (or of its late spans), tracestate `ot=th` rewritten (apm.md §4.2) | `<tenant_id>/<hex trace_id>` |
+
+**Tail sampling (D-075, D-076).** The sampled topic is created with the same settings as the others, whether or not tail sampling is enabled. With `OPENLOG_TAILSAMPLING_ENABLED=true`:
+- ingest splits trace export requests by trace id, so all spans of a trace go to one partition;
+- `openlog-sampler` (consumer group `openlog-sampler`, `OPENLOG_TAILSAMPLING_GROUP`) consumes `<prefix>.otlp.traces.v1` and produces to `<prefix>.otlp.traces.sampled.v1` with the same four headers (tenant, schema version, the first record's receive time and request id). It commits a raw partition only up to the oldest record that still has a buffered span or an unproduced kept span. Partitions it gives up in a rebalance are decided, produced and committed inside the revoke callback. Delivery is at-least-once; sampler crash, commit failure or lost partitions can duplicate kept spans, and processor dedup tokens don't cover these duplicates because the tokens are per sampled-topic offset range. See docs/operations/tail-sampling.md;
+- the processor consumes `<prefix>.otlp.traces.sampled.v1` instead of `<prefix>.otlp.traces.v1` (the chunk, token and commit rules below apply to it unchanged).
 
 Keying metrics/logs by host keeps inventory snapshot items and their snapshot-complete record in order within one partition.
 

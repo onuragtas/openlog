@@ -84,7 +84,9 @@ export function TracePage() {
   const selected = useMemo(() => spans.find((s) => s.span_id === search.span), [spans, search.span]);
   const root = layout.rows[0]?.span;
   const locale = i18n.resolvedLanguage ?? "en";
-  const selectSpan = (id: string | undefined) => void navigate({ search: (prev) => ({ ...prev, span: id }), replace: true });
+  // Selecting a span only changes the search param: keep the page and waterfall scroll positions
+  // (scroll restoration would otherwise reset them, undoing the waterfall's scroll to a search match).
+  const selectSpan = (id: string | undefined) => void navigate({ search: (prev) => ({ ...prev, span: id }), replace: true, resetScroll: false });
 
   if (!valid) return <EmptyState>{t("trace.invalid")}</EmptyState>;
   if (query.isPending) return <LoadingState />;
@@ -152,7 +154,7 @@ export function TracePage() {
           </SheetContent>
         </Sheet>
       )}
-      <TraceLogsPanel traceId={query.data.trace_id} startMs={startMs} endMs={startMs + layout.totalNs / 1e6} onSelectSpan={selectSpan} />
+      <TraceLogsPanel traceId={query.data.trace_id} startMs={startMs} endMs={startMs + layout.totalNs / 1e6} selectedSpanId={selected?.span_id} onSelectSpan={selectSpan} />
     </div>
   );
 }

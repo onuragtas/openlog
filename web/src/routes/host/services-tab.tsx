@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Code2, LineChart } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { servicesQuery } from "@/api/queries";
+import { hostQuery, servicesQuery } from "@/api/queries";
 import type { DiscoveredService, InventoryItem } from "@/api/types";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -147,6 +147,7 @@ export function HostServicesTab({ hostId }: { hostId: string }) {
   const { t, i18n } = useTranslation();
   const now = useNow();
   const query = useQuery(servicesQuery(hostId));
+  const hostName = useQuery(hostQuery(hostId)).data?.host_name || hostId;
   if (query.isPending) return <LoadingState />;
   if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
   const { snapshot_id, snapshot_time, items } = query.data;
@@ -162,6 +163,9 @@ export function HostServicesTab({ hostId }: { hostId: string }) {
           {snap !== null && <span className="text-xs text-muted-foreground">{t("services.snapshotAt", { when: formatRelative(snap, now, i18n.resolvedLanguage ?? "en") })}</span>}
           <Link to="/integrations" className="text-xs text-primary hover:underline">
             {t("services.allIntegrations")}
+          </Link>
+          <Link to="/alerts/templates" search={{ category: "host", host: hostId, hostName } as never} className="text-xs text-primary hover:underline" data-testid="host-recommended-alerts">
+            {t("services.recommendedAlerts")}
           </Link>
         </div>
       </div>

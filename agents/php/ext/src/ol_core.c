@@ -136,10 +136,13 @@ void ol_arena_release(void)
 	OLG(arena_cur) = c;
 }
 
-/* Copies len bytes (at most max, UTF-8 cleaned, NUL terminated) into the arena. */
-const char *ol_strdup(const char *s, size_t len, size_t max)
+/* Copies len bytes (at most max, UTF-8 cleaned, NUL terminated) into the arena; *out_len (optional) = copied length. */
+const char *ol_strdup_n(const char *s, size_t len, size_t max, size_t *out_len)
 {
 	char *d;
+	if (out_len) {
+		*out_len = 0;
+	}
 	if (s == NULL) {
 		return NULL;
 	}
@@ -155,7 +158,15 @@ const char *ol_strdup(const char *s, size_t len, size_t max)
 	}
 	len = ol_utf8_clean(d, s, len, max);
 	d[len] = '\0';
+	if (out_len) {
+		*out_len = len;
+	}
 	return d;
+}
+
+const char *ol_strdup(const char *s, size_t len, size_t max)
+{
+	return ol_strdup_n(s, len, max, NULL);
 }
 
 const char *ol_strdup_lit(const char *s)
@@ -294,7 +305,7 @@ uint32_t ol_span_begin_flags(zend_execute_data *ex, const char *name, uint8_t ki
 	uint32_t parent, eff_span, idx, seg = OL_NONE;
 	ol_frame *f;
 
-	if (!OL_REC()) {
+	if (!OL_REC() || OLG(concurrent)) {
 		return OL_NONE;
 	}
 	parent = ol_current_parent();
@@ -391,7 +402,7 @@ ol_node *ol_span_end(zend_execute_data *ex)
 uint32_t ol_span_detached(const char *name, uint8_t kind)
 {
 	uint32_t idx, parent, seg = OL_NONE;
-	if (!OL_REC()) {
+	if (!OL_REC() || OLG(concurrent)) {
 		return OL_NONE;
 	}
 	parent = ol_current_parent();
@@ -480,17 +491,32 @@ void ol_attr_str(ol_node *n, const char *key, const char *s, size_t len)
 {
 	const char *copy;
 	ol_attr *a;
-	if (n == NULL || s == NULL) {
+	size_t cl;
+	if (n == NULL || s == NULL || n->nattrs >= OL_MAX_ATTRS) {
 		return;
 	}
-	copy = ol_strdup(s, len, OL_STR_MAX);
+	copy = ol_strdup_n(s, len, OL_STR_MAX, &cl);
 	if (copy == NULL) {
 		return;
 	}
 	a = ol_attr_new(n, key, OL_AT_STR);
 	if (a) {
 		a->v.s.p = copy;
-		a->v.s.len = (uint32_t) strlen(copy);
+		a->v.s.len = (uint32_t) cl;
+	}
+}
+
+/* s: arena string (valid UTF-8, <= 4 KiB, outlives the request) of length len. */
+void ol_attr_static_n(ol_node *n, const char *key, const char *s, size_t len)
+{
+	ol_attr *a;
+	if (s == NULL) {
+		return;
+	}
+	a = ol_attr_new(n, key, OL_AT_STR);
+	if (a) {
+		a->v.s.p = s;
+		a->v.s.len = (uint32_t) len;
 	}
 }
 
@@ -567,10 +593,11 @@ void ol_event_attr_str(ol_event *e, const char *key, const char *s, size_t len)
 {
 	ol_attr *a;
 	const char *copy;
+	size_t cl;
 	if (e == NULL || s == NULL) {
 		return;
 	}
-	copy = ol_strdup(s, len, OL_STR_MAX);
+	copy = ol_strdup_n(s, len, OL_STR_MAX, &cl);
 	a = copy ? ol_alloc(sizeof(ol_attr)) : NULL;
 	if (a == NULL) {
 		return;
@@ -578,7 +605,7 @@ void ol_event_attr_str(ol_event *e, const char *key, const char *s, size_t len)
 	a->key = key;
 	a->type = OL_AT_STR;
 	a->v.s.p = copy;
-	a->v.s.len = (uint32_t) strlen(copy);
+	a->v.s.len = (uint32_t) cl;
 	a->next = e->attrs;
 	e->attrs = a;
 }
@@ -587,7 +614,7 @@ void ol_event_attr_str(ol_event *e, const char *key, const char *s, size_t len)
 void ol_set_route(const char *route, size_t len, int prio, bool http_route)
 {
 	const char *copy;
-	if (!OLG(active) || route == NULL || len == 0 || prio < OLG(route_prio)) {
+	if (!OLG(active) || OLG(concurrent) || route == NULL || len == 0 || prio < OLG(route_prio)) {
 		return;
 	}
 	copy = ol_strdup(route, len, 1024);

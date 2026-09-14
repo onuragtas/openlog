@@ -22,6 +22,8 @@ var ShardingKeys = map[string][]string{
 	TableHosts:              {"tenant_id", "host_id"},
 	TableInventoryItems:     {"tenant_id", "host_id"},
 	TableInventorySnapshots: {"tenant_id", "host_id"},
+	TableRelinkQueue:        {"tenant_id", "trace_id"},
+	TableUsageIngest:        {"tenant_id", "signal"},
 }
 
 // ShardingExpressions returns table -> "cityHash64(col, ...)" for VerifyShardingKeys.

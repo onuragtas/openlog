@@ -13,7 +13,6 @@ import (
 	"github.com/onuragtas/openlog/internal/alert/notify"
 	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/api"
-	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
@@ -58,6 +57,7 @@ func startAlertAPI(cfg config.Config, pool *pgxpool.Pool, srv *api.Server, apmSe
 		Keys: kr, Sender: alertSender(cfg), PublicURL: cfg.Alert.PublicURL, MaxRulesPerOrg: cfg.Alert.MaxRulesPerOrg,
 		Limits: alert.Limits{MaxSeries: cfg.Alert.MaxSeriesPerRule}, Delay: cfg.Alert.EvaluationDelay,
 		QueryTimeout: cfg.Alert.QueryTimeout, DefaultApdexT: cfg.APM.DefaultApdexT, ApdexSettings: settings,
+		ErrorStates: apm.PGErrorStates{Pool: pool},
 	}))
 	return nil
 }
@@ -90,7 +90,11 @@ func RunAlert(ctx context.Context, cfg config.Config, adm *admin.Server, log *sl
 		return err
 	}
 	defer conn.Close()
-	db := query.New(conn, cfg.ClickHouseDatabase, cfg.Alert.QueryTimeout)
+	db, closeDB, err := openQueryDB(ctx, cfg, conn, "alert", cfg.Alert.QueryTimeout, log)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
 	adm.AddCheck("clickhouse", db.Ping)
 
 	store := alert.NewPGStore(pool)
@@ -126,6 +130,7 @@ func RunAlert(ctx context.Context, cfg config.Config, adm *admin.Server, log *sl
 		TenantPerMinute: a.TenantEvaluationsPerMinute, QueryTimeout: a.QueryTimeout, Limits: alert.Limits{MaxSeries: a.MaxSeriesPerRule},
 		PublicURL: a.PublicURL, Log: log.With("job", "alert-evaluator"), Registerer: adm.Registry(),
 		ApdexSettings: apmSettings.List, DefaultApdexT: cfg.APM.DefaultApdexT, Summaries: summaries,
+		ErrorStates: apm.PGErrorStates{Pool: pool},
 	})
 	disp := alert.NewDispatcher(store, alertSender(cfg), kr, alert.DispatcherOptions{
 		Instance: instance, Workers: a.DispatchWorkers, DeliveryTimeout: a.DeliveryTimeout, MaxAttempts: a.DeliveryMaxAttempts,

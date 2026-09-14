@@ -659,24 +659,35 @@ func (s *PGStore) ActiveMutes(ctx context.Context, orgID string, at time.Time) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var out []Mute
+	var all []Mute
 	for rows.Next() {
 		m, err := scanMute(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
-		if m.Active(at) {
-			out = append(out, *m)
+		all = append(all, *m)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachMuteHolidays(ctx, all); err != nil {
+		return nil, err
+	}
+	var out []Mute
+	for i := range all {
+		if all[i].Active(at) {
+			out = append(out, all[i])
 		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // RollRecurringMutes implements OutboxStore. The update is conditional on the old window, so concurrent
 // dispatchers write the same result at most once.
 func (s *PGStore) RollRecurringMutes(ctx context.Context, now time.Time) (int, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id::text, schedule, ends_at FROM alert_mutes
+	rows, err := s.pool.Query(ctx, `SELECT id::text, org_id::text, schedule, ends_at FROM alert_mutes
 		WHERE schedule IS NOT NULL AND ends_at <= $1
 		  AND (schedule->>'until' IS NULL OR (schedule->>'until')::timestamptz > $1)
 		ORDER BY ends_at LIMIT 1000`, now)
@@ -684,8 +695,7 @@ func (s *PGStore) RollRecurringMutes(ctx context.Context, now time.Time) (int, e
 		return 0, err
 	}
 	type due struct {
-		id   string
-		sc   MuteSchedule
+		mute Mute
 		ends time.Time
 	}
 	var list []due
@@ -693,12 +703,14 @@ func (s *PGStore) RollRecurringMutes(ctx context.Context, now time.Time) (int, e
 		var (
 			d   due
 			raw []byte
+			sc  MuteSchedule
 		)
-		if err := rows.Scan(&d.id, &raw, &d.ends); err != nil {
+		if err := rows.Scan(&d.mute.ID, &d.mute.OrgID, &raw, &d.ends); err != nil {
 			rows.Close()
 			return 0, err
 		}
-		if json.Unmarshal(raw, &d.sc) == nil {
+		if json.Unmarshal(raw, &sc) == nil {
+			d.mute.Schedule = &sc
 			list = append(list, d)
 		}
 	}
@@ -706,13 +718,20 @@ func (s *PGStore) RollRecurringMutes(ctx context.Context, now time.Time) (int, e
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
+	mutes := make([]Mute, len(list))
+	for i := range list {
+		mutes[i] = list[i].mute
+	}
+	if err := s.attachMuteHolidays(ctx, mutes); err != nil {
+		return 0, err
+	}
 	moved := 0
-	for _, d := range list {
-		start, end, ok := d.sc.Window(now)
+	for i, d := range list {
+		start, end, ok := mutes[i].Schedule.Window(now)
 		if !ok {
 			continue
 		}
-		tag, err := s.pool.Exec(ctx, `UPDATE alert_mutes SET starts_at = $2, ends_at = $3 WHERE id = $1 AND ends_at = $4`, d.id, start, end, d.ends)
+		tag, err := s.pool.Exec(ctx, `UPDATE alert_mutes SET starts_at = $2, ends_at = $3 WHERE id = $1 AND ends_at = $4`, d.mute.ID, start, end, d.ends)
 		if err != nil {
 			return moved, err
 		}

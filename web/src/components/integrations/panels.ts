@@ -31,7 +31,11 @@ export type SeriesLabelKey =
   | "maxConnections"
   | "commits"
   | "rollbacks"
-  | "deadlocks";
+  | "deadlocks"
+  | "slotsOk"
+  | "slotsPfail"
+  | "slotsFail"
+  | "locks";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -57,7 +61,11 @@ export type PanelChartId =
   | "pgCacheHit"
   | "pgRows"
   | "pgDeadlocks"
-  | "pgReplicationLag";
+  | "pgReplicationLag"
+  | "nginxStatus"
+  | "nginxUpstreams"
+  | "redisCluster"
+  | "pgLocks";
 
 export interface PanelQuery {
   name: string;
@@ -74,6 +82,8 @@ export interface PanelChart {
   stacked?: boolean;
   yMax?: number;
   order?: string[];
+  /** Hidden when the instance reports no data (metrics only some setups send: nginx Plus/VTS, Redis Cluster). */
+  optional?: boolean;
   /** Query key whose metric the chart's "create alert" shortcut uses. */
   alert?: string;
   build: (d: PanelData, label: (k: SeriesLabelKey) => string) => ChartSeriesInput[];
@@ -82,6 +92,9 @@ export interface PanelChart {
 /** PostgreSQL database/table resource attributes, grouped via `group_by=resource.<key>`. */
 export const PG_DATABASE = "resource.postgresql.database.name";
 export const PG_TABLE = "resource.postgresql.table.name";
+/** pg_stat_statements query resources (semantic-conventions §6.5). */
+export const PG_QUERY_ID = "resource.postgresql.queryid";
+export const PG_QUERY_TEXT = "resource.db.query.text";
 
 const get = (d: PanelData, k: string): MetricSeries[] => d[k] ?? [];
 const one = (label: string, points: Points): ChartSeriesInput[] => (points.length > 0 ? [{ label, points }] : []);
@@ -114,6 +127,25 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
         const h = sumSeries(get(d, "h"));
         return [...one(L("accepted"), a), ...one(L("handled"), h), ...one(L("dropped"), differencePoints(a, h))];
       },
+    },
+    {
+      id: "nginxStatus",
+      queries: { s: { name: "nginx.http.response.status", agg: "rate", groupBy: ["nginx.status_range"] } },
+      unit: "number",
+      stacked: true,
+      optional: true,
+      order: ["2xx", "3xx", "4xx", "5xx", "1xx"],
+      alert: "s",
+      build: (d, L) => by(get(d, "s"), ["nginx.status_range"], L("requests")),
+    },
+    {
+      id: "nginxUpstreams",
+      queries: { p: { name: "nginx.http.upstream.peer.state", agg: "last", groupBy: ["nginx.peer.state"] } },
+      unit: "number",
+      stacked: true,
+      optional: true,
+      order: ["UP", "DRAINING", "CHECKING", "UNHEALTHY", "UNAVAILABLE", "DOWN"],
+      build: (d, L) => by(get(d, "p"), ["nginx.peer.state"], L("connections")),
     },
   ],
   redis: [
@@ -165,6 +197,14 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
         const replica = sumSeries(get(d, "r"));
         return replica.length > 0 ? one(L("lag"), differencePoints(sumSeries(get(d, "o")), replica)) : [];
       },
+    },
+    {
+      id: "redisCluster",
+      queries: { o: { name: "redis.cluster.slots_ok", agg: "last" }, p: { name: "redis.cluster.slots_pfail", agg: "last" }, f: { name: "redis.cluster.slots_fail", agg: "last" } },
+      unit: "number",
+      optional: true,
+      alert: "f",
+      build: (d, L) => [...one(L("slotsOk"), sumSeries(get(d, "o"))), ...one(L("slotsPfail"), sumSeries(get(d, "p"))), ...one(L("slotsFail"), sumSeries(get(d, "f")))],
     },
   ],
   mysql: [
@@ -279,6 +319,14 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
       unit: "number",
       alert: "l",
       build: (d, L) => by(get(d, "l"), ["operation", "replication_client"], L("lag")),
+    },
+    {
+      id: "pgLocks",
+      queries: { l: { name: "postgresql.database.locks", agg: "last", groupBy: ["mode"] } },
+      unit: "number",
+      stacked: true,
+      optional: true,
+      build: (d, L) => by(get(d, "l"), ["mode"], L("locks")),
     },
   ],
 };

@@ -25,7 +25,9 @@ import (
 //
 // apmLinker (nil when disabled) is the APM edge-linking job (docs/contracts/apm.md §6). Without
 // PostgreSQL (static auth mode, development) there is no leader election and it runs in this process.
-func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, srv *api.Server, log *slog.Logger, fleetController, apmLinker func(ctx context.Context)) {
+//
+// extra are further leader tasks (usage.go); they only run with PostgreSQL.
+func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, srv *api.Server, log *slog.Logger, fleetController, apmLinker func(ctx context.Context), extra ...leaderTask) {
 	uc := updatecheck.Config{
 		Enabled: cfg.UpdateCheck.Enabled, Interval: cfg.UpdateCheck.Interval, IndexURL: cfg.UpdateCheck.IndexURL,
 		Channel: cfg.UpdateCheck.Channel, TrustedKeysFile: cfg.UpdateCheck.TrustedKeysFile,
@@ -46,6 +48,9 @@ func startLeaderTasks(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 	}
 	if apmLinker != nil {
 		leader.Add("apm-edge-linking", apmLinker) // internal/apm, per shard
+	}
+	for _, t := range extra {
+		leader.Add(t.name, t.run)
 	}
 	var checkNow func(context.Context) error
 	if uc.Enabled {

@@ -106,7 +106,7 @@ func TestProbeOrderMemoAndHTTPS(t *testing.T) {
 	if err := c.Collect(context.Background(), integrations.NewBatch(time.Now(), 0)); err != nil {
 		t.Fatal(err)
 	}
-	if len(hits) != 2 || hits[0] != "/basic_status" {
+	if len(hits) != 1 || hits[0] != "/basic_status" { // the memoized page's body is recorded, no second request
 		t.Errorf("memoized probe hits = %v", hits)
 	}
 	c.Close()

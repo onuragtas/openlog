@@ -74,7 +74,7 @@ type versionBody struct {
 
 func (e *updatesEnv) audit(t *testing.T, orgID string) map[string]auth.AuditEvent {
 	t.Helper()
-	evs, err := e.st.ListAuditEvents(context.Background(), orgID, 100)
+	evs, err := e.st.ListAuditEvents(context.Background(), orgID, auth.AuditFilter{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

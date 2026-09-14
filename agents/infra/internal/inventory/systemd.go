@@ -18,6 +18,14 @@ type SystemdUnit struct {
 	EnabledState string `json:"enabled_state"`
 	Description  string `json:"description"`
 	ExecStart    string `json:"exec_start,omitempty"`
+	// Runtime state from systemd over D-Bus (systemd_dbus.go); omitted without D-Bus.
+	LoadState   string  `json:"load_state,omitempty"`
+	ActiveState string  `json:"active_state,omitempty"`
+	SubState    string  `json:"sub_state,omitempty"`
+	ActiveSince string  `json:"active_since,omitempty"`
+	Restarts    *uint32 `json:"restarts,omitempty"`
+	MemoryBytes *uint64 `json:"memory_bytes,omitempty"`
+	CPUUsageNs  *uint64 `json:"cpu_usage_ns,omitempty"`
 }
 
 // UnitDirs are scanned in systemd precedence order (first match wins).

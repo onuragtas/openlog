@@ -99,6 +99,8 @@ func testRows(tenant string, n int, now time.Time) map[string][][]any {
 				Name: "op", Kind: "server", StatusCode: "ok", HostID: host}
 			rows[TableSpans] = append(rows[TableSpans], sp.Values())
 		}
+		q := RelinkQueueRow{TenantID: tenant, Minute: ts.Truncate(time.Minute), TraceID: trace, Spans: 1, EnqueuedAt: ts}
+		rows[TableRelinkQueue] = append(rows[TableRelinkQueue], q.Values())
 		h := HostRow{TenantID: tenant, HostID: host, HostName: host, LastSeen: ts}
 		rows[TableHosts] = append(rows[TableHosts], h.Values())
 		it := InventoryItemRow{TenantID: tenant, HostID: host, SnapshotID: "s1", SnapshotTime: ts, Category: "package", ItemKey: "k" + host, Data: "{}"}

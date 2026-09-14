@@ -58,6 +58,37 @@ const validManifest = `{
     "sha256": "` + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" + `", "size": 42}]
 }`
 
+// A manifest of the PHP agent component (php-agent.md §7.1) keeps schema 1: consumers that only know infra-agent
+// ignore the extra artifacts, and apk is a valid format.
+func TestParseManifestPHPAgentArtifacts(t *testing.T) {
+	sum := strings.Repeat("ab", 32)
+	art := func(format string) string {
+		name := "openlog-php-agent_0.4.0_linux_arm64." + format
+		return `{"component": "php-agent", "os": "linux", "arch": "arm64", "format": "` + format + `", "name": "` + name +
+			`", "url": "https://example.com/` + name + `", "sha256": "` + sum + `", "size": 7}`
+	}
+	data := strings.Replace(validManifest, `"artifacts": [`, `"artifacts": [`+art("tar.gz")+`, `+art("apk")+`, `, 1)
+	m, err := ParseManifest([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Schema != SchemaVersion {
+		t.Errorf("schema = %d", m.Schema)
+	}
+	for _, f := range []string{FormatTarGz, FormatAPK} {
+		if _, ok := m.Artifact(ComponentPHPAgent, "linux", "arm64", f); !ok {
+			t.Errorf("php-agent %s not found", f)
+		}
+	}
+	if _, ok := m.Artifact(ComponentInfraAgent, "linux", "amd64", FormatTarGz); !ok {
+		t.Error("infra-agent artifact lost")
+	}
+	dup := strings.Replace(data, art("apk"), art("tar.gz"), 1)
+	if _, err := ParseManifest([]byte(dup)); err == nil || !strings.Contains(err.Error(), "duplicate php-agent/linux/arm64/tar.gz") {
+		t.Errorf("duplicate php-agent artifact: err = %v", err)
+	}
+}
+
 func TestParseManifest(t *testing.T) {
 	m, err := ParseManifest([]byte(validManifest))
 	if err != nil {

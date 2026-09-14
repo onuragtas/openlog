@@ -19,6 +19,8 @@ security:
   - apiKey: []
 tags:
   - name: auth
+  - name: sso
+    description: Single sign-on (OIDC, SAML 2.0), claimed e-mail domains, role mappings and SCIM tokens (api.md "Single sign-on")
   - name: organization
   - name: keys
   - name: hosts
@@ -30,9 +32,17 @@ tags:
     description: Application performance monitoring derived from traces (apm.md)
   - name: containers
     description: Containers reported by the infra agent (semantic-conventions.md §2) and their APM services
+  - name: kubernetes
+    description: Kubernetes clusters, nodes, workloads, pods and events (semantic-conventions.md §7)
   - name: fleet
   - name: integrations
   - name: alerts
+  - name: query
+    description: OQL query language (oql.md)
+  - name: dashboards
+    description: Custom dashboards of OQL widgets
+  - name: usage
+    description: Usage metering, plans, quotas and billing (usage.md)
 
 paths:
   /api/v1/hosts:
@@ -226,6 +236,320 @@ paths:
                   services:
                     type: array
                     items: { $ref: "#/components/schemas/ContainerService" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/clusters:
+    get:
+      tags: [kubernetes]
+      operationId: listKubernetesClusters
+      description: Clusters with data in [from, to] (default last hour), ordered by name. Counts include current objects only (api.md "Kubernetes").
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clusters]
+                properties:
+                  clusters:
+                    type: array
+                    items: { $ref: "#/components/schemas/KubernetesCluster" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/clusters/{cluster_uid}:
+    get:
+      tags: [kubernetes]
+      operationId: getKubernetesCluster
+      description: A cluster (any time within retention) with workload health by kind, recent Warning events and resource totals over [from, to].
+      parameters:
+        - $ref: "#/components/parameters/K8sClusterUID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesClusterDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/nodes:
+    get:
+      tags: [kubernetes]
+      operationId: listKubernetesNodes
+      description: Nodes seen in [from, to], ordered by cluster name and node name. `q` matches every term against name, uid, cluster, roles, IP, kubelet version and OS image.
+      parameters:
+        - { name: cluster_uid, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: q, in: query, schema: { type: string, maxLength: 256 } }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nodes, total]
+                properties:
+                  nodes:
+                    type: array
+                    items: { $ref: "#/components/schemas/KubernetesNode" }
+                  total: { type: integer, description: "Matching nodes before limit" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/workloads:
+    get:
+      tags: [kubernetes]
+      operationId: listKubernetesWorkloads
+      description: Workloads seen in [from, to], ordered by cluster name, namespace, kind and name; sparklines have ≈ 30 buckets (`step`).
+      parameters:
+        - { name: cluster_uid, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: namespace, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/KubernetesWorkloadKind" } }
+        - { name: health, in: query, schema: { $ref: "#/components/schemas/KubernetesWorkloadHealth" } }
+        - { name: q, in: query, schema: { type: string, maxLength: 256 } }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workloads, total, step]
+                properties:
+                  workloads:
+                    type: array
+                    items: { $ref: "#/components/schemas/KubernetesWorkload" }
+                  total: { type: integer, description: "Matching workloads before limit" }
+                  step: { type: string, example: 120s }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/workloads/{cluster_uid}/{namespace}/{kind}/{name}:
+    get:
+      tags: [kubernetes]
+      operationId: getKubernetesWorkload
+      description: A workload (any time within retention) with its pods seen in [from, to], its HPA and latest status attributes.
+      parameters:
+        - $ref: "#/components/parameters/K8sClusterUID"
+        - $ref: "#/components/parameters/K8sNamespace"
+        - $ref: "#/components/parameters/K8sWorkloadKind"
+        - $ref: "#/components/parameters/K8sWorkloadName"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesWorkloadDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/workloads/{cluster_uid}/{namespace}/{kind}/{name}/timeseries:
+    get:
+      tags: [kubernetes]
+      operationId: getKubernetesWorkloadTimeseries
+      parameters:
+        - $ref: "#/components/parameters/K8sClusterUID"
+        - $ref: "#/components/parameters/K8sNamespace"
+        - $ref: "#/components/parameters/K8sWorkloadKind"
+        - $ref: "#/components/parameters/K8sWorkloadName"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: step, in: query, description: "Go duration >= 10s; default ≈ 300 points", schema: { type: string, example: 1m } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesWorkloadTimeseries" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/pods:
+    get:
+      tags: [kubernetes]
+      operationId: listKubernetesPods
+      description: Pods seen in [from, to], ordered by cluster name, namespace and pod name.
+      parameters:
+        - { name: cluster_uid, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: namespace, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: node, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: workload_kind, in: query, schema: { $ref: "#/components/schemas/KubernetesWorkloadKind" } }
+        - { name: workload_name, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: phase, in: query, schema: { $ref: "#/components/schemas/KubernetesPodPhase" } }
+        - { name: q, in: query, schema: { type: string, maxLength: 256 } }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pods, total]
+                properties:
+                  pods:
+                    type: array
+                    items: { $ref: "#/components/schemas/KubernetesPod" }
+                  total: { type: integer, description: "Matching pods before limit" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/pods/{pod_uid}:
+    get:
+      tags: [kubernetes]
+      operationId: getKubernetesPod
+      description: A pod (any time within retention) with its containers, labels, APM services and node host.
+      parameters:
+        - $ref: "#/components/parameters/K8sPodUID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesPodDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/pods/{pod_uid}/timeseries:
+    get:
+      tags: [kubernetes]
+      operationId: getKubernetesPodTimeseries
+      parameters:
+        - $ref: "#/components/parameters/K8sPodUID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: step, in: query, description: "Go duration >= 10s; default ≈ 300 points", schema: { type: string, example: 1m } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesPodTimeseries" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/pods/{pod_uid}/events:
+    get:
+      tags: [kubernetes]
+      operationId: listKubernetesPodEvents
+      description: Events whose involved object is the pod, newest first.
+      parameters:
+        - $ref: "#/components/parameters/K8sPodUID"
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/KubernetesEventType" } }
+        - { name: reason, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesEventList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/kubernetes/events:
+    get:
+      tags: [kubernetes]
+      operationId: listKubernetesEvents
+      description: |
+        Kubernetes events (log records with event_name `k8s.event`) in [from, to], newest first. Updates of one event
+        (same `k8s.event.uid`) are returned once, as the latest record. Limit above 1000 is capped.
+      parameters:
+        - { name: cluster_uid, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: namespace, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/KubernetesEventType" } }
+        - { name: object_kind, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: object_name, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: object_uid, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: reason, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesEventList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/apm/services/{service_name}/kubernetes:
+    get:
+      tags: [apm, kubernetes]
+      operationId: listApmServiceKubernetesPods
+      description: |
+        Pods of the service seen in [from, to]: pods whose containers carried the service's container ids
+        (apm_service_containers, since `from`) or whose uid the service's spans carried as resource `k8s.pod.uid`.
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pods]
+                properties:
+                  pods:
+                    type: array
+                    items: { $ref: "#/components/schemas/KubernetesServicePod" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -425,6 +749,10 @@ paths:
           in: query
           description: Container logs (resource attribute `container.id`)
           schema: { type: string }
+        - name: k8s_pod_uid
+          in: query
+          description: Kubernetes pod logs (resource attribute `k8s.pod.uid`)
+          schema: { type: string }
         - name: compose_service
           in: query
           description: Resource attribute `docker.compose.service`
@@ -453,6 +781,22 @@ paths:
         - name: attr.openlog.syslog.identifier
           in: query
           schema: { type: string, example: sshd }
+        - name: span_id
+          in: query
+          description: Log records of one span (16 hex characters, case-insensitive)
+          schema: { type: string }
+        - name: transaction
+          in: query
+          description: With transaction_service, log records of the traces of that transaction (its entry spans in the range, at most 10000 traces)
+          schema: { type: string }
+        - name: transaction_service
+          in: query
+          description: service.name of `transaction`
+          schema: { type: string }
+        - name: cursor
+          in: query
+          description: next_cursor of the previous page (opaque). Send the same filters, from and to; a cursor overrides nothing else.
+          schema: { type: string }
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
@@ -463,11 +807,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [logs]
+                required: [logs, next_cursor]
                 properties:
                   logs:
                     type: array
                     items: { $ref: "#/components/schemas/LogRecord" }
+                  next_cursor:
+                    description: Cursor of the next (older) page; null when this page is the last one
+                    oneOf:
+                      - { type: string }
+                      - { type: "null" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -627,19 +976,16 @@ paths:
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/ApmStep"
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+        - $ref: "#/components/parameters/ApmErrorStatus"
+        - $ref: "#/components/parameters/ApmErrorAssignee"
+        - $ref: "#/components/parameters/ApmErrorQuery"
+        - $ref: "#/components/parameters/ApmErrorSort"
       responses:
         "200":
-          description: Error groups with occurrences in the range, most frequent first
+          description: Error inbox of the service (groups with occurrences in the range, plus groups whose workflow state matches the filter)
           content:
             application/json:
-              schema:
-                type: object
-                required: [groups, step]
-                properties:
-                  step: { type: string }
-                  groups:
-                    type: array
-                    items: { $ref: "#/components/schemas/ApmErrorGroup" }
+              schema: { $ref: "#/components/schemas/ApmErrorInbox" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
@@ -664,6 +1010,165 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/errors:
+    get:
+      tags: [apm]
+      operationId: listApmErrorInbox
+      description: Error inbox across services (apm.md §3.4); `service`, `namespace` and `environment` narrow it.
+      parameters:
+        - { name: service, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/ApmStep"
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+        - $ref: "#/components/parameters/ApmErrorStatus"
+        - $ref: "#/components/parameters/ApmErrorAssignee"
+        - $ref: "#/components/parameters/ApmErrorQuery"
+        - $ref: "#/components/parameters/ApmErrorSort"
+      responses:
+        "200":
+          description: Error groups with workflow state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmErrorInbox" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/errors/groups:
+    patch:
+      tags: [apm]
+      operationId: updateApmErrorGroups
+      description: |
+        Bulk status and assignee change (signed-in member, admin or owner; API keys 403). Writes the audit event
+        apm.error_group.update per changed group. 404 when a group id is unknown; not available in static auth mode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApmErrorGroupPatch" }
+      responses:
+        "200":
+          description: The states after the change
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups]
+                properties:
+                  groups:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmErrorGroupState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/errors/groups/{group_id}/comments:
+    get:
+      tags: [apm]
+      operationId: listApmErrorComments
+      parameters:
+        - $ref: "#/components/parameters/ApmGroupID"
+      responses:
+        "200":
+          description: Comments, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [comments]
+                properties:
+                  comments:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmErrorComment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    post:
+      tags: [apm]
+      operationId: addApmErrorComment
+      description: Signed-in member or above; audit event apm.error_group.comment.
+      parameters:
+        - $ref: "#/components/parameters/ApmGroupID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApmErrorCommentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmErrorComment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/errors/groups/{group_id}/comments/{comment_id}:
+    delete:
+      tags: [apm]
+      operationId: deleteApmErrorComment
+      description: The author, or an admin/owner, deletes a comment (audit event apm.error_group.comment_delete).
+      parameters:
+        - $ref: "#/components/parameters/ApmGroupID"
+        - { name: comment_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/apm/services/{service_name}/deployments:
+    get:
+      tags: [apm]
+      operationId: listApmDeployments
+      description: service.version changes in the range (apm.md §12), oldest first.
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - { name: gap, in: query, description: "Absence after which a version counts as deployed again (5m-24h)", schema: { type: string, default: 30m } }
+      responses:
+        "200":
+          description: Deployments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deployments, gap_seconds]
+                properties:
+                  gap_seconds: { type: integer }
+                  deployments:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmDeployment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/services/{service_name}/deployments/compare:
+    get:
+      tags: [apm]
+      operationId: compareApmDeployment
+      description: RED and Apdex of [at − window, at) against [at, at + window) (capped at now), and error groups first seen after at.
+      parameters:
+        - $ref: "#/components/parameters/ApmServiceName"
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - { name: at, in: query, required: true, description: RFC3339 or unix milliseconds (truncated to the minute), schema: { type: string } }
+        - { name: window, in: query, description: "5m-24h", schema: { type: string, default: 30m } }
+      responses:
+        "200":
+          description: Before/after comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmDeploymentCompare" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
 
   /api/v1/apm/services/{service_name}/databases:
     get:
@@ -779,6 +1284,70 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/apm/sampling:
+    get:
+      tags: [apm]
+      operationId: getTailSamplingPolicy
+      description: >-
+        The organization's tail sampling policy (D-075, apm.md §4.2). `is_default` when none is stored (the sampler then
+        uses OPENLOG_TAILSAMPLING_DEFAULT_POLICY). `enabled` reports OPENLOG_TAILSAMPLING_ENABLED of this api.
+      responses:
+        "200":
+          description: Policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TailSamplingPolicyState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    put:
+      tags: [apm]
+      operationId: putTailSamplingPolicy
+      description: >-
+        Signed-in admin or owner; audit event apm.tail_sampling.update. `version` is the version that was edited
+        (0 when none is stored); a different stored version answers 409. Not available in static auth mode (404).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TailSamplingPolicyInput" }
+      responses:
+        "200":
+          description: Stored policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TailSamplingPolicyState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/apm/sampling/preview:
+    post:
+      tags: [apm]
+      operationId: previewTailSamplingPolicy
+      description: >-
+        Estimates what a (not yet saved) policy keeps, from the traces stored in the last `window_minutes` (default 60,
+        at most 1440). Every stored trace counts with its adjusted count (sample_weight), so the ratios refer to the
+        original traffic; at most 20000 traces are examined (hash sample of trace ids). Rate limits are not simulated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy]
+              properties:
+                policy: { $ref: "#/components/schemas/TailSamplingPolicy" }
+                window_minutes: { type: integer, minimum: 1, maximum: 1440 }
+      responses:
+        "200":
+          description: Estimate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TailSamplingPreview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
   /api/v1/apm/hosts/{host_id}/services:
     get:
       tags: [apm]
@@ -816,6 +1385,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApmMap" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/apm/map/path:
+    get:
+      tags: [apm]
+      operationId: getApmMapPath
+      description: Service map node and edge ids (as in GET /apm/map) used by up to 50 traces of a transaction.
+      parameters:
+        - { name: service, in: query, required: true, schema: { type: string } }
+        - { name: transaction, in: query, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/ApmNamespace"
+        - $ref: "#/components/parameters/ApmEnvironment"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Path of the transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApmMapPath" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
@@ -981,6 +1571,8 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/Unavailable" }
 
   /api/v1/auth/me:
     get:
@@ -1021,7 +1613,498 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /api/v1/auth/verify-email:
+    post:
+      tags: [auth]
+      operationId: verifyEmail
+      security: []
+      description: Confirms the e-mail address with the token of the verification link (/verify-email#token=olv_…).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "204": { description: Verified }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/auth/verify-email/resend:
+    post:
+      tags: [auth]
+      operationId: resendVerificationEmail
+      description: E-mails a new verification link to the signed-in, unverified user (5 per hour).
+      responses:
+        "204": { description: Sent }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   # ---------------------------------------------------------------- organization
+  # ---- Single sign-on, domains and SCIM tokens (api.md "Single sign-on", D-077, D-078) ----
+
+  /api/v1/auth/sso/discover:
+    post:
+      tags: [sso]
+      operationId: discoverSSO
+      security: []
+      description: Whether the e-mail address belongs to a verified domain with an enabled connection. Rate limited per client IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSODiscovery" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/auth/sso/start:
+    post:
+      tags: [sso]
+      operationId: startSSOLogin
+      security: []
+      description: >-
+        Starts an SP-initiated sign-in and sets the browser binding cookie `openlog_sso_<id>` (HttpOnly, SameSite=Lax,
+        Path=/api/v1/sso, 10 minutes). The browser then navigates to `redirect_url` (the identity provider).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+                redirect: { type: string, description: "Relative UI path after sign-in (default /)" }
+      responses:
+        "200":
+          description: Identity provider URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirect_url]
+                properties:
+                  redirect_url: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/sso/oidc/callback:
+    get:
+      tags: [sso]
+      operationId: oidcCallback
+      security: []
+      description: OIDC redirect URI. Always answers 303 — to the UI path of the sign-in with the session cookie, or to `/login?sso_error=<code>`.
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "303": { description: Redirect to the UI }
+
+  /api/v1/sso/saml/{connection_id}/metadata:
+    get:
+      tags: [sso]
+      operationId: samlMetadata
+      security: []
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: SAML SP metadata (entity ID = this URL)
+          content:
+            application/samlmetadata+xml:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/sso/saml/{connection_id}/acs:
+    post:
+      tags: [sso]
+      operationId: samlACS
+      security: []
+      description: Assertion consumer service (HTTP-POST binding). Answers 303 to `/api/v1/sso/saml/complete` or `/login?sso_error=<code>`.
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [SAMLResponse]
+              properties:
+                SAMLResponse: { type: string }
+                RelayState: { type: string }
+      responses:
+        "303": { description: Redirect }
+
+  /api/v1/sso/saml/complete:
+    get:
+      tags: [sso]
+      operationId: samlComplete
+      security: []
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "303": { description: Redirect to the UI (session cookie set on success) }
+
+  /api/v1/sso/connection:
+    get:
+      tags: [sso]
+      operationId: getSSOConnection
+      description: admin, owner
+      responses:
+        "200":
+          description: Connection (null when none) and the service provider values to register at the identity provider
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [sso]
+      operationId: saveSSOConnection
+      description: admin, owner. Creates or replaces the connection; every save increases config_version (enforcement needs a new test).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SSOConnectionInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [sso]
+      operationId: deleteSSOConnection
+      description: admin, owner. Refused (409) while enforced; ends the connection's SSO sessions.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/connection/test:
+    post:
+      tags: [sso]
+      operationId: testSSOConnection
+      description: admin, owner. Server-side checks (OIDC discovery, JWKS, PKCE; SAML metadata, certificates, SP key).
+      responses:
+        "200":
+          description: Check results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOTestResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/sso/connection/test/start:
+    post:
+      tags: [sso]
+      operationId: startSSOTest
+      description: admin, owner. Starts a test sign-in (also for a disabled connection); the result is stored as last_test and the browser returns to /settings/sso?sso_test=ok|failed. No user, membership or session is created.
+      responses:
+        "200":
+          description: Identity provider URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirect_url]
+                properties:
+                  redirect_url: { type: string }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/enforcement:
+    put:
+      tags: [sso]
+      operationId: updateSSOEnforcement
+      description: owner. Turning enforcement on requires an enabled, successfully tested connection, a verified domain, at least one break-glass owner and that the caller keeps access (409 otherwise).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enforce, break_glass_user_ids]
+              properties:
+                enforce: { type: boolean }
+                break_glass_user_ids: { type: array, items: { type: string }, maxItems: 10 }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/role-mappings:
+    get:
+      tags: [sso]
+      operationId: listSSORoleMappings
+      description: admin, owner
+      responses:
+        "200":
+          description: Mappings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mappings]
+                properties:
+                  mappings: { type: array, items: { $ref: "#/components/schemas/SSORoleMapping" } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [sso]
+      operationId: replaceSSORoleMappings
+      description: admin, owner. Replaces all mappings (at most 200); roles of SCIM-provisioned members are recomputed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mappings]
+              properties:
+                mappings: { type: array, items: { $ref: "#/components/schemas/SSORoleMapping" } }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mappings]
+                properties:
+                  mappings: { type: array, items: { $ref: "#/components/schemas/SSORoleMapping" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/sso/domains:
+    get:
+      tags: [sso]
+      operationId: listSSODomains
+      description: admin, owner
+      responses:
+        "200":
+          description: Claimed domains
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domains]
+                properties:
+                  domains: { type: array, items: { $ref: "#/components/schemas/SSODomain" } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [sso]
+      operationId: addSSODomain
+      description: admin, owner (confirmed e-mail address). At most 20 domains.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain: { type: string }
+      responses:
+        "201":
+          description: Claimed (not verified yet)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSODomain" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/domains/{id}/verify:
+    post:
+      tags: [sso]
+      operationId: verifySSODomain
+      description: admin, owner. `dns_txt` looks up the TXT record now; `email` sends a link to <email_local_part>@<domain> (SMTP and OPENLOG_PUBLIC_URL required).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method]
+              properties:
+                method: { type: string, enum: [dns_txt, email] }
+                email_local_part: { type: string, enum: [admin, administrator, hostmaster, postmaster, webmaster] }
+      responses:
+        "200":
+          description: Verified (dns_txt) or e-mail sent (email)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSODomain" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/sso/domains/{id}:
+    delete:
+      tags: [sso]
+      operationId: deleteSSODomain
+      description: admin, owner. The last verified domain cannot be removed while SSO is enforced (409).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/domains/verify-email:
+    post:
+      tags: [sso]
+      operationId: verifySSODomainEmail
+      security: []
+      description: Confirms a domain with the token of the e-mailed link (/sso/verify-domain#token=oldv_…).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200":
+          description: Verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domain]
+                properties:
+                  domain: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/scim/tokens:
+    get:
+      tags: [sso]
+      operationId: listSCIMTokens
+      description: admin, owner
+      responses:
+        "200":
+          description: Tokens, including revoked ones
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens, base_url, enabled]
+                properties:
+                  tokens: { type: array, items: { $ref: "#/components/schemas/SCIMToken" } }
+                  base_url: { type: string }
+                  enabled: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [sso]
+      operationId: createSCIMToken
+      description: admin, owner (confirmed e-mail address). At most 20 active tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 200 }
+                expires_at: { type: [string, "null"], description: "RFC3339 or unix milliseconds, in the future" }
+      responses:
+        "201":
+          description: Created; the secret (ols_…) is shown only in this response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, secret]
+                properties:
+                  token: { $ref: "#/components/schemas/SCIMToken" }
+                  secret: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/scim/tokens/{id}:
+    delete:
+      tags: [sso]
+      operationId: revokeSCIMToken
+      description: admin, owner
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/scim/v2/Users:
+    get:
+      tags: [sso]
+      operationId: scimListUsers
+      security: [{ scimToken: [] }]
+      description: SCIM 2.0 (RFC 7644) list; filter `userName eq "…"` or `externalId eq "…"`, startIndex, count (≤ 500). Also POST; /Users/{id} supports GET, PUT, PATCH, DELETE; /Groups the same; /ServiceProviderConfig, /ResourceTypes, /Schemas. See api.md "SCIM".
+      responses:
+        "200":
+          description: ListResponse
+          content:
+            application/scim+json:
+              schema: { type: object }
+        "401": { description: SCIM error }
+
   /api/v1/orgs/current:
     get:
       tags: [organization]
@@ -1115,6 +2198,11 @@ paths:
     get:
       tags: [organization]
       operationId: listInvitations
+      parameters:
+        - name: include_expired
+          in: query
+          description: Also list expired invitations that were neither accepted nor revoked.
+          schema: { type: boolean }
       responses:
         "200":
           description: Pending invitations
@@ -1149,10 +2237,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [invitation, token]
+                required: [invitation, token, email_sent]
                 properties:
                   invitation: { $ref: "#/components/schemas/Invitation" }
                   token: { type: string, description: "oli_… (shown once)" }
+                  email_sent: { type: boolean, description: "The invitation was e-mailed (e-mail configured and within limits)" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1166,6 +2255,29 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/invitations/{id}/resend:
+    post:
+      tags: [organization]
+      operationId: resendInvitation
+      description: New token and expiry for an invitation that is neither accepted nor revoked (also expired); e-mails it when configured. The previous link stops working.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Renewed; the token is shown only in this response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitation, token, email_sent]
+                properties:
+                  invitation: { $ref: "#/components/schemas/Invitation" }
+                  token: { type: string }
+                  email_sent: { type: boolean }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1388,6 +2500,11 @@ paths:
           in: query
           description: Default 100, max 500.
           schema: { type: integer, minimum: 1 }
+        - { name: actor, in: query, description: "Case-insensitive substring of the actor e-mail", schema: { type: string } }
+        - { name: action, in: query, description: "Action prefix, e.g. member. or member.remove", schema: { type: string } }
+        - { name: from, in: query, description: "Inclusive start (RFC3339 or unix ms)", schema: { type: string } }
+        - { name: to, in: query, description: "Exclusive end (RFC3339 or unix ms)", schema: { type: string } }
+        - { name: cursor, in: query, description: "next_cursor of the previous page (same filters)", schema: { type: string } }
       responses:
         "200":
           description: Newest first
@@ -1395,11 +2512,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [events]
+                required: [events, next_cursor]
                 properties:
                   events:
                     type: array
                     items: { $ref: "#/components/schemas/AuditEvent" }
+                  next_cursor: { type: [string, "null"], description: "Cursor of the next page; null when this page was not full" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1505,6 +2623,43 @@ paths:
       tags: [fleet]
       operationId: deleteFleetHostOverride
       description: Idempotent.
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/fleet/hosts/{host_id}/php-agent:
+    parameters:
+      - { name: host_id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [fleet]
+      operationId: putFleetHostPHPAgentOverride
+      description: >-
+        Admin or owner. Sets the host's PHP agent mode instead of the policy's (php-agent.md §7.3); an auto override
+        skips PHP agent waves. Audit action fleet.php_agent_override.set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { $ref: "#/components/schemas/FleetPHPAgentMode" }
+      responses:
+        "200":
+          description: Override stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FleetPHPOverride" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [fleet]
+      operationId: deleteFleetHostPHPAgentOverride
+      description: Idempotent; the host follows the policy again. Audit action fleet.php_agent_override.delete.
       responses:
         "204": { description: Removed }
         "401": { $ref: "#/components/responses/Unauthenticated" }
@@ -2170,6 +3325,173 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/alerts/mutes/preview:
+    post:
+      tags: [alerts]
+      operationId: previewAlertMuteSchedule
+      description: |
+        Validates an unsaved recurring schedule (alerting.md §5.2) and returns its next occurrences, with exception
+        dates and holiday calendars applied. Any role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schedule]
+              properties:
+                schedule: { $ref: "#/components/schemas/AlertMuteScheduleInput" }
+      responses:
+        "200":
+          description: Up to 5 occurrences, the current one first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [occurrences]
+                properties:
+                  occurrences:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertMuteOccurrence" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/alerts/holiday-calendars:
+    get:
+      tags: [alerts]
+      operationId: listAlertHolidayCalendars
+      responses:
+        "200":
+          description: Holiday calendars ordered by name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [calendars]
+                properties:
+                  calendars:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertHolidayCalendar" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [alerts]
+      operationId: createAlertHolidayCalendar
+      description: Signed-in admin or owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertHolidayCalendarInput" }
+      responses:
+        "201":
+          description: Calendar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertHolidayCalendar" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/holiday-calendars/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [alerts]
+      operationId: getAlertHolidayCalendar
+      responses:
+        "200":
+          description: Calendar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertHolidayCalendar" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [alerts]
+      operationId: updateAlertHolidayCalendar
+      description: Signed-in admin or owner. Mutes that reference the calendar use the new dates from their next check.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertHolidayCalendarInput" }
+      responses:
+        "200":
+          description: Calendar
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertHolidayCalendar" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [alerts]
+      operationId: deleteAlertHolidayCalendar
+      description: Signed-in admin or owner. `409 failed_precondition` while mutes reference the calendar.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/templates:
+    get:
+      tags: [alerts]
+      operationId: listAlertTemplates
+      description: Recommended alert templates (alerting.md §2.8). Any role.
+      parameters:
+        - { name: category, in: query, schema: { type: string, enum: [host, container, apm, integration, kubernetes] } }
+        - { name: integration, in: query, schema: { type: string, example: redis } }
+      responses:
+        "200":
+          description: Template catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertTemplate" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/alerts/templates/{id}/render:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [alerts]
+      operationId: renderAlertTemplate
+      description: |
+        Renders a template to a rule definition (not stored): preview it with `POST /alerts/rules/preview` and create it
+        with `POST /alerts/rules`. Ratio templates read the latest value of their reference metric (last hour) on the
+        given instance through the tenant-scoped query layer (viewer); `409 failed_precondition` when it is missing or 0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertTemplateRenderInput" }
+      responses:
+        "200":
+          description: Rendered rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertTemplateRender" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   /api/v1/alerts/deliveries:
     get:
       tags: [alerts]
@@ -2195,8 +3517,405 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /api/v1/query:
+    post:
+      tags: [query]
+      operationId: runOqlQuery
+      description: |
+        Runs an OQL query (oql.md) for the caller's organization. Any role and API keys. `from`/`to` override
+        SINCE/UNTIL. Organization query limits apply (422/429), timeouts are 504.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OqlQueryRequest" }
+      responses:
+        "200":
+          description: Query result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OqlResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/query/validate:
+    post:
+      tags: [query]
+      operationId: validateOqlQuery
+      description: Parses and plans an OQL query without reading telemetry. Answers 200 also for invalid queries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OqlValidateRequest" }
+      responses:
+        "200":
+          description: Validation result with positions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OqlValidation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/query/schema:
+    get:
+      tags: [query]
+      operationId: getOqlSchema
+      description: Event types, attributes, functions and keywords for editors; with `event_type` also frequent map keys of the last hour.
+      parameters:
+        - name: event_type
+          in: query
+          schema: { type: string, enum: [Log, Span, Transaction, Metric, Host, Container] }
+      responses:
+        "200":
+          description: Schema
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OqlSchema" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/dashboards:
+    get:
+      tags: [dashboards]
+      operationId: listDashboards
+      parameters:
+        - { name: q, in: query, description: Name substring (case-insensitive), schema: { type: string } }
+      responses:
+        "200":
+          description: Dashboards visible to the caller
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dashboards]
+                properties:
+                  dashboards:
+                    type: array
+                    items: { $ref: "#/components/schemas/DashboardSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [dashboards]
+      operationId: createDashboard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/dashboards/import:
+    post:
+      tags: [dashboards]
+      operationId: importDashboard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardImport" }
+      responses:
+        "201":
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/dashboards/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: getDashboard
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [dashboards]
+      operationId: updateDashboard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [dashboards]
+      operationId: deleteDashboard
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/widgets:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [dashboards]
+      operationId: addDashboardWidget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardAddWidget" }
+      responses:
+        "200":
+          description: Dashboard with the appended widget
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/duplicate:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [dashboards]
+      operationId: duplicateDashboard
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "201":
+          description: Copy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/export:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: exportDashboard
+      responses:
+        "200":
+          description: Portable dashboard document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardExport" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/usage:
+    get:
+      tags: [usage]
+      operationId: getUsage
+      summary: Usage of a billing period against the plan limits (any role, API keys)
+      parameters:
+        - { name: period, in: query, description: "current (default), previous or YYYY-MM (UTC calendar month)", schema: { type: string } }
+      responses:
+        "200":
+          description: Usage overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageOverview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/usage/daily:
+    get:
+      tags: [usage]
+      operationId: getUsageDaily
+      parameters:
+        - { name: period, in: query, description: "current (default), previous or YYYY-MM", schema: { type: string } }
+      responses:
+        "200":
+          description: One entry per day with usage, ordered by day
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageDaily" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/usage/top:
+    get:
+      tags: [usage]
+      operationId: getUsageTop
+      parameters:
+        - { name: period, in: query, description: "current (default), previous or YYYY-MM", schema: { type: string } }
+        - { name: by, in: query, schema: { type: string, enum: [service, host], default: service } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+      responses:
+        "200":
+          description: Services or hosts with the most stored bytes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageTop" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/usage/export:
+    get:
+      tags: [usage]
+      operationId: exportUsage
+      summary: Invoice-period export (admin, owner)
+      parameters:
+        - { name: period, in: query, description: "current (default), previous or YYYY-MM", schema: { type: string } }
+        - { name: format, in: query, schema: { type: string, enum: [csv, json], default: csv } }
+      responses:
+        "200":
+          description: "Attachment openlog-usage-<tenant>-<period>.<format>; CSV columns tenant_id,period,day,metric,value (usage.md \"Export\")"
+          content:
+            text/csv:
+              schema: { type: string }
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageExport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/usage/status:
+    get:
+      tags: [usage]
+      operationId: getUsageStatus
+      summary: Latest quota evaluation of the organization (banner)
+      responses:
+        "200":
+          description: Level ok with no metrics when the organization was not evaluated yet
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsageStatus" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/plans:
+    get:
+      tags: [usage]
+      operationId: listPlans
+      responses:
+        "200":
+          description: Plan catalog (OPENLOG_PLANS / OPENLOG_PLANS_FILE)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanCatalog" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/orgs/{org}/plan:
+    parameters:
+      - { name: org, in: path, required: true, description: Organization id or tenant id, schema: { type: string } }
+    get:
+      tags: [usage]
+      operationId: getOrgPlan
+      summary: Plan assignment of any organization (superadmin, OPENLOG_SUPERADMIN_EMAILS)
+      responses:
+        "200":
+          description: Assignment and effective plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgPlan" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [usage]
+      operationId: putOrgPlan
+      summary: Assign a plan, overrides and billing ids (superadmin; audit plan.update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrgPlanInput" }
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgPlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/billing/webhooks/{provider}:
+    post:
+      tags: [usage]
+      operationId: billingWebhook
+      summary: Billing provider webhook (signature verified by the provider implementation)
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, description: OPENLOG_BILLING_PROVIDER, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Event accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received, changed]
+                properties:
+                  received: { type: boolean }
+                  changed: { type: boolean, description: The organization's plan assignment changed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 components:
   securitySchemes:
+    scimToken:
+      type: http
+      scheme: bearer
+      description: "`Authorization: Bearer ols_…` — SCIM token of one organization (only /api/scim/v2)."
     session:
       type: apiKey
       in: cookie
@@ -2218,6 +3937,31 @@ components:
       in: path
       required: true
       schema: { type: string }
+    K8sClusterUID:
+      name: cluster_uid
+      in: path
+      required: true
+      schema: { type: string, maxLength: 256 }
+    K8sNamespace:
+      name: namespace
+      in: path
+      required: true
+      schema: { type: string, maxLength: 256 }
+    K8sWorkloadKind:
+      name: kind
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/KubernetesWorkloadKind" }
+    K8sWorkloadName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string, maxLength: 256 }
+    K8sPodUID:
+      name: pod_uid
+      in: path
+      required: true
+      schema: { type: string, maxLength: 256 }
     ContainerID:
       name: container_id
       in: path
@@ -2261,6 +4005,31 @@ components:
       in: query
       description: Go duration >= 60s (default ~60 points), rounded up to whole minutes
       schema: { type: string, example: 5m }
+    ApmErrorStatus:
+      name: status
+      in: query
+      description: all (default) or a comma-separated list of unresolved, resolved, ignored
+      schema: { type: string, example: unresolved }
+    ApmErrorAssignee:
+      name: assignee
+      in: query
+      description: any (default), none (unassigned), me (signed-in user) or a user id
+      schema: { type: string }
+    ApmErrorQuery:
+      name: q
+      in: query
+      description: Case-insensitive substring of the error type, message, service name or span name
+      schema: { type: string, maxLength: 256 }
+    ApmErrorSort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [count, last_seen, first_seen], default: count }
+    ApmGroupID:
+      name: group_id
+      in: path
+      required: true
+      description: 16 hex digits
+      schema: { type: string, pattern: "^[0-9a-fA-F]{16}$" }
   responses:
     BadRequest:
       description: invalid_argument
@@ -2309,6 +4078,256 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    # ---- usage, plans and quotas (usage.md) ----
+    UsagePeriod:
+      type: object
+      required: [id, start, end, data_until]
+      properties:
+        id: { type: string, description: YYYY-MM }
+        start: { $ref: "#/components/schemas/Timestamp" }
+        end: { $ref: "#/components/schemas/Timestamp" }
+        data_until: { $ref: "#/components/schemas/Timestamp" }
+
+    PlanQueryLimits:
+      type: object
+      properties:
+        max_memory_usage: { type: integer }
+        max_rows_to_read: { type: integer }
+        max_bytes_to_read: { type: integer }
+
+    PlanLimits:
+      type: object
+      description: 0 or absent = unlimited (retention_days absent = table default)
+      required: [retention_days, query]
+      properties:
+        ingest_gb_month: { type: number, description: GiB per billing period }
+        hosts: { type: integer }
+        users: { type: integer }
+        retention_days: { type: object, additionalProperties: { type: integer }, description: "keys logs, traces, metrics" }
+        query: { $ref: "#/components/schemas/PlanQueryLimits" }
+        ingest_bytes_per_second: { type: integer }
+        ingest_burst_bytes: { type: integer }
+
+    PlanEnforcement:
+      type: object
+      properties:
+        hard_ingest_limit: { type: boolean }
+        grace_percent: { type: number }
+
+    Plan:
+      type: object
+      required: [id, name, description, limits, enforcement]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        limits: { $ref: "#/components/schemas/PlanLimits" }
+        enforcement: { $ref: "#/components/schemas/PlanEnforcement" }
+
+    PlanCatalog:
+      type: object
+      required: [plans, default]
+      properties:
+        plans: { type: array, items: { $ref: "#/components/schemas/Plan" } }
+        default: { type: string }
+
+    PlanOverrides:
+      type: object
+      description: Organization-specific limits replacing the plan's; absent fields keep the plan's value
+      properties:
+        ingest_gb_month: { type: number }
+        hosts: { type: integer }
+        users: { type: integer }
+        retention_days: { type: object, additionalProperties: { type: integer } }
+        query: { $ref: "#/components/schemas/PlanQueryLimits" }
+        ingest_bytes_per_second: { type: integer }
+        ingest_burst_bytes: { type: integer }
+        hard_ingest_limit: { type: boolean }
+        grace_percent: { type: number }
+
+    QuotaMetric:
+      type: object
+      required: [metric, used, limit, percent, level]
+      properties:
+        metric: { type: string, enum: [ingest_bytes, hosts, users] }
+        used: { type: number }
+        limit: { type: number, description: 0 = unlimited }
+        percent: { type: number }
+        level: { $ref: "#/components/schemas/QuotaLevel" }
+
+    QuotaLevel:
+      type: string
+      enum: [ok, warning, exceeded]
+
+    UsageSignal:
+      type: object
+      required: [signal, items, bytes, ingest_bytes, ingest_requests]
+      properties:
+        signal: { type: string, enum: [traces, logs, metrics] }
+        items: { type: number, description: Stored spans, log records or metric data points }
+        bytes: { type: number, description: Estimated uncompressed bytes of the stored rows }
+        ingest_bytes: { type: number, description: Uncompressed OTLP protobuf bytes }
+        ingest_requests: { type: number }
+
+    UsageQuery:
+      type: object
+      required: [queries, failed, read_rows, read_bytes, cpu_seconds, memory_bytes]
+      properties:
+        queries: { type: number }
+        failed: { type: number }
+        read_rows: { type: number }
+        read_bytes: { type: number }
+        cpu_seconds: { type: number }
+        memory_bytes: { type: number, description: Sum of per-query peak memory }
+
+    UsageTotals:
+      type: object
+      required: [signals, ingest_bytes, hosts, containers, services, active_hosts, query]
+      properties:
+        signals: { type: array, items: { $ref: "#/components/schemas/UsageSignal" } }
+        ingest_bytes: { type: number }
+        hosts: { type: number, description: Distinct hosts in the range }
+        containers: { type: number }
+        services: { type: number }
+        active_hosts: { type: number, description: Larger distinct host count of the last day and the day before }
+        query: { $ref: "#/components/schemas/UsageQuery" }
+
+    UsageStored:
+      type: object
+      required: [signal, retention_days, bytes, compressed_bytes]
+      properties:
+        signal: { type: string, enum: [traces, logs, metrics] }
+        retention_days: { type: integer }
+        bytes: { type: number }
+        compressed_bytes: { type: number, description: bytes x the table's current compression ratio }
+
+    UsageOverview:
+      type: object
+      required: [organization, period, saas_mode, plan, plan_assigned, usage, stored, limits, level, ingest_blocked, projection, can_manage_plan, billing_enabled]
+      properties:
+        organization:
+          type: object
+          required: [id, name, tenant_id]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            tenant_id: { type: string }
+        period: { $ref: "#/components/schemas/UsagePeriod" }
+        saas_mode: { type: boolean }
+        plan: { $ref: "#/components/schemas/Plan" }
+        plan_assigned: { type: boolean, description: false = the default plan applies }
+        usage: { $ref: "#/components/schemas/UsageTotals" }
+        stored: { type: array, items: { $ref: "#/components/schemas/UsageStored" } }
+        limits: { type: array, items: { $ref: "#/components/schemas/QuotaMetric" } }
+        level: { $ref: "#/components/schemas/QuotaLevel" }
+        ingest_blocked: { type: boolean }
+        projection:
+          type: object
+          required: [ingest_bytes]
+          properties:
+            ingest_bytes: { type: number, description: Projected ingest at period end }
+            ingest_percent: { type: number }
+        can_manage_plan: { type: boolean, description: The caller is a superadmin }
+        billing_enabled: { type: boolean }
+
+    UsageDay:
+      type: object
+      required: [day, signals, ingest_bytes, hosts, containers, services, query]
+      properties:
+        day: { type: string, format: date }
+        signals: { type: array, items: { $ref: "#/components/schemas/UsageSignal" } }
+        ingest_bytes: { type: number }
+        hosts: { type: number }
+        containers: { type: number }
+        services: { type: number }
+        query: { $ref: "#/components/schemas/UsageQuery" }
+
+    UsageDaily:
+      type: object
+      required: [period, days]
+      properties:
+        period: { $ref: "#/components/schemas/UsagePeriod" }
+        days: { type: array, items: { $ref: "#/components/schemas/UsageDay" } }
+
+    UsageTopEntry:
+      type: object
+      required: [key, items, bytes, bytes_by_signal]
+      properties:
+        key: { type: string }
+        items: { type: number }
+        bytes: { type: number }
+        bytes_by_signal: { type: object, additionalProperties: { type: number } }
+
+    UsageTop:
+      type: object
+      required: [period, by, entries]
+      properties:
+        period: { $ref: "#/components/schemas/UsagePeriod" }
+        by: { type: string, enum: [service, host] }
+        entries: { type: array, items: { $ref: "#/components/schemas/UsageTopEntry" } }
+
+    UsageExport:
+      type: object
+      required: [organization, plan_id, period, totals, days]
+      properties:
+        organization: { type: object, additionalProperties: { type: string } }
+        plan_id: { type: string }
+        period: { $ref: "#/components/schemas/UsagePeriod" }
+        totals: { $ref: "#/components/schemas/UsageTotals" }
+        days: { type: array, items: { $ref: "#/components/schemas/UsageDay" } }
+
+    UsageStatus:
+      type: object
+      required: [level, ingest_blocked, metrics, saas_mode]
+      properties:
+        level: { $ref: "#/components/schemas/QuotaLevel" }
+        ingest_blocked: { type: boolean }
+        metrics: { type: array, items: { $ref: "#/components/schemas/QuotaMetric" } }
+        saas_mode: { type: boolean }
+        plan_id: { type: string }
+        evaluated_at: { $ref: "#/components/schemas/Timestamp" }
+        period_start: { type: string, format: date }
+
+    OrgPlan:
+      type: object
+      required: [organization, plan_id, assigned, overrides, billing, note, updated_at, updated_by, effective]
+      properties:
+        organization:
+          type: object
+          required: [id, name, tenant_id]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            tenant_id: { type: string }
+        plan_id: { type: string }
+        assigned: { type: boolean }
+        overrides: { $ref: "#/components/schemas/PlanOverrides" }
+        billing:
+          type: object
+          required: [provider, customer_id, subscription_id]
+          properties:
+            provider: { type: string }
+            customer_id: { type: string }
+            subscription_id: { type: string }
+        note: { type: string }
+        updated_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        updated_by: { type: string }
+        effective: { $ref: "#/components/schemas/Plan" }
+
+    OrgPlanInput:
+      type: object
+      required: [plan_id]
+      properties:
+        plan_id: { type: string }
+        overrides: { $ref: "#/components/schemas/PlanOverrides" }
+        billing:
+          type: object
+          properties:
+            provider: { type: string }
+            customer_id: { type: string }
+            subscription_id: { type: string }
+        note: { type: string, maxLength: 1000 }
+
     Error:
       type: object
       required: [error]
@@ -2342,6 +4361,318 @@ components:
         agent_version: { type: string }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
         resource_attributes: { $ref: "#/components/schemas/StringMap" }
+
+    KubernetesWorkloadKind:
+      type: string
+      description: "`Pod` is accepted but the cluster agent reports no Pod workloads"
+      enum: [Deployment, StatefulSet, DaemonSet, Job, CronJob, ReplicaSet, Pod]
+
+    KubernetesWorkloadHealth:
+      type: string
+      enum: [healthy, degraded, unavailable, unknown]
+
+    KubernetesPodPhase:
+      type: string
+      enum: [Pending, Running, Succeeded, Failed, Unknown]
+
+    KubernetesEventType:
+      type: string
+      enum: [Normal, Warning]
+
+    KubernetesCluster:
+      type: object
+      required: [cluster_uid, cluster_name, version, first_seen, last_seen, reporting, nodes, nodes_ready, pods, pods_not_ready,
+        workloads, workloads_unhealthy, namespaces]
+      properties:
+        cluster_uid: { type: string, description: "Resource k8s.cluster.uid (uid of the kube-system namespace)" }
+        cluster_name: { type: string }
+        version: { type: string, example: v1.31.2 }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        reporting: { type: boolean, description: "Data within the last 5 minutes" }
+        nodes: { type: integer, description: Current nodes }
+        nodes_ready: { type: integer }
+        pods:
+          type: object
+          description: Current pods by phase
+          required: [Pending, Running, Succeeded, Failed, Unknown]
+          properties:
+            Pending: { type: integer }
+            Running: { type: integer }
+            Succeeded: { type: integer }
+            Failed: { type: integer }
+            Unknown: { type: integer }
+        pods_not_ready: { type: integer, description: "Current Running pods that are not ready" }
+        workloads: { type: integer, description: Current workloads }
+        workloads_unhealthy: { type: integer, description: "degraded + unavailable" }
+        namespaces: { type: array, items: { type: string }, description: "Namespaces with pods or workloads in the range" }
+
+    KubernetesWorkloadKindCount:
+      type: object
+      required: [kind, total, healthy, degraded, unavailable, unknown]
+      properties:
+        kind: { type: string }
+        total: { type: integer }
+        healthy: { type: integer }
+        degraded: { type: integer }
+        unavailable: { type: integer }
+        unknown: { type: integer }
+
+    KubernetesClusterDetail:
+      allOf:
+        - $ref: "#/components/schemas/KubernetesCluster"
+        - type: object
+          required: [workloads_by_kind, warning_events, cpu_usage, memory_working_set, allocatable_cpu, allocatable_memory]
+          properties:
+            workloads_by_kind:
+              type: array
+              items: { $ref: "#/components/schemas/KubernetesWorkloadKindCount" }
+            warning_events:
+              type: array
+              description: Latest 20 Warning events in the range, newest first
+              items: { $ref: "#/components/schemas/KubernetesEvent" }
+            cpu_usage: { type: [number, "null"], description: "cores, sum over nodes (node agents)" }
+            memory_working_set: { type: [number, "null"], description: bytes }
+            allocatable_cpu: { type: [number, "null"], description: cores }
+            allocatable_memory: { type: [number, "null"], description: bytes }
+
+    KubernetesNodeCondition:
+      type: object
+      required: [condition, status]
+      properties:
+        condition: { type: string, example: Ready }
+        status: { type: string, enum: ["true", "false", unknown] }
+
+    KubernetesNode:
+      type: object
+      required: [cluster_uid, cluster_name, node_name, node_uid, ready, unschedulable, roles, kubelet_version, os_image, container_runtime,
+        internal_ip, created_at, allocatable_cpu, allocatable_memory, allocatable_pods, cpu_usage, memory_working_set, pods, host_id,
+        host_name, first_seen, last_seen, reporting, conditions]
+      properties:
+        cluster_uid: { type: string }
+        cluster_name: { type: string }
+        node_name: { type: string }
+        node_uid: { type: string }
+        ready: { type: string, enum: ["true", "false", unknown] }
+        unschedulable: { type: boolean }
+        roles: { type: array, items: { type: string } }
+        kubelet_version: { type: string }
+        os_image: { type: string }
+        container_runtime: { type: string }
+        internal_ip: { type: string }
+        created_at: { type: [string, "null"], description: RFC3339 }
+        allocatable_cpu: { type: [number, "null"], description: cores }
+        allocatable_memory: { type: [number, "null"], description: bytes }
+        allocatable_pods: { type: [number, "null"] }
+        cpu_usage: { type: [number, "null"], description: "cores (k8s.node.cpu.usage)" }
+        memory_working_set: { type: [number, "null"], description: bytes }
+        pods: { type: integer, description: "Current Running and Pending pods on the node" }
+        host_id: { type: [string, "null"], description: "Host of the node agent (resource k8s.cluster.name + k8s.node.name)" }
+        host_name: { type: [string, "null"] }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        reporting: { type: boolean }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/KubernetesNodeCondition" }
+
+    KubernetesWorkload:
+      type: object
+      required: [cluster_uid, cluster_name, namespace, kind, name, uid, desired, ready, available, updated, health, pods, restarts,
+        cpu_usage, memory_working_set, cpu_sparkline, memory_sparkline, created_at, first_seen, last_seen, reporting]
+      properties:
+        cluster_uid: { type: string }
+        cluster_name: { type: string }
+        namespace: { type: string }
+        kind: { type: string }
+        name: { type: string }
+        uid: { type: string }
+        desired: { type: integer }
+        ready: { type: integer }
+        available: { type: integer, description: "Jobs: succeeded pods" }
+        updated: { type: integer, description: "Jobs: failed pods" }
+        health: { $ref: "#/components/schemas/KubernetesWorkloadHealth" }
+        pods: { type: integer, description: Current pods of the workload }
+        restarts: { type: integer, description: Sum of the restarts of its current pods }
+        cpu_usage: { type: [number, "null"], description: "cores, sum over pods" }
+        memory_working_set: { type: [number, "null"], description: "bytes, sum over pods" }
+        cpu_sparkline: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+        memory_sparkline: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+        created_at: { type: [string, "null"], description: RFC3339 }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        reporting: { type: boolean }
+
+    KubernetesHPA:
+      type: object
+      required: [name, min_replicas, max_replicas, current_replicas, desired_replicas]
+      properties:
+        name: { type: string }
+        min_replicas: { type: [number, "null"] }
+        max_replicas: { type: [number, "null"] }
+        current_replicas: { type: [number, "null"] }
+        desired_replicas: { type: [number, "null"] }
+
+    KubernetesWorkloadDetail:
+      allOf:
+        - $ref: "#/components/schemas/KubernetesWorkload"
+        - type: object
+          required: [pod_list, hpa, attributes]
+          properties:
+            pod_list:
+              type: array
+              items: { $ref: "#/components/schemas/KubernetesPod" }
+            hpa:
+              oneOf:
+                - $ref: "#/components/schemas/KubernetesHPA"
+                - type: "null"
+            attributes: { $ref: "#/components/schemas/StringMap" }
+
+    KubernetesWorkloadTimeseries:
+      type: object
+      required: [step, from, to, series]
+      properties:
+        step: { type: string, example: 20s }
+        from: { type: integer, description: unix ms }
+        to: { type: integer, description: unix ms }
+        series:
+          type: object
+          required: [cpu_usage, memory_working_set, ready, desired, restarts]
+          properties:
+            cpu_usage: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            memory_working_set: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            ready: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            desired: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            restarts: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+
+    KubernetesPod:
+      type: object
+      required: [cluster_uid, cluster_name, namespace, pod_name, pod_uid, node_name, workload_kind, workload_name, phase, ready, reason,
+        status, restarts, pod_ip, qos_class, created_at, started_at, cpu_usage, memory_working_set, first_seen, last_seen, reporting]
+      properties:
+        cluster_uid: { type: string }
+        cluster_name: { type: string }
+        namespace: { type: string }
+        pod_name: { type: string }
+        pod_uid: { type: string }
+        node_name: { type: string }
+        workload_kind: { type: string, description: "Top-level owner kind, Pod for bare pods" }
+        workload_name: { type: string }
+        phase: { type: string, example: Running }
+        ready: { type: boolean }
+        reason: { type: string, example: CrashLoopBackOff }
+        status: { type: string, description: "reason when set, else phase" }
+        restarts: { type: integer }
+        pod_ip: { type: string }
+        qos_class: { type: string }
+        created_at: { type: [string, "null"], description: RFC3339 }
+        started_at: { type: [string, "null"], description: RFC3339 }
+        cpu_usage: { type: [number, "null"], description: "cores (k8s.pod.cpu.usage)" }
+        memory_working_set: { type: [number, "null"], description: bytes }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        reporting: { type: boolean }
+
+    KubernetesPodContainer:
+      type: object
+      required: [name, container_id, image, ready, restarts, state, reason, known, host_id, cpu_usage, memory_working_set, cpu_request,
+        cpu_limit, memory_request, memory_limit]
+      properties:
+        name: { type: string }
+        container_id: { type: string, description: "Empty before the container started" }
+        image: { type: string }
+        ready: { type: boolean }
+        restarts: { type: integer }
+        state: { type: string }
+        reason: { type: string }
+        known: { type: boolean, description: "The container is in the containers table (GET /containers/{container_id})" }
+        host_id: { type: [string, "null"] }
+        cpu_usage: { type: [number, "null"], description: cores }
+        memory_working_set: { type: [number, "null"], description: bytes }
+        cpu_request: { type: [number, "null"], description: cores }
+        cpu_limit: { type: [number, "null"], description: cores }
+        memory_request: { type: [number, "null"], description: bytes }
+        memory_limit: { type: [number, "null"], description: bytes }
+
+    KubernetesPodDetail:
+      allOf:
+        - $ref: "#/components/schemas/KubernetesPod"
+        - type: object
+          required: [containers, labels, services, host_id, host_name]
+          properties:
+            containers:
+              type: array
+              items: { $ref: "#/components/schemas/KubernetesPodContainer" }
+            labels: { $ref: "#/components/schemas/StringMap" }
+            services:
+              type: array
+              items:
+                type: object
+                required: [service_name, service_namespace, deployment_environment]
+                properties:
+                  service_name: { type: string }
+                  service_namespace: { type: string }
+                  deployment_environment: { type: string }
+            host_id: { type: [string, "null"] }
+            host_name: { type: [string, "null"] }
+
+    KubernetesPodTimeseries:
+      type: object
+      required: [step, from, to, series]
+      properties:
+        step: { type: string, example: 20s }
+        from: { type: integer, description: unix ms }
+        to: { type: integer, description: unix ms }
+        series:
+          type: object
+          required: [cpu_usage, memory_working_set, network_receive, network_transmit, restarts]
+          properties:
+            cpu_usage: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            memory_working_set: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            network_receive: { type: array, items: { $ref: "#/components/schemas/MetricPoint" }, description: bytes/s }
+            network_transmit: { type: array, items: { $ref: "#/components/schemas/MetricPoint" }, description: bytes/s }
+            restarts: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+
+    KubernetesEvent:
+      type: object
+      required: [timestamp, type, reason, message, count, namespace, object_kind, object_name, object_uid, source, cluster_uid, cluster_name]
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        type: { type: string, example: Warning }
+        reason: { type: string, example: BackOff }
+        message: { type: string }
+        count: { type: integer }
+        namespace: { type: string }
+        object_kind: { type: string }
+        object_name: { type: string }
+        object_uid: { type: string }
+        source: { type: string }
+        cluster_uid: { type: string }
+        cluster_name: { type: string }
+
+    KubernetesEventList:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/KubernetesEvent" }
+
+    KubernetesServicePod:
+      type: object
+      required: [cluster_uid, cluster_name, namespace, pod_name, pod_uid, workload_kind, workload_name, node_name, phase, ready, reporting]
+      properties:
+        cluster_uid: { type: string }
+        cluster_name: { type: string }
+        namespace: { type: string }
+        pod_name: { type: string }
+        pod_uid: { type: string }
+        workload_kind: { type: string }
+        workload_name: { type: string }
+        node_name: { type: string }
+        phase: { type: string }
+        ready: { type: boolean }
+        reporting: { type: boolean }
 
     ContainerStateFilter:
       type: string
@@ -2531,6 +4862,11 @@ components:
           description: >-
             Name of the running process (e.g. `redis-server`) when it differs from what `instance`
             (the executable path) suggests. Optional; older agents omit it.
+        display_instance:
+          type: string
+          description: >-
+            Invoked path of a multi-call or symlinked executable (e.g. `/usr/bin/redis-server` when `instance` is
+            `/usr/bin/redis-check-rdb`). Display only; `instance` stays the key. Optional.
         version: { type: string }
         matched_by:
           type: array
@@ -2807,9 +5143,15 @@ components:
           items: { $ref: "#/components/schemas/ApmTraceSample" }
     ApmErrorGroup:
       type: object
-      required: [group_id, error_type, message, count, total_count, first_seen, last_seen, last_trace_id, last_span_name, sparkline]
+      allOf:
+        - $ref: "#/components/schemas/ApmErrorWorkflow"
+      required: [group_id, service_name, service_namespace, environment, error_type, message, count, total_count, first_seen, last_seen,
+        last_trace_id, last_span_name, sparkline]
       properties:
         group_id: { type: string, description: 16 hex digits }
+        service_name: { type: string }
+        service_namespace: { type: string }
+        environment: { type: string }
         error_type: { type: string }
         message: { type: string, description: Normalized message }
         count: { type: number, description: Occurrences in the range (weighted) }
@@ -2823,7 +5165,7 @@ components:
           items: { $ref: "#/components/schemas/MetricPoint" }
     ApmErrorSample:
       type: object
-      required: [trace_id, span_id, timestamp, span_name, transaction_name, duration_ms, message]
+      required: [trace_id, span_id, timestamp, span_name, transaction_name, duration_ms, message, version, host_id]
       properties:
         trace_id: { type: string }
         span_id: { type: string }
@@ -2832,12 +5174,27 @@ components:
         transaction_name: { type: string }
         duration_ms: { type: number }
         message: { type: string }
+        version: { type: string, description: service.version of the span resource }
+        host_id: { type: string }
     ApmErrorGroupDetail:
       type: object
-      required: [group_id, error_type, message, count, total_count, first_seen, last_seen, last_message, stacktrace,
-        last_trace_id, last_span_id, last_span_name, step, series, samples]
+      allOf:
+        - $ref: "#/components/schemas/ApmErrorWorkflow"
+      required: [group_id, service_name, service_namespace, environment, error_type, message, count, total_count, first_seen, last_seen,
+        last_message, stacktrace, last_trace_id, last_span_id, last_span_name, step, series, samples, affected, comments, activity, workflow]
       properties:
         group_id: { type: string }
+        service_name: { type: string }
+        service_namespace: { type: string }
+        environment: { type: string }
+        affected: { $ref: "#/components/schemas/ApmErrorAffected" }
+        comments:
+          type: array
+          items: { $ref: "#/components/schemas/ApmErrorComment" }
+        activity:
+          type: array
+          items: { $ref: "#/components/schemas/ApmErrorActivity" }
+        workflow: { type: boolean, description: "false without PostgreSQL (static auth mode): no state, comments or activity" }
         error_type: { type: string }
         message: { type: string }
         count: { type: number }
@@ -2898,9 +5255,69 @@ components:
       required: [apdex_t_ms]
       properties:
         apdex_t_ms: { type: integer, minimum: 1, maximum: 600000 }
+    TailSamplingRule:
+      type: object
+      description: One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2).
+      required: [name, type]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+        type: { type: string, enum: [error, latency, service, route, attribute] }
+        ratio: { type: number, minimum: 0, maximum: 1, description: "Keep probability, default 1" }
+        threshold_ms: { type: integer, minimum: 1, maximum: 3600000, description: "latency: trace duration, or a span of `service`" }
+        service: { type: string, maxLength: 512, description: "Restricts error, latency, route and attribute rules to spans of this service" }
+        services: { type: array, maxItems: 50, items: { type: string, minLength: 1 }, description: "service rule" }
+        route: { type: string, maxLength: 512, description: "route rule: glob on http.route (span name without route); a trailing * is a prefix match" }
+        key: { type: string, maxLength: 512, description: "attribute rule: span or resource attribute key" }
+        value: { type: string, maxLength: 512, description: "attribute rule: required value (empty: key present)" }
+    TailSamplingPolicy:
+      type: object
+      required: [enabled, baseline_ratio, max_spans_per_second, rules]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean, description: "false keeps every trace (the policy is stored but inactive)" }
+        baseline_ratio: { type: number, minimum: 0, maximum: 1 }
+        max_spans_per_second: { type: number, minimum: 0, maximum: 10000000, description: "Per sampler instance; 0 = unlimited" }
+        rules: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/TailSamplingRule" } }
+    TailSamplingPolicyInput:
+      type: object
+      required: [policy, version]
+      properties:
+        policy: { $ref: "#/components/schemas/TailSamplingPolicy" }
+        version: { type: integer, minimum: 0 }
+    TailSamplingPolicyState:
+      type: object
+      required: [enabled, policy, is_default, version, updated_at, updated_by_email]
+      properties:
+        enabled: { type: boolean, description: "OPENLOG_TAILSAMPLING_ENABLED" }
+        policy: { $ref: "#/components/schemas/TailSamplingPolicy" }
+        is_default: { type: boolean }
+        version: { type: integer }
+        updated_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        updated_by_email: { type: string }
+    TailSamplingPreview:
+      type: object
+      required: [window_minutes, traces_examined, sampled_fraction, estimated_traces, kept_trace_ratio, kept_span_ratio, rules]
+      properties:
+        window_minutes: { type: integer }
+        traces_examined: { type: integer }
+        sampled_fraction: { type: number }
+        estimated_traces: { type: number, description: "Adjusted count of traces in the window" }
+        kept_trace_ratio: { type: number }
+        kept_span_ratio: { type: number }
+        rules:
+          type: array
+          description: Per rule in order, then `baseline` (traces matching no rule)
+          items:
+            type: object
+            required: [name, matched_trace_ratio, kept_trace_ratio]
+            properties:
+              name: { type: string }
+              matched_trace_ratio: { type: number }
+              kept_trace_ratio: { type: number }
     ApmMapNode:
       type: object
-      required: [id, type, name, service_namespace, environment, requests, throughput, error_rate, avg_ms, p95_ms, apdex]
+      required: [id, type, name, service_namespace, environment, requests, throughput, error_rate, avg_ms, p95_ms, apdex, host_count, container_count]
       properties:
         id: { type: string }
         type: { type: string, enum: [service, db, external, messaging] }
@@ -2913,6 +5330,8 @@ components:
         avg_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
         p95_ms: { $ref: "#/components/schemas/ApmNullableNumber" }
         apdex: { $ref: "#/components/schemas/ApmNullableNumber" }
+        host_count: { type: integer, description: "Services: hosts that reported the service since from (0 for dependencies)" }
+        container_count: { type: integer, description: "Services: containers that reported the service since from" }
     ApmMapEdge:
       type: object
       required: [id, source, target, target_type, calls, throughput, errors, error_rate, avg_ms, p95_ms]
@@ -2937,6 +5356,160 @@ components:
         edges:
           type: array
           items: { $ref: "#/components/schemas/ApmMapEdge" }
+    ApmErrorStatus: { type: string, enum: [unresolved, resolved, ignored] }
+    ApmErrorAssignee:
+      type: object
+      required: [user_id, email, name]
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        name: { type: string }
+    ApmErrorWorkflow:
+      type: object
+      description: Workflow state of an error group (apm.md §3.4); a group without state is unresolved and unassigned.
+      required: [status, assignee, resolved_at, resolved_in_version, resolved_by_email, regressed_at, regression_count, comment_count, updated_at, updated_by_email]
+      properties:
+        status: { $ref: "#/components/schemas/ApmErrorStatus" }
+        assignee:
+          oneOf:
+            - { $ref: "#/components/schemas/ApmErrorAssignee" }
+            - { type: "null" }
+        resolved_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        resolved_in_version: { type: string }
+        resolved_by_email: { type: string }
+        regressed_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        regression_count: { type: integer }
+        comment_count: { type: integer }
+        updated_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        updated_by_email: { type: string }
+    ApmErrorInbox:
+      type: object
+      required: [groups, step, counts, truncated, workflow]
+      properties:
+        step: { type: string }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/ApmErrorGroup" }
+        counts:
+          type: object
+          description: Groups per status after the assignee and q filters (before the status filter)
+          required: [unresolved, resolved, ignored]
+          properties:
+            unresolved: { type: integer }
+            resolved: { type: integer }
+            ignored: { type: integer }
+        truncated: { type: boolean, description: More than 2000 candidate groups or more than limit results }
+        workflow: { type: boolean, description: "false without PostgreSQL (static auth mode): every group is unresolved" }
+    ApmErrorGroupState:
+      allOf:
+        - type: object
+          required: [group_id, service_name, service_namespace, environment]
+          properties:
+            group_id: { type: string }
+            service_name: { type: string }
+            service_namespace: { type: string }
+            environment: { type: string }
+        - $ref: "#/components/schemas/ApmErrorWorkflow"
+    ApmErrorGroupPatch:
+      type: object
+      required: [group_ids]
+      properties:
+        group_ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: string, pattern: "^[0-9a-fA-F]{16}$" }
+        status: { $ref: "#/components/schemas/ApmErrorStatus" }
+        assignee_user_id: { type: string, description: 'A member''s user id; "" unassigns; omitted = unchanged' }
+        resolved_in_version: { type: string, maxLength: 256, description: Only with status resolved (apm.md §3.4 regression rules) }
+    ApmErrorComment:
+      type: object
+      required: [id, author_user_id, author_email, author_name, body, created_at]
+      properties:
+        id: { type: string }
+        author_user_id: { type: string }
+        author_email: { type: string }
+        author_name: { type: string }
+        body: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+    ApmErrorCommentInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
+    ApmErrorActivity:
+      type: object
+      required: [action, actor_email, details, created_at]
+      properties:
+        action: { type: string, description: "apm.error_group.update, .regressed, .comment, .comment_delete" }
+        actor_email: { type: string }
+        details: { type: object, additionalProperties: true }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+    ApmAffected:
+      type: object
+      required: [value, name, count, first_seen, last_seen]
+      properties:
+        value: { type: string }
+        name: { type: string, description: Host or container name when known }
+        count: { type: number }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+    ApmErrorAffected:
+      type: object
+      description: Top 20 per dimension over retention (apm_error_group_dims)
+      required: [versions, hosts, containers, transactions]
+      properties:
+        versions: { type: array, items: { $ref: "#/components/schemas/ApmAffected" } }
+        hosts: { type: array, items: { $ref: "#/components/schemas/ApmAffected" } }
+        containers: { type: array, items: { $ref: "#/components/schemas/ApmAffected" } }
+        transactions: { type: array, items: { $ref: "#/components/schemas/ApmAffected" } }
+    ApmDeployment:
+      type: object
+      required: [timestamp, t, service_namespace, environment, version, previous_version, initial, rollback]
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        t: { type: integer, description: Unix milliseconds }
+        service_namespace: { type: string }
+        environment: { type: string }
+        version: { type: string }
+        previous_version: { type: string }
+        initial: { type: boolean }
+        rollback: { type: boolean }
+    ApmPeriod:
+      allOf:
+        - type: object
+          required: [from, to]
+          properties:
+            from: { $ref: "#/components/schemas/Timestamp" }
+            to: { $ref: "#/components/schemas/Timestamp" }
+        - $ref: "#/components/schemas/ApmRed"
+    ApmDeploymentCompare:
+      type: object
+      required: [at, window_seconds, apdex_t_ms, before, after, new_error_groups]
+      properties:
+        at: { $ref: "#/components/schemas/Timestamp" }
+        window_seconds: { type: integer }
+        apdex_t_ms: { type: number }
+        before: { $ref: "#/components/schemas/ApmPeriod" }
+        after: { $ref: "#/components/schemas/ApmPeriod" }
+        new_error_groups:
+          type: array
+          items:
+            type: object
+            required: [group_id, error_type, message, first_seen, total_count]
+            properties:
+              group_id: { type: string }
+              error_type: { type: string }
+              message: { type: string }
+              first_seen: { $ref: "#/components/schemas/Timestamp" }
+              total_count: { type: number }
+    ApmMapPath:
+      type: object
+      required: [trace_count, nodes, edges]
+      properties:
+        trace_count: { type: integer }
+        nodes: { type: array, items: { type: string } }
+        edges: { type: array, items: { type: string } }
     ApmTraceResult:
       allOf:
         - $ref: "#/components/schemas/ApmTraceSample"
@@ -2957,11 +5530,205 @@ components:
 
     AuthConfig:
       type: object
-      required: [mode, signup_enabled, password_min_length]
+      required: [mode, signup_enabled, password_min_length, email_enabled, email_verification_required, captcha]
       properties:
         mode: { type: string, enum: [postgres, static] }
         signup_enabled: { type: boolean }
         password_min_length: { type: integer }
+        email_enabled: { type: boolean, description: "Invitation and verification e-mails are sent (SMTP and OPENLOG_PUBLIC_URL configured)" }
+        email_verification_required: { type: boolean, description: "Sign-ups must confirm their e-mail before creating keys or inviting" }
+        captcha:
+          description: CAPTCHA widget for sign-up; null when not configured or sign-up is disabled.
+          oneOf:
+            - type: object
+              required: [provider, site_key]
+              properties:
+                provider: { type: string, enum: [turnstile, hcaptcha] }
+                site_key: { type: string }
+            - { type: "null" }
+        sso_enabled: { type: boolean, description: "“Sign in with SSO” is offered (postgres mode, OPENLOG_SSO_ENABLED, OPENLOG_PUBLIC_URL). Always present since M4." }
+
+    SSODiscovery:
+      type: object
+      required: [sso, organization_name, protocol, enforced]
+      properties:
+        sso: { type: boolean }
+        organization_name: { type: [string, "null"] }
+        protocol:
+          oneOf:
+            - { type: string, enum: [oidc, saml] }
+            - { type: "null" }
+        enforced: { type: boolean }
+
+    SSOState:
+      type: object
+      required: [available, secrets_encrypted, scim_enabled, email_verification_available, domain_email_local_parts, service_provider, connection]
+      properties:
+        available: { type: boolean, description: "OPENLOG_PUBLIC_URL is set (SSO cannot be used without it)" }
+        secrets_encrypted: { type: boolean, description: "Client secrets and SP keys are sealed (OPENLOG_SSO_SECRET_KEY or OPENLOG_KEY_HASH_SECRET)" }
+        scim_enabled: { type: boolean }
+        email_verification_available: { type: boolean, description: "Domains can be verified by e-mail (SMTP configured)" }
+        domain_email_local_parts: { type: array, items: { type: string } }
+        service_provider:
+          type: object
+          description: Values to register at the identity provider. SAML values exist once a SAML connection is saved.
+          required: [oidc_redirect_uri, scim_base_url, saml_entity_id, saml_acs_url, saml_metadata_url, saml_certificate_pem]
+          properties:
+            oidc_redirect_uri: { type: string }
+            scim_base_url: { type: string }
+            saml_entity_id: { type: [string, "null"] }
+            saml_acs_url: { type: [string, "null"] }
+            saml_metadata_url: { type: [string, "null"] }
+            saml_certificate_pem: { type: [string, "null"] }
+        connection:
+          oneOf:
+            - { $ref: "#/components/schemas/SSOConnection" }
+            - { type: "null" }
+
+    SSOConnection:
+      type: object
+      required: [id, protocol, name, enabled, oidc, saml, email_attribute, name_attribute, groups_attribute, jit_enabled, default_role,
+        session_max_age_seconds, enforce, break_glass_user_ids, config_version, tested, last_test, created_at, updated_at]
+      properties:
+        id: { type: string }
+        protocol: { type: string, enum: [oidc, saml] }
+        name: { type: string }
+        enabled: { type: boolean }
+        oidc:
+          oneOf:
+            - type: object
+              required: [issuer, client_id, scopes, require_email_verified, client_secret_set]
+              properties:
+                issuer: { type: string }
+                client_id: { type: string }
+                scopes: { type: array, items: { type: string } }
+                require_email_verified: { type: boolean }
+                client_secret_set: { type: boolean, description: The secret itself is never returned }
+            - { type: "null" }
+        saml:
+          oneOf:
+            - type: object
+              required: [idp_metadata_url, idp_entity_id, idp_sso_url, idp_certificates, idp_cert_not_after, allow_idp_initiated, relay_state_allowlist, sign_authn_requests]
+              properties:
+                idp_metadata_url: { type: string }
+                idp_entity_id: { type: string }
+                idp_sso_url: { type: string }
+                idp_certificates: { type: array, items: { type: string }, description: SHA-256 fingerprints of the IdP signing certificates }
+                idp_cert_not_after: { $ref: "#/components/schemas/NullableTimestamp" }
+                allow_idp_initiated: { type: boolean }
+                relay_state_allowlist: { type: array, items: { type: string } }
+                sign_authn_requests: { type: boolean }
+            - { type: "null" }
+        email_attribute: { type: string, description: "Empty = default (OIDC email; SAML email/mail/… or an e-mail NameID)" }
+        name_attribute: { type: string }
+        groups_attribute: { type: string, description: "Empty = groups" }
+        jit_enabled: { type: boolean }
+        default_role: { type: string, enum: [admin, member, viewer] }
+        session_max_age_seconds: { type: integer, description: "0 = OPENLOG_SESSION_TTL only" }
+        enforce: { type: boolean }
+        break_glass_user_ids: { type: array, items: { type: string } }
+        config_version: { type: integer }
+        tested: { type: boolean, description: The current settings passed a test sign-in (required for enforcement) }
+        last_test:
+          oneOf:
+            - type: object
+              required: [at, ok, current, error, details]
+              properties:
+                at: { $ref: "#/components/schemas/Timestamp" }
+                ok: { type: boolean }
+                current: { type: boolean, description: "false when the settings changed since this successful test" }
+                error: { type: string }
+                details: { type: object, additionalProperties: true, description: "email, name, subject, groups, role, role_mapped" }
+            - { type: "null" }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    SSOConnectionInput:
+      type: object
+      required: [protocol, enabled]
+      properties:
+        protocol: { type: string, enum: [oidc, saml] }
+        name: { type: string, maxLength: 200 }
+        enabled: { type: boolean }
+        oidc:
+          type: object
+          required: [issuer, client_id]
+          properties:
+            issuer: { type: string }
+            client_id: { type: string }
+            client_secret: { type: [string, "null"], description: "Omitted or null keeps the stored secret; empty removes it" }
+            scopes: { type: array, items: { type: string } }
+            require_email_verified: { type: boolean, default: true }
+        saml:
+          type: object
+          properties:
+            idp_metadata_url: { type: string, description: Fetched when saved }
+            idp_metadata_xml: { type: string }
+            allow_idp_initiated: { type: boolean }
+            relay_state_allowlist: { type: array, items: { type: string } }
+            sign_authn_requests: { type: boolean }
+        email_attribute: { type: string }
+        name_attribute: { type: string }
+        groups_attribute: { type: string }
+        jit_enabled: { type: boolean, default: true }
+        default_role: { type: string, enum: [admin, member, viewer], default: viewer }
+        session_max_age_seconds: { type: integer, description: "0 or 300–2592000" }
+
+    SSOTestResult:
+      type: object
+      required: [ok, checks]
+      properties:
+        ok: { type: boolean }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, ok, message]
+            properties:
+              name: { type: string, description: "public_url, discovery, signing_algorithms, jwks, pkce, client_secret, idp_metadata, idp_certificate, sp_key" }
+              ok: { type: boolean }
+              message: { type: string }
+
+    SSODomain:
+      type: object
+      required: [id, domain, verified, verified_at, verification_method, dns_record, email_address, email_expires_at, last_checked_at, created_at]
+      properties:
+        id: { type: string }
+        domain: { type: string }
+        verified: { type: boolean }
+        verified_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        verification_method: { type: [string, "null"], description: "dns_txt or email" }
+        dns_record:
+          type: object
+          required: [type, name, value]
+          properties:
+            type: { type: string, enum: [TXT] }
+            name: { type: string, description: "_openlog-verification.<domain>" }
+            value: { type: string, description: "openlog-domain-verification=<token>" }
+        email_address: { type: [string, "null"], description: Address of a pending e-mail verification }
+        email_expires_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_checked_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+
+    SSORoleMapping:
+      type: object
+      required: [group, role]
+      properties:
+        group: { type: string, minLength: 1, maxLength: 512 }
+        role: { type: string, enum: [admin, member, viewer] }
+
+    SCIMToken:
+      type: object
+      required: [id, name, prefix, created_by_email, created_at, last_used_at, expires_at, revoked_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        prefix: { type: string }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        last_used_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        expires_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        revoked_at: { $ref: "#/components/schemas/NullableTimestamp" }
 
     LoginRequest:
       type: object
@@ -2978,6 +5745,7 @@ components:
         password: { type: string, minLength: 8 }
         name: { type: string }
         organization_name: { type: string }
+        captcha_token: { type: string, description: "Widget response; required when AuthConfig.captcha is set" }
 
     PasswordChangeRequest:
       type: object
@@ -2994,11 +5762,12 @@ components:
 
     User:
       type: object
-      required: [id, email, name]
+      required: [id, email, name, email_verified]
       properties:
         id: { type: string }
         email: { type: string }
         name: { type: string }
+        email_verified: { type: boolean, description: "false only for sign-ups that have not confirmed their address" }
 
     VersionInfo:
       type: object
@@ -3170,7 +5939,7 @@ components:
 
     Invitation:
       type: object
-      required: [id, email, role, invited_by_email, created_at, expires_at]
+      required: [id, email, role, invited_by_email, created_at, expires_at, expired, last_sent_at, send_count]
       properties:
         id: { type: string }
         email: { type: string }
@@ -3178,6 +5947,9 @@ components:
         invited_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         expires_at: { $ref: "#/components/schemas/Timestamp" }
+        expired: { type: boolean }
+        last_sent_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        send_count: { type: integer, description: "Invitation e-mails sent" }
 
     InvitationLookup:
       type: object
@@ -3359,10 +6131,41 @@ components:
         maintenance_windows:
           type: array
           items: { $ref: "#/components/schemas/MaintenanceWindow" }
+        php_agent:
+          description: Omitted = keep the stored section. changed_at is set by the server.
+          allOf: [{ $ref: "#/components/schemas/FleetPHPAgentPolicyInput" }]
+
+    FleetPHPAgentMode: { type: string, enum: [off, manual, auto] }
+
+    FleetPHPAgentPolicyInput:
+      type: object
+      required: [mode]
+      properties:
+        mode: { $ref: "#/components/schemas/FleetPHPAgentMode" }
+        version: { type: string, description: "agent (the host's infra agent version; default) or a SemVer version" }
+        reload: { type: string, enum: [none, graceful] }
+        exclude_bins:
+          type: array
+          maxItems: 50
+          items: { type: string, description: "Glob of PHP binaries never enabled (filepath.Match syntax)" }
+
+    FleetPHPAgentPolicy:
+      type: object
+      required: [mode, version, reload, exclude_bins, changed_at]
+      properties:
+        mode: { $ref: "#/components/schemas/FleetPHPAgentMode" }
+        version: { type: string }
+        reload: { type: string, enum: [none, graceful] }
+        exclude_bins:
+          type: array
+          items: { type: string }
+        changed_at:
+          description: Last change of the section; PHP agent waves start then (or at the target's release time if later)
+          allOf: [{ $ref: "#/components/schemas/NullableTimestamp" }]
 
     FleetPolicy:
       type: object
-      required: [mode, channel, target, pinned_version, waves, wave_soak_minutes, halt_failure_rate, maintenance_windows, is_default, updated_at, updated_by_email]
+      required: [mode, channel, target, pinned_version, waves, wave_soak_minutes, halt_failure_rate, maintenance_windows, php_agent, is_default, updated_at, updated_by_email]
       properties:
         mode: { $ref: "#/components/schemas/FleetMode" }
         channel: { $ref: "#/components/schemas/FleetChannel" }
@@ -3376,6 +6179,7 @@ components:
         maintenance_windows:
           type: array
           items: { $ref: "#/components/schemas/MaintenanceWindow" }
+        php_agent: { $ref: "#/components/schemas/FleetPHPAgentPolicy" }
         is_default: { type: boolean }
         updated_at: { $ref: "#/components/schemas/NullableTimestamp" }
         updated_by_email: { type: string }
@@ -3502,9 +6306,70 @@ components:
         version: { type: [string, "null"] }
         updated_at: { $ref: "#/components/schemas/Timestamp" }
 
+    FleetPHPOverride:
+      type: object
+      required: [mode, updated_at]
+      properties:
+        mode: { $ref: "#/components/schemas/FleetPHPAgentMode" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    FleetPHPRuntime:
+      type: object
+      description: One PHP binary of the host (openlog-php-install status --json, php-agent.md §7.2)
+      required: [bin, version, api, zts, debug, libc, scan_dir, module, supported, enabled, loaded, excluded]
+      properties:
+        bin: { type: string }
+        version: { type: string }
+        api: { type: string, description: ZEND_MODULE_API_NO }
+        zts: { type: boolean }
+        debug: { type: boolean }
+        libc: { type: string }
+        scan_dir: { type: string }
+        module: { type: string, description: "<api>-<nts|zts>-<glibc|musl>" }
+        supported: { type: boolean, description: A module exists for the ABI }
+        enabled: { type: boolean, description: The managed ini file exists }
+        loaded: { type: boolean, description: "`-m` lists openlog" }
+        excluded: { type: boolean, description: Matched by php_agent.exclude_bins }
+
+    FleetPHPAgentUpdate:
+      type: object
+      required: [operation, version, state, error, changed_at]
+      properties:
+        operation: { type: string, description: "install, upgrade, rollback or uninstall" }
+        version: { type: string }
+        state: { type: string, description: "downloading, restarting, confirming, applied, failed, rolled_back, uninstalled" }
+        error: { type: string }
+        changed_at: { type: string }
+
+    FleetHostPHPAgent:
+      type: object
+      required: [reported, mode, agent_mode, source, capable, reason, managed_by, version, runtimes, update, override, status, status_target]
+      properties:
+        reported: { type: boolean, description: false for agents that do not report PHP runtimes (older versions) }
+        mode: { $ref: "#/components/schemas/FleetPHPAgentMode" }
+        agent_mode: { type: string, description: Mode the agent applies ("" when not reported) }
+        source: { type: string, description: "remote (fleet settings) or local (config.yaml)" }
+        capable: { type: boolean, description: The privileged pre-start step runs on the host }
+        reason: { type: string }
+        managed_by: { type: string, enum: [fleet, package, manual, none] }
+        version: { type: [string, "null"], description: Installed PHP agent version }
+        runtimes:
+          type: array
+          items: { $ref: "#/components/schemas/FleetPHPRuntime" }
+        update:
+          anyOf: [{ $ref: "#/components/schemas/FleetPHPAgentUpdate" }, { type: "null" }]
+        override:
+          anyOf: [{ $ref: "#/components/schemas/FleetPHPOverride" }, { type: "null" }]
+        status:
+          type: string
+          description: PHP agent decision for the host now
+          enum: [offer, up_to_date, mode_off, manual, not_reported, not_capable, managed_elsewhere, no_php, invalid_version, no_catalog,
+            target_unavailable, no_artifact, already_failed, not_in_wave, outside_window]
+        status_target: { type: [string, "null"] }
+
     FleetHost:
       type: object
-      required: [host_id, host_name, agent, update, first_seen_at, last_sync_at, rollout_id, override, outdated, supported, status, status_target]
+      required: [host_id, host_name, agent, update, first_seen_at, last_sync_at, rollout_id, override, outdated, supported, status, status_target, php_agent]
       properties:
         host_id: { type: string }
         host_name: { type: string }
@@ -3541,9 +6406,10 @@ components:
           enum: [offer, no_catalog, mode_off, notify_only, invalid_version, hold, not_capable, no_rollout, rollout_paused, rollout_halted,
             rollout_outdated, not_in_rollout, up_to_date, not_in_wave, target_unavailable, incompatible, already_failed, no_artifact, outside_window]
         status_target: { type: [string, "null"] }
+        php_agent: { $ref: "#/components/schemas/FleetHostPHPAgent" }
 
     # ---- Alerting (docs/contracts/alerting.md) ----
-    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data] }
+    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql] }
     AlertSeverity: { type: string, enum: [critical, warning, info] }
     AlertOperator: { type: string, enum: [gt, gte, lt, lte] }
     AlertSeriesStateName: { type: string, enum: [ok, pending, firing] }
@@ -3586,6 +6452,10 @@ components:
         transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
         apm_no_data (§2.7): service_name ("" = every service), service_namespace, environment, group_by (namespace,
         environment), window_seconds, lookback_seconds.
+        apm_error (§2.9): event (new_group, regressed), service_name ("" = every service), service_namespace, environment,
+        match, window_seconds, min_count (new_group only).
+        oql (§2.10): query (OQL with exactly one number column; FACET = series labels; no TIMESERIES, SINCE/UNTIL,
+        COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
       properties:
         metric: { type: string }
         service_name: { type: string }
@@ -3611,8 +6481,9 @@ components:
         query: { type: string }
         severity_min: { type: string }
         signal: { type: string, enum: [host, metric, log] }
-        event: { type: string, enum: [service_disappeared, port_opened] }
+        event: { type: string, enum: [service_disappeared, port_opened, new_group, regressed] }
         match: { type: string }
+        min_count: { type: number, minimum: 0 }
 
     AlertFlapping:
       type: object
@@ -3959,25 +6830,52 @@ components:
         days:
           type: array
           items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
-        rrule: { type: string, description: "Subset FREQ=WEEKLY;BYDAY=MO,TU,… or FREQ=DAILY", example: "FREQ=WEEKLY;BYDAY=MO,FR" }
+        rrule:
+          type: string
+          description: "Subset FREQ=DAILY, FREQ=WEEKLY;BYDAY=MO,TU,… or FREQ=MONTHLY with BYMONTHDAY (±1..31), BYDAY (MO, 1MO, -1FR) and BYSETPOS (±1..31)"
+          example: "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1"
         start_time: { type: string, pattern: "^\\d{2}:\\d{2}$", example: "22:00" }
         end_time: { type: string, pattern: "^\\d{2}:\\d{2}$", example: "06:00" }
         from: { type: [string, "null"], description: "RFC3339 or unix ms; default now" }
         until: { type: [string, "null"], description: "RFC3339 or unix ms; empty = no end" }
+        exdates:
+          type: array
+          maxItems: 366
+          description: Local dates (YYYY-MM-DD or YYYYMMDD) on which no occurrence starts
+          items: { type: string, example: "2026-10-29" }
+        holiday_calendar_ids:
+          type: array
+          maxItems: 10
+          description: Holiday calendars of the organization whose dates are exceptions too
+          items: { type: string }
 
     AlertMuteSchedule:
       type: object
-      required: [timezone, days, rrule, start_time, end_time, from, until]
+      required: [timezone, days, rrule, start_time, end_time, from, until, exdates, holiday_calendar_ids]
       properties:
         timezone: { type: string }
         days:
           type: array
+          description: Weekly days (empty for monthly rules)
           items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
         rrule: { type: [string, "null"], description: Normalized rule when the mute was created with one }
         start_time: { type: string }
         end_time: { type: string }
         from: { $ref: "#/components/schemas/Timestamp" }
         until: { $ref: "#/components/schemas/NullableTimestamp" }
+        exdates:
+          type: array
+          items: { type: string }
+        holiday_calendar_ids:
+          type: array
+          items: { type: string }
+
+    AlertMuteOccurrence:
+      type: object
+      required: [starts_at, ends_at]
+      properties:
+        starts_at: { $ref: "#/components/schemas/Timestamp" }
+        ends_at: { $ref: "#/components/schemas/Timestamp" }
 
     AlertMuteInput:
       type: object
@@ -4001,7 +6899,7 @@ components:
 
     AlertMute:
       type: object
-      required: [id, name, comment, starts_at, ends_at, rule_ids, matchers, schedule, active, created_by_user_id, created_by_email, created_at, updated_at]
+      required: [id, name, comment, starts_at, ends_at, rule_ids, matchers, schedule, upcoming, active, created_by_user_id, created_by_email, created_at, updated_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -4018,11 +6916,108 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/AlertMuteSchedule" }
             - { type: "null" }
+        upcoming:
+          type: array
+          description: Recurring mutes, the current or next occurrences (up to 5); empty for one-off mutes
+          items: { $ref: "#/components/schemas/AlertMuteOccurrence" }
         active: { type: boolean }
         created_by_user_id: { type: [string, "null"] }
         created_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    AlertHolidayCalendarInput:
+      type: object
+      required: [name, dates]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        dates:
+          type: array
+          maxItems: 1000
+          description: "YYYY-MM-DD (one date), MM-DD or --MM-DD (every year); stored sorted and deduplicated"
+          items: { type: string, example: "04-23" }
+
+    AlertHolidayCalendar:
+      type: object
+      required: [id, name, description, dates, mute_count, created_by_email, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        dates:
+          type: array
+          items: { type: string }
+        mute_count: { type: integer, description: Mutes that reference the calendar }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+
+    AlertTemplateText:
+      type: object
+      description: Text per language
+      required: [en, tr]
+      properties:
+        en: { type: string }
+        tr: { type: string }
+
+    AlertTemplateParam:
+      type: object
+      required: [key, kind, required, default, label]
+      properties:
+        key: { type: string, example: threshold }
+        kind: { type: string, enum: [number, duration, host, instance, service, environment, text] }
+        unit: { type: string, description: "number: ratio (0..1), seconds, count, per_second, ms, bytes, score", example: ratio }
+        required: { type: boolean }
+        default: { description: Default value (number or string) }
+        min: { type: number }
+        max: { type: number }
+        label: { $ref: "#/components/schemas/AlertTemplateText" }
+
+    AlertTemplate:
+      type: object
+      required: [id, category, rule_type, severity, name, description, params]
+      properties:
+        id: { type: string, example: redis_memory_high }
+        category: { type: string, enum: [host, container, apm, integration, kubernetes] }
+        integration: { type: string, description: "nginx, redis, mysql, postgresql (category integration)" }
+        rule_type: { $ref: "#/components/schemas/AlertRuleType" }
+        severity: { $ref: "#/components/schemas/AlertSeverity" }
+        metric: { type: string, description: Main metric of metric_threshold templates }
+        reference_metric: { type: string, description: "Ratio templates: threshold = ratio × latest value of this metric on the instance" }
+        name: { $ref: "#/components/schemas/AlertTemplateText" }
+        description: { $ref: "#/components/schemas/AlertTemplateText" }
+        params:
+          type: array
+          items: { $ref: "#/components/schemas/AlertTemplateParam" }
+
+    AlertTemplateRenderInput:
+      type: object
+      properties:
+        params:
+          type: object
+          additionalProperties: true
+          description: "Values by parameter key (unknown keys → 400); integration targets: host_id, discovery_id + instance (empty = every instance)"
+        language: { type: string, enum: [en, tr], description: "Language of the generated name and description (default en)" }
+        name: { type: string, description: Rule name (default template name – target) }
+        channel_ids:
+          type: array
+          items: { type: string }
+
+    AlertTemplateRender:
+      type: object
+      required: [rule, reference]
+      properties:
+        rule: { $ref: "#/components/schemas/AlertRuleInput" }
+        reference:
+          oneOf:
+            - type: object
+              required: [metric, value, ratio]
+              properties:
+                metric: { type: string }
+                value: { type: number }
+                ratio: { type: number }
+            - { type: "null" }
 
     AlertDeliveryAttempt:
       type: object
@@ -4058,3 +7053,341 @@ components:
         attempt_log:
           type: array
           items: { $ref: "#/components/schemas/AlertDeliveryAttempt" }
+
+    # ---- OQL (oql.md) ----
+
+    OqlVariables:
+      type: object
+      description: 'Dashboard variable values: {"name": "value" | ["v1", "v2"]}'
+      additionalProperties:
+        oneOf:
+          - { type: string }
+          - { type: array, items: { type: string } }
+
+    OqlQueryRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, maxLength: 8192 }
+        from: { type: string, description: RFC3339 or unix ms; overrides SINCE (requires to) }
+        to: { type: string, description: RFC3339 or unix ms; overrides UNTIL (requires from) }
+        variables: { $ref: "#/components/schemas/OqlVariables" }
+
+    OqlColumn:
+      type: object
+      required: [name, function, type]
+      properties:
+        name: { type: string, description: Alias or rendered aggregate, e.g. "count(*)" }
+        function: { type: string, example: percentile }
+        type: { type: string, enum: [number, string] }
+
+    OqlValue:
+      type: [number, string, "null"]
+
+    OqlRow:
+      type: object
+      required: [facets, values]
+      properties:
+        facets: { type: array, items: { type: string } }
+        values: { type: array, items: { $ref: "#/components/schemas/OqlValue" } }
+
+    OqlPoint:
+      type: array
+      description: "[bucket start unix milliseconds, value]"
+      prefixItems:
+        - { type: integer }
+        - { type: [number, "null"] }
+      minItems: 2
+      maxItems: 2
+      items: { type: [number, "null"] }
+
+    OqlSeries:
+      type: object
+      required: [facets, column, points]
+      properties:
+        facets: { type: array, items: { type: string } }
+        column: { type: integer, description: Index into columns }
+        points: { type: array, items: { $ref: "#/components/schemas/OqlPoint" } }
+
+    OqlHistogramBucket:
+      type: object
+      required: [from, to, count]
+      properties:
+        from: { type: number }
+        to: { type: number }
+        count: { type: number }
+
+    OqlCompare:
+      type: object
+      required: [offset_seconds, rows, series, buckets]
+      properties:
+        offset_seconds: { type: integer }
+        rows: { type: array, items: { $ref: "#/components/schemas/OqlRow" } }
+        series: { type: array, items: { $ref: "#/components/schemas/OqlSeries" } }
+        buckets: { type: array, items: { $ref: "#/components/schemas/OqlHistogramBucket" } }
+
+    OqlMetadata:
+      type: object
+      required: [from, to, bucket_seconds, rollup, table, rows_read, bytes_read, elapsed_ms, queries, facet_limit, truncated, warnings]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        bucket_seconds: { type: [integer, "null"] }
+        rollup: { type: boolean }
+        table: { type: string }
+        rows_read: { type: integer }
+        bytes_read: { type: integer }
+        elapsed_ms: { type: integer }
+        queries: { type: integer }
+        facet_limit: { type: integer }
+        truncated: { type: boolean }
+        warnings: { type: array, items: { type: string } }
+
+    OqlResult:
+      type: object
+      required: [kind, event_type, columns, facets, rows, series, buckets, compare, metadata]
+      properties:
+        kind: { type: string, enum: [single, facets, timeseries, histogram] }
+        event_type: { type: string }
+        columns: { type: array, items: { $ref: "#/components/schemas/OqlColumn" } }
+        facets: { type: array, items: { type: string } }
+        rows: { type: array, items: { $ref: "#/components/schemas/OqlRow" } }
+        series: { type: array, items: { $ref: "#/components/schemas/OqlSeries" } }
+        buckets: { type: array, items: { $ref: "#/components/schemas/OqlHistogramBucket" } }
+        compare:
+          oneOf:
+            - { $ref: "#/components/schemas/OqlCompare" }
+            - { type: "null" }
+        metadata: { $ref: "#/components/schemas/OqlMetadata" }
+
+    OqlValidateRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, maxLength: 8192 }
+        variables: { $ref: "#/components/schemas/OqlVariables" }
+
+    OqlDiagnostic:
+      type: object
+      required: [message, offset, length, line, column]
+      properties:
+        message: { type: string }
+        offset: { type: integer, description: Byte offset in the query }
+        length: { type: integer }
+        line: { type: integer, description: 1-based }
+        column: { type: integer, description: 1-based (characters) }
+
+    OqlValidation:
+      type: object
+      required: [valid, event_type, kind, variables, errors, warnings]
+      properties:
+        valid: { type: boolean }
+        event_type: { type: [string, "null"] }
+        kind: { type: [string, "null"], enum: [single, facets, timeseries, histogram, null] }
+        variables: { type: array, items: { type: string } }
+        errors: { type: array, items: { $ref: "#/components/schemas/OqlDiagnostic" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/OqlDiagnostic" } }
+
+    OqlSchema:
+      type: object
+      required: [event_types, functions, keywords, attribute_keys, resource_keys, metric_names]
+      properties:
+        event_types:
+          type: array
+          items:
+            type: object
+            required: [name, description, attributes, maps, max_range_seconds]
+            properties:
+              name: { type: string }
+              description: { type: string }
+              maps: { type: array, items: { type: string, enum: [attributes, resource] } }
+              max_range_seconds: { type: integer }
+              attributes:
+                type: array
+                items:
+                  type: object
+                  required: [name, type, aliases, rollup]
+                  properties:
+                    name: { type: string }
+                    type: { type: string, enum: [string, number, bool] }
+                    aliases: { type: array, items: { type: string } }
+                    rollup: { type: boolean, description: Available on the Metric 1-minute rollup }
+        functions:
+          type: array
+          items:
+            type: object
+            required: [name, signature, description]
+            properties:
+              name: { type: string }
+              signature: { type: string }
+              description: { type: string }
+        keywords: { type: array, items: { type: string } }
+        attribute_keys: { type: array, items: { type: string } }
+        resource_keys: { type: array, items: { type: string } }
+        metric_names: { type: array, items: { type: string } }
+
+    # ---- Dashboards ----
+
+    DashboardVisibility:
+      type: string
+      enum: [org, private]
+
+    DashboardVariable:
+      type: object
+      required: [name, label, type, query, values, default, multi, include_all]
+      properties:
+        name: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_]{0,63}$" }
+        label: { type: string }
+        type: { type: string, enum: [query, list, text] }
+        query: { type: string, description: OQL query with FACET (type query) }
+        values: { type: array, items: { type: string }, description: Static values (type list) }
+        default: { type: array, items: { type: string } }
+        multi: { type: boolean }
+        include_all: { type: boolean }
+
+    DashboardWidgetLayout:
+      type: object
+      required: [x, y, w, h]
+      properties:
+        x: { type: integer, minimum: 0, maximum: 11 }
+        y: { type: integer, minimum: 0, maximum: 10000 }
+        w: { type: integer, minimum: 1, maximum: 12 }
+        h: { type: integer, minimum: 1, maximum: 50 }
+
+    DashboardThreshold:
+      type: object
+      required: [value, severity]
+      properties:
+        value: { type: number }
+        severity: { type: string, enum: [warning, critical] }
+
+    DashboardVisualization:
+      type: string
+      enum: [line, area, bar, table, billboard, pie, heatmap, markdown]
+
+    DashboardWidgetOptions:
+      type: object
+      properties:
+        stacked: { type: boolean }
+        legend: { type: boolean }
+
+    DashboardUnit:
+      type: string
+      enum: ["", number, percent, bytes, bytesPerSec, ms, s]
+
+    DashboardWidget:
+      type: object
+      required: [id, title, visualization, layout, query, markdown, unit, thresholds, options]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        visualization: { $ref: "#/components/schemas/DashboardVisualization" }
+        layout: { $ref: "#/components/schemas/DashboardWidgetLayout" }
+        query: { type: string }
+        markdown: { type: string }
+        unit: { $ref: "#/components/schemas/DashboardUnit" }
+        thresholds: { type: array, items: { $ref: "#/components/schemas/DashboardThreshold" } }
+        options: { $ref: "#/components/schemas/DashboardWidgetOptions" }
+
+    DashboardWidgetInput:
+      type: object
+      required: [visualization, layout]
+      properties:
+        id: { type: string, description: Kept when it is a widget id of the same dashboard }
+        title: { type: string }
+        visualization: { $ref: "#/components/schemas/DashboardVisualization" }
+        layout: { $ref: "#/components/schemas/DashboardWidgetLayout" }
+        query: { type: string }
+        markdown: { type: string }
+        unit: { $ref: "#/components/schemas/DashboardUnit" }
+        thresholds: { type: array, items: { $ref: "#/components/schemas/DashboardThreshold" } }
+        options: { $ref: "#/components/schemas/DashboardWidgetOptions" }
+
+    DashboardPage:
+      type: object
+      required: [id, name, widgets]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        widgets: { type: array, items: { $ref: "#/components/schemas/DashboardWidget" } }
+
+    DashboardPageInput:
+      type: object
+      required: [name, widgets]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        widgets: { type: array, items: { $ref: "#/components/schemas/DashboardWidgetInput" } }
+
+    Dashboard:
+      type: object
+      required: [id, name, description, visibility, version, variables, pages, created_by_user_id, created_by_email, created_at, updated_at, can_edit]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        visibility: { $ref: "#/components/schemas/DashboardVisibility" }
+        version: { type: integer }
+        variables: { type: array, items: { $ref: "#/components/schemas/DashboardVariable" } }
+        pages: { type: array, items: { $ref: "#/components/schemas/DashboardPage" } }
+        created_by_user_id: { type: [string, "null"] }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        can_edit: { type: boolean }
+
+    DashboardInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        visibility: { $ref: "#/components/schemas/DashboardVisibility" }
+        variables: { type: array, items: { $ref: "#/components/schemas/DashboardVariable" } }
+        pages: { type: array, items: { $ref: "#/components/schemas/DashboardPageInput" } }
+        version: { type: integer, description: Required on PUT (optimistic concurrency) }
+
+    DashboardSummary:
+      type: object
+      required: [id, name, description, visibility, page_count, widget_count, created_by_email, updated_at, can_edit]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        visibility: { $ref: "#/components/schemas/DashboardVisibility" }
+        page_count: { type: integer }
+        widget_count: { type: integer }
+        created_by_email: { type: string }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        can_edit: { type: boolean }
+
+    DashboardAddWidget:
+      type: object
+      required: [widget]
+      properties:
+        page_id: { type: string }
+        widget: { $ref: "#/components/schemas/DashboardWidgetInput" }
+
+    DashboardExport:
+      type: object
+      required: [openlog_dashboard, name, description, variables, pages]
+      properties:
+        openlog_dashboard: { type: integer, enum: [1] }
+        name: { type: string }
+        description: { type: string }
+        variables: { type: array, items: { $ref: "#/components/schemas/DashboardVariable" } }
+        pages:
+          type: array
+          items:
+            type: object
+            required: [name, widgets]
+            properties:
+              name: { type: string }
+              widgets: { type: array, items: { $ref: "#/components/schemas/DashboardWidgetInput" } }
+
+    DashboardImport:
+      allOf:
+        - { $ref: "#/components/schemas/DashboardExport" }
+        - type: object
+          properties:
+            visibility: { $ref: "#/components/schemas/DashboardVisibility" }

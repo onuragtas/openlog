@@ -1,0 +1,153 @@
+# Tiered storage test stack (test/e2e/tieredtest, `make tieredtest`; docs/operations/tiered-storage.md).
+#
+#   MinIO        bucket openlog-tiered (created by minio-init), data in a small named volume
+#   ClickHouse   cluster `openlog`, 2 shards x 2 replicas, storage policy from deploy/compose/clickhouse/
+#                storage-tiered.xml + storage-tiered-warm.xml (unchanged), one S3 prefix per {shard}/{replica}.
+#                Every replica gets its S3 credentials differently:
+#                  ch-s1r1  OPENLOG_S3_ACCESS_KEY_ID / _SECRET_ACCESS_KEY
+#                  ch-s1r2  use_environment_credentials (AWS_ACCESS_KEY_ID, the IAM / IRSA code path)
+#                  ch-s2r1  credentials file (zz-openlog-s3-credentials.xml) over wrong environment keys
+#                  ch-s2r2  static keys, OPENLOG_S3_REGION unset
+#
+# Host ports (ch-s1r1 only): 37000 native, 37123 HTTP. Distinct from the default, e2e and tlstest stacks.
+name: openlog-tiered
+
+x-clickhouse: &clickhouse
+  image: clickhouse/clickhouse-server:25.8
+  ulimits:
+    nofile: {soft: 262144, hard: 262144}
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping >/dev/null || exit 1"]
+    interval: 3s
+    timeout: 5s
+    retries: 60
+  depends_on:
+    minio-init:
+      condition: service_completed_successfully
+
+x-ch-env: &ch-env
+  CLICKHOUSE_USER: openlog
+  CLICKHOUSE_PASSWORD: openlog
+  CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+  OPENLOG_S3_ENDPOINT: http://minio:9000/openlog-tiered/{shard}/{replica}/
+  OPENLOG_S3_REGION: us-east-1
+  OPENLOG_S3_ACCESS_KEY_ID: openlog-tiered
+  OPENLOG_S3_SECRET_ACCESS_KEY: openlog-tiered-secret
+  OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS: "false"
+  OPENLOG_S3_CACHE_MAX_SIZE: 32Mi
+  OPENLOG_S3_CACHE_PATH: /var/lib/clickhouse/openlog_s3_cache/
+  OPENLOG_WARM_PATH: /var/lib/clickhouse-warm/
+
+services:
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    hostname: minio
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: openlog-tiered
+      MINIO_ROOT_PASSWORD: openlog-tiered-secret
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  minio-init:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - mc alias set l http://minio:9000 openlog-tiered openlog-tiered-secret && mc mb -p l/openlog-tiered
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  ch-s1r1:
+    <<: *clickhouse
+    hostname: ch-s1r1
+    environment:
+      <<: *ch-env
+      CH_SHARD: "01"
+      CH_REPLICA: ch-s1r1
+    volumes:
+      - ./clickhouse/cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+      - ./clickhouse/keeper.xml:/etc/clickhouse-server/config.d/openlog-keeper.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered.xml:/etc/clickhouse-server/config.d/openlog-storage.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered-warm.xml:/etc/clickhouse-server/config.d/openlog-storage-warm.xml:ro
+      - ch-s1r1:/var/lib/clickhouse
+      - ch-s1r1-warm:/var/lib/clickhouse-warm
+    ports:
+      - "127.0.0.1:37000:9000"
+      - "127.0.0.1:37123:8123"
+
+  ch-s1r2:
+    <<: *clickhouse
+    hostname: ch-s1r2
+    environment:
+      <<: *ch-env
+      CH_SHARD: "01"
+      CH_REPLICA: ch-s1r2
+      OPENLOG_S3_ACCESS_KEY_ID: ""
+      OPENLOG_S3_SECRET_ACCESS_KEY: ""
+      OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS: "true"
+      AWS_ACCESS_KEY_ID: openlog-tiered
+      AWS_SECRET_ACCESS_KEY: openlog-tiered-secret
+    volumes:
+      - ./clickhouse/cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered.xml:/etc/clickhouse-server/config.d/openlog-storage.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered-warm.xml:/etc/clickhouse-server/config.d/openlog-storage-warm.xml:ro
+      - ch-s1r2:/var/lib/clickhouse
+      - ch-s1r2-warm:/var/lib/clickhouse-warm
+
+  ch-s2r1:
+    <<: *clickhouse
+    hostname: ch-s2r1
+    environment:
+      <<: *ch-env
+      CH_SHARD: "02"
+      CH_REPLICA: ch-s2r1
+      OPENLOG_S3_ACCESS_KEY_ID: wrong
+      OPENLOG_S3_SECRET_ACCESS_KEY: wrong-secret
+    volumes:
+      - ./clickhouse/cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered.xml:/etc/clickhouse-server/config.d/openlog-storage.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered-warm.xml:/etc/clickhouse-server/config.d/openlog-storage-warm.xml:ro
+      - ./clickhouse/credentials.xml:/etc/clickhouse-server/config.d/zz-openlog-s3-credentials.xml:ro
+      - ch-s2r1:/var/lib/clickhouse
+      - ch-s2r1-warm:/var/lib/clickhouse-warm
+
+  ch-s2r2:
+    <<: *clickhouse
+    hostname: ch-s2r2
+    environment:
+      CLICKHOUSE_USER: openlog
+      CLICKHOUSE_PASSWORD: openlog
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+      OPENLOG_S3_ENDPOINT: http://minio:9000/openlog-tiered/{shard}/{replica}/
+      OPENLOG_S3_ACCESS_KEY_ID: openlog-tiered
+      OPENLOG_S3_SECRET_ACCESS_KEY: openlog-tiered-secret
+      OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS: "false"
+      OPENLOG_S3_CACHE_MAX_SIZE: 32Mi
+      OPENLOG_S3_CACHE_PATH: /var/lib/clickhouse/openlog_s3_cache/
+      OPENLOG_WARM_PATH: /var/lib/clickhouse-warm/
+      CH_SHARD: "02"
+      CH_REPLICA: ch-s2r2
+    volumes:
+      - ./clickhouse/cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered.xml:/etc/clickhouse-server/config.d/openlog-storage.xml:ro
+      - ../../../deploy/compose/clickhouse/storage-tiered-warm.xml:/etc/clickhouse-server/config.d/openlog-storage-warm.xml:ro
+      - ch-s2r2:/var/lib/clickhouse
+      - ch-s2r2-warm:/var/lib/clickhouse-warm
+
+volumes:
+  minio-data:
+  ch-s1r1:
+  ch-s1r1-warm:
+  ch-s1r2:
+  ch-s1r2-warm:
+  ch-s2r1:
+  ch-s2r1-warm:
+  ch-s2r2:
+  ch-s2r2-warm:

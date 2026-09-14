@@ -1,0 +1,102 @@
+# openlog-agent chart values. See README.md and docs/operations/kubernetes.md.
+
+image:
+  repository: ghcr.io/onuragtas/openlog-infra-agent
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Required: the name shown for this cluster (resource attribute k8s.cluster.name).
+clusterName: ""
+
+# Required: OTLP/HTTP endpoint of openlog ingest, e.g. https://ingest.openlog.example:4318
+endpoint: ""
+
+# Ingest license key. Prefer existingSecret; a key given here is stored in a Secret created by the chart.
+licenseKey: ""
+existingSecret:
+  # Name of a Secret in the release namespace holding the license key.
+  name: ""
+  key: license-key
+
+# Attributes added to every resource (host.extra_attributes), e.g. { env: prod, team: platform }.
+extraAttributes: {}
+
+# Extra environment variables for both workloads.
+extraEnv: []
+
+logLevel: info
+
+serviceAccount:
+  # Two ServiceAccounts are created: <fullname>-node and <fullname>-cluster.
+  create: true
+  annotations: {}
+  automountServiceAccountToken: true
+
+rbac:
+  create: true
+
+commonLabels: {}
+
+# ---- node agent (DaemonSet) ----
+node:
+  enabled: true
+  # Extra agent configuration merged over the generated config (agents/infra/packaging/config.example.yaml keys).
+  config: {}
+  kubelet:
+    enabled: true
+    # Kubelet serving certificates are self-signed on kubeadm, kind and many managed clusters. Set false when kubelet
+    # certificates are signed by the cluster CA (serverTLSBootstrap).
+    insecureSkipVerify: true
+  containerLogs:
+    enabled: true
+  # Collect host metrics, processes and inventory of the node. hostNetwork and hostPID are required for correct host
+  # network counters, listening ports and per-process metrics.
+  hostNetwork: true
+  hostPID: true
+  # Host directory for the disk buffer, log positions and the generated host id (survives pod restarts).
+  stateHostPath: /var/lib/openlog-infra-agent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      memory: 384Mi
+  # Run on every node, including tainted control-plane nodes.
+  tolerations:
+    - operator: Exists
+  nodeSelector:
+    kubernetes.io/os: linux
+  affinity: {}
+  priorityClassName: ""
+  podAnnotations: {}
+  podLabels: {}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 10%
+  terminationGracePeriodSeconds: 30
+
+# ---- cluster collector (Deployment, leader elected) ----
+cluster:
+  enabled: true
+  # Only the Lease holder collects; 2 replicas give a fast failover.
+  replicas: 1
+  interval: 30s
+  events: true
+  maxPods: 10000
+  config: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  tolerations: []
+  nodeSelector:
+    kubernetes.io/os: linux
+  affinity: {}
+  priorityClassName: ""
+  podAnnotations: {}
+  podLabels: {}

@@ -394,6 +394,8 @@ func TestE2E(t *testing.T) {
 	t.Run("logs_exclude_inventory", testLogsExcludeInventory)
 	t.Run("tenant_isolation", testTenantIsolation)
 	t.Run("agent_logs", testAgentLogs)
+	t.Run("agent_log_rotation_unread", testAgentLogRotationUnread)
+	t.Run("agent_journald", testAgentJournald)
 	t.Run("process_metrics", testProcessMetrics)
 	t.Run("containers", testContainers)
 	t.Run("apm", testAPM)       // apm_test.go

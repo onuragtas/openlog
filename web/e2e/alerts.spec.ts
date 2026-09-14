@@ -49,7 +49,7 @@ test("alerts: incident workflow, rule editor with preview, channels and mutes", 
   await page.getByLabel("Threshold", { exact: true }).fill("1.5");
   await page.getByLabel("Recovery threshold", { exact: true }).fill("1.2");
   await expect(page.getByTestId("preview-summary")).toContainText(/Would have opened \d+ incidents?/, { timeout: 10_000 });
-  await expect(page.getByTestId("alert-preview-chart").locator("canvas")).toBeVisible();
+  await expect(page.getByTestId("alert-preview").locator("canvas")).toBeVisible();
   await page.getByLabel(/#ops-alerts/).check();
   await page.getByTestId("alert-preview").scrollIntoViewIfNeeded();
   await shot(page, "alerts-rule-editor");
@@ -99,7 +99,7 @@ test("alerts: rule editor in dark mode", async ({ page }) => {
   await page.getByRole("link", { name: "High CPU" }).click();
   await expect(page.getByRole("heading", { name: "Edit alert rule" })).toBeVisible();
   await expect(page.getByTestId("preview-summary")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByTestId("alert-preview-chart").locator("canvas")).toBeVisible();
+  await expect(page.getByTestId("alert-preview").locator("canvas")).toBeVisible();
   await page.getByTestId("alert-preview").scrollIntoViewIfNeeded();
   await shot(page, "alerts-rule-editor-dark", false);
 });

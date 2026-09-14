@@ -88,6 +88,34 @@ describe("fleet policy and rollout", () => {
     expect(screen.queryByRole("button", { name: "Deploy now" })).not.toBeInTheDocument();
   });
 
+  it("saves the PHP agent section", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderHarness(true);
+
+    const mode = await screen.findByLabelText("PHP agent mode");
+    expect(mode).toHaveValue("manual");
+    await user.selectOptions(mode, "auto");
+    expect(screen.getByText(/Install where a supported PHP runtime is found/)).toBeInTheDocument();
+
+    const version = screen.getByLabelText("PHP agent version");
+    await user.clear(version);
+    await user.type(version, "latest");
+    expect(screen.getByText("Enter agent or a version such as 0.9.1.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save policy" })).toBeDisabled();
+    await user.clear(version);
+    await user.type(version, "v0.4.0");
+
+    await user.selectOptions(screen.getByLabelText("After a change"), "graceful");
+    await user.type(screen.getByLabelText("Excluded PHP binaries"), "/usr/bin/php7.4");
+    await user.click(screen.getByRole("button", { name: "Save policy" }));
+    expect(await screen.findByText("Policy saved")).toBeInTheDocument();
+    // The form shows the stored section (leading v removed).
+    expect(screen.getByLabelText("PHP agent mode")).toHaveValue("auto");
+    expect(screen.getByLabelText("PHP agent version")).toHaveValue("0.4.0");
+    expect(screen.getByLabelText("Excluded PHP binaries")).toHaveValue("/usr/bin/php7.4");
+  });
+
   it("is read-only for viewers", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     setSelectedOrg(MOCK_STAGING_ORG_ID);

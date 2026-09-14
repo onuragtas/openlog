@@ -96,6 +96,12 @@ e2e:
 tlstest:
 	go test -tags tlstest -v -count=1 -timeout 30m ./test/e2e/tlstest
 
+# Tiered storage test: MinIO + 2-shard x 2-replica ClickHouse with the storage policy of deploy/compose/clickhouse,
+# moves, reads, deletion, restart, S3 outage (compose project openlog-tiered; docs/operations/tiered-storage.md).
+.PHONY: tieredtest
+tieredtest:
+	cd test/e2e/tieredtest && go test -tags tieredtest -v -count=1 -timeout 30m .
+
 # Web UI (requires Node >= 20.19). `build` does not need Node: without `make web`
 # the binaries embed the placeholder web/dist/index.html.
 .PHONY: web web-test
@@ -164,6 +170,17 @@ go-agent-verify:
 release-local: release-check release-agent release-packages release-backend release-helm release-manifest release-index
 	@rm -rf $(RELEASE_STAGE)
 	@echo "release $(VERSION) ready in $(RELEASE_DIR)"; ls -l $(RELEASE_DIR)
+
+# PHP agent artifacts (openlog-php-agent_<v>_linux_<arch>.tar.gz|deb|rpm|apk, php-agent.md §7.1) for the Docker host's
+# architecture, into $(RELEASE_DIR) before release-local (which puts every artifact found there into the manifest).
+# release.yml builds all 36 modules on native amd64/arm64 runners; locally pick a subset, e.g.
+#   make release-php-agent VERSION=0.9.0 PHP_TARGETS="8.2-nts-glibc" PHP_PACKAGES=""
+PHP_TARGETS ?=
+PHP_PACKAGES ?= deb rpm apk
+.PHONY: release-php-agent
+release-php-agent:
+	@mkdir -p $(RELEASE_DIR)
+	TARGETS="$(PHP_TARGETS)" PACKAGES="$(PHP_PACKAGES)" agents/php/packaging/build-artifacts.sh "$(VERSION)" "$(RELEASE_DIR)"
 
 release-tool:
 	@mkdir -p $(BIN)
@@ -297,6 +314,9 @@ helm-lint:
 	"$(HELM)" lint deploy/helm/openlog
 	"$(HELM)" template openlog deploy/helm/openlog | docker run --rm -i $(KUBECONFORM_IMAGE) \
 		-strict -summary -ignore-missing-schemas -kubernetes-version 1.30.0 -
+	"$(HELM)" lint deploy/helm/openlog-agent --set clusterName=ci,endpoint=https://ingest.example:4318,licenseKey=x
+	"$(HELM)" template openlog-agent deploy/helm/openlog-agent --set clusterName=ci,endpoint=https://ingest.example:4318,licenseKey=x,cluster.replicas=2 \
+		| docker run --rm -i $(KUBECONFORM_IMAGE) -strict -summary -ignore-missing-schemas -kubernetes-version 1.30.0 -
 
 # Install the built .deb/.rpm in debian:12 / rockylinux/rockylinux:9 containers (needs release-local).
 package-test:

@@ -1,0 +1,15 @@
+-- SELECT count(*), max(restarts) FROM Container WHERE state = 'running' AND attributes['com.docker.compose.version'] IS NOT NULL FACET compose.project TIMESERIES 1 hour SINCE 1 day ago
+-- kind=timeseries table=containers rollup=false bucket=1h0m0s limit=10 from=2026-09-13T12:00:00Z to=2026-09-14T12:00:00Z
+SELECT toString(c_compose_project) AS f0, toInt64(intDiv(toUnixTimestamp64Milli(c_last_seen), {b_ms:Int64}) * {b_ms:Int64}) AS bk, CAST(count() AS Nullable(Float64)) AS a0, CAST(max(c_restarts) AS Nullable(Float64)) AS a1 FROM (SELECT host_id AS c_host_id, container_id AS c_container_id, min(first_seen) AS c_first_seen, max(last_seen) AS c_last_seen, argMaxMerge(host_name) AS c_host_name, argMaxMerge(name) AS c_name, argMaxMerge(image_name) AS c_image_name, argMaxMerge(image_tags) AS c_image_tags, argMaxMerge(runtime) AS c_runtime, argMaxMerge(compose_project) AS c_compose_project, argMaxMerge(compose_service) AS c_compose_service, argMaxMerge(k8s_pod_name) AS c_k8s_pod_name, argMaxMerge(k8s_namespace_name) AS c_k8s_namespace_name, argMaxMerge(k8s_container_name) AS c_k8s_container_name, argMaxMerge(state) AS c_state, argMaxMerge(health) AS c_health, argMaxMerge(restarts) AS c_restarts, argMaxMerge(attributes) AS c_attributes FROM `openlog`.containers
+WHERE (tenant_id = {tenant_id:String}) GROUP BY host_id, container_id)
+WHERE (c_last_seen >= fromUnixTimestamp64Nano({t_from:Int64}) AND c_last_seen < fromUnixTimestamp64Nano({t_to:Int64})) AND ((c_state = {p0:String}) AND (mapContains(c_attributes, {p1:String}))) AND (toString(c_compose_project) GLOBAL IN (SELECT toString(c_compose_project) FROM (SELECT host_id AS c_host_id, container_id AS c_container_id, min(first_seen) AS c_first_seen, max(last_seen) AS c_last_seen, argMaxMerge(host_name) AS c_host_name, argMaxMerge(name) AS c_name, argMaxMerge(image_name) AS c_image_name, argMaxMerge(image_tags) AS c_image_tags, argMaxMerge(runtime) AS c_runtime, argMaxMerge(compose_project) AS c_compose_project, argMaxMerge(compose_service) AS c_compose_service, argMaxMerge(k8s_pod_name) AS c_k8s_pod_name, argMaxMerge(k8s_namespace_name) AS c_k8s_namespace_name, argMaxMerge(k8s_container_name) AS c_k8s_container_name, argMaxMerge(state) AS c_state, argMaxMerge(health) AS c_health, argMaxMerge(restarts) AS c_restarts, argMaxMerge(attributes) AS c_attributes FROM `openlog`.containers
+WHERE (tenant_id = {tenant_id:String}) GROUP BY host_id, container_id)
+WHERE (c_last_seen >= fromUnixTimestamp64Nano({t_from:Int64}) AND c_last_seen < fromUnixTimestamp64Nano({t_to:Int64})) AND ((c_state = {p0:String}) AND (mapContains(c_attributes, {p1:String}))) GROUP BY toString(c_compose_project) ORDER BY count() DESC, toString(c_compose_project) LIMIT 10)) GROUP BY f0, bk ORDER BY bk LIMIT 100001
+-- b_ms = 3600000
+-- p0 = running
+-- p1 = com.docker.compose.version
+-- t_from = 1789300800000000000
+-- t_to = 1789387200000000000
+-- tenant_id = tenant-a
+-- column "count(*)" count number zero=true
+-- column "max(restarts)" max number zero=false

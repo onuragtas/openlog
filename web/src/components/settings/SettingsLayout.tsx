@@ -10,6 +10,10 @@ const TABS = [
   { to: "/settings/license-keys", label: "settings.tabs.licenseKeys", permission: "license_keys.list" },
   { to: "/settings/api-keys", label: "settings.tabs.apiKeys", permission: "api_keys.list" },
   { to: "/settings/security", label: "settings.tabs.security", permission: null },
+  { to: "/settings/sso", label: "sso.tab", permission: "org.update" },
+  { to: "/settings/audit-log", label: "settings.tabs.auditLog", permission: "audit.read" },
+  { to: "/settings/apm-sampling", label: "settings.tabs.tailSampling", permission: null },
+  { to: "/settings/usage", label: "settings.tabs.usage", permission: null },
 ] as const satisfies readonly { to: string; label: string; permission: Permission | null }[];
 
 export function SettingsLayout() {

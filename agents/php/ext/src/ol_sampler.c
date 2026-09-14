@@ -14,6 +14,16 @@
  * Segments are compact records (id, first/last sample time, referenced name strings); spans and JSON are produced
  * only when the function trace is sent (slow or failed transaction). No per-call cost; a sample costs a stack walk.
  *
+ * Arming costs no system call while the worker is busy: after a request the thread keeps ticking (without
+ * interrupting) for OL_SAMPLER_GRACE_NS and only then waits on its condition variable, so a worker serving
+ * back-to-back requests never wakes it with a futex. `idle` / `armed` are a Dekker-style handshake on atomics.
+ *
+ * Warm-up: during the first OL_SAMPLER_WARMUP_NS of a request (and while idle) the thread ticks every
+ * OL_SAMPLER_WARMUP_IV_NS instead of every min_segment_ms. Function traces are only sent for requests slower than the
+ * threshold (default 500 ms) or failed ones, so a fast request no longer pays one thread wake-up + interrupt per
+ * millisecond (measured ~150 µs PHP CPU on a 7 ms Laravel request on a VM). Blocking calls still take their own samples
+ * at span start/end; calls shorter than 10 ms in the first 100 ms of a request appear only when a sample hits them.
+ *
  * Limits: calls shorter than the interval appear only when a sample hits them; consecutive calls of the same function
  * from the same frame address without a sample in between merge into one segment (`openlog.php.samples`).
  */
@@ -21,6 +31,7 @@
 
 #include <pthread.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -31,41 +42,58 @@
 # define OL_SET_INTERRUPT(p) (*(zend_bool *) (p) = 1)
 #endif
 
+#define OL_SAMPLER_GRACE_NS     200000000ULL /* keep ticking 200 ms after the last request */
+#define OL_SAMPLER_WARMUP_NS    100000000ULL /* first 100 ms of a request … */
+#define OL_SAMPLER_WARMUP_IV_NS  10000000ULL /* … and while idle: one tick every 10 ms */
+
 typedef struct ol_sampler {
 	pthread_t th;
 	pthread_mutex_t mu;
 	pthread_cond_t cv;
 	int quit;
-	volatile int armed;
+	atomic_int armed;
+	atomic_ullong armed_at; /* monotonic ns of the current request's start */
+	atomic_int idle;     /* the thread waits (or is about to wait) on cv */
 	volatile int pending;
-	uint64_t interval_ns;
-	void *vm_interrupt;
+	uint64_t interval_ns; /* written under mu only */
+	void *vm_interrupt;   /* written under mu only */
 	int pid;
 } ol_sampler;
 
 static void *ol_sampler_main(void *arg)
 {
 	ol_sampler *s = arg;
+	uint64_t unarmed_ns = 0;
 	pthread_mutex_lock(&s->mu);
 	while (!s->quit) {
 		uint64_t iv;
 		void *vi;
 		struct timespec ts;
-		while (!s->armed && !s->quit) {
-			pthread_cond_wait(&s->cv, &s->mu);
-		}
-		if (s->quit) {
-			break;
+		if (!atomic_load(&s->armed) && unarmed_ns >= OL_SAMPLER_GRACE_NS) {
+			atomic_store(&s->idle, 1);
+			while (!atomic_load(&s->armed) && !s->quit) {
+				pthread_cond_wait(&s->cv, &s->mu);
+			}
+			atomic_store(&s->idle, 0);
+			unarmed_ns = 0;
+			continue;
 		}
 		iv = s->interval_ns;
 		vi = s->vm_interrupt;
+		if (iv < OL_SAMPLER_WARMUP_IV_NS &&
+				(!atomic_load(&s->armed) || ol_mono_ns() - atomic_load(&s->armed_at) < OL_SAMPLER_WARMUP_NS)) {
+			iv = OL_SAMPLER_WARMUP_IV_NS;
+		}
 		pthread_mutex_unlock(&s->mu);
 		ts.tv_sec = (time_t) (iv / 1000000000ULL);
 		ts.tv_nsec = (long) (iv % 1000000000ULL);
 		nanosleep(&ts, NULL);
-		if (s->armed && vi) {
+		if (atomic_load(&s->armed) && vi) {
+			unarmed_ns = 0;
 			s->pending = 1;
 			OL_SET_INTERRUPT(vi);
+		} else {
+			unarmed_ns += iv;
 		}
 		pthread_mutex_lock(&s->mu);
 	}
@@ -90,7 +118,12 @@ bool ol_sampler_arm(void)
 		}
 		pthread_mutex_init(&s->mu, NULL);
 		pthread_cond_init(&s->cv, NULL);
+		atomic_init(&s->armed, 0);
+		atomic_init(&s->armed_at, 0);
+		atomic_init(&s->idle, 0);
 		s->pid = pid;
+		s->interval_ns = OLG(sample_interval_ns);
+		s->vm_interrupt = &EG(vm_interrupt);
 		/* the sampler thread must never receive the process's signals (FPM, timeouts) */
 		sigfillset(&all);
 		pthread_sigmask(SIG_BLOCK, &all, &old);
@@ -103,13 +136,20 @@ bool ol_sampler_arm(void)
 		pthread_sigmask(SIG_SETMASK, &old, NULL);
 		OLG(sampler) = s;
 	}
-	pthread_mutex_lock(&s->mu);
-	s->interval_ns = OLG(sample_interval_ns);
-	s->vm_interrupt = &EG(vm_interrupt);
 	s->pending = 0;
-	s->armed = 1;
-	pthread_cond_signal(&s->cv);
-	pthread_mutex_unlock(&s->mu);
+	if (s->interval_ns != OLG(sample_interval_ns) || s->vm_interrupt != (void *) &EG(vm_interrupt)) {
+		pthread_mutex_lock(&s->mu);
+		s->interval_ns = OLG(sample_interval_ns);
+		s->vm_interrupt = &EG(vm_interrupt);
+		pthread_mutex_unlock(&s->mu);
+	}
+	atomic_store(&s->armed_at, OLG(req_mono));
+	atomic_store(&s->armed, 1);
+	if (atomic_load(&s->idle)) {
+		pthread_mutex_lock(&s->mu);
+		pthread_cond_signal(&s->cv);
+		pthread_mutex_unlock(&s->mu);
+	}
 	return true;
 }
 
@@ -117,7 +157,7 @@ void ol_sampler_disarm(void)
 {
 	ol_sampler *s = OLG(sampler);
 	if (s && s->pid == (int) getpid()) {
-		s->armed = 0;
+		atomic_store(&s->armed, 0);
 		s->pending = 0;
 	}
 }
@@ -131,7 +171,7 @@ void ol_sampler_stop(void *ptr)
 	}
 	pthread_mutex_lock(&s->mu);
 	s->quit = 1;
-	s->armed = 0;
+	atomic_store(&s->armed, 0);
 	pthread_cond_signal(&s->cv);
 	pthread_mutex_unlock(&s->mu);
 	pthread_join(s->th, NULL);

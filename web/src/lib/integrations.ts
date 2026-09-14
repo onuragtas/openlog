@@ -1,6 +1,6 @@
 // Pure logic for integration panels (semantic-conventions §6): instance identity and resource filters,
-// point arithmetic (ratios, differences), PostgreSQL cache hit ratio, top-N tables, overview summaries and
-// recommended alert presets. Unit-tested in integrations.test.ts.
+// point arithmetic (ratios, differences), PostgreSQL cache hit ratio, top-N tables and overview summaries
+// (recommended alerts are server templates, components/alerts/TemplateGallery). Unit-tested in integrations.test.ts.
 import type { DiscoveredService, MetricSeries } from "@/api/types";
 import type { RuleEditorSearch } from "@/lib/alerts";
 
@@ -42,11 +42,12 @@ export function splitServiceKey(key: string): { discoveryId: string; instance: s
 /**
  * Display name of an instance: the process name (`command`, e.g. `redis-server`) is what operators recognise,
  * while `instance` is the resolved executable (`/usr/bin/redis-check-rdb` on Debian) or a container id. The
- * command is primary and the instance secondary; without a command the instance is the only name.
+ * command is primary and the instance secondary; without a command the instance is the only name. The secondary
+ * path is `displayInstance` (the invoked path, `/usr/bin/redis-server`) when the agent sent one.
  */
-export function instanceLabel(s: { command?: string; instance?: string }): { primary: string; secondary?: string } {
+export function instanceLabel(s: { command?: string; instance?: string; displayInstance?: string }): { primary: string; secondary?: string } {
   const command = s.command?.trim() ?? "";
-  const instance = s.instance?.trim() ?? "";
+  const instance = s.displayInstance?.trim() || (s.instance?.trim() ?? "");
   if (!command) return { primary: instance };
   return { primary: command, secondary: instance && instance !== command ? instance : undefined };
 }
@@ -77,10 +78,10 @@ export function integrationForRule(ruleId: string): IntegrationId | undefined {
   return isIntegrationId(ruleId) ? ruleId : undefined;
 }
 
-/** Whether a service has a metrics panel: a supported integration id that is not unavailable. */
+/** Whether a service has a panel: a supported integration id (or docker, whose panel shows engine reachability) that is not unavailable. */
 export function hasPanel(s: DiscoveredService | undefined): boolean {
   const i = integrationOf(s);
-  return isIntegrationId(i.id) && i.status !== "not_available";
+  return (isIntegrationId(i.id) || i.id === "docker") && i.status !== "not_available";
 }
 
 /** Whether the panel should show configuration help instead of charts. */
@@ -179,6 +180,8 @@ export interface IntegrationRow {
   instance: string;
   /** Process name (argv0 basename); shown instead of `instance` when present, see instanceLabel. */
   command?: string;
+  /** Invoked path of a multi-call executable; shown instead of `instance` as the path (display only). */
+  displayInstance?: string;
   name: string;
   integration: IntegrationState;
   panel: boolean;
@@ -212,6 +215,7 @@ export function summarizeIntegrations(items: ServiceItem[]): { rows: Integration
       discoveryId,
       instance,
       command: s.command?.trim() || undefined,
+      displayInstance: s.display_instance?.trim() || undefined,
       name: s.name || discoveryId,
       integration,
       panel: hasPanel(s) && discoveryId !== "" && instance !== "",
@@ -245,96 +249,5 @@ export function instanceAlertSearch(spec: { metric: string; agg: string; ref: In
     groupBy: "host",
     filters: JSON.stringify(Object.entries(instanceResourceFilter(spec.ref)).map(([k, v]) => ({ field: `resource.${k}`, op: "eq", values: [v] }))),
     name: spec.name,
-  };
-}
-
-export type PresetOperator = "gt" | "gte" | "lt" | "lte";
-
-export type PresetId =
-  | "nginxWaiting"
-  | "nginxActive"
-  | "nginxNoRequests"
-  | "redisMemory"
-  | "redisEvicted"
-  | "redisRejected"
-  | "mysqlReplicaLag"
-  | "mysqlSlowQueries"
-  | "mysqlLockWaits"
-  | "pgConnections"
-  | "pgDeadlocks"
-  | "pgReplicationLag";
-
-export interface AlertPreset {
-  id: PresetId;
-  integration: IntegrationId;
-  metric: string;
-  agg: "avg" | "max" | "last" | "rate" | "sum" | "min";
-  seriesAgg?: "avg" | "sum" | "min" | "max";
-  operator: PresetOperator;
-  /** Fixed threshold, or a fraction of the latest value of `ratioOf` (e.g. 0.9 × redis.maxmemory). */
-  threshold: number | { ratioOf: string; ratio: number };
-  windowSeconds: number;
-  forSeconds?: number;
-  severity: "critical" | "warning" | "info";
-  /** Extra data point attribute filters, e.g. nginx state=waiting. */
-  attrs?: Record<string, string>;
-}
-
-export const ALERT_PRESETS: AlertPreset[] = [
-  { id: "nginxWaiting", integration: "nginx", metric: "nginx.connections_current", agg: "avg", seriesAgg: "sum", operator: "gt", threshold: 500, windowSeconds: 300, severity: "warning", attrs: { state: "waiting" } },
-  { id: "nginxActive", integration: "nginx", metric: "nginx.connections_current", agg: "avg", seriesAgg: "sum", operator: "gt", threshold: 1000, windowSeconds: 300, severity: "warning", attrs: { state: "active" } },
-  { id: "nginxNoRequests", integration: "nginx", metric: "nginx.requests", agg: "rate", operator: "lte", threshold: 0, windowSeconds: 600, severity: "warning" },
-  { id: "redisMemory", integration: "redis", metric: "redis.memory.used", agg: "avg", operator: "gt", threshold: { ratioOf: "redis.maxmemory", ratio: 0.9 }, windowSeconds: 300, severity: "critical" },
-  { id: "redisEvicted", integration: "redis", metric: "redis.keys.evicted", agg: "rate", operator: "gt", threshold: 0, windowSeconds: 300, severity: "warning" },
-  { id: "redisRejected", integration: "redis", metric: "redis.connections.rejected", agg: "rate", operator: "gt", threshold: 0, windowSeconds: 300, severity: "warning" },
-  { id: "mysqlReplicaLag", integration: "mysql", metric: "mysql.replica.time_behind_source", agg: "max", operator: "gt", threshold: 30, windowSeconds: 300, severity: "critical" },
-  { id: "mysqlSlowQueries", integration: "mysql", metric: "mysql.query.slow.count", agg: "rate", operator: "gt", threshold: 0.1, windowSeconds: 300, severity: "warning" },
-  { id: "mysqlLockWaits", integration: "mysql", metric: "mysql.row_locks", agg: "rate", operator: "gt", threshold: 1, windowSeconds: 300, severity: "warning", attrs: { kind: "waits" } },
-  { id: "pgConnections", integration: "postgresql", metric: "postgresql.backends", agg: "avg", seriesAgg: "sum", operator: "gt", threshold: { ratioOf: "postgresql.connection.max", ratio: 0.8 }, windowSeconds: 300, severity: "critical" },
-  { id: "pgDeadlocks", integration: "postgresql", metric: "postgresql.deadlocks", agg: "rate", operator: "gt", threshold: 0, windowSeconds: 300, severity: "warning" },
-  { id: "pgReplicationLag", integration: "postgresql", metric: "postgresql.wal.lag", agg: "max", seriesAgg: "max", operator: "gt", threshold: 30, windowSeconds: 300, severity: "critical", attrs: { operation: "replay" } },
-];
-
-export function presetsFor(id: IntegrationId): AlertPreset[] {
-  return ALERT_PRESETS.filter((p) => p.integration === id);
-}
-
-/** Resolves a preset threshold; ratio thresholds need a positive reference value (0 = unlimited → null). */
-export function resolveThreshold(p: AlertPreset, reference: number | null | undefined): number | null {
-  if (typeof p.threshold === "number") return p.threshold;
-  if (reference === null || reference === undefined || !Number.isFinite(reference) || reference <= 0) return null;
-  return Math.round(reference * p.threshold.ratio);
-}
-
-/**
- * Rule editor prefill for a preset on one instance: host + instance resource filters (+ attribute filters),
- * grouped by host, threshold/window/severity set. Returns null when the threshold cannot be resolved.
- */
-export function presetSearch(
-  p: AlertPreset,
-  ref: InstanceRef,
-  opts: { name: string; hostName?: string; reference?: number | null },
-): RuleEditorSearch | null {
-  const threshold = resolveThreshold(p, opts.reference);
-  if (threshold === null) return null;
-  const filters = [
-    ...Object.entries(instanceResourceFilter(ref)).map(([k, v]) => ({ field: `resource.${k}`, op: "eq", values: [v] })),
-    ...Object.entries(p.attrs ?? {}).map(([k, v]) => ({ field: `attr.${k}`, op: "eq", values: [v] })),
-  ];
-  return {
-    type: "metric_threshold",
-    metric: p.metric,
-    host: ref.hostId,
-    hostName: opts.hostName,
-    agg: p.agg,
-    seriesAgg: p.seriesAgg,
-    groupBy: "host",
-    filters: JSON.stringify(filters),
-    operator: p.operator,
-    threshold: String(threshold),
-    window: String(p.windowSeconds),
-    forSeconds: p.forSeconds ? String(p.forSeconds) : undefined,
-    severity: p.severity,
-    name: opts.name,
   };
 }

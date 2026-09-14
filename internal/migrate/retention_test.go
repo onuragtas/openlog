@@ -12,8 +12,14 @@ func TestAPMRetentionStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stmts) != 8 {
-		t.Fatalf("%d statements", len(stmts))
+	apmTables := 0
+	for _, tt := range TTLTables {
+		if tt.Days == 0 {
+			apmTables++
+		}
+	}
+	if len(stmts) != apmTables || apmTables < 8 {
+		t.Fatalf("%d statements for %d APM tables", len(stmts), apmTables)
 	}
 	for _, st := range stmts {
 		if !strings.HasPrefix(st, "ALTER TABLE openlog.apm_") || !strings.Contains(st, "_local ON CLUSTER 'openlog' MODIFY TTL ") ||
@@ -30,16 +36,14 @@ func TestAPMRetentionStatements(t *testing.T) {
 		t.Error("accepted a hostile cluster name")
 	}
 
-	// Every TTL table of 0006_apm.sql is covered, with the same expression at the default retention.
+	// Every APM table of the retention is created with the same expression at the default retention. Coverage of all
+	// TTL tables of the schema: TestTTLTablesMatchSchema (ttl_test.go).
 	ms, err := Load(schema.ClickHouse, "clickhouse", "openlog")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var created []string
 	for _, m := range ms {
-		if m.Name != "apm" {
-			continue
-		}
 		for _, st := range m.Statements {
 			st = strings.Join(strings.Fields(st), " ")
 			if strings.HasPrefix(st, "CREATE TABLE IF NOT EXISTS openlog.apm_") && strings.Contains(st, " TTL ") {
@@ -48,9 +52,6 @@ func TestAPMRetentionStatements(t *testing.T) {
 		}
 	}
 	defaults, _ := APMRetentionStatements("openlog", DefaultAPMRetentionDays)
-	if len(created) != len(defaults) {
-		t.Fatalf("0006_apm has %d TTL tables, retention covers %d", len(created), len(defaults))
-	}
 	for i, st := range defaults {
 		table := strings.Fields(st)[2] // openlog.apm_x_local
 		expr := st[strings.Index(st, "MODIFY TTL ")+len("MODIFY TTL "):]

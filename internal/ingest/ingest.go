@@ -49,6 +49,10 @@ type Service struct {
 	grpcSrv *grpc.Server
 	// extraRoutes registers non-OTLP routes on the HTTP listener (agent sync, release mirror).
 	extraRoutes func(mux *http.ServeMux)
+	// splitTraces produces one traces record per trace id (tail sampling, tracesplit.go).
+	splitTraces bool
+	// limiter enforces tenant quotas (SaaS mode, limit.go); nil: none.
+	limiter Limiter
 }
 
 // SetHTTPRoutes adds routes to the OTLP/HTTP listener (e.g. /v1/openlog/agent/sync). Must be
@@ -125,7 +129,24 @@ func (s *Service) export(ctx context.Context, sig queue.Signal, tenantID string,
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.ProduceTimeout)
 	defer cancel()
 	start := time.Now()
-	err := s.producer.Produce(ctx, msg)
+	msgs := []queue.Message{msg}
+	if sig == queue.SignalTraces && s.splitTraces {
+		if tr, ok := p.msg.(*coltrace.ExportTraceServiceRequest); ok {
+			if parts := splitByTrace(tenantID, tr); parts != nil {
+				msgs = msgs[:0]
+				for _, part := range parts {
+					b, err := proto.Marshal(part.req)
+					if err != nil {
+						return err
+					}
+					m := msg
+					m.Key, m.Value = part.key, b
+					msgs = append(msgs, m)
+				}
+			}
+		}
+	}
+	err := s.producer.Produce(ctx, msgs...)
 	s.m.produce.WithLabelValues(string(sig)).Observe(time.Since(start).Seconds())
 	if err != nil {
 		s.log.Warn("produce failed", "signal", sig, "tenant_id", tenantID, "err", err)

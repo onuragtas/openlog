@@ -66,6 +66,9 @@ type Container struct {
 	LogPath   string `json:"-" yaml:"-"`
 	LogDriver string `json:"-" yaml:"-"`
 	Tty       bool   `json:"-" yaml:"-"`
+	// Extra are attributes added by Source.Enrich (Kubernetes pod metadata, semantic-conventions §7.2); keys
+	// already set from the runtime metadata win. Not part of the inventory body.
+	Extra []*commonpb.KeyValue `json:"-" yaml:"-"`
 
 	inspected bool
 }
@@ -85,6 +88,7 @@ const (
 	AttrK8sPod         = "k8s.pod.name"
 	AttrK8sNamespace   = "k8s.namespace.name"
 	AttrK8sContainer   = "k8s.container.name"
+	AttrK8sPodUID      = "k8s.pod.uid"
 )
 
 // labelAttributes maps container labels to attributes: Docker Compose labels and the CRI
@@ -95,6 +99,7 @@ var labelAttributes = []struct{ label, attr string }{
 	{"io.kubernetes.pod.name", AttrK8sPod},
 	{"io.kubernetes.pod.namespace", AttrK8sNamespace},
 	{"io.kubernetes.container.name", AttrK8sContainer},
+	{"io.kubernetes.pod.uid", AttrK8sPodUID},
 }
 
 // Attributes returns the container identity attributes: container.id always, name, image,
@@ -122,6 +127,18 @@ func Attributes(id, runtime string, meta *Container) []*commonpb.KeyValue {
 	if runtime != "" {
 		attrs = append(attrs, otlputil.Str(AttrRuntime, runtime))
 	}
+	if meta != nil && len(meta.Extra) > 0 {
+		seen := make(map[string]bool, len(attrs))
+		for _, a := range attrs {
+			seen[a.Key] = true
+		}
+		for _, a := range meta.Extra {
+			if !seen[a.Key] {
+				seen[a.Key] = true
+				attrs = append(attrs, a)
+			}
+		}
+	}
 	return attrs
 }
 
@@ -142,21 +159,29 @@ func ImageName(ref string) (string, []string) {
 	return ref, nil
 }
 
-// TODO(containerd): container inventory for containerd/CRI-O/Podman hosts
-// (containerd gRPC socket or CRI). Until then their containers only get
-// cgroup metrics keyed by container.id, without names or images.
+// Podman containers only get cgroup metrics keyed by container.id (no Docker-compatible socket
+// is configured by default; point containers.docker_socket at podman.sock to list them).
 
 // ErrNoRuntime means no container runtime socket exists on the host.
-var ErrNoRuntime = errors.New("containers: no docker socket")
+var ErrNoRuntime = errors.New("containers: no container runtime socket")
 
-// Source lists Docker containers with a small cache.
+// DefaultCRISockets are the CRI sockets of containerd (also k3s) and CRI-O.
+var DefaultCRISockets = []string{"/run/containerd/containerd.sock", "/run/k3s/containerd/containerd.sock", "/var/run/crio/crio.sock"}
+
+// Source lists Docker containers (Docker Engine API) and the containers of CRI runtimes
+// (containerd, CRI-O; cri.go) with a small cache.
 type Source struct {
 	FS *hostfs.FS
 	// Socket is the host path of the Docker socket (resolved under the root).
-	Socket  string
-	Timeout time.Duration
+	Socket string
+	// CRISockets are host paths of CRI runtime sockets; empty disables CRI listing.
+	CRISockets []string
+	Timeout    time.Duration
 	// Permission is called when the socket exists but may not be opened.
 	Permission func()
+	// Enrich, when set, sets Container.Extra on a copy of every listing returned by List and Cached (Kubernetes pod
+	// metadata). It runs on every call, so metadata that arrives after the runtime listing is picked up.
+	Enrich func([]Container)
 
 	mu      sync.Mutex
 	at      time.Time
@@ -165,6 +190,13 @@ type Source struct {
 	details map[string]detailEntry
 	// sock is the socket path of the last successful listing (used for log streams).
 	sock string
+	// dockerErr is the Docker error of the last listing (nil when Docker answered).
+	dockerErr error
+
+	criDetails map[string]criDetailEntry
+	criLive    map[string]bool
+	criRuntime map[string]string    // socket → runtime name
+	criSkip    map[string]time.Time // sockets without the CRI service, until
 }
 
 // NewSource returns a source for the Docker socket at a host path.
@@ -172,7 +204,17 @@ func NewSource(fsys *hostfs.FS, socket string) *Source {
 	return &Source{FS: fsys, Socket: socket, Timeout: 5 * time.Second}
 }
 
-func (s *Source) socketCandidates() []string {
+// DockerErr returns the Docker Engine API error of the last listing: nil when Docker answered,
+// ErrNoRuntime without a Docker socket. List succeeds when only a CRI runtime answered.
+func (s *Source) DockerErr() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dockerErr
+}
+
+func (s *Source) socketCandidates() []string { return s.socketCandidatesFor(s.Socket) }
+
+func (s *Source) socketCandidatesFor(sock string) []string {
 	var out []string
 	add := func(p string) {
 		for _, o := range out {
@@ -182,33 +224,44 @@ func (s *Source) socketCandidates() []string {
 		}
 		out = append(out, p)
 	}
-	add(s.FS.Path(s.Socket))
+	add(s.FS.Path(sock))
 	// /var/run is usually a symlink to /run; under a root path an absolute
 	// link would resolve inside the agent's container instead of the host.
-	if rest, ok := strings.CutPrefix(s.Socket, "/var/run/"); ok {
+	if rest, ok := strings.CutPrefix(sock, "/var/run/"); ok {
 		add(s.FS.Path("/run/" + rest))
 	}
 	return out
 }
 
-// List returns all containers (running and stopped). A cached result younger
-// than maxAge is reused. When no socket exists, ErrNoRuntime is returned.
+// List returns all containers (running and stopped) of Docker and the CRI runtimes. A cached result
+// younger than maxAge is reused. When no socket exists, ErrNoRuntime is returned.
 func (s *Source) List(ctx context.Context, maxAge time.Duration) ([]Container, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.at.IsZero() && time.Since(s.at) < maxAge {
-		return s.cached, s.lastErr
+		return s.enriched(s.cached), s.lastErr
 	}
 	s.cached, s.lastErr = s.list(ctx)
 	s.at = time.Now()
-	return s.cached, s.lastErr
+	return s.enriched(s.cached), s.lastErr
+}
+
+// enriched returns cs, or an enriched copy when Enrich is set (the cached slice is shared with concurrent readers).
+func (s *Source) enriched(cs []Container) []Container {
+	if s.Enrich == nil || len(cs) == 0 {
+		return cs
+	}
+	out := make([]Container, len(cs))
+	copy(out, cs)
+	s.Enrich(out)
+	return out
 }
 
 // Cached returns the last listing without refreshing.
 func (s *Source) Cached() []Container {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.cached
+	return s.enriched(s.cached)
 }
 
 // Fingerprint hashes the cached container set (id, state, image) for change detection.
@@ -227,7 +280,42 @@ func (s *Source) Fingerprint() uint64 {
 	return h.Sum64()
 }
 
+// list merges Docker and CRI containers. Docker stays primary: its errors are returned unless a CRI
+// runtime answered, and CRI errors are ignored while Docker works (Docker's own containerd socket
+// usually has no CRI service or is root-only). Docker-managed containers live in containerd's
+// "moby" namespace, which the CRI does not show, so ids do not overlap; Docker wins if they do.
 func (s *Source) list(ctx context.Context) ([]Container, error) {
+	docker, dockerErr := s.listDocker(ctx)
+	s.dockerErr = dockerErr
+	if len(s.CRISockets) == 0 {
+		return docker, dockerErr
+	}
+	cri, criErr := s.listCRI(ctx)
+	switch {
+	case dockerErr == nil:
+		seen := make(map[string]bool, len(docker))
+		for _, c := range docker {
+			seen[c.ID] = true
+		}
+		for _, c := range cri {
+			if !seen[c.ID] {
+				docker = append(docker, c)
+			}
+		}
+		sort.SliceStable(docker, func(i, j int) bool { return docker[i].ID < docker[j].ID })
+		return docker, nil
+	case criErr == nil:
+		return cri, nil
+	case errors.Is(dockerErr, ErrNoRuntime):
+		if permissionError(criErr) && s.Permission != nil {
+			s.Permission()
+		}
+		return nil, criErr
+	}
+	return nil, dockerErr
+}
+
+func (s *Source) listDocker(ctx context.Context) ([]Container, error) {
 	var lastErr error = ErrNoRuntime
 	for _, sock := range s.socketCandidates() {
 		body, err := s.get(ctx, sock, "/containers/json?all=1")

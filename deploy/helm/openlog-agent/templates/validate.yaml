@@ -1,0 +1,12 @@
+{{- if not .Values.clusterName }}
+{{- fail "clusterName is required (the k8s.cluster.name shown in openlog)" }}
+{{- end }}
+{{- if not .Values.endpoint }}
+{{- fail "endpoint is required (OTLP/HTTP URL of openlog ingest, e.g. https://ingest.openlog.example:4318)" }}
+{{- end }}
+{{- if not (or .Values.licenseKey .Values.existingSecret.name) }}
+{{- fail "set existingSecret.name (recommended) or licenseKey" }}
+{{- end }}
+{{- if not (or .Values.node.enabled .Values.cluster.enabled) }}
+{{- fail "node.enabled and cluster.enabled are both false: nothing to deploy" }}
+{{- end }}

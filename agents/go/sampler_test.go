@@ -81,7 +81,7 @@ func TestRootConsistentDecisionAndTracestate(t *testing.T) {
 		sampled bool
 	}{{0, false}, {threshold - 1, false}, {threshold, true}, {maxThreshold - 1, true}} {
 		rec := tracetest.NewSpanRecorder()
-		tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0.25)), sdktrace.WithSpanProcessor(rec),
+		tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0.25, false)), sdktrace.WithSpanProcessor(rec),
 			sdktrace.WithIDGenerator(fixedIDs{traceIDWithRandomness(tc.r)}))
 		ctx, root := tp.Tracer("t").Start(context.Background(), "root")
 		_, child := tp.Tracer("t").Start(ctx, "child")
@@ -172,7 +172,7 @@ func TestRemoteParentReadsThreshold(t *testing.T) {
 		parent := trace.NewSpanContext(trace.SpanContextConfig{TraceID: trace.TraceID{1}, SpanID: trace.SpanID{1},
 			TraceFlags: trace.FlagsSampled, TraceState: st, Remote: true})
 		rec := tracetest.NewSpanRecorder()
-		tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(1)), sdktrace.WithSpanProcessor(rec))
+		tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(1, false)), sdktrace.WithSpanProcessor(rec))
 		ctx, entry := tp.Tracer("t").Start(trace.ContextWithRemoteSpanContext(context.Background(), parent), "entry")
 		_, inner := tp.Tracer("t").Start(ctx, "inner")
 		inner.End()
@@ -203,7 +203,7 @@ func TestRemoteParentReadsThreshold(t *testing.T) {
 func TestSamplingPropagationRoundTrip(t *testing.T) {
 	prop := propagation.TraceContext{}
 	backRec := tracetest.NewSpanRecorder()
-	backTP := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(1)), sdktrace.WithSpanProcessor(backRec))
+	backTP := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(1, false)), sdktrace.WithSpanProcessor(backRec))
 	backMux := http.NewServeMux()
 	backMux.HandleFunc("GET /work", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
 	back := httptest.NewServer(openloghttp.Middleware(backMux,
@@ -211,7 +211,7 @@ func TestSamplingPropagationRoundTrip(t *testing.T) {
 	defer back.Close()
 
 	frontRec := tracetest.NewSpanRecorder()
-	frontTP := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0.25)), sdktrace.WithSpanProcessor(frontRec))
+	frontTP := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0.25, false)), sdktrace.WithSpanProcessor(frontRec))
 	client := &http.Client{Transport: openloghttp.Transport(nil,
 		openloghttp.WithTracerProvider(frontTP), openloghttp.WithPropagators(prop))}
 	frontMux := http.NewServeMux()

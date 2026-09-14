@@ -36,7 +36,9 @@ func TestParseRRule(t *testing.T) {
 	if days, norm, err := ParseRRule("FREQ=DAILY"); err != nil || len(days) != 7 || norm != "FREQ=DAILY" {
 		t.Errorf("daily: %v %q %v", days, norm, err)
 	}
-	for _, bad := range []string{"FREQ=WEEKLY", "FREQ=MONTHLY;BYDAY=MO", "FREQ=WEEKLY;BYDAY=1MO", "FREQ=WEEKLY;BYDAY=MO;COUNT=3", "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", "BYDAY=MO", "garbage"} {
+	for _, bad := range []string{"FREQ=WEEKLY", "FREQ=YEARLY;BYDAY=MO", "FREQ=WEEKLY;BYDAY=1MO", "FREQ=WEEKLY;BYDAY=MO;COUNT=3", "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", "BYDAY=MO", "garbage",
+		"FREQ=MONTHLY", "FREQ=MONTHLY;BYMONTHDAY=0", "FREQ=MONTHLY;BYMONTHDAY=32", "FREQ=MONTHLY;BYDAY=6MO", "FREQ=MONTHLY;BYSETPOS=1",
+		"FREQ=MONTHLY;BYDAY=MO;BYDAY=TU", "FREQ=DAILY;BYMONTHDAY=1", "FREQ=WEEKLY;BYDAY=MO;BYSETPOS=1"} {
 		if _, _, err := ParseRRule(bad); err == nil {
 			t.Errorf("accepted %q", bad)
 		}

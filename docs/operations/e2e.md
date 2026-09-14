@@ -91,6 +91,8 @@ posts OTLP probes with the ingest key.
 | `logs_exclude_inventory` | `/api/v1/logs` returns no inventory events; the `logs` table holds none |
 | `tenant_isolation` | the other key sees no hosts and no search items; `/hosts/{target}`, `/inventory`, `/services`, `/metrics` are `404 not_found` for the other organization and for an unknown host id (own key); logs with `attr.*` filters are empty for the other key; a bad key and an ingest key get 401 |
 | `agent_logs` | 100 requests to missing nginx paths (`/e2e-log/<run>/a/<i>`), then logrotate-style rotation (`mv access.log access.log.1 && nginx -s reopen`), then 100 more (`…/b/<i>`). Every request has exactly one unique access and one error record (none lost across the rotation; duplicates are logged, delivery is at-least-once). All records: `host_id`, empty `service_name`, `openlog.log.source=file`, `openlog.discovery.id=nginx`. Access records carry `e2e.source` (logs.files) and a `log.file.path` of `access.log` (phase b) or `access.log`/`access.log.1` (phase a); error records have `log.file.path=/var/log/nginx/error.log`, severity `ERROR` and no `e2e.source` (tailed only through `auto_from_discovery`). Server-side `attr.*` filters return the same counts (error.log by path, nginx+file; redis and journald give 0; a non-allowlisted key is 400). ClickHouse: unique (request, file) rows = 400 |
+| `agent_log_rotation_unread` | forced rotation with unread lines: `/var/log/e2e-rotate/*.log` (logs.files). After the first line's record arrives, one exec appends 10 000 lines (`/e2e-rotate/<run>/a/<i>`), renames `app.log` to `app.log.1` and writes 2 000 lines (`…/b/<i>`) to a new `app.log`. With `rate_limit_lines` 2000/s and the mv within 2 s of the burst start (asserted), thousands of lines are unread at the rotation and exist only in the renamed file. ClickHouse: each of the 12 001 lines exactly once, no multi-line record, all with `e2e.source=rotation`; the agent then closes `app.log.1` (no open descriptor) |
+| `agent_journald` | the target runs `systemd-journald` standalone (no systemd PID 1); 20 entries (`/e2e-journal/<run>/<i>`) via `systemd-cat -p err` and `logger -p user.warning`. The agent (journalctl, `logs.journald.enabled`) delivers each: `openlog.log.source=journald`, `openlog.syslog.identifier=openlog-e2e`, severity `ERROR`/`WARN`, `host_id`, timestamp; the `attr.openlog.syslog.identifier` filter returns all 20 |
 | `process_metrics` | `process.memory.usage` grouped by `process.executable.name,openlog.discovery.id`: `nginx` → `nginx`, `redis-server` → `redis`, value > 0, unit `By` |
 | `containers` | (`E2E_DOCKER=1`) a `container` inventory item for `e2e-sleeper` / `openlog-e2e/sleeper` in state running; `container.memory.usage` (> 0) and `container.cpu.time` series with `container.name=e2e-sleeper` |
 | `ui` | (`E2E_UI=1`) Playwright against the embedded UI, see below |
@@ -140,6 +142,15 @@ directory under `/tmp`, nothing committed) and starts compose project `openlog-t
 
 `TLSTEST_KEEP=1` keeps the stack, `TLSTEST_SKIP_BUILD=1` reuses `openlog:tlstest`, `TLSTEST_WORKDIR` fixes the certificate
 directory (needed with `TLSTEST_KEEP=1` to reconnect). The stack is removed with `down -v` at the end.
+
+## Tiered storage test
+
+`make tieredtest` (`test/e2e/tieredtest`, compose project `openlog-tiered`, host ports 37000/37123, no openlog image)
+runs MinIO and a 2-shard × 2-replica ClickHouse cluster with the unchanged `deploy/compose/clickhouse/storage-tiered.xml`
+and `storage-tiered-warm.xml`, applies the schema and `migrate.ApplyTableTTLs` in-process and checks moves to warm and
+S3 on every replica, reads through Distributed tables after a cache drop and a restart of all servers, deletion of cold
+parts, an S3 outage (inserts, hot/cold queries, a server restart) with recovery, and disabling. What it asserts and the
+measured failure behaviour: [tiered-storage.md](tiered-storage.md#test). `TIEREDTEST_KEEP=1` keeps the stack.
 
 ## Debugging
 

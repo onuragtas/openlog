@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { login } from "@/api/account";
 import { setSelectedOrg } from "@/api/auth";
 import { applyPrefill, createAlertSearch } from "@/lib/alerts";
+import { ThemeProvider } from "@/lib/theme";
 import { MOCK_EMAIL, MOCK_PASSWORD, MOCK_STAGING_ORG_ID } from "@/mocks/account";
 import { MOCK_ALERT_IDS, resetMockAlerts } from "@/mocks/alerts";
 import { ChannelsManager } from "./ChannelsManager";
@@ -23,15 +24,17 @@ import { IncidentDetail, IncidentsList } from "./Incidents";
 import { MutesManager } from "./MutesManager";
 import { RuleEditor } from "./RuleEditor";
 
-/** Renders ui inside a memory router (for Links) with a fresh query client. */
+/** Renders ui inside a memory router (for Links) with a fresh query client and the theme (charts). */
 function renderUi(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRootRoute({ component: () => ui });
   const router = createRouter({ routeTree: root, history: createMemoryHistory({ initialEntries: ["/"] }) });
   return render(
-    <QueryClientProvider client={client}>
-      <RouterProvider router={router as never} />
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router as never} />
+      </QueryClientProvider>
+    </ThemeProvider>,
   );
 }
 
@@ -84,7 +87,7 @@ describe("alerting UI", () => {
     await user.click(screen.getByRole("radio", { name: /Discovery event/ }));
     expect(screen.getByLabelText("Event")).toBeInTheDocument();
     expect(screen.queryByLabelText("For at least")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: /^APM(?! service)/ }));
+    await user.click(screen.getByRole("radio", { name: /^APM(?! service| error)/ }));
     expect(screen.getByLabelText("Service")).toBeInTheDocument();
     expect(screen.getByLabelText("APM metric")).toHaveValue("p95_ms");
   }, 40_000);

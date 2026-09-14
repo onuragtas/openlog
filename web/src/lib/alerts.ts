@@ -13,6 +13,7 @@ import type {
 } from "@/api/alerts";
 import { can, type Role } from "@/api/roles";
 import type { UnitKind } from "@/lib/format";
+import { alertQueryIssues } from "@/lib/oql";
 import type { ChartSeriesInput } from "@/lib/series";
 
 // ---- durations ----
@@ -101,6 +102,8 @@ export interface RuleDraft {
   environment: string;
   transaction_name: string;
   min_requests: string;
+  /** apm_error new_group: minimum weighted occurrences in the window */
+  min_count: string;
 }
 
 export const DEFAULT_FLAPPING: AlertFlapping = { enabled: true, transitions: 4, window_seconds: 3600, hold_seconds: 600 };
@@ -112,7 +115,12 @@ const TYPE_DEFAULTS: Record<AlertRuleType, Partial<RuleDraft>> = {
   discovery: { window_seconds: 900, lookback_seconds: 86400, group_by: [], interval_seconds: 300 },
   apm: { window_seconds: 300, operator: "gt", metric: "p95_ms", group_by: [], interval_seconds: 60 },
   apm_no_data: { window_seconds: 600, lookback_seconds: 86400, group_by: [], interval_seconds: 60 },
+  oql: { window_seconds: 300, operator: "gt", group_by: [], interval_seconds: 60 },
+  apm_error: { window_seconds: 300, group_by: [], interval_seconds: 60, event: "new_group" },
 };
+
+/** Event rules ignore for_seconds (discovery, apm_error). */
+export const isEventRule = (t: AlertRuleType) => t === "discovery" || t === "apm_error";
 
 export function emptyDraft(type: AlertRuleType = "metric_threshold"): RuleDraft {
   return {
@@ -149,6 +157,7 @@ export function emptyDraft(type: AlertRuleType = "metric_threshold"): RuleDraft 
     environment: "",
     transaction_name: "",
     min_requests: "",
+    min_count: "",
     ...TYPE_DEFAULTS[type],
   };
 }
@@ -162,7 +171,7 @@ export function changeType(d: RuleDraft, type: AlertRuleType): RuleDraft {
     description: d.description,
     severity: d.severity,
     enabled: d.enabled,
-    for_seconds: type === "discovery" ? 0 : d.for_seconds,
+    for_seconds: isEventRule(type) ? 0 : d.for_seconds,
     recovery_for_seconds: d.recovery_for_seconds,
     renotify_interval_seconds: d.renotify_interval_seconds,
     channel_ids: d.channel_ids,
@@ -170,7 +179,7 @@ export function changeType(d: RuleDraft, type: AlertRuleType): RuleDraft {
     labels: d.labels,
     flapping: d.flapping,
     version: d.version,
-    filters: type === "apm" || type === "apm_no_data" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
+    filters: type === "apm" || type === "apm_no_data" || type === "apm_error" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
   };
 }
 
@@ -214,7 +223,30 @@ export function draftFromRule(rule: AlertRule): RuleDraft {
     environment: c.environment ?? "",
     transaction_name: c.transaction_name ?? "",
     min_requests: c.min_requests ? String(c.min_requests) : "",
+    min_count: c.min_count ? String(c.min_count) : "",
   };
+}
+
+/** Draft of an unsaved rule definition, e.g. a rendered alert template opened in the editor. */
+export function draftFromInput(input: AlertRuleInput): RuleDraft {
+  const base = emptyDraft(input.type);
+  const d = draftFromRule({
+    name: input.name,
+    description: input.description ?? "",
+    type: input.type,
+    severity: input.severity ?? "warning",
+    enabled: input.enabled ?? true,
+    interval_seconds: input.interval_seconds || base.interval_seconds,
+    for_seconds: input.for_seconds ?? 0,
+    recovery_for_seconds: input.recovery_for_seconds ?? 0,
+    renotify_interval_seconds: input.renotify_interval_seconds ?? 0,
+    channel_ids: input.channel_ids ?? [],
+    runbook_url: input.runbook_url ?? "",
+    labels: input.labels ?? {},
+    flapping: input.flapping ?? DEFAULT_FLAPPING,
+    condition: input.condition,
+  } as unknown as AlertRule);
+  return { ...d, version: undefined };
 }
 
 function parseNumber(s: string): number | null {
@@ -304,17 +336,31 @@ export function draftToInput(d: RuleDraft): AlertRuleInput {
         lookback_seconds: d.lookback_seconds,
       };
       break;
+    case "oql":
+      // FACET attributes of the query become the series labels (no group_by/filters).
+      condition = { query: d.query.trim(), window_seconds: d.window_seconds, operator: d.operator, threshold, recovery_threshold: recovery, missing_data: d.missing_data };
+      break;
+    case "apm_error":
+      condition = {
+        event: d.event,
+        service_name: d.service_name.trim(),
+        environment: d.environment.trim() === "" ? null : d.environment.trim(),
+        match: d.match,
+        window_seconds: d.window_seconds,
+        ...(d.event === "new_group" ? { min_count: parseNumber(d.min_count) ?? 0 } : {}),
+      };
+      break;
   }
   const labels: Record<string, string> = {};
   for (const l of d.labels) if (l.key.trim()) labels[l.key.trim()] = l.value;
   return {
     name: d.name.trim(),
     description: d.description,
-    type: d.type,
+    type: d.type as AlertRuleInput["type"],
     severity: d.severity,
     enabled: d.enabled,
     interval_seconds: d.interval_seconds,
-    for_seconds: d.type === "discovery" ? 0 : d.for_seconds,
+    for_seconds: isEventRule(d.type) ? 0 : d.for_seconds,
     recovery_for_seconds: d.recovery_for_seconds,
     condition,
     channel_ids: d.channel_ids,
@@ -328,7 +374,7 @@ export function draftToInput(d: RuleDraft): AlertRuleInput {
 
 // ---- validation ----
 
-export type ValidationKey = "required" | "number" | "range" | "recoverySide" | "labelKey" | "filterValues" | "renotify" | "url";
+export type ValidationKey = "required" | "number" | "range" | "recoverySide" | "labelKey" | "filterValues" | "renotify" | "url" | "oqlQuery";
 
 export interface ValidationIssue {
   key: ValidationKey;
@@ -349,7 +395,7 @@ export function validateDraft(d: RuleDraft): DraftErrors {
   const e: DraftErrors = {};
   if (!d.name.trim()) e.name = { key: "required" };
   inRange(e, "interval_seconds", d.interval_seconds, 10, 3600);
-  if (d.type !== "discovery") inRange(e, "for_seconds", d.for_seconds, 0, 86400);
+  if (!isEventRule(d.type)) inRange(e, "for_seconds", d.for_seconds, 0, 86400);
   inRange(e, "recovery_for_seconds", d.recovery_for_seconds, 0, 86400);
   if (d.renotify_interval_seconds !== 0 && (d.renotify_interval_seconds < 300 || d.renotify_interval_seconds > 604800)) {
     e.renotify_interval_seconds = { key: "renotify" };
@@ -358,7 +404,7 @@ export function validateDraft(d: RuleDraft): DraftErrors {
   d.labels.forEach((l, i) => {
     if (l.key.trim() && !LABEL_KEY.test(l.key.trim())) e[`labels.${i}`] = { key: "labelKey" };
   });
-  const needsThreshold = d.type === "metric_threshold" || d.type === "log_match" || d.type === "apm";
+  const needsThreshold = d.type === "metric_threshold" || d.type === "log_match" || d.type === "apm" || d.type === "oql";
   if (needsThreshold) {
     const th = parseNumber(d.threshold);
     if (d.threshold.trim() === "") e.threshold = { key: "required" };
@@ -396,6 +442,15 @@ export function validateDraft(d: RuleDraft): DraftErrors {
       inRange(e, "window_seconds", d.window_seconds, 60, 86400);
       inRange(e, "lookback_seconds", d.lookback_seconds, Math.max(600, d.window_seconds + 1), 604800);
       break;
+    case "apm_error":
+      inRange(e, "window_seconds", d.window_seconds, 60, 86400);
+      if (d.event === "new_group" && d.min_count.trim() !== "" && (parseNumber(d.min_count) ?? -1) < 0) e.min_count = { key: "number" };
+      break;
+    case "oql":
+      if (!d.query.trim()) e.query = { key: "required" };
+      else if (alertQueryIssues(d.query).length > 0) e.query = { key: "oqlQuery" };
+      inRange(e, "window_seconds", d.window_seconds, 60, 21600);
+      break;
   }
   d.filters.forEach((f, i) => {
     const key = f.field.replace(/^(attr|resource)\./, "");
@@ -431,11 +486,14 @@ export interface RuleEditorSearch {
   window?: string;
   forSeconds?: string;
   severity?: string;
+  /** Recommended template id and its API params (JSON), rendered by the server into the draft. */
+  template?: string;
+  tparams?: string;
 }
 
 const AGGS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGS = ["avg", "sum", "min", "max"] as const;
-const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data"];
+const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "oql", "apm_error"];
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
 const SEVERITIES = ["critical", "warning", "info"] as const;
 

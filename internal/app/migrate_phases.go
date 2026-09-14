@@ -101,21 +101,51 @@ func migrateClickHouse(ctx context.Context, cfg config.Config, conn clickhouse.C
 			return err
 		}
 		PrintPlan(opts.out(), steps)
-		if cur, err := migrate.AppliedAPMRetention(ctx, conn); err != nil {
-			fmt.Fprintf(opts.out(), "apm retention: unknown (%v)\n\n", err)
-		} else if cur != cfg.APM.RetentionDays {
-			fmt.Fprintf(opts.out(), "apm retention: %d -> %d days (ALTER TABLE ... ON CLUSTER MODIFY TTL on the APM tables)\n\n", cur, cfg.APM.RetentionDays)
-		} else {
-			fmt.Fprintf(opts.out(), "apm retention: %d days (unchanged)\n\n", cur)
+		ttlOpts, err := TTLOptions(cfg)
+		if err != nil {
+			return err
 		}
+		ttl, err := migrate.PlanTableTTLs(ctx, conn, ttlOpts)
+		if err != nil {
+			fmt.Fprintf(opts.out(), "table TTLs: unknown (%v)\n\n", err)
+			return nil
+		}
+		PrintTTLPlan(opts.out(), ttl, cfg)
 		return nil
 	}
 	if _, err = migrate.RunGated(ctx, conn, ms, gate, log); err != nil {
 		return err
 	}
-	// Settings applied outside migration files (apm.md §8 "Retention"): after the migrations, idempotent.
-	_, err = migrate.ApplyAPMRetention(ctx, conn, cfg.ClickHouseCluster, cfg.APM.RetentionDays, log)
+	// Settings applied outside migration files, after the migrations and idempotent: APM retention (apm.md §8
+	// "Retention") and tiered storage moves (D-066, docs/operations/tiered-storage.md).
+	ttlOpts, err := TTLOptions(cfg) // usage.go: per-tenant retention widens the signal tables' TTL (D-081)
+	if err != nil {
+		return err
+	}
+	_, err = migrate.ApplyTableTTLs(ctx, conn, ttlOpts, log)
 	return err
+}
+
+// PrintTTLPlan writes the table TTL / storage policy changes of openlog-migrate -plan.
+func PrintTTLPlan(w io.Writer, p migrate.TTLPlan, cfg config.Config) {
+	if p.APMRetentionFrom != p.APMRetentionTo {
+		fmt.Fprintf(w, "apm retention: %d -> %d days\n", p.APMRetentionFrom, p.APMRetentionTo)
+	} else {
+		fmt.Fprintf(w, "apm retention: %d days (unchanged)\n", p.APMRetentionTo)
+	}
+	tiering := "disabled"
+	if cfg.Storage.TieringEnabled {
+		tiering = "enabled, policy " + cfg.Storage.Policy
+	}
+	fmt.Fprintf(w, "tiered storage: %s\n", tiering)
+	if len(p.Steps) == 0 {
+		fmt.Fprint(w, "table TTLs: unchanged\n\n")
+		return
+	}
+	for _, s := range p.Steps {
+		fmt.Fprintf(w, "  %s\n", s.SQL)
+	}
+	fmt.Fprintln(w)
 }
 
 func printInstances(w io.Writer, in []phase.Instance, err error) {

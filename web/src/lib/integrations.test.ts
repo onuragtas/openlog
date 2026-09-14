@@ -3,7 +3,6 @@ import type { MetricSeries } from "@/api/types";
 import { PANELS } from "@/components/integrations/panels";
 import { applyPrefill, parsePrefillFilters } from "./alerts";
 import {
-  ALERT_PRESETS,
   combinePoints,
   differencePoints,
   filterIntegrationRows,
@@ -16,9 +15,6 @@ import {
   integrationOf,
   latestMax,
   pgCacheHitRatio,
-  presetSearch,
-  presetsFor,
-  resolveThreshold,
   splitServiceKey,
   sumSeries,
   summarizeIntegrations,
@@ -39,6 +35,8 @@ describe("instance identity", () => {
 
   it("names instances by their command, keeping the executable path secondary", () => {
     expect(instanceLabel({ command: "redis-server", instance: "/usr/bin/redis-check-rdb" })).toEqual({ primary: "redis-server", secondary: "/usr/bin/redis-check-rdb" });
+    // Multi-call binaries: the invoked path replaces the resolved executable as the secondary line.
+    expect(instanceLabel({ command: "redis-server", instance: "/usr/bin/redis-check-rdb", displayInstance: "/usr/bin/redis-server" })).toEqual({ primary: "redis-server", secondary: "/usr/bin/redis-server" });
     expect(instanceLabel({ command: " nginx ", instance: "nginx" })).toEqual({ primary: "nginx", secondary: undefined });
     expect(instanceLabel({ command: "redis-server" })).toEqual({ primary: "redis-server", secondary: undefined });
     // Older agents omit command: the instance stays the name.
@@ -55,7 +53,9 @@ describe("instance identity", () => {
     expect(integrationOf(undefined)).toEqual({ status: "not_available", id: undefined, error: undefined, hint: undefined, endpoint: undefined });
     expect(integrationOf({ integration: { id: "redis", status: "weird" as never } }).status).toBe("not_available");
     expect(hasPanel({ integration: { id: "redis", status: "needs_configuration" } })).toBe(true);
-    expect(hasPanel({ integration: { id: "docker", status: "enabled" } })).toBe(false);
+    // Docker's panel shows engine reachability (no metrics).
+    expect(hasPanel({ integration: { id: "docker", status: "enabled" } })).toBe(true);
+    expect(hasPanel({ integration: { id: "docker", status: "not_available" } })).toBe(false);
     expect(hasPanel({ integration: { status: "not_available" } })).toBe(false);
     expect(integrationForRule("mariadb")).toBe("mysql");
     expect(integrationForRule("postgresql")).toBe("postgresql");
@@ -145,7 +145,7 @@ describe("overview", () => {
 
   it("lists services with an integration id, counts statuses and marks panels", () => {
     const { rows, counts } = summarizeIntegrations(items);
-    expect(rows.map((r) => `${r.hostName}/${r.name}/${r.panel}`)).toEqual(["db-1/PostgreSQL/true", "web-1/Docker/false", "web-1/NGINX/true", "web-1/Redis/true"]);
+    expect(rows.map((r) => `${r.hostName}/${r.name}/${r.panel}`)).toEqual(["db-1/PostgreSQL/true", "web-1/Docker/true", "web-1/NGINX/true", "web-1/Redis/true"]);
     expect(counts).toEqual({ enabled: 2, needs_configuration: 1, error: 1, not_available: 0 });
     expect(rows.find((r) => r.name === "Redis")).toMatchObject({ command: "redis-server", instance: "/usr/bin/redis-check-rdb" });
     expect(rows.find((r) => r.name === "NGINX")!.command).toBeUndefined();
@@ -160,46 +160,7 @@ describe("overview", () => {
   });
 });
 
-describe("recommended alerts", () => {
-  it("offers 2–4 presets per integration", () => {
-    for (const id of ["nginx", "redis", "mysql", "postgresql"] as const) {
-      expect(presetsFor(id).length).toBeGreaterThanOrEqual(2);
-      expect(presetsFor(id).length).toBeLessThanOrEqual(4);
-    }
-    expect(new Set(ALERT_PRESETS.map((p) => p.id)).size).toBe(ALERT_PRESETS.length);
-  });
-
-  it("resolves ratio thresholds from the reference value", () => {
-    const mem = ALERT_PRESETS.find((p) => p.id === "redisMemory")!;
-    expect(resolveThreshold(mem, 1073741824)).toBe(966367642);
-    expect(resolveThreshold(mem, 0)).toBeNull(); // maxmemory 0 = unlimited
-    expect(resolveThreshold(mem, null)).toBeNull();
-    expect(resolveThreshold(ALERT_PRESETS.find((p) => p.id === "redisEvicted")!, null)).toBe(0);
-  });
-
-  it("builds a prefill that the rule editor turns into an instance-scoped draft", () => {
-    const lockWaits = ALERT_PRESETS.find((p) => p.id === "mysqlLockWaits")!;
-    const inst = { hostId: "h1", discoveryId: "mariadb", instance: "/usr/sbin/mariadbd" };
-    const s = presetSearch(lockWaits, inst, { name: "Row lock waits – db-1", hostName: "db-1" })!;
-    const d = applyPrefill(s);
-    expect(d.type).toBe("metric_threshold");
-    expect(d.metric).toBe("mysql.row_locks");
-    expect(d.aggregation).toBe("rate");
-    expect(d.operator).toBe("gt");
-    expect(d.threshold).toBe("1");
-    expect(d.window_seconds).toBe(300);
-    expect(d.severity).toBe("warning");
-    expect(d.group_by).toEqual(["host"]);
-    expect(d.name).toBe("Row lock waits – db-1");
-    expect(d.filters).toEqual([
-      { field: "host.id", op: "eq", values: "h1" },
-      { field: "resource.openlog.discovery.id", op: "eq", values: "mariadb" },
-      { field: "resource.openlog.discovery.instance", op: "eq", values: "/usr/sbin/mariadbd" },
-      { field: "attr.kind", op: "eq", values: "waits" },
-    ]);
-    expect(presetSearch(ALERT_PRESETS.find((p) => p.id === "pgConnections")!, inst, { name: "x", reference: 0 })).toBeNull();
-  });
-
+describe("alert prefill", () => {
   it("prefills chart alerts with the instance filters only", () => {
     const d = applyPrefill(instanceAlertSearch({ metric: "redis.memory.used", agg: "avg", ref, hostName: "web-1", name: "redis.memory.used on web-1" }));
     expect(d.threshold).toBe("");

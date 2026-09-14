@@ -8,7 +8,8 @@ type S = components["schemas"];
 export type AlertRule = S["AlertRule"];
 export type AlertRuleDetail = S["AlertRuleDetail"];
 export type AlertRuleInput = S["AlertRuleInput"];
-export type AlertRuleType = S["AlertRuleType"];
+/** Plus "oql" (OQL alert rules, alerting.md), which openapi.yaml's AlertRuleType enum does not list yet. */
+export type AlertRuleType = S["AlertRuleType"] | "oql";
 export type AlertRuleTypeInfo = S["AlertRuleTypeInfo"];
 export type AlertCondition = S["AlertCondition"];
 export type AlertFilter = S["AlertFilter"];
@@ -34,6 +35,14 @@ export type AlertDelivery = S["AlertDelivery"];
 export type AlertRulePreview = S["AlertRulePreview"];
 export type AlertPreviewSeries = S["AlertPreviewSeries"];
 export type AlertNotificationStatus = S["AlertNotificationStatus"];
+export type AlertMuteOccurrence = S["AlertMuteOccurrence"];
+export type AlertHolidayCalendar = S["AlertHolidayCalendar"];
+export type AlertHolidayCalendarInput = S["AlertHolidayCalendarInput"];
+export type AlertTemplate = S["AlertTemplate"];
+export type AlertTemplateParam = S["AlertTemplateParam"];
+export type AlertTemplateText = S["AlertTemplateText"];
+export type AlertTemplateRender = S["AlertTemplateRender"];
+export type AlertTemplateRenderInput = S["AlertTemplateRenderInput"];
 
 /** Incidents change while you look at them. */
 export const INCIDENT_REFRESH_MS = 15_000;
@@ -203,3 +212,56 @@ export async function updateAlertMute(id: string, input: AlertMuteInput): Promis
 export async function deleteAlertMute(id: string): Promise<void> {
   expectOk(await api.DELETE("/api/v1/alerts/mutes/{id}", { params: { path: { id } } }));
 }
+
+// ---- holiday calendars and mute schedule previews (alerting.md §5.2) ----
+
+export const alertHolidayCalendarsQuery = () =>
+  queryOptions({
+    queryKey: ["alerts", "holiday-calendars"],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/alerts/holiday-calendars", { signal })).calendars,
+  });
+
+export async function createHolidayCalendar(input: AlertHolidayCalendarInput): Promise<AlertHolidayCalendar> {
+  return unwrap(await api.POST("/api/v1/alerts/holiday-calendars", { body: input }));
+}
+
+export async function updateHolidayCalendar(id: string, input: AlertHolidayCalendarInput): Promise<AlertHolidayCalendar> {
+  return unwrap(await api.PUT("/api/v1/alerts/holiday-calendars/{id}", { params: { path: { id } }, body: input }));
+}
+
+export async function deleteHolidayCalendar(id: string): Promise<void> {
+  expectOk(await api.DELETE("/api/v1/alerts/holiday-calendars/{id}", { params: { path: { id } } }));
+}
+
+/** Next occurrences of an unsaved schedule; `schedule` null disables the query. */
+export const muteSchedulePreviewQuery = (schedule: AlertMuteScheduleInput | null) =>
+  queryOptions({
+    queryKey: ["alerts", "mute-preview", schedule ? JSON.stringify(schedule) : ""],
+    queryFn: async ({ signal }) => unwrap(await api.POST("/api/v1/alerts/mutes/preview", { body: { schedule: schedule! }, signal })).occurrences,
+    enabled: schedule !== null,
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+// ---- recommended templates (alerting.md §2.8) ----
+
+export const alertTemplatesQuery = (f: { category?: AlertTemplate["category"]; integration?: string } = {}) =>
+  queryOptions({
+    queryKey: ["alerts", "templates", f.category ?? "", f.integration ?? ""],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/alerts/templates", { params: { query: { category: f.category, integration: f.integration || undefined } }, signal })).templates,
+    staleTime: 10 * 60_000,
+  });
+
+/** Renders a template with parameters; `input` null disables the query. */
+export const alertTemplateRenderQuery = (id: string, input: AlertTemplateRenderInput | null) =>
+  queryOptions({
+    queryKey: ["alerts", "template-render", id, input ? JSON.stringify(input) : ""],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.POST("/api/v1/alerts/templates/{id}/render", { params: { path: { id } }, body: input!, signal })) as AlertTemplateRender,
+    enabled: input !== null,
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: 30_000,
+  });

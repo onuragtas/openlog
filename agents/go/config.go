@@ -27,6 +27,7 @@ const (
 	defaultShutdownTimeout = 5 * time.Second
 	defaultExportTimeout   = 10 * time.Second
 	defaultInfraStateDir   = "/var/lib/openlog-infra-agent"
+	defaultInfraRuntimeDir = "/run/openlog-infra-agent"
 )
 
 // Config is the resolved agent configuration. Precedence per field:
@@ -43,7 +44,10 @@ type Config struct {
 	ServiceNamespace string
 	Environment      string // deployment.environment.name
 	SamplingRatio    float64
-	LogLevel         slog.Level
+	// SamplingRV makes new traces carry explicit randomness (tracestate ot=rv) instead of relying
+	// on the random trace id alone.
+	SamplingRV bool
+	LogLevel   slog.Level
 	// ResourceAttributes are merged over detected attributes; explicit service/environment
 	// settings and host.id override (HostID) still win.
 	ResourceAttributes map[string]string
@@ -54,6 +58,7 @@ type Config struct {
 	ExportTimeout      time.Duration
 	HostRoot           string // prefix for host files (/etc/machine-id, …); "/" by default
 	InfraStateDir      string // infra agent state dir holding a generated host-id
+	InfraRuntimeDir    string // infra agent runtime dir where the running agent publishes its host-id
 	StateDir           string // where the Go agent persists a generated host id; "" = user cache dir
 
 	retry retrySettings
@@ -102,6 +107,11 @@ func WithEnvironment(env string) Option { return func(c *Config) { c.Environment
 
 // WithSamplingRatio sets the parent-based head sampling ratio for new traces (0..1).
 func WithSamplingRatio(r float64) Option { return func(c *Config) { c.SamplingRatio = r } }
+
+// WithSamplingRV makes new traces write explicit randomness (tracestate ot=rv:<14 hex>),
+// used for the sampling decision and kept by every downstream service. Off by default: the
+// trace id is random and root spans carry the W3C random flag.
+func WithSamplingRV(enabled bool) Option { return func(c *Config) { c.SamplingRV = enabled } }
 
 // WithLogLevel sets the level of the agent's own diagnostics (stderr).
 func WithLogLevel(l slog.Level) Option { return func(c *Config) { c.LogLevel = l } }
@@ -153,6 +163,7 @@ func loadConfig(lookup lookupFunc, opts []Option) (*Config, []string, error) {
 		ExportTimeout:      defaultExportTimeout,
 		HostRoot:           "/",
 		InfraStateDir:      defaultInfraStateDir,
+		InfraRuntimeDir:    defaultInfraRuntimeDir,
 		retry:              retrySettings{initial: time.Second, max: 30 * time.Second, elapsed: time.Minute},
 	}
 	var warnings []string
@@ -292,6 +303,10 @@ func loadConfig(lookup lookupFunc, opts []Option) (*Config, []string, error) {
 	if v, _, ok := get("OPENLOG_INFRA_STATE_DIR"); ok {
 		c.InfraStateDir = v
 	}
+	if v, _, ok := get("OPENLOG_INFRA_RUNTIME_DIR"); ok {
+		c.InfraRuntimeDir = v
+	}
+	boolVar(&c.SamplingRV, "OPENLOG_SAMPLING_RV")
 	if v, _, ok := get("OPENLOG_STATE_DIR"); ok {
 		c.StateDir = v
 	}

@@ -8,6 +8,7 @@ import { LogTable } from "@/components/LogTable";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { useLogPages } from "@/lib/use-logs";
+import type { LogsSearch } from "@/router";
 
 const route = getRouteApi("/app/logs");
 
@@ -22,11 +23,21 @@ export function LogsPage() {
     service: search.service,
     hostId: search.host,
     traceId: search.trace,
+    spanId: search.span,
+    transaction: search.txn,
+    transactionService: search.txnsvc,
   });
   const filterValue = useMemo(
     () => ({ q: search.q ?? "", severity: search.severity ?? "", service: search.service ?? "", host: search.host ?? "" }),
     [search.q, search.severity, search.service, search.host],
   );
+  const remove = (patch: Partial<LogsSearch>) => void navigate({ search: (prev) => ({ ...prev, ...patch }) });
+  const badges: { key: string; label: string; value: string; clear: Partial<LogsSearch> }[] = [];
+  if (search.trace) badges.push({ key: "trace", label: t("logs.trace"), value: search.trace, clear: { trace: undefined } });
+  if (search.span) badges.push({ key: "span", label: t("logs.spanFilter"), value: search.span, clear: { span: undefined } });
+  if (search.txn) {
+    badges.push({ key: "txn", label: t("logs.transactionFilter"), value: search.txnsvc ? `${search.txnsvc}: ${search.txn}` : search.txn, clear: { txn: undefined, txnsvc: undefined } });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -39,14 +50,18 @@ export function LogsPage() {
           })
         }
       />
-      {search.trace && (
-        <div>
-          <Badge variant="secondary" className="gap-2 font-mono">
-            {t("logs.trace")}: {search.trace}
-            <button type="button" aria-label={t("common.close")} onClick={() => void navigate({ search: (prev) => ({ ...prev, trace: undefined }) })}>
-              <X aria-hidden="true" />
-            </button>
-          </Badge>
+      {badges.length > 0 && (
+        <div className="flex flex-wrap gap-2" data-testid="log-context-filters">
+          {badges.map((b) => (
+            <Badge key={b.key} variant="secondary" className="max-w-full gap-2 font-mono">
+              <span className="truncate">
+                {b.label}: {b.value}
+              </span>
+              <button type="button" aria-label={t("logs.removeFilter", { name: b.label })} onClick={() => remove(b.clear)} className="pointer-coarse:p-1.5">
+                <X aria-hidden="true" />
+              </button>
+            </Badge>
+          ))}
         </div>
       )}
       <div className="overflow-hidden rounded-xl border bg-card">

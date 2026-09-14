@@ -2,20 +2,23 @@
 // Filters, tabs and selections live in the URL (router.tsx validateSearch).
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Network, Search } from "lucide-react";
-import { useId, useMemo } from "react";
+import { ArrowLeft, Bug, Network, Search } from "lucide-react";
+import { lazy, Suspense, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { apmMapQuery, apmServiceQuery, apmServicesQuery, type ApmService } from "@/api/apm";
+import { useMe } from "@/api/account";
+import { apmMapPathQuery, apmMapQuery, apmServiceQuery, apmServicesQuery, type ApmService } from "@/api/apm";
 import { ApiError } from "@/api/client";
 import { ApdexSettings } from "@/components/apm/ApdexSettings";
 import { ApdexBadge, Sparkline } from "@/components/apm/Charts";
 import { DatabasesTab } from "@/components/apm/DatabasesTab";
 import { ErrorsTab } from "@/components/apm/ErrorsTab";
+import { MapPathControl } from "@/components/apm/MapPathControl";
+import { layoutStorageKey } from "@/lib/apm-map";
 import { OverviewTab } from "@/components/apm/OverviewTab";
-import { ServiceMap } from "@/components/apm/ServiceMap";
 import { TracesTab } from "@/components/apm/TracesTab";
 import { TransactionsTab } from "@/components/apm/TransactionsTab";
 import { ServiceContainers } from "@/components/containers/ServiceContainers";
+import { ServiceKubernetesPods } from "@/components/kubernetes/ServiceKubernetesPods";
 import { PageHeader } from "@/components/AppShell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +31,19 @@ import { formatMs, formatRate, formatRpm, serviceNodeId, type ServiceScope } fro
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { parseTimeParam } from "@/lib/time";
-import { APM_TABS, type ApmServiceSearch, type ApmTab } from "@/router";
+import { APM_TABS, type ApmMapSearch, type ApmServiceSearch, type ApmTab } from "@/router";
+import type { ServiceMapProps } from "@/components/apm/ServiceMap";
+
+// React Flow + dagre (~80 kB gzip) load only when a map is shown, not with every APM screen.
+const LazyServiceMap = lazy(() => import("@/components/apm/ServiceMap").then((m) => ({ default: m.ServiceMap })));
+
+function ServiceMap(props: ServiceMapProps) {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <LazyServiceMap {...props} />
+    </Suspense>
+  );
+}
 
 const servicesRoute = getRouteApi("/app/apm");
 const serviceRoute = getRouteApi("/app/apm/services/$service");
@@ -95,6 +110,12 @@ export function ApmServicesPage() {
               <Link to="/apm/map" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to })}>
                 <Network className="size-4" aria-hidden="true" />
                 {t("apm.serviceMap")}
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/apm/errors" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, env: search.env })}>
+                <Bug className="size-4" aria-hidden="true" />
+                {t("apm.errors.inboxLink")}
               </Link>
             </Button>
           </div>
@@ -243,6 +264,7 @@ export function ApmServicePage() {
             </dd>
           </div>
           <ServiceContainers scope={scope} range={range} />
+          <ServiceKubernetesPods scope={scope} range={range} />
           {d.instances.length > 1 && (
             <div className="flex gap-1.5">
               <dt className="text-muted-foreground">{t("apm.service.environments")}</dt>
@@ -261,7 +283,13 @@ export function ApmServicePage() {
         </TabsList>
         <TabsContent value="overview">
           {tab === "overview" && (
-            <OverviewTab scope={scope} range={range} onOpenTransaction={(name) => setSearch({ tab: "transactions", txn: name })} onViewAll={() => setSearch({ tab: "transactions" })} />
+            <OverviewTab
+              scope={scope}
+              range={range}
+              onOpenTransaction={(name) => setSearch({ tab: "transactions", txn: name })}
+              onViewAll={() => setSearch({ tab: "transactions" })}
+              onOpenErrorGroup={(group) => setSearch({ tab: "errors", group })}
+            />
           )}
         </TabsContent>
         <TabsContent value="transactions">
@@ -277,7 +305,29 @@ export function ApmServicePage() {
             />
           )}
         </TabsContent>
-        <TabsContent value="errors">{tab === "errors" && <ErrorsTab scope={scope} range={range} selected={search.group} onSelect={(group) => setSearch({ group })} />}</TabsContent>
+        <TabsContent value="errors">
+          {tab === "errors" && (
+            <ErrorsTab
+              scope={scope}
+              range={range}
+              selected={search.group}
+              onSelect={(group) => setSearch({ group })}
+              filters={{ status: search.estatus ?? "unresolved", assignee: search.eassignee ?? "any", q: search.eq ?? "", sort: search.esort ?? "count" }}
+              onFilters={(p) =>
+                setSearch(
+                  {
+                    ...(p.status !== undefined ? { estatus: p.status === "unresolved" ? undefined : p.status } : {}),
+                    ...(p.assignee !== undefined ? { eassignee: p.assignee === "any" ? undefined : p.assignee } : {}),
+                    ...(p.q !== undefined ? { eq: p.q || undefined } : {}),
+                    ...(p.sort !== undefined ? { esort: p.sort === "count" ? undefined : p.sort } : {}),
+                  },
+                  true,
+                )
+              }
+              onOpenTransaction={(txn) => setSearch({ tab: "transactions", txn })}
+            />
+          )}
+        </TabsContent>
         <TabsContent value="databases">{tab === "databases" && <DatabasesTab scope={scope} range={range} sort={search.dsort ?? "time"} onSort={(dsort) => setSearch({ dsort }, true)} />}</TabsContent>
         <TabsContent value="map">{tab === "map" && <ServiceMapTab scope={scope} range={range} />}</TabsContent>
         <TabsContent value="traces">
@@ -299,10 +349,24 @@ export function ApmServicePage() {
 function ServiceMapTab({ scope, range }: { scope: ServiceScope; range: { range?: string; from?: string; to?: string } }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const me = useMe();
   const q = useQuery(apmMapQuery(range, scope));
+  const [txn, setTxn] = useState("");
+  const path = useQuery(apmMapPathQuery(range, scope, txn));
+  const focusId = serviceNodeId(scope.service, scope.namespace ?? "", scope.environment ?? "");
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <MapPathControl
+          range={range}
+          service={scope.service}
+          transaction={txn}
+          namespace={scope.namespace}
+          environment={scope.environment}
+          onChange={(v) => setTxn(v.transaction)}
+          path={txn ? path.data : undefined}
+          loading={!!txn && path.isFetching && !path.data}
+        />
         <Link to="/apm/map" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to })} className="text-xs text-primary hover:underline">
           {t("apm.map.full")}
         </Link>
@@ -314,7 +378,9 @@ function ServiceMapTab({ scope, range }: { scope: ServiceScope; range: { range?:
       ) : (
         <ServiceMap
           data={q.data}
-          focusId={serviceNodeId(scope.service, scope.namespace ?? "", scope.environment ?? "")}
+          focusId={focusId}
+          path={txn ? path.data : null}
+          layoutKey={me.data ? layoutStorageKey(me.data.user?.id ?? me.data.auth, { focusId }) : undefined}
           onOpenService={(s) =>
             void navigate({
               to: "/apm/services/$service",
@@ -332,10 +398,58 @@ export function ApmMapPage() {
   const { t } = useTranslation();
   const search = mapRoute.useSearch();
   const navigate = useNavigate();
-  const q = useQuery(apmMapQuery({ range: search.range, from: search.from, to: search.to }));
+  const me = useMe();
+  const ids = { env: useId(), ns: useId() };
+  const range = useMemo(() => ({ range: search.range, from: search.from, to: search.to }), [search.range, search.from, search.to]);
+  const q = useQuery(apmMapQuery(range, undefined, { namespace: search.ns, environment: search.env }));
+  const services = useQuery(apmServicesQuery(range));
+  const list = services.data?.services ?? [];
+  const uniq = (values: string[]) => [...new Set(values.filter(Boolean))].sort();
+  const environments = uniq(list.map((s) => s.environment));
+  const namespaces = uniq(list.map((s) => s.service_namespace));
+  const serviceNames = uniq(list.filter((s) => (!search.env || s.environment === search.env) && (!search.ns || s.service_namespace === search.ns)).map((s) => s.service_name));
+  const hsvc = search.hsvc ?? "";
+  const htxn = search.htxn ?? "";
+  const path = useQuery(apmMapPathQuery(range, { service: hsvc, namespace: search.ns, environment: search.env }, htxn));
+  const setSearch = (patch: Partial<ApmMapSearch>) => void navigate({ to: "/apm/map", search: (prev: Record<string, unknown>) => ({ ...prev, ...patch }) as never, replace: true });
+  const filterSelect = (id: string, key: "env" | "ns", label: string, all: string, values: string[]) => (
+    <>
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
+      <NativeSelect id={id} value={search[key] ?? ""} className="max-w-[12rem]" onChange={(e) => setSearch({ [key]: e.target.value || undefined })}>
+        <option value="">{all}</option>
+        {values.map((v) => (
+          <option key={v} value={v}>
+            {v}
+          </option>
+        ))}
+      </NativeSelect>
+    </>
+  );
   return (
-    <div>
-      <PageHeader title={t("apm.map.title")} subtitle={t("apm.map.subtitle")} />
+    <div className="flex flex-col gap-3">
+      <PageHeader
+        title={t("apm.map.title")}
+        subtitle={t("apm.map.subtitle")}
+        actions={
+          <div className="contents">
+            {filterSelect(ids.env, "env", t("apm.environment"), t("apm.allEnvironments"), environments)}
+            {filterSelect(ids.ns, "ns", t("apm.map.namespace"), t("apm.map.allNamespaces"), namespaces)}
+          </div>
+        }
+      />
+      <MapPathControl
+        range={range}
+        serviceOptions={serviceNames}
+        service={hsvc}
+        transaction={htxn}
+        namespace={search.ns}
+        environment={search.env}
+        onChange={(v) => setSearch({ hsvc: v.service || undefined, htxn: v.transaction || undefined })}
+        path={htxn ? path.data : undefined}
+        loading={!!htxn && path.isFetching && !path.data}
+      />
       {q.isPending ? (
         <LoadingState />
       ) : q.isError ? (
@@ -344,6 +458,8 @@ export function ApmMapPage() {
         <ServiceMap
           data={q.data}
           height={600}
+          path={hsvc && htxn ? path.data : null}
+          layoutKey={me.data ? layoutStorageKey(me.data.user?.id ?? me.data.auth, { environment: search.env, namespace: search.ns }) : undefined}
           onOpenService={(s) =>
             void navigate({
               to: "/apm/services/$service",

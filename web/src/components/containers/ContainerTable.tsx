@@ -153,7 +153,12 @@ export function ContainerGroups({ containers, showHost = true }: { containers: C
                 ) : (
                   <>
                     {g.service}
-                    {g.project && <span className="font-normal text-muted-foreground"> · {g.project}</span>}
+                    {g.project && (
+                      <>
+                        {" · "}
+                        <span className="font-normal text-muted-foreground">{g.project}</span>
+                      </>
+                    )}
                   </>
                 )}
               </h2>

@@ -135,9 +135,9 @@ func openLazy(o Options) (Conn, error) {
 // bootstrap connection apply; with an empty ServerName each replica's host_name from
 // system.clusters is verified, so replica certificates must carry those names.
 func lazyOptions(o Options) (*ch.Options, error) {
-	tc, err := o.TLS.Config()
+	dial, err := dialContext(o.TLS)
 	if err != nil {
-		return nil, fmt.Errorf("clickhouse tls: %w", err)
+		return nil, err
 	}
 	return &ch.Options{
 		Addr:            o.Addr,
@@ -147,7 +147,7 @@ func lazyOptions(o Options) (*ch.Options, error) {
 		MaxIdleConns:    o.MaxConns,
 		ConnMaxLifetime: time.Hour,
 		Compression:     &ch.Compression{Method: ch.CompressionLZ4},
-		TLS:             tc,
+		DialContext:     dial,
 	}, nil
 }
 

@@ -141,6 +141,19 @@ Endpoints derived in this mode:
 (override with `clickhouse.altinity.host` / `clickhouse.altinity.keeper.host` if your operator
 version names services differently).
 
+#### Tiered storage (S3)
+
+`clickhouse.tieredStorage.enabled=true` moves old parts to S3 (and optionally a warm PVC) while retention stays the
+same ([docs/operations/tiered-storage.md](../../../docs/operations/tiered-storage.md), D-066). In operators mode the
+chart adds the storage policy `openlog_tiered` (`config.d/openlog-storage.xml`), the S3 disk with a cache on the data
+volume (`s3.cacheMaxSize`; size `clickhouse.altinity.storage.size` for it), credentials from `s3.credentialsSecret`
+(or IRSA: empty secret name, `s3.useEnvironmentCredentials=true`, `s3.serviceAccountName`), extra disk settings such as
+SSE-KMS (`s3.diskSettings`) and, with `warm.enabled`, a second PVC per replica. Use `{shard}/{replica}` in
+`s3.endpoint` so every replica has its own prefix. The migrate Job applies the moves per `coldAfterDays` /
+`warmAfterDays`; `kubectl exec deploy/<release>-api -- openlog-admin storage status` shows bytes per volume and pending
+moves. External mode: configure `storage_configuration` on every server yourself (same XML as
+`deploy/compose/clickhouse/storage-tiered.xml`), then enable. Not yet tried on a real cluster.
+
 ### PostgreSQL (`auth.mode: postgres`, default)
 
 Organizations (tenants), users, sessions, ingest license keys and API keys live in PostgreSQL

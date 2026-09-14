@@ -1,0 +1,17 @@
+{"hostName":"web-1","moduleVersion":"v0.2.2","nginxVersion":"1.25.3","loadMsec":1789300000000,"nowMsec":1789340000000,
+"connections":{"active":5,"reading":0,"writing":2,"waiting":3,"accepted":1200,"handled":1198,"requests":9800},
+"sharedZones":{"name":"ngx_http_vhost_traffic_status","maxSize":1048575,"usedSize":7446,"usedNode":3},
+"serverZones":{
+"example.com":{"requestCounter":8000,"inBytes":1600000,"outBytes":90000000,"responses":{"1xx":0,"2xx":7600,"3xx":100,"4xx":250,"5xx":50,"miss":0,"bypass":0,"expired":0,"stale":0,"updating":0,"revalidated":0,"hit":0,"scarce":0},"requestMsecCounter":40000,"requestMsec":5,"requestMsecs":{"times":[],"msecs":[]},"requestBuckets":{"msecs":[],"counters":[]},"overCounts":{"maxIntegerSize":18446744073709551615,"requestCounter":0,"inBytes":0,"outBytes":0,"1xx":0,"2xx":0,"3xx":0,"4xx":0,"5xx":0,"miss":0,"bypass":0,"expired":0,"stale":0,"updating":0,"revalidated":0,"hit":0,"scarce":0,"requestMsecCounter":0}},
+"_":{"requestCounter":1800,"inBytes":200000,"outBytes":500000,"responses":{"1xx":0,"2xx":1000,"3xx":0,"4xx":800,"5xx":0,"miss":0,"bypass":0,"expired":0,"stale":0,"updating":0,"revalidated":0,"hit":0,"scarce":0},"requestMsecCounter":100,"requestMsec":0,"requestMsecs":{"times":[],"msecs":[]},"requestBuckets":{"msecs":[],"counters":[]}},
+"*":{"requestCounter":9800,"inBytes":1800000,"outBytes":90500000,"responses":{"1xx":0,"2xx":8600,"3xx":100,"4xx":1050,"5xx":50,"miss":0,"bypass":0,"expired":0,"stale":0,"updating":0,"revalidated":0,"hit":0,"scarce":0},"requestMsecCounter":40100,"requestMsec":4,"requestMsecs":{"times":[],"msecs":[]},"requestBuckets":{"msecs":[],"counters":[]}}
+},
+"upstreamZones":{
+"backend":[
+{"server":"10.0.0.5:8080","requestCounter":5000,"inBytes":1000000,"outBytes":60000000,"responses":{"1xx":0,"2xx":4940,"3xx":0,"4xx":20,"5xx":40},"requestMsecCounter":30000,"requestMsec":6,"requestMsecs":{"times":[],"msecs":[]},"requestBuckets":{"msecs":[],"counters":[]},"responseMsecCounter":29000,"responseMsec":6,"responseMsecs":{"times":[],"msecs":[]},"responseBuckets":{"msecs":[],"counters":[]},"weight":1,"maxFails":1,"failTimeout":10,"backup":false,"down":false},
+{"server":"10.0.0.6:8080","requestCounter":2900,"inBytes":580000,"outBytes":28000000,"responses":{"1xx":0,"2xx":2880,"3xx":0,"4xx":10,"5xx":10},"requestMsecCounter":9000,"requestMsec":3,"requestMsecs":{"times":[],"msecs":[]},"requestBuckets":{"msecs":[],"counters":[]},"responseMsecCounter":8800,"responseMsec":3,"responseMsecs":{"times":[],"msecs":[]},"responseBuckets":{"msecs":[],"counters":[]},"weight":1,"maxFails":1,"failTimeout":10,"backup":false,"down":false}
+],
+"::nogroups":[
+{"server":"127.0.0.1:9000","requestCounter":100,"inBytes":10000,"outBytes":20000,"responses":{"1xx":0,"2xx":100,"3xx":0,"4xx":0,"5xx":0},"requestMsecCounter":100,"requestMsec":1,"requestMsecs":{"times":[],"msecs":[]},"requestBuckets":{"msecs":[],"counters":[]},"responseMsecCounter":100,"responseMsec":1,"responseMsecs":{"times":[],"msecs":[]},"responseBuckets":{"msecs":[],"counters":[]},"weight":0,"maxFails":0,"failTimeout":0,"backup":false,"down":false}
+]
+}}

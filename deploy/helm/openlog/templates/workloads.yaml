@@ -1,6 +1,6 @@
-{{- range $component := list "ingest" "processor" "api" "alert" }}
+{{- range $component := list "ingest" "processor" "api" "alert" "sampler" }}
 {{- $v := index $.Values $component }}
-{{- if and $v.enabled (or (ne $component "alert") (include "openlog.postgres.enabled" $)) }}
+{{- if and (ne $component "sampler") $v.enabled (or (ne $component "alert") (include "openlog.postgres.enabled" $)) | or (and (eq $component "sampler") $.Values.tailSampling.enabled) }}
 {{- $ctx := dict "root" $ "component" $component "values" $v }}
 ---
 apiVersion: apps/v1

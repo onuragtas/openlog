@@ -31,6 +31,7 @@
 |---|---|---|---|
 | Ingest | `openlog-ingest` | OTLP alır, license key → tenant çözer, limit uygular, Kafka'ya yazar | Yok |
 | Processor | `openlog-processor` | Kafka'dan okur, OTLP'yi tablo satırlarına çevirir, ClickHouse'a batch yazar | Yok (offset Kafka'da) |
+| Sampler (isteğe bağlı) | `openlog-sampler` | Tail-based sampling (D-075): ham traces topic'ini okur, trace başına tamponlar, tenant politikasıyla karar verip tutulan span'leri `traces.sampled` topic'ine yazar; açıkken processor bu topic'i okur, ingest trace id'ye göre anahtarlar | Karar süresi kadar bellek içi tampon (kaybında karar hemen verilir; offset Kafka'da) |
 | API | `openlog-api` | UI ve dış kullanıcılar için sorgu API'si | Yok |
 | Alert | `openlog-alert` | Kuralları periyodik değerlendirir, bildirim gönderir | Yok (lease Postgres'te) |
 | Migrate | `openlog-migrate` | PostgreSQL, ardından ClickHouse şemasını uygular, Kafka topic'lerini oluşturur | Yok |

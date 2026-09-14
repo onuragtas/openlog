@@ -34,6 +34,8 @@ type Principal struct {
 	SessionID string
 	CSRFToken string // session principals only
 	APIKeyID  string
+	// EmailVerified is false only for session users who signed up and have not confirmed their address.
+	EmailVerified bool
 
 	// Organization context. Empty for a user without memberships.
 	OrgID    string

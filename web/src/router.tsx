@@ -5,27 +5,39 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect } from "@tanstack/react-router";
 import { meQuery } from "@/api/account";
 import { ApiError } from "@/api/client";
+import { SSO_ERROR_CODES, type SsoErrorCode } from "@/api/sso";
 import { AppShell } from "@/components/AppShell";
 import { LoadingState } from "@/components/StateViews";
 import { NotFoundPage } from "@/routes/not-found";
 import { LoginPage } from "@/routes/login";
 import { validateRangeSearch, type RangeSpec } from "@/lib/time";
+import { sanitizeVarsSearch } from "@/lib/dashboards";
+import { POD_PHASES, WORKLOAD_HEALTHS, WORKLOAD_KINDS, type PodPhaseParam, type WorkloadHealthParam, type WorkloadKind } from "@/lib/kubernetes";
 
 // Screens are code-split per route (uPlot only loads with host detail).
 const HostsPage = lazyRouteComponent(() => import("@/routes/hosts"), "HostsPage");
 const HostDetailPage = lazyRouteComponent(() => import("@/routes/host-detail"), "HostDetailPage");
 const ContainersPage = lazyRouteComponent(() => import("@/routes/containers"), "ContainersPage");
 const ContainerDetailPage = lazyRouteComponent(() => import("@/routes/container-detail"), "ContainerDetailPage");
+const KubernetesOverviewPage = lazyRouteComponent(() => import("@/routes/kubernetes"), "KubernetesOverviewPage");
+const KubernetesWorkloadsPage = lazyRouteComponent(() => import("@/routes/kubernetes"), "KubernetesWorkloadsPage");
+const KubernetesPodsPage = lazyRouteComponent(() => import("@/routes/kubernetes"), "KubernetesPodsPage");
+const KubernetesNodesPage = lazyRouteComponent(() => import("@/routes/kubernetes"), "KubernetesNodesPage");
+const KubernetesWorkloadPage = lazyRouteComponent(() => import("@/routes/kubernetes-detail"), "KubernetesWorkloadPage");
+const KubernetesPodPage = lazyRouteComponent(() => import("@/routes/kubernetes-detail"), "KubernetesPodPage");
 const HostIntegrationPage = lazyRouteComponent(() => import("@/routes/integrations"), "HostIntegrationPage");
 const IntegrationsPage = lazyRouteComponent(() => import("@/routes/integrations"), "IntegrationsPage");
 const LogsPage = lazyRouteComponent(() => import("@/routes/logs"), "LogsPage");
 const TracePage = lazyRouteComponent(() => import("@/routes/trace"), "TracePage");
 const InventorySearchPage = lazyRouteComponent(() => import("@/routes/inventory-search"), "InventorySearchPage");
 const InvitePage = lazyRouteComponent(() => import("@/routes/invite"), "InvitePage");
+const SignupPage = lazyRouteComponent(() => import("@/routes/signup"), "SignupPage");
+const VerifyEmailPage = lazyRouteComponent(() => import("@/routes/verify-email"), "VerifyEmailPage");
 const FleetPage = lazyRouteComponent(() => import("@/routes/fleet"), "FleetPage");
 const ApmServicesPage = lazyRouteComponent(() => import("@/routes/apm"), "ApmServicesPage");
 const ApmServicePage = lazyRouteComponent(() => import("@/routes/apm"), "ApmServicePage");
 const ApmMapPage = lazyRouteComponent(() => import("@/routes/apm"), "ApmMapPage");
+const ApmErrorsPage = lazyRouteComponent(() => import("@/routes/apm-errors"), "ApmErrorsPage");
 const AlertsLayout = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsLayout");
 const AlertsIncidentsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentsPage");
 const AlertsIncidentPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentPage");
@@ -34,12 +46,19 @@ const AlertsRuleNewPage = lazyRouteComponent(() => import("@/routes/alerts"), "A
 const AlertsRuleEditPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsRuleEditPage");
 const AlertsChannelsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsChannelsPage");
 const AlertsMutesPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsMutesPage");
+const AlertsTemplatesPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsTemplatesPage");
 const SettingsLayout = lazyRouteComponent(() => import("@/routes/settings"), "SettingsLayout");
 const OrganizationSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "OrganizationSettingsPage");
 const MembersSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "MembersSettingsPage");
 const LicenseKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "LicenseKeysSettingsPage");
 const ApiKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "ApiKeysSettingsPage");
 const SecuritySettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SecuritySettingsPage");
+const AuditLogSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "AuditLogSettingsPage");
+const TailSamplingSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "TailSamplingSettingsPage");
+const UsageSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "UsageSettingsPage");
+const QueryPage = lazyRouteComponent(() => import("@/routes/query"), "QueryPage");
+const DashboardsPage = lazyRouteComponent(() => import("@/routes/dashboards"), "DashboardsPage");
+const DashboardPage = lazyRouteComponent(() => import("@/routes/dashboards"), "DashboardPage");
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -56,6 +75,8 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 export interface LoginSearch {
   redirect?: string;
   expired?: boolean;
+  /** Failed single sign-on (docs/contracts/api.md "Single sign-on", components/settings/SsoSignIn). */
+  sso_error?: SsoErrorCode;
 }
 
 const loginRoute = createRoute({
@@ -64,6 +85,7 @@ const loginRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): LoginSearch => ({
     redirect: str(s.redirect)?.startsWith("/") ? str(s.redirect) : undefined,
     expired: s.expired === true || s.expired === "true" || s.expired === 1 ? true : undefined,
+    sso_error: oneOf(SSO_ERROR_CODES, s.sso_error),
   }),
   component: LoginPage,
 });
@@ -91,6 +113,10 @@ const inviteRoute = createRoute({
   path: "/invite",
   component: InvitePage,
 });
+
+// Self-service sign-up and e-mail verification links need no session either.
+const signupRoute = createRoute({ getParentRoute: () => rootRoute, path: "/signup", component: SignupPage });
+const verifyEmailRoute = createRoute({ getParentRoute: () => rootRoute, path: "/verify-email", component: VerifyEmailPage });
 
 const indexRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -198,6 +224,104 @@ const containerDetailRoute = createRoute({
   component: ContainerDetailPage,
 });
 
+// ---- Kubernetes (routes/kubernetes.tsx, routes/kubernetes-detail.tsx) ----
+
+const pick = <T extends string>(values: readonly T[], v: unknown): T | undefined => ((values as readonly string[]).includes(String(v)) ? (v as T) : undefined);
+
+export interface KubernetesOverviewSearch {
+  /** selected cluster uid (default: first reporting cluster) */
+  cluster?: string;
+}
+
+const kubernetesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/kubernetes",
+  validateSearch: (s: Record<string, unknown>): KubernetesOverviewSearch => ({ cluster: str(s.cluster) }),
+  component: KubernetesOverviewPage,
+});
+
+export interface KubernetesWorkloadsSearch {
+  cluster?: string;
+  ns?: string;
+  kind?: WorkloadKind;
+  health?: WorkloadHealthParam;
+  q?: string;
+}
+
+const kubernetesWorkloadsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/kubernetes/workloads",
+  validateSearch: (s: Record<string, unknown>): KubernetesWorkloadsSearch => ({
+    cluster: str(s.cluster),
+    ns: str(s.ns),
+    kind: pick(WORKLOAD_KINDS, s.kind),
+    health: pick(WORKLOAD_HEALTHS, s.health),
+    q: str(s.q),
+  }),
+  component: KubernetesWorkloadsPage,
+});
+
+export interface KubernetesPodsSearch {
+  cluster?: string;
+  ns?: string;
+  node?: string;
+  phase?: PodPhaseParam;
+  /** pods of one workload: kind and name */
+  wkind?: string;
+  wname?: string;
+  q?: string;
+}
+
+const kubernetesPodsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/kubernetes/pods",
+  validateSearch: (s: Record<string, unknown>): KubernetesPodsSearch => ({
+    cluster: str(s.cluster),
+    ns: str(s.ns),
+    node: str(s.node),
+    phase: pick(POD_PHASES, s.phase),
+    wkind: str(s.wkind),
+    wname: str(s.wname),
+    q: str(s.q),
+  }),
+  component: KubernetesPodsPage,
+});
+
+export interface KubernetesNodesSearch {
+  cluster?: string;
+  q?: string;
+}
+
+const kubernetesNodesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/kubernetes/nodes",
+  validateSearch: (s: Record<string, unknown>): KubernetesNodesSearch => ({ cluster: str(s.cluster), q: str(s.q) }),
+  component: KubernetesNodesPage,
+});
+
+const kubernetesWorkloadRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/kubernetes/workloads/$clusterUid/$namespace/$kind/$name",
+  component: KubernetesWorkloadPage,
+});
+
+export const K8S_POD_TABS = ["overview", "containers", "logs", "events", "labels"] as const;
+export type K8sPodTab = (typeof K8S_POD_TABS)[number];
+
+export interface KubernetesPodSearch {
+  tab?: K8sPodTab;
+  /** logs text filter and minimum severity */
+  lq?: string;
+  severity?: string;
+}
+
+const kubernetesPodRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/kubernetes/pods/$podUid",
+  validateSearch: (s: Record<string, unknown>): KubernetesPodSearch => ({ tab: pick(K8S_POD_TABS, s.tab), lq: str(s.lq), severity: str(s.severity) }),
+  component: KubernetesPodPage,
+});
+
 // ---- Integrations (routes/integrations.tsx) ----
 
 /** Panel of one integration instance: `$instance` is the discovered service instance (URL-encoded). */
@@ -210,12 +334,14 @@ const hostIntegrationRoute = createRoute({
 export interface IntegrationsSearch {
   status?: string;
   q?: string;
+  /** integration id: fleet dashboard of its instances */
+  integration?: string;
 }
 
 const integrationsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/integrations",
-  validateSearch: (s: Record<string, unknown>): IntegrationsSearch => ({ status: str(s.status), q: str(s.q) }),
+  validateSearch: (s: Record<string, unknown>): IntegrationsSearch => ({ status: str(s.status), q: str(s.q), integration: str(s.integration) }),
   component: IntegrationsPage,
 });
 
@@ -225,6 +351,11 @@ export interface LogsSearch {
   service?: string;
   host?: string;
   trace?: string;
+  /** span id (logs of one span) */
+  span?: string;
+  /** transaction name and its service (logs of that transaction's traces) */
+  txn?: string;
+  txnsvc?: string;
 }
 
 const logsRoute = createRoute({
@@ -236,6 +367,9 @@ const logsRoute = createRoute({
     service: str(s.service),
     host: str(s.host),
     trace: str(s.trace),
+    span: str(s.span),
+    txn: str(s.txn),
+    txnsvc: str(s.txnsvc),
   }),
   component: LogsPage,
 });
@@ -288,9 +422,17 @@ export interface ApmServiceSearch {
   qerr?: boolean;
   qattr?: string;
   qsort?: "timestamp" | "duration";
+  /** error inbox filters: status tab, assignee (any | me | none | user id), search, sort */
+  estatus?: (typeof ERROR_STATUS_PARAMS)[number];
+  eassignee?: string;
+  eq?: string;
+  esort?: (typeof ERROR_SORT_PARAMS)[number];
 }
 
-const oneOf = <T extends string>(values: readonly T[], v: unknown): T | undefined => ((values as readonly string[]).includes(String(v)) ? (v as T) : undefined);
+export const ERROR_STATUS_PARAMS = ["unresolved", "resolved", "ignored", "all"] as const;
+export const ERROR_SORT_PARAMS = ["count", "last_seen", "first_seen"] as const;
+
+const oneOf =<T extends string>(values: readonly T[], v: unknown): T | undefined => ((values as readonly string[]).includes(String(v)) ? (v as T) : undefined);
 
 const apmServiceRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -309,14 +451,54 @@ const apmServiceRoute = createRoute({
     qerr: s.qerr === true || s.qerr === "true" ? true : undefined,
     qattr: str(s.qattr),
     qsort: oneOf(["timestamp", "duration"] as const, s.qsort),
+    estatus: oneOf(ERROR_STATUS_PARAMS, s.estatus),
+    eassignee: str(s.eassignee),
+    eq: str(s.eq),
+    esort: oneOf(ERROR_SORT_PARAMS, s.esort),
   }),
   component: ApmServicePage,
 });
 
+export interface ApmMapSearch {
+  /** whole-map environment / namespace filter */
+  env?: string;
+  ns?: string;
+  /** highlighted transaction path: service and transaction name */
+  hsvc?: string;
+  htxn?: string;
+}
+
 const apmMapRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/apm/map",
+  validateSearch: (s: Record<string, unknown>): ApmMapSearch => ({ env: str(s.env), ns: str(s.ns), hsvc: str(s.hsvc), htxn: str(s.htxn) }),
   component: ApmMapPage,
+});
+
+/** Organization-wide error inbox (routes/apm-errors.tsx). */
+export interface ApmErrorsSearch {
+  svc?: string;
+  ns?: string;
+  env?: string;
+  estatus?: (typeof ERROR_STATUS_PARAMS)[number];
+  eassignee?: string;
+  eq?: string;
+  esort?: (typeof ERROR_SORT_PARAMS)[number];
+}
+
+const apmErrorsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/apm/errors",
+  validateSearch: (s: Record<string, unknown>): ApmErrorsSearch => ({
+    svc: str(s.svc),
+    ns: str(s.ns),
+    env: str(s.env),
+    estatus: oneOf(ERROR_STATUS_PARAMS, s.estatus),
+    eassignee: str(s.eassignee),
+    eq: str(s.eq),
+    esort: oneOf(ERROR_SORT_PARAMS, s.esort),
+  }),
+  component: ApmErrorsPage,
 });
 
 export interface InventorySearchSearch {
@@ -387,6 +569,9 @@ export interface AlertRuleNewSearch {
   window?: string;
   forSeconds?: string;
   severity?: string;
+  /** Recommended template id and its render params (JSON), see components/alerts/TemplateGallery. */
+  template?: string;
+  tparams?: string;
 }
 
 const alertsRuleNewRoute = createRoute({
@@ -408,12 +593,83 @@ const alertsRuleNewRoute = createRoute({
     window: str(s.window),
     forSeconds: str(s.forSeconds),
     severity: str(s.severity),
+    template: str(s.template),
+    tparams: str(s.tparams),
   }),
   component: AlertsRuleNewPage,
+});
+
+/** Recommended alert templates, optionally for one host or APM service (routes/alerts.tsx). */
+export interface AlertTemplatesSearch {
+  category?: "host" | "container" | "apm" | "integration" | "kubernetes";
+  integration?: string;
+  host?: string;
+  hostName?: string;
+  service?: string;
+}
+
+const alertsTemplatesRoute = createRoute({
+  getParentRoute: () => alertsRoute,
+  path: "/templates",
+  validateSearch: (s: Record<string, unknown>): AlertTemplatesSearch => ({
+    category: oneOf(["host", "container", "apm", "integration", "kubernetes"] as const, s.category),
+    integration: str(s.integration),
+    host: str(s.host),
+    hostName: str(s.hostName),
+    service: str(s.service),
+  }),
+  component: AlertsTemplatesPage,
 });
 const alertsRuleRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/rules/$ruleId", component: AlertsRuleEditPage });
 const alertsChannelsRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/channels", component: AlertsChannelsPage });
 const alertsMutesRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/mutes", component: AlertsMutesPage });
+
+// ---- Query console and dashboards (routes/query.tsx, routes/dashboards.tsx; docs/contracts/oql.md) ----
+
+export interface QuerySearch {
+  /** OQL query text (shared/reloaded with the URL) */
+  q?: string;
+  view?: "chart" | "table";
+}
+
+const queryRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/query",
+  validateSearch: (s: Record<string, unknown>): QuerySearch => ({
+    q: typeof s.q === "string" && s.q.trim() !== "" ? s.q.slice(0, 8192) : undefined,
+    view: oneOf(["chart", "table"] as const, s.view),
+  }),
+  component: QueryPage,
+});
+
+export interface DashboardsSearch {
+  q?: string;
+}
+
+const dashboardsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/dashboards",
+  validateSearch: (s: Record<string, unknown>): DashboardsSearch => ({ q: str(s.q) }),
+  component: DashboardsPage,
+});
+
+export interface DashboardSearch {
+  page?: string;
+  /** Selected variable values by variable name (lib/dashboards.ts sanitizeVarsSearch). */
+  vars?: Record<string, string[]>;
+  edit?: boolean;
+}
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/dashboards/$dashboardId",
+  validateSearch: (s: Record<string, unknown>): DashboardSearch => ({
+    page: str(s.page),
+    vars: sanitizeVarsSearch(s.vars),
+    edit: s.edit === true || s.edit === "true" ? true : undefined,
+  }),
+  component: DashboardPage,
+});
 
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/settings", component: SettingsLayout });
 const settingsIndexRoute = createRoute({
@@ -428,25 +684,49 @@ const settingsMembersRoute = createRoute({ getParentRoute: () => settingsRoute, 
 const settingsLicenseKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/license-keys", component: LicenseKeysSettingsPage });
 const settingsApiKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/api-keys", component: ApiKeysSettingsPage });
 const settingsSecurityRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/security", component: SecuritySettingsPage });
+const settingsAuditLogRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/audit-log", component: AuditLogSettingsPage });
+const settingsTailSamplingRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/apm-sampling", component: TailSamplingSettingsPage });
+const settingsUsageRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/usage", component: UsageSettingsPage });
+// Single sign-on settings and the public domain verification link (components/settings/Sso*.tsx, D-077).
+const SsoSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SsoSettingsPage");
+const settingsSsoRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/sso", component: SsoSettingsPage });
+const ssoVerifyDomainRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sso/verify-domain",
+  component: lazyRouteComponent(() => import("@/components/settings/SsoVerifyDomain"), "SsoVerifyDomainPage"),
+});
 
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   inviteRoute,
+  signupRoute,
+  verifyEmailRoute,
+  ssoVerifyDomainRoute,
   appRoute.addChildren([
     indexRoute,
     hostsRoute,
     hostDetailRoute,
     containersRoute,
     containerDetailRoute,
+    kubernetesRoute,
+    kubernetesWorkloadsRoute,
+    kubernetesWorkloadRoute,
+    kubernetesPodsRoute,
+    kubernetesPodRoute,
+    kubernetesNodesRoute,
     hostIntegrationRoute,
     integrationsRoute,
     apmServicesRoute,
     apmServiceRoute,
     apmMapRoute,
+    apmErrorsRoute,
     logsRoute,
     traceRoute,
     inventorySearchRoute,
     fleetRoute,
+    queryRoute,
+    dashboardsRoute,
+    dashboardRoute,
     alertsRoute.addChildren([
       alertsIndexRoute,
       alertsIncidentsRoute,
@@ -454,6 +734,7 @@ export const routeTree = rootRoute.addChildren([
       alertsRulesRoute,
       alertsRuleNewRoute,
       alertsRuleRoute,
+      alertsTemplatesRoute,
       alertsChannelsRoute,
       alertsMutesRoute,
     ]),
@@ -464,6 +745,10 @@ export const routeTree = rootRoute.addChildren([
       settingsLicenseKeysRoute,
       settingsApiKeysRoute,
       settingsSecurityRoute,
+      settingsAuditLogRoute,
+      settingsTailSamplingRoute,
+      settingsUsageRoute,
+      settingsSsoRoute,
     ]),
   ]),
 ]);

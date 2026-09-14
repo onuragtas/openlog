@@ -162,6 +162,7 @@ type Processor struct {
 	failures   prometheus.Counter
 	cuts       *prometheus.CounterVec
 	lagRecords *prometheus.GaugeVec
+	relink     *relinkEnqueuer // relink.go
 }
 
 // New creates a processor. reg may be nil.
@@ -201,8 +202,10 @@ func New(cfg config.Processor, topicPrefix string, consumer Consumer, writer Wri
 		lagRecords: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "openlog_processor_consumer_lag_records", Help: "Log end offset minus committed offset for partitions assigned to this processor.",
 		}, []string{"topic", "partition"}),
+		relink: newRelinkEnqueuer(),
 	}
 	if reg != nil {
+		reg.MustRegister(p.relink.enqueued, p.relink.tooOld)
 		reg.MustRegister(p.rejected, p.dropped, p.inserted, p.flushDur, p.failures, p.cuts, p.lagRecords, &lagSecondsCollector{p: p,
 			desc: prometheus.NewDesc("openlog_processor_consumer_lag_seconds",
 				"Age of the oldest record not yet inserted and committed by this processor (record timestamp), max over its partitions.",
@@ -216,6 +219,9 @@ func New(cfg config.Processor, topicPrefix string, consumer Consumer, writer Wri
 func (p *Processor) SetPartitionEvents(e *PartitionEvents) { p.events = e }
 
 func (p *Processor) signalOf(topic string) (queue.Signal, bool) {
+	if topic == queue.SampledTracesTopic(p.prefix) { // tail sampling enabled (D-075)
+		return queue.SignalTraces, true
+	}
 	for _, s := range queue.AllSignals {
 		if queue.Topic(p.prefix, s) == topic {
 			return s, true
@@ -419,6 +425,7 @@ func (p *Processor) decodeRecord(rows *Rows, rec *kgo.Record) {
 			return
 		}
 		rows.AddMetrics(tenantID, receivedAt, &req)
+		rows.AddIngestUsage(tenantID, string(sig), receivedAt, len(rec.Value)) // usage.go (D-079)
 	case queue.SignalLogs:
 		var req collogs.ExportLogsServiceRequest
 		if err := proto.Unmarshal(rec.Value, &req); err != nil {
@@ -426,6 +433,7 @@ func (p *Processor) decodeRecord(rows *Rows, rec *kgo.Record) {
 			return
 		}
 		rows.AddLogs(tenantID, receivedAt, &req)
+		rows.AddIngestUsage(tenantID, string(sig), receivedAt, len(rec.Value))
 	case queue.SignalTraces:
 		var req coltrace.ExportTraceServiceRequest
 		if err := proto.Unmarshal(rec.Value, &req); err != nil {
@@ -433,6 +441,7 @@ func (p *Processor) decodeRecord(rows *Rows, rec *kgo.Record) {
 			return
 		}
 		rows.AddTraces(tenantID, receivedAt, &req)
+		rows.AddIngestUsage(tenantID, string(sig), receivedAt, len(rec.Value))
 	}
 }
 
@@ -451,6 +460,7 @@ func (p *Processor) blockToken(base string, i, n int) string {
 // would be deduplicated by ClickHouse anyway).
 func (p *Processor) writeChunk(ctx context.Context, c *chunk) error {
 	rows := p.decode(c)
+	p.enqueueLate(rows)
 	for reason, n := range rows.Dropped {
 		p.dropped.WithLabelValues(reason).Add(float64(n))
 	}

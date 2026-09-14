@@ -49,6 +49,7 @@ var hostIDFiles = []string{"/etc/machine-id", "/var/lib/dbus/machine-id", "/sys/
 // Host id sources reported at debug level.
 const (
 	hostIDSourceConfig    = "config"
+	hostIDSourceInfraRun  = "infra-agent"
 	hostIDSourceInfra     = "infra-agent-state"
 	hostIDSourcePlatform  = "platform"
 	hostIDSourceGenerated = "generated"
@@ -57,6 +58,8 @@ const (
 // resolveHostID implements the same chain as the infra agent so both report the same
 // host.id on one machine:
 //
+//  0. the id a running infra agent published in <infraRuntimeDir>/host-id (under the host
+//     root, else the plain path: containers mount -v /run/openlog-infra-agent:/run/openlog-infra-agent:ro)
 //  1. /etc/machine-id → /var/lib/dbus/machine-id → /sys/class/dmi/id/product_uuid
 //     (non-empty, [0-9A-Za-z-]{8,}, not all zeros; lower-cased)
 //  2. the UUID the infra agent generated and persisted in its state dir (<state_dir>/host-id)
@@ -64,7 +67,17 @@ const (
 //  4. a UUID generated and persisted by this agent (stateDir, default user cache dir)
 //
 // Step 4 cannot match an infra agent that generates its own id later; the caller logs it.
-func resolveHostID(ctx context.Context, fs hostFS, infraStateDir, stateDir string) (id, source string) {
+func resolveHostID(ctx context.Context, fs hostFS, infraRuntimeDir, infraStateDir, stateDir string) (id, source string) {
+	if infraRuntimeDir != "" {
+		file := filepath.Join(infraRuntimeDir, "host-id")
+		v := fs.readString(file)
+		if !validHostID.MatchString(v) && fs.path(file) != filepath.Clean(file) {
+			v = hostFS{}.readString(file)
+		}
+		if validHostID.MatchString(v) {
+			return v, hostIDSourceInfraRun
+		}
+	}
 	for _, p := range hostIDFiles {
 		if v := fs.readString(p); validHostID.MatchString(v) && strings.Trim(v, "0-") != "" {
 			return strings.ToLower(v), p
@@ -310,7 +323,7 @@ func detectAttributes(ctx context.Context, cfg *Config, lookup lookupFunc) (map[
 	source := hostIDSourceConfig
 	if cfg.HostID == "" {
 		var id string
-		id, source = resolveHostID(ctx, fs, cfg.InfraStateDir, cfg.StateDir)
+		id, source = resolveHostID(ctx, fs, cfg.InfraRuntimeDir, cfg.InfraStateDir, cfg.StateDir)
 		setIf(a, "host.id", id)
 	}
 	return a, source

@@ -323,7 +323,7 @@ export interface MetricDef {
 /** Resource attribute keys accepted as metric resource filters (internal/api/metrics.go). */
 export const METRIC_RESOURCE_KEYS = [
   "openlog.discovery.id", "openlog.discovery.instance", "openlog.integration.id", "service.instance.id", "server.address", "server.port",
-  "postgresql.database.name", "postgresql.table.name", "postgresql.index.name",
+  "postgresql.database.name", "postgresql.table.name", "postgresql.index.name", "postgresql.queryid", "postgresql.rolname", "db.query.text",
 ];
 
 const wave = (t: number, period: number, phase = 0) => (Math.sin((t / period) * Math.PI * 2 + phase) + 1) / 2;

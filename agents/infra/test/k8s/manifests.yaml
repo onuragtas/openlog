@@ -1,0 +1,99 @@
+# Kubernetes live test fixtures (run.sh): an OTLP capture server and demo workloads whose metrics, logs and
+# events the agent chart must report. Images are loaded into kind by run.sh (no registry pulls).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openlog
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: capture
+  namespace: openlog
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: capture}
+  template:
+    metadata:
+      labels: {app: capture}
+    spec:
+      containers:
+        - name: capture
+          image: openlog-m4-k8s/capture:dev
+          imagePullPolicy: Never
+          ports: [{containerPort: 4318}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: capture
+  namespace: openlog
+spec:
+  selector: {app: capture}
+  ports: [{port: 4318, targetPort: 4318}]
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: web}
+  template:
+    metadata:
+      labels: {app: web, app.kubernetes.io/version: "1.0", secret-label: "not-sent"}
+    spec:
+      containers:
+        - name: app
+          image: alpine:3
+          imagePullPolicy: Never
+          command: ["sh", "-c", "i=0; while true; do i=$((i+1)); echo \"web-log line $i from $HOSTNAME\"; sleep 2; done"]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crasher
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: crasher}
+  template:
+    metadata:
+      labels: {app: crasher}
+    spec:
+      containers:
+        - name: crash
+          image: alpine:3
+          imagePullPolicy: Never
+          command: ["sh", "-c", "echo crasher-log starting; sleep 3; exit 1"]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tick
+  namespace: demo
+spec:
+  schedule: "* * * * *"
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: tick
+              image: alpine:3
+              imagePullPolicy: Never
+              command: ["sh", "-c", "echo tick-log done"]

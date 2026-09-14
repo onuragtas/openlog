@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { requestUpdateApply, requestUpdateCheck, updateInProgress, versionQuery, type UpdateRequest, type VersionInfo } from "@/api/version";
+import { followingRequest, requestUpdateApply, requestUpdateCheck, updateInProgress, versionQuery, type UpdateRequest, type VersionInfo } from "@/api/version";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,7 +59,7 @@ export function VersionSettings() {
   const [followId, setFollowId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [ignoreWindow, setIgnoreWindow] = useState(false);
-  const q = useQuery(versionQuery({ follow: followId !== null }));
+  const q = useQuery(versionQuery({ followId }));
 
   const check = useMutation({
     mutationFn: requestUpdateCheck,
@@ -76,12 +76,8 @@ export function VersionSettings() {
 
   const v = q.data;
   const latest = v?.update_requests?.latest ?? null;
-  const serverAnswers = !q.isError;
-  // Stop following once the request finished and the server answers again.
-  const followDone = followId !== null && serverAnswers && latest?.id === followId && latest.state !== "pending" && latest.state !== "running" && v?.updater?.state !== "updating";
-  useEffect(() => {
-    if (followDone) setFollowId(null);
-  }, [followDone]);
+  // Following stops once the request finished and the server answers again.
+  const following = followingRequest(v, followId, !q.isError);
 
   if (q.isPending) return <LoadingState />;
   if (!v) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -89,7 +85,7 @@ export function VersionSettings() {
   const u = v.updater;
   const steps = u?.steps ?? [];
   const requests = v.update_requests;
-  const busy = followId !== null || updateInProgress(v);
+  const busy = following || updateInProgress(v);
   const reconnecting = q.isError && busy;
   const target = updateTarget(v);
   const updaterUsable = !!u && u.mode !== "off";

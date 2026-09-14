@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/onuragtas/openlog/internal/tenant"
 )
 
 // DefaultCookieName is the session cookie name.
@@ -33,6 +35,23 @@ type Config struct {
 	LoginWindow        time.Duration //
 	InvitationTTL      time.Duration
 	TrustedProxies     []netip.Prefix
+
+	// KeyHasher hashes license and API keys (OPENLOG_KEY_HASH_SECRET, D-044); nil = plain SHA-256.
+	KeyHasher *tenant.KeyHasher
+	// PublicURL is the web UI base URL for links in e-mails (OPENLOG_PUBLIC_URL).
+	PublicURL string
+	// Mailer sends invitation and verification e-mails; nil disables e-mail (D-045).
+	Mailer Mailer
+	// RequireEmailVerification: sign-ups must confirm their address before creating keys or inviting.
+	RequireEmailVerification bool
+	VerificationTTL          time.Duration // verification link validity [48h]
+	SignupMaxPerIP           int           // sign-up attempts per client IP within SignupRateWindow [10]
+	SignupMaxPerEmail        int           // sign-up attempts per e-mail address within SignupRateWindow [5]
+	SignupRateWindow         time.Duration // [1h], at most 24h (counters are kept for a day)
+	// EmailDomainBlocked rejects sign-ups from a domain (disposable-address blocklist hook); nil allows all.
+	EmailDomainBlocked func(domain string) bool
+	// Captcha verifies sign-up CAPTCHA tokens (Cloudflare Turnstile, hCaptcha); nil = no CAPTCHA.
+	Captcha CaptchaVerifier
 }
 
 func (c *Config) defaults() {
@@ -51,16 +70,29 @@ func (c *Config) defaults() {
 	if c.InvitationTTL <= 0 {
 		c.InvitationTTL = 7 * 24 * time.Hour
 	}
+	if c.VerificationTTL <= 0 {
+		c.VerificationTTL = 48 * time.Hour
+	}
+	if c.SignupMaxPerIP <= 0 {
+		c.SignupMaxPerIP = 10
+	}
+	if c.SignupMaxPerEmail <= 0 {
+		c.SignupMaxPerEmail = 5
+	}
+	if c.SignupRateWindow <= 0 {
+		c.SignupRateWindow = time.Hour
+	}
 }
 
 // Service implements authentication and the management operations. It holds
 // no per-user state: sessions, rate limits and keys live in the Store, so any
 // number of API replicas can serve any request.
 type Service struct {
-	store Store
-	cfg   Config
-	log   *slog.Logger
-	now   func() time.Time
+	store  Store
+	cfg    Config
+	log    *slog.Logger
+	now    func() time.Time
+	policy SessionPolicy // single sign-on restrictions (external.go); nil = none
 }
 
 // NewService creates a Service.
@@ -152,8 +184,12 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 			s.log.Warn("cannot update session last_seen_at", "err", err)
 		}
 	}
-	p := &Principal{Kind: KindSession, UserID: user.ID, Email: user.Email, Name: user.Name, SessionID: sess.ID, CSRFToken: sess.CSRFToken}
-	if err := s.selectOrg(ctx, p, strings.TrimSpace(r.Header.Get(HeaderOrg))); err != nil {
+	// Membership and role are read from the store on every request (no cache), so removals and role changes
+	// apply to the next request on every API pod (D-046).
+	p := &Principal{Kind: KindSession, UserID: user.ID, Email: user.Email, Name: user.Name, SessionID: sess.ID, CSRFToken: sess.CSRFToken,
+		EmailVerified: user.EmailVerifiedAt != nil}
+	// With a SessionPolicy (single sign-on) the organization must also be allowed for this session (external.go).
+	if err := s.selectSessionOrg(ctx, p, sess, user, strings.TrimSpace(r.Header.Get(HeaderOrg)), now); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -188,7 +224,7 @@ func (s *Service) authenticateAPIKey(ctx context.Context, r *http.Request, key s
 	if key == "" {
 		return nil, unauthenticated("missing credentials")
 	}
-	k, org, err := s.store.LookupAPIKey(ctx, HashSecret(key))
+	k, org, err := s.store.LookupAPIKey(ctx, s.cfg.KeyHasher.Candidates(key))
 	if errors.Is(err, ErrNotFound) {
 		return nil, unauthenticated("invalid API key")
 	}
@@ -207,7 +243,7 @@ func (s *Service) authenticateAPIKey(ctx context.Context, r *http.Request, key s
 		}
 	}
 	// API keys are read-only: they act as viewers regardless of the creator's role.
-	return &Principal{Kind: KindAPIKey, APIKeyID: k.ID, OrgID: org.ID, OrgName: org.Name, TenantID: org.TenantID, Role: RoleViewer}, nil
+	return &Principal{Kind: KindAPIKey, APIKeyID: k.ID, OrgID: org.ID, OrgName: org.Name, TenantID: org.TenantID, Role: RoleViewer, EmailVerified: true}, nil
 }
 
 // ---- cookies ----
@@ -304,6 +340,11 @@ func (s *Service) Login(ctx context.Context, email, password string, meta Client
 	if err := s.store.ClearLoginFailures(ctx, key); err != nil {
 		s.log.Warn("cannot clear failed logins", "err", err)
 	}
+	// Single sign-on enforcement may refuse password sessions (external.go, D-077).
+	if err := s.checkPasswordLogin(ctx, u, now); err != nil {
+		s.audit(ctx, "", u.ID, u.Email, meta, "user.login_refused", "user", u.ID, map[string]any{"reason": "sso_required"})
+		return LoginResult{}, err
+	}
 	res, err := s.startSession(ctx, u, meta, now)
 	if err != nil {
 		return LoginResult{}, err
@@ -354,9 +395,15 @@ type SignupInput struct {
 	Password string
 	Name     string
 	OrgName  string
+	// CaptchaToken is the widget response when a CAPTCHA provider is configured.
+	CaptchaToken string
 }
 
-// Signup creates a user, a new organization owned by them and a session.
+var errSignupRate = &Error{Code: CodeResourceExhausted, Message: "too many sign-up attempts; try again later"}
+
+// Signup creates a user, a new organization owned by them and a session. Abuse protection (D-045): attempts
+// are limited per client IP and per e-mail address, then the CAPTCHA (if configured) and the e-mail domain
+// policy are checked. With RequireEmailVerification the user starts unverified and gets a verification e-mail.
 func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (LoginResult, Organization, error) {
 	if !s.cfg.SignupEnabled {
 		return LoginResult{}, Organization{}, denied("sign-up is disabled on this server")
@@ -368,6 +415,9 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 	if err := ValidatePassword(in.Password); err != nil {
 		return LoginResult{}, Organization{}, err
 	}
+	if NormalizeEmail(in.Password) == email {
+		return LoginResult{}, Organization{}, invalid("password must not be your email address")
+	}
 	name, err := cleanName(in.Name, "name", false)
 	if err != nil {
 		return LoginResult{}, Organization{}, err
@@ -375,6 +425,35 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 	orgName, err := cleanName(in.OrgName, "organization name", true)
 	if err != nil {
 		return LoginResult{}, Organization{}, err
+	}
+	now := s.now()
+	if ok, err := s.allow(ctx, rateKey("signup-ip", meta.IP), s.cfg.SignupMaxPerIP, s.cfg.SignupRateWindow, now); err != nil {
+		return LoginResult{}, Organization{}, err
+	} else if !ok {
+		return LoginResult{}, Organization{}, errSignupRate
+	}
+	if ok, err := s.allow(ctx, rateKey("signup-email", email), s.cfg.SignupMaxPerEmail, s.cfg.SignupRateWindow, now); err != nil {
+		return LoginResult{}, Organization{}, err
+	} else if !ok {
+		return LoginResult{}, Organization{}, errSignupRate
+	}
+	if c := s.cfg.Captcha; c != nil {
+		if strings.TrimSpace(in.CaptchaToken) == "" {
+			return LoginResult{}, Organization{}, invalid("complete the CAPTCHA")
+		}
+		ok, err := c.Verify(ctx, in.CaptchaToken, meta.IP)
+		if err != nil {
+			s.log.Warn("captcha verification unavailable", "provider", c.Provider(), "err", err)
+			return LoginResult{}, Organization{}, &Error{Code: CodeUnavailable, Message: "CAPTCHA verification is unavailable; try again later"}
+		}
+		if !ok {
+			return LoginResult{}, Organization{}, invalid("CAPTCHA verification failed; try again")
+		}
+	}
+	if blocked := s.cfg.EmailDomainBlocked; blocked != nil {
+		if _, domain, _ := strings.Cut(email, "@"); blocked(domain) {
+			return LoginResult{}, Organization{}, invalid("sign-up with this e-mail domain is not allowed; use another address")
+		}
 	}
 	hash, err := HashPassword(in.Password)
 	if err != nil {
@@ -384,9 +463,11 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 	if err != nil {
 		return LoginResult{}, Organization{}, err
 	}
-	now := s.now()
 	org := Organization{TenantID: tenantID, Name: orgName, CreatedAt: now}
 	u := User{Email: email, Name: name, PasswordHash: hash, CreatedAt: now}
+	if !s.cfg.RequireEmailVerification {
+		u.EmailVerifiedAt = &now
+	}
 	if err := s.store.CreateOrganization(ctx, &org, &u); err != nil {
 		if errors.Is(err, ErrAlreadyExists) {
 			return LoginResult{}, Organization{}, &Error{Code: CodeAlreadyExists, Message: "an account with this email already exists"}
@@ -398,6 +479,10 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 		return LoginResult{}, Organization{}, err
 	}
 	s.audit(ctx, org.ID, u.ID, u.Email, meta, "org.create", "organization", org.ID, map[string]any{"name": org.Name, "via": "signup"})
+	if u.EmailVerifiedAt == nil && s.EmailEnabled() {
+		// Best effort: the user is signed in either way and can resend the e-mail.
+		_ = s.startVerification(ctx, u)
+	}
 	return res, org, nil
 }
 

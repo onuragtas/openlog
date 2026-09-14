@@ -72,6 +72,8 @@ type HostReport struct {
 	// IntegrationsConfigRevision is the remote integration config revision the agent has applied ("" = none,
 	// "disabled" = remote config turned off on the host).
 	IntegrationsConfigRevision string
+	// PHPAgent is the PHP runtime inventory and PHP agent state (nil: the agent does not report it).
+	PHPAgent *PHPAgentReport
 }
 
 // Override is a per-host exception to the policy.

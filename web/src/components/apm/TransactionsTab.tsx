@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import { apmTransactionQuery, apmTransactionsQuery, type ApmTransaction, type TransactionSort } from "@/api/apm";
+import { apmDeploymentsQuery, apmTransactionQuery, apmTransactionsQuery, type ApmTransaction, type TransactionSort } from "@/api/apm";
+import { deploymentMarkers } from "@/lib/deployments";
 import { ApdexBadge, LatencyHistogram, RedTiles } from "@/components/apm/Charts";
 import { ChartCard } from "@/components/apm/OverviewTab";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -127,7 +128,9 @@ function TransactionDetail({ scope, range, name, onClose, onShowTraces }: { scop
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(apmTransactionQuery(scope, range, name));
+  const deployments = useQuery(apmDeploymentsQuery(scope, range));
   const points = q.data?.series ?? [];
+  const markers = deploymentMarkers(deployments.data?.deployments, q.data?.from, q.data?.to);
   return (
     <Card data-testid="transaction-detail" className="border-primary/40">
       <CardHeader className="flex flex-row items-start justify-between gap-2">
@@ -137,7 +140,14 @@ function TransactionDetail({ scope, range, name, onClose, onShowTraces }: { scop
             <h2 className="break-all">{name}</h2>
           </CardTitle>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {q.data && (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/logs" search={{ txn: name, txnsvc: scope.service, from: String(q.data.from), to: String(q.data.to) }}>
+                {t("apm.transactions.relatedLogs")}
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => onShowTraces(name)}>
             {t("apm.transactions.traces")}
           </Button>
@@ -159,10 +169,10 @@ function TransactionDetail({ scope, range, name, onClose, onShowTraces }: { scop
                 <LatencyHistogram bins={q.data.histogram} />
               </ChartCard>
               <ChartCard title={t("apm.metrics.latency")}>
-                <TimeSeriesChart title={t("apm.metrics.latency")} unit="ms" from={q.data.from} to={q.data.to} height={160} series={latencySeries(points)} />
+                <TimeSeriesChart title={t("apm.metrics.latency")} unit="ms" from={q.data.from} to={q.data.to} height={160} series={latencySeries(points)} markers={markers} />
               </ChartCard>
               <ChartCard title={t("apm.metrics.throughput")}>
-                <TimeSeriesChart title={t("apm.metrics.throughput")} unit="number" from={q.data.from} to={q.data.to} height={140} series={[{ label: t("apm.metrics.throughput"), points: metricPoints(points, "throughput") }]} />
+                <TimeSeriesChart title={t("apm.metrics.throughput")} unit="number" from={q.data.from} to={q.data.to} height={140} series={[{ label: t("apm.metrics.throughput"), points: metricPoints(points, "throughput") }]} markers={markers} />
               </ChartCard>
               <ChartCard title={t("apm.transactions.slowest")}>
                 {q.data.slowest.length === 0 ? (

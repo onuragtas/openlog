@@ -87,6 +87,7 @@ type Agent struct {
 	logs    *logs.Manager
 	integ   *integrations.Manager
 	php     *phpModule // nil unless exporting
+	k8s     *k8sNode   // nil outside Kubernetes node mode (kubernetes.go)
 
 	// apm_hint.status of PHP services in the last inventory snapshot ("active" = true).
 	apmActive bool
@@ -135,14 +136,21 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 		log.Warn("host.id could not be persisted; a new id will be generated on restart", "error", err)
 	}
 	a.hostID = hostID
-	a.res = resource.Detect(a.fs, hostID, version, cfg.Host.ExtraAttributes).Proto()
+	if forExport {
+		if err := resource.PublishHostID(resource.RuntimeDir, hostID); err != nil {
+			log.Debug("host.id not published for APM agents", "error", err)
+		}
+	}
+	a.res = resource.Detect(a.fs, hostID, version, hostAttributes(cfg)).Proto() // php_agent.go
 	a.stats.SetCollectionInterval(a.interval)
 	if cfg.Containers.Enabled {
 		a.ctr = containers.NewSource(a.fs, cfg.Containers.DockerSocket)
+		a.ctr.CRISockets = cfg.Containers.CRISockets
 		a.ctr.Permission = func() { a.stats.PermissionDenied("containers") }
 	}
 	a.metrics = metrics.NewSet(a.fs, cfg, a.stats, log, a.ctr)
-	a.inv = &inventory.Collector{FS: a.fs, Stats: a.stats, Log: log}
+	a.k8s = a.setupKubernetes(forExport)
+	a.inv = &inventory.Collector{FS: a.fs, Stats: a.stats, Log: log, SystemdBus: a.fs.Path(inventory.SystemdBusSocket)}
 	if a.ctr != nil {
 		a.inv.Containers = func() ([]inventory.Container, error) {
 			cs, err := a.ctr.List(context.Background(), a.interval/2)
@@ -406,6 +414,8 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a.integ != nil {
 		a.integ.Start(ctx)
 	}
+	// Kubernetes pod watch (node mode); stops with the log collection.
+	a.k8s.start(logsCtx)
 	a.php.arm() // explicit php_forwarder.enabled: true starts now; auto waits for the first discovery
 	a.collectLoop(ctx)
 	if a.integ != nil {

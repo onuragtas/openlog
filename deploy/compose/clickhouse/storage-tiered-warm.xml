@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+  Optional warm volume for storage-tiered.xml (D-066): a second, cheaper local disk (e.g. HDD or a larger network
+  volume) between the hot volume and S3. Mount it next to storage-tiered.xml and set
+  OPENLOG_STORAGE_WARM_AFTER_DAYS_<CLASS> for openlog-migrate.
+
+    OPENLOG_WARM_PATH   directory of the warm disk, with a trailing slash (default in Compose:
+                        /var/lib/clickhouse-warm/, a separate Docker volume)
+-->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <openlog_warm>
+                <type>local</type>
+                <path from_env="OPENLOG_WARM_PATH"/>
+            </openlog_warm>
+        </disks>
+        <policies>
+            <openlog_tiered>
+                <volumes>
+                    <warm>
+                        <disk>openlog_warm</disk>
+                        <volume_priority>2</volume_priority>
+                        <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
+                    </warm>
+                </volumes>
+            </openlog_tiered>
+        </policies>
+    </storage_configuration>
+</clickhouse>

@@ -1,7 +1,12 @@
 {{- if include "openlog.operators" . }}
 {{- $ch := .Values.clickhouse.altinity }}
 {{- $k := $ch.keeper }}
+{{- $tls := .Values.clickhouse.tls }}
+{{- $serverTLS := include "openlog.clickhouse.serverTLS" . }}
 {{- $keeperName := include "openlog.keeper.name" . }}
+{{- $ts := .Values.clickhouse.tieredStorage }}
+{{- $tiered := $ts.enabled }}
+{{- $warm := and $ts.enabled $ts.warm.enabled }}
 # ClickHouse Keeper ensemble (Raft) used by ReplicatedMergeTree and ON CLUSTER DDL.
 # Requires the Altinity clickhouse-operator (>= 0.24) watching this namespace.
 apiVersion: clickhouse-keeper.altinity.com/v1
@@ -86,16 +91,137 @@ spec:
         - "::/0"
       {{ include "openlog.clickhouse.user" . }}/profile: default
       {{ include "openlog.clickhouse.user" . }}/quota: default
-    {{- with $ch.profiles }}
+      {{- with include "openlog.clickhouse.readUser" . }}
+      # Read-only user of api/alert tenant queries (D-047): readonly=2, SELECT on openlog.* only.
+      {{ . }}/k8s_secret_password: {{ include "openlog.secretName" $ }}/{{ include "openlog.secret.clickhouseReadPasswordKey" $ }}
+      {{ . }}/networks/ip:
+        - "::/0"
+      {{ . }}/profile: openlog_readonly
+      {{ . }}/quota: default
+      {{ . }}/grants/query:
+        - "GRANT SELECT ON openlog.*"
+      {{- end }}
     profiles:
+      # readonly=2: reads only, but openlog may set per-query limits (max_memory_usage, ...).
+      openlog_readonly/readonly: "2"
+      openlog_readonly/allow_ddl: "0"
+      openlog_readonly/allow_introspection_functions: "0"
+      {{- with $ch.profiles }}
       {{- toYaml . | nindent 6 }}
-    {{- end }}
-    {{- with $ch.settings }}
+      {{- end }}
+    {{- if or $ch.settings $serverTLS }}
     settings:
+      {{- if $serverTLS }}
+      tcp_port_secure: {{ int $tls.securePort }}
+      https_port: {{ int $tls.server.httpsPort }}
+      {{- end }}
+      {{- with $ch.settings }}
       {{- toYaml . | nindent 6 }}
+      {{- end }}
+    {{- end }}
+    {{- if or $serverTLS $tiered }}
+    files:
+      {{- if $tiered }}
+      # Tiered storage (D-066): the same policy as deploy/compose/clickhouse/storage-tiered.xml; values come from the
+      # container environment below (credentials from clickhouse.tieredStorage.s3.credentialsSecret).
+      config.d/openlog-storage.xml: |
+        <clickhouse>
+          <storage_configuration>
+            <disks>
+              <openlog_s3>
+                <type>object_storage</type>
+                <object_storage_type>s3</object_storage_type>
+                <metadata_type>local</metadata_type>
+                <endpoint from_env="OPENLOG_S3_ENDPOINT"/>
+                <region from_env="OPENLOG_S3_REGION"/>
+                <access_key_id from_env="OPENLOG_S3_ACCESS_KEY_ID"/>
+                <secret_access_key from_env="OPENLOG_S3_SECRET_ACCESS_KEY"/>
+                <use_environment_credentials from_env="OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS"/>
+                <skip_access_check>true</skip_access_check>
+                {{- range $k, $v := $ts.s3.diskSettings }}
+                <{{ $k }}>{{ $v }}</{{ $k }}>
+                {{- end }}
+              </openlog_s3>
+              <openlog_s3_cache>
+                <type>cache</type>
+                <disk>openlog_s3</disk>
+                <path>/var/lib/clickhouse/openlog_s3_cache/</path>
+                <max_size from_env="OPENLOG_S3_CACHE_MAX_SIZE"/>
+                <cache_on_write_operations>false</cache_on_write_operations>
+              </openlog_s3_cache>
+              {{- if $warm }}
+              <openlog_warm>
+                <type>local</type>
+                <path>/var/lib/clickhouse-warm/</path>
+              </openlog_warm>
+              {{- end }}
+            </disks>
+            <policies>
+              <{{ $ts.policy }}>
+                <volumes>
+                  <default>
+                    <disk>default</disk>
+                    <volume_priority>1</volume_priority>
+                  </default>
+                  {{- if $warm }}
+                  <warm>
+                    <disk>openlog_warm</disk>
+                    <volume_priority>2</volume_priority>
+                    <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
+                  </warm>
+                  {{- end }}
+                  <cold>
+                    <disk>openlog_s3_cache</disk>
+                    <volume_priority>3</volume_priority>
+                    <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
+                  </cold>
+                </volumes>
+                <move_factor>0.1</move_factor>
+              </{{ $ts.policy }}>
+            </policies>
+          </storage_configuration>
+        </clickhouse>
+      {{- end }}
+      {{- if $serverTLS }}
+      # Certificates from clickhouse.tls.server.secretName, mounted below. Clients (openlog, Distributed
+      # queries between shards) connect to tcp_port_secure.
+      config.d/openlog-tls.xml: |
+        <clickhouse>
+          <openSSL>
+            <server>
+              <certificateFile>/etc/clickhouse-server/tls/tls.crt</certificateFile>
+              <privateKeyFile>/etc/clickhouse-server/tls/tls.key</privateKeyFile>
+              <caConfig>/etc/clickhouse-server/tls/ca.crt</caConfig>
+              <verificationMode>{{ $tls.server.verificationMode }}</verificationMode>
+              <loadDefaultCAFile>false</loadDefaultCAFile>
+              <cacheSessions>true</cacheSessions>
+              <disableProtocols>sslv2,sslv3,tlsv1,tlsv1_1</disableProtocols>
+              <preferServerCiphers>true</preferServerCiphers>
+            </server>
+            <client>
+              <certificateFile>/etc/clickhouse-server/tls/tls.crt</certificateFile>
+              <privateKeyFile>/etc/clickhouse-server/tls/tls.key</privateKeyFile>
+              <caConfig>/etc/clickhouse-server/tls/ca.crt</caConfig>
+              <verificationMode>relaxed</verificationMode>
+              <loadDefaultCAFile>false</loadDefaultCAFile>
+              <disableProtocols>sslv2,sslv3,tlsv1,tlsv1_1</disableProtocols>
+              <invalidCertificateHandler>
+                <name>RejectCertificateHandler</name>
+              </invalidCertificateHandler>
+            </client>
+          </openSSL>
+        </clickhouse>
+      {{- end }}
     {{- end }}
     clusters:
       - name: {{ .Values.clickhouse.cluster }}
+        {{- if $serverTLS }}
+        # remote_servers use the secure port with <secure>1</secure>.
+        secure: "yes"
+        {{- if $tls.server.disableInsecure }}
+        insecure: "no"
+        {{- end }}
+        {{- end }}
         layout:
           shardsCount: {{ $ch.shards }}
           replicasCount: {{ $ch.replicas }}
@@ -107,11 +233,69 @@ spec:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         spec:
+          {{- if and $tiered $ts.s3.serviceAccountName }}
+          serviceAccountName: {{ $ts.s3.serviceAccountName }}
+          {{- end }}
           containers:
             - name: clickhouse
               image: {{ $ch.image }}
               resources:
                 {{- toYaml $ch.resources | nindent 16 }}
+              {{- if $tiered }}
+              env:
+                - name: OPENLOG_S3_ENDPOINT
+                  value: {{ required "clickhouse.tieredStorage.s3.endpoint is required with clickhouse.tieredStorage.enabled in operators mode" $ts.s3.endpoint | quote }}
+                - name: OPENLOG_S3_REGION
+                  value: {{ $ts.s3.region | quote }}
+                - name: OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS
+                  value: {{ $ts.s3.useEnvironmentCredentials | toString | quote }}
+                {{- with $ts.s3.credentialsSecret }}
+                {{- if .name }}
+                - name: OPENLOG_S3_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: {{ .name }}, key: {{ .accessKeyIdKey }}}
+                - name: OPENLOG_S3_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: {{ .name }}, key: {{ .secretAccessKeyKey }}}
+                {{- else }}
+                - name: OPENLOG_S3_ACCESS_KEY_ID
+                  value: ""
+                - name: OPENLOG_S3_SECRET_ACCESS_KEY
+                  value: ""
+                {{- end }}
+                {{- end }}
+                - name: OPENLOG_S3_CACHE_MAX_SIZE
+                  value: {{ $ts.s3.cacheMaxSize | quote }}
+              {{- end }}
+              {{- if or $serverTLS $warm }}
+              volumeMounts:
+                {{- if $serverTLS }}
+                - name: openlog-tls
+                  mountPath: /etc/clickhouse-server/tls
+                  readOnly: true
+                {{- end }}
+                {{- if $warm }}
+                # Warm volume (volumeClaimTemplate `warm`).
+                - name: warm
+                  mountPath: /var/lib/clickhouse-warm
+                {{- end }}
+              {{- end }}
+          {{- if or $serverTLS $warm }}
+          # clickhouse runs as uid/gid 101: TLS keys (not world-readable) and the warm volume are accessible through fsGroup.
+          securityContext:
+            fsGroup: 101
+          {{- end }}
+          {{- if $serverTLS }}
+          volumes:
+            - name: openlog-tls
+              secret:
+                secretName: {{ $tls.server.secretName }}
+                defaultMode: 0440
+                items:
+                  - {key: {{ $tls.server.certKey }}, path: tls.crt}
+                  - {key: {{ $tls.server.keyKey }}, path: tls.key}
+                  - {key: {{ $tls.server.caKey }}, path: ca.crt}
+          {{- end }}
     serviceTemplates:
       # The operator's default CHI Service is a LoadBalancer; keep it internal.
       - name: clickhouse
@@ -121,6 +305,10 @@ spec:
           ports:
             - {name: http, port: 8123}
             - {name: tcp, port: 9000}
+            {{- if $serverTLS }}
+            - {name: tls, port: {{ int $tls.securePort }}}
+            - {name: https, port: {{ int $tls.server.httpsPort }}}
+            {{- end }}
     volumeClaimTemplates:
       - name: data
         reclaimPolicy: {{ $ch.storage.reclaimPolicy }}
@@ -132,4 +320,16 @@ spec:
           resources:
             requests:
               storage: {{ $ch.storage.size }}
+      {{- if $warm }}
+      - name: warm
+        reclaimPolicy: {{ $ch.storage.reclaimPolicy }}
+        spec:
+          accessModes: [ReadWriteOnce]
+          {{- with $ts.warm.storageClass }}
+          storageClassName: {{ . }}
+          {{- end }}
+          resources:
+            requests:
+              storage: {{ $ts.warm.size }}
+      {{- end }}
 {{- end }}

@@ -1,0 +1,18 @@
+openlog-agent {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }} for cluster "{{ .Values.clusterName }}".
+{{- if .Values.node.enabled }}
+
+Node agent (DaemonSet {{ include "openlog-agent.fullname" . }}-node):
+  kubectl -n {{ .Release.Namespace }} rollout status ds/{{ include "openlog-agent.fullname" . }}-node
+  kubectl -n {{ .Release.Namespace }} logs ds/{{ include "openlog-agent.fullname" . }}-node | grep -i kubernetes
+{{- end }}
+{{- if .Values.cluster.enabled }}
+
+Cluster collector (Deployment {{ include "openlog-agent.fullname" . }}-cluster, leader Lease {{ include "openlog-agent.fullname" . }}-cluster):
+  kubectl -n {{ .Release.Namespace }} get lease {{ include "openlog-agent.fullname" . }}-cluster -o jsonpath='{.spec.holderIdentity}'
+{{- end }}
+
+The node agent needs host access (hostPath /, hostPID, hostNetwork): label the namespace for the
+"privileged" Pod Security Standard, e.g.
+  kubectl label ns {{ .Release.Namespace }} pod-security.kubernetes.io/enforce=privileged
+
+Data appears in openlog under Kubernetes within about a minute (docs/operations/kubernetes.md).

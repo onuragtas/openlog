@@ -45,6 +45,8 @@ func (s *Server) fleetRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/fleet/hosts", false, s.fleetHosts)
 	route("PUT /api/v1/fleet/hosts/{host_id}/override", true, s.putHostOverride)
 	route("DELETE /api/v1/fleet/hosts/{host_id}/override", true, s.deleteHostOverride)
+	route("PUT /api/v1/fleet/hosts/{host_id}/php-agent", true, s.putHostPHPOverride)       // fleet_php.go
+	route("DELETE /api/v1/fleet/hosts/{host_id}/php-agent", true, s.deleteHostPHPOverride) // fleet_php.go
 	route("GET /api/v1/fleet/rollouts", false, s.fleetRollouts)
 	route("POST /api/v1/fleet/rollouts/{id}/pause", true, s.pauseRollout)
 	route("POST /api/v1/fleet/rollouts/{id}/resume", true, s.resumeRollout)
@@ -211,6 +213,7 @@ type fleetHostJSON struct {
 	Supported    bool               `json:"supported"`
 	Status       string             `json:"status"`
 	StatusTarget *string            `json:"status_target"`
+	PHPAgent     fleetHostPHPJSON   `json:"php_agent"` // fleet_php.go
 }
 
 func hostResponse(h fleet.HostView) fleetHostJSON {
@@ -226,6 +229,7 @@ func hostResponse(h fleet.HostView) fleetHostJSON {
 	out.FirstSeenAt, out.LastSyncAt = formatTime(h.FirstSeenAt), formatTime(h.LastSyncAt)
 	out.RolloutID, out.Override = optString(h.RolloutID), overrideResponse(h.Override)
 	out.Outdated, out.Supported, out.Status, out.StatusTarget = h.Outdated, h.Supported, string(h.Status), optString(h.Target)
+	out.PHPAgent = hostPHPResponse(h)
 	return out
 }
 

@@ -8,7 +8,7 @@ Binding contract between agents and the backend. Where an OpenTelemetry semantic
 
 | Attribute | Required | Source / value |
 |---|---|---|
-| `host.id` | yes | `/etc/machine-id` → `/var/lib/dbus/machine-id` → `/sys/class/dmi/id/product_uuid` → generated UUID persisted in the agent state dir |
+| `host.id` | yes | `/etc/machine-id` → `/var/lib/dbus/machine-id` → `/sys/class/dmi/id/product_uuid` → generated UUID persisted in the agent state dir. The running agent publishes the resolved id in `/run/openlog-infra-agent/host-id` (`<id>\n`, mode 0644, only when the directory exists, e.g. systemd `RuntimeDirectory`); APM agents read it first, also from containers that mount the directory read-only |
 | `host.name` | yes | kernel hostname |
 | `host.arch` | yes | `amd64`, `arm64`, … (OTel values) |
 | `os.type` | yes | `linux` |
@@ -104,11 +104,11 @@ Read from cgroup v2 for every directory under `/sys/fs/cgroup` named after a 64-
 | `container.blockio.io` | Sum, cumulative, monotonic | `By` | `io.stat` rbytes/wbytes summed over devices; `disk.io.direction` = `read`,`write` |
 | `container.blockio.operations` | Sum, cumulative, monotonic | `{operation}` | `io.stat` rios/wios; `disk.io.direction` |
 | `container.network.io` | Sum, cumulative, monotonic | `By` | `/proc/<pid>/net/dev` of a container process, non-`lo` interfaces summed; `network.io.direction` = `receive`,`transmit`; omitted for containers in the host network namespace |
-| `container.restarts` | Sum, cumulative, monotonic | `{restart}` | Docker `RestartCount` (inspect); only with Docker metadata |
+| `container.restarts` | Sum, cumulative, monotonic | `{restart}` | Docker `RestartCount` (inspect), CRI annotation `io.kubernetes.container.restartCount`; only with container metadata |
 | `openlog.container.status` | Gauge | `1` | value 1 per container; `openlog.container.state` = Docker state (`running`,`paused`,`restarting`,`exited`,`created`,`dead`); `openlog.container.health` = `healthy`,`unhealthy`,`starting` (only with a healthcheck); `openlog.container.started_at` = RFC3339 start time (inspect) |
 
 Data point attributes of every container metric: `container.id` (always), `container.name`, `container.image.name`, `container.image.tags`
-(string array; e.g. `["1.25"]`) when Docker metadata is available, `container.runtime` (`docker`, `containerd`, `cri-o`, `podman`) when known,
+(string array; e.g. `["1.25"]`) when Docker or CRI metadata is available, `container.runtime` (`docker`, `containerd`, `cri-o`, `podman`) when known,
 and from container labels (Docker metadata only): `docker.compose.project` (`com.docker.compose.project`), `docker.compose.service`
 (`com.docker.compose.service`), `k8s.pod.name` (`io.kubernetes.pod.name`), `k8s.namespace.name` (`io.kubernetes.pod.namespace`),
 `k8s.container.name` (`io.kubernetes.container.name`; Kubernetes on Docker via cri-dockerd — containerd/CRI-O hosts have no names, see below).
@@ -183,13 +183,13 @@ Unknown fields must be ignored by consumers; missing fields are allowed.
 | `hardware` | `dmi` | `sys_vendor`, `product_name`, `product_version`, `bios_vendor`, `bios_version` (no serial numbers) |
 | `kernel_module` | module name | `name`, `size_bytes`, `state` |
 | `package` | `<manager>:<name>` | `manager` (`dpkg`,`rpm`,`apk`), `name`, `version`, `arch` |
-| `systemd_unit` | unit name | `name`, `type` (`service`,`socket`,`timer`,…), `path`, `enabled_state` (`enabled`,`disabled`,`static`,`masked`,`unknown`), `description`, `exec_start` (masked) |
+| `systemd_unit` | unit name | `name`, `type` (`service`,`socket`,`timer`,…), `path`, `enabled_state` (`enabled`,`disabled`,`static`,`masked`,`unknown`; `generated`,`transient` for units known only over D-Bus), `description`, `exec_start` (masked). Runtime state over D-Bus (`org.freedesktop.systemd1`, system bus socket `/run/dbus/system_bus_socket` under the host root; all omitted when the bus is unreachable or the unit is not loaded): `load_state`, `active_state` (`active`,`inactive`,`failed`,`activating`,…), `sub_state` (`running`,`dead`,`exited`,…), `active_since` (RFC3339, `ActiveEnterTimestamp`; not for `inactive`/`failed`), services only: `restarts` (`NRestarts`, may be 0), `memory_bytes` (`MemoryCurrent`), `cpu_usage_ns` (`CPUUsageNSec`; memory/CPU omitted when accounting is off). Loaded services without a unit file of their own (template instances `foo@bar.service` — `path`/`exec_start` from the template —, generated and transient services) are items too; devices, scopes and other file-less units are not. State is as of the snapshot (no extra snapshot on state changes) |
 | `listening_port` | `<proto>:<address>:<port>`; IPv6 addresses in brackets (`tcp:[::]:22`, `tcp:0.0.0.0:22`) | `protocol` (`tcp`,`udp`), `family` (4,6), `address`, `port`, `pid`, `process_name`, `process_exe` |
 | `process` | exe path (or `comm:<name>` if exe unreadable) | `exe`, `name`, `command` (argv0 basename of the first instance, e.g. `redis-server` when exe is `/usr/bin/redis-check-rdb`), `cmdline` (masked, ≤1024 chars, first instance), `count`, `pids` (≤20), `uids` (distinct), `start_time` (earliest, RFC3339), `systemd_unit`, `container_id` |
 | `user` | user name | `name`, `uid`, `gid`, `home`, `shell` |
 | `network_interface` | interface name | `name`, `mac`, `mtu`, `operstate`, `addresses` |
 | `mount` | mount point | `mountpoint`, `device`, `fs_type`, `options` |
-| `container` | container id (64 hex) | `id`, `name`, `runtime` (`docker`), `image` (as reported, e.g. `nginx:1.25` or `sha256:…`), `image_id`, `state` (`running`,`exited`,`paused`,`created`,…), `health` (`healthy`,`unhealthy`,`starting`; omitted without healthcheck), `created` (RFC3339), `started_at` / `finished_at` (RFC3339; omitted until inspected or when never started/stopped), `restart_count`, `exit_code` (stopped containers, omitted when 0), `labels` (object; at most 100 keys, values truncated to 256 bytes), `ports` (array of `{ip, private_port, public_port, protocol}`) |
+| `container` | container id (64 hex) | `id`, `name`, `runtime` (`docker`; `containerd`, `cri-o` for containers listed through the CRI, where `name` is the Kubernetes container name, `ports` is empty and `restart_count` comes from the kubelet annotation `io.kubernetes.container.restartCount`), `image` (as reported, e.g. `nginx:1.25` or `sha256:…`), `image_id`, `state` (`running`,`exited`,`paused`,`created`,…), `health` (`healthy`,`unhealthy`,`starting`; omitted without healthcheck), `created` (RFC3339), `started_at` / `finished_at` (RFC3339; omitted until inspected or when never started/stopped), `restart_count`, `exit_code` (stopped containers, omitted when 0), `labels` (object; at most 100 keys, values truncated to 256 bytes), `ports` (array of `{ip, private_port, public_port, protocol}`) |
 | `discovered_service` | `<rule_id>:<instance>` | see 3.4 |
 
 ### 3.4 `discovered_service` body
@@ -252,6 +252,14 @@ server messages (e.g. `Access denied for user 'openlog'@'172.18.0.1' (using pass
 `command` is the argv0 basename of the service's main process (lowest PID whose parent is not part of the service; a setproctitle suffix `:` is removed),
 e.g. `redis-server` on Debian where the executable resolves to `redis-check-rdb`. It is a display name only; `instance` keeps the resolved executable. Omitted when the service has no process.
 
+`display_instance` is the user-facing instance for multi-call or symlinked executables: the main process's absolute argv0 (`/usr/bin/redis-server`) when
+`instance` is an executable path, its basename differs from the executable's (`/usr/bin/redis-check-rdb`) and `comm` equals it (first 15 bytes; so it is the
+executed name, not a setproctitle title). Omitted otherwise (container instances, relative argv0, same name). UIs show `command` as the name and
+`display_instance`, else `instance`, as the path. It is display only: `instance`, the item key, `openlog.discovery.instance` (§6) and integration
+joins keep the resolved executable, so existing entities (e.g. `redis:/usr/bin/redis-check-rdb` on Debian) keep their keys and metric series after an
+agent upgrade; older agents simply omit the field. Different invoked names of one binary matched by the same rule still share one instance, and
+`process` items stay keyed by the resolved executable.
+
 `log_paths` lists the log file globs declared by the rule (`logs:`); always present, possibly empty. They are tailed when `logs.auto_from_discovery` is true.
 
 `instance` groups matches, first available of: the service's executable path (the resolved `/proc/<pid>/exe` target; if unreadable, an absolute argv0), systemd unit name, container id, package key (`dpkg:redis-server`), listening port key.
@@ -308,7 +316,7 @@ Delivery is at-least-once: file offsets and the journal cursor are committed aft
 
 ### 4.1 Container logs (`logs.containers`)
 
-stdout/stderr of Docker containers, collected automatically (default on; requires `containers.enabled`). Each container's records are a
+stdout/stderr of Docker and CRI (containerd, CRI-O) containers, collected automatically (default on; requires `containers.enabled`). Each container's records are a
 separate `ResourceLogs` whose resource is the host resource of §1 plus the container identity attributes of §2 "Container metrics"
 (`container.id`, `container.name`, `container.image.name`, `container.image.tags`, `container.runtime`, `docker.compose.project`,
 `docker.compose.service`, `k8s.*`).
@@ -340,7 +348,22 @@ Positions: json-file logs use the file offsets of §4 (rotation `<id>-json.log` 
 the rest of `<id>-json.log.1` is read before the new file). Containers running at the first listing start at `logs.start_at`; containers
 seen later are read from their beginning, skipping messages older than the agent start (`start_at: end`) or already read. API streams
 store the Docker time of the last delivered record per container in the state file and resume after it. Per-container rate limit
-`rate_limit_lines` (backpressure: the file keeps unread data, the stream blocks). Multiline grouping is not applied to container logs.
+`rate_limit_lines` (backpressure: the file keeps unread data, the stream blocks).
+
+CRI containers (`container.runtime` `containerd` / `cri-o`, listed through `containers.cri_sockets`): the log file is the absolute
+`log_path` of `ContainerStatus` (kubelet: `/var/log/pods/<ns>_<pod>_<uid>/<container>/<restart>.log`, needs `CAP_DAC_READ_SEARCH` or root)
+in the CRI log format `<RFC3339Nano> <stdout|stderr> <F|P> <message>`; `P` (partial) lines are joined with the following lines of the
+same stream up to the `F` line, the time is that of the first part. There is no API fallback (`source: api` reads nothing for them);
+lines that are not in the format are sent as they are without `log.iostream`. A rotation while the agent was down is not followed
+(kubelet's `<n>.log.<timestamp>` files are not read).
+
+Multiline grouping: a container's lines are grouped into multiline records when a start pattern is set — the container label
+`openlog.logs.multiline=<regex>` (wins), else `multiline_start` of the first matching `include` item. As for files, a line matching the
+pattern starts a record and following non-matching lines are appended with `\n` (lines before the first start line are sent alone).
+Grouping is per stream (stdout and stderr separately), after Docker/CRI partial messages were joined; a record is sent when the next
+start line of its stream arrives, after 2 s without a new line of its stream, or when the log ends; at most `logs.max_line_bytes`
+(`openlog.log.truncated=true`). `time_unix_nano` is the time of the first line; the saved position (file offset / stream time) never
+passes a record that was not sent. An invalid label pattern disables grouping for that container (logged once).
 
 ## 5. Infra agent configuration keys (M1 additions)
 
@@ -350,6 +373,7 @@ store the Docker time of the last delivered record per container in the state fi
 | `process_metrics.top_n_cpu` / `top_n_memory` | `20` / `20` | top-N sizes; the union is reported |
 | `containers.enabled` | `true` | container inventory and metrics |
 | `containers.docker_socket` | `/var/run/docker.sock` | host path under `host.root_path`; `/run/docker.sock` is tried as a fallback |
+| `containers.cri_sockets` | `[/run/containerd/containerd.sock, /run/k3s/containerd/containerd.sock, /var/run/crio/crio.sock]` | CRI (`runtime.v1`) sockets of containerd / CRI-O, host paths under `host.root_path` (`/var/run/…` also tried as `/run/…`); containers of every answering socket are added to Docker's (union by id, Docker wins); CRI errors are ignored while Docker works; a socket without the CRI service is not asked again for 5 min; `[]` disables |
 | `logs.enabled` | `true` | master switch; nothing is read unless files, journald or auto discovery is configured |
 | `logs.files[]` | `[]` | `path` (absolute glob, `filepath.Match` syntax, no `**`), `exclude` (globs matched against the path and the basename), `multiline_start` (regex of a record's first line), `attributes` (map) |
 | `logs.auto_from_discovery` | `false` | tail `log_paths` of discovered services |
@@ -365,7 +389,7 @@ store the Docker time of the last delivered record per container in the state fi
 | `logs.containers.source` | `auto` | `auto`, `file` (json-file logs only) or `api` (Docker Engine API only) |
 | `logs.containers.max_containers` | `100` | containers read at once (1–1000) |
 | `logs.containers.rate_limit_lines` | `1000` | lines per second per container (0 = unlimited) |
-| `logs.containers.include[]` / `exclude[]` | `[]` | `{name, image, compose_project, compose_service, label}` globs; label `openlog.logs=false` always excludes |
+| `logs.containers.include[]` / `exclude[]` | `[]` | `{name, image, compose_project, compose_service, label}` globs; label `openlog.logs=false` always excludes; `include` items may set `multiline_start` (regex; label `openlog.logs.multiline` wins, §4.1) — an include list selects containers, so add `{name: "*"}` to keep collecting the others |
 | `logs.containers.docker_containers_dir` | `/var/lib/docker/containers` | json-file logs without Docker API access (host path under `host.root_path`) |
 
 ## 6. Integrations (infra agent, M2, D-031)
@@ -419,12 +443,13 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 | `integrations.max_concurrent` / `max_instances` | `4` / `32` | concurrency limit; instance limit (later instances: `not_available`) |
 | `integrations.<id>.enabled` | `true` | per integration (`nginx`, `redis`, `mysql`, `postgresql`, `docker`) |
 | `integrations.<id>.interval` | — | overrides the default interval |
-| `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql) or the `http(s)://…` stub_status URL (nginx) |
+| `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql) or the `http(s)://…` status URL (nginx: stub_status page, NGINX Plus API `/api/` or `/api/<n>`, or VTS JSON page; the format is detected, §6.3) |
 | `integrations.<id>.username` / `password` | — | redis, mysql, postgresql. `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
 | `integrations.<id>.tls` | — | `{enabled, insecure_skip_verify, ca_file, server_name}`; PostgreSQL without `tls` uses `sslmode=prefer` over TCP |
 | `integrations.postgresql.database` | `postgres` | initial database |
 | `integrations.postgresql.databases` / `exclude_databases` | `[]` | database allow/deny lists (default: every non-template database with `datallowconn`, max 32) |
 | `integrations.{mysql,postgresql}.top_n_tables` | `50` / `20` | cardinality guard: largest tables/indexes (PostgreSQL, per database) or tables/indexes with most io wait time (MySQL) |
+| `integrations.postgresql.query_stats` | `{enabled: false, top_n: 20, min_calls: 0}` | opt-in `pg_stat_statements` top statements (§6.5): `top_n` 0..100 (0 = 20) by total execution time, `min_calls` skips statements with fewer calls. `config.yaml` only (not part of remote integration config) |
 | `integrations.<id>.instances[]` | `[]` | overrides for services matching **all** given `match` fields: `port` (listening, private or published), `endpoint` (derived candidate), `unit`, `container` (name or ≥ 12-char id prefix), `instance`; plus any setting above and `enabled` |
 | `integrations.remote_config` | `true` | apply integration settings configured in the openlog UI (delivered by agent sync, [releases-updates.md](releases-updates.md) §3, D-039). `false`: ignored; the agent reports revision `disabled` |
 
@@ -440,14 +465,20 @@ next start before the backend answers. Changes apply without a restart: instance
 changed are restarted. A hard cap of 20 000 data points per collection applies;
 dropped points turn the collection partial (`error`: `cardinality guard: N data points dropped`).
 
-### 6.3 nginx (`stub_status`)
+### 6.3 nginx (`stub_status`, NGINX Plus API, VTS)
 
-Source: `ngx_http_stub_status_module` page. With `auto_enable: true` (nginx rule) and no configured `endpoint`, the paths `/nginx_status`,
-`/stub_status`, `/basic_status`, `/status`, `/server_status` are probed on every candidate endpoint over `http`, then `https` (certificates are
-not verified only for loopback endpoints); the first `200` page that parses as `stub_status` is used. The found URL is remembered per instance and
-tried first when the instance re-probes after a failure (with the instance backoff). When no candidate serves the page the status is
-`needs_configuration` with a hint saying that stub_status is not enabled and showing the nginx `location` snippet; the agent never edits the nginx
-configuration. No credentials. Resource: §6.1 only.
+Sources: the `ngx_http_stub_status_module` page, the NGINX Plus API (`api` directive) or the nginx-module-vts JSON page. With `auto_enable: true`
+(nginx rule) and no configured `endpoint`, these paths are probed on every candidate endpoint over `http`, then `https` (certificates are not
+verified only for loopback endpoints), in this order: `/api/` (Plus), `/status/format/json`, `/vts/format/json`, `/vts_status/format/json` (VTS),
+`/nginx_status`, `/stub_status`, `/basic_status`, `/status`, `/server_status` (stub_status). The first `200` page whose body is detected as one of the
+formats is used: a JSON array of API versions (Plus root, the highest version is used) or of endpoint names containing `connections` and `http`
+(versioned Plus root, e.g. a configured `…/api/9`) — accepted only when `<api>/connections` answers; a JSON object with `connections` and
+`serverZones` (VTS); a `stub_status` text page. A configured `endpoint` URL is detected the same way. The found URL is remembered per instance and
+tried first when the instance re-probes after a failure (with the instance backoff). When no candidate serves a page the status is
+`needs_configuration` with a hint saying that stub_status is not enabled and showing the nginx `location` snippets (stub_status, Plus `api`, VTS);
+the agent never edits the nginx configuration. No credentials.
+
+Resource attribute (openlog extension): `nginx.status.source` = `stub_status`, `plus` or `vts`.
 
 | Metric | Type | Unit | Attributes |
 |---|---|---|---|
@@ -455,6 +486,26 @@ configuration. No credentials. Resource: §6.1 only.
 | `nginx.connections_accepted` | Sum, cumulative, monotonic, int | `{connections}` | — |
 | `nginx.connections_handled` | Sum, cumulative, monotonic, int | `{connections}` | — |
 | `nginx.connections_current` | Sum, cumulative, non-monotonic, int | `{connections}` | `state` = `active`, `reading`, `writing`, `waiting` |
+
+Core metrics by source: stub_status and VTS (`connections` object) provide all of the above. Plus: `nginx.requests` = `http/requests.total`,
+`connections_accepted` = `connections.accepted`, `connections_handled` = `accepted − dropped`, `connections_current` only `state` = `active`
+(`active + idle`, as stub_status counts idle keep-alive connections) and `waiting` (`idle`); Plus has no reading/writing states.
+
+Zone and upstream metrics (Plus and VTS only; openlog extensions named after the NGINX agent's `nginxplusreceiver`, `metadata.yaml` on `v3`,
+2026-09-14, including its units). Plus reads `/api/<n>/connections`, `/http/requests` (required), `/http/server_zones` and `/http/upstreams`
+(a failure of the last two makes the collection partial). VTS: `serverZones` without the `*` aggregate zone, `upstreamZones` (including
+`::nogroups`). Cardinality: the 50 server zones and the 100 upstream peers with the most requests.
+
+| Metric | Type | Unit | Attributes | Sources |
+|---|---|---|---|---|
+| `nginx.http.requests` | Sum, cumulative, monotonic, int | `requests` | `nginx.zone.name`, `nginx.zone.type` = `SERVER` | Plus (`requests`), VTS (`requestCounter`) |
+| `nginx.http.response.status` | Sum, cumulative, monotonic, int | `responses` | `nginx.status_range` = `1xx`…`5xx`, `nginx.zone.name`, `nginx.zone.type` | Plus, VTS (`responses`) |
+| `nginx.http.upstream.peer.requests` | Sum, cumulative, monotonic, int | `requests` | `nginx.peer.address`, `nginx.peer.name`, `nginx.upstream.name`, `nginx.zone.name` (Plus only) | Plus, VTS (`server` is name and address) |
+| `nginx.http.upstream.peer.responses` | Sum, cumulative, monotonic, int | `responses` | peer attributes + `nginx.status_range` | Plus, VTS |
+| `nginx.http.upstream.peer.fails` | Sum, cumulative, monotonic, int | `attempts` | peer attributes | Plus |
+| `nginx.http.upstream.peer.state` | Gauge, int | `is_deployed` | peer attributes + `nginx.peer.state` = `UP`, `DOWN`, `DRAINING`, `UNAVAILABLE`, `UNHEALTHY`, `CHECKING` (value 1 for the current state) | Plus |
+
+5xx rate alert: `rate(nginx.http.response.status{nginx.status_range="5xx"})` / `rate(sum by zone of nginx.http.response.status)`.
 
 ### 6.4 Redis (`INFO`) and MySQL/MariaDB
 
@@ -493,11 +544,31 @@ Resource attribute: `redis.version` (`redis_version`, `unknown` when missing).
 | `redis.slaves.connected` | Sum, non-monotonic, int | `{replica}` | — | `connected_slaves` |
 | `redis.uptime` | Sum, monotonic, int | `s` | — | `uptime_in_seconds` |
 
+**Redis Cluster** — when `INFO` reports `cluster_enabled:1` the agent also runs `CLUSTER INFO` and `CLUSTER NODES` (ACL: `+cluster|info +cluster|nodes`;
+without them the INFO metrics are kept and the collection is partial with a hint). Every cluster node is its own instance, so the INFO metrics above
+are per node. Resource attribute: `redis.cluster.node.id` (id of the `myself` line of `CLUSTER NODES`). Names, types and units are those of
+redisreceiver's `metadata.yaml` (all *opt-in in OTel*; the receiver itself only fills `redis.cluster.cluster_enabled`). Not emitted:
+`redis.cluster.uptime` / `redis.cluster.node.uptime` (defined with unit `s` but meaning the cluster/node epoch).
+
+| Metric | Type | Unit | Attributes | Field |
+|---|---|---|---|---|
+| `redis.cluster.cluster_enabled` | Gauge, int | `1` | — | INFO `cluster_enabled` (every server, `0` or `1`) |
+| `redis.cluster.state` | Gauge, int | `{state}` | `cluster_state` = `ok` (value 1), `fail` (value 0) | `cluster_state` |
+| `redis.cluster.slots_assigned` / `slots_ok` / `slots_pfail` / `slots_fail` | Gauge, int | `{slot}` | — | `cluster_slots_assigned`, `_ok`, `_pfail`, `_fail` |
+| `redis.cluster.known_nodes` | Gauge, int | `{node}` | — | `cluster_known_nodes` |
+| `redis.cluster.node.count` | Gauge, int | `{node}` | — | `cluster_size` (masters serving slots) |
+| `redis.cluster.stats_messages_sent` / `stats_messages_received` | Sum, monotonic, int | `{message}` | — | `cluster_stats_messages_sent`, `_received` |
+| `redis.cluster.links_buffer_limit_exceeded.count` | Sum, monotonic, int | `{count}` | — | `total_cluster_links_buffer_limit_exceeded` |
+
 **MySQL / MariaDB** (rules `mysql` and `mariadb`, integration id `mysql`) — native protocol, `mysql_native_password` and
 `caching_sha2_password` (RSA key exchange without TLS). Queries: `SHOW GLOBAL STATUS`, `SELECT @@innodb_buffer_pool_size`,
 top-N `performance_schema.table_io_waits_summary_by_table` / `…_by_index_usage` (ordered by `SUM_TIMER_WAIT`), `SHOW REPLICA STATUS`
 (`SHOW SLAVE STATUS` on older servers). Required privileges: `PROCESS`, `REPLICATION CLIENT` (MariaDB ≥ 10.5.9: `REPLICA MONITOR` or `SLAVE MONITOR`
-for replica status), `SELECT ON performance_schema.*`. Missing performance_schema/replica privileges make a collection partial.
+for replica status), `SELECT ON performance_schema.*`. Missing performance_schema/replica privileges make a collection partial, as does
+`performance_schema = OFF` (the MariaDB default; the io wait tables exist but stay empty) with a hint to enable it. io waits: schemas `mysql`,
+`performance_schema`, `information_schema`, `sys` excluded; ties ordered by schema, table (, index); counts from `COUNT_*`, times
+`FLOOR(SUM_TIMER_*/1000)` (picoseconds → ns) per operation. mysqlreceiver's index query selects `FETCH, INSERT, UPDATE, DELETE` but scans them as
+`delete, fetch, insert, update`; openlog emits the correct operation labels.
 Resource attributes: `mysql.instance.endpoint` (endpoint display form, e.g. `127.0.0.1:3306`, `unix:/run/mysqld/mysqld.sock`);
 `service.instance.id` = UUIDv5 (namespace `4d63009a-8d0f-11ee-aad7-4c796ed8e320`) of the §6.1 `host:port` value, as mysqlreceiver.
 
@@ -553,6 +624,7 @@ per database, per table and per index with these additional attributes:
 | database | `postgresql.database.name` |
 | table | `postgresql.database.name`, `postgresql.table.name` = `<schema>.<table>` |
 | index | `postgresql.database.name`, `postgresql.table.name` = `<table>` (no schema, as the receiver), `postgresql.index.name` |
+| query (opt-in `query_stats`) | `postgresql.database.name`, `postgresql.queryid`, `postgresql.rolname`, `db.query.text` |
 
 | Metric | Resource | Type | Unit | Attributes |
 |---|---|---|---|---|
@@ -582,10 +654,170 @@ per database, per table and per index with these additional attributes:
 
 Cardinality: at most 32 databases, `top_n_tables` (default 20) largest tables and indexes per database, 100 lock rows per database.
 
+**Top statements** (`integrations.postgresql.query_stats.enabled: true`, openlog extension). postgresqlreceiver reports `pg_stat_statements` only as
+`db.server.top_query` log events; openlog emits metrics and reuses that event's attribute keys. Queried on the `database` connection: the
+extension must be installed there (`SELECT extversion FROM pg_extension`), the server needs `shared_preload_libraries = 'pg_stat_statements'`, and
+statements of other roles need `pg_read_all_stats` (included in `pg_monitor`). The top `top_n` (default 20, max 100) rows of
+`pg_stat_statements` by `total_exec_time` (`total_time` for extension versions < 1.8, PostgreSQL < 13) with `calls ≥ max(1, min_calls)` of the
+collected databases; one resource per `queryid` + database + role (a duplicate from `pg_stat_statements.track = all` keeps the first row).
+`db.query.text` is the statement as normalized by PostgreSQL (`$1` placeholders) with whitespace collapsed, string literals (`'…'`, `E'…'`,
+`$$…$$`) replaced by `'?'`/`$$?$$` (utility statements such as `CREATE ROLE … PASSWORD '…'` are not normalized by PostgreSQL) and truncated to
+1024 bytes. A missing extension, `shared_preload_libraries` error (SQLSTATE 55000), permission error or rows shown as `<insufficient privilege>`
+make the collection partial with a hint (`CREATE EXTENSION pg_stat_statements`, `shared_preload_libraries`, `pg_read_all_stats`); other metrics are
+unaffected.
+
+| Metric | Resource | Type | Unit | Attributes | Column |
+|---|---|---|---|---|---|
+| `postgresql.query.calls` | query | Sum, monotonic, int | `{call}` | — | `calls` |
+| `postgresql.query.rows` | query | Sum, monotonic, int | `{row}` | — | `rows` |
+| `postgresql.query.total_exec_time` | query | Sum, monotonic, double | `ms` | — | `total_exec_time` (mean = Δtotal_exec_time / Δcalls) |
+| `postgresql.query.shared_blocks` | query | Sum, monotonic, int | `{block}` | `source` = `hit`, `read` | `shared_blks_hit`, `shared_blks_read` |
+
 ### 6.6 Docker Engine
 
 Integration id `docker` (rule `docker`) sends **no metrics**: the OTel `docker_stats` receiver defines only `container.*` metrics, which the agent
 already sends from cgroup v2 (§2 container metrics), and there are no OTel engine-level `docker.*` names. The integration reports the Docker Engine
 API state for the service card: `enabled` when `GET /containers/json` succeeds on `containers.docker_socket`, `needs_configuration` on permission
 denied (hint: docker group membership, which is root-equivalent), `error` when the socket is missing or the API fails, `not_available` when
-`containers.enabled` is false.
+`containers.enabled` is false. The state reflects the Docker Engine API only: on hosts where only a CRI runtime (containerd, CRI-O) answers,
+container listing succeeds but the integration reports `error` (`docker socket not found`).
+
+## 7. Kubernetes (infra agent, M4, D-070, D-071)
+
+The infra agent runs in Kubernetes from the `deploy/helm/openlog-agent` chart in two modes ([operations/kubernetes.md](../operations/kubernetes.md)):
+**node** (DaemonSet, one per node: host, container, kubelet metrics and container logs) and **cluster** (one leader-elected
+Deployment replica: kube-state metrics and Kubernetes events). Object identity is sent as **data point / log record attributes**
+on one resource per agent, like container metrics (§2), so every Kubernetes series of a node lands on the node's shard and alert
+rules filter it with `attr.*`. Names follow the OTel `kubeletstats` and `k8s_cluster` receivers; openlog-only names use `openlog.k8s.`.
+
+### 7.1 Detection and resource
+
+Kubernetes mode is on when `kubernetes.enabled` is `true`, or `auto` (default) and `KUBERNETES_SERVICE_HOST` is set. The API server is
+reached in-cluster (`https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT`, ServiceAccount token and CA).
+
+| Attribute | Node mode (host resource, §1) | Cluster mode resource |
+|---|---|---|
+| `k8s.cluster.name` | `kubernetes.cluster_name` (chart `clusterName`) | same |
+| `k8s.cluster.uid` | uid of the `kube-system` namespace (omitted when it cannot be read) | same (required: the cluster agent does not start without it) |
+| `k8s.node.name` | `kubernetes.node_name` (downward API `spec.nodeName`) | — |
+| `openlog.entity.type` | `host` | `k8s_cluster` |
+| `openlog.agent.mode` | `node` | `cluster` |
+| `host.id`, `host.name`, OS attributes | as §1 | **not sent** (`host_id` = `''`; the cluster agent writes no host row) |
+| `openlog.agent.name`, `openlog.agent.version` | as §1 | same |
+
+### 7.2 Pod metadata on container metrics and logs (node mode)
+
+The node agent watches the pods of its node (`GET /api/v1/pods?fieldSelector=spec.nodeName=<node>`, list + watch, relist every
+`kubernetes.pod_resync` (5m) and after `410 Gone`). Containers listed from the CRI (`io.kubernetes.*` labels) or Docker are matched by
+`container.id` (pod `status.containerStatuses[].containerID`) and else by pod uid + container name. These attributes are added to every
+container metric data point (§2) and to the resource of container log records (§4.1), when known:
+
+| Attribute | Source |
+|---|---|
+| `k8s.pod.name`, `k8s.namespace.name`, `k8s.container.name` | CRI labels `io.kubernetes.pod.name`, `io.kubernetes.pod.namespace`, `io.kubernetes.container.name` (now for containerd and CRI-O too), else the pod |
+| `k8s.pod.uid` | CRI label `io.kubernetes.pod.uid`, else the pod |
+| `k8s.node.name`, `k8s.cluster.name` | agent configuration |
+| `k8s.replicaset.name`, `k8s.deployment.name` | controller owner `ReplicaSet`; the deployment is the ReplicaSet name without the `-<pod-template-hash>` suffix |
+| `k8s.statefulset.name`, `k8s.daemonset.name`, `k8s.job.name` | controller owner of that kind |
+| `k8s.cronjob.name` | owner `Job` whose name is `<cronjob>-<digits>` (CronJob-created jobs) |
+| `openlog.k8s.workload.kind`, `openlog.k8s.workload.name` | top-level owner: `Deployment`, `StatefulSet`, `DaemonSet`, `CronJob`, `Job`, `ReplicaSet` (no deployment), or `Pod` (bare pod, name = pod name) |
+| `k8s.pod.label.<key>` | pod labels in `kubernetes.label_allowlist` (default `app`, `app.kubernetes.io/name`, `app.kubernetes.io/instance`, `app.kubernetes.io/version`, `app.kubernetes.io/component`) |
+
+Log files of CRI containers are `/var/log/pods/<namespace>_<pod>_<pod-uid>/<container>/<restart>.log` (CRI log format, §4.1); when the
+runtime metadata is missing the agent takes namespace, pod name, pod uid and container name from this path.
+
+### 7.3 Kubelet metrics (node mode)
+
+`GET https://<kubernetes.kubelet.endpoint>/stats/summary` (default `https://$OPENLOG_K8S_HOST_IP:10250`, ServiceAccount bearer token,
+RBAC `nodes/stats get`) every metrics interval. Attributes of pod metrics: `k8s.pod.name`, `k8s.pod.uid`, `k8s.namespace.name`,
+`k8s.node.name` plus the owner attributes of §7.2; container metrics add `k8s.container.name` and `container.id` (from the pod watch);
+node metrics carry `k8s.node.name`. Cumulative counters carry no start time (like container metrics, §2).
+
+| Metric | Type | Unit | Summary field |
+|---|---|---|---|
+| `k8s.node.cpu.usage` | Gauge | `{cpu}` | `node.cpu.usageNanoCores` / 1e9 |
+| `k8s.node.cpu.time` | Sum, cumulative, monotonic | `s` | `node.cpu.usageCoreNanoSeconds` / 1e9 |
+| `k8s.node.memory.usage` · `k8s.node.memory.working_set` · `k8s.node.memory.rss` · `k8s.node.memory.available` | Gauge | `By` | `node.memory.*` |
+| `k8s.node.network.io` | Sum, cumulative, monotonic | `By` | `node.network.interfaces[]` rx/tx summed; `network.io.direction` |
+| `k8s.node.filesystem.usage` · `.capacity` · `.available` | Gauge | `By` | `node.fs` |
+| `k8s.pod.cpu.usage` | Gauge | `{cpu}` | `pods[].cpu.usageNanoCores` / 1e9 |
+| `k8s.pod.cpu.time` | Sum, cumulative, monotonic | `s` | `pods[].cpu.usageCoreNanoSeconds` / 1e9 |
+| `k8s.pod.memory.usage` · `k8s.pod.memory.working_set` · `k8s.pod.memory.rss` | Gauge | `By` | `pods[].memory.*` |
+| `k8s.pod.network.io` | Sum, cumulative, monotonic | `By` | `pods[].network.interfaces[]` summed; `network.io.direction` = `receive`,`transmit` |
+| `k8s.pod.network.errors` | Sum, cumulative, monotonic | `{error}` | rx/tx errors; `network.io.direction` |
+| `k8s.pod.filesystem.usage` · `.capacity` · `.available` | Gauge | `By` | `pods[].ephemeral-storage` |
+| `k8s.container.cpu.usage` | Gauge | `{cpu}` | `pods[].containers[].cpu.usageNanoCores` / 1e9 |
+| `k8s.container.cpu.time` | Sum, cumulative, monotonic | `s` | `containers[].cpu.usageCoreNanoSeconds` / 1e9 |
+| `k8s.container.memory.usage` · `k8s.container.memory.working_set` · `k8s.container.memory.rss` | Gauge | `By` | `containers[].memory.*` |
+| `k8s.container.filesystem.usage` | Gauge | `By` | `containers[].rootfs.usedBytes` + `logs.usedBytes` |
+
+The OTel `kubeletstats` receiver names the container metrics `container.*`; openlog uses `k8s.container.*` because `container.*` names are
+already the cgroup metrics of §2 (both are sent; they differ slightly: cgroup `container.memory.usage` excludes `inactive_file`, kubelet
+`working_set` excludes it too but `usage` does not).
+
+### 7.4 Cluster metrics (cluster mode)
+
+Listed every `kubernetes.cluster.interval` (30s) with `resourceVersion=0` (served from the API server watch cache), only by the Lease holder
+(`coordination.k8s.io` Lease `kubernetes.cluster.lease_name` in the agent namespace, 15s lease, renew every 5s). Attribute sets:
+*pod* = `k8s.namespace.name`, `k8s.pod.name`, `k8s.pod.uid`, `k8s.node.name` + owner attributes (§7.2, resolved exactly through ReplicaSets
+and Jobs); *container* = *pod* + `k8s.container.name`, `container.id` (runtime prefix removed; empty before the container started),
+`container.image.name`, `container.image.tags`; *workload* = `k8s.namespace.name`, `openlog.k8s.workload.kind`, `openlog.k8s.workload.name`,
+`openlog.k8s.workload.uid` + the kind's name/uid attribute (`k8s.deployment.name`/`k8s.deployment.uid`, …).
+
+| Metric | Type | Unit | Attributes / value |
+|---|---|---|---|
+| `openlog.k8s.cluster.status` | Gauge | `1` | value 1; `openlog.k8s.cluster.version` (API server `gitVersion`), `openlog.k8s.cluster.nodes`, `openlog.k8s.cluster.namespaces` (counts as strings) |
+| `openlog.k8s.node.status` | Gauge | `1` | value 1; `k8s.node.name`, `k8s.node.uid`, `openlog.k8s.node.ready` (`true`,`false`,`unknown`), `openlog.k8s.node.unschedulable` (`true`,`false`), `openlog.k8s.node.roles` (comma-separated `node-role.kubernetes.io/*`), `openlog.k8s.node.kubelet_version`, `openlog.k8s.node.os_image`, `openlog.k8s.node.container_runtime`, `openlog.k8s.node.internal_ip`, `openlog.k8s.node.created_at` (RFC3339) |
+| `k8s.node.condition` | Gauge | `1` | `k8s.node.name`, `condition` (`Ready`, `MemoryPressure`, `DiskPressure`, `PIDPressure`, `NetworkUnavailable`); 1 true, 0 false, -1 unknown |
+| `k8s.node.allocatable_cpu` · `k8s.node.allocatable_memory` · `k8s.node.allocatable_pods` · `k8s.node.allocatable_ephemeral_storage` | Gauge | `{cpu}` · `By` · `{pod}` · `By` | `k8s.node.name` |
+| `openlog.k8s.pod.status` | Gauge | `1` | value 1; *pod* + `openlog.k8s.pod.phase` (`Pending`,`Running`,`Succeeded`,`Failed`,`Unknown`), `openlog.k8s.pod.ready` (`true`,`false`), `openlog.k8s.pod.reason` (first of: pod `status.reason` e.g. `Evicted`, a container waiting reason e.g. `CrashLoopBackOff`/`ImagePullBackOff`, a terminated reason e.g. `OOMKilled`/`Error`; else empty), `openlog.k8s.pod.restarts` (sum over containers), `openlog.k8s.pod.ip`, `openlog.k8s.pod.qos_class`, `openlog.k8s.pod.created_at`, `openlog.k8s.pod.started_at`, `openlog.k8s.pod.containers` (JSON array `[{"name","container_id","image","ready","restarts","state","reason"}]`, init containers excluded, at most 4 KiB) |
+| `k8s.pod.phase` | Gauge | `1` | *pod*; 1 Pending, 2 Running, 3 Succeeded, 4 Failed, 5 Unknown |
+| `k8s.container.restarts` | Gauge | `{restart}` | *container*; `restartCount` |
+| `k8s.container.ready` | Gauge | `1` | *container*; 1 ready, 0 not |
+| `k8s.container.cpu_request` · `k8s.container.cpu_limit` | Gauge | `{cpu}` | *container*; only when set |
+| `k8s.container.memory_request` · `k8s.container.memory_limit` | Gauge | `By` | *container*; only when set |
+| `openlog.k8s.workload.status` | Gauge | `1` | value 1; *workload* + `openlog.k8s.workload.desired`, `.ready`, `.available`, `.updated` (integers as strings; see kinds below), `openlog.k8s.workload.created_at` |
+| `openlog.k8s.workload.unavailable` | Gauge | `{pod}` | *workload*; max(desired − available, 0) (Jobs: failed pods; CronJobs: 0) |
+| `k8s.deployment.desired` · `k8s.deployment.available` | Gauge | `{pod}` | *workload* (Deployment) |
+| `k8s.statefulset.desired_pods` · `.current_pods` · `.ready_pods` · `.updated_pods` | Gauge | `{pod}` | *workload* (StatefulSet) |
+| `k8s.daemonset.desired_scheduled_nodes` · `.current_scheduled_nodes` · `.ready_nodes` · `.misscheduled_nodes` | Gauge | `{node}` | *workload* (DaemonSet) |
+| `k8s.job.active_pods` · `.failed_pods` · `.successful_pods` · `.desired_successful_pods` · `.max_parallel_pods` | Gauge | `{pod}` | *workload* (Job; desired/max only when set) |
+| `k8s.cronjob.active_jobs` | Gauge | `{job}` | *workload* (CronJob) |
+| `k8s.hpa.current_replicas` · `.desired_replicas` · `.min_replicas` · `.max_replicas` | Gauge | `{pod}` | `k8s.namespace.name`, `k8s.hpa.name`, `k8s.hpa.uid`, `k8s.hpa.scaletargetref.kind`, `k8s.hpa.scaletargetref.name` (`autoscaling/v2`) |
+| `k8s.namespace.phase` | Gauge | `1` | `k8s.namespace.name`; 1 Active, 0 Terminating |
+| `k8s.resource_quota.hard_limit` · `k8s.resource_quota.used` | Gauge | `{resource}` | `k8s.namespace.name`, `k8s.resource_quota.name`, `k8s.resource_quota.uid`, `resource` (e.g. `limits.cpu`; quantities in cores / bytes / counts) |
+
+Workload status values: Deployment desired = `spec.replicas`, ready = `status.readyReplicas`, available = `status.availableReplicas`,
+updated = `status.updatedReplicas`; StatefulSet desired = `spec.replicas`, ready = `readyReplicas`, available = `availableReplicas`,
+updated = `updatedReplicas`; DaemonSet desired = `desiredNumberScheduled`, ready = `numberReady`, available = `numberAvailable`,
+updated = `updatedNumberScheduled`; Job desired = `spec.completions` (1 when unset), ready = `status.ready`, available = `succeeded`,
+updated = `failed`; CronJob desired = 0, ready = active jobs, available = 0, updated = 0 (`openlog.k8s.workload.suspended` = `true`/`false`).
+ReplicaSets owned by a Deployment and Jobs owned by a CronJob are not reported as workloads.
+
+At most `kubernetes.cluster.max_pods` (10000) pods and 5000 workloads per interval are reported; the agent logs a warning when it truncates.
+
+### 7.5 Kubernetes events (cluster mode, OTLP logs)
+
+The leader watches `GET /api/v1/events` (core/v1, all namespaces; relist on `410 Gone`) and sends each new or updated event
+(by uid and `count`/`series.count`) once. Events older than 5 minutes at startup are skipped. Log record: `event_name` = `k8s.event`,
+`body` = `message`, timestamp = `series.lastObservedTime` → `lastTimestamp` → `eventTime` → `firstTimestamp`, severity `WARN` (13) for
+type `Warning`, else `INFO` (9). Resource = the cluster resource of §7.1.
+
+| Log attribute | Source |
+|---|---|
+| `k8s.event.name`, `k8s.event.uid` | event metadata |
+| `k8s.event.reason`, `k8s.event.type` (`Normal`,`Warning`), `k8s.event.action`, `k8s.event.count` (int) | event |
+| `k8s.event.source` | `source.component` / `reportingController` |
+| `k8s.namespace.name` | `involvedObject.namespace` (else event namespace) |
+| `k8s.object.kind`, `k8s.object.name`, `k8s.object.uid`, `k8s.object.fieldpath` | `involvedObject` |
+| `k8s.pod.name`, `k8s.pod.uid` | only for `Pod` objects |
+| `k8s.node.name` | `Node` objects; for `Pod` objects the `source.host` when set |
+
+### 7.6 Backend entities
+
+Materialized views on `metrics_local` (schema 0040–0044, like `containers_mv`) keep entity rows per tenant: `k8s_clusters` (from
+`openlog.k8s.cluster.status`, key `k8s.cluster.uid`), `k8s_nodes` (`openlog.k8s.node.status`), `k8s_workloads`
+(`openlog.k8s.workload.status`) and `k8s_pods` (`openlog.k8s.pod.status`), 30 days after the last point, plus bloom filter skip indexes
+on `logs_local` for `resource_attributes['k8s.pod.uid']` and `attributes['k8s.object.uid']`. A node links to its host through the host
+resource attributes `k8s.cluster.name` + `k8s.node.name`; a pod links to containers (`containers.container_id`) through
+`openlog.k8s.pod.containers[].container_id` and to APM services through `apm_service_containers` (API: [api.md](api.md) "Kubernetes").

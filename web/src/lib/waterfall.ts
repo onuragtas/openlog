@@ -108,6 +108,76 @@ export function tickCountForWidth(widthPx: number, minLabelPx = 80, max = 4): nu
   return Math.max(1, Math.min(max, Math.floor(widthPx / minLabelPx)));
 }
 
+/** Tree structure of layout rows (DFS pre-order), for collapsing subtrees and ARIA tree attributes. */
+export interface WaterfallTree {
+  /** row index of each row's parent, -1 for roots */
+  parent: Int32Array;
+  /** 1-based position among siblings */
+  posInSet: Int32Array;
+  /** number of siblings, the row included */
+  setSize: Int32Array;
+}
+
+export function waterfallTree(rows: WaterfallRow[]): WaterfallTree {
+  const n = rows.length;
+  const parent = new Int32Array(n).fill(-1);
+  const posInSet = new Int32Array(n);
+  const setSize = new Int32Array(n);
+  const lastAtDepth: number[] = [];
+  const childrenSeen = new Map<number, number>();
+  for (let i = 0; i < n; i++) {
+    const d = rows[i]!.depth;
+    const p = d > 0 ? (lastAtDepth[d - 1] ?? -1) : -1;
+    parent[i] = p;
+    lastAtDepth[d] = i;
+    lastAtDepth.length = d + 1;
+    const k = (childrenSeen.get(p) ?? 0) + 1;
+    childrenSeen.set(p, k);
+    posInSet[i] = k;
+  }
+  for (let i = 0; i < n; i++) setSize[i] = childrenSeen.get(parent[i]!)!;
+  return { parent, posInSet, setSize };
+}
+
+/** Indexes of the rows not hidden by a collapsed ancestor (`collapsed` holds span ids). */
+export function visibleRowIndexes(rows: WaterfallRow[], collapsed: ReadonlySet<string>): number[] {
+  const out: number[] = [];
+  let hideBelow = Infinity;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    if (r.depth > hideBelow) continue;
+    hideBelow = Infinity;
+    out.push(i);
+    if (r.childCount > 0 && collapsed.has(r.span.span_id)) hideBelow = r.depth;
+  }
+  return out;
+}
+
+/** Indexes of rows whose span name, service or span id contains `query` (case-insensitive); none for a blank query. */
+export function matchRowIndexes(rows: WaterfallRow[], query: string): number[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const out: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const s = rows[i]!.span;
+    if (s.name.toLowerCase().includes(q) || s.service_name.toLowerCase().includes(q) || s.span_id.toLowerCase().includes(q)) out.push(i);
+  }
+  return out;
+}
+
+/** `collapsed` without the ancestors of row `index` (the same set when none of them was collapsed). */
+export function expandAncestors(rows: WaterfallRow[], tree: WaterfallTree, index: number, collapsed: ReadonlySet<string>): ReadonlySet<string> {
+  let next: Set<string> | null = null;
+  for (let p = tree.parent[index] ?? -1; p >= 0; p = tree.parent[p]!) {
+    const id = rows[p]!.span.span_id;
+    if (collapsed.has(id)) {
+      next ??= new Set(collapsed);
+      next.delete(id);
+    }
+  }
+  return next ?? collapsed;
+}
+
 /** Label anchor of tick `i` of `n`: the first starts at its tick, the last ends at it, the rest are centered. */
 export function tickAnchor(i: number, n: number): "start" | "middle" | "end" {
   if (i === 0) return "start";

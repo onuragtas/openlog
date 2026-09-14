@@ -1,0 +1,131 @@
+{{- $fullname := include "openlog-agent.fullname" . }}
+{{- if .Values.serviceAccount.create }}
+{{- range $component := list "node" "cluster" }}
+{{- if (index $.Values $component).enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ printf "%s-%s" $fullname $component }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "openlog-agent.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+  {{- with $.Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: {{ $.Values.serviceAccount.automountServiceAccountToken }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.rbac.create }}
+{{- if .Values.node.enabled }}
+---
+# Node agent: read the pods of its node (pod metadata), kubelet stats, and the kube-system namespace uid.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-%s-node" .Release.Namespace $fullname }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes/stats"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["kube-system"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-%s-node" .Release.Namespace $fullname }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-%s-node" .Release.Namespace $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ printf "%s-node" $fullname }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.cluster.enabled }}
+---
+# Cluster collector: list (from the watch cache) the objects of the kube-state metrics and watch events. Read-only;
+# no access to Secrets or ConfigMaps.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-%s-cluster" .Release.Namespace $fullname }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "namespaces", "resourcequotas", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-%s-cluster" .Release.Namespace $fullname }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-%s-cluster" .Release.Namespace $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ printf "%s-cluster" $fullname }}
+    namespace: {{ .Release.Namespace }}
+---
+# Leader election Lease, only in the release namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-leader-election" $fullname }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: [{{ printf "%s-cluster" $fullname | quote }}]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-leader-election" $fullname }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-leader-election" $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ printf "%s-cluster" $fullname }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

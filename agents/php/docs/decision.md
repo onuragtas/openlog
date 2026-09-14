@@ -405,3 +405,11 @@ geri dönüş (§6.3) uçtan uca test edilmiş.
 8. **Laravel 11:** Brief Laravel 11 istiyordu, spike Laravel 12 ile yapıldı (11.x Packagist güvenlik uyarılarıyla
    kurulamıyor). Laravel 11 desteği ürün hedefi mi, yoksa desteklenen framework sürümleri upstream destek takvimini mi
    izlemeli?
+
+## 9. Sonraki durum (2026-09-14)
+
+Karar A yönünde verildi (D-035–D-038) ve extension faz 1 tamamlandı. Bu belgedeki açık başlıkların güncel hali:
+ek yük ölçümü ve Observer API'nin çağrı başına motor maliyeti D-057 (`agents/php/ext/README.md` "Overhead",
+`bench/ext/micro`, `bench/ext/http`); Octane/RoadRunner/Swoole D-058; ön-derlenmiş `.so` matrisi, paketler ve infra
+agent üzerinden filo kurulumu (§6.3, 8. soru 3 ve 5) D-059 ve `docs/contracts/php-agent.md` §7. ASan/UBSan phpt
+koşusu, `ol_text.c` fuzz hedefi ve soak testi `agents/php/ext/README.md` geliştirme tablosunda.

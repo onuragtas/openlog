@@ -128,8 +128,9 @@ type syncRequest struct {
 		Error       string `json:"error"`
 		ChangedAt   string `json:"changed_at"`
 	} `json:"update"`
-	ConfigHash                 string `json:"config_hash"`
-	IntegrationsConfigRevision string `json:"integrations_config_revision"`
+	ConfigHash                 string          `json:"config_hash"`
+	IntegrationsConfigRevision string          `json:"integrations_config_revision"`
+	PHPAgent                   json.RawMessage `json:"php_agent"`
 }
 
 // SyncResponse is the sync answer.
@@ -140,6 +141,8 @@ type SyncResponse struct {
 	// IntegrationsConfig is set only when the host's effective settings differ from the revision it reported;
 	// null = keep the current config.
 	IntegrationsConfig *IntegrationsConfigJSON `json:"integrations_config"`
+	// PHPAgent is the fleet's PHP agent settings for the host (null without a policy store).
+	PHPAgent *PHPAgentJSON `json:"php_agent"`
 }
 
 // IntegrationsConfigJSON is the remote integration config of a host.
@@ -229,6 +232,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 		Arch: clip(req.Agent.Arch, 32), InstallMethod: clip(req.Agent.InstallMethod, 32), UpdateCapable: req.Agent.UpdateCapable,
 		UpdateState: StateIdle, ConfigHash: clip(req.ConfigHash, 128),
 		IntegrationsConfigRevision: clip(strings.TrimSpace(req.IntegrationsConfigRevision), 128),
+		PHPAgent:                   ParsePHPAgentReport(req.PHPAgent),
 	}
 	if u := req.Update; u != nil {
 		if st := clip(strings.TrimSpace(u.State), 32); st != "" {
@@ -267,6 +271,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 				rolloutID = d.RolloutID
 			}
 			resp.IntegrationsConfig = s.integrationsConfig(st, rep)
+			resp.PHPAgent = s.phpAgentJSON(r, st, rep, in.Catalog, now)
 		}
 		s.decisions.WithLabelValues(string(reason)).Inc()
 		if s.recorder != nil {
@@ -303,6 +308,38 @@ func (s *SyncService) integrationsConfig(st OrgState, rep HostReport) *Integrati
 	}
 	s.integrations.WithLabelValues("sent").Inc()
 	return &IntegrationsConfigJSON{Revision: rev, Items: items}
+}
+
+// phpAgentJSON is the host's php_agent section: the effective settings and, when the host should install a version
+// now, its signed manifest and download URL.
+func (s *SyncService) phpAgentJSON(r *http.Request, st OrgState, rep HostReport, snap *catalog.Snapshot, now time.Time) *PHPAgentJSON {
+	p := st.Policy.PHPAgent
+	if p.Mode == "" {
+		p = DefaultPHPAgentPolicy()
+	}
+	in := PHPInput{Now: now, Host: rep, Policy: st.Policy, Catalog: snap}
+	in.Policy.PHPAgent = p
+	if o, ok := st.PHPOverrides[rep.HostID]; ok {
+		in.Override = &o
+	}
+	d := DecidePHP(in)
+	out := &PHPAgentJSON{Mode: d.Mode, Version: p.Version, Reload: p.Reload, ExcludeBins: p.ExcludeBins, Reason: string(d.Reason)}
+	if out.ExcludeBins == nil {
+		out.ExcludeBins = []string{}
+	}
+	switch d.Reason {
+	case ReasonPHPUpToDate:
+		out.TargetVersion = d.Target
+	case ReasonPHPOffer:
+		out.TargetVersion = d.Target
+		out.Manifest = base64.StdEncoding.EncodeToString(d.Release.Raw)
+		out.Signature = string(d.Release.Signature)
+		out.DownloadURL = d.Artifact.URL
+		if s.o.ServeMirror && s.catalog != nil && s.catalog.MirrorEnabled() {
+			out.DownloadURL = s.mirrorBase(r) + ReleasesPathFmt + url.PathEscape(d.Release.VersionString()) + "/" + url.PathEscape(d.Artifact.Name)
+		}
+	}
+	return out
 }
 
 // warnDecrypt logs at most once per minute per pod (the error names the setting and key id, never secrets).

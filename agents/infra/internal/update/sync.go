@@ -63,6 +63,9 @@ type Syncer struct {
 	// Integrations receives the remote integration config of a successful sync
 	// when the backend sent one (optional; must not block for long).
 	Integrations func(*config.RemoteIntegrations)
+	// PHPAgent receives the php_agent section of a successful sync when the backend sent one (optional; must not
+	// block for long).
+	PHPAgent func(json.RawMessage)
 	// Kick triggers an immediate sync (state changes).
 	Kick <-chan struct{}
 	// InitialDelay before the first sync; negative means a random delay up to MaxInitialDelay.
@@ -159,6 +162,9 @@ func (s *Syncer) Run(ctx context.Context) {
 			interval = ClampPoll(resp.PollIntervalSeconds)
 			if resp.IntegrationsConfig != nil && s.Integrations != nil {
 				s.Integrations(resp.IntegrationsConfig)
+			}
+			if s.PHPAgent != nil && len(resp.PHPAgent) > 0 && string(resp.PHPAgent) != "null" {
+				s.PHPAgent(resp.PHPAgent)
 			}
 		}
 		wait = Jitter(interval, rnd())

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"strconv"
 	"time"
 
@@ -20,16 +21,18 @@ import (
 
 // ClientOptions returns the TLS and SASL options every Kafka client of a service must use
 // (OPENLOG_KAFKA_TLS_*, OPENLOG_KAFKA_SASL_*; docs/contracts/config.md). Certificate files are
-// read here, so build the options once per client.
+// validated here and re-read on every new broker connection after they change (D-048).
 func ClientOptions(c config.Common) ([]kgo.Opt, error) {
 	var opts []kgo.Opt
-	tc, err := c.KafkaTLS.Config()
+	tr, err := c.KafkaTLS.Reloader()
 	if err != nil {
 		return nil, fmt.Errorf("kafka tls: %w", err)
 	}
-	if tc != nil {
-		// franz-go sets ServerName to each broker's host when tc.ServerName is empty.
-		opts = append(opts, kgo.DialTLSConfig(tc))
+	if tr != nil {
+		// Like kgo.DialTLSConfig: 10 s timeout, ServerName = each broker's host when not configured.
+		opts = append(opts, kgo.Dialer(func(ctx context.Context, network, host string) (net.Conn, error) {
+			return tr.DialContext(ctx, 10*time.Second, network, host)
+		}))
 	}
 	s := c.KafkaSASL
 	switch s.Mechanism {
@@ -75,6 +78,25 @@ var AllSignals = []Signal{SignalMetrics, SignalLogs, SignalTraces}
 // Topic returns <prefix>.otlp.<signal>.v1.
 func Topic(prefix string, s Signal) string {
 	return prefix + ".otlp." + string(s) + ".v1"
+}
+
+// SampledTracesTopic returns <prefix>.otlp.traces.sampled.v1: traces kept by openlog-sampler (tail sampling, D-075).
+func SampledTracesTopic(prefix string) string {
+	return prefix + ".otlp.traces.sampled.v1"
+}
+
+// ProcessorTopics returns the topics the processor consumes: metrics, logs and the raw traces topic, or the
+// sampled traces topic instead when tail sampling is enabled.
+func ProcessorTopics(prefix string, tailSampling bool) []string {
+	topics := Topics(prefix)
+	if tailSampling {
+		for i, t := range topics {
+			if t == Topic(prefix, SignalTraces) {
+				topics[i] = SampledTracesTopic(prefix)
+			}
+		}
+	}
+	return topics
 }
 
 // Message is a record to produce.
@@ -204,10 +226,11 @@ const (
 // Auto-commit is disabled and rebalances are blocked while polled records are
 // being processed; the caller must call AllowRebalance after committing.
 func NewConsumerClient(brokers []string, group, prefix string, log *slog.Logger, extra ...kgo.Opt) (*kgo.Client, error) {
-	topics := make([]string, 0, len(AllSignals))
-	for _, s := range AllSignals {
-		topics = append(topics, Topic(prefix, s))
-	}
+	return NewConsumerClientTopics(brokers, group, Topics(prefix), log, extra...)
+}
+
+// NewConsumerClientTopics is NewConsumerClient for an explicit topic list.
+func NewConsumerClientTopics(brokers []string, group string, topics []string, log *slog.Logger, extra ...kgo.Opt) (*kgo.Client, error) {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
@@ -260,6 +283,8 @@ func CreateTopics(ctx context.Context, brokers []string, ts TopicSettings, extra
 	for _, s := range AllSignals {
 		topics = append(topics, Topic(ts.Prefix, s))
 	}
+	// Created even while tail sampling is off, so enabling it needs no topic migration.
+	topics = append(topics, SampledTracesTopic(ts.Prefix))
 	resp, err := adm.CreateTopics(ctx, int32(ts.Partitions), int16(ts.ReplicationFactor), configs, topics...)
 	if err != nil {
 		return err

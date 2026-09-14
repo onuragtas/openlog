@@ -24,6 +24,37 @@ type User struct {
 	CreatedAt    time.Time
 	LastLoginAt  *time.Time
 	DisabledAt   *time.Time
+	// EmailVerifiedAt is nil only for self-service sign-ups that have not confirmed their address yet
+	// (OPENLOG_SIGNUP_REQUIRE_VERIFICATION); every other way of creating a user sets it.
+	EmailVerifiedAt *time.Time
+}
+
+// EmailVerification is a one-time e-mail address confirmation token. TokenHash = sha256(token).
+type EmailVerification struct {
+	ID        string
+	UserID    string
+	Email     string
+	TokenHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+// AuditFilter selects audit events (newest first). Zero values do not filter.
+type AuditFilter struct {
+	Limit  int
+	Actor  string    // case-insensitive substring of actor_email
+	Action string    // action prefix, e.g. "member." or "member.remove"
+	From   time.Time // created_at >= From
+	To     time.Time // created_at < To
+	// Before continues a listing after the last event of the previous page (keyset on created_at, id).
+	Before *AuditCursor
+}
+
+// AuditCursor is the position of an audit event in the newest-first order.
+type AuditCursor struct {
+	CreatedAt time.Time
+	ID        int64
 }
 
 // Membership is one of a user's organizations.
@@ -54,6 +85,13 @@ type Session struct {
 	RevokedAt  *time.Time
 	IP         string
 	UserAgent  string
+	// AuthMethod is how the session was created: MethodPassword (also sign-up and invitations; "" = password),
+	// MethodOIDC or MethodSAML (external.go).
+	AuthMethod string
+	// OrgID binds a single sign-on session to one organization; ConnectionID is its SSO connection. Empty for
+	// password sessions.
+	OrgID        string
+	ConnectionID string
 }
 
 // Active reports whether the session is usable at now: not revoked, not past
@@ -67,11 +105,14 @@ func (s Session) Active(now time.Time, idle time.Duration) bool {
 
 // LicenseKey is an ingest key. The plaintext is never stored.
 type LicenseKey struct {
-	ID             string
-	OrgID          string
-	Name           string
-	Prefix         string
-	Hash           []byte
+	ID     string
+	OrgID  string
+	Name   string
+	Prefix string
+	Hash   []byte
+	// LegacyHashes (create only, not stored): other hashes of the same value (KeyHasher.Legacy); creation fails
+	// with ErrAlreadyExists when any key has one of them, so a value stays unusable after a secret is introduced.
+	LegacyHashes   [][]byte
 	Custom         bool // operator-chosen value (imported or bootstrap), not generated
 	CreatedBy      string
 	CreatedByEmail string
@@ -114,6 +155,13 @@ type Invitation struct {
 	ExpiresAt      time.Time
 	AcceptedAt     *time.Time
 	RevokedAt      *time.Time
+	LastSentAt     *time.Time // last invitation e-mail (nil: never e-mailed)
+	SendCount      int        // invitation e-mails sent
+}
+
+// Expired reports whether a not yet accepted or revoked invitation has passed its expiry at now.
+func (i Invitation) Expired(now time.Time) bool {
+	return i.AcceptedAt == nil && i.RevokedAt == nil && !now.Before(i.ExpiresAt)
 }
 
 // Pending reports whether the invitation can still be accepted at now.
@@ -175,20 +223,36 @@ type Store interface {
 	ListAPIKeys(ctx context.Context, orgID string) ([]APIKey, error)
 	GetAPIKey(ctx context.Context, orgID, id string) (APIKey, error)
 	RevokeAPIKey(ctx context.Context, orgID, id, by string, at time.Time) (APIKey, error)
-	LookupAPIKey(ctx context.Context, hash []byte) (APIKey, Organization, error)
+	// RevokeAPIKeysCreatedBy revokes the organization's active API keys created by userID and returns how many.
+	RevokeAPIKeysCreatedBy(ctx context.Context, orgID, userID, by string, at time.Time) (int, error)
+	// LookupAPIKey returns the key (even revoked or expired) whose hash is one of hashes (current format first);
+	// an active key found by a later candidate is rewritten to hashes[0].
+	LookupAPIKey(ctx context.Context, hashes [][]byte) (APIKey, Organization, error)
 	TouchAPIKey(ctx context.Context, id string, at time.Time) error
 
 	CreateInvitation(ctx context.Context, inv *Invitation) error // ErrAlreadyExists when one is pending for the email
-	ListInvitations(ctx context.Context, orgID string, now time.Time) ([]Invitation, error)
+	// ListInvitations lists invitations that are neither accepted nor revoked and, unless includeExpired, not expired.
+	ListInvitations(ctx context.Context, orgID string, now time.Time, includeExpired bool) ([]Invitation, error)
 	RevokeInvitation(ctx context.Context, orgID, id string, at time.Time) (Invitation, error)
+	// RenewInvitation replaces the token and expiry of an invitation that is neither accepted nor revoked
+	// (expired ones included); ErrNotFound otherwise.
+	RenewInvitation(ctx context.Context, orgID, id string, tokenHash []byte, expiresAt time.Time) (Invitation, error)
+	// MarkInvitationSent records an invitation e-mail (last_sent_at, send_count).
+	MarkInvitationSent(ctx context.Context, id string, at time.Time) error
 	GetInvitationByTokenHash(ctx context.Context, hash []byte) (Invitation, Organization, error)
 	// AcceptInvitation marks the pending invitation accepted and adds the
 	// membership atomically; it creates user first when user.ID == "".
 	AcceptInvitation(ctx context.Context, invID string, user *User, at time.Time) error
 
 	AddAuditEvent(ctx context.Context, e *AuditEvent) error
-	ListAuditEvents(ctx context.Context, orgID string, limit int) ([]AuditEvent, error)
+	ListAuditEvents(ctx context.Context, orgID string, f AuditFilter) ([]AuditEvent, error)
 
+	CreateEmailVerification(ctx context.Context, v *EmailVerification) error
+	// ConsumeEmailVerification marks the unused, unexpired token used and sets the user's email_verified_at
+	// (when the user still has the token's email) in one statement; ErrNotFound otherwise.
+	ConsumeEmailVerification(ctx context.Context, tokenHash []byte, at time.Time) (User, error)
+
+	// Rate limiting counters (login_failures table; keys are hashes of a purpose label plus the counted subject).
 	CountLoginFailures(ctx context.Context, key []byte, since time.Time) (int, error)
 	AddLoginFailure(ctx context.Context, key []byte, at time.Time) error
 	ClearLoginFailures(ctx context.Context, key []byte) error

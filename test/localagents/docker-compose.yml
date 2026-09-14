@@ -13,7 +13,8 @@
 #
 #   apm-host      Debian 12 + openlog-infra-agent; machine-id = host.id of the demo services
 #   web-host      Debian 12 + nginx, redis, postgresql + openlog-infra-agent (logs, integrations)
-#   frontend      Node.js (OTel)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-33000}
+#   frontend      Node.js (openlog Node.js agent @openlog/node built from agents/node)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-33000}
+#                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps frontend loadgen)
 #   orders        Go (OTel) -> orders-db
 #   catalog       PHP 8.3 (OTel) -> redis
 #   loadgen       ~8 req/s against frontend
@@ -51,19 +52,22 @@ x-container-id: &container-id
 
 services:
   frontend:
-    build: {context: ../apmdemo/frontend}
-    image: openlog-apmdemo/frontend:1
+    # The agent detects container.id (mountinfo) itself, so no container-id entrypoint wrapper.
+    build:
+      context: node-frontend
+      additional_contexts: {app: ../apmdemo/frontend, nodeagent: ../../agents/node}
+    image: openlog-localagents/node-frontend:1
     hostname: frontend
     environment:
-      <<: *otel
-      OTEL_SERVICE_NAME: frontend
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+      OPENLOG_SERVICE_NAME: frontend
       OTEL_RESOURCE_ATTRIBUTES: *apm-resource
-      OTEL_LOGS_EXPORTER: otlp
-      OTEL_SEMCONV_STABILITY_OPT_IN: http
+      OPENLOG_HTTP_IGNORE_PATHS: /healthz
+      OPENLOG_LOGS_CONSOLE: "true"
+      OPENLOG_METRIC_EXPORT_INTERVAL: 30s
       CATALOG_URL: http://catalog:8080
       ORDERS_URL: http://orders:8080
-    entrypoint: *container-id
-    command: ["node", "--require", "./instrumentation.js", "server.js"]
     ports: ["${LOCALAGENTS_FRONTEND_PORT:-33000}:3000"]
     depends_on: [orders, catalog]
     restart: unless-stopped
@@ -121,12 +125,32 @@ services:
     restart: unless-stopped
 
   loadgen:
-    image: openlog-apmdemo/frontend:1
+    image: openlog-localagents/node-frontend:1
     command: ["node", "loadgen.js"]
     environment:
       LOADGEN_TARGET: http://frontend:3000
       LOADGEN_RPS: ${LOCALAGENTS_LOADGEN_RPS:-8}
     depends_on: [frontend]
+    restart: unless-stopped
+
+  java-inventory:
+    # Java (openlog Java agent openlog-javaagent.jar built from agents/java, Spring Boot WebFlux sample); calls itself
+    # at DEMO_LOAD_RPS. Build/update only this one:
+    #   docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps java-inventory
+    build:
+      context: java-inventory
+      additional_contexts: {javaagent: ../../agents/java}
+    image: openlog-localagents/java-inventory:1
+    hostname: java-inventory
+    environment:
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+      OPENLOG_SERVICE_NAME: java-inventory
+      OTEL_RESOURCE_ATTRIBUTES: *apm-resource
+      OPENLOG_HTTP_IGNORE_PATHS: /health
+      OPENLOG_METRIC_EXPORT_INTERVAL: 30s
+      DEMO_LOAD_RPS: ${LOCALAGENTS_JAVA_RPS:-4}
+    ports: ["${LOCALAGENTS_JAVA_PORT:-33081}:8080"]
     restart: unless-stopped
 
   apm-host:

@@ -149,7 +149,8 @@ A source-built agent has no release keys compiled in, so it does not update itse
 ### 5. Applications, HTTPS and firewall
 
 - **Application traces:** any OpenTelemetry SDK works — `OTEL_EXPORTER_OTLP_ENDPOINT=http://<server>:4318`,
-  `OTEL_EXPORTER_OTLP_HEADERS=openlog-license-key=<key>`. Go: [agents/go](agents/go/README.md).
+  `OTEL_EXPORTER_OTLP_HEADERS=openlog-license-key=<key>`. Go: [agents/go](agents/go/README.md), Node.js:
+  [agents/node](agents/node/README.md), Java: [agents/java](agents/java/README.md), .NET: [agents/dotnet](agents/dotnet/README.md), Python: [agents/python](agents/python/README.md).
 - **HTTPS:** put a reverse proxy (Caddy, nginx, Traefik) in front of `8080` (UI/API) and `4318` (OTLP/HTTP), then set
   `OPENLOG_COOKIE_SECURE=true` and use `https://` endpoints for agents.
 - **Firewall:** expose `8080` to users and `4317`/`4318` to monitored hosts; keep `9464` internal
@@ -201,6 +202,10 @@ More options: [deploy/compose/README.md](deploy/compose/README.md).
 | `deploy/compose`, `deploy/helm/openlog` | `single` and `cluster` deployment profiles |
 | [`agents/infra`](agents/infra) | Linux host agent: metrics, inventory, discovery, logs, integrations, PHP forwarder (Apache-2.0) |
 | [`agents/go`](agents/go) | Go APM agent (OpenTelemetry distribution, Apache-2.0) |
+| [`agents/node`](agents/node) | Node.js APM agent `@openlog/node` (OpenTelemetry distribution, Apache-2.0) |
+| [`agents/java`](agents/java) | Java APM agent `openlog-javaagent.jar` (OpenTelemetry Java agent distribution, Apache-2.0) |
+| [`agents/dotnet`](agents/dotnet) | .NET APM agent, NuGet `OpenLog.Agent` (OpenTelemetry .NET distribution, Apache-2.0) |
+| [`agents/python`](agents/python) | Python APM agent, PyPI `openlog-agent` (OpenTelemetry Python distribution, Apache-2.0) |
 | [`agents/php`](agents/php) | PHP APM agent (C extension, in development, Apache-2.0) |
 | `libs/release` | Release manifests and signatures shared by agents and backend (Apache-2.0) |
 

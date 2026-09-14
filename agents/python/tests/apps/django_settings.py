@@ -1,0 +1,9 @@
+SECRET_KEY = "openlog-test"
+DEBUG = False
+ALLOWED_HOSTS = ["*"]
+ROOT_URLCONF = "django_app"
+MIDDLEWARE = []
+INSTALLED_APPS = []
+DATABASES = {}
+USE_TZ = True
+LOGGING_CONFIG = None

@@ -1,0 +1,27 @@
+<Project>
+  <!-- openlog .NET agent (D-074). Every component shares the product SemVer (D-025); release.yml overrides
+       OpenLogVersion from the tag (dotnet pack -p:OpenLogVersion=X.Y.Z). -->
+  <PropertyGroup>
+    <OpenLogVersion Condition="'$(OpenLogVersion)' == ''">0.1.9</OpenLogVersion>
+    <Version>$(OpenLogVersion)</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- vulnerability audit findings of test/sample dependencies and prerelease dependencies stay warnings -->
+    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904;NU5104</WarningsNotAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <Deterministic>true</Deterministic>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Authors>openlog</Authors>
+    <Company>openlog</Company>
+    <Copyright>Copyright the openlog authors</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/onuragtas/openlog</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/onuragtas/openlog/tree/main/agents/dotnet</PackageProjectUrl>
+    <IsPackable>false</IsPackable>
+    <!-- containers put bin/obj on a volume (OPENLOG_DOTNET_ARTIFACTS=/artifacts), keeping them out of the source tree -->
+    <ArtifactsPath Condition="'$(OPENLOG_DOTNET_ARTIFACTS)' != ''">$(OPENLOG_DOTNET_ARTIFACTS)</ArtifactsPath>
+  </PropertyGroup>
+</Project>

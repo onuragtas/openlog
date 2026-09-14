@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -187,7 +188,99 @@ func (c *collector) Collect(ctx context.Context, b *integrations.Batch) error {
 		c.Close()
 		return classify(err, c.inst)
 	}
-	return Record(b, ParseInfo(body))
+	info := ParseInfo(body)
+	if err := Record(b, info); err != nil {
+		return err
+	}
+	if info["cluster_enabled"] != "1" {
+		return nil
+	}
+	return c.collectCluster(ctx, b)
+}
+
+// collectCluster adds CLUSTER INFO metrics and the node id (CLUSTER NODES).
+// Failures (e.g. an ACL user without +cluster) make the collection partial.
+func (c *collector) collectCluster(ctx context.Context, b *integrations.Batch) error {
+	ci, err := c.do(ctx, "CLUSTER", "INFO")
+	if err != nil {
+		return c.clusterError(err)
+	}
+	nodes, nerr := c.do(ctx, "CLUSTER", "NODES")
+	if nerr != nil {
+		nodes = ""
+	}
+	RecordCluster(b, ParseInfo(ci), nodes)
+	if nerr != nil {
+		return c.clusterError(nerr)
+	}
+	return nil
+}
+
+func (c *collector) clusterError(err error) error {
+	var se ServerError
+	switch {
+	case !errors.As(err, &se):
+		c.Close() // the connection state is unknown; reconnect next time
+		return integrations.Partial(fmt.Errorf("cluster metrics: %v", err))
+	case strings.HasPrefix(string(se), "NOPERM"):
+		return integrations.Partial(fmt.Errorf("cluster metrics: permission denied (the ACL user needs +cluster|info and +cluster|nodes): %s", se))
+	}
+	return integrations.Partial(fmt.Errorf("cluster metrics: %s", se))
+}
+
+// clusterMetrics maps CLUSTER INFO fields to redisreceiver metrics (names of
+// its metadata.yaml; the receiver itself does not run CLUSTER INFO).
+var clusterMetrics = []struct {
+	field, name, unit string
+	sum               bool
+}{
+	{"cluster_slots_assigned", "redis.cluster.slots_assigned", "{slot}", false},
+	{"cluster_slots_ok", "redis.cluster.slots_ok", "{slot}", false},
+	{"cluster_slots_pfail", "redis.cluster.slots_pfail", "{slot}", false},
+	{"cluster_slots_fail", "redis.cluster.slots_fail", "{slot}", false},
+	{"cluster_known_nodes", "redis.cluster.known_nodes", "{node}", false},
+	{"cluster_size", "redis.cluster.node.count", "{node}", false},
+	{"cluster_stats_messages_sent", "redis.cluster.stats_messages_sent", "{message}", true},
+	{"cluster_stats_messages_received", "redis.cluster.stats_messages_received", "{message}", true},
+	{"total_cluster_links_buffer_limit_exceeded", "redis.cluster.links_buffer_limit_exceeded.count", "{count}", true},
+}
+
+// RecordCluster emits cluster metrics from CLUSTER INFO fields and sets the
+// resource attribute redis.cluster.node.id from a CLUSTER NODES reply ("" skips it).
+func RecordCluster(b *integrations.Batch, ci map[string]string, nodes string) {
+	s := b.Resource()
+	if st, ok := ci["cluster_state"]; ok {
+		v, label := int64(0), "fail"
+		if st == "ok" {
+			v, label = 1, "ok"
+		}
+		s.GaugeInt("redis.cluster.state", "{state}", v, otlputil.Str("cluster_state", label))
+	}
+	for _, m := range clusterMetrics {
+		n, err := strconv.ParseInt(ci[m.field], 10, 64)
+		if err != nil {
+			continue
+		}
+		if m.sum {
+			s.SumInt(m.name, m.unit, true, n)
+		} else {
+			s.GaugeInt(m.name, m.unit, n)
+		}
+	}
+	if id := MyClusterNodeID(nodes); id != "" {
+		b.SetResourceAttr(otlputil.Str("redis.cluster.node.id", id))
+	}
+}
+
+// MyClusterNodeID returns the id of the "myself" line of a CLUSTER NODES reply.
+func MyClusterNodeID(nodes string) string {
+	for _, line := range strings.Split(nodes, "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 3 && slices.Contains(strings.Split(f[2], ","), "myself") {
+			return f[0]
+		}
+	}
+	return ""
 }
 
 func classify(err error, inst *integrations.Instance) error {
@@ -334,6 +427,9 @@ func Record(b *integrations.Batch, info map[string]string) error {
 		s.GaugeInt("redis.db.keys", "{key}", fields["keys"], attr)
 		s.GaugeInt("redis.db.expires", "{key}", fields["expires"], attr)
 		s.GaugeInt("redis.db.avg_ttl", "ms", fields["avg_ttl"], attr)
+	}
+	if n, err := strconv.ParseInt(info["cluster_enabled"], 10, 64); err == nil {
+		s.GaugeInt("redis.cluster.cluster_enabled", "1", n)
 	}
 	if role, ok := info["role"]; ok {
 		r := "replica"

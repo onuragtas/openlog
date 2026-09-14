@@ -1,0 +1,23 @@
+apiVersion: v2
+name: openlog-agent
+description: >-
+  openlog infra agent for Kubernetes - a DaemonSet (host, container and kubelet metrics, pod metadata, container
+  logs from /var/log/pods) and a leader-elected cluster collector (kube-state metrics and Kubernetes events),
+  sending OTLP to an openlog ingest endpoint.
+type: application
+# Chart version (SemVer). Bump on every chart change.
+version: 0.1.0
+# Default image tag of the openlog-infra-agent image.
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/onuragtas/openlog
+sources:
+  - https://github.com/onuragtas/openlog
+keywords:
+  - observability
+  - kubernetes
+  - opentelemetry
+  - otlp
+  - daemonset
+annotations:
+  artifacthub.io/license: Apache-2.0

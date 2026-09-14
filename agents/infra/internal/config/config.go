@@ -66,6 +66,8 @@ type Config struct {
 	Update            UpdateConfig       `yaml:"update"`
 	Release           ReleaseConfig      `yaml:"release"`
 	PHPForwarder      PHPForwarder       `yaml:"php_forwarder"`
+	PHPAgent          PHPAgentConfig     `yaml:"php_agent"`  // php_agent.go
+	Kubernetes        KubernetesConfig   `yaml:"kubernetes"` // kubernetes.go
 }
 
 // PHPForwarder configures the php_forwarder module (docs/contracts/php-agent.md §6).
@@ -146,11 +148,13 @@ type ProcessMetrics struct {
 	TopNMemory int  `yaml:"top_n_memory"`
 }
 
-// Containers configures container inventory (Docker Engine API) and cgroup v2 metrics.
+// Containers configures container inventory (Docker Engine API, CRI) and cgroup v2 metrics.
 type Containers struct {
 	Enabled bool `yaml:"enabled"`
 	// DockerSocket is a host path, resolved under host.root_path.
 	DockerSocket string `yaml:"docker_socket"`
+	// CRISockets are host paths of CRI runtime sockets (containerd, CRI-O); empty disables CRI listing.
+	CRISockets []string `yaml:"cri_sockets"`
 }
 
 // LogsConfig configures log collection from files and journald.
@@ -197,6 +201,9 @@ type ContainerMatch struct {
 	ComposeService string `yaml:"compose_service"`
 	// Label is "key" (label present) or "key=value" (value is a glob).
 	Label string `yaml:"label"`
+	// MultilineStart (include items only) is the regex of a record's first line for matching containers;
+	// the container label openlog.logs.multiline takes precedence.
+	MultilineStart string `yaml:"multiline_start"`
 }
 
 func (m ContainerMatch) empty() bool {
@@ -278,7 +285,8 @@ func Default() *Config {
 		Export:    ExportConfig{Timeout: Duration(15 * time.Second), MaxRequestBytes: 4 << 20},
 
 		ProcessMetrics: ProcessMetrics{Enabled: true, TopNCPU: 20, TopNMemory: 20},
-		Containers:     Containers{Enabled: true, DockerSocket: "/var/run/docker.sock"},
+		Containers: Containers{Enabled: true, DockerSocket: "/var/run/docker.sock",
+			CRISockets: []string{"/run/containerd/containerd.sock", "/run/k3s/containerd/containerd.sock", "/var/run/crio/crio.sock"}},
 		Logs: LogsConfig{
 			Enabled: true, ParseSeverity: true, PollInterval: Duration(time.Second), StartAt: "end",
 			MaxLineBytes: 64 << 10, RateLimitLines: 2000,
@@ -294,6 +302,8 @@ func Default() *Config {
 			Socket: DefaultPHPSocket, SocketGroup: "auto", SocketMode: "0660",
 			MaxPendingTraces: 10000, ReassemblyTimeout: Duration(5 * time.Second),
 		},
+		PHPAgent:   defaultPHPAgent(),
+		Kubernetes: defaultKubernetes(),
 	}
 }
 
@@ -333,6 +343,7 @@ func (c *Config) ApplyEnv(getenv func(string) string) {
 	if v := getenv("OPENLOG_ENDPOINT"); v != "" {
 		c.Endpoint = v
 	}
+	c.Kubernetes.applyEnv(getenv)
 }
 
 // Validate checks the configuration. When requireExport is false (e.g. -once),
@@ -390,6 +401,11 @@ func (c *Config) Validate(requireExport bool) error {
 	if c.Containers.Enabled && !strings.HasPrefix(c.Containers.DockerSocket, "/") {
 		add("containers.docker_socket must be an absolute path")
 	}
+	for i, s := range c.Containers.CRISockets {
+		if c.Containers.Enabled && !strings.HasPrefix(s, "/") {
+			add("containers.cri_sockets[%d] must be an absolute path", i)
+		}
+	}
 	if !filepath.IsAbs(c.Update.InstallRoot) {
 		add("update.install_root must be an absolute path")
 	}
@@ -399,6 +415,8 @@ func (c *Config) Validate(requireExport bool) error {
 	errs = append(errs, c.Logs.validate()...)
 	errs = append(errs, c.Integrations.validate()...)
 	errs = append(errs, c.PHPForwarder.validate()...)
+	errs = append(errs, c.PHPAgent.validate()...)
+	errs = append(errs, c.Kubernetes.validate(os.Getenv)...)
 	for k := range c.Host.ExtraAttributes {
 		if k == "" {
 			add("host.extra_attributes contains an empty key")
@@ -467,6 +485,13 @@ func (l *LogsConfig) validate() []error {
 				for _, g := range []string{m.Name, m.Image, m.ComposeProject, m.ComposeService, m.Label} {
 					if _, err := filepath.Match(g, ""); err != nil {
 						add("logs.containers.%s[%d]: invalid glob %q", name, i, g)
+					}
+				}
+				if m.MultilineStart != "" {
+					if name == "exclude" {
+						add("logs.containers.exclude[%d]: multiline_start is only allowed in include", i)
+					} else if _, err := regexp.Compile(m.MultilineStart); err != nil {
+						add("logs.containers.include[%d].multiline_start: %v", i, err)
 					}
 				}
 			}

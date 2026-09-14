@@ -79,7 +79,7 @@ func start(ctx context.Context, lookup lookupFunc, diagOut io.Writer, opts []Opt
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
-		sdktrace.WithSampler(newSampler(cfg.SamplingRatio)),
+		sdktrace.WithSampler(newSampler(cfg.SamplingRatio, cfg.SamplingRV)),
 		sdktrace.WithBatcher(exp.trace,
 			sdktrace.WithMaxQueueSize(4096),
 			sdktrace.WithMaxExportBatchSize(512),
@@ -108,7 +108,7 @@ func start(ctx context.Context, lookup lookupFunc, diagOut io.Writer, opts []Opt
 	otel.SetLogger(logr.FromSlogHandler(log.Handler()))
 	otel.SetErrorHandler(newErrorHandler(log))
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetTracerProvider(tp)
+	otel.SetTracerProvider(randomTracerProvider{tp: tp})
 	otel.SetMeterProvider(mp)
 	global.SetLoggerProvider(lp)
 	running = true

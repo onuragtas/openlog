@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!--
+  Server-side encryption of the cold volume (storage-tiered.xml). Keep one of the blocks, mount the file as an extra
+  config.d file (Compose: OPENLOG_CLICKHOUSE_S3_CREDENTIALS_FILE accepts any storage fragment, or add a second mount).
+  Not tested against AWS by openlog's test suite (MinIO needs a KMS for SSE-S3/KMS and TLS for SSE-C).
+
+  SSE-S3 (AES256, S3-managed keys): usually configured as the bucket's default encryption; nothing to add here.
+-->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <openlog_s3>
+                <!-- SSE-KMS: every object is written with this key; the ClickHouse IAM identity needs kms:GenerateDataKey
+                     and kms:Decrypt on it. -->
+                <server_side_encryption_kms_key_id>arn:aws:kms:eu-central-1:123456789012:key/00000000-0000-0000-0000-000000000000</server_side_encryption_kms_key_id>
+                <server_side_encryption_kms_bucket_key_enabled>true</server_side_encryption_kms_bucket_key_enabled>
+
+                <!-- SSE-C (customer-provided key, base64 of 32 bytes: openssl rand -base64 32). Losing the key loses every
+                     cold part; keep it with the backups. Use it instead of the KMS settings above.
+                <server_side_encryption_customer_key_base64>...</server_side_encryption_customer_key_base64>
+                -->
+            </openlog_s3>
+        </disks>
+    </storage_configuration>
+</clickhouse>

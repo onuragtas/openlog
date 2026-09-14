@@ -74,7 +74,7 @@ func Preview(ctx context.Context, sc *query.Scope, def *Definition, hours int, n
 	res := &PreviewResult{From: from, To: to, Step: step, Judge: def.Condition.Judge(), Unit: rr.Unit,
 		Truncated: rr.Truncated, Approximate: rr.Approximate || step != def.Interval()}
 	switch def.Type {
-	case TypeMetricThreshold, TypeLogMatch:
+	case TypeMetricThreshold, TypeLogMatch, TypeOQL:
 		res.HasOperator = true
 	}
 	cfg := StepConfigFor(def, 0)

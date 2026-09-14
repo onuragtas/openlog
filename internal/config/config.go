@@ -28,6 +28,8 @@ type Common struct {
 	KafkaTLS      TLS
 	KafkaSASL     KafkaSASL
 	ClickHouseTLS TLS
+	// ClickHouseRead is the read-only user of the api/alert query paths (query.go, D-047).
+	ClickHouseRead ClickHouseRead
 	// LicenseKeys is the static key map for OPENLOG_AUTH_MODE=static (dev/tests).
 	LicenseKeys string
 	// AuthMode is "postgres" (default) or "static".
@@ -35,6 +37,8 @@ type Common struct {
 	Postgres Postgres
 	// AuthCache configures ingest's license key cache (postgres mode).
 	AuthCache AuthCache
+	// KeyHash configures stored key hashing (signup.go).
+	KeyHash KeyHash
 }
 
 // Postgres holds the PostgreSQL connection settings (postgres auth mode).
@@ -64,6 +68,10 @@ type Auth struct {
 	LoginWindow        time.Duration
 	InvitationTTL      time.Duration
 	TrustedProxies     []string
+	// Signup configures sign-up abuse protection and e-mail verification (signup.go).
+	Signup Signup
+	// SSO configures single sign-on and SCIM provisioning (sso.go).
+	SSO SSO
 }
 
 // Bootstrap describes the first organization created by `openlog-admin bootstrap`.
@@ -152,6 +160,14 @@ type Config struct {
 	Alert Alert
 	// APM configures the edge-linking job and Apdex default (docs/contracts/apm.md).
 	APM APM
+	// Query holds per-tenant ClickHouse query limits of api and alert (query.go, D-047).
+	Query Query
+	// Storage configures tiered storage (storage.go, D-066).
+	Storage Storage
+	// TailSampling configures tail-based sampling (tailsampling.go, D-075).
+	TailSampling TailSampling
+	// Usage configures usage metering, plans, quotas and billing (usage.go, D-079..D-081).
+	Usage Usage
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -166,6 +182,12 @@ type APM struct {
 	DefaultApdexT    time.Duration // OPENLOG_APM_DEFAULT_APDEX_T
 	// RetentionDays is the TTL of the APM tables, applied by openlog-migrate (OPENLOG_APM_RETENTION_DAYS).
 	RetentionDays int
+	// Late-span re-link (apm.md §6): the processor enqueues client minutes of late spans, the api leader re-links them.
+	RelinkEnabled    bool          // OPENLOG_APM_RELINK_ENABLED (processor and api)
+	RelinkAfter      time.Duration // OPENLOG_APM_RELINK_AFTER (processor; default OPENLOG_APM_LINK_LOOKBACK)
+	RelinkMaxAge     time.Duration // OPENLOG_APM_RELINK_MAX_AGE (processor and api)
+	RelinkInterval   time.Duration // OPENLOG_APM_RELINK_INTERVAL (api)
+	RelinkMaxMinutes int           // OPENLOG_APM_RELINK_MAX_MINUTES (api)
 }
 
 // CatchUpOffset returns OPENLOG_APM_LINK_CATCHUP_AT as the offset from 00:00 UTC (0 when invalid).
@@ -207,6 +229,7 @@ func Load(getenv func(string) string) (Config, error) {
 			KafkaTLS:           p.tls("OPENLOG_KAFKA_TLS"),
 			KafkaSASL:          p.kafkaSASL(),
 			ClickHouseTLS:      p.tls("OPENLOG_CLICKHOUSE_TLS"),
+			ClickHouseRead:     p.clickHouseRead(),
 			LicenseKeys:        p.str("OPENLOG_LICENSE_KEYS", ""),
 			AuthMode:           p.str("OPENLOG_AUTH_MODE", "postgres"),
 			Postgres: Postgres{
@@ -220,6 +243,7 @@ func Load(getenv func(string) string) (Config, error) {
 				NegativeTTL: p.duration("OPENLOG_AUTH_NEGATIVE_CACHE_TTL", 10*time.Second),
 				MaxStale:    p.duration("OPENLOG_AUTH_CACHE_MAX_STALE", 15*time.Minute),
 			},
+			KeyHash: loadKeyHash(&p),
 		},
 		Ingest: Ingest{
 			HTTPAddr:           p.str("OPENLOG_INGEST_HTTP_ADDR", ":4318"),
@@ -256,6 +280,8 @@ func Load(getenv func(string) string) (Config, error) {
 				LoginWindow:        p.duration("OPENLOG_LOGIN_WINDOW", 15*time.Minute),
 				InvitationTTL:      p.duration("OPENLOG_INVITATION_TTL", 7*24*time.Hour),
 				TrustedProxies:     p.list("OPENLOG_API_TRUSTED_PROXIES", ""),
+				Signup:             loadSignup(&p),
+				SSO:                loadSSO(&p),
 			},
 		},
 		Migrate: Migrate{
@@ -274,8 +300,12 @@ func Load(getenv func(string) string) (Config, error) {
 			Channel:         p.str("OPENLOG_UPDATE_CHANNEL", "stable"),
 			TrustedKeysFile: p.str("OPENLOG_RELEASE_TRUSTED_KEYS_FILE", ""),
 		},
-		Fleet: loadFleet(&p),
-		Alert: loadAlert(&p),
+		Fleet:        loadFleet(&p),
+		Alert:        loadAlert(&p),
+		Query:        loadQuery(&p),
+		Storage:      loadStorage(&p),
+		TailSampling: loadTailSampling(&p),
+		Usage:        loadUsage(&p),
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
@@ -286,6 +316,10 @@ func Load(getenv func(string) string) (Config, error) {
 			LinkCatchUpBatch: p.duration("OPENLOG_APM_LINK_CATCHUP_BATCH", time.Hour),
 			DefaultApdexT:    p.duration("OPENLOG_APM_DEFAULT_APDEX_T", 500*time.Millisecond),
 			RetentionDays:    int(p.int64("OPENLOG_APM_RETENTION_DAYS", 30)),
+			RelinkEnabled:    p.bool("OPENLOG_APM_RELINK_ENABLED", true),
+			RelinkMaxAge:     p.duration("OPENLOG_APM_RELINK_MAX_AGE", 7*24*time.Hour),
+			RelinkInterval:   p.duration("OPENLOG_APM_RELINK_INTERVAL", 5*time.Minute),
+			RelinkMaxMinutes: int(p.int64("OPENLOG_APM_RELINK_MAX_MINUTES", 120)),
 		},
 		Bootstrap: Bootstrap{
 			TenantID:      p.str("OPENLOG_BOOTSTRAP_TENANT_ID", "default"),
@@ -297,6 +331,7 @@ func Load(getenv func(string) string) (Config, error) {
 			APIKey:        p.str("OPENLOG_BOOTSTRAP_API_KEY", ""),
 		},
 	}
+	c.APM.RelinkAfter = p.duration("OPENLOG_APM_RELINK_AFTER", c.APM.LinkLookback)
 	if err := errors.Join(p.errs...); err != nil {
 		return Config{}, err
 	}
@@ -324,6 +359,10 @@ func (c Config) validate(getenv func(string) string) error {
 		errs = append(errs, fmt.Errorf("OPENLOG_LOG_LEVEL: invalid level %q", c.LogLevel))
 	}
 	errs = append(errs, c.validateTLS()...)
+	errs = append(errs, c.validateQuery()...)
+	errs = append(errs, c.validateStorage()...)
+	errs = append(errs, c.TailSampling.validate()...)
+	errs = append(errs, c.validateUsage()...)
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))
 	}
@@ -377,6 +416,18 @@ func (c Config) validate(getenv func(string) string) error {
 	if c.APM.DefaultApdexT < time.Millisecond || c.APM.DefaultApdexT > 10*time.Minute {
 		errs = append(errs, fmt.Errorf("OPENLOG_APM_DEFAULT_APDEX_T: must be between 1ms and 10m, got %s", c.APM.DefaultApdexT))
 	}
+	if c.APM.RelinkAfter < time.Minute || c.APM.RelinkAfter > c.APM.LinkLookback {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_RELINK_AFTER: must be between 1m and OPENLOG_APM_LINK_LOOKBACK (%s), got %s", c.APM.LinkLookback, c.APM.RelinkAfter))
+	}
+	if maxAge := min(30*24*time.Hour, time.Duration(max(c.APM.RetentionDays, 1))*24*time.Hour); c.APM.RelinkMaxAge < time.Hour || c.APM.RelinkMaxAge > maxAge {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_RELINK_MAX_AGE: must be between 1h and %s (30 days, at most OPENLOG_APM_RETENTION_DAYS), got %s", maxAge, c.APM.RelinkMaxAge))
+	}
+	if c.APM.RelinkInterval < 10*time.Second || c.APM.RelinkInterval > time.Hour {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_RELINK_INTERVAL: must be between 10s and 1h, got %s", c.APM.RelinkInterval))
+	}
+	if c.APM.RelinkMaxMinutes < 1 || c.APM.RelinkMaxMinutes > 1440 {
+		errs = append(errs, fmt.Errorf("OPENLOG_APM_RELINK_MAX_MINUTES: must be between 1 and 1440, got %d", c.APM.RelinkMaxMinutes))
+	}
 	if c.Migrate.KafkaPartitions <= 0 || c.Migrate.KafkaReplicationFactor <= 0 {
 		errs = append(errs, errors.New("OPENLOG_KAFKA_PARTITIONS and OPENLOG_KAFKA_REPLICATION_FACTOR must be > 0"))
 	}
@@ -416,6 +467,8 @@ func (c Config) validate(getenv func(string) string) error {
 	}
 	errs = append(errs, c.Fleet.validate()...)
 	errs = append(errs, c.Alert.validate()...)
+	errs = append(errs, c.validateSignup()...)
+	errs = append(errs, c.validateSSO()...) // sso.go
 	return errors.Join(errs...)
 }
 

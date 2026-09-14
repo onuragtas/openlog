@@ -112,6 +112,10 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
         php: ["7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4",
               "7.4-zts", "8.3-zts", "7.4-cli-alpine", "8.3-cli-alpine"]
+        include:
+          # AddressSanitizer + UBSan debug PHP built from source (~3 min image build); sanitizer reports fail the job
+          - runner: ubuntu-24.04
+            php: "8.3-asan"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: build openlog.so + phpt (NTS/ZTS, glibc/musl; amd64 and arm64 native runners)
@@ -124,6 +128,23 @@ jobs:
       - name: test logs
         if: always()
         run: cat "$RUNNER_TEMP"/openlog-ext-matrix/results/*.log
+
+  php-ext-fuzz:
+    name: php-ext fuzz (ol_text.c, libFuzzer + ASan/UBSan)
+    needs: changes
+    if: needs.changes.outputs.php == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: fuzz 120 s
+        env:
+          FUZZ_SECONDS: "120"
+          OUT: ${{ runner.temp }}/openlog-php-fuzz
+        run: agents/php/ext/fuzz/run.sh
+      - name: crash artifacts
+        if: failure()
+        run: ls -la "$RUNNER_TEMP"/openlog-php-fuzz && head -c 2000 "$RUNNER_TEMP"/openlog-php-fuzz/crash-* 2>/dev/null | od -c | head -40
 
   web:
     runs-on: ubuntu-24.04
@@ -143,6 +164,171 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  node-agent:
+    name: node-agent (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    defaults:
+      run:
+        working-directory: agents/node
+    env:
+      COMPOSE: docker compose -p openlog-nodeagent-test -f test/integration/docker-compose.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: agents/node/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: lint
+        if: matrix.node == '22'
+        run: npm run lint
+      - run: npm run typecheck
+      - name: unit + end-to-end tests (Go sampler fixtures, OTLP capture, express/fastify/koa/nest/http, ESM)
+        run: npm test
+      - name: instrumentation tests against PostgreSQL, MySQL and Redis
+        if: matrix.node == '22'
+        env:
+          PG_URL: postgres://openlog:openlog@127.0.0.1:55432/openlog
+          MYSQL_URL: mysql://openlog:openlog@127.0.0.1:53306/openlog
+          REDIS_URL: redis://127.0.0.1:56379
+        run: |
+          $COMPOSE up -d --wait postgres mysql redis
+          npm run test:integration
+      - name: stop databases
+        if: always() && matrix.node == '22'
+        run: $COMPOSE down -v
+      - name: package contents
+        if: matrix.node == '22'
+        run: npm pack --dry-run
+
+  python-agent:
+    name: python-agent (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 installs the last OpenTelemetry line that supports it (SDK 1.41 / contrib 0.62), 3.12 the current one
+        python: ["3.9", "3.12"]
+    defaults:
+      run:
+        working-directory: agents/python
+    env:
+      COMPOSE: docker compose -p openlog-m4-python-test -f tests/integration/docker-compose.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            agents/python/pyproject.toml
+            agents/python/tests/requirements-*.txt
+      - run: python -m pip install -e . -r tests/requirements-test.txt
+      - name: lint
+        if: matrix.python == '3.12'
+        run: python -m ruff check src tests && python -m ruff format --check src tests
+      - name: unit + end-to-end tests (Go sampler fixtures, shared sanitizer cases, Flask/Django/FastAPI, gunicorn pre-fork workers)
+        run: python -m pytest -q -p no:cacheprovider tests/unit tests/e2e
+      - name: instrumentation tests against PostgreSQL, MySQL and Redis (psycopg2/3, asyncpg, PyMySQL, mysqlclient, SQLAlchemy, redis, Celery prefork, gRPC)
+        if: matrix.python == '3.12'
+        env:
+          PG_URL: postgresql://openlog:openlog@127.0.0.1:55433/openlog
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "53307"
+          REDIS_URL: redis://127.0.0.1:56380/0
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libmysqlclient-dev pkg-config
+          python -m pip install -r tests/requirements-integration.txt
+          $COMPOSE up -d --wait postgres mysql redis
+          python -m pytest -q -p no:cacheprovider tests/integration
+      - name: stop databases
+        if: always() && matrix.python == '3.12'
+        run: $COMPOSE down -v
+      - name: wheel + sdist
+        if: matrix.python == '3.12'
+        run: |
+          python -m pip install build==1.6.1 twine==7.0.0
+          python -m build --outdir dist .
+          python -m twine check --strict dist/*
+          python -m zipfile -l dist/*.whl
+
+  java-agent:
+    name: java-agent (JDK ${{ matrix.java }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["17", "21"]
+    defaults:
+      run:
+        working-directory: agents/java
+    env:
+      COMPOSE: docker compose -p openlog-m4-java-test -f test/docker-compose.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: gradle
+      - name: unit tests (Go sampler fixtures, sanitizer, config, resource, SDK autoconfiguration) + agent jar
+        run: ./gradlew --no-daemon --console=plain :extension:test :agentJar :agentJarChecksum
+      - name: integration tests (Spring Boot MVC/WebFlux, PostgreSQL, MySQL, Hibernate, Redis, Kafka, gRPC, Logback/Log4j2)
+        run: |
+          $COMPOSE up -d --wait postgres mysql redis kafka
+          ./gradlew --no-daemon --console=plain :integration-tests:integrationTest
+      - name: stop services
+        if: always()
+        run: $COMPOSE down -v
+
+  dotnet-agent:
+    name: dotnet-agent (.NET ${{ matrix.dotnet }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet: ["8.0", "9.0"]
+    defaults:
+      run:
+        working-directory: agents/dotnet
+    env:
+      COMPOSE: docker compose -p openlog-m4-dotnet-test -f test/docker-compose.yml
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      PG_CONNECTION: Host=127.0.0.1;Port=45433;Username=openlog;Password=openlog;Database=openlog
+      MYSQL_CONNECTION: Server=127.0.0.1;Port=43307;User ID=openlog;Password=openlog;Database=openlog
+      REDIS_CONNECTION: 127.0.0.1:46380
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - name: build (net8.0 + netstandard2.0, warnings as errors)
+        run: dotnet build src/OpenLog.Agent/OpenLog.Agent.csproj -c Release
+      - name: unit tests (Go sampler fixtures, sanitizer, config, resource, processors, propagator)
+        run: dotnet test test/OpenLog.Agent.Tests/OpenLog.Agent.Tests.csproj -c Release -f "net${{ matrix.dotnet }}"
+      - name: integration tests (ASP.NET Core minimal API/MVC, HttpClient, gRPC, ILogger, metrics, PostgreSQL/EF Core, MySQL, Redis)
+        run: |
+          $COMPOSE up -d --wait postgres mysql redis
+          dotnet test test/OpenLog.Agent.IntegrationTests/OpenLog.Agent.IntegrationTests.csproj -c Release -f "net${{ matrix.dotnet }}"
+      - name: stop databases
+        if: always()
+        run: $COMPOSE down -v
+      - name: package
+        if: matrix.dotnet == '9.0'
+        run: dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -o "$RUNNER_TEMP/nupkg"
 
   helm:
     runs-on: ubuntu-24.04
@@ -167,7 +353,8 @@ jobs:
   release-dryrun:
     name: release dry run (test keys, packages, install.sh)
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    # The PHP agent subset below adds about 8 minutes (release.yml builds all 36 modules per architecture).
+    timeout-minutes: 55
     env:
       DRYRUN_VERSION: 0.0.${{ github.run_number }}
     steps:
@@ -181,6 +368,11 @@ jobs:
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.3.0
+      - name: PHP agent artifacts (reduced subset; php-agent.md §7.1)
+        run: |
+          # Debian 12 PHP 8.2 (glibc) and Alpine PHP 8.3 (musl) modules: enough for the deb and apk install tests.
+          TARGETS="8.2-nts-glibc 8.3-nts-musl" PACKAGES="deb apk" \
+            agents/php/packaging/build-artifacts.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
       - name: signed local release
         run: |
           make release-testkeys
@@ -190,6 +382,9 @@ jobs:
         run: |
           bin/openlog-release verify --keys dist/testkeys/public.key --check-artifacts "dist/v$DRYRUN_VERSION/manifest.json"
           bin/openlog-release verify --keys dist/testkeys/public.key dist/index.json
+          grep -q '"component": "php-agent"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "php-agent artifacts missing from the manifest"; exit 1; }
+      - name: PHP agent deb/apk install
+        run: agents/php/packaging/test.sh "dist/v$DRYRUN_VERSION" "$DRYRUN_VERSION" deb apk
       - name: deb/rpm install
         run: packaging/test/packages.sh "dist/v$DRYRUN_VERSION" "$DRYRUN_VERSION"
       - name: install.sh

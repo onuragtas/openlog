@@ -79,6 +79,10 @@ func NewSet(fs *hostfs.FS, cfg *config.Config, stats *selfmon.Stats, log *slog.L
 	return s
 }
 
+// Add appends a collector (e.g. the Kubernetes kubelet collector); it runs before self-telemetry. Not safe
+// concurrently with Collect: call before the agent runs.
+func (s *Set) Add(c Collector) { s.collectors = append(s.collectors, c) }
+
 // SetServiceLookup forwards the discovery mapping to the process metrics collector.
 func (s *Set) SetServiceLookup(l ServiceLookup) {
 	if s.procTop != nil {

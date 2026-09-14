@@ -1,0 +1,62 @@
+{{- $fullname := include "openlog-agent.fullname" . }}
+{{- if .Values.node.enabled }}
+{{- $node := dict
+  "log_level" .Values.logLevel
+  "state_dir" "/var/lib/openlog-infra-agent"
+  "buffer" (dict "dir" "/var/lib/openlog-infra-agent/buffer")
+  "host" (dict "root_path" "/host" "extra_attributes" .Values.extraAttributes)
+  "update" (dict "enabled" false)
+  "discovery" (dict "rules_dir" "/etc/openlog-infra-agent/discovery.d")
+  "logs" (dict "containers" (dict "enabled" .Values.node.containerLogs.enabled))
+  "kubernetes" (dict
+    "enabled" "true"
+    "mode" "node"
+    "cluster_name" .Values.clusterName
+    "kubelet" (dict "enabled" .Values.node.kubelet.enabled "insecure_skip_verify" .Values.node.kubelet.insecureSkipVerify))
+}}
+{{- $node = mustMergeOverwrite $node (deepCopy .Values.node.config) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-node" $fullname }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node
+data:
+  config.yaml: |
+    {{- toYaml $node | nindent 4 }}
+{{- end }}
+{{- if .Values.cluster.enabled }}
+{{- $cluster := dict
+  "log_level" .Values.logLevel
+  "state_dir" "/var/lib/openlog-infra-agent"
+  "buffer" (dict "dir" "/var/lib/openlog-infra-agent/buffer")
+  "host" (dict "extra_attributes" .Values.extraAttributes)
+  "update" (dict "enabled" false)
+  "kubernetes" (dict
+    "enabled" "true"
+    "mode" "cluster"
+    "cluster_name" .Values.clusterName
+    "cluster" (dict
+      "interval" .Values.cluster.interval
+      "events" .Values.cluster.events
+      "max_pods" (int .Values.cluster.maxPods)
+      "lease_name" (printf "%s-cluster" $fullname)
+      "lease_namespace" .Release.Namespace))
+}}
+{{- $cluster = mustMergeOverwrite $cluster (deepCopy .Values.cluster.config) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-cluster" $fullname }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cluster
+data:
+  config.yaml: |
+    {{- toYaml $cluster | nindent 4 }}
+{{- end }}

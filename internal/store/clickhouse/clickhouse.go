@@ -5,6 +5,7 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -43,9 +44,9 @@ func Open(ctx context.Context, o Options) (Conn, error) {
 	if maxConns == 0 {
 		maxConns = 20
 	}
-	tc, err := o.TLS.Config()
+	dial, err := dialContext(o.TLS)
 	if err != nil {
-		return nil, fmt.Errorf("clickhouse tls: %w", err)
+		return nil, err
 	}
 	conn, err := ch.Open(&ch.Options{
 		Addr:             o.Addr,
@@ -57,7 +58,7 @@ func Open(ctx context.Context, o Options) (Conn, error) {
 		ConnMaxLifetime:  time.Hour,
 		Compression:      &ch.Compression{Method: ch.CompressionLZ4},
 		ConnOpenStrategy: ch.ConnOpenRoundRobin,
-		TLS:              tc,
+		DialContext:      dial,
 	})
 	if err != nil {
 		return nil, err
@@ -67,6 +68,22 @@ func Open(ctx context.Context, o Options) (Conn, error) {
 		return nil, fmt.Errorf("clickhouse ping: %w", err)
 	}
 	return conn, nil
+}
+
+// dialContext returns the driver dial function for TLS connections, or nil for plaintext. Certificate
+// files are re-read when they change (config.TLSReloader, D-048): new connections of the pool use renewed
+// certificates without a restart.
+func dialContext(t config.TLS) (func(ctx context.Context, addr string) (net.Conn, error), error) {
+	tr, err := t.Reloader()
+	if err != nil {
+		return nil, fmt.Errorf("clickhouse tls: %w", err)
+	}
+	if tr == nil {
+		return nil, nil
+	}
+	return func(ctx context.Context, addr string) (net.Conn, error) {
+		return tr.DialContext(ctx, 5*time.Second, "tcp", addr)
+	}, nil
 }
 
 // OpenRetry calls Open until it succeeds or ctx is done.

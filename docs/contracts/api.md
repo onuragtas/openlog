@@ -50,7 +50,12 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 | `GET /license-keys`, `GET /api-keys`, `POST /api-keys`, revoke own API keys | | ✓ | ✓ | ✓ |
 | Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ |
 | Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
+| APM error inbox: change status/assignee (`PATCH /apm/errors/groups`), comment, delete **own** comments (signed-in users only) | | ✓ | ✓ | ✓ |
+| Delete any error group comment | | | ✓ | ✓ |
 | `GET /integrations/settings` | ✓ | ✓ | ✓ | ✓ |
+| OQL (`POST /query`, `POST /query/validate`, `GET /query/schema`), read dashboards (private ones: creator only), export | ✓ | ✓ | ✓ | ✓ |
+| Create, import and duplicate dashboards; change/delete **own** dashboards | | ✓ | ✓ | ✓ |
+| Change/delete any non-private dashboard | | | ✓ | ✓ |
 | `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, deploy now, rollback), integration setting changes, any alert rule or mute, alert channels and test sends, `POST /version/check` and `POST /version/update` (signed-in users only; refused for everyone when `OPENLOG_SIGNUP_ENABLED=true`) | | | ✓ | ✓ |
 | Grant or remove the owner role, invite owners, remove owners | | | | ✓ |
 
@@ -59,20 +64,39 @@ An organization always keeps at least one owner (`409 failed_precondition`).
 ## Auth endpoints
 
 ### `GET /api/v1/auth/config` (public)
-`{"mode": "postgres", "signup_enabled": false, "password_min_length": 8}`
+`{"mode": "postgres", "signup_enabled": false, "password_min_length": 8, "email_enabled": false,
+"email_verification_required": false, "captcha": null | {"provider": "turnstile|hcaptcha", "site_key"}}`.
+`email_enabled`: invitation and verification e-mails are sent (SMTP and `OPENLOG_PUBLIC_URL` configured).
+`captcha` only while sign-up is enabled.
 
 ### `POST /api/v1/auth/login` (public)
 Body `{"email": "…", "password": "…"}`. `200` sets the session cookie and returns the **Me** object. `401` for any
 wrong email/password combination, `429` when rate limited.
 
 ### `POST /api/v1/auth/signup` (public, `OPENLOG_SIGNUP_ENABLED=true`)
-Body `{"email", "password", "name", "organization_name"}` → `201` + cookie + **Me**. Creates a new organization
-(generated tenant id) owned by the new user. `403` when disabled, `409` when the email exists.
+Body `{"email", "password", "name", "organization_name", "captcha_token"?}` → `201` + cookie + **Me**. Creates a new
+organization (generated tenant id) owned by the new user. `403` when disabled, `409` when the email exists.
+Abuse protection (D-045), in this order: `400` for invalid input (password policy 8–256 characters, not equal to
+the e-mail); `429 resource_exhausted` after `OPENLOG_SIGNUP_MAX_PER_IP` attempts per client IP or
+`OPENLOG_SIGNUP_MAX_PER_EMAIL` per address within `OPENLOG_SIGNUP_RATE_WINDOW`; with a CAPTCHA provider `400` when
+`captcha_token` is missing or rejected (`503` when the provider cannot be reached); `400` for a blocked e-mail
+domain. With `email_verification_required` the new user is signed in but `user.email_verified` is `false` and a
+verification e-mail is sent (a failed send does not fail the sign-up; resend below). Until verified,
+`POST /license-keys`, `POST /api-keys`, `POST /invitations` and invitation resends answer `403 permission_denied`
+("confirm your e-mail address first"); everything else works.
+
+### `POST /api/v1/auth/verify-email` (public) `{"token"}`
+Token from the verification link (`/verify-email#token=olv_…`) → `204`; `404` when invalid, used or expired
+(`OPENLOG_EMAIL_VERIFICATION_TTL`). Audit `user.email_verified`.
+
+### `POST /api/v1/auth/verify-email/resend`
+Signed-in, unverified user → `204` (new link; earlier links stay valid until they expire). `409` when already
+verified or e-mail is not configured, `429` after 5 e-mails per hour, `503` when the e-mail cannot be sent.
 
 ### `GET /api/v1/auth/me`
 **Me** object:
 ```json
-{"auth": "session", "user": {"id": "…", "email": "ada@example.com", "name": "Ada"},
+{"auth": "session", "user": {"id": "…", "email": "ada@example.com", "name": "Ada", "email_verified": true},
  "organization": {"id": "…", "tenant_id": "default", "name": "Default"}, "role": "owner",
  "organizations": [{"id": "…", "tenant_id": "default", "name": "Default", "role": "owner"}],
  "csrf_token": "…"}
@@ -96,15 +120,31 @@ Body `{"current_password", "new_password"}` → `204`; revokes the user's other 
 ### `PATCH /api/v1/members/{user_id}` `{"role"}` · `DELETE /api/v1/members/{user_id}`
 `204`. A user may always remove themselves (leave).
 
+Changes take effect **immediately on every API pod** (D-046): sessions are not cached — every request reads the
+session and the membership/role of the selected organization from PostgreSQL — so the removed user's next request
+with that organization gets `403` (without `X-Openlog-Org-Id` their next oldest membership is used, or none), and a
+demoted user acts with the new role at once. Removing a member also revokes the API keys they created in that
+organization (`details.revoked_api_keys` in the `member.remove` audit event). Their sessions stay valid for their
+other organizations.
+
 ## Invitations
 
-Invitations are not emailed in M1: the inviter gets a one-time token and shares the accept link
-(`/invite?token=<token>` in the web UI).
+The inviter always gets a one-time token for the accept link `/invite#token=<token>` (web UI; the token stays in the
+URL fragment). When e-mail is configured (`GET /auth/config` → `email_enabled`) the link is also e-mailed to the
+invitee from `OPENLOG_SMTP_FROM`; `email_sent` in the response says whether that succeeded (a failed or rate-limited
+e-mail never fails the request). Limits: 100 invitation e-mails per organization and 5 per invited address per hour.
 
-### `GET /api/v1/invitations` · `POST /api/v1/invitations` `{"email", "role"}` · `DELETE /api/v1/invitations/{id}`
-List: `{"invitations": [{"id", "email", "role", "invited_by_email", "created_at", "expires_at"}]}` (pending only).
-Create → `201 {"invitation": {…}, "token": "oli_…"}` (**token shown once**); `409` if the email is already a member
-or has a pending invitation.
+### `GET /api/v1/invitations?include_expired=` · `POST /api/v1/invitations` `{"email", "role"}` · `DELETE /api/v1/invitations/{id}`
+List: `{"invitations": [{"id", "email", "role", "invited_by_email", "created_at", "expires_at", "expired", "last_sent_at", "send_count"}]}`
+— pending invitations; with `include_expired=true` also expired ones that were neither accepted nor revoked.
+Create → `201 {"invitation": {…}, "token": "oli_…", "email_sent": true}` (**token shown once**); `409` if the email
+is already a member or has a pending invitation. Unverified sign-ups → `403`.
+
+### `POST /api/v1/invitations/{id}/resend`
+Issues a new token for an invitation that is neither accepted nor revoked (also an expired one), restarts its
+validity (`OPENLOG_INVITATION_TTL`) and e-mails it when e-mail is configured → `200 {"invitation", "token", "email_sent"}`.
+The previous link stops working. `404` when accepted, revoked or unknown; only owners resend owner invitations.
+Audit `invitation.resend`.
 
 ### `POST /api/v1/invitations/lookup` (public) `{"token"}`
 `{"organization_name", "email", "role", "expires_at", "user_exists"}`; `404` when invalid, used, revoked or expired.
@@ -155,9 +195,116 @@ Revokes → `204`; effective immediately.
 The caller's active sessions: `{"sessions": [{"id", "created_at", "last_seen_at", "expires_at", "ip", "user_agent", "current"}]}`.
 Revoking the current session also clears the cookie.
 
-### `GET /api/v1/audit-log?limit=`
-Newest first (default 100, max 500): `{"events": [{"id", "actor_email", "action", "target_type", "target_id", "details", "ip", "created_at"}]}`.
+### `GET /api/v1/audit-log?limit=&actor=&action=&from=&to=&cursor=`
+Newest first (default 100, max 500): `{"events": [{"id", "actor_email", "action", "target_type", "target_id", "details", "ip", "created_at"}], "next_cursor": "…" | null}`.
+`actor`: case-insensitive substring of the actor e-mail; `action`: prefix (`member.` or `member.remove`);
+`from` (inclusive) / `to` (exclusive): RFC3339 or unix ms; `cursor`: `next_cursor` of the previous page with the same
+filters (`null` when the page was not full). Invalid values → `400`. Settings → Audit log in the web UI.
 Actions: see [postgres.md](postgres.md#audit_log).
+
+## Single sign-on
+
+OIDC and SAML 2.0 sign-in per organization (D-077; operations guide [sso.md](../operations/sso.md), code
+`internal/sso`). Postgres auth mode, `OPENLOG_SSO_ENABLED=true` (default) and `OPENLOG_PUBLIC_URL` required;
+`GET /auth/config` reports `sso_enabled`.
+
+**Model.** An organization has at most one connection (`oidc` or `saml`) and claims e-mail domains. A domain is
+verified by a DNS TXT record `_openlog-verification.<domain>` = `openlog-domain-verification=<token>` or by a link
+e-mailed to `admin|administrator|hostmaster|postmaster|webmaster@<domain>`; a verified domain belongs to one
+organization. **Only identities whose e-mail address is in a verified domain of the connection's organization are
+accepted** (sign-in, test and SCIM), so an organization admin's IdP cannot sign in as another company's user.
+
+**Sign-in.** `POST /auth/sso/start` sets a per-sign-in binding cookie (`openlog_sso_<12 hex>`, HttpOnly,
+SameSite=Lax, Path=/api/v1/sso, 10 min; the server stores only its SHA-256) and returns the IdP URL.
+- OIDC: authorization code flow with PKCE S256, `state` (single use, 10 min) and `nonce`; discovery must match the
+  issuer; ID token signature with the provider's JWKS (cached, refetched hourly and on an unknown `kid`), algorithms
+  RS/PS/ES256–512 and EdDSA only, `aud` contains the client ID (`azp` required with several audiences), `exp`
+  and `iat` with `OPENLOG_SSO_CLOCK_SKEW`. `email_verified=true` is required unless the connection turns it off.
+  E-mail/groups missing from the ID token are read from UserInfo (same `sub`). IdP-initiated OIDC is not supported.
+- SAML: HTTP-Redirect AuthnRequest (optionally signed), response at the ACS by HTTP-POST. Before signature checks the
+  document must be a single `samlp:Response` without DTD with exactly one `Assertion`/`EncryptedAssertion` anywhere
+  (XML signature wrapping). The response or the assertion must carry exactly one enveloped signature by an IdP
+  metadata certificate (RSA/ECDSA SHA-256/384/512; SHA-1 refused; crewjam/saml + goxmldsig, validated element =
+  parsed element). Required: issuer = IdP entity ID, `Destination`/`Recipient` = ACS URL, an `AudienceRestriction`
+  with the SP entity ID, a bearer `SubjectConfirmation`, an `AuthnStatement`, `InResponseTo` = the outstanding
+  request (SP-initiated), time conditions with the clock skew. Assertion IDs are stored until they expire (replay →
+  `replay`). The ACS stores the verified identity on the sign-in and redirects (303) to
+  `GET /sso/saml/complete?state=`, which requires the binding cookie (a cross-site POST does not carry SameSite
+  cookies). IdP-initiated responses (no `InResponseTo`) are accepted only when the connection allows it; their
+  RelayState must be one of `relay_state_allowlist` (else `/`).
+- Completion: JIT creates the user (no password, e-mail verified) and the membership with the mapped role or
+  `default_role` unless JIT is off (`not_member`) or SCIM deactivated the user (`deprovisioned`). With role mappings
+  and a groups claim/attribute, non-owner roles are synchronized at every sign-in. The session is created like a
+  password session plus `auth_method` (`oidc`/`saml`), the organization and the connection; its lifetime is the
+  minimum of `OPENLOG_SESSION_TTL` and `session_max_age_seconds`.
+- Every step answers `303`: to the UI path of the sign-in (`redirect`, relative, never `/api/…`), or to
+  `/login?sso_error=<code>` with `expired`, `invalid_request`, `idp_error`, `invalid_response`, `replay`, `disabled`,
+  `email_missing`, `email_not_verified`, `domain_not_verified`, `not_member`, `deprovisioned`, `account_disabled`,
+  `unavailable`. Test sign-ins return to `/settings/sso?sso_test=ok|failed`. `Referrer-Policy: no-referrer`.
+
+**Sessions.** On every request an SSO session may act only in its organization (other `X-Openlog-Org-Id` → `403`),
+only while that organization's connection is the one that created it and enabled (else `401`), and only until the
+maximum session age (`401`). Logout is local.
+
+**Enforcement.** With `enforce`, password sessions of members whose e-mail domain is verified by the organization
+cannot act in it (`403 permission_denied` "this organization requires single sign-on"), except break-glass owners
+(owners listed in `break_glass_user_ids`). `POST /auth/login` with a correct password answers the same `403` when
+every organization of the user requires SSO (a user in another organization still signs in, without access to the
+enforcing one). Turning enforcement on (owner) requires an enabled connection whose current `config_version`
+passed a test sign-in, a verified domain, at least one break-glass owner, and that the caller keeps access
+(break-glass owner or SSO session of this connection) → else `409`. While enforced the connection cannot be
+disabled or deleted, and the last verified domain not removed (`409`).
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `POST /auth/sso/discover` `{"email"}` | public | `{"sso", "organization_name", "protocol", "enforced"}`; reveals only whether a domain uses SSO. 60 per IP per 10 min |
+| `POST /auth/sso/start` `{"email", "redirect"?}` | public | `{"redirect_url"}` + binding cookie; `404` without an enabled connection for the domain; `503` IdP unreachable. 30 per IP per 10 min |
+| `GET /sso/oidc/callback` · `POST /sso/saml/{connection_id}/acs` · `GET /sso/saml/complete` | public | See above; always `303` |
+| `GET /sso/saml/{connection_id}/metadata` | public | SP metadata (`application/samlmetadata+xml`); the URL is the SP entity ID |
+| `GET /sso/connection` | admin, owner | `{"available", "secrets_encrypted", "scim_enabled", "email_verification_available", "domain_email_local_parts", "service_provider": {"oidc_redirect_uri", "scim_base_url", "saml_entity_id", "saml_acs_url", "saml_metadata_url", "saml_certificate_pem"}, "connection": SSOConnection\|null}` |
+| `PUT /sso/connection` `SSOConnectionInput` | admin, owner | Create/replace; `client_secret` omitted = keep, `""` = remove; SAML metadata is fetched from `idp_metadata_url` now (or pasted `idp_metadata_xml`); each save increments `config_version` |
+| `DELETE /sso/connection` | admin, owner | Ends the connection's SSO sessions |
+| `POST /sso/connection/test` | admin, owner | Server-side checks `{"ok", "checks": [{"name", "ok", "message"}]}` |
+| `POST /sso/connection/test/start` | admin, owner | `{"redirect_url"}`; a real sign-in at the IdP that only records `last_test` (email, groups, resulting role) |
+| `PUT /sso/enforcement` `{"enforce", "break_glass_user_ids"}` | owner | Safeguards above |
+| `GET /sso/role-mappings` · `PUT /sso/role-mappings` `{"mappings": [{"group", "role"}]}` | admin, owner | `role` ∈ admin, member, viewer; ≤ 200; highest matching role wins |
+| `GET /sso/domains` · `POST /sso/domains` `{"domain"}` · `DELETE /sso/domains/{id}` | admin, owner | ≤ 20 per organization; adding needs a confirmed e-mail address |
+| `POST /sso/domains/{id}/verify` `{"method": "dns_txt"\|"email", "email_local_part"?}` | admin, owner | `409` when the TXT record is missing or another organization verified the domain; e-mail: 5 per domain per 10 min, link valid 24 h |
+| `POST /sso/domains/verify-email` `{"token"}` | public | Token of the link `/sso/verify-domain#token=oldv_…` |
+| `GET /scim/tokens` · `POST /scim/tokens` `{"name", "expires_at"?}` · `DELETE /scim/tokens/{id}` | admin, owner | `POST` returns `{"token", "secret"}` once (`ols_` + 48 hex); ≤ 20 active |
+
+Audit actions: `sso.connection.create|update|delete|test|test_start|test_login`, `sso.enforcement.update`,
+`sso.role_mappings.update`, `sso.domain.add|verify|remove|verification_email`, `sso.login`, `sso.login_failed`
+(reason), `user.login_refused` (password sign-in refused by enforcement), `member.add` / `member.role_change` with
+`via` `sso_jit`, `sso_groups`, `scim`, `scim_groups`, and the SCIM actions below.
+
+## SCIM
+
+SCIM 2.0 provisioning (RFC 7643/7644 subset, D-078, code `internal/scim`) at **`/api/scim/v2`** with
+`Authorization: Bearer ols_…` (a SCIM token authenticates only these paths; API keys and sessions do not).
+`OPENLOG_SCIM_ENABLED=true` (default). Responses are `application/scim+json`; errors use the SCIM error schema
+(`status`, `scimType` `invalidFilter`, `invalidValue`, `invalidSyntax`, `invalidPath`, `noTarget`, `uniqueness`,
+`mutability`, `tooMany`).
+
+| Resource | Operations |
+|---|---|
+| `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas` | GET (patch and filter supported; no bulk, sort, ETag, password change) |
+| `/Users` | GET (`filter=userName eq "…"` \| `externalId eq "…"`, `startIndex`, `count` ≤ 500), POST |
+| `/Users/{id}` | GET, PUT, PATCH (`add`/`replace`/`remove`; paths `active`, `userName`, `externalId`, `displayName`, `name`, `name.givenName`, `name.familyName`; path-less object; other attributes accepted and ignored), DELETE |
+| `/Groups` | GET (`filter=displayName eq "…"` \| `externalId eq "…"`, `excludedAttributes=members`), POST |
+| `/Groups/{id}` | GET, PUT, PATCH (`displayName`, `externalId`, `members` add/replace/remove, `members[value eq "<id>"]` remove), DELETE |
+
+Semantics: a SCIM user is the organization's membership of the openlog account with the primary e-mail (or
+`userName`), which must be in a **verified domain** of the organization (`400 invalidValue` otherwise); the `id` is
+the openlog user id. Creating an active user adds the membership (creating the account when the address is new,
+role from SCIM groups or the connection's `default_role`, viewer without a connection). `active=false` (also the
+strings `"False"`) or DELETE removes the membership immediately, revokes the user's SSO sessions bound to the
+organization and the API keys they created in it; other sessions lose the organization on their next request. A
+deactivated user is not re-added by JIT sign-in. Owners cannot be deactivated or deleted (`400 mutability`) and
+their role is never changed. Changing the e-mail address is refused (`400 mutability`). Group members must be
+provisioned users; group changes recompute the members' roles through the role mappings.
+Audit actions: `scim.user.create|update|activate|deactivate|delete`, `scim.group.create|update|delete`
+(actor `scim:<token name>`), `scim.token.create|revoke`.
 
 ## Version
 
@@ -265,6 +412,136 @@ over the range: `{"services": [{"service_name", "service_namespace", "environmen
 
 Container logs: `GET /api/v1/logs?container_id=…` (see Logs).
 
+## Kubernetes
+
+Kubernetes clusters, nodes, workloads, pods and events reported by the infra agent in node and cluster mode
+(semantic-conventions.md §7), kept in the entity tables `k8s_clusters`, `k8s_nodes`, `k8s_workloads` and `k8s_pods`
+(schema 0040–0042, 30 days after the last data point). Telemetry permissions (any role, API keys too); every query is
+tenant-scoped. Every endpoint accepts `from`/`to` (default last hour). Timestamps are RFC3339 strings, sparklines
+`[[unix_ms, value], …]`, nullable numbers are `null` without data. String filters and path segments are at most 256 bytes
+(`400 invalid_argument` otherwise).
+
+- A cluster is identified by `cluster_uid` (resource `k8s.cluster.uid`, uid of `kube-system`) and named by `cluster_name`.
+- `reporting`: the object's last data point is at most 5 minutes old (cluster agent interval 30 s).
+- **Current objects**: counts of a cluster (nodes, pods, workloads) and the pods of a node or workload include only
+  objects whose last point is at most 2 minutes older than the parent's last point, so deleted objects drop out after
+  one collection and a cluster that stopped reporting keeps its last known counts.
+- Workload `health`: `unknown` when not reporting; Deployment/StatefulSet/DaemonSet/ReplicaSet `healthy` when
+  `available >= desired` (desired 0 → healthy), `unavailable` when `available == 0 < desired`, else `degraded`; Job
+  `degraded` when `updated` (failed) > 0 and `available` (succeeded) < `desired`, else `healthy`; CronJob `healthy`.
+- Pod `status`: `reason` (e.g. `CrashLoopBackOff`, `Evicted`) when set, else `phase`.
+- Usage metrics: `cpu_usage` (cores) and `memory_working_set` (bytes) come from the node agents' kubelet metrics
+  (`k8s.node.*`, `k8s.pod.*`, `k8s.container.*`, matched by resource `k8s.cluster.name` and attributes), allocatable
+  resources and requests/limits from the cluster agent (matched by `cluster_uid`). "Latest" is the newest point in
+  `[from, to]`; sums over nodes or pods include only values within 2 minutes of the newest one.
+
+**Cluster object** (`KubernetesCluster`):
+```json
+{"cluster_uid": "5b1c…", "cluster_name": "prod", "version": "v1.31.2", "first_seen": "…", "last_seen": "…", "reporting": true,
+ "nodes": 3, "nodes_ready": 3, "pods": {"Pending": 0, "Running": 41, "Succeeded": 2, "Failed": 0, "Unknown": 0},
+ "pods_not_ready": 1, "workloads": 18, "workloads_unhealthy": 1, "namespaces": ["default", "kube-system", "shop"]}
+```
+`pods_not_ready` counts current `Running` pods that are not ready; `workloads_unhealthy` counts `degraded` and
+`unavailable` workloads; `namespaces` lists every namespace with pods or workloads in the range.
+
+### `GET /api/v1/kubernetes/clusters?from=&to=`
+Clusters with data in the range, ordered by name: `{"clusters": [KubernetesCluster…]}`.
+
+### `GET /api/v1/kubernetes/clusters/{cluster_uid}?from=&to=`
+A cluster (any time within retention) or `404`, with `workloads_by_kind` (`[{"kind", "total", "healthy", "degraded",
+"unavailable", "unknown"}]` over current workloads, by kind), `warning_events` (the latest 20 `Warning` events in the range,
+newest first, Event objects below), `cpu_usage` / `memory_working_set` (sum of the latest `k8s.node.cpu.usage` /
+`k8s.node.memory.working_set` over the nodes) and `allocatable_cpu` / `allocatable_memory` (sum of the latest
+`k8s.node.allocatable_*`).
+
+### `GET /api/v1/kubernetes/nodes?cluster_uid=&q=&from=&to=&limit=`
+Nodes seen in the range, ordered by cluster name and node name: `{"nodes": [KubernetesNode…], "total": 3}` (`total` before `limit`).
+```json
+{"cluster_uid": "…", "cluster_name": "prod", "node_name": "worker-1", "node_uid": "…", "ready": "true", "unschedulable": false,
+ "roles": ["worker"], "kubelet_version": "v1.31.2", "os_image": "Ubuntu 24.04 LTS", "container_runtime": "containerd://1.7.22",
+ "internal_ip": "10.0.0.11", "created_at": "2026-01-01T00:00:00Z", "allocatable_cpu": 4, "allocatable_memory": 16364216320,
+ "allocatable_pods": 110, "cpu_usage": 0.82, "memory_working_set": 5242880000, "pods": 23, "host_id": "…", "host_name": "worker-1",
+ "first_seen": "…", "last_seen": "…", "reporting": true, "conditions": [{"condition": "Ready", "status": "true"}]}
+```
+`ready` is `true`, `false` or `unknown`; `pods` counts current `Running` and `Pending` pods on the node; `host_id` /
+`host_name` are the host whose resource attributes carry `k8s.cluster.name` and `k8s.node.name` of the node (`null` when
+no node agent reports); `conditions` are the latest `k8s.node.condition` values (`true`/`false`/`unknown`, by name). `q`
+matches every term against node name, uid, cluster name, roles, IP, kubelet version and OS image.
+
+### `GET /api/v1/kubernetes/workloads?cluster_uid=&namespace=&kind=&health=&q=&from=&to=&limit=`
+Workloads seen in the range, ordered by cluster name, namespace, kind and name:
+`{"workloads": [KubernetesWorkload…], "total": 18, "step": "120s"}`. `kind` ∈ `Deployment`, `StatefulSet`, `DaemonSet`,
+`Job`, `CronJob`, `ReplicaSet`, `Pod` (the cluster agent reports no `Pod` workloads, so it matches nothing); `health` ∈
+`healthy`, `degraded`, `unavailable`, `unknown`; other values → `400`.
+```json
+{"cluster_uid": "…", "cluster_name": "prod", "namespace": "shop", "kind": "Deployment", "name": "orders", "uid": "…",
+ "desired": 3, "ready": 2, "available": 2, "updated": 3, "health": "degraded", "pods": 3, "restarts": 7,
+ "cpu_usage": 0.12, "memory_working_set": 314572800, "cpu_sparkline": [[1757757600000, 0.1]], "memory_sparkline": [],
+ "created_at": "2026-09-01T10:00:00Z", "first_seen": "…", "last_seen": "…", "reporting": true}
+```
+`desired`/`ready`/`available`/`updated` per kind as in semantic-conventions §7.4; `pods` and `restarts` (sum of
+`openlog.k8s.pod.restarts`) over the current pods of the workload; `cpu_usage` / `memory_working_set` sum the latest
+`k8s.pod.cpu.usage` / `k8s.pod.memory.working_set` of its pods, sparklines sum the per-pod bucket averages (≈ 30 buckets of `step`).
+
+### `GET /api/v1/kubernetes/workloads/{cluster_uid}/{namespace}/{kind}/{name}?from=&to=`
+A workload (any time within retention) or `404`, plus `pod_list` (Pod objects of the workload seen in the range, at
+most `OPENLOG_API_MAX_ROWS`), `hpa` (`{"name", "min_replicas", "max_replicas", "current_replicas", "desired_replicas"}`
+of the HorizontalPodAutoscaler targeting it, latest `k8s.hpa.*` values, or `null`) and `attributes` (data point
+attributes of its latest `openlog.k8s.workload.status` point). An unknown `kind` → `400`.
+
+### `GET /api/v1/kubernetes/workloads/{cluster_uid}/{namespace}/{kind}/{name}/timeseries?from=&to=&step=`
+`{"step": "20s", "from": 1757757600000, "to": 1757761200000, "series": {"cpu_usage": [], "memory_working_set": [],
+"ready": [], "desired": [], "restarts": []}}` (`step` as for containers; `404` for an unknown workload). `cpu_usage` and
+`memory_working_set` sum the per-pod bucket averages; `ready`/`desired` are the latest status values per bucket;
+`restarts` sums the latest restart count per pod per bucket.
+
+### `GET /api/v1/kubernetes/pods?cluster_uid=&namespace=&node=&workload_kind=&workload_name=&phase=&q=&from=&to=&limit=`
+Pods seen in the range, ordered by cluster name, namespace and pod name: `{"pods": [KubernetesPod…], "total": 41}`.
+`phase` ∈ `Pending`, `Running`, `Succeeded`, `Failed`, `Unknown`; `workload_kind` as `kind` above; other values → `400`.
+```json
+{"cluster_uid": "…", "cluster_name": "prod", "namespace": "shop", "pod_name": "orders-7d9c-x2k", "pod_uid": "…",
+ "node_name": "worker-1", "workload_kind": "Deployment", "workload_name": "orders", "phase": "Running", "ready": false,
+ "reason": "CrashLoopBackOff", "status": "CrashLoopBackOff", "restarts": 7, "pod_ip": "10.244.1.17", "qos_class": "Burstable",
+ "created_at": "…", "started_at": "…", "cpu_usage": 0.01, "memory_working_set": 52428800,
+ "first_seen": "…", "last_seen": "…", "reporting": true}
+```
+
+### `GET /api/v1/kubernetes/pods/{pod_uid}?from=&to=`
+A pod (any time within retention) or `404`, plus:
+- `containers`: `[{"name", "container_id", "image", "ready", "restarts", "state", "reason", "known", "host_id", "cpu_usage",
+  "memory_working_set", "cpu_request", "cpu_limit", "memory_request", "memory_limit"}]` from `openlog.k8s.pod.containers`;
+  `known` is true (and `host_id` set) when the container is in the `containers` table (see Containers); usage from the
+  latest `k8s.container.*` kubelet metrics, requests/limits from the cluster agent (`null` when unset).
+- `labels`: `k8s.pod.label.*` attributes (prefix removed) of the latest status points of its known containers.
+- `services`: `[{"service_name", "service_namespace", "deployment_environment"}]` whose spans carried one of its container ids (`apm_service_containers`).
+- `host_id` / `host_name`: the node's host, or `null`.
+
+### `GET /api/v1/kubernetes/pods/{pod_uid}/timeseries?from=&to=&step=`
+`{"step", "from", "to", "series": {"cpu_usage": [], "memory_working_set": [], "network_receive": [], "network_transmit": [], "restarts": []}}`
+(`404` for an unknown pod): kubelet gauges averaged per bucket, `network_*` per-second rates of `k8s.pod.network.io`
+(resets clamp to 0), `restarts` the latest `openlog.k8s.pod.restarts` per bucket.
+
+### `GET /api/v1/kubernetes/events?cluster_uid=&namespace=&type=&object_kind=&object_name=&object_uid=&reason=&from=&to=&limit=`
+Kubernetes events (log records with `event_name` `k8s.event`, semantic-conventions §7.5) in the range, newest first:
+`{"events": [KubernetesEvent…]}`. Updates of one event (same `k8s.event.uid`) are returned once, as the latest record.
+`type` ∈ `Normal`, `Warning` (`400` otherwise); `limit` default 100, at most 1000.
+```json
+{"timestamp": "…", "type": "Warning", "reason": "BackOff", "message": "Back-off restarting failed container app",
+ "count": 12, "namespace": "shop", "object_kind": "Pod", "object_name": "orders-7d9c-x2k", "object_uid": "…",
+ "source": "kubelet", "cluster_uid": "…", "cluster_name": "prod"}
+```
+
+### `GET /api/v1/kubernetes/pods/{pod_uid}/events?from=&to=&type=&reason=&limit=`
+The events whose involved object is the pod (`object_uid` = `pod_uid`; container events of the pod carry the same uid).
+
+### `GET /api/v1/apm/services/{service_name}/kubernetes?namespace=&environment=&from=&to=`
+Pods of an APM service seen in the range: pods whose `openlog.k8s.pod.containers` contain a container id linked to the
+service since `from` (`apm_service_containers`), or whose uid spans of the service carried as resource `k8s.pod.uid` in the
+range. `{"pods": [{"cluster_uid", "cluster_name", "namespace", "pod_name", "pod_uid", "workload_kind", "workload_name",
+"node_name", "phase", "ready", "reporting"}]}`, ordered by cluster, namespace and pod name (at most 1000).
+
+Pod logs: `GET /api/v1/logs?k8s_pod_uid=…` (see Logs).
+
 ## Metrics
 
 ### `GET /api/v1/metrics/names?host_id=&from=&to=`
@@ -286,7 +563,8 @@ Ranges longer than 6h read from the 1-minute rollup table, except requests with 
 
 Allowed `resource.<key>` keys — integration instance identity and PostgreSQL entities (semantic-conventions §6.1, §6.5):
 `openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`, `service.instance.id`, `server.address`,
-`server.port`, `postgresql.database.name`, `postgresql.table.name`, `postgresql.index.name`. Any other key, an empty or
+`server.port`, `postgresql.database.name`, `postgresql.table.name`, `postgresql.index.name`, and for pg_stat_statements
+query resources `postgresql.queryid`, `postgresql.rolname`, `db.query.text`. Any other key, an empty or
 repeated value, or a value longer than 1024 bytes → `400 invalid_argument` (reported before the host check). Values are
 bound query parameters. Integration panels select one instance with
 `?resource.openlog.discovery.id=redis&resource.openlog.discovery.instance=/usr/bin/redis-server`.
@@ -313,8 +591,19 @@ Across all hosts' latest complete snapshots: items in `category` (required) whos
 
 ## Logs
 
-### `GET /api/v1/logs?host_id=&service=&container_id=&compose_project=&compose_service=&q=&severity_min=&trace_id=&attr.<key>=&from=&to=&limit=`
+### `GET /api/v1/logs?host_id=&service=&container_id=&compose_project=&compose_service=&k8s_pod_uid=&q=&severity_min=&trace_id=&span_id=&transaction=&transaction_service=&attr.<key>=&from=&to=&limit=&cursor=`
 Excludes inventory events (`event.name` starting with `openlog.inventory.`). `q` is a case-insensitive substring match on body. Newest first.
+
+**Paging.** Rows are ordered by (`timestamp`, row key) descending; the row key is a hash of the row's content
+(observed timestamp, host, service, severity, trace/span ids, body, attributes). A full page returns
+`next_cursor` (opaque string, else `null`); request the next (older) page with the same filters, `from` and `to` plus
+`cursor=<next_cursor>`. The cursor holds the last row's timestamp (nanoseconds), row key and how many rows with that
+exact position were already returned, so rows in the same nanosecond — even identical ones — are returned exactly once.
+An invalid cursor → `400`. Clients that page by moving `to` still work (every response is still newest first).
+
+`span_id` restricts to one span (lower-cased). `transaction` + `transaction_service` (both required together, `400`
+otherwise) restrict to the traces with an entry span of that transaction in the range (at most 10000 traces; APM
+"logs of this transaction").
 
 `attr.<key>=<value>` is an exact-match filter on a log record attribute (AND-ed, one value per key, bound as a query
 parameter). Allowed keys — the attributes the infra agent sets (semantic-conventions §4):
@@ -324,9 +613,11 @@ longer than 1024 bytes → `400 invalid_argument`. Agent log records have an emp
 `host_id` plus these filters, e.g. `?host_id=…&attr.openlog.discovery.id=nginx&attr.log.file.path=/var/log/nginx/error.log`.
 `container_id`, `compose_project` and `compose_service` are exact matches on the resource attributes `container.id`
 (lower-cased), `docker.compose.project` and `docker.compose.service` of container logs (semantic-conventions §4).
+`k8s_pod_uid` is an exact match on the resource attribute `k8s.pod.uid` of Kubernetes container logs (semantic-conventions §7.2).
 ```json
 {"logs": [{"timestamp": "…", "severity_text": "ERROR", "severity_number": 17, "body": "…", "host_id": "…",
-           "service_name": "…", "trace_id": "…", "span_id": "…", "attributes": {}, "resource_attributes": {}}]}
+           "service_name": "…", "trace_id": "…", "span_id": "…", "attributes": {}, "resource_attributes": {}}],
+ "next_cursor": "eyJ2IjoxLCJ0IjoxNzU3NzU3NjAwMDAwMDAwMDAwLCJrIjoiNDIiLCJuIjoxfQ"}
 ```
 
 ## Traces
@@ -390,19 +681,53 @@ restrict to one transaction. Buckets without requests are omitted.
 ```
 `histogram` lists the non-empty latency buckets (apm.md §4.1); `slowest` the 10 slowest entry spans in the range.
 
-### `GET /api/v1/apm/services/{service_name}/errors?limit=`
-Error groups with occurrences in the range, most frequent first (`limit` default 50, max 500):
+### `GET /api/v1/apm/services/{service_name}/errors?limit=&status=&assignee=&q=&sort=` · `GET /api/v1/apm/errors?service=&namespace=&environment=&…`
+Error inbox ([apm.md](apm.md) §3.4): groups with occurrences in the range (and, for resolved/ignored/assignee
+filters, groups with a matching workflow state), most frequent first (`limit` default 50, max 500). The second form
+spans every service. `status` = `all` (default) or a comma-separated list of `unresolved`, `resolved`, `ignored`;
+`assignee` = `any` (default), `none`, `me`, or a user id; `q` substring of type/message/service/span name (≤ 256
+bytes); `sort` = `count` (default), `last_seen`, `first_seen`. Response adds `counts` per status (after `assignee`
+and `q`), `truncated` and `workflow` (`false` without PostgreSQL: every group unresolved, no mutations). Resolved
+groups are checked for regressions (and reopened) on every read.
 ```json
 {"step": "60s", "groups": [{"group_id": "9f3c2a71d4b84e0f", "error_type": "*errors.errorString",
   "message": "order <n>: inventory shard <n> unavailable", "count": 12, "total_count": 480, "first_seen": "…",
   "last_seen": "…", "last_trace_id": "…", "last_span_name": "GET /orders/{id}", "sparkline": [[1757757600000, 2]]}]}
 ```
-`count` is in the range, `total_count`, `first_seen`, `last_seen` over retention.
+`count` is in the range, `total_count`, `first_seen`, `last_seen` over retention. Every group also has
+`service_name`, `service_namespace`, `environment` and the workflow fields `status`, `assignee`
+(`{"user_id", "email", "name"}` or `null`), `resolved_at`, `resolved_in_version`, `resolved_by_email`,
+`regressed_at`, `regression_count`, `comment_count`, `updated_at`, `updated_by_email`.
 
 ### `GET /api/v1/apm/services/{service_name}/errors/{group_id}`
 `400` unless `group_id` is 16 hex digits, `404` for an unknown group. Group fields above plus `last_message` (raw),
 `stacktrace` (newest sample), `last_span_id`, `series` (`[[ms, count]]`) and `samples` (newest 20 error spans in the
-range: `{"trace_id", "span_id", "timestamp", "span_name", "transaction_name", "duration_ms", "message"}`).
+range: `{"trace_id", "span_id", "timestamp", "span_name", "transaction_name", "duration_ms", "message", "version", "host_id"}`),
+the workflow fields above, `affected` (`{"versions", "hosts", "containers", "transactions"}`, each the top 20
+`{"value", "name", "count", "first_seen", "last_seen"}` over retention; `name` = host or container name),
+`comments` and `activity` (the group's audit events `{"action", "actor_email", "details", "created_at"}`, newest first,
+at most 50) and `workflow`.
+
+### `PATCH /api/v1/apm/errors/groups` `{"group_ids": [...], "status"?, "assignee_user_id"?, "resolved_in_version"?}`
+Signed-in member, admin or owner (`403` for viewers and API keys; CSRF as usual; `404` in static auth mode). 1–500
+group ids (16 hex digits; unknown ids → `404`); at least one change. `status` `unresolved`/`resolved`/`ignored`;
+`assignee_user_id` a member's id (`400` otherwise) or `""` to unassign; `resolved_in_version` (≤ 256 bytes) only with
+`status: "resolved"`. Returns `{"groups": [{"group_id", "service_name", "service_namespace", "environment", …workflow fields}]}`.
+Audit event `apm.error_group.update` per changed group.
+
+### `GET /api/v1/apm/errors/groups/{group_id}/comments` · `POST …/comments` `{"body"}` · `DELETE …/comments/{comment_id}`
+`{"comments": [{"id", "author_user_id", "author_email", "author_name", "body", "created_at"}]}`, oldest first. `POST`
+(member+, body 1–4000 bytes, `201` with the comment; audit `apm.error_group.comment`); `DELETE` by the author or an
+admin/owner (`204`, else `404`; audit `apm.error_group.comment_delete`).
+
+### `GET /api/v1/apm/services/{service_name}/deployments?from=&to=&gap=`
+`service.version` changes in the range ([apm.md](apm.md) §12), oldest first; `gap` 5m–24h (default 30m):
+`{"gap_seconds": 1800, "deployments": [{"timestamp", "t": 1757757600000, "service_namespace", "environment", "version": "1.4.3", "previous_version": "1.4.2", "initial": false, "rollback": false}]}`
+
+### `GET /api/v1/apm/services/{service_name}/deployments/compare?at=&window=`
+`at` required (RFC3339 or ms, truncated to the minute, `400` unless in the past); `window` 5m–24h (default 30m).
+`{"at", "window_seconds", "apdex_t_ms", "before": {"from", "to", …ApmRed}, "after": {"from", "to", …ApmRed}, "new_error_groups": [{"group_id", "error_type", "message", "first_seen", "total_count"}]}`
+(`after` ends at now at the latest; new groups = first seen in `after`, top 20 by total count).
 
 ### `GET /api/v1/apm/services/{service_name}/databases?sort=&db_system=&limit=`
 `sort` = `time` (default) | `calls` | `slowest` (avg) | `errors`.
@@ -424,19 +749,36 @@ environment applies to all of them unless a more specific row exists. `PUT` need
 otherwise; CSRF as usual), `apdex_t_ms` an integer 1..600000 (`400`), writes the audit event
 `apm.service_settings.update`; not available with `OPENLOG_AUTH_MODE=static` (`404`, `GET` returns the default).
 
+### `GET /api/v1/apm/sampling` · `PUT /api/v1/apm/sampling` `{"policy": {…}, "version": 3}`
+The organization's tail sampling policy ([apm.md](apm.md) §4.2, D-075):
+`{"enabled": true, "policy": {"enabled", "baseline_ratio", "max_spans_per_second", "rules": [{"name", "type", "ratio", …}]}, "is_default", "version", "updated_at", "updated_by_email"}`.
+`enabled` is `OPENLOG_TAILSAMPLING_ENABLED` of the api. `is_default` (version 0) when nothing is stored.
+`PUT` requires a signed-in admin or owner (`403`), a valid policy (`400`: unknown fields, ratios outside 0..1, duplicate/reserved rule names, missing rule fields), and the version that was edited (`409 conflict` when the stored version differs). It writes the audit event `apm.tail_sampling.update` and returns the stored state. Not available with `OPENLOG_AUTH_MODE=static` (`404`; `GET` returns the keep-all default).
+
+### `POST /api/v1/apm/sampling/preview` `{"policy": {…}, "window_minutes": 60}`
+Estimates what a policy would keep of the traces stored in the last `window_minutes` (1..1440, default 60). At most 20 000 traces are examined, as a hash sample of trace ids; each weighs its adjusted count:
+`{"window_minutes", "traces_examined", "sampled_fraction", "estimated_traces", "kept_trace_ratio", "kept_span_ratio", "rules": [{"name", "matched_trace_ratio", "kept_trace_ratio"}]}`
+(the last entry is `baseline`). The rate limit is not simulated. Needs read access to telemetry.
+
 ### `GET /api/v1/apm/hosts/{host_id}/services?from=`
 Services whose resources carried `host.id` since `from` (default 24h ago):
 `{"services": [{"service_name", "service_namespace", "environment", "first_seen", "last_seen"}]}`. Unknown hosts → empty list.
 
+### `GET /api/v1/apm/map/path?service=&transaction=&namespace=&environment=&from=&to=`
+`service` and `transaction` required. `{"trace_count": 50, "nodes": ["service:frontend|shop|prod", …], "edges": ["service:frontend|shop|prod->db:postgresql/orders", …]}`:
+ids of `GET /apm/map` used by up to 50 traces of the transaction ([apm.md](apm.md) §5.1).
+
 ### `GET /api/v1/apm/map?service=&namespace=&environment=`
 ```json
 {"nodes": [{"id": "service:orders|shop|prod", "type": "service", "name": "orders", "service_namespace": "shop",
-            "environment": "prod", "requests", "throughput", "error_rate", "avg_ms", "p95_ms", "apdex"},
+            "environment": "prod", "requests", "throughput", "error_rate", "avg_ms", "p95_ms", "apdex", "host_count": 2, "container_count": 3},
            {"id": "db:postgresql/orders", "type": "db", "name": "postgresql/orders", "service_namespace": "", "environment": "", …}],
  "edges": [{"id": "service:frontend|shop|prod->service:orders|shop|prod", "source": "…", "target": "…", "target_type": "service",
             "calls", "throughput", "errors", "error_rate", "avg_ms", "p95_ms"}]}
 ```
-Node `type` ∈ `service`, `db`, `external`, `messaging`; dependency node RED is the sum of its incoming edges. `service`
+Node `type` ∈ `service`, `db`, `external`, `messaging`; dependency node RED is the sum of its incoming edges.
+`host_count`/`container_count`: hosts and containers linked to a service node since `from` (0 for dependencies).
+Without `service`, `namespace`/`environment` filter the whole map (sources and trace-linked targets). `service`
 restricts the map to edges touching that service.
 
 ### `GET /api/v1/apm/traces?service=&namespace=&environment=&transaction=&type=&min_duration_ms=&max_duration_ms=&error=&attr.<key>=&sort=&limit=`
@@ -459,8 +801,17 @@ controller within `OPENLOG_FLEET_CONTROLLER_INTERVAL`. Every change is written t
 {"mode": "auto", "channel": "stable", "target": "latest", "pinned_version": null, "waves": [10, 50, 100],
  "wave_soak_minutes": 60, "halt_failure_rate": 0.05,
  "maintenance_windows": [{"days": ["sat", "sun"], "start": "02:00", "end": "05:00"}],
+ "php_agent": {"mode": "manual", "version": "agent", "reload": "none", "exclude_bins": [], "changed_at": null},
  "is_default": false, "updated_at": "…", "updated_by_email": "…"}
 ```
+`php_agent` controls installing the PHP agent through the infra agent ([php-agent.md](php-agent.md) §7.3): `mode`
+`off` (fleet installations are removed) · `manual` (default: runtime inventory only) · `auto` (install and upgrade
+where a supported PHP runtime is found); `version` `agent` (each host gets the PHP agent of its infra agent version)
+or a SemVer version (must be a verified release when the catalog is loaded); `reload` `none` · `graceful` (PHP-FPM /
+Apache reload after a change); `exclude_bins` globs (at most 50). Hosts follow the policy's `waves` and
+`wave_soak_minutes` starting at the later of `changed_at` (set by the server when the section changes) and the
+target's release time, and its maintenance windows. A `PUT` without `php_agent` keeps the stored section.
+
 `PUT` takes the policy fields and returns the stored policy. `400 invalid_argument`: unknown mode/channel/target,
 `waves` not strictly increasing in 1..100 or not ending at 100 (1–20 waves), `wave_soak_minutes` outside 0..43200,
 `halt_failure_rate` outside 0..1, bad windows (`days` ∈ `mon`…`sun`, empty = every day; `HH:MM`, `end` may be
@@ -499,9 +850,22 @@ the reported version exactly, `state` the reported update state, `q` a substring
   "update": {"state": "failed", "from_version": "0.3.0", "to_version": "0.4.0", "error": "self-test failed", "changed_at": "…"},
   "first_seen_at": "…", "last_sync_at": "…", "rollout_id": "…" | null,
   "override": {"action": "pin", "version": "0.3.1", "updated_at": "…"} | null,
-  "outdated": true, "supported": true, "status": "already_failed", "status_target": "0.4.0" | null}],
+  "outdated": true, "supported": true, "status": "already_failed", "status_target": "0.4.0" | null,
+  "php_agent": {"reported": true, "mode": "auto", "agent_mode": "auto", "source": "remote", "capable": true, "reason": "",
+    "managed_by": "fleet", "version": "0.4.0" | null,
+    "runtimes": [{"bin": "/usr/sbin/php-fpm8.2", "version": "8.2.29", "api": "20220829", "zts": false, "debug": false,
+      "libc": "glibc", "scan_dir": "/etc/php/8.2/fpm/conf.d", "module": "20220829-nts-glibc", "supported": true,
+      "enabled": true, "loaded": true, "excluded": false}],
+    "update": {"operation": "upgrade", "version": "0.4.0", "state": "applied", "error": "", "changed_at": "…"} | null,
+    "override": {"mode": "auto", "updated_at": "…"} | null, "status": "up_to_date", "status_target": "0.4.0" | null}}],
  "next_cursor": null}
 ```
+`php_agent.status` is the PHP agent decision (same inputs as the sync response): `offer` (installs `status_target`
+at its next sync), `up_to_date`, `mode_off`, `manual`, `not_reported` (agent too old to report PHP runtimes),
+`not_capable` (no privileged pre-start step, container, no release keys), `managed_elsewhere` (installed by a
+deb/rpm/apk package or by hand: never changed), `no_php`, `invalid_version`, `no_catalog`, `target_unavailable`,
+`no_artifact`, `already_failed` (rolled back on the host), `not_in_wave`, `outside_window`. `update.state`:
+`downloading`, `restarting`, `confirming` (health check pending), `applied`, `failed`, `rolled_back`, `uninstalled`.
 `status` is the update decision for the host right now: `offer` (will get `status_target` on its next sync),
 `not_in_wave`, `outside_window`, `hold`, `not_capable`, `up_to_date`, `already_failed`, `incompatible` (no upgrade
 path from its version / below the rollback floor), `no_artifact` (platform), `rollout_paused`, `rollout_halted`,
@@ -513,6 +877,13 @@ path from its version / below the rollback floor), `no_artifact` (platform), `ro
 a pin version that is not a verified release. `DELETE` is idempotent (`204`). A pinned host moves to its version
 (upgrade or, down to the rollback floor, rollback) regardless of waves, within maintenance windows, and is not part
 of fleet rollouts.
+
+### `PUT /api/v1/fleet/hosts/{host_id}/php-agent` `{"mode": "off"|"manual"|"auto"}` · `DELETE …/php-agent`
+Enables (`auto`) or disables (`off`, removes a fleet installation) the PHP agent on one host regardless of the
+policy's `php_agent.mode`; an `auto` override skips waves (maintenance windows still apply). `PUT` returns
+`{"mode", "updated_at"}`; `404` for a host that never synced; `400` for another mode. `DELETE` is idempotent (`204`)
+and returns the host to the policy. Audit `fleet.php_agent_override.set` (`details.mode`) /
+`fleet.php_agent_override.delete`.
 
 ### `GET /api/v1/fleet/rollouts?limit=`
 Newest first (default 20, max 100): `{"rollouts": [Rollout]}`.
@@ -627,7 +998,153 @@ everything and manage channels. Not available with `OPENLOG_AUTH_MODE=static` (`
 | `GET /api/v1/alerts/channels` · `POST` · `GET/PUT/DELETE /api/v1/alerts/channels/{id}` | secrets are write-only (`secret_hints` masked; omitted secret fields keep stored values; `generated_secrets` once on create); list carries `secrets_configured`. `409` without `OPENLOG_SECRETS_KEY` |
 | `POST /api/v1/alerts/channels/{id}/test` | synchronous test send: `{"success", "status_code", "error", "duration_ms", "notification_id"}` (always `200` when the channel exists) |
 | `GET /api/v1/alerts/mutes?include_expired=` · `POST` · `PUT/DELETE /api/v1/alerts/mutes/{id}` | `starts_at`/`ends_at` (≤ 90 days), `rule_ids`, label `matchers`; `active` computed. Recurring: `schedule {timezone, days\|rrule, start_time, end_time, from, until}` (alerting.md §5.2); responses then carry the current or next occurrence in `starts_at`/`ends_at` |
+| `POST /api/v1/alerts/mutes/preview` `{"schedule"}` | any role: validates an unsaved schedule, `{"occurrences": [{"starts_at", "ends_at"}]}` (≤ 5, exceptions applied). Mute responses carry the same list as `upcoming`; schedules accept `FREQ=MONTHLY` rules, `exdates` and `holiday_calendar_ids` (alerting.md §5.2) |
+| `GET /api/v1/alerts/holiday-calendars` · `POST` · `GET/PUT/DELETE /api/v1/alerts/holiday-calendars/{id}` | named holiday date sets `{name, description, dates: ["YYYY-MM-DD" \| "MM-DD"]}` (≤ 1000) with `mute_count`; writes admin/owner; delete → `409` while mutes reference it |
+| `GET /api/v1/alerts/templates?category=&integration=` | recommended rule templates (alerting.md §2.8): `{"templates": [{"id", "category", "integration", "rule_type", "severity", "metric", "reference_metric", "name": {en, tr}, "description", "params": [...]}]}` |
+| `POST /api/v1/alerts/templates/{id}/render` `{"params", "language", "name", "channel_ids"}` | viewer (reads telemetry for ratio thresholds): `{"rule": RuleInput, "reference": {"metric", "value", "ratio"} \| null}`; `400` for invalid params, `404` unknown template, `409` when a ratio reference is missing or 0 |
 | `GET /api/v1/alerts/deliveries?channel_id=&incident_id=&status=&limit=` | delivery log newest first (default 100, max 500) with `attempt_log` |
+
+## Query language (OQL)
+
+Language: [oql.md](oql.md). Any role and API keys (`telemetry.read`); the tenant comes from the principal as for every
+telemetry endpoint. Available in both auth modes. Responses carry `Cache-Control: no-store`.
+
+### `POST /api/v1/query` `{"query", "from"?, "to"?, "variables"?}`
+`from`/`to` (RFC3339 or unix ms, both or neither) override `SINCE`/`UNTIL` (dashboards' time picker). `variables`:
+`{"name": "value" | ["v1", "v2"]}` (§3 of oql.md). Result:
+```json
+{"kind": "single" | "facets" | "timeseries" | "histogram", "event_type": "Log",
+ "columns": [{"name": "count(*)", "function": "count", "type": "number" | "string"}],
+ "facets": ["service.name"],
+ "rows": [{"facets": ["api"], "values": [42, null]}],
+ "series": [{"facets": ["api"], "column": 0, "points": [[1757757600000, 42], [1757757660000, null]]}],
+ "buckets": [{"from": 0, "to": 25, "count": 17}],
+ "compare": {"offset_seconds": 86400, "rows": [], "series": [], "buckets": []} | null,
+ "metadata": {"from": "…", "to": "…", "bucket_seconds": 60 | null, "rollup": false, "table": "logs",
+              "rows_read": 123456, "bytes_read": 7890123, "elapsed_ms": 35, "queries": 1, "facet_limit": 10,
+              "truncated": false, "warnings": ["attribute http.route is read from attributes['http.route']"]}}
+```
+- `single`: no `FACET`/`TIMESERIES`, one row without facets. `facets`: one row per group (ordered by the first column,
+  descending; `truncated` = more groups than `LIMIT`). `timeseries`: one series per group × column, points
+  `[bucket start ms, value]` for every bucket of the range. `histogram`: `buckets` only. Unused arrays are `[]`.
+- `400 invalid_argument`: syntax/validation error (message `line L, column C: …`), range or size limits (oql.md §5).
+- `422`/`429`/`504`: organization query limits and timeout (as other telemetry endpoints).
+
+### `POST /api/v1/query/validate` `{"query", "variables"?}`
+Parses and plans without reading ClickHouse (`200` also for invalid queries):
+```json
+{"valid": false, "event_type": "Log" | null, "kind": "facets" | null, "variables": ["host"],
+ "errors": [{"message": "unknown attribute \"sevrity\" for Log", "offset": 30, "length": 7, "line": 1, "column": 31}],
+ "warnings": [{"message": "…", "offset": 0, "length": 0, "line": 1, "column": 1}]}
+```
+
+### `GET /api/v1/query/schema?event_type=`
+Event types with their attributes (`name`, `type`, `aliases`, `rollup`), `maps` (`attributes`, `resource`) and
+`max_range_seconds`; functions (`name`, `signature`, `description`); keywords. With `event_type`, also the most frequent
+map keys of the last hour (`attribute_keys`, `resource_keys`, ≤ 200 each) and, for `Metric`, `metric_names` (≤ 500).
+
+## Dashboards
+
+Custom dashboards of OQL widgets (`OPENLOG_AUTH_MODE=postgres` only; `404` otherwise). Table: [postgres.md](postgres.md#dashboards-0020_dashboards).
+Reads: any role and API keys; `visibility: "private"` dashboards are visible only to their creator (and to admins once
+the creator's account is deleted). Writes need a signed-in user (CSRF as usual): members create, import and duplicate
+dashboards and change/delete their own; admins and owners change/delete any `org` dashboard (`403` otherwise). Every
+write is audited (`dashboard.{create,update,delete,duplicate,import}`, target `dashboard`).
+
+Dashboard:
+```json
+{"id": "…", "name": "Checkout", "description": "", "visibility": "org" | "private", "version": 3,
+ "variables": [{"name": "host", "label": "Host", "type": "query" | "list" | "text",
+                "query": "SELECT count(*) FROM Log FACET host.name LIMIT 100", "values": [], "default": [],
+                "multi": true, "include_all": true}],
+ "pages": [{"id": "…", "name": "Overview", "widgets": [
+   {"id": "…", "title": "Errors", "visualization": "line" | "area" | "bar" | "table" | "billboard" | "pie" | "heatmap" | "markdown",
+    "layout": {"x": 0, "y": 0, "w": 6, "h": 3}, "query": "SELECT count(*) FROM Log WHERE host.name IN ({{host}}) TIMESERIES",
+    "markdown": "", "unit": "" | "number" | "percent" | "bytes" | "bytesPerSec" | "ms" | "s",
+    "thresholds": [{"value": 100, "severity": "warning" | "critical"}], "options": {"stacked": false, "legend": true}}]}],
+ "created_by_user_id": "…" | null, "created_by_email": "…", "created_at": "…", "updated_at": "…", "can_edit": true}
+```
+Validation (`400`): name 1–200 characters, description ≤ 2000; 1–20 pages (an empty list becomes one page "Page 1"),
+page names 1–100; ≤ 100 widgets per page; layout on a 12-column grid (`0 ≤ x`, `1 ≤ w ≤ 12`, `x + w ≤ 12`, `0 ≤ y ≤ 10000`,
+`1 ≤ h ≤ 50`); non-markdown widgets need a query that parses and validates (oql.md; variables may be unset), markdown
+widgets ≤ 20 000 characters; ≤ 10 variables with unique names (`[A-Za-z_][A-Za-z0-9_]{0,63}`), `query` variables need an
+OQL query with `FACET` (values = first facet), ≤ 200 `values`; ≤ 10 thresholds per widget. Widget and page ids are kept when
+the input carries a valid id of the same dashboard, otherwise new ids are assigned.
+
+### `GET /api/v1/dashboards?q=`
+`{"dashboards": [{"id", "name", "description", "visibility", "page_count", "widget_count", "created_by_email",
+"updated_at", "can_edit"}]}`, by name; `q` filters by name substring (case-insensitive).
+
+### `POST /api/v1/dashboards` · `GET /api/v1/dashboards/{id}` · `PUT /api/v1/dashboards/{id}` · `DELETE /api/v1/dashboards/{id}`
+Input: `{"name", "description", "visibility", "variables", "pages", "version"}` (`version` required on `PUT`: the
+version that was read; `409 failed_precondition` when the dashboard changed meanwhile). `POST` → `201` Dashboard, `PUT`
+→ `200` Dashboard (version + 1, whole document replaced), `DELETE` → `204`. Unknown or invisible id → `404`.
+
+### `POST /api/v1/dashboards/{id}/widgets` `{"page_id"?, "widget"}`
+Appends one widget below the existing ones of the page (default: first page; `layout.y` is recomputed) → `200`
+Dashboard. Same permission as `PUT`.
+
+### `POST /api/v1/dashboards/{id}/duplicate` `{"name"?}`
+Copies a readable dashboard as a new dashboard of the caller (default name `"<name> (copy)"`, same visibility) → `201`.
+
+### `GET /api/v1/dashboards/{id}/export` · `POST /api/v1/dashboards/import`
+Export: `{"openlog_dashboard": 1, "name", "description", "variables", "pages": [{"name", "widgets": [widget without
+id]}]}`. Import takes the same document (plus optional `"visibility"`), validates it like `POST` and answers `201`
+Dashboard; unknown `openlog_dashboard` versions → `400`.
+
+## Usage and plans
+
+Usage metering, plan limits, quota status and billing ([usage.md](usage.md), D-079–D-081). Reads: every role of the
+organization and API keys. Export: admin, owner. Plan assignment: superadmins only (`OPENLOG_SUPERADMIN_EMAILS`, a
+session user with a verified e-mail address; organization membership not required). `period` is `current` (default),
+`previous` or `YYYY-MM` (UTC calendar month); anything else → `400`. In static auth mode the default plan applies and
+the admin and webhook endpoints do not exist.
+
+### `GET /api/v1/usage?period=`
+`{"organization": {"id","name","tenant_id"}, "period": {"id","start","end","data_until"}, "saas_mode", "plan":
+{"id","name","description","limits","enforcement"}, "plan_assigned", "usage": {"signals": [{"signal","items","bytes",
+"ingest_bytes","ingest_requests"}], "ingest_bytes", "hosts", "containers", "services", "active_hosts", "query":
+{"queries","failed","read_rows","read_bytes","cpu_seconds","memory_bytes"}}, "stored": [{"signal","retention_days",
+"bytes","compressed_bytes"}], "limits": [{"metric","used","limit","percent","level"}], "level", "ingest_blocked",
+"projection": {"ingest_bytes","ingest_percent"?}, "can_manage_plan", "billing_enabled"}`. `plan` is the effective plan
+(overrides applied); `limits` is evaluated at request time (`metric` `ingest_bytes`, `hosts`, `users`; `limit` 0 =
+unlimited; `level` `ok`, `warning`, `exceeded`). `stored` covers each signal's effective retention up to now.
+
+### `GET /api/v1/usage/daily?period=`
+`{"period", "days": [{"day": "YYYY-MM-DD", "signals": […], "ingest_bytes", "hosts", "containers", "services", "query"}]}`
+— days with any usage, ascending.
+
+### `GET /api/v1/usage/top?period=&by=service|host&limit=`
+`{"period", "by", "entries": [{"key", "items", "bytes", "bytes_by_signal": {"traces","logs","metrics"}}]}` ordered by
+stored bytes; `limit` 1–100 (default 10).
+
+### `GET /api/v1/usage/export?period=&format=csv|json`
+Admin, owner. Attachment `openlog-usage-<tenant>-<period>.<format>`. CSV (`text/csv`): `tenant_id,period,day,metric,value`
+long format (usage.md §9); JSON: `{"organization", "plan_id", "period", "totals", "days"}`.
+
+### `GET /api/v1/usage/status`
+Latest stored evaluation (every minute, api leader): `{"level", "ingest_blocked", "metrics": [QuotaMetric], "saas_mode",
+"plan_id"?, "evaluated_at"?, "period_start"?}`; `{"level": "ok", "metrics": []}` before the first evaluation. Used by the
+UI banner.
+
+### `GET /api/v1/plans`
+`{"plans": [Plan], "default"}` — the configured catalog.
+
+### `GET /api/v1/admin/orgs/{org}/plan` · `PUT /api/v1/admin/orgs/{org}/plan`
+Superadmin. `{org}` is the organization id or tenant id (`404` when unknown). Response `{"organization", "plan_id",
+"assigned", "overrides", "billing": {"provider","customer_id","subscription_id"}, "note", "updated_at", "updated_by",
+"effective": Plan}`. `PUT` body `{"plan_id", "overrides"?, "billing"?, "note"?}`: unknown `plan_id`, invalid overrides or a
+`retention_days` override longer than the longest plan retention → `400`. Absent `overrides`/`billing`/`note` keep the
+stored values. Audit `plan.update`.
+
+### `POST /api/v1/billing/webhooks/{provider}`
+Public; the configured provider (`OPENLOG_BILLING_PROVIDER`) verifies the signature. Another or no provider → `404`;
+invalid signature or an unmapped plan reference → `400`. `200 {"received": true, "changed"}`.
+
+### Ingest: tenant quota (`429`)
+In SaaS mode OTLP ingest answers `429` + `Retry-After` (gRPC `RESOURCE_EXHAUSTED` + `RetryInfo`) with a
+`google.rpc.Status` message when the organization's monthly ingest quota is used up or its ingest rate limit is exceeded
+(usage.md §4.4).
 
 ## Edge cases (machine-readable spec: [openapi.yaml](openapi.yaml))
 

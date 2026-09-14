@@ -30,6 +30,10 @@ func main() {
 			func(ctx context.Context) error { return app.RunProcessor(ctx, cfg, adm, log) },
 			func(ctx context.Context) error { return app.RunAPI(ctx, cfg, adm, log) },
 		}
+		// Tail sampling stage between ingest and processor (D-075), in-process when enabled.
+		if cfg.TailSampling.Enabled {
+			fns = append(fns, func(ctx context.Context) error { return app.RunSampler(ctx, cfg, adm, log) })
+		}
 		// Alert evaluator + dispatcher (docs/contracts/alerting.md); needs PostgreSQL.
 		if cfg.Alert.Enabled && cfg.AuthMode == "postgres" {
 			fns = append(fns, func(ctx context.Context) error { return app.RunAlert(ctx, cfg, adm, log) })

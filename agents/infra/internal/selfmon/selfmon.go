@@ -30,6 +30,8 @@ type Stats struct {
 	integrationDurations   map[string]time.Duration
 
 	php *PHPSnapshot // nil until the PHP forwarder has started once
+
+	phpAgentOps map[PHPAgentOp]uint64 // nil until the first PHP agent operation
 }
 
 // PHPSnapshot holds the PHP forwarder counters (openlog.agent.php.*).
@@ -119,6 +121,22 @@ func (s *Stats) AddUpdateAttempt(result string) {
 	s.mu.Unlock()
 }
 
+// PHPAgentOp identifies an openlog.agent.php_agent.operations series (php-agent.md §7.3).
+type PHPAgentOp struct {
+	Operation string // install, upgrade, rollback, uninstall
+	Result    string // success, failure
+}
+
+// AddPHPAgentOperation increments openlog.agent.php_agent.operations{operation, result}.
+func (s *Stats) AddPHPAgentOperation(operation, result string) {
+	s.mu.Lock()
+	if s.phpAgentOps == nil {
+		s.phpAgentOps = map[PHPAgentOp]uint64{}
+	}
+	s.phpAgentOps[PHPAgentOp{operation, result}]++
+	s.mu.Unlock()
+}
+
 // New creates empty stats; start is the counters' start timestamp.
 func New(start time.Time) *Stats {
 	return &Stats{
@@ -186,6 +204,8 @@ type Snapshot struct {
 	IntegrationDurations   map[string]time.Duration
 
 	PHP *PHPSnapshot // nil until the PHP forwarder has started once
+
+	PHPAgentOps map[PHPAgentOp]uint64 // empty until the first PHP agent operation
 }
 
 // Snapshot copies the current values.
@@ -223,6 +243,12 @@ func (s *Stats) Snapshot() Snapshot {
 	}
 	for k, v := range s.updateAttempts {
 		out.UpdateAttempts[k] = v
+	}
+	if len(s.phpAgentOps) > 0 {
+		out.PHPAgentOps = make(map[PHPAgentOp]uint64, len(s.phpAgentOps))
+		for k, v := range s.phpAgentOps {
+			out.PHPAgentOps[k] = v
+		}
 	}
 	for k, v := range s.exportItems {
 		out.ExportItems[k] = v

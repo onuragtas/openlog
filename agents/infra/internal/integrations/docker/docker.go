@@ -51,12 +51,26 @@ func (i Integration) New(*integrations.Instance, integrations.Endpoint) (integra
 	return collector{src: i.Source}, nil
 }
 
-type collector struct{ src *containers.Source }
+// source is the part of *containers.Source the collector uses.
+type source interface {
+	List(ctx context.Context, maxAge time.Duration) ([]containers.Container, error)
+	DockerErr() error
+}
+
+type collector struct{ src source }
 
 func (collector) Close() {}
 
+// Collect refreshes the (cached) container listing and reports the Docker
+// Engine API state of it. The listing merges CRI runtimes (containerd, CRI-O)
+// and succeeds when only a CRI runtime answers, so the state comes from
+// DockerErr, not from the listing error.
 func (c collector) Collect(ctx context.Context, _ *integrations.Batch) error {
-	_, err := c.src.List(ctx, 15*time.Second)
+	_, listErr := c.src.List(ctx, 15*time.Second)
+	err := c.src.DockerErr()
+	if err == nil && listErr != nil && !errors.Is(listErr, containers.ErrNoRuntime) {
+		err = listErr // defensive: no Docker result recorded
+	}
 	switch {
 	case err == nil:
 		return nil

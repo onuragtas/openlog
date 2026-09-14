@@ -251,6 +251,11 @@ func (c *collector) Collect(ctx context.Context, b *integrations.Batch) error {
 			inst.GaugeInt("postgresql.wal.age", "s", i64(r[0]))
 		}
 	}
+	if qs := c.inst.Settings.QueryStats; qs != nil && qs.Enabled {
+		if err := c.collectQueryStats(ctx, b, main, dbs); err != nil {
+			partial = append(partial, "pg_stat_statements: "+err.Error())
+		}
+	}
 
 	want := map[string]bool{}
 	for _, d := range dbs {

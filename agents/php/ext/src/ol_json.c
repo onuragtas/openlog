@@ -1,5 +1,6 @@
 /*
- * JSON encoder (contract §2), datagram splitting (§2.3) and non-blocking transport (§1).
+ * Message encoding (contract §2), datagram splitting (§2.3) and non-blocking transport (§1). The JSON writer itself
+ * is in ol_text.c.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "ol.h"
@@ -15,119 +16,36 @@
 # define MSG_NOSIGNAL 0
 #endif
 
-typedef struct {
-	char *p;
-	size_t len;
-	size_t cap;
-	bool ok;
-} ol_w;
-
-static inline void w_raw(ol_w *w, const char *s, size_t n)
+static inline void w_str(ol_w *w, const char *s)
 {
-	if (!w->ok || w->len + n > w->cap) {
-		w->ok = false;
-		return;
-	}
-	memcpy(w->p + w->len, s, n);
-	w->len += n;
+	ol_w_strn(w, s ? s : "", s ? strlen(s) : 0);
 }
 
-#define W_LIT(w, lit) w_raw((w), (lit), sizeof(lit) - 1)
-
-static void w_strn(ol_w *w, const char *s, size_t n)
+/* A string from outside the arena (environment, ini): UTF-8 cleaned and truncated. */
+static void w_ext_str(ol_w *w, const char *s, size_t max)
 {
-	static const char hex[] = "0123456789abcdef";
-	size_t i, run = 0;
-	W_LIT(w, "\"");
-	for (i = 0; i < n && w->ok; i++) {
-		unsigned char c = (unsigned char) s[i];
-		if (c == '"' || c == '\\' || c < 0x20 || c == 0x7f) {
-			if (run) {
-				w_raw(w, s + i - run, run);
-				run = 0;
-			}
-			if (c == '"' || c == '\\') {
-				char e[2] = {'\\', (char) c};
-				w_raw(w, e, 2);
-			} else if (c == '\n') {
-				W_LIT(w, "\\n");
-			} else if (c == '\t') {
-				W_LIT(w, "\\t");
-			} else if (c == '\r') {
-				W_LIT(w, "\\r");
-			} else {
-				char e[6] = {'\\', 'u', '0', '0', hex[c >> 4], hex[c & 15]};
-				w_raw(w, e, 6);
-			}
-		} else {
-			run++;
-		}
+	char buf[OL_STR_MAX + 1];
+	size_t n = strlen(s);
+	if (max > OL_STR_MAX) {
+		max = OL_STR_MAX;
 	}
-	if (run) {
-		w_raw(w, s + n - run, run);
-	}
-	W_LIT(w, "\"");
-}
-
-static void w_str(ol_w *w, const char *s)
-{
-	w_strn(w, s ? s : "", s ? strlen(s) : 0);
-}
-
-static void w_u64(ol_w *w, uint64_t v)
-{
-	char b[24];
-	int n = snprintf(b, sizeof(b), "%llu", (unsigned long long) v);
-	w_raw(w, b, (size_t) n);
-}
-
-static void w_i64(ol_w *w, int64_t v)
-{
-	char b[24];
-	int n = snprintf(b, sizeof(b), "%lld", (long long) v);
-	w_raw(w, b, (size_t) n);
-}
-
-static void w_dbl(ol_w *w, double v)
-{
-	char b[40];
-	int n;
-	if (v != v || v > 1.7976931348623157e308 || v < -1.7976931348623157e308) {
-		W_LIT(w, "0.0");
-		return;
-	}
-	n = snprintf(b, sizeof(b), "%.17g", v);
-	w_raw(w, b, (size_t) n);
-	if (!memchr(b, '.', (size_t) n) && !memchr(b, 'e', (size_t) n) && !memchr(b, 'n', (size_t) n)) {
-		W_LIT(w, ".0");
-	}
-}
-
-static void w_id(ol_w *w, uint64_t id)
-{
-	char b[19];
-	if (id == 0) {
-		W_LIT(w, "\"\"");
-		return;
-	}
-	snprintf(b, sizeof(b), "\"%016llx\"", (unsigned long long) id);
-	w_raw(w, b, 18);
+	n = ol_utf8_clean(buf, s, n, max);
+	ol_w_strn(w, buf, n);
 }
 
 static void w_attrs(ol_w *w, ol_attr *a, bool *first)
 {
 	for (; a && w->ok; a = a->next) {
 		if (!*first) {
-			W_LIT(w, ",");
+			OL_W_LIT(w, ",");
 		}
 		*first = false;
-		w_str(w, a->key);
-		W_LIT(w, ":");
+		ol_w_key(w, a->key);
 		switch (a->type) {
-			case OL_AT_STR: w_strn(w, a->v.s.p, a->v.s.len); break;
-			case OL_AT_INT: w_i64(w, a->v.i); break;
-			case OL_AT_DBL: w_dbl(w, a->v.d); break;
-			default: if (a->v.b) { W_LIT(w, "true"); } else { W_LIT(w, "false"); } break;
+			case OL_AT_STR: ol_w_strn(w, a->v.s.p, a->v.s.len); break;
+			case OL_AT_INT: ol_w_i64(w, a->v.i); break;
+			case OL_AT_DBL: ol_w_dbl(w, a->v.d); break;
+			default: if (a->v.b) { OL_W_LIT(w, "true"); } else { OL_W_LIT(w, "false"); } break;
 		}
 	}
 }
@@ -143,59 +61,59 @@ static void w_span(ol_w *w, ol_node *n, uint32_t idx, bool with_fast)
 	bool first = true;
 	ol_event *e;
 
-	W_LIT(w, "{\"id\":");
-	w_id(w, n->id);
-	W_LIT(w, ",\"parent\":");
+	OL_W_LIT(w, "{\"id\":");
+	ol_w_id(w, n->id);
+	OL_W_LIT(w, ",\"parent\":");
 	if (with_fast && n->seg_parent != OL_NONE && n->seg_parent < OLG(nsegs)) {
-		w_id(w, OLG(segs)[n->seg_parent].id); /* function trace sent: the innermost function segment */
+		ol_w_id(w, OLG(segs)[n->seg_parent].id); /* function trace sent: the innermost function segment */
 	} else {
-		w_id(w, p ? p->id : (idx == 0 ? OLG(remote_parent) : 0));
+		ol_w_id(w, p ? p->id : (idx == 0 ? OLG(remote_parent) : 0));
 	}
-	W_LIT(w, ",\"name\":");
+	OL_W_LIT(w, ",\"name\":");
 	w_str(w, n->name && *n->name ? n->name : "php");
-	W_LIT(w, ",\"kind\":");
-	w_u64(w, n->kind);
-	W_LIT(w, ",\"start\":");
-	w_u64(w, ol_unix_of(n->start));
-	W_LIT(w, ",\"dur\":");
-	w_u64(w, n->dur);
-	W_LIT(w, ",\"status\":");
-	w_u64(w, n->status);
+	OL_W_LIT(w, ",\"kind\":");
+	ol_w_u64(w, n->kind);
+	OL_W_LIT(w, ",\"start\":");
+	ol_w_u64(w, ol_unix_of(n->start));
+	OL_W_LIT(w, ",\"dur\":");
+	ol_w_u64(w, n->dur);
+	OL_W_LIT(w, ",\"status\":");
+	ol_w_u64(w, n->status);
 	if (n->status_msg && *n->status_msg) {
-		W_LIT(w, ",\"status_msg\":");
+		OL_W_LIT(w, ",\"status_msg\":");
 		w_str(w, n->status_msg);
 	}
-	W_LIT(w, ",\"attrs\":{");
+	OL_W_LIT(w, ",\"attrs\":{");
 	w_attrs(w, n->attrs, &first);
 	if (with_fast && n->fast_calls) {
 		if (!first) {
-			W_LIT(w, ",");
+			OL_W_LIT(w, ",");
 		}
 		first = false;
-		W_LIT(w, "\"openlog.php.fast_calls\":");
-		w_u64(w, n->fast_calls);
-		W_LIT(w, ",\"openlog.php.fast_calls_ns\":");
-		w_u64(w, n->fast_ns);
+		OL_W_LIT(w, "\"openlog.php.fast_calls\":");
+		ol_w_u64(w, n->fast_calls);
+		OL_W_LIT(w, ",\"openlog.php.fast_calls_ns\":");
+		ol_w_u64(w, n->fast_ns);
 	}
-	W_LIT(w, "}");
+	OL_W_LIT(w, "}");
 	if (n->events) {
-		W_LIT(w, ",\"events\":[");
+		OL_W_LIT(w, ",\"events\":[");
 		for (e = n->events; e && w->ok; e = e->next) {
 			bool f2 = true;
 			if (e != n->events) {
-				W_LIT(w, ",");
+				OL_W_LIT(w, ",");
 			}
-			W_LIT(w, "{\"name\":");
+			OL_W_LIT(w, "{\"name\":");
 			w_str(w, e->name);
-			W_LIT(w, ",\"time\":");
-			w_u64(w, ol_unix_of(e->mono));
-			W_LIT(w, ",\"attrs\":{");
+			OL_W_LIT(w, ",\"time\":");
+			ol_w_u64(w, ol_unix_of(e->mono));
+			OL_W_LIT(w, ",\"attrs\":{");
 			w_attrs(w, e->attrs, &f2);
-			W_LIT(w, "}}");
+			OL_W_LIT(w, "}}");
 		}
-		W_LIT(w, "]");
+		OL_W_LIT(w, "]");
 	}
-	W_LIT(w, "}");
+	OL_W_LIT(w, "}");
 }
 
 /* ---------------- transport ---------------- */
@@ -327,72 +245,78 @@ static bool ol_send(const char *buf, size_t len)
 static void w_resource(ol_w *w)
 {
 	const char *v;
-	W_LIT(w, "\"resource\":{\"service.name\":");
+	OL_W_LIT(w, "\"resource\":{\"service.name\":");
 	v = getenv("OPENLOG_SERVICE_NAME");
 	if (v && *v) {
-		w_strn(w, v, strlen(v) > 256 ? 256 : strlen(v));
+		w_ext_str(w, v, 256);
 	} else if (OLG(service_name) && *OLG(service_name)) {
-		w_strn(w, OLG(service_name), strlen(OLG(service_name)) > 256 ? 256 : strlen(OLG(service_name)));
+		w_ext_str(w, OLG(service_name), 256);
 	} else {
-		w_str(w, OLG(is_cli) ? "php-cli" : "php-app");
+		w_str(w, OLG(txn_web) ? "php-app" : "php-cli");
 	}
 #define OL_RES_OPT(key, env, ini) do { \
 		const char *e_ = getenv(env); \
 		const char *val_ = (e_ && *e_) ? e_ : (ini); \
-		if (val_ && *val_) { W_LIT(w, ",\"" key "\":"); w_strn(w, val_, strlen(val_) > 256 ? 256 : strlen(val_)); } \
+		if (val_ && *val_) { OL_W_LIT(w, ",\"" key "\":"); w_ext_str(w, val_, 256); } \
 	} while (0)
 	OL_RES_OPT("service.namespace", "OPENLOG_SERVICE_NAMESPACE", OLG(service_namespace));
 	OL_RES_OPT("service.version", "OPENLOG_SERVICE_VERSION", OLG(service_version));
 	OL_RES_OPT("deployment.environment.name", "OPENLOG_ENVIRONMENT", OLG(environment));
 #undef OL_RES_OPT
-	W_LIT(w, ",\"process.runtime.name\":\"php\",\"process.runtime.version\":");
+	OL_W_LIT(w, ",\"process.runtime.name\":\"php\",\"process.runtime.version\":");
 	w_str(w, PHP_VERSION);
-	W_LIT(w, ",\"php.sapi\":");
+	OL_W_LIT(w, ",\"php.sapi\":");
 	w_str(w, sapi_module.name);
-	W_LIT(w, ",\"telemetry.distro.name\":\"openlog-php\",\"telemetry.distro.version\":\"" PHP_OPENLOG_VERSION "\"");
+	OL_W_LIT(w, ",\"telemetry.distro.name\":\"openlog-php\",\"telemetry.distro.version\":\"" PHP_OPENLOG_VERSION "\"");
 	if (OLG(container_id)[0]) {
-		W_LIT(w, ",\"container.id\":");
+		OL_W_LIT(w, ",\"container.id\":");
 		w_str(w, OLG(container_id));
 	}
-	W_LIT(w, "}");
+	OL_W_LIT(w, "}");
 }
 
-static size_t w_header(ol_w *w, bool function_trace)
+static size_t w_header(ol_w *w, const uint8_t *trace_id, double ratio, bool function_trace)
 {
 	static const char hex[] = "0123456789abcdef";
 	char tid[34];
 	int i;
 	w->len = 0;
 	w->ok = true;
-	W_LIT(w, "{\"v\":1,\"pid\":");
-	w_u64(w, (uint64_t) getpid());
+	OL_W_LIT(w, "{\"v\":1,\"pid\":");
+	ol_w_u64(w, (uint64_t) getpid());
 	tid[0] = '"';
 	for (i = 0; i < 16; i++) {
-		tid[1 + 2 * i] = hex[OLG(trace_id)[i] >> 4];
-		tid[2 + 2 * i] = hex[OLG(trace_id)[i] & 15];
+		tid[1 + 2 * i] = hex[trace_id[i] >> 4];
+		tid[2 + 2 * i] = hex[trace_id[i] & 15];
 	}
 	tid[33] = '"';
-	W_LIT(w, ",\"trace_id\":");
-	w_raw(w, tid, 34);
-	W_LIT(w, ",");
+	OL_W_LIT(w, ",\"trace_id\":");
+	ol_w_raw(w, tid, 34);
+	OL_W_LIT(w, ",");
 	w_resource(w);
-	W_LIT(w, ",\"sampling_ratio\":");
-	w_dbl(w, OLG(applied_ratio) > 0 ? OLG(applied_ratio) : 1.0);
+	OL_W_LIT(w, ",\"sampling_ratio\":");
+	ol_w_dbl(w, ratio > 0 ? ratio : 1.0);
 	if (function_trace) {
-		W_LIT(w, ",\"function_trace\":true");
+		OL_W_LIT(w, ",\"function_trace\":true");
 	} else {
-		W_LIT(w, ",\"function_trace\":false");
+		OL_W_LIT(w, ",\"function_trace\":false");
 	}
-	W_LIT(w, ",\"spans\":[");
+	OL_W_LIT(w, ",\"spans\":[");
 	return w->len;
 }
 
-static bool ol_send_part(ol_w *w, int seq, bool last)
+static bool ol_send_part(ol_w *w, int seq, bool last, uint32_t dropped)
 {
-	char tail[96];
-	int n = snprintf(tail, sizeof(tail), "],\"seq\":%d,\"last\":%s,\"dropped_spans\":%u}", seq, last ? "true" : "false", OLG(dropped));
 	w->cap = OL_DGRAM_MAX;
-	w_raw(w, tail, (size_t) n);
+	OL_W_LIT(w, "],\"seq\":");
+	ol_w_u64(w, (uint64_t) seq);
+	if (last) {
+		OL_W_LIT(w, ",\"last\":true,\"dropped_spans\":");
+	} else {
+		OL_W_LIT(w, ",\"last\":false,\"dropped_spans\":");
+	}
+	ol_w_u64(w, dropped);
+	OL_W_LIT(w, "}");
 	if (!w->ok) {
 		return false;
 	}
@@ -407,7 +331,7 @@ static void w_zstr(ol_w *w, zend_string *s)
 {
 	char buf[OL_STR_MAX + 1];
 	size_t n = ol_utf8_clean(buf, ZSTR_VAL(s), ZSTR_LEN(s), OL_STR_MAX);
-	w_strn(w, buf, n);
+	ol_w_strn(w, buf, n);
 }
 
 /* A sampled function segment (ol_sampler.c) as a kind 1 span. Times are ± half a sampling interval. */
@@ -419,11 +343,11 @@ static void w_segment(ol_w *w, ol_seg *s, ol_node *root)
 	char name[1100];
 	size_t nl;
 
-	W_LIT(w, "{\"id\":");
-	w_id(w, s->id);
-	W_LIT(w, ",\"parent\":");
-	w_id(w, s->parent != OL_NONE && s->parent < OLG(nsegs) ? OLG(segs)[s->parent].id : root->id);
-	W_LIT(w, ",\"name\":");
+	OL_W_LIT(w, "{\"id\":");
+	ol_w_id(w, s->id);
+	OL_W_LIT(w, ",\"parent\":");
+	ol_w_id(w, s->parent != OL_NONE && s->parent < OLG(nsegs) ? OLG(segs)[s->parent].id : root->id);
+	OL_W_LIT(w, ",\"name\":");
 	if (s->cname) {
 		nl = (size_t) snprintf(name, sizeof(name), "%.*s::%.*s", (int) (ZSTR_LEN(s->cname) > 512 ? 512 : ZSTR_LEN(s->cname)),
 			ZSTR_VAL(s->cname), (int) (ZSTR_LEN(s->fname) > 512 ? 512 : ZSTR_LEN(s->fname)), ZSTR_VAL(s->fname));
@@ -436,27 +360,27 @@ static void w_segment(ol_w *w, ol_seg *s, ol_node *root)
 	{
 		char clean[sizeof(name)];
 		size_t cl = ol_utf8_clean(clean, name, nl, sizeof(name) - 1);
-		w_strn(w, clean, cl);
+		ol_w_strn(w, clean, cl);
 	}
-	W_LIT(w, ",\"kind\":1,\"start\":");
-	w_u64(w, ol_unix_of(start));
-	W_LIT(w, ",\"dur\":");
-	w_u64(w, end > start ? end - start : 0);
-	W_LIT(w, ",\"status\":0,\"attrs\":{\"code.function.name\":");
+	OL_W_LIT(w, ",\"kind\":1,\"start\":");
+	ol_w_u64(w, ol_unix_of(start));
+	OL_W_LIT(w, ",\"dur\":");
+	ol_w_u64(w, end > start ? end - start : 0);
+	OL_W_LIT(w, ",\"status\":0,\"attrs\":{\"code.function.name\":");
 	w_zstr(w, s->fname);
 	if (s->cname) {
-		W_LIT(w, ",\"code.namespace\":");
+		OL_W_LIT(w, ",\"code.namespace\":");
 		w_zstr(w, s->cname);
 	}
 	if (s->file) {
-		W_LIT(w, ",\"code.file.path\":");
+		OL_W_LIT(w, ",\"code.file.path\":");
 		w_zstr(w, s->file);
-		W_LIT(w, ",\"code.line.number\":");
-		w_u64(w, s->line);
+		OL_W_LIT(w, ",\"code.line.number\":");
+		ol_w_u64(w, s->line);
 	}
-	W_LIT(w, ",\"openlog.php.segment\":\"function\",\"openlog.php.samples\":");
-	w_u64(w, s->samples);
-	W_LIT(w, "}}");
+	OL_W_LIT(w, ",\"openlog.php.segment\":\"function\",\"openlog.php.samples\":");
+	ol_w_u64(w, s->samples);
+	OL_W_LIT(w, "}}");
 }
 
 static inline bool ol_emitted(ol_node *n, bool segs)
@@ -504,14 +428,12 @@ void ol_emit(void)
 				}
 			}
 		}
-	} else {
-		/* segments are not sent: their drops do not count */
 	}
 
 	OLG(retry_budget) = 20;
 	w.p = OLG(out);
 	w.cap = OL_DGRAM_MAX - OL_TAIL_RESERVE;
-	header_len = w_header(&w, segs);
+	header_len = w_header(&w, OLG(trace_id), OLG(applied_ratio), segs);
 	if (!w.ok) {
 		OLG(c_dropped_messages)++;
 		OLG(p_dropped_messages)++;
@@ -526,13 +448,13 @@ void ol_emit(void)
 			}
 			mark = w.len;
 			if (any_in_part) {
-				W_LIT(&w, ",");
+				OL_W_LIT(&w, ",");
 			}
 			w_span(&w, n, i, segs);
 		} else {
 			mark = w.len;
 			if (any_in_part) {
-				W_LIT(&w, ",");
+				OL_W_LIT(&w, ",");
 			}
 			w_segment(&w, &OLG(segs)[i - nn], root);
 		}
@@ -551,7 +473,7 @@ void ol_emit(void)
 			OLG(dropped) += 1;
 			continue;
 		}
-		if (!ol_send_part(&w, seq, false)) {
+		if (!ol_send_part(&w, seq, false, OLG(dropped))) {
 			send_ok = false;
 		}
 		seq++;
@@ -561,7 +483,7 @@ void ol_emit(void)
 		any_in_part = false;
 		i--; /* retry this span in the next part */
 	}
-	if (!ol_send_part(&w, seq, true)) {
+	if (!ol_send_part(&w, seq, true, OLG(dropped))) {
 		send_ok = false;
 	}
 	OLG(c_messages)++;
@@ -570,6 +492,70 @@ void ol_emit(void)
 		OLG(p_send_errors) = 0;
 		OLG(p_dropped_messages) = 0;
 	} else {
+		OLG(c_send_errors)++;
+		OLG(p_send_errors)++;
+		OLG(c_dropped_messages)++;
+		OLG(p_dropped_messages)++;
+	}
+}
+
+static void w_light_attr(ol_w *w, const char *key, const char *value)
+{
+	if (value && *value) {
+		OL_W_LIT(w, ",");
+		ol_w_key(w, key);
+		w_str(w, value);
+	}
+}
+
+/* A concurrent worker request (inst_workers.c): one message with its root span only. Strings are UTF-8 clean. */
+void ol_emit_light(const ol_wtx *t)
+{
+	ol_w w;
+	char norm[1024], name[1100], clean[1100];
+	const char *method = t->method[0] ? t->method : "GET";
+	size_t cl;
+	int nl;
+
+	w.p = OLG(out);
+	w.cap = OL_DGRAM_MAX - OL_TAIL_RESERVE;
+	w_header(&w, t->trace_id, t->ratio, false);
+	ol_normalize_path(norm, sizeof(norm), t->path, strlen(t->path));
+	nl = snprintf(name, sizeof(name), "%s %s", method, norm);
+	nl = nl < 0 ? 0 : ((size_t) nl >= sizeof(name) ? (int) sizeof(name) - 1 : nl);
+	cl = ol_utf8_clean(clean, name, (size_t) nl, sizeof(clean) - 1);
+	OL_W_LIT(&w, "{\"id\":");
+	ol_w_id(&w, t->span_id);
+	OL_W_LIT(&w, ",\"parent\":");
+	ol_w_id(&w, t->remote_parent);
+	OL_W_LIT(&w, ",\"name\":");
+	ol_w_strn(&w, clean, cl);
+	OL_W_LIT(&w, ",\"kind\":2,\"start\":");
+	ol_w_u64(&w, t->start_unix);
+	OL_W_LIT(&w, ",\"dur\":");
+	ol_w_u64(&w, ol_mono_ns() - t->start_mono);
+	OL_W_LIT(&w, ",\"status\":");
+	ol_w_u64(&w, t->status >= 500 ? OL_STATUS_ERROR : OL_STATUS_UNSET);
+	OL_W_LIT(&w, ",\"attrs\":{\"openlog.php.concurrent\":true");
+	w_light_attr(&w, "http.request.method", method);
+	w_light_attr(&w, "url.path", t->path);
+	w_light_attr(&w, "url.scheme", t->https ? "https" : "http");
+	w_light_attr(&w, "server.address", t->host);
+	if (t->port > 0) {
+		OL_W_LIT(&w, ",\"server.port\":");
+		ol_w_i64(&w, t->port);
+	}
+	w_light_attr(&w, "client.address", t->client);
+	w_light_attr(&w, "user_agent.original", t->ua);
+	w_light_attr(&w, "network.protocol.version", t->proto);
+	if (t->status > 0) {
+		OL_W_LIT(&w, ",\"http.response.status_code\":");
+		ol_w_i64(&w, t->status);
+	}
+	OL_W_LIT(&w, "}}");
+	OLG(retry_budget) = 20;
+	OLG(c_messages)++;
+	if (!w.ok || !ol_send_part(&w, 0, true, 0)) {
 		OLG(c_send_errors)++;
 		OLG(p_send_errors)++;
 		OLG(c_dropped_messages)++;

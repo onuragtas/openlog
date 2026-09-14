@@ -42,16 +42,15 @@ test("integrations: overview, Redis panel with alert preset, needs-configuration
   await expect(page).toHaveURL(new RegExp(`/hosts/${WEB}/integrations/redis/`));
   await expect(page.getByRole("heading", { name: "Redis integration" })).toBeVisible();
   await expect(page.getByTestId("integration-chart")).toHaveCount(6);
-  await expect(page.getByTestId("alert-preset")).toHaveCount(3);
-  await expect(page.getByTestId("alert-preset").first()).toContainText("921.6 MiB"); // 90% of maxmemory
+  // Recommended alert templates for Redis (alerting.md §2.8): set one up for this instance and create it.
+  await expect(page.getByTestId("alert-template")).toHaveCount(2);
   await shot(page, "integ-mock-redis");
-
-  // One click opens the rule editor prefilled for this instance.
-  await page.getByRole("link", { name: "Create alert: Memory near maxmemory" }).click();
-  await expect(page).toHaveURL(/\/alerts\/rules\/new/);
-  await expect
-    .poll(() => page.locator("input").evaluateAll((els) => els.map((e) => (e as unknown as { value: string }).value)))
-    .toEqual(expect.arrayContaining(["redis.memory.used", "966367642", "redis", "/usr/bin/redis-check-rdb", expect.stringContaining("Memory near maxmemory – web-1")]));
+  await page.getByRole("button", { name: "Set up Redis memory near maxmemory" }).click();
+  const setup = page.getByTestId("template-setup");
+  await expect(setup.getByTestId("template-reference")).toContainText("921.6 MiB"); // 90% of maxmemory
+  await expect(setup.getByTestId("template-preview")).toBeVisible();
+  await setup.getByRole("button", { name: "Create rule" }).click();
+  await expect(setup.getByTestId("template-created")).toBeVisible();
 
   // db-1 services tab → Redis needs configuration: inline form (remote config) instead of charts, the
   // config.yaml snippet as a collapsed manual alternative.

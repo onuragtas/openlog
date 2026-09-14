@@ -38,9 +38,12 @@ func TestClientOptionsTLSAndSASL(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer cl.Close()
-			tc, _ := cl.OptValue(kgo.DialTLSConfig).(*tls.Config)
-			if tc == nil || tc.RootCAs == nil || len(tc.Certificates) != 1 {
-				t.Errorf("dial TLS config = %+v", tc)
+			// TLS is dialed through config.TLSReloader (certificate reload, D-048), not a static DialTLSConfig.
+			if tc, _ := cl.OptValue(kgo.DialTLSConfig).(*tls.Config); tc != nil {
+				t.Errorf("static dial TLS config = %+v", tc)
+			}
+			if dial := cl.OptValue(kgo.Dialer); dial == nil {
+				t.Error("no TLS dialer")
 			}
 			mechs, _ := cl.OptValue(kgo.SASL).([]sasl.Mechanism)
 			if len(mechs) != 1 || mechs[0].Name() != mech {

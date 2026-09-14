@@ -25,9 +25,11 @@ type KeyInfo struct {
 
 // KeyStore is the persistent license key store (PostgreSQL).
 type KeyStore interface {
-	// LookupLicenseKey returns the active key with SHA-256 hash keyHash, or
-	// ErrUnknownKey when it does not exist or is revoked.
-	LookupLicenseKey(ctx context.Context, keyHash []byte) (KeyInfo, error)
+	// LookupLicenseKey returns the active key whose stored hash is one of hashes
+	// (KeyHasher.Candidates, current format first), or ErrUnknownKey when it
+	// does not exist or is revoked. A key found by a later candidate is
+	// rewritten to hashes[0] in the same round trip (D-044).
+	LookupLicenseKey(ctx context.Context, hashes [][]byte) (KeyInfo, error)
 	// TouchLicenseKeys records that keys were used at "at" (coarsely).
 	TouchLicenseKeys(ctx context.Context, keyIDs []string, at time.Time) error
 }
@@ -41,9 +43,12 @@ type CacheOptions struct {
 	LookupTimeout time.Duration // per store lookup [2s]
 	TouchInterval time.Duration // last_used_at flush period [60s]
 	MaxEntries    int           // bound on cached keys (memory) [100000]
-	Registerer    prometheus.Registerer
-	Log           *slog.Logger
-	Now           func() time.Time
+	// Hasher computes the stored hash candidates on a cache miss (OPENLOG_KEY_HASH_SECRET) [nil: SHA-256].
+	// Cache hits never hash with it: entries are keyed by an in-memory SHA-256 of the key.
+	Hasher     *KeyHasher
+	Registerer prometheus.Registerer
+	Log        *slog.Logger
+	Now        func() time.Time
 }
 
 func (o *CacheOptions) defaults() {
@@ -136,7 +141,7 @@ func (c *Cached) Resolve(ctx context.Context, key string) (string, error) {
 			return cur, nil
 		}
 		lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.o.LookupTimeout)
-		info, err := c.store.LookupLicenseKey(lctx, sum[:])
+		info, err := c.store.LookupLicenseKey(lctx, c.o.Hasher.Candidates(key))
 		cancel()
 		now := c.o.Now()
 		switch {

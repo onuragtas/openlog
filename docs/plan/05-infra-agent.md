@@ -33,7 +33,7 @@ Her öğe bir kategori ve bu kategori içinde benzersiz bir anahtar taşır.
 | `hardware` | `/proc/cpuinfo`, `/proc/meminfo`, `/sys/class/dmi/id` | `cpu`, `memory`, `dmi` |
 | `kernel_module` | `/proc/modules` | modül adı |
 | `package` | dpkg (`/var/lib/dpkg/status`), rpm (`rpmdb.sqlite` doğrudan okunur, cgo/bağımlılık yok; eski BDB/ndb için `rpm` CLI), apk (`/lib/apk/db/installed`) | `<yönetici>:<paket>` |
-| `systemd_unit` | `/etc/systemd`, `/lib/systemd`, `/run/systemd` (D-Bus ile aktif durum: yapılmadı, M2) | unit adı |
+| `systemd_unit` | `/etc/systemd`, `/lib/systemd`, `/run/systemd` (D-Bus `org.freedesktop.systemd1` ile aktif durum, başlangıç zamanı, yeniden başlatma, bellek/CPU; bus yoksa yalnız dosyalar) | unit adı |
 | `listening_port` | `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp*` + inode→pid eşleşmesi | `<proto>:<adres>:<port>` |
 | `process` | `/proc/<pid>/{comm,cmdline,exe,status}` | `<exe yolu>` (aynı binary'nin kopyaları tek öğe, sayı attribute'ta) |
 | `container` | Docker Engine API (unix socket; containerd/CRI-O/Podman: M2) | container id |

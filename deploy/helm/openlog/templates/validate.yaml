@@ -63,6 +63,15 @@
 {{- end -}}
 {{- end -}}
 
+{{- if .Values.tailSampling.enabled -}}
+{{- $sa := .Values.sampler -}}
+{{- if and $sa.autoscaling.enabled (gt (int $sa.autoscaling.maxReplicas) $partitions) -}}
+{{- fail (printf "sampler.autoscaling.maxReplicas (%d) must be <= kafka.topics.partitions (%d)" (int $sa.autoscaling.maxReplicas) $partitions) -}}
+{{- else if and (not $sa.autoscaling.enabled) (gt (int $sa.replicaCount) $partitions) -}}
+{{- fail (printf "sampler.replicaCount (%d) must be <= kafka.topics.partitions (%d)" (int $sa.replicaCount) $partitions) -}}
+{{- end -}}
+{{- end -}}
+
 {{- /* TLS / SASL (config.md "TLS and SASL"). */ -}}
 {{- $sasl := .Values.kafka.sasl -}}
 {{- if not (has (upper (toString $sasl.mechanism)) (list "" "PLAIN" "SCRAM-SHA-256" "SCRAM-SHA-512")) -}}
@@ -77,6 +86,23 @@
 {{- end -}}
 {{- if and (eq $auth "tls") (not .Values.kafka.strimzi.listener.tls) -}}
 {{- fail "kafka.strimzi.listener.authentication=tls requires kafka.strimzi.listener.tls=true" -}}
+{{- end -}}
+
+{{- /* ClickHouse server TLS in operators mode (clickhouse.tls.server). */ -}}
+{{- $ct := .Values.clickhouse.tls -}}
+{{- if $ct.server.secretName -}}
+{{- if not (include "openlog.operators" .) -}}
+{{- fail "clickhouse.tls.server.secretName requires dependencies.mode=operators (configure TLS on external ClickHouse servers yourself)" -}}
+{{- end -}}
+{{- if not (has (toString $ct.server.verificationMode) (list "none" "relaxed" "strict")) -}}
+{{- fail (printf "clickhouse.tls.server.verificationMode must be none, relaxed or strict, got %q" (toString $ct.server.verificationMode)) -}}
+{{- end -}}
+{{- if and (eq (toString $ct.server.verificationMode) "strict") $ct.enabled (not $ct.clientSecret.name) -}}
+{{- fail "clickhouse.tls.server.verificationMode=strict requires clickhouse.tls.clientSecret.name (client certificate of the openlog pods)" -}}
+{{- end -}}
+{{- if and $ct.server.disableInsecure (not $ct.enabled) -}}
+{{- fail "clickhouse.tls.server.disableInsecure requires clickhouse.tls.enabled=true (openlog would still use the plaintext port)" -}}
+{{- end -}}
 {{- end -}}
 {{- range $dep := list "kafka" "clickhouse" -}}
 {{- $t := (index $.Values $dep).tls -}}

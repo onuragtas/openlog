@@ -58,6 +58,34 @@ func HostID(fs *hostfs.FS, stateDir string) (string, bool, error) {
 	return id, true, nil
 }
 
+// RuntimeDir is the agent's runtime directory (systemd RuntimeDirectory=openlog-infra-agent,
+// mode 0755). The running agent publishes its host.id there for APM agents on the same host,
+// including applications in containers that mount the directory read-only.
+const RuntimeDir = "/run/openlog-infra-agent"
+
+// PublishHostID writes id to <dir>/host-id (0644, atomic). A missing dir is not created
+// (the agent does not run under systemd and nothing mounted it): it returns nil.
+func PublishHostID(dir, id string) error {
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return nil
+	}
+	file := filepath.Join(dir, HostIDFile)
+	if b, err := os.ReadFile(file); err == nil && strings.TrimSpace(string(b)) == id {
+		return nil
+	}
+	tmp := file + ".tmp"
+	if err := os.WriteFile(tmp, []byte(id+"\n"), 0o644); err != nil {
+		return fmt.Errorf("resource: publish host id: %w", err)
+	}
+	if err := os.Chmod(tmp, 0o644); err != nil { // umask
+		return fmt.Errorf("resource: publish host id: %w", err)
+	}
+	if err := os.Rename(tmp, file); err != nil {
+		return fmt.Errorf("resource: publish host id: %w", err)
+	}
+	return nil
+}
+
 // Info holds the resolved resource attributes.
 type Info struct {
 	HostID        string

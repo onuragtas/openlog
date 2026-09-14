@@ -3,9 +3,9 @@
 // current wave update, one host fails in the second wave, waves advance, the rollout completes), so the
 // UI and Playwright can watch a rollout progress without a backend.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { FleetHost, FleetPolicy, FleetRollout, FleetSummary } from "@/api/fleet";
+import type { FleetHost, FleetHostPHPAgent, FleetPHPAgentMode, FleetPolicy, FleetRollout, FleetSummary } from "@/api/fleet";
 import type { Role } from "@/api/roles";
-import { compareVersions, isOpenRollout, parseWaves } from "@/lib/fleet";
+import { compareVersions, isOpenRollout, isVersion, parseWaves } from "@/lib/fleet";
 import { authenticate } from "./account";
 import { formatTs } from "./fixtures";
 
@@ -36,6 +36,40 @@ interface MockState {
   seq: number;
 }
 
+/** PHP inventory of a seeded host: every 4th web host runs PHP-FPM 8.2, some already have the PHP agent. */
+function seedPHP(i: number, container: boolean, version: string, now: number): FleetHostPHPAgent {
+  const base: FleetHostPHPAgent = {
+    reported: !container,
+    mode: "manual",
+    agent_mode: container ? "" : "manual",
+    source: container ? "" : "remote",
+    capable: !container,
+    reason: container ? "running in a container: update the image instead" : "",
+    managed_by: "none",
+    version: null,
+    runtimes: [],
+    update: null,
+    override: null,
+    status: container ? "not_reported" : "manual",
+    status_target: null,
+  };
+  if (container || i % 4 !== 1) return base;
+  const installed = i % 8 === 1 && version === LATEST;
+  const packaged = i === 5;
+  return {
+    ...base,
+    managed_by: packaged ? "package" : installed ? "fleet" : "none",
+    version: installed || packaged ? version : null,
+    runtimes: [
+      { bin: "/usr/sbin/php-fpm8.2", version: "8.2.29", api: "20220829", zts: false, debug: false, libc: "glibc", scan_dir: "/etc/php/8.2/fpm/conf.d",
+        module: "20220829-nts-glibc", supported: true, enabled: installed || packaged, loaded: installed || packaged, excluded: false },
+      { bin: "/usr/bin/php8.2", version: "8.2.29", api: "20220829", zts: false, debug: false, libc: "glibc", scan_dir: "/etc/php/8.2/cli/conf.d",
+        module: "20220829-nts-glibc", supported: true, enabled: installed || packaged, loaded: installed || packaged, excluded: false },
+    ],
+    update: installed ? { operation: "install", version, state: "applied", error: "", changed_at: formatTs(now - 2 * 86_400_000) } : null,
+  };
+}
+
 function seedHosts(now: number): FleetHost[] {
   const hosts: FleetHost[] = [];
   for (let i = 0; i < 64; i++) {
@@ -43,6 +77,7 @@ function seedHosts(now: number): FleetHost[] {
     const version = i < 42 ? "0.3.0" : i < 58 ? LATEST : i < 60 ? "0.2.0" : "0.3.0";
     const name = container ? `k8s-node-${i - 59}` : `web-${String(i + 1).padStart(2, "0")}`;
     hosts.push({
+      php_agent: seedPHP(i, container, version, now),
       host_id: `h-${String(i).padStart(4, "0")}-5d1e0c9a7f3b`,
       host_name: name,
       agent: {
@@ -80,6 +115,7 @@ function seed(): MockState {
       wave_soak_minutes: 60,
       halt_failure_rate: 0.05,
       maintenance_windows: [],
+      php_agent: { mode: "manual", version: "agent", reload: "none", exclude_bins: [], changed_at: null },
       is_default: false,
       updated_at: formatTs(now - 3 * 86_400_000),
       updated_by_email: "admin@openlog.local",
@@ -148,6 +184,48 @@ function decide(h: FleetHost, r: FleetRollout | null): { status: FleetHost["stat
   return { status: "offer", target };
 }
 
+/** The PHP agent decision (internal/fleet DecidePHP without waves and windows). */
+function decidePHP(h: FleetHost): FleetHostPHPAgent {
+  const p = h.php_agent;
+  const mode: FleetPHPAgentMode = p.override?.mode ?? db.policy.php_agent.mode;
+  const out = (status: FleetHostPHPAgent["status"], target: string | null = null): FleetHostPHPAgent => ({ ...p, mode, status, status_target: target });
+  if (mode === "off") return out("mode_off");
+  if (mode === "manual") return out("manual");
+  const target = db.policy.php_agent.version === "agent" ? h.agent.version : db.policy.php_agent.version;
+  if (!p.reported) return out("not_reported", target);
+  if (p.managed_by === "package" || p.managed_by === "manual") return out("managed_elsewhere", target);
+  if (!p.capable) return out("not_capable", target);
+  if (p.version === target) return out("up_to_date", target);
+  if (!p.runtimes.some((r) => r.supported && !r.excluded)) return out("no_php", target);
+  return out("offer", target);
+}
+
+/** Offered PHP hosts install their target (one step per summary refresh). */
+function stepPHP(): void {
+  const now = formatTs(Date.now());
+  for (const h of db.hosts) {
+    const d = decidePHP(h);
+    if (d.status === "offer" && d.status_target) {
+      const op = h.php_agent.version ? "upgrade" : "install";
+      h.php_agent = {
+        ...h.php_agent,
+        managed_by: "fleet",
+        version: d.status_target,
+        runtimes: h.php_agent.runtimes.map((r) => ({ ...r, enabled: !r.excluded, loaded: !r.excluded })),
+        update: { operation: op, version: d.status_target, state: "applied", error: "", changed_at: now },
+      };
+    } else if (d.status === "mode_off" && h.php_agent.managed_by === "fleet") {
+      h.php_agent = {
+        ...h.php_agent,
+        managed_by: "none",
+        version: null,
+        runtimes: h.php_agent.runtimes.map((r) => ({ ...r, enabled: false, loaded: false })),
+        update: { operation: "uninstall", version: h.php_agent.version ?? "", state: "uninstalled", error: "", changed_at: now },
+      };
+    }
+  }
+}
+
 function view(h: FleetHost): FleetHost {
   const r = current();
   const d = decide(h, r);
@@ -157,6 +235,7 @@ function view(h: FleetHost): FleetHost {
     supported: compareVersions(h.agent.version, OLDEST_SUPPORTED) >= 0,
     status: d.status,
     status_target: d.target,
+    php_agent: decidePHP(h),
   };
 }
 
@@ -330,6 +409,7 @@ async function body<T>(request: Request): Promise<Partial<T>> {
 export const fleetHandlers = [
   http.get(`${API}/summary`, read(() => {
     step();
+    stepPHP();
     return HttpResponse.json(summary());
   })),
 
@@ -341,9 +421,21 @@ export const fleetHandlers = [
     const waves = parseWaves((p.waves ?? []).join(","));
     if (waves.error) return fail("invalid_argument", "waves must be strictly increasing percentages between 1 and 100 ending at 100");
     if (p.target === "pinned" && !p.pinned_version) return fail("invalid_argument", "pinned_version is required when target is pinned");
+    let php = db.policy.php_agent;
+    if (p.php_agent) {
+      const next = p.php_agent;
+      if (!["off", "manual", "auto"].includes(next.mode)) return fail("invalid_argument", "php_agent.mode must be off, manual or auto");
+      const version = (next.version ?? "agent").trim() || "agent";
+      if (version !== "agent" && !isVersion(version)) return fail("invalid_argument", "php_agent.version must be agent or a SemVer version");
+      if ((next.exclude_bins ?? []).length > 50) return fail("invalid_argument", "php_agent.exclude_bins: at most 50 globs");
+      const merged = { mode: next.mode, version: version.replace(/^v/, ""), reload: next.reload ?? "none", exclude_bins: next.exclude_bins ?? [] };
+      const same = JSON.stringify(merged) === JSON.stringify({ mode: php.mode, version: php.version, reload: php.reload, exclude_bins: php.exclude_bins });
+      php = { ...merged, changed_at: same ? php.changed_at : formatTs(Date.now()) };
+    }
     db.policy = {
       ...db.policy,
       ...p,
+      php_agent: php,
       pinned_version: p.target === "pinned" ? (p.pinned_version ?? null) : null,
       is_default: false,
       updated_at: formatTs(Date.now()),
@@ -384,6 +476,21 @@ export const fleetHandlers = [
   http.delete(`${API}/hosts/:hostId/override`, write(({ params }) => {
     const h = db.hosts.find((x) => x.host_id === params.hostId);
     if (h) h.override = null;
+    return new HttpResponse(null, { status: 204 });
+  })),
+
+  http.put(`${API}/hosts/:hostId/php-agent`, write(async ({ request, params }) => {
+    const h = db.hosts.find((x) => x.host_id === params.hostId);
+    if (!h) return fail("not_found", "not found");
+    const b = await body<{ mode: FleetPHPAgentMode }>(request);
+    if (!b.mode || !["off", "manual", "auto"].includes(b.mode)) return fail("invalid_argument", "mode must be off, manual or auto");
+    h.php_agent = { ...h.php_agent, override: { mode: b.mode, updated_at: formatTs(Date.now()) } };
+    return HttpResponse.json(h.php_agent.override);
+  })),
+
+  http.delete(`${API}/hosts/:hostId/php-agent`, write(({ params }) => {
+    const h = db.hosts.find((x) => x.host_id === params.hostId);
+    if (h) h.php_agent = { ...h.php_agent, override: null };
     return new HttpResponse(null, { status: 204 });
   })),
 

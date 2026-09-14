@@ -21,12 +21,27 @@ export function updateInProgress(v: VersionInfo | undefined): boolean {
  * while an update request is in progress or `follow` is set (the page follows an update it started,
  * including while the server restarts).
  */
-export const versionQuery = ({ follow = false }: { follow?: boolean } = {}) =>
+/**
+ * Whether the update request followId is still being followed: until it finished and the server
+ * answers again (serverAnswers false while the api restarts during the update).
+ */
+export function followingRequest(v: VersionInfo | undefined, followId: string | null, serverAnswers: boolean): boolean {
+  if (followId === null) return false;
+  const latest = v?.update_requests?.latest;
+  const finished =
+    serverAnswers && latest?.id === followId && latest.state !== "pending" && latest.state !== "running" && v?.updater?.state !== "updating";
+  return !finished;
+}
+
+export const versionQuery = ({ followId = null }: { followId?: string | null } = {}) =>
   queryOptions({
     queryKey: ["version"],
     queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/version", { signal })),
     staleTime: 15 * 60_000,
-    refetchInterval: (q) => (follow || updateInProgress(q.state.data) ? FOLLOW_REFRESH_MS : IDLE_REFRESH_MS),
+    refetchInterval: (q) =>
+      followingRequest(q.state.data, followId, q.state.status !== "error") || updateInProgress(q.state.data)
+        ? FOLLOW_REFRESH_MS
+        : IDLE_REFRESH_MS,
   });
 
 /** POST /api/v1/version/check: runs the release check now and asks openlog-updater to check. */

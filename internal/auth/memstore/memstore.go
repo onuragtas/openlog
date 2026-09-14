@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +34,7 @@ type Store struct {
 	invitations map[string]auth.Invitation
 	audit       []auth.AuditEvent
 	failures    map[string][]time.Time
+	verifies    map[string]auth.EmailVerification
 
 	// Err, when set, is returned by every method (simulates an outage).
 	Err error
@@ -47,7 +49,7 @@ func New() *Store {
 	return &Store{
 		orgs: map[string]auth.Organization{}, users: map[string]auth.User{}, members: map[[2]string]membership{},
 		sessions: map[string]auth.Session{}, licenseKeys: map[string]auth.LicenseKey{}, apiKeys: map[string]auth.APIKey{},
-		invitations: map[string]auth.Invitation{}, failures: map[string][]time.Time{},
+		invitations: map[string]auth.Invitation{}, failures: map[string][]time.Time{}, verifies: map[string]auth.EmailVerification{},
 	}
 }
 
@@ -422,13 +424,15 @@ func (s *Store) CreateLicenseKey(_ context.Context, k *auth.LicenseKey) error {
 		return err
 	}
 	for _, x := range s.licenseKeys {
-		if bytes.Equal(x.Hash, k.Hash) {
+		if bytes.Equal(x.Hash, k.Hash) || tenant.MatchIndex(k.LegacyHashes, x.Hash) >= 0 {
 			return auth.ErrAlreadyExists
 		}
 	}
 	k.ID = uuid.NewString()
 	k.CreatedAt = now(k.CreatedAt)
-	s.licenseKeys[k.ID] = *k
+	stored := *k
+	stored.LegacyHashes = nil
+	s.licenseKeys[k.ID] = stored
 	return nil
 }
 
@@ -464,18 +468,72 @@ func (s *Store) RevokeLicenseKey(_ context.Context, orgID, id, _ string, at time
 	return k, nil
 }
 
-func (s *Store) LookupLicenseKey(_ context.Context, hash []byte) (tenant.KeyInfo, error) {
-	defer s.mu.Unlock()
+// LookupLicenseKey mirrors the PostgreSQL store: the best (lowest index) candidate wins and a key found by a
+// later candidate is rewritten to hashes[0] unless another row already has that hash.
+func (s *Store) LookupLicenseKey(_ context.Context, hashes [][]byte) (tenant.KeyInfo, error) {
+	s.mu.Lock()
 	s.Lookups++
+	s.mu.Unlock()
+	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {
 		return tenant.KeyInfo{}, err
 	}
-	for _, k := range s.licenseKeys {
-		if bytes.Equal(k.Hash, hash) && k.RevokedAt == nil {
-			return tenant.KeyInfo{KeyID: k.ID, TenantID: s.orgs[k.OrgID].TenantID}, nil
+	best, bestIdx := "", -1
+	for id, k := range s.licenseKeys {
+		if i := tenant.MatchIndex(hashes, k.Hash); i >= 0 && k.RevokedAt == nil && (bestIdx < 0 || i < bestIdx) {
+			best, bestIdx = id, i
 		}
 	}
-	return tenant.KeyInfo{}, tenant.ErrUnknownKey
+	if bestIdx < 0 {
+		return tenant.KeyInfo{}, tenant.ErrUnknownKey
+	}
+	k := s.licenseKeys[best]
+	if bestIdx > 0 && !s.licenseHashTakenLocked(hashes[0]) {
+		k.Hash = hashes[0]
+		s.licenseKeys[best] = k
+	}
+	return tenant.KeyInfo{KeyID: k.ID, TenantID: s.orgs[k.OrgID].TenantID}, nil
+}
+
+func (s *Store) licenseHashTakenLocked(h []byte) bool {
+	for _, k := range s.licenseKeys {
+		if bytes.Equal(k.Hash, h) {
+			return true
+		}
+	}
+	return false
+}
+
+// LicenseKeyHash returns the stored hash of a license key (tests).
+func (s *Store) LicenseKeyHash(id string) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.licenseKeys[id].Hash
+}
+
+// APIKeyHash returns the stored hash of an API key (tests).
+func (s *Store) APIKeyHash(id string) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.apiKeys[id].Hash
+}
+
+// SetLicenseKeyHash overwrites a license key's stored hash (tests: rows written before a secret existed).
+func (s *Store) SetLicenseKeyHash(id string, h []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := s.licenseKeys[id]
+	k.Hash = h
+	s.licenseKeys[id] = k
+}
+
+// SetAPIKeyHash overwrites an API key's stored hash (tests).
+func (s *Store) SetAPIKeyHash(id string, h []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := s.apiKeys[id]
+	k.Hash = h
+	s.apiKeys[id] = k
 }
 
 func (s *Store) TouchLicenseKeys(_ context.Context, ids []string, at time.Time) error {
@@ -552,17 +610,48 @@ func (s *Store) RevokeAPIKey(_ context.Context, orgID, id, _ string, at time.Tim
 	return k, nil
 }
 
-func (s *Store) LookupAPIKey(_ context.Context, hash []byte) (auth.APIKey, auth.Organization, error) {
+func (s *Store) LookupAPIKey(_ context.Context, hashes [][]byte) (auth.APIKey, auth.Organization, error) {
 	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {
 		return auth.APIKey{}, auth.Organization{}, err
 	}
-	for _, k := range s.apiKeys {
-		if bytes.Equal(k.Hash, hash) {
-			return k, s.orgs[k.OrgID], nil
+	best, bestIdx := "", -1
+	for id, k := range s.apiKeys {
+		if i := tenant.MatchIndex(hashes, k.Hash); i >= 0 && (bestIdx < 0 || i < bestIdx) {
+			best, bestIdx = id, i
 		}
 	}
-	return auth.APIKey{}, auth.Organization{}, auth.ErrNotFound
+	if bestIdx < 0 {
+		return auth.APIKey{}, auth.Organization{}, auth.ErrNotFound
+	}
+	k := s.apiKeys[best]
+	if bestIdx > 0 && k.RevokedAt == nil {
+		taken := false
+		for _, x := range s.apiKeys {
+			taken = taken || bytes.Equal(x.Hash, hashes[0])
+		}
+		if !taken {
+			k.Hash = hashes[0]
+			s.apiKeys[best] = k
+		}
+	}
+	return k, s.orgs[k.OrgID], nil
+}
+
+func (s *Store) RevokeAPIKeysCreatedBy(_ context.Context, orgID, userID, _ string, at time.Time) (int, error) {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for id, k := range s.apiKeys {
+		if k.OrgID == orgID && k.CreatedBy == userID && k.RevokedAt == nil {
+			k.RevokedAt = tp(at)
+			s.apiKeys[id] = k
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (s *Store) TouchAPIKey(_ context.Context, id string, at time.Time) error {
@@ -599,14 +688,42 @@ func (s *Store) CreateInvitation(_ context.Context, inv *auth.Invitation) error 
 	return nil
 }
 
-func (s *Store) ListInvitations(_ context.Context, orgID string, at time.Time) ([]auth.Invitation, error) {
+func (s *Store) RenewInvitation(_ context.Context, orgID, id string, tokenHash []byte, expiresAt time.Time) (auth.Invitation, error) {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return auth.Invitation{}, err
+	}
+	inv, ok := s.invitations[id]
+	if !ok || inv.OrgID != orgID || inv.AcceptedAt != nil || inv.RevokedAt != nil {
+		return auth.Invitation{}, auth.ErrNotFound
+	}
+	inv.TokenHash, inv.ExpiresAt = tokenHash, expiresAt
+	s.invitations[id] = inv
+	return inv, nil
+}
+
+func (s *Store) MarkInvitationSent(_ context.Context, id string, at time.Time) error {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return err
+	}
+	inv, ok := s.invitations[id]
+	if !ok {
+		return auth.ErrNotFound
+	}
+	inv.LastSentAt, inv.SendCount = tp(at), inv.SendCount+1
+	s.invitations[id] = inv
+	return nil
+}
+
+func (s *Store) ListInvitations(_ context.Context, orgID string, at time.Time, includeExpired bool) ([]auth.Invitation, error) {
 	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {
 		return nil, err
 	}
 	out := []auth.Invitation{}
 	for _, inv := range s.invitations {
-		if inv.OrgID == orgID && inv.Pending(at) {
+		if inv.OrgID == orgID && (inv.Pending(at) || (includeExpired && inv.Expired(at))) {
 			inv.InvitedByEmail = s.users[inv.InvitedBy].Email
 			out = append(out, inv)
 		}
@@ -677,18 +794,72 @@ func (s *Store) AddAuditEvent(_ context.Context, e *auth.AuditEvent) error {
 	return nil
 }
 
-func (s *Store) ListAuditEvents(_ context.Context, orgID string, limit int) ([]auth.AuditEvent, error) {
+func (s *Store) ListAuditEvents(_ context.Context, orgID string, f auth.AuditFilter) ([]auth.AuditEvent, error) {
 	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {
 		return nil, err
 	}
-	out := []auth.AuditEvent{}
-	for i := len(s.audit) - 1; i >= 0 && len(out) < limit; i-- {
-		if s.audit[i].OrgID == orgID {
-			out = append(out, s.audit[i])
+	all := []auth.AuditEvent{}
+	for _, e := range s.audit {
+		switch {
+		case e.OrgID != orgID,
+			f.Actor != "" && !strings.Contains(strings.ToLower(e.ActorEmail), strings.ToLower(f.Actor)),
+			f.Action != "" && !strings.HasPrefix(e.Action, f.Action),
+			!f.From.IsZero() && e.CreatedAt.Before(f.From),
+			!f.To.IsZero() && !e.CreatedAt.Before(f.To),
+			f.Before != nil && !(e.CreatedAt.Before(f.Before.CreatedAt) || (e.CreatedAt.Equal(f.Before.CreatedAt) && e.ID < f.Before.ID)):
+			continue
 		}
+		all = append(all, e)
 	}
-	return out, nil
+	sort.Slice(all, func(i, j int) bool {
+		if !all[i].CreatedAt.Equal(all[j].CreatedAt) {
+			return all[i].CreatedAt.After(all[j].CreatedAt)
+		}
+		return all[i].ID > all[j].ID
+	})
+	if f.Limit > 0 && len(all) > f.Limit {
+		all = all[:f.Limit]
+	}
+	return all, nil
+}
+
+func (s *Store) CreateEmailVerification(_ context.Context, v *auth.EmailVerification) error {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return err
+	}
+	if _, ok := s.users[v.UserID]; !ok {
+		return auth.ErrNotFound
+	}
+	v.ID = uuid.NewString()
+	v.CreatedAt = now(v.CreatedAt)
+	s.verifies[v.ID] = *v
+	return nil
+}
+
+func (s *Store) ConsumeEmailVerification(_ context.Context, tokenHash []byte, at time.Time) (auth.User, error) {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return auth.User{}, err
+	}
+	for id, v := range s.verifies {
+		if !bytes.Equal(v.TokenHash, tokenHash) || v.UsedAt != nil || !at.Before(v.ExpiresAt) {
+			continue
+		}
+		v.UsedAt = tp(at)
+		s.verifies[id] = v
+		u, ok := s.users[v.UserID]
+		if !ok || u.Email != v.Email {
+			return auth.User{}, auth.ErrNotFound
+		}
+		if u.EmailVerifiedAt == nil {
+			u.EmailVerifiedAt = tp(at)
+			s.users[u.ID] = u
+		}
+		return u, nil
+	}
+	return auth.User{}, auth.ErrNotFound
 }
 
 func (s *Store) CountLoginFailures(_ context.Context, key []byte, since time.Time) (int, error) {

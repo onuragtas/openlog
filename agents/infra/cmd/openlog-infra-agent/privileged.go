@@ -112,6 +112,7 @@ func runApply(configPath string, explicit bool, ver string) (code int) {
 			return cmd.Run()
 		},
 	})
+	runPHPAgentApply(sys, cfg, install, keys, log) // phpagent.go
 	return 0
 }
 

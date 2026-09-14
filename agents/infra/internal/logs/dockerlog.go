@@ -68,6 +68,7 @@ func streamName(i int) string {
 type pendingLine struct {
 	buf       []byte
 	ts        time.Time // time of the first part
+	last      time.Time // time of the last line (multiline records)
 	start     int64     // file offset of the first part (json-file)
 	started   bool
 	truncated bool
@@ -84,7 +85,7 @@ func (p *pendingLine) add(b []byte, maxBytes int) {
 }
 
 func (p *pendingLine) reset() {
-	p.buf, p.ts, p.start, p.started, p.truncated = p.buf[:0], time.Time{}, 0, false, false
+	p.buf, p.ts, p.last, p.start, p.started, p.truncated = p.buf[:0], time.Time{}, time.Time{}, 0, false, false
 }
 
 // emitLineFunc receives a complete line (valid only during the call); false stops the stream.

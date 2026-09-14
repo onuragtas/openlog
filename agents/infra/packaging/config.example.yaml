@@ -45,6 +45,8 @@ process_metrics:
 containers:
   enabled: true                  # container inventory (Docker Engine API) + cgroup v2 container metrics
   docker_socket: /var/run/docker.sock   # host path, resolved under host.root_path; the agent user needs access (docker group = root-equivalent)
+  # CRI sockets (containerd, k3s, CRI-O): their containers are added to Docker's; [] disables. Usually root-only.
+  cri_sockets: [/run/containerd/containerd.sock, /run/k3s/containerd/containerd.sock, /var/run/crio/crio.sock]
 
 logs:
   enabled: true                  # nothing is read unless files, journald or auto_from_discovery is configured
@@ -74,6 +76,10 @@ logs:
     rate_limit_lines: 1000       # per container per second; 0 = unlimited; excess waits (no drops)
     docker_containers_dir: /var/lib/docker/containers   # json-file logs when the Docker API is not accessible
     include: []                  # empty = every container; an item matches when all its fields match (globs)
+    # include:
+    #   - name: "billing*"
+    #     multiline_start: '^\d{4}-\d{2}-\d{2}'   # group stack traces (per stream); label openlog.logs.multiline wins
+    #   - name: "*"                  # keep collecting every other container
     exclude: []
     # exclude:
     #   - compose_service: loadgen
@@ -132,9 +138,38 @@ php_forwarder:                   # receives spans from the openlog PHP extension
   max_pending_traces: 10000      # split messages waiting for their remaining parts
   reassembly_timeout: 5s         # incomplete traces are exported with openlog.php.incomplete=true
 
+php_agent:                       # PHP agent installation through this agent (docs/contracts/php-agent.md §7.3)
+  mode: manual                   # manual = only report PHP runtimes; auto = install/upgrade where PHP runs; off = remove
+  version: agent                 # agent = this agent's version, or e.g. 0.9.1
+  reload: none                   # none = PHP-FPM/Apache load it at their next reload; graceful = reload them
+  exclude_bins: []               # globs of PHP binaries never enabled, e.g. [/usr/bin/php7.4]
+  remote_config: true            # the Fleet page's settings replace mode/version/reload/exclude_bins
+  health_check_after: 5m         # after an installation: roll back unless PHP loads it and services still send data
+  install_root: /opt/openlog/php-agent   # packages and manual installs there are never changed
+
 update:
   enabled: true                 # apply signed updates ordered by the backend (sync/version reporting runs regardless)
   install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user
 
 release:
   trusted_keys_file: ""          # extra base64 Ed25519 release public keys, one per line (added to the compiled-in keys)
+
+# Kubernetes (docs/operations/kubernetes.md, semantic-conventions §7). Set by the openlog-agent Helm chart; on a plain
+# host nothing changes (auto = on only inside a pod).
+kubernetes:
+  enabled: auto                  # auto (KUBERNETES_SERVICE_HOST set), true, false
+  mode: node                     # node (DaemonSet) or cluster (leader-elected cluster collector); env OPENLOG_K8S_MODE
+  cluster_name: ""               # k8s.cluster.name; env OPENLOG_K8S_CLUSTER_NAME
+  node_name: ""                  # env OPENLOG_K8S_NODE_NAME (downward API spec.nodeName); default: host name
+  pod_resync: 5m                 # full relist of the node's pods
+  label_allowlist: [app, app.kubernetes.io/name, app.kubernetes.io/instance, app.kubernetes.io/version, app.kubernetes.io/component]
+  kubelet:
+    enabled: true                # /stats/summary (RBAC nodes/stats get)
+    endpoint: ""                 # default https://$OPENLOG_K8S_HOST_IP:10250, else https://127.0.0.1:10250
+    insecure_skip_verify: false  # true for self-signed kubelet serving certificates (kubeadm, kind)
+  cluster:
+    interval: 30s                # cluster mode: kube-state listing interval
+    events: true                 # Kubernetes events as logs
+    max_pods: 10000
+    lease_name: openlog-agent-cluster
+    lease_namespace: ""          # default: the agent pod's namespace

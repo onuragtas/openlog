@@ -25,10 +25,10 @@ function severityVariant(n: number): "destructive" | "warning" | "secondary" | "
   return "muted";
 }
 
-const GRID = "2.5rem 13.5rem 5.5rem minmax(5rem,9rem) minmax(12rem,1fr) 5.5rem";
+const GRID = "2.5rem 13.5rem 5.5rem minmax(5rem,9rem) minmax(12rem,1fr) 9rem";
 const COMPACT_GRID = "2.75rem minmax(0,1fr)";
-/** The full grid needs ~46rem (plus the scrollbar gutter). */
-const COMPACT_BELOW = 760;
+/** The full grid needs ~50rem (plus the scrollbar gutter). */
+const COMPACT_BELOW = 820;
 
 export interface LogTableProps {
   logs: LogRecord[];
@@ -52,17 +52,26 @@ function Severity({ log }: { log: LogRecord }) {
   );
 }
 
-function TraceLink({ traceId }: { traceId: string }) {
+/** Trace link and, when the record has a span id, a link that opens the trace with that span selected. */
+function TraceLinks({ log }: { log: LogRecord }) {
   const { t } = useTranslation();
+  const cls = "font-mono text-xs text-primary underline-offset-2 hover:underline pointer-coarse:py-1";
   return (
-    <Link
-      to="/traces/$traceId"
-      params={{ traceId }}
-      className="font-mono text-xs text-primary underline-offset-2 hover:underline"
-      aria-label={t("logs.viewTrace", { id: traceId })}
-    >
-      {traceId.slice(0, 8)}
-    </Link>
+    <span className="inline-flex flex-wrap items-center gap-x-1.5">
+      <Link to="/traces/$traceId" params={{ traceId: log.trace_id }} className={cls} aria-label={t("logs.viewTrace", { id: log.trace_id })}>
+        {log.trace_id.slice(0, 8)}
+      </Link>
+      {log.span_id && (
+        <>
+          <span aria-hidden="true" className="text-muted-foreground">
+            /
+          </span>
+          <Link to="/traces/$traceId" params={{ traceId: log.trace_id }} search={{ span: log.span_id }} className={cls} aria-label={t("logs.viewSpan", { id: log.span_id })}>
+            {log.span_id.slice(0, 4)}
+          </Link>
+        </>
+      )}
+    </span>
   );
 }
 
@@ -158,7 +167,7 @@ export function LogTable({ logs, showHost = true, hasMore, loadingMore, onLoadMo
                             {l.service_name}
                           </span>
                         )}
-                        {l.trace_id && <TraceLink traceId={l.trace_id} />}
+                        {l.trace_id && <TraceLinks log={l} />}
                       </div>
                       <span className={cn("font-mono text-xs break-all", open ? "whitespace-pre-wrap" : "line-clamp-2")}>{l.body}</span>
                     </div>
@@ -181,8 +190,24 @@ export function LogTable({ logs, showHost = true, hasMore, loadingMore, onLoadMo
                       <span className={open ? "whitespace-pre-wrap break-all" : "block truncate"}>{l.body}</span>
                     </div>
                     <div role="cell" className="px-3 py-1">
-                      {l.trace_id && <TraceLink traceId={l.trace_id} />}
+                      {l.trace_id && <TraceLinks log={l} />}
                     </div>
+                  </div>
+                )}
+                {open && l.trace_id && (
+                  <div className={cn("flex flex-wrap gap-2 pb-2", compact ? "px-3" : "px-4 pl-12")} data-testid="log-trace-actions">
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/traces/$traceId" params={{ traceId: l.trace_id }}>
+                        {t("logs.openTrace")}
+                      </Link>
+                    </Button>
+                    {l.span_id && (
+                      <Button asChild variant="outline" size="sm">
+                        <Link to="/traces/$traceId" params={{ traceId: l.trace_id }} search={{ span: l.span_id }}>
+                          {t("logs.openSpan")}
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 )}
                 {open && (

@@ -48,6 +48,18 @@ if [ "${E2E_SERVICES:-0}" = "1" ]; then
   # Password-like arguments; every form must be masked by the agent (semantic-conventions §3.5).
   nohup /usr/local/bin/mysql -uapp -pE2eSecretPw1 --password=E2eSecretPw2 DB_TOKEN=E2eSecretPw3 \
     mysql://app:E2eSecretPw4@db.internal:3306/app >/dev/null 2>&1 &
+  # systemd-journald without systemd as PID 1: it creates its sockets (/run/systemd/journal, /dev/log)
+  # and a volatile journal in /run/log/journal; systemd-cat and logger write to it and the agent reads
+  # it through journalctl (test/e2e agent_journald).
+  /lib/systemd/systemd-journald &
+  for _ in $(seq 1 30); do
+    [ -S /run/systemd/journal/stdout ] && break
+    sleep 1
+  done
+  # The syslog socket; systemd-journald-dev-log.socket creates this link on a systemd host.
+  ln -sf /run/systemd/journal/dev-log /dev/log
+  # Directory of the forced-rotation log (test/e2e agent_log_rotation_unread).
+  install -d -m 0755 /var/log/e2e-rotate
   # Logs: the nginx access log is a configured file (logs.files, with a user attribute); the error
   # log (and redis/postgresql logs) come only from the discovered services' log_paths
   # (auto_from_discovery). Both get openlog.discovery.id=nginx.
@@ -63,6 +75,11 @@ logs:
     - path: /var/log/nginx/access.log
       attributes:
         e2e.source: logs.files
+    - path: /var/log/e2e-rotate/*.log
+      attributes:
+        e2e.source: rotation
+  journald:
+    enabled: true
 EOF
   )
 fi

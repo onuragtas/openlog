@@ -26,6 +26,26 @@ func SampleWeight(traceState string, spanAttrs, resAttrs map[string]string) floa
 	return 1
 }
 
+// HeadProbability returns the span's sampling probability p (the same lookup as SampleWeight,
+// unclamped; 0 means "not counted") and whether it came from the tracestate `ot` entry, i.e. from
+// a consistent-probability sampler whose decision used the trace's randomness (tail sampling, D-075).
+func HeadProbability(traceState string, spanAttrs, resAttrs map[string]string) (p float64, fromTraceState bool) {
+	if p, ok := probabilityFromTraceState(traceState); ok {
+		return p, true
+	}
+	for _, attrs := range []map[string]string{spanAttrs, resAttrs} {
+		if v := attrs["sampling.ratio"]; v != "" {
+			if p, err := strconv.ParseFloat(v, 64); err == nil && p > 0 && p <= 1 && !math.IsNaN(p) {
+				return p, false
+			}
+		}
+	}
+	return 1, false
+}
+
+// MinProbability is the smallest probability SampleWeight honours (larger weights are clamped).
+const MinProbability = minProbability
+
 func clampP(p float64) float64 { return math.Min(1, math.Max(minProbability, p)) }
 
 // probabilityFromTraceState reads the OTel `ot` tracestate entry: th:<hex> threshold

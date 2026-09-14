@@ -36,6 +36,8 @@ import {
   type FilterOp,
   type RuleDraft,
 } from "@/lib/alerts";
+import { OqlEditor } from "@/components/oql/OqlEditor";
+import { alertQueryIssues } from "@/lib/oql";
 import { ChannelTypeIcon } from "./badges";
 import { describedBy, useIssue } from "./field-utils";
 import { DurationField, Field, Section } from "./fields";
@@ -43,7 +45,7 @@ import { DurationField, Field, Section } from "./fields";
 // uPlot is loaded only when a preview is shown.
 const PreviewChart = lazy(() => import("./PreviewChart").then((m) => ({ default: m.PreviewChart })));
 
-const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data"];
+const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "apm_error", "oql"];
 const AGGREGATIONS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGREGATIONS = ["avg", "sum", "min", "max"] as const;
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
@@ -436,6 +438,66 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
         </>
       );
       break;
+    case "apm_error":
+      condition = (
+        <>
+          <p className="text-sm text-muted-foreground">{t("alerts.editor.errorEventHint")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id={id("event")} label={t("alerts.editor.event")}>
+              <NativeSelect id={id("event")} value={draft.event} onChange={(e) => update({ event: e.target.value as RuleDraft["event"] })}>
+                {(["new_group", "regressed"] as const).map((ev) => (
+                  <option key={ev} value={ev}>
+                    {t(`alerts.editor.events.${ev}`)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field id={id("svc")} label={t("alerts.editor.serviceName")} hint={t("alerts.editor.serviceNameAllHint")}>
+              <Input id={id("svc")} value={draft.service_name} placeholder="checkout" onChange={(e) => update({ service_name: e.target.value })} {...describedBy(id("svc"), undefined, t("alerts.editor.serviceNameAllHint"))} />
+            </Field>
+            <Field id={id("env")} label={t("alerts.editor.environment")} hint={t("alerts.editor.environmentHint")}>
+              <Input id={id("env")} value={draft.environment} onChange={(e) => update({ environment: e.target.value })} {...describedBy(id("env"), undefined, t("alerts.editor.environmentHint"))} />
+            </Field>
+            <Field id={id("match")} label={t("alerts.editor.errorMatch")}>
+              <Input id={id("match")} value={draft.match} placeholder="timeout" onChange={(e) => update({ match: e.target.value })} />
+            </Field>
+            <DurationField id={id("window")} label={t("alerts.editor.window")} seconds={draft.window_seconds} onChange={(s) => update({ window_seconds: s }, "window_seconds")} error={err("window_seconds")} />
+            {draft.event === "new_group" && numberField("min_count", t("alerts.editor.minCount"))}
+          </div>
+        </>
+      );
+      break;
+    case "oql": {
+      const restrictions = alertQueryIssues(draft.query);
+      condition = (
+        <>
+          <Field id={id("oql")} label={t("alerts.editor.oqlQuery")} hint={t("alerts.editor.oqlQueryHint")} error={err("query")}>
+            <OqlEditor
+              id={id("oql")}
+              label={t("alerts.editor.oqlQuery")}
+              value={draft.query}
+              onChange={(query) => update({ query }, "query")}
+              minRows={3}
+              placeholder="SELECT count(*) FROM Log WHERE severity = 'ERROR' FACET service.name"
+              describedBy={err("query") ? `${id("oql")}-error` : `${id("oql")}-hint`}
+            />
+          </Field>
+          {restrictions.length > 0 && (
+            <ul className="-mt-2 flex flex-col gap-0.5 text-xs text-destructive-text" data-testid="oql-restrictions">
+              {restrictions.map((r) => (
+                <li key={r.key}>{t(`oql.alertRestrictions.${r.key}`)}</li>
+              ))}
+            </ul>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DurationField id={id("window")} label={t("alerts.editor.window")} seconds={draft.window_seconds} onChange={(s) => update({ window_seconds: s }, "window_seconds")} error={err("window_seconds")} />
+            {missingField}
+          </div>
+          {thresholdFields}
+        </>
+      );
+      break;
+    }
   }
 
   return (
@@ -518,7 +580,7 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
         <Section title={t("alerts.editor.sections.evaluation")}>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <DurationField id={id("interval")} label={t("alerts.editor.interval")} seconds={draft.interval_seconds} onChange={(s) => update({ interval_seconds: s }, "interval_seconds")} error={err("interval_seconds")} />
-            {draft.type !== "discovery" && (
+            {draft.type !== "discovery" && draft.type !== "apm_error" && (
               <DurationField id={id("for")} label={t("alerts.editor.for")} hint={t("alerts.editor.forHint")} seconds={draft.for_seconds} onChange={(s) => update({ for_seconds: s }, "for_seconds")} error={err("for_seconds")} />
             )}
             <DurationField id={id("recfor")} label={t("alerts.editor.recoveryFor")} seconds={draft.recovery_for_seconds} onChange={(s) => update({ recovery_for_seconds: s }, "recovery_for_seconds")} error={err("recovery_for_seconds")} />

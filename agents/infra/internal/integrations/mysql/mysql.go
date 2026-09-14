@@ -225,6 +225,13 @@ func (c *collector) collect(ctx context.Context, b *integrations.Batch) error {
 		partial = append(partial, "performance_schema table io waits: "+c.classify(err).Error())
 	} else {
 		RecordIOWaits(s, rows, false)
+		if len(rows) == 0 {
+			// The summary tables exist but stay empty while performance_schema is
+			// OFF (the MariaDB default).
+			if _, r, err := c.q.Rows(ctx, c.db, "SELECT @@performance_schema"); err == nil && len(r) == 1 && len(r[0]) == 1 && r[0][0] != nil && *r[0][0] == "0" {
+				partial = append(partial, "performance_schema is disabled: set performance_schema=ON in the server configuration and restart (mysql.table.io.wait.*, mysql.index.io.wait.*)")
+			}
+		}
 	}
 	if _, rows, err := c.q.Rows(ctx, c.db, IndexIOWaitsQuery(topN)); err != nil {
 		partial = append(partial, "performance_schema index io waits: "+c.classify(err).Error())
@@ -383,7 +390,7 @@ func TableIOWaitsQuery(n int) string {
 		"COUNT_DELETE, COUNT_FETCH, COUNT_INSERT, COUNT_UPDATE, " +
 		"FLOOR(SUM_TIMER_DELETE/1000), FLOOR(SUM_TIMER_FETCH/1000), FLOOR(SUM_TIMER_INSERT/1000), FLOOR(SUM_TIMER_UPDATE/1000) " +
 		"FROM performance_schema.table_io_waits_summary_by_table WHERE " + ioWaitsExclude +
-		" ORDER BY SUM_TIMER_WAIT DESC LIMIT " + strconv.Itoa(n)
+		" ORDER BY SUM_TIMER_WAIT DESC, OBJECT_SCHEMA, OBJECT_NAME LIMIT " + strconv.Itoa(n)
 }
 
 // IndexIOWaitsQuery returns the top-N indexes by total io wait time.
@@ -392,7 +399,7 @@ func IndexIOWaitsQuery(n int) string {
 		"COUNT_DELETE, COUNT_FETCH, COUNT_INSERT, COUNT_UPDATE, " +
 		"FLOOR(SUM_TIMER_DELETE/1000), FLOOR(SUM_TIMER_FETCH/1000), FLOOR(SUM_TIMER_INSERT/1000), FLOOR(SUM_TIMER_UPDATE/1000) " +
 		"FROM performance_schema.table_io_waits_summary_by_index_usage WHERE " + ioWaitsExclude +
-		" ORDER BY SUM_TIMER_WAIT DESC LIMIT " + strconv.Itoa(n)
+		" ORDER BY SUM_TIMER_WAIT DESC, OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME LIMIT " + strconv.Itoa(n)
 }
 
 // RecordIOWaits emits mysql.{table,index}.io.wait.{count,time}.

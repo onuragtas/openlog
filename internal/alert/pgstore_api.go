@@ -780,23 +780,35 @@ func (s *PGStore) ListMutes(ctx context.Context, orgID string, includeExpired bo
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []Mute{}
 	for rows.Next() {
 		m, err := scanMute(rows)
 		if err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out = append(out, *m)
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.attachMuteHolidays(ctx, out)
 }
 
 func (s *PGStore) GetMute(ctx context.Context, orgID, id string) (*Mute, error) {
 	if !ValidUUID(id) {
 		return nil, ErrNotFound
 	}
-	return scanMute(s.pool.QueryRow(ctx, `SELECT `+muteColumns+muteFrom+` WHERE m.org_id = $1 AND m.id = $2`, orgID, id))
+	m, err := scanMute(s.pool.QueryRow(ctx, `SELECT `+muteColumns+muteFrom+` WHERE m.org_id = $1 AND m.id = $2`, orgID, id))
+	if err != nil {
+		return nil, err
+	}
+	one := []Mute{*m}
+	if err := s.attachMuteHolidays(ctx, one); err != nil {
+		return nil, err
+	}
+	return &one[0], nil
 }
 
 func (s *PGStore) CreateMute(ctx context.Context, orgID string, m *ValidMute, actor Actor) (*Mute, error) {

@@ -25,16 +25,14 @@ func TestShardPoolsUseTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if co.TLS == nil || co.TLS.RootCAs == nil || len(co.TLS.Certificates) != 1 {
-		t.Fatalf("replica pool TLS = %+v", co.TLS)
-	}
-	if co.TLS.ServerName != "" {
-		t.Errorf("replica pool ServerName = %q; want empty so each replica host is verified", co.TLS.ServerName)
+	// TLS is dialed by config.TLSReloader (certificate reload, D-048), which verifies each dialed replica host.
+	if co.DialContext == nil || co.TLS != nil {
+		t.Fatalf("replica pool: DialContext set %v, TLS %+v", co.DialContext != nil, co.TLS)
 	}
 
 	plain, err := lazyOptions(OptionsFromConfig(config.Common{}))
-	if err != nil || plain.TLS != nil {
-		t.Errorf("plaintext replica pool: TLS %+v err %v", plain.TLS, err)
+	if err != nil || plain.TLS != nil || plain.DialContext != nil {
+		t.Errorf("plaintext replica pool: TLS %+v dial %v err %v", plain.TLS, plain.DialContext != nil, err)
 	}
 }
 

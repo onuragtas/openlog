@@ -80,7 +80,7 @@ services:
       - target-agent-state:/var/lib/openlog-infra-agent
       - target-docker:/var/lib/docker
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f /usr/bin/openlog-infra-agent >/dev/null && pgrep -x nginx >/dev/null && pgrep -x redis-server >/dev/null && pgrep -x postgres >/dev/null && { [ \"$${E2E_DOCKER:-0}\" != 1 ] || [ \"$$(docker inspect -f '{{.State.Running}}' e2e-sleeper 2>/dev/null)\" = true ]; }"]
+      test: ["CMD-SHELL", "pgrep -f /usr/bin/openlog-infra-agent >/dev/null && pgrep -x nginx >/dev/null && pgrep -x redis-server >/dev/null && pgrep -x postgres >/dev/null && pgrep -x systemd-journal >/dev/null && { [ \"$${E2E_DOCKER:-0}\" != 1 ] || [ \"$$(docker inspect -f '{{.State.Running}}' e2e-sleeper 2>/dev/null)\" = true ]; }"]
       interval: 5s
       timeout: 5s
       retries: 36

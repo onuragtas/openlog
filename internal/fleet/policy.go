@@ -50,6 +50,8 @@ type Policy struct {
 	WaveSoakMinutes    int      `json:"wave_soak_minutes"`
 	HaltFailureRate    float64  `json:"halt_failure_rate"`
 	MaintenanceWindows []Window `json:"maintenance_windows"`
+	// PHPAgent configures PHP agent installation through the infra agent (phpagent.go).
+	PHPAgent PHPAgentPolicy `json:"php_agent"`
 }
 
 // DefaultPolicy is used for organizations without a stored policy.
@@ -57,7 +59,7 @@ func DefaultPolicy() Policy {
 	return Policy{
 		Mode: ModeAuto, Channel: lib.ChannelStable, Target: TargetLatest,
 		Waves: []int{10, 50, 100}, WaveSoakMinutes: 60, HaltFailureRate: 0.05,
-		MaintenanceWindows: []Window{},
+		MaintenanceWindows: []Window{}, PHPAgent: DefaultPHPAgentPolicy(),
 	}
 }
 
@@ -131,6 +133,14 @@ func (p Policy) Normalize() (Policy, error) {
 		out = append(out, nw)
 	}
 	p.MaintenanceWindows = out
+	// An omitted php_agent section (mode "") keeps the stored one (Manager.PutPolicy).
+	if p.PHPAgent.Mode != "" {
+		php, err := p.PHPAgent.Normalize()
+		if err != nil {
+			return p, err
+		}
+		p.PHPAgent = php
+	}
 	return p, nil
 }
 

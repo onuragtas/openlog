@@ -27,6 +27,8 @@ type OrgState struct {
 	// IntegrationsLoaded is false when the settings are unknown (table not migrated yet): sync then omits
 	// integrations_config so agents keep their last applied config.
 	IntegrationsLoaded bool
+	// PHPOverrides are the per-host PHP agent modes (by host id).
+	PHPOverrides map[string]PHPOverride
 }
 
 // StoredPolicy is a policy with its metadata.
@@ -99,6 +101,9 @@ type Store interface {
 	ListOverrides(ctx context.Context, orgID string) (map[string]Override, error)
 	PutOverride(ctx context.Context, orgID string, o Override, userID string) error
 	DeleteOverride(ctx context.Context, orgID, hostID string) (bool, error)
+	ListPHPOverrides(ctx context.Context, orgID string) (map[string]PHPOverride, error)
+	PutPHPOverride(ctx context.Context, orgID string, o PHPOverride, userID string) error
+	DeletePHPOverride(ctx context.Context, orgID, hostID string) (bool, error)
 
 	GetHost(ctx context.Context, orgID, hostID string) (Host, error)
 	ListHosts(ctx context.Context, orgID string, f HostFilter) (hosts []Host, nextCursor string, err error)

@@ -168,7 +168,7 @@ func queryFloat(t *testing.T, conn clickhouse.Conn, q string, args ...any) float
 func syncReplicas(t *testing.T, conns ...clickhouse.Conn) {
 	t.Helper()
 	tables := []string{"spans", "apm_transactions_1m", "apm_service_edges_1m", "apm_service_links_1m", "apm_db_queries_1m",
-		"apm_errors_1m", "apm_error_groups", "apm_services", "apm_service_hosts"}
+		"apm_errors_1m", "apm_error_groups", "apm_services", "apm_service_hosts", "apm_relink_queue"}
 	for _, c := range conns {
 		for _, tbl := range tables {
 			if err := c.Exec(context.Background(), "SYSTEM SYNC REPLICA openlog."+tbl+"_local"); err != nil {
@@ -415,6 +415,58 @@ func TestAPMSharded(t *testing.T) {
 		}
 		if got := links()["frontend->orders via orders:8080"]; got != 752 {
 			t.Errorf("after catch-up: %v, want 752", got)
+		}
+
+		// Late-span re-link (apm.md §6): a third late pair; the processor's queue rows (enqueued 3 minutes ago) make
+		// the leader's pass re-link its client minutes on every shard, once.
+		late3 := processor.NewRows()
+		for _, req := range genTraces(1, base.Add(130*time.Second)) {
+			for _, rs := range req.ResourceSpans {
+				for _, ss := range rs.ScopeSpans {
+					for _, sp := range ss.Spans {
+						sp.TraceId = []byte("late-trace-00003")
+						sp.TraceState = ""
+					}
+				}
+			}
+			late3.AddTraces(tenant, base, req)
+		}
+		queued, tooOld := processor.RelinkRows(late3.Spans, time.Now().Add(-3*time.Minute),
+			processor.RelinkOptions{Enabled: true, After: 10 * time.Minute, MaxAge: 24 * time.Hour})
+		if len(queued) != 6 || tooOld != 0 { // client minute base+2m; children: base-3m .. base+2m
+			t.Fatalf("queue rows %+v, too old %d", queued, tooOld)
+		}
+		late3.RelinkQueue = queued
+		for _, tbl := range []string{processor.TableSpans, processor.TableRelinkQueue} {
+			if err := (processor.DirectWriter{W: sw}).Write(ctx, tbl, token+":late3:"+tbl, processor.Columns[tbl], late3.Values(tbl)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		syncReplicas(t, boot, s1r2)
+		relinker := apm.NewLinker(boot, apm.LinkerOptions{
+			Database: "openlog", Cluster: "openlog", Conn: clickhouse.Options{User: "openlog", Password: "openlog"},
+			ResolveAddr: func(r clickhouse.Replica) string { return shardAddrs[r.Addr()] }, Relink: true, RelinkMaxMinutes: 4,
+		}, log, nil)
+		first, err := relinker.Relink(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := relinker.Relink(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		third, err := relinker.Relink(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("relink passes: %+v %+v %+v", first, second, third)
+		// 6 queued minutes, at most 4 per pass (oldest first: base-3m..base+0m, then base+1m..base+2m); trace 0 calls
+		// orders and catalog in minute base+2m: two late calls over both passes. The third pass finds nothing new.
+		if first.Minutes != 4 || first.Pending < 2 || first.LateCalls+second.LateCalls != 2 || third.Minutes != 0 {
+			t.Errorf("relink passes %+v %+v %+v", first, second, third)
+		}
+		if got := links()["frontend->orders via orders:8080"]; got != 753 {
+			t.Errorf("after relink: %v, want 753", got)
 		}
 	})
 

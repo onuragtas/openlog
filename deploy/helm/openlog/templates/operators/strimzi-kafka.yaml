@@ -120,7 +120,7 @@ spec:
 {{- end }}
 {{- if .Values.kafka.topics.create }}
 {{- $t := .Values.kafka.topics }}
-{{- range $signal := list "metrics" "logs" "traces" }}
+{{- range $signal := list "metrics" "logs" "traces" "traces.sampled" }}
 {{- $topic := printf "%s.otlp.%s.v1" $.Values.kafka.topicPrefix $signal }}
 ---
 # docs/contracts/kafka.md

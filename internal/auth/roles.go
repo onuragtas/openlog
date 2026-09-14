@@ -52,6 +52,10 @@ const (
 	ActReadAlerts   Action = "alerts.read"
 	ActWriteAlerts  Action = "alerts.write"
 	ActManageAlerts Action = "alerts.manage"
+
+	// APM error inbox workflow (docs/contracts/apm.md §3.4): status, assignee, comments; managing deletes any comment.
+	ActWriteAPMErrors  Action = "apm_errors.write"
+	ActManageAPMErrors Action = "apm_errors.manage"
 )
 
 // minRole is the permission matrix (docs/contracts/api.md "Roles").
@@ -74,6 +78,8 @@ var minRole = map[Action]Role{
 	ActReadAlerts:        RoleViewer,
 	ActWriteAlerts:       RoleMember,
 	ActManageAlerts:      RoleAdmin,
+	ActWriteAPMErrors:    RoleMember,
+	ActManageAPMErrors:   RoleAdmin,
 }
 
 // Can reports whether role r may perform a. Unknown actions are denied.

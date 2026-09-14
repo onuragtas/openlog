@@ -1,6 +1,9 @@
 /*
  * Module entry, ini settings (contract §4), request lifecycle, PHP functions.
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * A transaction is started by ol_txn_start() and ended by ol_txn_finish(): at RINIT/RSHUTDOWN for the SAPI request,
+ * and in the middle of a PHP request for every request a long-running worker handles (inst_workers.c).
  */
 #include "ol.h"
 #include "ext/standard/info.h"
@@ -26,6 +29,7 @@ PHP_INI_BEGIN()
 	STD_PHP_INI_ENTRY("openlog.transaction_tracer.min_segment_ms", "1", PHP_INI_ALL, OnUpdateLong, tt_min_segment_ms, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_ENTRY("openlog.transaction_tracer.max_memory_kb", "4096", PHP_INI_ALL, OnUpdateLong, tt_max_memory_kb, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_ENTRY("openlog.log_level", "warning", PHP_INI_ALL, OnUpdateString, log_level, zend_openlog_globals, openlog_globals)
+	STD_PHP_INI_BOOLEAN("openlog.userland_hooks", "1", PHP_INI_SYSTEM, OnUpdateBool, userland_hooks, zend_openlog_globals, openlog_globals)
 PHP_INI_END()
 
 static PHP_GINIT_FUNCTION(openlog)
@@ -106,19 +110,9 @@ PHP_MSHUTDOWN_FUNCTION(openlog)
 	return SUCCESS;
 }
 
-PHP_RINIT_FUNCTION(openlog)
+/* Starts a transaction (per-transaction state only; process and connection state are kept). */
+void ol_txn_start(const ol_reqinfo *ri)
 {
-#if defined(COMPILE_DL_OPENLOG) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE();
-#endif
-	OLG(active) = false;
-	OLG(recording) = false;
-	OLG(tracing) = false;
-	if (!OLG(enabled)) {
-		return SUCCESS;
-	}
-	ol_derive_settings();
-	OLG(is_cli) = strcmp(sapi_module.name, "cli") == 0 || strcmp(sapi_module.name, "phpdbg") == 0;
 	OLG(nnodes) = 0;
 	OLG(nspans) = 0;
 	OLG(seg_kept) = 0;
@@ -132,28 +126,65 @@ PHP_RINIT_FUNCTION(openlog)
 	OLG(route_prio) = 0;
 	OLG(route_attr) = NULL;
 	OLG(nreported) = 0;
+	OLG(wp_tpl_ex) = NULL;
+	OLG(txn_status) = 0;
+	OLG(stack) = &OLG(main_stack);
+	ol_stack_reset(&OLG(main_stack));
+	ol_arena_reset();
+	if (++OLG(qgen) == 0) { /* wrapped: entries of generation 0 must not match */
+		memset(OLG(qcache), 0, sizeof(OLG(qcache)));
+		OLG(qgen) = 1;
+	}
+	OLG(req_mono) = ol_mono_ns();
+	OLG(req_unix) = ol_unix_ns();
+	OLG(applied_ratio) = 1.0;
+
+	OLG(active) = true;
+	OLG(c_requests)++;
+	ol_request_context(ri);
+	OLG(tracing) = OLG(recording) && OLG(tt_enabled) && OLG(tt_max_segments) > 0 && OLG(seg_bytes_cap) > 0 && !OLG(concurrent);
+	if (OLG(tracing) && !ol_sampler_arm()) {
+		OLG(tracing) = false;
+	}
+}
+
+PHP_RINIT_FUNCTION(openlog)
+{
+	ol_reqinfo ri;
+	char *owned[12];
+	size_t n, i;
+#if defined(COMPILE_DL_OPENLOG) && defined(ZTS)
+	ZEND_TSRMLS_CACHE_UPDATE();
+#endif
+	OLG(active) = false;
+	OLG(recording) = false;
+	OLG(tracing) = false;
+	if (!OLG(enabled)) {
+		return SUCCESS;
+	}
+	ol_derive_settings();
+	OLG(is_cli) = strcmp(sapi_module.name, "cli") == 0 || strcmp(sapi_module.name, "phpdbg") == 0;
 	OLG(conns) = NULL;
 	OLG(stmts) = NULL;
 	OLG(curl) = NULL;
 	OLG(pg_last_conn_key_set) = 0;
-	OLG(wp_tpl_ex) = NULL;
 	OLG(nsaved_ctx) = 0;
 	OLG(in_call) = false;
 	OLG(end_ex) = NULL;
-	OLG(stack) = &OLG(main_stack);
-	ol_stack_reset(&OLG(main_stack));
-	ol_arena_reset();
-	OLG(req_mono) = ol_mono_ns();
-	OLG(req_unix) = ol_unix_ns();
-	OLG(applied_ratio) = 1.0;
+	OLG(worker_mode) = false;
+	OLG(concurrent) = false;
+	OLG(wprimary) = false;
+	OLG(wkey) = 0;
+	OLG(wframe) = NULL;
+	OLG(wtx) = NULL;
+	OLG(nwtx) = 0;
+	OLG(nworker_cbs) = 0;
 	ol_process_info();
 
-	OLG(active) = true;
-	OLG(c_requests)++;
-	ol_request_context();
-	OLG(tracing) = OLG(recording) && OLG(tt_enabled) && OLG(tt_max_segments) > 0 && OLG(seg_bytes_cap) > 0;
-	if (OLG(tracing) && !ol_sampler_arm()) {
-		OLG(tracing) = false;
+	n = ol_reqinfo_sapi(&ri, owned, sizeof(owned) / sizeof(owned[0]));
+	ol_txn_start(&ri);
+	for (i = 0; i < n; i++) {
+		efree(owned[i]);
 	}
 	return SUCCESS;
 }
@@ -172,7 +203,7 @@ static void ol_finalize_root(void)
 	root->dur = ol_mono_ns() - OLG(req_mono);
 	root->flags |= OL_NF_ENDED;
 
-	if (OLG(is_cli)) {
+	if (!OLG(txn_web)) {
 		const char *script = "-";
 		if (SG(request_info).argc > 0 && SG(request_info).argv && SG(request_info).argv[0]) {
 			script = SG(request_info).argv[0];
@@ -189,14 +220,8 @@ static void ol_finalize_root(void)
 			ol_attr_int(root, "process.exit.code", EG(exit_status));
 		}
 	} else {
-		const char *method = SG(request_info).request_method ? SG(request_info).request_method : "GET";
-		int code = SG(sapi_headers).http_response_code;
-		char mbuf[17];
-		size_t i;
-		for (i = 0; i < 16 && method[i]; i++) {
-			mbuf[i] = (char) toupper((unsigned char) method[i]);
-		}
-		mbuf[i] = '\0';
+		const char *method = OLG(txn_method)[0] ? OLG(txn_method) : "GET";
+		int code = OLG(txn_status) > 0 ? (int) OLG(txn_status) : (OLG(worker_mode) ? 0 : SG(sapi_headers).http_response_code);
 		if (code > 0) {
 			ol_attr_int(root, "http.response.status_code", code);
 			if (code >= 500) {
@@ -204,7 +229,7 @@ static void ol_finalize_root(void)
 			}
 		}
 		if (OLG(route)) {
-			len = snprintf(name, sizeof(name), "%s %s", mbuf, OLG(route));
+			len = snprintf(name, sizeof(name), "%s %s", method, OLG(route));
 			if (OLG(route_attr)) {
 				ol_attr_static(root, "http.route", OLG(route_attr));
 			}
@@ -212,7 +237,7 @@ static void ol_finalize_root(void)
 			ol_attr *p = ol_attr_find(root, "url.path");
 			char norm[1024];
 			ol_normalize_path(norm, sizeof(norm), p ? p->v.s.p : "/", p ? p->v.s.len : 1);
-			len = snprintf(name, sizeof(name), "%s %s", mbuf, norm);
+			len = snprintf(name, sizeof(name), "%s %s", method, norm);
 		}
 		root->name = ol_strdup(name, len > 0 && (size_t) len < sizeof(name) ? (size_t) len : sizeof(name) - 1, sizeof(name));
 	}
@@ -227,7 +252,8 @@ static void ol_finalize_root(void)
 	}
 }
 
-static void ol_request_cleanup(void)
+/* Per-transaction cleanup. Connection/statement/curl handle state and the worker state stay. */
+static void ol_txn_cleanup(void)
 {
 	int i;
 	uint32_t k;
@@ -235,6 +261,41 @@ static void ol_request_cleanup(void)
 		OBJ_RELEASE(OLG(last_reported)[k]);
 	}
 	OLG(nreported) = 0;
+	ol_http_txn_end();
+	ol_fiber_stacks_free();
+	ol_stack_reset(&OLG(main_stack));
+	OLG(path_depth) = 0;
+	ol_segs_release();
+	ol_arena_release();
+	for (i = 2; i < OL_MAX_CHUNKS && OLG(chunks)[i]; i++) {
+		free(OLG(chunks)[i]);
+		OLG(chunks)[i] = NULL;
+	}
+	OLG(nnodes) = 0;
+	OLG(recording) = false;
+	OLG(tracing) = false;
+	if (OLG(worker_mode)) {
+		/* between two requests of a worker: hooks keep connection state, nothing is recorded or propagated */
+		OLG(active) = true;
+		OLG(propagate) = false;
+	} else {
+		OLG(active) = false;
+	}
+}
+
+/* Ends the current transaction; emit: send it when it is recorded. */
+void ol_txn_finish(bool emit)
+{
+	ol_sampler_disarm();
+	if (emit && OLG(active) && OLG(recording)) {
+		ol_finalize_root();
+		ol_emit();
+	}
+	ol_txn_cleanup();
+}
+
+static void ol_request_cleanup(void)
+{
 	ol_http_rshutdown();
 	if (OLG(conns)) {
 		zend_hash_destroy(OLG(conns));
@@ -251,16 +312,14 @@ static void ol_request_cleanup(void)
 		FREE_HASHTABLE(OLG(curl));
 		OLG(curl) = NULL;
 	}
-	ol_fiber_stacks_free();
-	ol_stack_reset(&OLG(main_stack));
-	OLG(path_depth) = 0;
-	ol_segs_release();
-	ol_arena_release();
-	for (i = 2; i < OL_MAX_CHUNKS && OLG(chunks)[i]; i++) {
-		free(OLG(chunks)[i]);
-		OLG(chunks)[i] = NULL;
+	if (OLG(wtx)) {
+		efree(OLG(wtx));
+		OLG(wtx) = NULL;
 	}
-	OLG(nnodes) = 0;
+	OLG(nwtx) = 0;
+	OLG(worker_mode) = false;
+	OLG(concurrent) = false;
+	OLG(wprimary) = false;
 	OLG(active) = false;
 	OLG(recording) = false;
 	OLG(tracing) = false;
@@ -271,11 +330,8 @@ PHP_RSHUTDOWN_FUNCTION(openlog)
 	if (!OLG(enabled)) {
 		return SUCCESS;
 	}
-	ol_sampler_disarm();
-	if (OLG(active) && OLG(recording)) {
-		ol_finalize_root();
-		ol_emit();
-	}
+	ol_worker_rshutdown();
+	ol_txn_finish(true);
 	ol_request_cleanup();
 	return SUCCESS;
 }
@@ -286,13 +342,7 @@ PHP_MINFO_FUNCTION(openlog)
 	php_info_print_table_start();
 	php_info_print_table_row(2, "openlog APM agent", OLG(enabled) ? "enabled" : "disabled");
 	php_info_print_table_row(2, "Version", PHP_OPENLOG_VERSION);
-#if PHP_VERSION_ID >= 80200
-	php_info_print_table_row(2, "Hook layer", "Observer API (userland + internal)");
-#elif PHP_VERSION_ID >= 80000
-	php_info_print_table_row(2, "Hook layer", "Observer API (userland) + zend_execute_internal");
-#else
-	php_info_print_table_row(2, "Hook layer", "zend_execute_ex + zend_execute_internal");
-#endif
+	php_info_print_table_row(2, "Hook layer", OLG(enabled) ? ol_hooks_describe() : "none (openlog.enabled=0)");
 	snprintf(buf, sizeof(buf), ZEND_LONG_FMT, OLG(c_messages));
 	php_info_print_table_row(2, "Messages sent (this process)", buf);
 	snprintf(buf, sizeof(buf), ZEND_LONG_FMT, OLG(c_dropped_messages));
@@ -310,21 +360,45 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_openlog_name, 0, 0, 1)
 	ZEND_ARG_INFO(0, name)
 ZEND_END_ARG_INFO()
 
+/* Trace and span of the request the calling code belongs to; false between two worker requests. */
+static bool ol_current_ids(const uint8_t **tid, uint64_t *span)
+{
+	if (!OLG(active) || (OLG(worker_mode) && !OLG(wprimary) && !OLG(concurrent))) {
+		return false;
+	}
+	*tid = OLG(trace_id);
+	*span = ol_current_span_id();
+	if (OLG(concurrent)) {
+		const ol_wtx *w = NULL;
+		int which = ol_worker_context(&w);
+		if (which < 0) {
+			return false;
+		}
+		if (which == 1) {
+			*tid = w->trace_id;
+			*span = w->span_id;
+		}
+	}
+	return true;
+}
+
 /* {{{ openlog\trace_id(): string — current trace id (32 hex) or "" */
 PHP_FUNCTION(openlog_trace_id)
 {
 	static const char hex[] = "0123456789abcdef";
 	char buf[32];
+	const uint8_t *tid;
+	uint64_t span;
 	int i;
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
-	if (!OLG(active)) {
+	if (!ol_current_ids(&tid, &span)) {
 		RETURN_EMPTY_STRING();
 	}
 	for (i = 0; i < 16; i++) {
-		buf[2 * i] = hex[OLG(trace_id)[i] >> 4];
-		buf[2 * i + 1] = hex[OLG(trace_id)[i] & 15];
+		buf[2 * i] = hex[tid[i] >> 4];
+		buf[2 * i + 1] = hex[tid[i] & 15];
 	}
 	RETURN_STRINGL(buf, 32);
 }
@@ -333,13 +407,15 @@ PHP_FUNCTION(openlog_trace_id)
 PHP_FUNCTION(openlog_span_id)
 {
 	char buf[17];
+	const uint8_t *tid;
+	uint64_t span;
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
-	if (!OLG(active)) {
+	if (!ol_current_ids(&tid, &span)) {
 		RETURN_EMPTY_STRING();
 	}
-	snprintf(buf, sizeof(buf), "%016llx", (unsigned long long) ol_current_span_id());
+	snprintf(buf, sizeof(buf), "%016llx", (unsigned long long) span);
 	RETURN_STRINGL(buf, 16);
 }
 
@@ -348,10 +424,12 @@ PHP_FUNCTION(openlog_traceparent)
 {
 	char buf[64];
 	size_t len;
+	const uint8_t *tid;
+	uint64_t span;
 	if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
-	if (!OLG(active)) {
+	if (!ol_current_ids(&tid, &span)) {
 		RETURN_EMPTY_STRING();
 	}
 	len = ol_format_traceparent(buf, sizeof(buf), ol_current_span_id());
@@ -366,7 +444,7 @@ PHP_FUNCTION(openlog_set_transaction_name)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &name, &len) == FAILURE) {
 		return;
 	}
-	if (!OLG(active) || len == 0) {
+	if (!OLG(active) || len == 0 || OLG(concurrent)) {
 		RETURN_FALSE;
 	}
 	ol_set_route(name, len, 1000, false);
@@ -418,6 +496,8 @@ static const zend_module_dep openlog_deps[] = {
 	ZEND_MOD_OPTIONAL("mysqli")
 	ZEND_MOD_OPTIONAL("pgsql")
 	ZEND_MOD_OPTIONAL("redis")
+	ZEND_MOD_OPTIONAL("swoole")
+	ZEND_MOD_OPTIONAL("openswoole")
 	ZEND_MOD_END
 };
 

@@ -1,7 +1,7 @@
-{{- range $component := list "ingest" "processor" "api" "alert" }}
+{{- range $component := list "ingest" "processor" "api" "alert" "sampler" }}
 {{- $v := index $.Values $component }}
 {{- $ctx := dict "root" $ "component" $component "values" $v }}
-{{- $on := and $v.enabled (or (ne $component "alert") (include "openlog.postgres.enabled" $)) }}
+{{- $on := or (and (eq $component "sampler") $.Values.tailSampling.enabled) (and (ne $component "sampler") $v.enabled (or (ne $component "alert") (include "openlog.postgres.enabled" $))) }}
 {{- if and $on $v.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2
@@ -24,6 +24,19 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ $v.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if and (eq $component "sampler") $v.autoscaling.lag.enabled }}
+    # Consumer lag of the raw traces topic (external metrics adapter required).
+    - type: External
+      external:
+        metric:
+          name: {{ $v.autoscaling.lag.metricName }}
+          selector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+        target:
+          type: AverageValue
+          averageValue: {{ $v.autoscaling.lag.averageValue | quote }}
+    {{- end }}
   {{- with $v.autoscaling.behavior }}
   behavior:
     {{- toYaml . | nindent 4 }}

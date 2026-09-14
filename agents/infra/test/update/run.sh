@@ -47,6 +47,23 @@ $E2E -version 0.9.4 -binary "$WORK/bin/0.9.1/openlog-infra-agent" -floor 0.9.0
 $E2E -version 0.9.5 -binary "$WORK/bin/0.9.1/openlog-infra-agent" -floor 0.9.0 -corrupt
 $E2E -version 0.8.0 -binary "$WORK/bin/0.9.0/openlog-infra-agent"
 
+# PHP agent fleet installation: only the module Debian 12's php8.2 loads (PHP 8.2 NTS glibc) is built here; release.yml
+# builds all 36. The tarball is cached in $PHP_WORK; the build images pulled for it are removed again.
+PHP_WORK=${PHP_WORK:-$WORK/php}
+PHP_TGZ="$PHP_WORK/openlog-php-agent_0.0.0-e2e_linux_$ARCH.tar.gz"
+if [ ! -s "$PHP_TGZ" ]; then
+  echo "== PHP agent module (8.2-nts-glibc)"
+  pulled=""
+  for img in php:8.2-cli almalinux:8; do docker image inspect "$img" >/dev/null 2>&1 || pulled="$pulled $img"; done
+  TARGETS=8.2-nts-glibc PACKAGES="" PARALLEL=1 "$AGENT/../php/packaging/build-artifacts.sh" 0.0.0-e2e "$PHP_WORK"
+  docker rmi -f openlog-php-build:8.2-nts >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086
+  [ -z "$pulled" ] || docker rmi -f $pulled >/dev/null 2>&1 || true
+fi
+PHP_E2E="go run ./test/update/e2e php-release -seed $WORK/keys/key.seed -arch $ARCH -out $WORK/releases -base-url $BASE -from $PHP_TGZ"
+$PHP_E2E -version 0.9.6
+$PHP_E2E -version 0.9.7 -broken
+
 cp "$HERE/scenario.sh" "$HERE/legacy-unit.service" "$WORK/"
 
 echo "== systemd image"

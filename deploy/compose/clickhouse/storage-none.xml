@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!-- Placeholder for the optional storage mounts of docker-compose.yml (tiered storage disabled). See storage-tiered.xml. -->
+<clickhouse/>

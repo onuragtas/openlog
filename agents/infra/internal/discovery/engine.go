@@ -53,21 +53,25 @@ type IntegrationStatus struct {
 
 // Service is the body of a discovered_service item (semantic-conventions §3.4).
 type Service struct {
-	RuleID       string            `json:"rule_id"`
-	Name         string            `json:"name"`
-	Category     string            `json:"category"`
-	Instance     string            `json:"instance"`
-	Command      string            `json:"command,omitempty"`
-	Version      string            `json:"version"`
-	MatchedBy    []string          `json:"matched_by"`
-	PIDs         []int             `json:"pids"`
-	Ports        []PortRef         `json:"ports"`
-	SystemdUnits []string          `json:"systemd_units"`
-	Packages     []string          `json:"packages"`
-	ContainerIDs []string          `json:"container_ids"`
-	Integration  IntegrationStatus `json:"integration"`
-	APMHint      *APMHint          `json:"apm_hint"`
-	LogPaths     []string          `json:"log_paths"`
+	RuleID   string `json:"rule_id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Instance string `json:"instance"`
+	Command  string `json:"command,omitempty"`
+	// DisplayInstance is the invoked path of a multi-call or symlinked
+	// executable (/usr/bin/redis-server when Instance is /usr/bin/redis-check-rdb);
+	// display only, Instance stays the grouping key.
+	DisplayInstance string            `json:"display_instance,omitempty"`
+	Version         string            `json:"version"`
+	MatchedBy       []string          `json:"matched_by"`
+	PIDs            []int             `json:"pids"`
+	Ports           []PortRef         `json:"ports"`
+	SystemdUnits    []string          `json:"systemd_units"`
+	Packages        []string          `json:"packages"`
+	ContainerIDs    []string          `json:"container_ids"`
+	Integration     IntegrationStatus `json:"integration"`
+	APMHint         *APMHint          `json:"apm_hint"`
+	LogPaths        []string          `json:"log_paths"`
 }
 
 // ServiceIndex maps processes to the rule id of their discovered service.
@@ -128,24 +132,52 @@ func (ix *ServiceIndex) Lookup(pid int, exe, containerID string) string {
 	return ""
 }
 
-// mainCommand returns the argv0 basename of the service's main process: the
-// lowest PID whose parent is not part of the service.
-func mainCommand(pids []int, ix *index) string {
+// mainProcess returns the service's main process: the lowest PID whose parent
+// is not part of the service.
+func mainProcess(pids []int, ix *index) (inventory.ProcessInstance, bool) {
 	set := map[int]bool{}
 	for _, p := range pids {
 		set[p] = true
 	}
 	for _, p := range pids { // pids are sorted
 		if in, ok := ix.byPID[p]; ok && !set[in.PPID] {
-			return in.Command()
+			return in, true
 		}
 	}
 	if len(pids) > 0 {
-		if in, ok := ix.byPID[pids[0]]; ok {
-			return in.Command()
-		}
+		in, ok := ix.byPID[pids[0]]
+		return in, ok
 	}
-	return ""
+	return inventory.ProcessInstance{}, false
+}
+
+// displayInstance returns the invoked path of an executable instance started
+// through another name of the same binary (Debian's /usr/bin/redis-server →
+// redis-check-rdb, busybox applets): the absolute argv[0] when its basename
+// differs from the resolved executable and comm confirms it is the exec'd name
+// (comm is set from the executed file name, truncated to 15 bytes; a
+// setproctitle title does not change it). Otherwise "".
+func displayInstance(instance string, main inventory.ProcessInstance) string {
+	if !strings.HasPrefix(instance, "/") || main.ContainerID != "" {
+		return ""
+	}
+	argv0, _, _ := strings.Cut(strings.TrimSpace(main.Cmdline), " ")
+	if !strings.HasPrefix(argv0, "/") || strings.HasSuffix(argv0, ":") {
+		return ""
+	}
+	argv0 = path.Clean(argv0)
+	name := path.Base(argv0)
+	if argv0 == instance || name == path.Base(instance) {
+		return ""
+	}
+	comm := name
+	if len(comm) > 15 {
+		comm = comm[:15]
+	}
+	if main.Comm != comm {
+		return ""
+	}
+	return argv0
 }
 
 // Key returns <rule_id>:<instance>.
@@ -488,7 +520,10 @@ func evaluate(r *Rule, ix *index) []Service {
 			SystemdUnits: sortedStrings(c.units), Packages: append([]string{}, linkedPkgs...),
 			ContainerIDs: sortedStrings(c.containers), APMHint: r.APMHint, LogPaths: []string{},
 		}
-		s.Command = mainCommand(s.PIDs, ix)
+		if main, ok := mainProcess(s.PIDs, ix); ok {
+			s.Command = main.Command()
+			s.DisplayInstance = displayInstance(s.Instance, main)
+		}
 		for _, l := range r.Logs {
 			s.LogPaths = append(s.LogPaths, l.Path)
 		}

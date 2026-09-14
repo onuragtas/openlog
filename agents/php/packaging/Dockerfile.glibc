@@ -1,0 +1,24 @@
+# glibc build environment for release builds of openlog.so (packaging/build-artifacts.sh): AlmaLinux 8 (glibc 2.28,
+# gcc 8) + the headers of one PHP version (NTS or ZTS) configured from the official image's source tarball. Building
+# against an old glibc keeps the module loadable on RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 20.04+ (official PHP images
+# are Debian trixie: modules built there need glibc 2.34+ symbols such as pthread_create@GLIBC_2.34).
+ARG PHP_SRC_IMAGE=php:8.3-cli
+FROM ${PHP_SRC_IMAGE} AS src
+
+FROM almalinux:8
+ARG ZTS=nts
+RUN dnf install -y --setopt=install_weak_deps=False gcc make autoconf automake libtool m4 file binutils xz diffutils \
+    && dnf clean all
+COPY --from=src /usr/src/php.tar.xz /usr/src/php.tar.xz
+RUN set -eux; \
+    mkdir -p /usr/src/php && tar -xf /usr/src/php.tar.xz -C /usr/src/php --strip-components=1; \
+    cd /usr/src/php; \
+    major=$(sed -n 's/^#define PHP_MAJOR_VERSION \([0-9]*\).*/\1/p' main/php_version.h); \
+    zts=""; if [ "$ZTS" = zts ]; then if [ "$major" -ge 8 ]; then zts=--enable-zts; else zts=--enable-maintainer-zts; fi; fi; \
+    ./configure --prefix=/opt/php --disable-all --enable-pdo --disable-cgi --disable-phpdbg --without-pear --without-sqlite3 \
+      --without-pdo-sqlite --without-libxml --disable-dom --disable-simplexml --disable-xml --disable-xmlreader \
+      --disable-xmlwriter $zts >/dev/null; \
+    make install-headers install-build install-programs >/dev/null; \
+    cd / && rm -rf /usr/src/php /usr/src/php.tar.xz; \
+    /opt/php/bin/php-config --version
+ENV PATH=/opt/php/bin:$PATH

@@ -1,0 +1,42 @@
+# AddressSanitizer + UndefinedBehaviorSanitizer PHP (debug build) for the phpt suite: build/run-matrix.sh tag
+# "<version>-asan" (e.g. VERSIONS="" EXTRA="8.3-asan" build/run-matrix.sh). PHP >= 8.0 (configure's sanitizer flags).
+# The PHP source comes from the official image (/usr/src/php.tar.xz); openlog.so is compiled with the same sanitizers
+# (OPENLOG_EXT_CFLAGS, picked up by run-matrix.sh). Build context: agents/php/ext/build.
+ARG PHP_IMAGE=php:8.3-cli
+FROM ${PHP_IMAGE}
+ARG REDIS_VERSION=6.2.0
+COPY apt-update.sh /usr/local/bin/apt-update
+RUN set -eux; \
+    sh /usr/local/bin/apt-update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PHPIZE_DEPS bison re2c pkg-config \
+      libxml2-dev libsqlite3-dev libcurl4-openssl-dev libssl-dev zlib1g-dev libpq-dev; \
+    rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    mkdir -p /usr/src/php-asan && tar -xf /usr/src/php.tar.xz -C /usr/src/php-asan --strip-components=1; \
+    cd /usr/src/php-asan; \
+    ./configure --prefix=/opt/php-asan --with-config-file-path=/opt/php-asan/etc \
+      --with-config-file-scan-dir=/opt/php-asan/etc/conf.d \
+      --enable-debug --enable-address-sanitizer --enable-undefined-sanitizer \
+      --disable-all --disable-phpdbg --enable-cli --enable-cgi --enable-opcache \
+      --enable-pdo --with-sqlite3 --with-pdo-sqlite --with-curl --with-openssl --with-zlib \
+      --enable-mysqlnd --with-mysqli --with-pdo-mysql --with-pgsql --with-pdo-pgsql \
+      --enable-session --enable-filter --enable-ctype --enable-tokenizer --enable-posix >/dev/null; \
+    make -j"$(nproc)" >/tmp/php-build.log 2>&1 || { tail -50 /tmp/php-build.log; exit 1; }; \
+    make install >/dev/null; \
+    mkdir -p /opt/php-asan/etc/conf.d; \
+    echo 'zend_extension=opcache' > /opt/php-asan/etc/conf.d/10-opcache.ini; \
+    cd / && rm -rf /usr/src/php-asan /tmp/php-build.log
+ENV PATH=/opt/php-asan/bin:$PATH \
+    OPENLOG_EXT_CFLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g -O1" \
+    USE_ZEND_ALLOC=0 \
+    ZEND_DONT_UNLOAD_MODULES=1 \
+    ASAN_OPTIONS=detect_leaks=1:abort_on_error=1:allocator_may_return_null=1:detect_stack_use_after_return=0:log_path=/tmp/sanitizer/asan \
+    UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1:log_path=/tmp/sanitizer/ubsan
+# phpredis built with the sanitizer PHP (tests skip when this fails)
+RUN set -ux; \
+    cd /tmp && curl -fsSL "https://pecl.php.net/get/redis-${REDIS_VERSION}.tgz" | tar -xz \
+    && cd "redis-${REDIS_VERSION}" && phpize >/dev/null && ./configure >/dev/null && make -j"$(nproc)" >/dev/null 2>&1 \
+    && make install >/dev/null && echo 'extension=redis' > /opt/php-asan/etc/conf.d/20-redis.ini \
+    || echo "phpredis ${REDIS_VERSION} not built: phpredis tests will skip"; \
+    rm -rf /tmp/redis-*; \
+    php -m

@@ -1,0 +1,91 @@
+{
+  "realm": "openlog",
+  "enabled": true,
+  "sslRequired": "none",
+  "loginWithEmailAllowed": true,
+  "groups": [
+    { "name": "openlog-admins" },
+    { "name": "engineering" }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "email": "alice@acme.test",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Alice",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "alice-password", "temporary": false }],
+      "groups": ["/openlog-admins", "/engineering"]
+    },
+    {
+      "username": "bob",
+      "email": "bob@acme.test",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Bob",
+      "lastName": "Viewer",
+      "credentials": [{ "type": "password", "value": "bob-password", "temporary": false }],
+      "groups": ["/engineering"]
+    },
+    {
+      "username": "dave",
+      "email": "dave@acme.test",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Dave",
+      "lastName": "Saml",
+      "credentials": [{ "type": "password", "value": "dave-password", "temporary": false }]
+    },
+    {
+      "username": "eve",
+      "email": "eve@evil.test",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Eve",
+      "lastName": "Outsider",
+      "credentials": [{ "type": "password", "value": "eve-password", "temporary": false }]
+    },
+    {
+      "username": "unverified",
+      "email": "unverified@acme.test",
+      "emailVerified": false,
+      "enabled": true,
+      "firstName": "Una",
+      "lastName": "Verified",
+      "credentials": [{ "type": "password", "value": "unverified-password", "temporary": false }]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "openlog",
+      "name": "openlog (OIDC)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "openlog-oidc-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": ["http://127.0.0.1:*"],
+      "webOrigins": [],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    }
+  ]
+}

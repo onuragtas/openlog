@@ -122,8 +122,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # PHP agent (docs/contracts/php-agent.md §7.1): openlog.so for PHP 7.1–8.4 × NTS/ZTS × glibc/musl (36 modules), the
+  # tarball and deb/rpm/apk per architecture on native runners, install-tested, handed to the release job, which puts
+  # them into the signed manifest (component php-agent).
+  php-agent-artifacts:
+    name: PHP agent artifacts (${{ matrix.arch }})
+    needs: [prepare]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, arch: amd64 }
+          - { runner: ubuntu-24.04-arm, arch: arm64 }
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: build 36 modules, tarball, deb/rpm/apk
+        env:
+          PARALLEL: "4"
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" agents/php/packaging/build-artifacts.sh "$VERSION" dist/php
+          ls -l dist/php
+      - name: deb/rpm/apk install test
+        run: agents/php/packaging/test.sh dist/php "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: php-agent-${{ matrix.arch }}
+          path: dist/php/openlog-php-agent_*
+          if-no-files-found: error
+          retention-days: 7
+
   release:
-    needs: [prepare, image]
+    needs: [prepare, image, php-agent-artifacts]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -165,6 +198,13 @@ jobs:
             --jq '.[] | select(.draft | not) | select(any(.assets[]; .name == "manifest.json")) | .tag_name')
           echo "index entries:$args"
           echo "RELEASE_INDEX_ARGS=$args" >> "$GITHUB_ENV"
+
+      - name: PHP agent artifacts into the release directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: php-agent-*
+          merge-multiple: true
+          path: dist/v${{ needs.prepare.outputs.version }}
 
       - name: build, sign and verify
         env:
@@ -258,3 +298,212 @@ jobs:
               echo "attempt $attempt: $dir@v$VERSION not yet available"; sleep $((attempt * 15))
             done
           done < <(scripts/go-agent-release.sh modules)
+
+  # npm package @openlog/node (agents/node) at the product version, after the GitHub release is published
+  # (docs/operations/releasing.md#nodejs-agent-package). Needs the repository secret NPM_TOKEN; without it the
+  # job only warns. npm versions are immutable: an already published version is skipped.
+  node-agent-npm:
+    name: npm publish @openlog/node
+    needs: [prepare, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - id: token
+        name: NPM_TOKEN configured
+        run: |
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::secret NPM_TOKEN is not set; @openlog/node $VERSION is not published (docs/operations/releasing.md#nodejs-agent-package)"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.token.outputs.present == 'true'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.token.outputs.present == 'true'
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: agents/node/package-lock.json
+      - name: version from the tag, install, test
+        if: steps.token.outputs.present == 'true'
+        working-directory: agents/node
+        run: |
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          npm ci --no-audit --no-fund
+          npm test
+      - name: publish
+        if: steps.token.outputs.present == 'true'
+        working-directory: agents/node
+        run: |
+          if npm view "@openlog/node@$VERSION" version >/dev/null 2>&1; then
+            echo "@openlog/node@$VERSION is already published"
+            exit 0
+          fi
+          tag=latest
+          if [ "$CHANNEL" = beta ]; then tag=beta; fi
+          npm publish --access public --provenance --tag "$tag"
+          echo "### npm" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`npm install @openlog/node@$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # PyPI package openlog-agent (agents/python, D-073) at the tag version, after the GitHub release is published
+  # (docs/operations/releasing.md#python-agent-package). Trusted publishing (OIDC, environment `pypi`), no token
+  # secret; skipped with a warning unless the repository variable PYPI_PUBLISH is "true". PyPI versions are
+  # immutable: an already published version is skipped.
+  python-agent-pypi:
+    name: PyPI publish openlog-agent
+    needs: [prepare, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: pypi
+      url: https://pypi.org/project/openlog-agent/
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PYPI_PUBLISH: ${{ vars.PYPI_PUBLISH }}
+    steps:
+      - id: enabled
+        name: PYPI_PUBLISH configured
+        run: |
+          if [ "$PYPI_PUBLISH" = true ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::variable PYPI_PUBLISH is not true; openlog-agent $VERSION is not published (docs/operations/releasing.md#python-agent-package)"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.enabled.outputs.present == 'true'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.enabled.outputs.present == 'true'
+        with:
+          python-version: "3.12"
+      - id: build
+        name: version from the tag, test, build
+        if: steps.enabled.outputs.present == 'true'
+        working-directory: agents/python
+        run: |
+          # product SemVer → PEP 440: 1.2.0-beta.3 → 1.2.0b3, 1.2.0-rc.1 → 1.2.0rc1
+          pyv="$VERSION"
+          case "$VERSION" in
+            *-beta.*) pyv="${VERSION%%-beta.*}b${VERSION##*-beta.}" ;;
+            *-rc.*) pyv="${VERSION%%-rc.*}rc${VERSION##*-rc.}" ;;
+            *-alpha.*) pyv="${VERSION%%-alpha.*}a${VERSION##*-alpha.}" ;;
+          esac
+          sed -i -E "s/^__version__ = \".*\"/__version__ = \"$pyv\"/" src/openlog_agent/version.py
+          python -m pip install -e . -r tests/requirements-test.txt build==1.6.1 twine==7.0.0
+          python -m pytest -q -p no:cacheprovider tests/unit tests/e2e
+          rm -rf dist && python -m build --outdir dist .
+          python -m twine check --strict dist/*
+          ls dist | grep -F "openlog_agent-$pyv"
+          echo "version=$pyv" >> "$GITHUB_OUTPUT"
+          if curl -fsS -o /dev/null "https://pypi.org/pypi/openlog-agent/$pyv/json"; then
+            echo "openlog-agent $pyv is already published"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
+        if: steps.enabled.outputs.present == 'true' && steps.build.outputs.publish == 'true'
+        with:
+          packages-dir: agents/python/dist
+      - name: summary
+        if: steps.enabled.outputs.present == 'true' && steps.build.outputs.publish == 'true'
+        env:
+          PYV: ${{ steps.build.outputs.version }}
+        run: |
+          echo "### PyPI" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`pip install openlog-agent==$PYV\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # openlog-javaagent-<version>.jar + .sha256 (agents/java, D-072) attached to the published GitHub release
+  # (docs/operations/releasing.md#java-agent-jar). Not in the signed manifest (built after it). The jar is
+  # reproducible, so a re-run uploads the same bytes (--clobber).
+  java-agent-jar:
+    name: Java agent jar on the GitHub release
+    needs: [prepare, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: build and unit-test at the tag version
+        working-directory: agents/java
+        run: ./gradlew --no-daemon --console=plain -Pversion="$VERSION" :extension:test :agentJar :agentJarChecksum
+      - name: attach to the release
+        working-directory: agents/java/build/libs
+        run: |
+          (cd . && sha256sum -c "openlog-javaagent-$VERSION.jar.sha256")
+          gh release upload "$TAG" "openlog-javaagent-$VERSION.jar" "openlog-javaagent-$VERSION.jar.sha256" --clobber
+          {
+            echo "### Java agent"
+            echo "\`java -javaagent:openlog-javaagent-$VERSION.jar -jar app.jar\` ($(cut -d' ' -f1 "openlog-javaagent-$VERSION.jar.sha256"))"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # OpenLog.Agent NuGet package (agents/dotnet, D-074) at the tag version, after the GitHub release is published
+  # (docs/operations/releasing.md#net-agent-package). Skipped with a warning without the NUGET_API_KEY secret.
+  # NuGet versions are immutable: --skip-duplicate makes a re-run safe.
+  dotnet-agent-nuget:
+    name: NuGet publish OpenLog.Agent
+    needs: [prepare, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - id: key
+        name: NUGET_API_KEY configured
+        run: |
+          if [ -n "$NUGET_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::secret NUGET_API_KEY is not set; OpenLog.Agent $VERSION is not published (docs/operations/releasing.md#net-agent-package)"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.key.outputs.present == 'true'
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        if: steps.key.outputs.present == 'true'
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - name: unit tests and pack at the tag version
+        if: steps.key.outputs.present == 'true'
+        working-directory: agents/dotnet
+        run: |
+          dotnet test test/OpenLog.Agent.Tests/OpenLog.Agent.Tests.csproj -c Release -p:OpenLogVersion="$VERSION"
+          dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -p:OpenLogVersion="$VERSION" -o "$RUNNER_TEMP/nupkg"
+      - name: publish
+        if: steps.key.outputs.present == 'true'
+        run: |
+          dotnet nuget push "$RUNNER_TEMP/nupkg/OpenLog.Agent.$VERSION.nupkg" --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json --skip-duplicate
+          {
+            echo "### NuGet"
+            echo "\`dotnet add package OpenLog.Agent --version $VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -18,6 +18,7 @@ packages:
   - { name: nginx, version: 1.22.1-9+deb12u1 }
   - { name: redis-server, version: "5:7.0.15-1~deb12u1" }
 expect:
-  - { rule_id: nginx, instance: /usr/sbin/nginx, version: 1.22.1, pids: [586, 587, 588], ports: [80], units: [nginx.service], matched_by: [process, systemd_unit, package] }
-  - { rule_id: redis, instance: /usr/bin/redis-check-rdb, version: 7.0.15, pids: [598], ports: [6379], units: [redis-server.service], matched_by: [process, systemd_unit, listening_port, package] }
+  - { rule_id: nginx, instance: /usr/sbin/nginx, display_instance: "", command: nginx, version: 1.22.1, pids: [586, 587, 588], ports: [80], units: [nginx.service], matched_by: [process, systemd_unit, package] }
+  # instance (the key) stays the resolved executable; display_instance is the invoked path
+  - { rule_id: redis, instance: /usr/bin/redis-check-rdb, display_instance: /usr/bin/redis-server, command: redis-server, version: 7.0.15, pids: [598], ports: [6379], units: [redis-server.service], matched_by: [process, systemd_unit, listening_port, package] }
 exactly_keys: ["nginx:/usr/sbin/nginx", "redis:/usr/bin/redis-check-rdb"]

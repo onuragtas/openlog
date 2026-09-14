@@ -1,13 +1,16 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, BellPlus, CircleAlert, Info, LineChart, Search } from "lucide-react";
-import { useId, useMemo } from "react";
+import { ArrowLeft, BellPlus, CircleAlert, Container, Info, LineChart, Search, Settings2 } from "lucide-react";
+import { useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { hostQuery, inventorySearchQuery, metricQuery, servicesQuery, type MetricRequest } from "@/api/queries";
 import { can } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
-import { PANELS, PG_DATABASE, PG_TABLE, type PanelChart } from "@/components/integrations/panels";
+import { KPIS, type KpiSpec } from "@/components/integrations/kpis";
+import { PANELS, PG_DATABASE, PG_QUERY_ID, PG_QUERY_TEXT, PG_TABLE, type PanelChart } from "@/components/integrations/panels";
+import { TemplateGallery } from "@/components/alerts/TemplateGallery";
+import { NativeSelect } from "@/components/ui/native-select";
 import { ApplyNotice, HostIntegrationToggle, IntegrationConfigPanel, useApplyState } from "@/components/integrations/IntegrationConfig";
 import { isConfigurable } from "@/lib/integration-settings";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
@@ -18,9 +21,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DiscoveredService } from "@/api/types";
-import { formatBytes, formatValue } from "@/lib/format";
+import { formatBytes, formatNumber, formatValue } from "@/lib/format";
 import {
   filterIntegrationRows,
+  INTEGRATION_IDS,
   INTEGRATION_STATUSES,
   instanceAlertSearch,
   instanceLabel,
@@ -28,10 +32,7 @@ import {
   integrationForRule,
   integrationOf,
   isIntegrationId,
-  latestMax,
   needsAttention,
-  presetsFor,
-  presetSearch,
   serviceKey,
   summarizeIntegrations,
   topByLast,
@@ -97,6 +98,8 @@ function PanelChartCard({ chart, inst, range, hostName, canAlert }: { chart: Pan
   }, [dataKey, chart, i18n.resolvedLanguage]);
   const first = results[0]?.data;
   const alertQuery = chart.alert ? chart.queries[chart.alert] : undefined;
+  // Metrics only some setups send (nginx Plus/VTS, Redis Cluster, lock stats) do not leave empty cards behind.
+  if (chart.optional && !isLoading && !error && series && series.length === 0) return null;
 
   return (
     <Card className="min-w-0 gap-2" data-testid="integration-chart">
@@ -180,55 +183,153 @@ function TopTablesCard({ inst, range }: { inst: InstanceRef; range: RangeSpec })
   );
 }
 
-function RecommendedAlerts({ id, inst, range, hostName, instanceName }: { id: IntegrationId; inst: InstanceRef; range: RangeSpec; hostName: string; instanceName: string }) {
+/** Top statements by execution time from pg_stat_statements (opt-in `integrations.postgresql.query_stats`). */
+function TopQueriesCard({ inst, range }: { inst: InstanceRef; range: RangeSpec }) {
   const { t, i18n } = useTranslation();
-  const presets = presetsFor(id);
-  const refMetrics = [...new Set(presets.flatMap((p) => (typeof p.threshold === "number" ? [] : [p.threshold.ratioOf])))];
-  const refs = useQueries({
-    queries: refMetrics.map((name) => metricQuery({ hostId: inst.hostId, name, agg: "last", range, resource: instanceResourceFilter(inst) })),
-  });
+  const q = useQuery(
+    metricQuery({ hostId: inst.hostId, name: "postgresql.query.total_exec_time", agg: "rate", groupBy: [PG_DATABASE, PG_QUERY_ID, PG_QUERY_TEXT], range, resource: instanceResourceFilter(inst) }),
+  );
+  const calls = useQuery(
+    metricQuery({ hostId: inst.hostId, name: "postgresql.query.calls", agg: "rate", groupBy: [PG_QUERY_ID], range, resource: instanceResourceFilter(inst) }),
+  );
+  const rows = useMemo(() => topByLast(q.data?.series ?? [], 10), [q.data]);
+  const callsById = useMemo(() => new Map(topByLast(calls.data?.series ?? [], 1000).map((r) => [r.labels[PG_QUERY_ID], r.value] as const)), [calls.data]);
+  // Not enabled: no card (the agent setting is opt-in).
+  if (!q.isPending && !q.isError && rows.length === 0) return null;
+  return (
+    <Card className="min-w-0 gap-2 lg:col-span-2" data-testid="integration-top-queries">
+      <CardHeader>
+        <CardTitle>
+          <h3>{t("integrations.topQueries.title")}</h3>
+        </CardTitle>
+        <CardDescription>{t("integrations.topQueries.description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {q.isPending ? (
+          <LoadingState />
+        ) : q.isError ? (
+          <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+        ) : (
+          <Table mobile="stack">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("integrations.topQueries.query")}</TableHead>
+                <TableHead>{t("integrations.topTables.database")}</TableHead>
+                <TableHead className="text-right">{t("integrations.topQueries.time")}</TableHead>
+                <TableHead className="text-right">{t("integrations.topQueries.calls")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => {
+                const c = callsById.get(r.labels[PG_QUERY_ID]);
+                return (
+                  <TableRow key={`${r.labels[PG_DATABASE]}/${r.labels[PG_QUERY_ID]}`}>
+                    <TableCell className="max-w-xl font-mono text-xs break-all whitespace-normal">{r.labels[PG_QUERY_TEXT] || "–"}</TableCell>
+                    <TableCell label={t("integrations.topTables.database")} className="font-mono text-xs">
+                      {r.labels[PG_DATABASE] || "–"}
+                    </TableCell>
+                    <TableCell label={t("integrations.topQueries.time")} className="text-right tabular-nums">
+                      {t("integrations.topQueries.msPerSecond", { value: formatNumber(r.value, i18n.resolvedLanguage) })}
+                    </TableCell>
+                    <TableCell label={t("integrations.topQueries.calls")} className="text-right tabular-nums">
+                      {c === undefined ? "–" : t("integrations.topQueries.perSecond", { value: formatNumber(c, i18n.resolvedLanguage) })}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecommendedAlerts({ id, inst, hostName, instanceName }: { id: IntegrationId; inst: InstanceRef; hostName: string; instanceName: string }) {
+  const { t } = useTranslation();
   const titleId = useId();
-  if (presets.length === 0) return null;
+  const target = useMemo(
+    () => ({ hostId: inst.hostId, hostName, discoveryId: inst.discoveryId, instance: inst.instance }),
+    [inst.hostId, inst.discoveryId, inst.instance, hostName],
+  );
   return (
     <Card className="gap-3" aria-labelledby={titleId} role="region">
       <CardHeader>
         <CardTitle>
           <h2 id={titleId}>{t("integrations.alerts.title")}</h2>
         </CardTitle>
-        <CardDescription>{t("integrations.alerts.description")}</CardDescription>
+        <CardDescription>{t("integrations.alerts.description", { name: instanceName })}</CardDescription>
       </CardHeader>
       <CardContent>
-        <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-          {presets.map((p) => {
-            const title = t(`integrations.alerts.presets.${p.id}.title`);
-            const refMetric = typeof p.threshold === "number" ? undefined : p.threshold.ratioOf;
-            const reference = refMetric ? latestMax(refs[refMetrics.indexOf(refMetric)]?.data?.series) : null;
-            const s = presetSearch(p, inst, { name: `${title} – ${hostName} (${instanceName})`, hostName, reference });
-            // Ratio thresholds show the resolved value, e.g. " (921.6 MiB)"; empty when unavailable.
-            const threshold = refMetric && s?.threshold ? ` (${formatValue(Number(s.threshold), p.metric.startsWith("redis.memory") ? "bytes" : "number", i18n.resolvedLanguage)})` : "";
-            return (
-              <li key={p.id} className="flex flex-col justify-between gap-2 rounded-lg border p-3" data-testid="alert-preset">
-                <div>
-                  <p className="text-sm font-medium">{title}</p>
-                  <p className="text-xs text-muted-foreground">{t(`integrations.alerts.presets.${p.id}.body`, { threshold })}</p>
-                </div>
-                {s ? (
-                  <Link
-                    to="/alerts/rules/new"
-                    search={s as never}
-                    aria-label={t("integrations.alerts.createFor", { title })}
-                    className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10 self-start" })}
-                  >
-                    <BellPlus aria-hidden="true" />
-                    {t("integrations.alerts.create")}
-                  </Link>
-                ) : (
-                  <p className="text-xs text-muted-foreground">{t("integrations.alerts.unavailable", { metric: refMetric ?? p.metric })}</p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <TemplateGallery category="integration" integration={id} target={target} columns="3" />
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Switches between instances of the same integration (this host first, then other hosts). */
+function InstanceSelector({ integration, current }: { integration: string; current: InstanceRef }) {
+  const { t } = useTranslation();
+  const uid = useId();
+  const navigate = useNavigate();
+  const q = useQuery(inventorySearchQuery("discovered_service", ""));
+  const rows = useMemo(
+    () =>
+      summarizeIntegrations(q.data ?? [])
+        .rows.filter((r) => r.integration.id === integration && r.panel)
+        .sort((a, b) => Number(b.hostId === current.hostId) - Number(a.hostId === current.hostId)),
+    [q.data, integration, current.hostId],
+  );
+  if (rows.length < 2) return null;
+  const key = (r: { hostId: string; discoveryId: string; instance: string }) => `${r.hostId}\u0000${r.discoveryId}\u0000${r.instance}`;
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="instance-selector">
+      <label htmlFor={uid} className="text-xs text-muted-foreground">
+        {t("integrations.panel.switchInstance")}
+      </label>
+      <NativeSelect
+        id={uid}
+        className="max-w-full min-w-0 sm:max-w-md"
+        value={key(current)}
+        onChange={(e) => {
+          const r = rows.find((x) => key(x) === e.target.value);
+          if (r) void navigate({ to: "/hosts/$hostId/integrations/$discoveryId/$instance", params: { hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }, search: (prev) => prev as never });
+        }}
+      >
+        {rows.map((r) => (
+          <option key={key(r)} value={key(r)}>
+            {r.hostName} · {instanceLabel(r).primary}
+            {r.integration.status !== "enabled" ? ` (${t(`integrations.status.${r.integration.status}`)})` : ""}
+          </option>
+        ))}
+      </NativeSelect>
+    </div>
+  );
+}
+
+/** Docker has no engine metrics (semantic-conventions §6.6): reachability and a link to the host's containers. */
+function DockerEngineCard({ hostId, status, error }: { hostId: string; status: IntegrationStatus; error?: string }) {
+  const { t } = useTranslation();
+  return (
+    <Card className="gap-3" data-testid="docker-engine">
+      <CardHeader>
+        <CardTitle>
+          <h2>{t("integrations.docker.title")}</h2>
+        </CardTitle>
+        <CardDescription>{t(status === "enabled" ? "integrations.docker.reachable" : "integrations.docker.unreachable")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">
+        {error && <p className="break-words text-muted-foreground">{error}</p>}
+        <p className="text-muted-foreground">{t("integrations.docker.noMetrics")}</p>
+        <Link
+          to="/hosts/$hostId"
+          params={{ hostId }}
+          search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, tab: "containers" as const })}
+          className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10 self-start" })}
+        >
+          <Container aria-hidden="true" />
+          {t("integrations.docker.containers")}
+        </Link>
       </CardContent>
     </Card>
   );
@@ -243,6 +344,8 @@ export function HostIntegrationPage() {
   const services = useQuery(servicesQuery(hostId));
   const role = useMe().data?.role;
   const canAlert = can(role, "alerts.write");
+  // Every role reads alert templates (writes are checked in the gallery).
+  const canReadAlerts = !!role;
   const canManage = can(role, "fleet.manage");
   const apply = useApplyState(hostId, services.data?.snapshot_time);
   const inst: InstanceRef = { hostId, discoveryId, instance };
@@ -262,7 +365,7 @@ export function HostIntegrationPage() {
   const status: IntegrationStatus = item ? integ.status : "not_available";
   const showCharts = !!id && (!item || integ.status === "enabled");
   // Process name first (e.g. redis-server); the executable path (/usr/bin/redis-check-rdb) stays secondary.
-  const label = instanceLabel({ command: svc?.command, instance });
+  const label = instanceLabel({ command: svc?.command, instance, displayInstance: svc?.display_instance });
 
   return (
     <div className="flex flex-col gap-4">
@@ -280,6 +383,7 @@ export function HostIntegrationPage() {
           <h1 className="text-xl font-semibold tracking-tight">{t("integrations.panel.title", { name })}</h1>
           {item && <IntegrationStatusBadge status={status} />}
         </div>
+        {configId && <div className="mt-2"><InstanceSelector integration={configId} current={inst} /></div>}
         {label.secondary && (
           <p className="mt-1 truncate font-mono text-sm font-medium" title={`${t("integrations.panel.command")}: ${label.primary}`} data-testid="integration-command">
             <span className="sr-only">{t("integrations.panel.command")}: </span>
@@ -347,18 +451,20 @@ export function HostIntegrationPage() {
           {integ.error ? ` ${integ.error}` : ""}
         </Notice>
       )}
-      {item && !id && integ.status === "enabled" && <EmptyState>{t("integrations.panel.unsupported")}</EmptyState>}
+      {item && configId === "docker" && integ.status !== "not_available" && <DockerEngineCard hostId={hostId} status={integ.status} error={integ.error} />}
+      {item && !id && configId !== "docker" && integ.status === "enabled" && <EmptyState>{t("integrations.panel.unsupported")}</EmptyState>}
 
       {showCharts && id && (
         <>
-          {canAlert && <RecommendedAlerts id={id} inst={inst} range={range} hostName={hostName} instanceName={label.primary} />}
           {/* 1 column on phones/tablets, 2 columns from 1024px. */}
           <section aria-label={t("integrations.panel.metrics")} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {PANELS[id].map((chart) => (
               <PanelChartCard key={chart.id} chart={chart} inst={inst} range={range} hostName={hostName} canAlert={canAlert} />
             ))}
             {id === "postgresql" && <TopTablesCard inst={inst} range={range} />}
+            {id === "postgresql" && <TopQueriesCard inst={inst} range={range} />}
           </section>
+          {canReadAlerts && <RecommendedAlerts id={id} inst={inst} hostName={hostName} instanceName={label.primary} />}
         </>
       )}
     </div>
@@ -388,16 +494,110 @@ function InstanceName({ row, truncate }: { row: IntegrationRow; truncate?: boole
   );
 }
 
+function KpiValue({ spec, row, range }: { spec: KpiSpec; row: IntegrationRow; range: RangeSpec }) {
+  const { t, i18n } = useTranslation();
+  const keys = Object.keys(spec.queries);
+  const resource = instanceResourceFilter(row);
+  const results = useQueries({
+    queries: keys.map((k) => {
+      const q = spec.queries[k]!;
+      return metricQuery({ hostId: row.hostId, name: q.name, agg: q.agg, groupBy: q.groupBy, range, resource });
+    }),
+  });
+  const pending = results.some((r) => r.isPending);
+  const failed = results.some((r) => r.isError);
+  const value = pending || failed ? null : spec.compute(Object.fromEntries(keys.map((k, i) => [k, results[i]!.data!.series])));
+  return (
+    <div className="min-w-0">
+      <dt className="truncate text-xs text-muted-foreground">{t(`integrations.kpis.${spec.id}`)}</dt>
+      <dd className="text-base font-semibold tabular-nums" aria-busy={pending}>
+        {pending ? "…" : formatValue(value, spec.unit, i18n.resolvedLanguage)}
+      </dd>
+    </div>
+  );
+}
+
+const DASHBOARD_PAGE = 12;
+
+/** Key figures of every instance of one integration, with configuration links for instances that need attention. */
+function IntegrationDashboard({ integration, rows, range }: { integration: string; rows: IntegrationRow[]; range: RangeSpec }) {
+  const { t } = useTranslation();
+  const [limit, setLimit] = useState(DASHBOARD_PAGE);
+  const specs = isIntegrationId(integration) ? KPIS[integration] : [];
+  const shown = rows.slice(0, limit);
+  if (rows.length === 0) return <EmptyState>{t("integrations.dashboard.empty")}</EmptyState>;
+  return (
+    <section aria-label={t("integrations.dashboard.title", { name: integration })} className="mb-4 flex flex-col gap-3" data-testid="integration-dashboard">
+      <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {shown.map((r) => {
+          const attention = needsAttention(r.integration.status);
+          return (
+            <li key={`${r.hostId}/${r.key}`} className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-3" data-testid="integration-kpi-card">
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <Link to="/hosts/$hostId" params={{ hostId: r.hostId }} className="text-sm font-medium text-primary hover:underline">
+                    {r.hostName}
+                  </Link>
+                  <InstanceName row={r} truncate />
+                </div>
+                <IntegrationStatusBadge status={r.integration.status} />
+              </div>
+              {r.integration.status === "enabled" && specs.length > 0 ? (
+                <dl className="grid grid-cols-2 gap-2">
+                  {specs.map((spec) => (
+                    <KpiValue key={spec.id} spec={spec} row={r} range={range} />
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-xs break-words text-muted-foreground">
+                  {r.integration.error ?? (attention ? t("integrations.dashboard.needsConfig") : r.integration.status === "enabled" ? t("integrations.docker.noMetrics") : t("integrations.panel.notAvailable"))}
+                </p>
+              )}
+              {r.panel && (
+                <Link
+                  to="/hosts/$hostId/integrations/$discoveryId/$instance"
+                  params={{ hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }}
+                  aria-label={t(attention ? "integrations.dashboard.configureFor" : "integrations.openPanelFor", { name: r.name, host: r.hostName })}
+                  className={buttonVariants({ variant: attention ? "default" : "outline", size: "sm", className: "mt-auto min-h-10 self-start" })}
+                >
+                  {attention ? <Settings2 aria-hidden="true" /> : <LineChart aria-hidden="true" />}
+                  {attention ? t("integrations.dashboard.configure") : t("integrations.openPanel")}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {rows.length > limit && (
+        <Button type="button" variant="outline" className="min-h-10 self-start" onClick={() => setLimit((l) => l + DASHBOARD_PAGE)}>
+          {t("integrations.dashboard.more", { count: rows.length - limit })}
+        </Button>
+      )}
+    </section>
+  );
+}
+
 export function IntegrationsPage() {
   const { t } = useTranslation();
   const search = listRoute.useSearch();
   const navigate = useNavigate({ from: "/integrations" });
   const inputId = useId();
   const query = useQuery(inventorySearchQuery("discovered_service", ""));
-  const { rows, counts } = useMemo(() => summarizeIntegrations(query.data ?? []), [query.data]);
+  const { rows: allRows, counts: allCounts } = useMemo(() => summarizeIntegrations(query.data ?? []), [query.data]);
+  const integrationIds = useMemo(() => [...new Set([...INTEGRATION_IDS, ...allRows.map((r) => r.integration.id!)])].filter((id) => allRows.some((r) => r.integration.id === id)), [allRows]);
+  const integration = search.integration && integrationIds.includes(search.integration) ? search.integration : undefined;
+  const rows = useMemo(() => (integration ? allRows.filter((r) => r.integration.id === integration) : allRows), [allRows, integration]);
+  const counts = useMemo(() => {
+    if (!integration) return allCounts;
+    const c = { enabled: 0, needs_configuration: 0, error: 0, not_available: 0 };
+    for (const r of rows) c[r.integration.status]++;
+    return c;
+  }, [allCounts, rows, integration]);
   const status = (INTEGRATION_STATUSES as readonly string[]).includes(search.status ?? "") ? (search.status as IntegrationStatus) : undefined;
   const q = search.q ?? "";
   const shown = useMemo(() => filterIntegrationRows(rows, status, q), [rows, status, q]);
+  const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
+  const setIntegration = (id: string | undefined) => void navigate({ search: (prev) => ({ ...prev, integration: id }), replace: true });
   const setStatus = (s: IntegrationStatus | undefined) => void navigate({ search: (prev) => ({ ...prev, status: s }), replace: true });
 
   return (
@@ -422,6 +622,19 @@ export function IntegrationsPage() {
           </div>
         }
       />
+      {integrationIds.length > 0 && (
+        <div role="group" aria-label={t("integrations.dashboard.filterLabel")} className="mb-3 flex flex-wrap gap-2" data-testid="integration-types">
+          <Button variant={integration ? "outline" : "secondary"} size="sm" className="min-h-10" aria-pressed={!integration} onClick={() => setIntegration(undefined)}>
+            {t("integrations.dashboard.allTypes")} <span className="tabular-nums text-muted-foreground">{allRows.length}</span>
+          </Button>
+          {integrationIds.map((id) => (
+            <Button key={id} variant={integration === id ? "secondary" : "outline"} size="sm" className="min-h-10" aria-pressed={integration === id} onClick={() => setIntegration(integration === id ? undefined : id)} data-integration={id}>
+              {t(`integrations.names.${id}`, { defaultValue: id })} <span className="tabular-nums text-muted-foreground">{allRows.filter((r) => r.integration.id === id).length}</span>
+            </Button>
+          ))}
+        </div>
+      )}
+      {integration && !query.isPending && <IntegrationDashboard key={integration} integration={integration} rows={rows} range={range} />}
       <div role="group" aria-label={t("integrations.filterLabel")} className="mb-3 flex flex-wrap gap-2" data-testid="integration-counts">
         <Button variant={status ? "outline" : "secondary"} size="sm" className="min-h-10" aria-pressed={!status} onClick={() => setStatus(undefined)}>
           {t("integrations.all")} <span className="tabular-nums text-muted-foreground">{rows.length}</span>

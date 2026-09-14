@@ -1,22 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { apmOverviewQuery, apmTransactionsQuery } from "@/api/apm";
+import { apmDeploymentsQuery, apmOverviewQuery, apmTransactionsQuery } from "@/api/apm";
 import { RedTiles } from "@/components/apm/Charts";
+import { DeploymentsCard } from "@/components/apm/Deployments";
 import { TransactionTable } from "@/components/apm/TransactionsTab";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { latencySeries, metricPoints, type ServiceScope } from "@/lib/apm";
+import { deploymentMarkers } from "@/lib/deployments";
 import type { RangeSpec } from "@/lib/time";
 
-export function OverviewTab({ scope, range, onOpenTransaction, onViewAll }: { scope: ServiceScope; range: RangeSpec; onOpenTransaction: (name: string) => void; onViewAll: () => void }) {
+export interface OverviewTabProps {
+  scope: ServiceScope;
+  range: RangeSpec;
+  onOpenTransaction: (name: string) => void;
+  onViewAll: () => void;
+  /** opens the Errors tab with a group (new error groups of a deployment comparison) */
+  onOpenErrorGroup?: (groupId: string) => void;
+}
+
+export function OverviewTab({ scope, range, onOpenTransaction, onViewAll, onOpenErrorGroup }: OverviewTabProps) {
   const { t } = useTranslation();
   const overview = useQuery(apmOverviewQuery(scope, range));
   const top = useQuery(apmTransactionsQuery(scope, range, "time", 5));
+  const deployments = useQuery(apmDeploymentsQuery(scope, range));
   const points = useMemo(() => overview.data?.series ?? [], [overview.data]);
-  const common = { from: overview.data?.from, to: overview.data?.to, isLoading: overview.isPending, error: overview.error, onRetry: () => void overview.refetch(), height: 180 };
+  const markers = useMemo(() => deploymentMarkers(deployments.data?.deployments, overview.data?.from, overview.data?.to), [deployments.data, overview.data?.from, overview.data?.to]);
+  const common = { from: overview.data?.from, to: overview.data?.to, isLoading: overview.isPending, error: overview.error, onRetry: () => void overview.refetch(), height: 180, markers };
 
   return (
     <div className="flex flex-col gap-4">
@@ -35,6 +48,7 @@ export function OverviewTab({ scope, range, onOpenTransaction, onViewAll }: { sc
           <TimeSeriesChart {...common} title={t("apm.metrics.apdex")} unit="number" yMax={1} series={[{ label: t("apm.metrics.apdex"), points: metricPoints(points, "apdex") }]} />
         </ChartCard>
       </div>
+      <DeploymentsCard scope={scope} range={range} onOpenErrorGroup={onOpenErrorGroup} />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle>

@@ -103,6 +103,23 @@ func (m *Manager) PutPolicy(ctx context.Context, orgID string, p Policy, a Actor
 	if err != nil {
 		return StoredPolicy{}, err
 	}
+	// php_agent: omitted keeps the stored section; a changed one restarts its waves (changed_at).
+	switch {
+	case np.PHPAgent.Mode == "":
+		np.PHPAgent = old.PHPAgent
+	case np.PHPAgent.sameSettings(old.PHPAgent):
+		np.PHPAgent.ChangedAt = old.PHPAgent.ChangedAt
+	default:
+		now := m.o.Now().UTC()
+		np.PHPAgent.ChangedAt = &now
+	}
+	if np.PHPAgent.Mode == PHPModeAuto && np.PHPAgent.Version != PHPVersionAgent {
+		if snap := m.snapshot(); snap.Len() > 0 {
+			if _, ok := snap.Release(np.PHPAgent.Version); !ok {
+				return StoredPolicy{}, invalidf("php_agent.version %s is not a verified release", np.PHPAgent.Version)
+			}
+		}
+	}
 	if err := m.store.PutPolicy(ctx, orgID, np, a.UserID, m.o.Now()); err != nil {
 		return StoredPolicy{}, err
 	}
@@ -304,6 +321,9 @@ type HostView struct {
 	Supported bool
 	Status    Reason // decision for the host now (offer, not_in_wave, hold, …)
 	Target    string // target version of the decision, if any
+	// PHPOverride and PHP are the host's PHP agent mode override and decision.
+	PHPOverride *PHPOverride
+	PHP         PHPDecision
 }
 
 // Hosts lists hosts with filters and pagination.
@@ -332,12 +352,21 @@ func (m *Manager) Hosts(ctx context.Context, orgID string, f HostFilter) ([]Host
 	if err != nil {
 		return nil, "", err
 	}
+	phpOvs, err := m.store.ListPHPOverrides(ctx, orgID)
+	if err != nil {
+		return nil, "", err
+	}
 	snap := m.snapshot()
 	floor, hasFloor := oldestSupported(snap)
 	now := m.o.Now()
 	out := make([]HostView, 0, len(hosts))
 	for _, h := range hosts {
 		hv := HostView{Host: h, Supported: true}
+		pin := PHPInput{Now: now, Host: h.HostReport, Policy: sp.Policy, Catalog: snap}
+		if o, ok := phpOvs[h.HostID]; ok {
+			hv.PHPOverride, pin.Override = &o, &o
+		}
+		hv.PHP = DecidePHP(pin)
 		in := Input{Now: now, Host: h.HostReport, Policy: sp.Policy, Rollout: cur, Catalog: snap}
 		if o, ok := ovs[h.HostID]; ok {
 			hv.Override = &o
@@ -402,6 +431,36 @@ func (m *Manager) DeleteOverride(ctx context.Context, orgID, hostID string, a Ac
 	}
 	if deleted {
 		m.audit(ctx, orgID, a, "fleet.host_override.delete", "agent_host", hostID, nil)
+	}
+	return nil
+}
+
+// PutPHPOverride sets the PHP agent mode (off, manual, auto) of a known host.
+func (m *Manager) PutPHPOverride(ctx context.Context, orgID, hostID, mode string, a Actor) (PHPOverride, error) {
+	switch mode {
+	case PHPModeOff, PHPModeManual, PHPModeAuto:
+	default:
+		return PHPOverride{}, invalidf("mode must be off, manual or auto")
+	}
+	if _, err := m.store.GetHost(ctx, orgID, hostID); err != nil {
+		return PHPOverride{}, err
+	}
+	o := PHPOverride{HostID: hostID, Mode: mode, UpdatedAt: m.o.Now()}
+	if err := m.store.PutPHPOverride(ctx, orgID, o, a.UserID); err != nil {
+		return PHPOverride{}, err
+	}
+	m.audit(ctx, orgID, a, "fleet.php_agent_override.set", "agent_host", hostID, map[string]any{"mode": mode})
+	return o, nil
+}
+
+// DeletePHPOverride removes a host's PHP agent mode override (idempotent).
+func (m *Manager) DeletePHPOverride(ctx context.Context, orgID, hostID string, a Actor) error {
+	deleted, err := m.store.DeletePHPOverride(ctx, orgID, hostID)
+	if err != nil {
+		return err
+	}
+	if deleted {
+		m.audit(ctx, orgID, a, "fleet.php_agent_override.delete", "agent_host", hostID, nil)
 	}
 	return nil
 }

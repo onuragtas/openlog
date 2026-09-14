@@ -61,6 +61,8 @@ Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**.
 | `OPENLOG_RESOURCE_ATTRIBUTES` (merged over `OTEL_RESOURCE_ATTRIBUTES`) | `WithResourceAttributes` | — | `k=v,k2=v2` (percent-encoded values allowed) |
 | `OPENLOG_HOST_ID` | `WithHostID` | detected | Explicit `host.id` |
 | `OPENLOG_HOST_ROOT` | — | `/` | Prefix for host files when the host root is mounted (e.g. `/host`) |
+| `OPENLOG_SAMPLING_RV` | `WithSamplingRV` | `false` | New traces write explicit randomness `ot=rv`, see [Sampling](#sampling) |
+| `OPENLOG_INFRA_RUNTIME_DIR` | — | `/run/openlog-infra-agent` | Where a running infra agent publishes its host id (`host-id`) |
 | `OPENLOG_INFRA_STATE_DIR` | — | `/var/lib/openlog-infra-agent` | Where the infra agent persists a generated host id |
 | `OPENLOG_STATE_DIR` | — | user cache dir `/openlog` | Where this agent persists a generated host id (last resort) |
 | `OPENLOG_RUNTIME_METRICS` | `WithRuntimeMetrics` | `true` | Go runtime metrics |
@@ -97,7 +99,12 @@ The agent uses OpenTelemetry
 - **W3C limits.** The `ot` value is capped at 256 characters: unknown sub-keys are dropped, and `th`/`rv` are kept.
   The list is capped at 32 members, and the right-most member is dropped when `ot` is added.
 
-`rv` is read but never generated. Trace ids from the SDK are random, so the trace id supplies the randomness.
+- **Randomness.** Trace ids from the SDK are random, so root spans carry the W3C Trace Context Level 2 random flag
+  (`traceparent` flags `03` when sampled, `02` when not) and the trace id supplies the randomness. Children inherit the
+  flag from their parent: a remote W3C Level 1 parent without it is continued unchanged. With
+  `OPENLOG_SAMPLING_RV=true` (`WithSamplingRV(true)`) a new trace also gets explicit randomness `ot=rv:<14 hex>`, which
+  the root decision uses and every downstream service keeps; an incoming `rv` is never replaced. Use it when trace ids
+  may be rewritten on the way (e.g. by a proxy that starts new traces).
 
 ## Resource
 
@@ -121,16 +128,22 @@ The APM UI links a service to a host when both report the same `host.id`. This a
 resolution chain ([semantic-conventions.md §1](../../docs/contracts/semantic-conventions.md)), so both agents
 produce the same id on one machine:
 
-1. `/etc/machine-id` → `/var/lib/dbus/machine-id` → `/sys/class/dmi/id/product_uuid`. A value is used only if it is at
+1. The id a running infra agent publishes in `/run/openlog-infra-agent/host-id` (`OPENLOG_INFRA_RUNTIME_DIR`; read under
+   `OPENLOG_HOST_ROOT`, then at the plain path). It is exactly the infra agent's `host.id`, whatever source it used.
+2. `/etc/machine-id` → `/var/lib/dbus/machine-id` → `/sys/class/dmi/id/product_uuid`. A value is used only if it is at
    least 8 characters of `[0-9A-Za-z-]` and not all zeros; it is lower-cased.
-2. The UUID the infra agent generated and persisted in `<state_dir>/host-id` (`/var/lib/openlog-infra-agent/host-id`).
-3. Non-Linux only: the platform machine id (macOS `IOPlatformUUID`, Windows `MachineGuid`).
-4. A UUID generated and persisted by this agent in `OPENLOG_STATE_DIR`. This cannot match an infra agent, and
+3. The UUID the infra agent generated and persisted in `<state_dir>/host-id` (`/var/lib/openlog-infra-agent/host-id`).
+4. Non-Linux only: the platform machine id (macOS `IOPlatformUUID`, Windows `MachineGuid`).
+5. A UUID generated and persisted by this agent in `OPENLOG_STATE_DIR`. This cannot match an infra agent, and
    `OPENLOG_LOG_LEVEL=info` says so at start.
 
 **Containers and Kubernetes.** A container's `/etc/machine-id` is usually missing or belongs to the image, not the
 host. Link containers to the host in one of these ways:
 
+- recommended with an infra agent on the host: mount its runtime directory read-only,
+  `-v /run/openlog-infra-agent:/run/openlog-infra-agent:ro` (Kubernetes: a `hostPath` volume of type `Directory`). The
+  id always matches the infra agent, also when it uses `product_uuid` or a generated id. The infra agent writes the file
+  at start when the directory exists (systemd creates it; for a containerized infra agent, mount a host directory there)
 - mount the host's id read-only: `-v /etc/machine-id:/etc/machine-id:ro` (Kubernetes: a `hostPath` volume of type `File`)
 - set `OPENLOG_HOST_ID` explicitly
 - mount the host root and set `OPENLOG_HOST_ROOT=/host`, like the infra agent's `host.root_path`

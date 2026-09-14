@@ -89,6 +89,9 @@ auth:
   # password from this Secret.
   existingSecret: ""
   clickhousePasswordKey: clickhouse-password
+  # With existingSecret: key holding the password of clickhouse.readUser (empty = the read user is not
+  # used and api/alert query as clickhouse.user). The chart-generated Secret uses clickhouse-read-password.
+  clickhouseReadPasswordKey: ""
   licenseKeysKey: license-keys
   # postgres.mode=external: key holding OPENLOG_POSTGRES_DSN.
   postgresDsnKey: postgres-dsn
@@ -301,6 +304,68 @@ clickhouse:
   user: ""
   # Empty in operators mode = random, preserved across upgrades via lookup. Ignored with existingSecret.
   password: ""
+  # Read-only user of api and alert tenant queries (OPENLOG_CLICKHOUSE_READ_*, D-047): settings profile
+  # readonly=2 and SELECT on openlog.* only; migrate, processor, APM edge linking and alert evaluation
+  # history keep clickhouse.user.
+  #   operators mode: created in the CHI; password random (preserved) unless readUser.password is set.
+  #   external mode: create the user yourself (docs/contracts/config.md) and set readUser.password or
+  #                  auth.existingSecret + auth.clickhouseReadPasswordKey; otherwise pods query as clickhouse.user.
+  readUser:
+    enabled: true
+    name: openlog_reader
+    password: ""
+  # Per-tenant limits of every api/alert query (OPENLOG_QUERY_*; 0 = the ClickHouse profile's value).
+  # Exceeding them answers 422 resource_exhausted.
+  queryLimits:
+    maxMemoryUsage: 2147483648
+    maxRowsToRead: 2000000000
+    maxBytesToRead: 0
+    # Overrides: "tenant:max_memory_usage=8589934592;max_rows_to_read=0,tenant2:max_bytes_to_read=0".
+    tenantLimits: ""
+
+  # Tiered storage (D-066, docs/operations/tiered-storage.md): parts older than the class's age move from the local
+  # data disk (volume `default`) to an optional warm disk and to S3 (volume `cold`); retention is unchanged.
+  # openlog-migrate switches the tables to `policy` and adds the TTL moves (OPENLOG_STORAGE_*).
+  #   operators mode: the chart adds the storage policy, S3 disk, cache and warm volume to the CHI (s3/warm below).
+  #   external mode:  configure storage_configuration on every ClickHouse server yourself (see the doc), then enable.
+  tieredStorage:
+    enabled: false
+    policy: openlog_tiered
+    # Days after which parts move to S3; 0 = never. Must be below the retention (metrics 30, metrics_1m 395, logs 14,
+    # traces 7, apm OPENLOG_APM_RETENTION_DAYS, alerts 30), otherwise the move is left out.
+    coldAfterDays:
+      metrics: 7
+      metrics_1m: 30
+      logs: 3
+      traces: 3
+      apm: 7
+      alerts: 7
+    # Days after which parts move to the warm volume (requires warm.enabled), e.g. {logs: 1}.
+    warmAfterDays: {}
+    s3:
+      # Operators mode, required: bucket URL with a trailing prefix per replica, e.g.
+      # https://my-bucket.s3.eu-central-1.amazonaws.com/openlog/{shard}/{replica}/ (macros expanded by ClickHouse).
+      endpoint: ""
+      region: ""
+      # Secret with static credentials (keys below). Empty = no static keys: set useEnvironmentCredentials and
+      # serviceAccountName (IRSA / EKS Pod Identity) or rely on the node's instance profile.
+      credentialsSecret:
+        name: ""
+        accessKeyIdKey: access-key-id
+        secretAccessKeyKey: secret-access-key
+      useEnvironmentCredentials: false
+      # Service account of the ClickHouse pods (IRSA role annotation lives on it; create it yourself).
+      serviceAccountName: ""
+      # Local read cache of cold parts on the data volume (leave room for it in clickhouse.altinity.storage.size).
+      cacheMaxSize: 20Gi
+      # Extra settings of the S3 disk, e.g. {server_side_encryption_kms_key_id: "arn:aws:kms:...",
+      # server_side_encryption_kms_bucket_key_enabled: "true"} (storage-tiered-sse.xml.example).
+      diskSettings: {}
+    # Operators mode: a second PersistentVolumeClaim per replica as the warm volume.
+    warm:
+      enabled: false
+      size: 500Gi
+      storageClass: ""
 
   external:
     # Native-protocol addresses. Required in external mode - REPLACE this placeholder.
@@ -311,9 +376,10 @@ clickhouse:
 
   # Native protocol over TLS (OPENLOG_CLICKHOUSE_TLS_*), including the processor's direct
   # shard connections. External mode: point clickhouse.external.addrs at the secure port
-  # and list <secure>1</secure> + that port in remote_servers. Operators mode: the chart
-  # only switches the address to securePort; configure the server certificate and
-  # tcp_port_secure in the CHI yourself (clickhouse.altinity.settings / files).
+  # and list <secure>1</secure> + that port in remote_servers. Operators mode: set
+  # tls.server.secretName and the chart configures the servers (below); without it the chart
+  # only switches the address to securePort and you configure the CHI yourself.
+  # Certificate files are re-read by openlog on change (no restart, D-048).
   tls:
     enabled: false
     securePort: 9440
@@ -329,6 +395,24 @@ clickhouse:
     serverName: ""
     # Testing only.
     insecureSkipVerify: false
+    # Operators mode only: ClickHouse server TLS. A Secret with the server certificate, key and CA
+    # (cert-manager: tls.crt, tls.key, ca.crt). The chart sets tcp_port_secure (securePort) and
+    # https_port, the openSSL server/client config (also used between shards), cluster secure: "yes"
+    # (remote_servers on the secure port) and the service ports. The certificate must be valid for
+    # the pod hosts in system.clusters (chi-<name>-<cluster>-<shard>-<replica>) and the service host,
+    # e.g. *.<namespace>.svc.cluster.local, and carry the clientAuth usage (Distributed queries).
+    # Without caSecret.name, the openlog pods trust caKey of this Secret.
+    server:
+      secretName: ""
+      certKey: tls.crt
+      keyKey: tls.key
+      caKey: ca.crt
+      httpsPort: 8443
+      # none | relaxed | strict (strict requires client certificates: set clientSecret).
+      verificationMode: relaxed
+      # Remove the plaintext native and HTTP ports (cluster insecure: "no"). The operator itself uses
+      # HTTP 8123: configure its access (scheme https, port 8443) in the operator config first.
+      disableInsecure: false
 
   # Used only when dependencies.mode=operators (Altinity clickhouse-operator >= 0.24).
   altinity:
@@ -483,6 +567,75 @@ processor:
   # stopping processor flushes its batches instead of leaving them to be re-read.
   # Default: 2s flush + 30s insert timeout x2 attempts + margin.
   terminationGracePeriodSeconds: 90
+  preStopSleepSeconds: 0
+  probes:
+    startup: {periodSeconds: 2, failureThreshold: 60, timeoutSeconds: 2}
+    liveness: {periodSeconds: 10, failureThreshold: 6, timeoutSeconds: 2}
+    readiness: {periodSeconds: 5, failureThreshold: 3, timeoutSeconds: 2}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+
+# -----------------------------------------------------------------------------
+# Tail-based sampling (docs/operations/tail-sampling.md, D-075). Off = no behavior change.
+# enabled sets OPENLOG_TAILSAMPLING_ENABLED on ingest, processor and api and deploys openlog-sampler.
+# -----------------------------------------------------------------------------
+tailSampling:
+  enabled: false
+  decisionWait: "30s"
+  maxTraces: 100000
+  maxSpansPerTrace: 2000
+  # Keep the sampler memory limit >= 1.5x this.
+  maxBufferedBytes: 536870912
+  decisionCacheTTL: "10m"
+  decisionCacheSize: 500000
+  policyRefresh: "30s"
+  # JSON policy for organizations without a saved one (empty: keep everything), e.g.
+  # '{"enabled":true,"baseline_ratio":0.1,"max_spans_per_second":0,"rules":[{"name":"errors","type":"error"}]}'
+  defaultPolicy: ""
+
+# openlog-sampler (rendered only with tailSampling.enabled)
+sampler:
+  # Must be <= kafka.topics.partitions (extra consumers sit idle).
+  replicaCount: 2
+  logLevel: ""
+  extraEnv: []
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {memory: 1536Mi}
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    # MUST be <= kafka.topics.partitions (enforced at render time).
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    # Scale on consumer lag of the raw traces topic as well: needs an external metrics adapter (e.g.
+    # prometheus-adapter) exposing openlog_tailsampling_consumer_lag_records summed per pod.
+    lag:
+      enabled: false
+      metricName: openlog_tailsampling_consumer_lag_records
+      # Target average lag (records) per pod.
+      averageValue: "5000"
+    # Every scale event rebalances the group and decides in-flight traces early; scale down slowly.
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies: [{type: Pods, value: 2, periodSeconds: 60}]
+      scaleDown:
+        stabilizationWindowSeconds: 900
+        policies: [{type: Pods, value: 1, periodSeconds: 300}]
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  # Covers the final decide + produce + commit (25s) on SIGTERM.
+  terminationGracePeriodSeconds: 45
   preStopSleepSeconds: 0
   probes:
     startup: {periodSeconds: 2, failureThreshold: 60, timeoutSeconds: 2}

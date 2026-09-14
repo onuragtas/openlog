@@ -112,6 +112,27 @@ container. `OPENLOG_IMAGE` in `.env` follows the running version. Status: `GET /
 audit log. It mounts `/var/run/docker.sock` and runs as root. Manual upgrades, restore and troubleshooting:
 [docs/operations/upgrading.md](../../docs/operations/upgrading.md).
 
+## Tiered storage (S3)
+
+Old parts can move from the ClickHouse volume to S3 while staying queryable ([docs/operations/tiered-storage.md](../../docs/operations/tiered-storage.md)):
+
+```sh
+# .env
+OPENLOG_CLICKHOUSE_STORAGE_CONFIG=./clickhouse/storage-tiered.xml
+OPENLOG_STORAGE_TIERING_ENABLED=true
+OPENLOG_S3_ENDPOINT=https://my-bucket.s3.eu-central-1.amazonaws.com/openlog/ch-1/
+OPENLOG_S3_ACCESS_KEY_ID=...        # or empty + OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS=true
+OPENLOG_S3_SECRET_ACCESS_KEY=...
+# local try-out instead of a bucket: COMPOSE_PROFILES=tiered (MinIO, keep the S3 defaults)
+
+docker compose up -d --wait
+docker compose exec openlog openlog-admin storage status
+```
+
+Move ages per signal: `OPENLOG_STORAGE_COLD_AFTER_DAYS_{METRICS,METRICS_1M,LOGS,TRACES,APM,ALERTS}` (`.env.example`).
+Back up ClickHouse with `BACKUP … TO S3` once tiering is on: a copy of the `clickhouse-data` volume only references the
+parts on S3.
+
 ## Stop
 
 ```sh

@@ -162,6 +162,7 @@ type Manager struct {
 	ctrScanned    bool
 	ctrWarnedMax  bool
 	ctrWarnedList bool
+	ctrPatterns   map[string]*regexp.Regexp // compiled multiline patterns (multiline.go)
 
 	stMu      sync.Mutex
 	committed map[string]*fileState
@@ -518,7 +519,8 @@ func (m *Manager) checkRotation(t *tailer, now time.Time) {
 		t.goneAt = now
 		m.lastScan = time.Time{} // pick up the new file on the next tick
 	}
-	if now.Sub(t.goneAt) >= rotateGrace && now.Sub(t.lastData) >= rotateGrace {
+	// A rate-limited tailer reads nothing new for a while: close only at the end of the old file.
+	if now.Sub(t.goneAt) >= rotateGrace && now.Sub(t.lastData) >= rotateGrace && !t.unread() {
 		m.closeTailer(t, now)
 	}
 }

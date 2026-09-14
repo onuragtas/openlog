@@ -20,7 +20,8 @@ import (
 // correctness, apm.md §8).
 
 type apmState struct {
-	settings apm.SettingsStore // nil: default Apdex T only (static auth mode)
+	settings apm.SettingsStore   // nil: default Apdex T only (static auth mode)
+	errors   apm.ErrorStateStore // nil: no error workflow (static auth mode)
 	defaultT time.Duration
 }
 
@@ -47,14 +48,13 @@ func (s *Server) apmRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/apm/services/{service}/overview", s.apmOverview)
 	route("GET /api/v1/apm/services/{service}/transactions", s.apmTransactions)
 	route("GET /api/v1/apm/services/{service}/transaction", s.apmTransaction)
-	route("GET /api/v1/apm/services/{service}/errors", s.apmErrors)
-	route("GET /api/v1/apm/services/{service}/errors/{group_id}", s.apmErrorGroup)
 	route("GET /api/v1/apm/services/{service}/databases", s.apmDatabases)
 	route("GET /api/v1/apm/services/{service}/hosts", s.apmServiceHosts)
 	route("GET /api/v1/apm/services/{service}/settings", s.apmGetSettings)
 	route("GET /api/v1/apm/hosts/{host_id}/services", s.apmHostServices)
 	route("GET /api/v1/apm/map", s.apmMap)
 	route("GET /api/v1/apm/traces", s.apmTraces)
+	s.apmGARoutes(mux) // apm_error_inbox.go: error workflow, deployments, map path
 	if s.accounts != nil {
 		pattern := "PUT /api/v1/apm/services/{service}/settings"
 		mux.Handle(pattern, s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {
@@ -927,219 +927,6 @@ func (s *Server) apmTransaction(w http.ResponseWriter, r *http.Request, sc *quer
 	return nil
 }
 
-// ---- errors ----
-
-type errorGroupJSON struct {
-	GroupID      string       `json:"group_id"`
-	ErrorType    string       `json:"error_type"`
-	Message      string       `json:"message"`
-	Count        float64      `json:"count"`
-	TotalCount   float64      `json:"total_count"`
-	FirstSeen    *string      `json:"first_seen"`
-	LastSeen     *string      `json:"last_seen"`
-	LastTraceID  string       `json:"last_trace_id"`
-	LastSpanName string       `json:"last_span_name"`
-	Sparkline    [][2]float64 `json:"sparkline"`
-}
-
-type groupMeta struct {
-	first, last                                     time.Time
-	total                                           float64
-	typ, msg, traceID, spanID, spanName, raw, stack string
-}
-
-func (s *Server) groupMetas(r *http.Request, sc *query.Scope, f svcFilter, ids []string) (map[uint64]groupMeta, error) {
-	q := f.apply(sc.From(query.ApmErrorGroups).Columns("error_group_id", "min(first_seen) AS m_first", "max(last_seen) AS m_last", "sum(count) AS m_count",
-		"anyLast(error_type) AS m_type", "anyLast(error_message) AS m_msg", "argMaxMerge(last_trace_id) AS m_trace", "argMaxMerge(last_span_id) AS m_span",
-		"argMaxMerge(last_span_name) AS m_name", "argMaxMerge(last_message) AS m_raw", "argMaxMerge(last_stacktrace) AS m_stack")).
-		Where("has({group_ids:Array(String)}, toString(error_group_id))").Param("group_ids", ids).GroupBy("error_group_id")
-	rows, err := sc.Query(r.Context(), q)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[uint64]groupMeta{}
-	for rows.Next() {
-		var id uint64
-		var m groupMeta
-		if err := rows.Scan(&id, &m.first, &m.last, &m.total, &m.typ, &m.msg, &m.traceID, &m.spanID, &m.spanName, &m.raw, &m.stack); err != nil {
-			return nil, err
-		}
-		out[id] = m
-	}
-	return out, rows.Err()
-}
-
-func (s *Server) apmErrors(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
-	f, err := parseSvcFilter(r)
-	if err != nil {
-		return err
-	}
-	from, to, err := s.timeRange(r)
-	if err != nil {
-		return err
-	}
-	step, err := apmStep(r, from, to)
-	if err != nil {
-		return err
-	}
-	limit, err := s.apmLimit(r, 50, 500)
-	if err != nil {
-		return err
-	}
-	q := f.apply(minuteRange(sc.From(query.ApmErrors1m).Columns("error_group_id", "sum(count) AS m_count"), from, to)).
-		GroupBy("error_group_id").OrderBy("m_count DESC", "error_group_id").Limit(limit)
-	rows, err := sc.Query(r.Context(), q)
-	if err != nil {
-		return err
-	}
-	groups := []*errorGroupJSON{}
-	byID := map[uint64]*errorGroupJSON{}
-	var ids []string
-	for rows.Next() {
-		var id uint64
-		var count float64
-		if err := rows.Scan(&id, &count); err != nil {
-			rows.Close()
-			return err
-		}
-		g := &errorGroupJSON{GroupID: apm.GroupIDString(id), Count: count, Sparkline: [][2]float64{}}
-		groups = append(groups, g)
-		byID[id] = g
-		ids = append(ids, strconv.FormatUint(id, 10))
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if len(ids) > 0 {
-		metas, err := s.groupMetas(r, sc, f, ids)
-		if err != nil {
-			return err
-		}
-		for id, m := range metas {
-			if g := byID[id]; g != nil {
-				g.ErrorType, g.Message, g.TotalCount, g.LastTraceID, g.LastSpanName = m.typ, m.msg, m.total, m.traceID, m.spanName
-				g.FirstSeen, g.LastSeen = optTime(&m.first), optTime(&m.last)
-			}
-		}
-		spark := f.apply(minuteRange(sc.From(query.ApmErrors1m).Columns("error_group_id",
-			"toStartOfInterval(timestamp, toIntervalSecond({step:UInt32})) AS t", "sum(count) AS m_count"), from, to)).
-			Where("has({group_ids:Array(String)}, toString(error_group_id))").Param("group_ids", ids).
-			Param("step", uint32(step/time.Second)).GroupBy("error_group_id", "t").OrderBy("t")
-		srows, err := sc.Query(r.Context(), spark)
-		if err != nil {
-			return err
-		}
-		for srows.Next() {
-			var id uint64
-			var t time.Time
-			var c float64
-			if err := srows.Scan(&id, &t, &c); err != nil {
-				srows.Close()
-				return err
-			}
-			if g := byID[id]; g != nil {
-				g.Sparkline = append(g.Sparkline, [2]float64{float64(t.UnixMilli()), c})
-			}
-		}
-		srows.Close()
-		if err := srows.Err(); err != nil {
-			return err
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"groups": groups, "step": formatStep(step)})
-	return nil
-}
-
-func (s *Server) apmErrorGroup(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
-	f, err := parseSvcFilter(r)
-	if err != nil {
-		return err
-	}
-	id, ok := apm.ParseGroupID(strings.ToLower(r.PathValue("group_id")))
-	if !ok {
-		return badRequest("group_id must be 16 hex characters")
-	}
-	from, to, err := s.timeRange(r)
-	if err != nil {
-		return err
-	}
-	step, err := apmStep(r, from, to)
-	if err != nil {
-		return err
-	}
-	idStr := strconv.FormatUint(id, 10)
-	metas, err := s.groupMetas(r, sc, f, []string{idStr})
-	if err != nil {
-		return err
-	}
-	m, found := metas[id]
-	if !found {
-		return notFound("error group not found")
-	}
-	series := f.apply(minuteRange(sc.From(query.ApmErrors1m).Columns("toStartOfInterval(timestamp, toIntervalSecond({step:UInt32})) AS t", "sum(count) AS m_count"), from, to)).
-		Where("error_group_id = {group_id:UInt64}").Param("group_id", id).Param("step", uint32(step/time.Second)).GroupBy("t").OrderBy("t")
-	srows, err := sc.Query(r.Context(), series)
-	if err != nil {
-		return err
-	}
-	points := [][2]float64{}
-	var count float64
-	for srows.Next() {
-		var t time.Time
-		var c float64
-		if err := srows.Scan(&t, &c); err != nil {
-			srows.Close()
-			return err
-		}
-		points = append(points, [2]float64{float64(t.UnixMilli()), c})
-		count += c
-	}
-	srows.Close()
-	if err := srows.Err(); err != nil {
-		return err
-	}
-	q := f.apply(spanRange(sc.From(query.Spans).Columns("trace_id", "span_id", "timestamp", "name", "transaction_name", "duration_ns",
-		"if(arrayLastIndex(x -> x = 'exception', events_name) > 0, events_attributes[arrayLastIndex(x -> x = 'exception', events_name)]['exception.message'], status_message) AS m_msg"), from, to)).
-		Where("error_group_id = {group_id:UInt64}").Param("group_id", id).OrderBy("timestamp DESC").Limit(20)
-	rows, err := sc.Query(r.Context(), q)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	type sampleJSON struct {
-		TraceID         string  `json:"trace_id"`
-		SpanID          string  `json:"span_id"`
-		Timestamp       string  `json:"timestamp"`
-		SpanName        string  `json:"span_name"`
-		TransactionName string  `json:"transaction_name"`
-		DurationMs      float64 `json:"duration_ms"`
-		Message         string  `json:"message"`
-	}
-	samples := []sampleJSON{}
-	for rows.Next() {
-		var sm sampleJSON
-		var t time.Time
-		var dur uint64
-		if err := rows.Scan(&sm.TraceID, &sm.SpanID, &t, &sm.SpanName, &sm.TransactionName, &dur, &sm.Message); err != nil {
-			return err
-		}
-		sm.Timestamp, sm.DurationMs = formatTime(t), float64(dur)/1e6
-		samples = append(samples, sm)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"group_id": apm.GroupIDString(id), "error_type": m.typ, "message": m.msg, "count": count, "total_count": m.total,
-		"first_seen": formatTime(m.first), "last_seen": formatTime(m.last), "last_message": m.raw, "stacktrace": m.stack,
-		"last_trace_id": m.traceID, "last_span_id": m.spanID, "last_span_name": m.spanName,
-		"step": formatStep(step), "series": points, "samples": samples,
-	})
-	return nil
-}
-
 // ---- databases ----
 
 func (s *Server) apmDatabases(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
@@ -1243,6 +1030,9 @@ type mapNodeJSON struct {
 	AvgMs            *float64 `json:"avg_ms"`
 	P95Ms            *float64 `json:"p95_ms"`
 	Apdex            *float64 `json:"apdex"`
+	// Services only: hosts and containers that reported the service since from (apm_service_hosts/_containers).
+	HostCount      int `json:"host_count"`
+	ContainerCount int `json:"container_count"`
 }
 
 type mapEdgeJSON struct {
@@ -1405,10 +1195,16 @@ func (s *Server) apmMap(w http.ResponseWriter, r *http.Request, sc *query.Scope)
 	if name := qp.Get("service"); name != "" {
 		focus = &svcFilter{name: name, ns: optionalParam(qp, "namespace"), env: optionalParam(qp, "environment")}
 	}
+	// Without a focus service, namespace/environment filter the whole map (sources and link targets).
+	var ns, env *string
+	if focus == nil {
+		ns, env = optionalParam(qp, "namespace"), optionalParam(qp, "environment")
+	}
 	idCols := []string{"service_name", "service_namespace", "deployment_environment"}
 	in := serviceMapInput{Services: map[apm.ServiceKey]redAgg{}, Minutes: rangeMinutes(from, to), Focus: focus}
 
 	tq := minuteRange(sc.From(query.ApmTransactions1m).Columns(cols(idCols, txAggColumns)...), from, to).GroupBy(idCols...).Limit(s.cfg.MaxRows)
+	applyScope(tq, ns, env)
 	rows, err := sc.Query(r.Context(), tq)
 	if err != nil {
 		return err
@@ -1429,6 +1225,7 @@ func (s *Server) apmMap(w http.ResponseWriter, r *http.Request, sc *query.Scope)
 	// Services with spans but no entry spans in the range (e.g. only outgoing calls).
 	sq := sc.From(query.ApmServices).Columns(idCols...).Where("last_seen >= fromUnixTimestamp64Nano({t_seen:Int64})").
 		Param("t_seen", from.UnixNano()).GroupBy(idCols...).Limit(s.cfg.MaxRows)
+	applyScope(sq, ns, env)
 	rows, err = sc.Query(r.Context(), sq)
 	if err != nil {
 		return err
@@ -1450,6 +1247,7 @@ func (s *Server) apmMap(w http.ResponseWriter, r *http.Request, sc *query.Scope)
 
 	eq := minuteRange(sc.From(query.ApmServiceEdges1m).Columns(cols(idCols, []string{"target_type", "target_name"}, callAggColumns)...), from, to).
 		GroupBy(append(idCols, "target_type", "target_name")...).Limit(s.cfg.MaxRows)
+	applyScope(eq, ns, env)
 	rows, err = sc.Query(r.Context(), eq)
 	if err != nil {
 		return err
@@ -1471,6 +1269,13 @@ func (s *Server) apmMap(w http.ResponseWriter, r *http.Request, sc *query.Scope)
 
 	lcols := append(append([]string{}, idCols...), "target_service", "target_namespace", "target_environment", "via")
 	lq := minuteRange(sc.From(query.ApmServiceLinks1m).Final().Columns(cols(lcols, callAggColumns)...), from, to).GroupBy(lcols...).Limit(s.cfg.MaxRows)
+	applyScope(lq, ns, env)
+	if ns != nil {
+		lq.Where("target_namespace = {svc_ns:String}")
+	}
+	if env != nil {
+		lq.Where("target_environment = {svc_env:String}")
+	}
 	rows, err = sc.Query(r.Context(), lq)
 	if err != nil {
 		return err
@@ -1495,6 +1300,9 @@ func (s *Server) apmMap(w http.ResponseWriter, r *http.Request, sc *query.Scope)
 		return t
 	}
 	nodes, edges := mergeServiceMap(in)
+	if err := s.mapNodeCounts(r.Context(), sc, from, nodes); err != nil {
+		return err
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "edges": edges})
 	return nil
 }

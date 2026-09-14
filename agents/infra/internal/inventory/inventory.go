@@ -3,7 +3,9 @@
 package inventory
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -78,6 +80,9 @@ type Collector struct {
 	InterfaceAddrs func(name string) []string
 	// Containers lists containers (nil: no container inventory).
 	Containers func() ([]Container, error)
+	// SystemdBus is the path of the D-Bus system bus socket used to add unit runtime state
+	// (active state, restarts, memory/CPU); "" or an unreachable bus keeps file data only.
+	SystemdBus string
 }
 
 func (c *Collector) fs(name string) *hostfs.FS {
@@ -111,6 +116,15 @@ func (c *Collector) Collect() *Data {
 	c.timed(CategoryKernelModule, func(fs *hostfs.FS) (err error) { d.Modules, err = collectModules(fs); return })
 	c.timed(CategoryPackage, func(fs *hostfs.FS) error { d.Packages = collectPackages(fs); return nil })
 	c.timed(CategorySystemdUnit, func(fs *hostfs.FS) error { d.Units = collectUnits(fs); return nil })
+	if c.SystemdBus != "" {
+		c.timed("systemd_dbus", func(*hostfs.FS) (err error) {
+			d.Units, err = collectUnitStates(context.Background(), c.SystemdBus, d.Units, dialSystemBus)
+			if errors.Is(err, errNoBus) {
+				return nil
+			}
+			return err
+		})
+	}
 	c.timed(CategoryProcess, func(fs *hostfs.FS) (err error) {
 		d.Instances, err = collectInstances(fs, bootTimeOf(d.OS))
 		d.Processes = GroupProcesses(d.Instances)

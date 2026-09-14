@@ -21,12 +21,37 @@ var (
 	hexRe    = regexp.MustCompile(`\b(?:0x)?[0-9a-fA-F]*[0-9][0-9a-fA-F]*\b`)
 	numberRe = regexp.MustCompile(`(^|[^\pL\pN_])[-+]?\d+(?:\.\d+)?`)
 	spacesRe = regexp.MustCompile(`\s+`)
+	// ISO 8601 / RFC 3339 timestamps (date and time), apm.md §3.1 (fingerprint v2).
+	timestampRe = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?`)
+	// Identifiers glued to a word prefix with "_" (req_8f3a9c2b1d, order_123456): word boundaries do not
+	// separate them, so hexRe/numberRe never matched.
+	prefixedIDRe = regexp.MustCompile(`\b((?:[A-Za-z][A-Za-z0-9]*_)+)([A-Za-z0-9]+)\b`)
 )
+
+// prefixedID replaces the id part of prefix_id when it is ≥ 4 digits, or ≥ 6 characters mixing digits and letters.
+func prefixedID(m string) string {
+	sub := prefixedIDRe.FindStringSubmatch(m)
+	id := sub[2]
+	digits, letters := 0, 0
+	for _, c := range id {
+		if c >= '0' && c <= '9' {
+			digits++
+		} else {
+			letters++
+		}
+	}
+	if (letters == 0 && digits >= 4) || (digits > 0 && letters > 0 && len(id) >= 6) {
+		return sub[1] + "<id>"
+	}
+	return m
+}
 
 // NormalizeMessage strips variable parts from an error message (apm.md §3.1).
 func NormalizeMessage(msg string) string {
 	s := quotedRe.ReplaceAllString(msg, "$1'?'")
+	s = timestampRe.ReplaceAllString(s, "<ts>")
 	s = uuidRe.ReplaceAllString(s, "<uuid>")
+	s = prefixedIDRe.ReplaceAllStringFunc(s, prefixedID)
 	s = emailRe.ReplaceAllString(s, "<email>")
 	s = ipRe.ReplaceAllString(s, "<ip>")
 	s = hexRe.ReplaceAllStringFunc(s, func(m string) string {
@@ -113,10 +138,50 @@ func TopFrame(stack string) string {
 	}
 	for _, f := range frames {
 		if !isLibraryFrame(f) {
-			return f.fn + "@" + f.file
+			return frameKey(f)
 		}
 	}
-	return frames[0].fn + "@" + frames[0].file
+	return frameKey(frames[0])
+}
+
+var (
+	goFuncLitRe     = regexp.MustCompile(`\.func\d+(\.\d+)*`)
+	goGenericRe     = regexp.MustCompile(`\[[^\[\]]*\]`)
+	javaLambdaRe    = regexp.MustCompile(`\$\$Lambda(?:\$\d+)?(?:/0x[0-9a-fA-F]+)?`)
+	javaLambdaFnRe  = regexp.MustCompile(`lambda\$([A-Za-z0-9_]+)\$\d+`)
+	javaGeneratedRe = regexp.MustCompile(`(\$Proxy|GeneratedMethodAccessor|GeneratedConstructorAccessor|\$\$EnhancerBySpringCGLIB\$\$)[0-9a-fA-F]+`)
+	phpAnonClassRe  = regexp.MustCompile(`class@anonymous[^\s:]*(?::\d+)?(?:\$[0-9a-fA-F]+)?`)
+	bundleHashRe    = regexp.MustCompile(`[.-][0-9a-fA-F]{8,}(\.(?:min\.)?m?[jt]sx?)$`)
+	releaseDirRe    = regexp.MustCompile(`^(?:\d{8,}|[0-9a-fA-F]{12,}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$`)
+)
+
+// frameKey is "function@file" with deploy- and build-specific parts removed (apm.md §3.2, fingerprint v2):
+// numbered Go func literals and generic instantiations, Java lambda/proxy/accessor class numbers, PHP anonymous
+// class suffixes, content hashes in bundled JS file names, query strings and release directories (≥ 8 digits,
+// ≥ 12 hex characters or a UUID) in paths.
+func frameKey(f frame) string {
+	fn := goFuncLitRe.ReplaceAllString(f.fn, ".func")
+	fn = goGenericRe.ReplaceAllString(fn, "[...]")
+	fn = javaLambdaRe.ReplaceAllString(fn, "$$$$Lambda")
+	fn = javaLambdaFnRe.ReplaceAllString(fn, "lambda$$$1")
+	fn = javaGeneratedRe.ReplaceAllString(fn, "$1")
+	fn = phpAnonClassRe.ReplaceAllString(fn, "class@anonymous")
+	return fn + "@" + normalizeFramePath(f.file)
+}
+
+func normalizeFramePath(p string) string {
+	p = strings.TrimPrefix(p, "file://")
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	parts := strings.Split(p, "/")
+	for i, seg := range parts {
+		if i < len(parts)-1 && releaseDirRe.MatchString(seg) {
+			parts[i] = "<id>"
+		}
+	}
+	p = strings.Join(parts, "/")
+	return bundleHashRe.ReplaceAllString(p, "$1")
 }
 
 func parseFrames(stack string) []frame {
@@ -134,7 +199,7 @@ func parseFrames(stack string) []frame {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(trimmed, "at "):
-			if m := javaFrameRe.FindStringSubmatch(line); m != nil && !strings.Contains(m[1], "/") {
+			if m := javaFrameRe.FindStringSubmatch(line); m != nil && (!strings.Contains(m[1], "/") || javaLambdaRe.MatchString(m[1])) {
 				out = append(out, frame{fn: m[1], file: m[2]})
 			} else if m := nodeFrameRe.FindStringSubmatch(line); m != nil {
 				fn := m[1]

@@ -1,0 +1,220 @@
+#!/bin/sh
+# openlog PHP agent installer: enables openlog.so for the PHP runtimes of this host (docs/contracts/php-agent.md §7).
+#
+#   openlog-php-install [install] [--php BIN]... [--dry-run] [--reload]
+#   openlog-php-install uninstall [--dry-run] [--reload]
+#   openlog-php-install status [--json]
+#
+# Runtimes: php, php-cgi and php-fpm binaries in the usual locations (Debian/Ubuntu php<v>, RHEL and Remi SCL,
+# Alpine php<vv>, official Docker images under /usr/local, /opt/php*) or given with --php. For each one the ABI is
+# read from `<bin> -i` (PHP Extension API, Thread Safety, Debug Build) together with its ini scan directory; the
+# module $MODULES/<api>-<nts|zts>-<glibc|musl>/openlog.so is enabled with an ini file that loads it by absolute path
+# (nothing is copied into PHP's extension_dir). The result is verified with `<bin> -m`: if openlog.so does not load,
+# the ini file is removed again. Only ini files carrying the marker line below are ever written or removed.
+# Debian/Ubuntu: mods-available/openlog.ini + conf.d/90-openlog.ini links for every SAPI (cli, fpm, apache2, cgi).
+# PHP-FPM / Apache are not restarted unless --reload is given (running workers keep their loaded extensions).
+# Exit status: 0 ok (also: no PHP found), 1 at least one runtime failed, 2 usage.
+set -u
+
+MARKER='; managed by openlog-php-install'
+self=$(readlink -f "$0" 2>/dev/null || echo "$0")
+ROOT=${OPENLOG_PHP_AGENT_ROOT:-$(cd "$(dirname "$self")/.." && pwd)}
+# a package install lives in /opt/openlog/php-agent/versions/<v>: reference the stable `current` link instead
+MODULES=${OPENLOG_PHP_MODULES:-$ROOT/modules}
+case "$ROOT" in
+  */php-agent/versions/*)
+    cur="${ROOT%/versions/*}/current"
+    [ -d "$cur/modules" ] && MODULES=${OPENLOG_PHP_MODULES:-$cur/modules} ;;
+esac
+VERSION=$(cat "$ROOT/VERSION" 2>/dev/null || echo unknown)
+
+cmd=install; dry=0; reload=0; json=0; bins=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    install|uninstall|status) cmd=$1 ;;
+    --php) shift; [ $# -gt 0 ] || { echo "--php needs a path" >&2; exit 2; }; bins="$bins $1" ;;
+    --dry-run) dry=1 ;;
+    --reload) reload=1 ;;
+    --json) json=1 ;;
+    -h|--help) sed -n '2,19p' "$self"; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+log() { [ "$json" = 1 ] || echo "openlog-php-install: $*"; }
+run() { if [ "$dry" = 1 ]; then log "(dry-run) $*"; else "$@"; fi; }
+
+libc() {
+  if [ -f /etc/alpine-release ] || ldd --version 2>&1 | grep -qi musl; then echo musl; else echo glibc; fi
+}
+LIBC=$(libc)
+
+candidates() {
+  if [ -n "$bins" ]; then
+    for b in $bins; do echo "$b"; done
+    return
+  fi
+  for b in /usr/bin/php /usr/bin/php[0-9]* /usr/bin/php-cgi /usr/bin/php-cgi[0-9]* /usr/sbin/php-fpm /usr/sbin/php-fpm[0-9]* \
+      /usr/local/bin/php /usr/local/bin/php-cgi /usr/local/sbin/php-fpm \
+      /opt/remi/php*/root/usr/bin/php /opt/remi/php*/root/usr/bin/php-cgi /opt/remi/php*/root/usr/sbin/php-fpm \
+      /opt/php*/bin/php /opt/php*/bin/php-cgi /opt/php*/sbin/php-fpm; do
+    [ -f "$b" ] && [ -x "$b" ] && echo "$b"
+  done
+  command -v php 2>/dev/null || true
+}
+
+# unique real paths
+runtimes() {
+  candidates | while read -r b; do readlink -f "$b" 2>/dev/null || echo "$b"; done | awk '!seen[$0]++'
+}
+
+# `-i` prints "key => value" lines (CLI, FPM) or an HTML table (CGI): both are reduced to "key => value"
+phpinfo() {
+  "$1" -i 2>/dev/null | sed -e 's#</td><td class="v">#=> #g' -e 's#<[^>]*>##g' -e 's#&quot;#"#g'
+}
+
+field() {
+  printf '%s\n' "$info" | awk -v k="$1" '{
+    i = index($0, "=>"); if (i == 0) next
+    key = substr($0, 1, i - 1); val = substr($0, i + 2)
+    gsub(/^[ \t]+|[ \t]+$/, "", key); gsub(/^[ \t]+|[ \t]+$/, "", val)
+    if (key == k) { sub(/ =>.*/, "", val); print val; exit }
+  }'
+}
+
+# ini target for a runtime: prints "debian <version> <mods-available>" or "dir <scan dir>"
+target_of() {
+  case "$1" in
+    /etc/php/*/*/conf.d)
+      v=${1#/etc/php/}; v=${v%%/*}
+      if [ -d "/etc/php/$v/mods-available" ]; then echo "debian $v /etc/php/$v/mods-available"; return; fi ;;
+  esac
+  echo "dir $1"
+}
+
+ini_body() {
+  printf '%s (openlog PHP agent %s). Overwritten on upgrade: put settings into another ini file.\n' "$MARKER" "$VERSION"
+  printf 'extension=%s\n' "$1"
+}
+
+managed() { [ -f "$1" ] && head -n 1 "$1" | grep -qF "$MARKER"; }
+
+write_ini() { # write_ini <file> <module>
+  if [ -e "$1" ] && ! managed "$1"; then
+    log "  $1 exists and is not managed by this tool: left alone"
+    return 1
+  fi
+  if [ "$dry" = 1 ]; then log "(dry-run) write $1 -> $2"; return 0; fi
+  mkdir -p "$(dirname "$1")" && ini_body "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"
+}
+
+debian_enable() { # debian_enable <version>
+  for sapi in /etc/php/"$1"/*/conf.d; do
+    [ -d "$sapi" ] || continue
+    link="$sapi/90-openlog.ini"
+    if [ -e "$link" ] && [ ! -L "$link" ] && ! managed "$link"; then continue; fi
+    run ln -sfn "/etc/php/$1/mods-available/openlog.ini" "$link"
+  done
+}
+
+debian_disable() {
+  for link in /etc/php/"$1"/*/conf.d/90-openlog.ini; do
+    [ -L "$link" ] && [ "$(readlink "$link")" = "/etc/php/$1/mods-available/openlog.ini" ] && run rm -f "$link"
+  done
+  managed "/etc/php/$1/mods-available/openlog.ini" && run rm -f "/etc/php/$1/mods-available/openlog.ini"
+  return 0
+}
+
+json_str() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"; }
+
+failures=0
+found=0
+for bin in $(runtimes); do
+  info=$(phpinfo "$bin") || { log "$bin: cannot run '$bin -i', skipped"; continue; }
+  api=$(field "PHP Extension")
+  [ -n "$api" ] || { log "$bin: not a PHP binary, skipped"; continue; }
+  found=$((found + 1))
+  ver=$(field "PHP Version")
+  zts=nts; [ "$(field "Thread Safety")" = enabled ] && zts=zts
+  debug=$(field "Debug Build")
+  scan=$(field "Scan this dir for additional .ini files")
+  key="$api-$zts-$LIBC"
+  module="$MODULES/$key/openlog.so"
+  supported=true
+  if [ "$debug" = yes ] || [ ! -f "$ROOT/modules/$key/openlog.so" ]; then supported=false; fi
+  loaded=false
+  "$bin" -m 2>/dev/null | grep -qx openlog && loaded=true
+  set -- $(target_of "${scan:-none}")
+  kind=$1
+  if [ "$kind" = debian ]; then ini="$3/openlog.ini"; dv=$2; else ini="$2/90-openlog.ini"; dv=""; fi
+  enabled=false; managed "$ini" && enabled=true
+
+  case "$cmd" in
+    status)
+      if [ "$json" = 1 ]; then
+        printf '{"bin":%s,"version":%s,"api":%s,"zts":%s,"debug":%s,"libc":%s,"scan_dir":%s,"module":%s,"supported":%s,"enabled":%s,"loaded":%s}\n' \
+          "$(json_str "$bin")" "$(json_str "$ver")" "$(json_str "$api")" "$([ $zts = zts ] && echo true || echo false)" \
+          "$([ "$debug" = yes ] && echo true || echo false)" "$(json_str "$LIBC")" "$(json_str "$scan")" "$(json_str "$key")" \
+          "$supported" "$enabled" "$loaded"
+      else
+        echo "$bin: PHP $ver ($key${debug:+, debug=$debug}) scan=${scan:-none} supported=$supported enabled=$enabled loaded=$loaded"
+      fi ;;
+    install)
+      if [ "$supported" != true ]; then
+        log "$bin: PHP $ver $key has no openlog.so in this release (debug build or unsupported version): skipped"
+        continue
+      fi
+      if [ -z "$scan" ] || [ "$scan" = "(none)" ]; then
+        log "$bin: PHP $ver has no ini scan directory: add extension=$module to its php.ini"
+        failures=$((failures + 1))
+        continue
+      fi
+      if [ "$loaded" = true ] && [ "$enabled" != true ]; then
+        log "$bin: openlog is already loaded by another ini file: left alone"
+        continue
+      fi
+      write_ini "$ini" "$module" || { failures=$((failures + 1)); continue; }
+      [ "$kind" = debian ] && debian_enable "$dv"
+      if [ "$dry" = 0 ]; then
+        out=$("$bin" -m 2>&1)
+        if printf '%s\n' "$out" | grep -qx openlog && ! printf '%s\n' "$out" | grep -qi "unable to load.*openlog"; then
+          log "$bin: PHP $ver enabled ($ini)"
+        else
+          log "$bin: openlog.so does not load into PHP $ver, removing $ini:"
+          printf '%s\n' "$out" | grep -i openlog | head -5
+          [ "$kind" = debian ] && debian_disable "$dv"
+          rm -f "$ini"
+          failures=$((failures + 1))
+        fi
+      fi ;;
+    uninstall)
+      if [ "$kind" = debian ]; then debian_disable "$dv"; elif managed "$ini"; then run rm -f "$ini"; fi
+      log "$bin: PHP $ver disabled" ;;
+  esac
+done
+
+if [ "$cmd" = uninstall ]; then
+  # runtimes that are gone already: remove every managed ini file in the usual places
+  for f in /etc/php/*/mods-available/openlog.ini /etc/php/*/*/conf.d/90-openlog.ini /etc/php.d/90-openlog.ini \
+      /etc/php[0-9]*/conf.d/90-openlog.ini /usr/local/etc/php/conf.d/90-openlog.ini /etc/opt/remi/*/php.d/90-openlog.ini; do
+    if [ -L "$f" ] && [ ! -e "$f" ]; then run rm -f "$f"; elif managed "$f"; then run rm -f "$f"; fi
+  done
+fi
+
+[ "$found" -gt 0 ] || log "no PHP runtime found (use --php /path/to/php)"
+
+if [ "$reload" = 1 ] && [ "$cmd" != status ]; then
+  if command -v systemctl >/dev/null 2>&1; then
+    for unit in $(systemctl list-units --type=service --state=running --no-legend 'php*fpm*' 'httpd*' 'apache2*' 2>/dev/null | awk '{print $1}'); do
+      run systemctl reload "$unit" && log "reloaded $unit"
+    done
+  elif command -v rc-service >/dev/null 2>&1; then
+    for svc in /etc/init.d/php-fpm*; do
+      [ -x "$svc" ] && run rc-service "$(basename "$svc")" reload && log "reloaded $(basename "$svc")"
+    done
+  else
+    log "--reload: no service manager found; reload PHP-FPM / Apache yourself"
+  fi
+fi
+[ "$failures" -eq 0 ]

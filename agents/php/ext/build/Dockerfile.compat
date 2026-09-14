@@ -1,0 +1,48 @@
+# Compatibility images for the phpt suite: openlog.so loaded together with another agent / debugger, or with the
+# OPcache JIT (build/run-matrix.sh tags <version>-xdebug, -ddtrace, -newrelic, -jit). The phpt children read the
+# image's conf.d, so the other extension is loaded first and openlog.so (-d extension=…) last.
+# Build context: agents/php/ext/build. FROM the regular test image of the same version (Dockerfile.test).
+ARG BASE_IMAGE=openlog-php-test:8.3
+FROM ${BASE_IMAGE}
+ARG FLAVOR=xdebug
+# coverage by default: develop mode prefixes var_dump() output with file:line, which only changes phpt output
+# (develop,coverage: 23/29 on 8.3, the 6 differences are that prefix and none of openlog's data)
+ARG XDEBUG_MODE=coverage
+# ddtrace: trace CLI scripts too (most phpt children are CLI), no agent to talk to
+ENV DD_TRACE_CLI_ENABLED=1 DD_TRACE_AGENT_URL=http://127.0.0.1:9 DD_INSTRUMENTATION_TELEMETRY_ENABLED=0 \
+    DD_TRACE_LOG_LEVEL=error
+RUN set -eux; \
+    v=$(php -r 'echo PHP_VERSION_ID;'); \
+    ini=$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;'); \
+    case "$FLAVOR" in \
+      xdebug) \
+        pkg=xdebug; [ "$v" -lt 80000 ] && pkg=xdebug-3.1.6; [ "$v" -lt 70200 ] && pkg=xdebug-2.9.8; \
+        pecl install "$pkg" >/tmp/pecl.log 2>&1 || { tail -30 /tmp/pecl.log; exit 1; }; \
+        docker-php-ext-enable xdebug; \
+        printf 'xdebug.mode=%s\nxdebug.start_with_request=no\nxdebug.log_level=0\nxdebug.max_nesting_level=5000\n' "$XDEBUG_MODE" > "$ini/zz-xdebug.ini" ;; \
+      ddtrace) \
+        curl -fsSLo /tmp/datadog-setup.php https://github.com/DataDog/dd-trace-php/releases/latest/download/datadog-setup.php; \
+        php /tmp/datadog-setup.php --php-bin=all; rm -f /tmp/datadog-setup.php ;; \
+      newrelic) \
+        base=https://download.newrelic.com/php_agent/release; \
+        tgz=$(curl -fsSL "$base/" | grep -o 'newrelic-php5-[0-9.]*-linux\.tar\.gz' | sort -uV | tail -1); \
+        curl -fsSL "$base/$tgz" | tar -xz -C /tmp; \
+        arch=$(uname -m); [ "$arch" = x86_64 ] && arch=x64; \
+        api=$(php -i | awk -F' => ' '$1 == "PHP Extension" {print $2; exit}'); \
+        zts=$(php -r 'echo PHP_ZTS ? "-zts" : "";'); \
+        cp /tmp/newrelic-php5-*/agent/"$arch"/newrelic-"$api$zts".so "$(php-config --extension-dir)/newrelic.so"; \
+        rm -rf /tmp/newrelic-php5-*; \
+        printf 'extension=newrelic.so\nnewrelic.license="0123456789012345678901234567890123456789"\nnewrelic.appname=openlog-compat\nnewrelic.daemon.dont_launch=3\nnewrelic.daemon.address=/tmp/newrelic-none.sock\nnewrelic.loglevel=error\n' \
+          > "$ini/zz-newrelic.ini" ;; \
+      jit) \
+        [ "$v" -ge 80000 ] || { echo "the JIT needs PHP >= 8.0"; exit 1; } ;; \
+      swoole) \
+        pecl install -D 'enable-sockets="no" enable-openssl="no" enable-mysqlnd="no" enable-swoole-curl="no" enable-cares="no" enable-brotli="no" enable-zstd="no" enable-swoole-pgsql="no" with-swoole-odbc="no" with-swoole-oracle="no" enable-swoole-sqlite="no" with-swoole-firebird="no" enable-swoole-thread="no" enable-iouring="no" enable-uring-socket="no" with-swoole-ssh2="no" enable-swoole-ftp="no"' \
+          swoole >/tmp/pecl.log 2>&1 || { tail -30 /tmp/pecl.log; exit 1; }; \
+        docker-php-ext-enable swoole ;; \
+      *) echo "unknown FLAVOR $FLAVOR"; exit 1 ;; \
+    esac; \
+    php -m
+# JIT: run-matrix.sh exports this file as OPENLOG_TEST_INI; the harness passes it to every child
+RUN if [ "$FLAVOR" = jit ]; then echo "opcache.enable_cli=1;opcache.jit=tracing;opcache.jit_buffer_size=64M" > /etc/openlog-test-ini; \
+    else : > /etc/openlog-test-ini; fi

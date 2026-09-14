@@ -97,6 +97,10 @@ func run() int {
 	_ = level.UnmarshalText([]byte(logCfg.LogLevel))
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 
+	if loadErr == nil && cfg.Kubernetes.ClusterMode(os.Getenv) {
+		return runCluster(cfg, ver, log, *once) // cluster.go: Kubernetes cluster collector, no updates or sync
+	}
+
 	var mgr *update.Manager
 	var install update.Install
 	if !*once {
@@ -153,17 +157,22 @@ func run() int {
 	mgr.SetStats(a.Stats())
 	mgr.SetRestart(cancel)
 	a.OnExportSuccess(mgr.Confirm)
+	php := newPHPAgentManager(cfg, ver, install, mgr, a, cancel, log) // phpagent.go
+	php.SetStats(a.Stats())
+	php.Startup()
 	syncer := &update.Syncer{
 		Endpoint: cfg.Endpoint, LicenseKey: cfg.LicenseKey, UserAgent: update.AgentName + "/" + ver,
 		Client: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "sync"),
-		Handle: mgr.Handle, Kick: mgr.Kick(), InitialDelay: -1,
+		Handle: mgr.Handle, Kick: mergeKicks(ctx, mgr.Kick(), php.Kick()), InitialDelay: -1,
 		Integrations: a.ApplyRemoteIntegrations,
+		PHPAgent:     php.SetRemote,
 		Request: func() update.SyncRequest {
 			return update.SyncRequest{
 				HostID: a.HostID(), HostName: a.HostName(), Agent: mgr.AgentInfo(),
 				Update: mgr.Report(), ConfigHash: configHash(*configPath),
 				IntegrationsConfigRevision: a.IntegrationsConfigRevision(),
 				Reconcile:                  install.Reconcile.Report(),
+				PHPAgent:                   php.Report(),
 			}
 		},
 	}
@@ -175,6 +184,7 @@ func run() int {
 	var wg sync.WaitGroup
 	wg.Go(func() { syncer.Run(ctx) })
 	wg.Go(func() { mgr.Run(ctx) })
+	wg.Go(func() { php.Run(ctx) })
 
 	if err := a.Run(ctx); err != nil {
 		log.Error("agent failed", "error", err)

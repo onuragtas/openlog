@@ -24,7 +24,7 @@ discovered service the process belongs to). Only these processes produce series;
 (not for host-network containers), with `container.id`, `container.name`, `container.image.name`, `container.image.tags`, `container.runtime`
 and, from container labels, `docker.compose.project`, `docker.compose.service` and `k8s.pod.name`/`k8s.namespace.name`/`k8s.container.name`.
 Containers are found by walking `/sys/fs/cgroup` for 64-hex id directories (Docker, containerd/CRI, CRI-O, Podman); names, images and labels come
-from the Docker Engine API. `openlog.container.status` (value 1, `openlog.container.state`, `openlog.container.health`,
+from the Docker Engine API and, for containerd/CRI-O (Kubernetes nodes), from the CRI (`containers.cri_sockets`). `openlog.container.status` (value 1, `openlog.container.state`, `openlog.container.health`,
 `openlog.container.started_at`) and `container.restarts` report every Docker container that is running or stopped within the last 24 hours
 (at most 500), so stopped containers stay visible in openlog's Containers page; start time, restart count and health come from
 `GET /containers/{id}/json` (new containers, state changes, once a minute per running container).
@@ -43,13 +43,13 @@ fingerprint changes (package database mtime, systemd unit directories, listening
 | `hardware` (`cpu`, `memory`, `dmi`) | `/proc/cpuinfo`, `/proc/meminfo`, `/sys/class/dmi/id` (no serials) |
 | `kernel_module` | `/proc/modules` |
 | `package` | dpkg `/var/lib/dpkg/status`, apk `/lib/apk/db/installed`, rpm `rpmdb.sqlite` (read directly, see below) |
-| `systemd_unit` | unit files in `/etc`, `/run`, `/usr/local/lib`, `/usr/lib`, `/lib`; enabled state from `*.wants` links; masks |
+| `systemd_unit` | unit files in `/etc`, `/run`, `/usr/local/lib`, `/usr/lib`, `/lib`; enabled state from `*.wants` links; masks. When the D-Bus system bus (`/run/dbus/system_bus_socket` under the host root) is reachable: active/sub state, active since, restarts, memory/CPU (with accounting), loaded template instances and transient services; otherwise file data only. No privileges or unit changes needed (systemd allows these reads for any user; `AF_UNIX` is allowed by the hardened unit) |
 | `listening_port` | `/proc/net/{tcp,tcp6,udp,udp6}` + socket inode → PID via `/proc/<pid>/fd`; key `tcp:0.0.0.0:22`, IPv6 bracketed `tcp:[::]:22` |
 | `process` | `/proc/<pid>/{stat,exe,cmdline,status,cgroup}`, grouped by executable; `command` = argv0 basename (e.g. `redis-server` for `/usr/bin/redis-check-rdb`) |
 | `user` | `/etc/passwd` (name, uid, gid, home, shell) |
 | `network_interface` | `/sys/class/net` + interface addresses |
 | `mount` | `mountinfo` |
-| `container` | Docker Engine API `GET /containers/json?all=1` over `containers.docker_socket` (id, name, image, image id, state, health, created, started/finished, restart count, exit code, labels with values ≤ 256 bytes, ports) |
+| `container` | Docker Engine API `GET /containers/json?all=1` over `containers.docker_socket` (id, name, image, image id, state, health, created, started/finished, restart count, exit code, labels with values ≤ 256 bytes, ports); containerd/CRI-O containers through the CRI `runtime.v1` API (`ListContainers`, `ContainerStatus`) on `containers.cri_sockets` (`runtime` `containerd`/`cri-o`, Kubernetes pod/namespace/container labels, restart count annotation, log path), merged with Docker's |
 | `discovered_service` | discovery engine (below); includes `command` and the rule's `log_paths` |
 
 Secrets are masked in command lines and `ExecStart`:
@@ -220,7 +220,7 @@ the agent (it is not in the scratch container image) and the agent user needs jo
 services report them as `log_paths`; with `logs.auto_from_discovery: true` they are tailed with `openlog.discovery.id=<rule_id>`. A configured file whose
 path matches a discovered glob also gets the discovery id.
 
-**Containers** (`logs.containers`, on by default with `containers.enabled`): stdout/stderr of Docker containers, one OTLP resource per container
+**Containers** (`logs.containers`, on by default with `containers.enabled`): stdout/stderr of Docker and containerd/CRI-O containers, one OTLP resource per container
 (host attributes + `container.id`, `container.name`, image, `docker.compose.project/service`), records with `openlog.log.source=container`,
 `log.iostream=stdout|stderr`, Docker's timestamp and, for JSON bodies with a `trace_id`/`traceId` field, the trace and span id (so the trace page
 finds them). See `semantic-conventions.md` §4.1.
@@ -231,7 +231,12 @@ finds them). See `semantic-conventions.md` §4.1.
 - Running containers are read (running first, at most `max_containers`, default 100); stopped containers until their log was read to the end.
   `rate_limit_lines` is per container (default 1000/s, backpressure). Containers running at the first start follow `logs.start_at`.
 - Select with `include` / `exclude` (`name`, `image`, `compose_project`, `compose_service`, `label` globs) or label a container `openlog.logs=false`.
-- Multiline grouping is not applied; drivers that cannot be read (`none`, remote drivers without dual logging) are retried with backoff and logged once.
+- Drivers that cannot be read (`none`, remote drivers without dual logging) are retried with backoff and logged once.
+- containerd/CRI-O containers: the CRI log file (`/var/log/pods/…/<n>.log`, CRI format, `P` partial lines joined) is tailed like a json-file
+  log; there is no API stream for them.
+- Multiline: label a container `openlog.logs.multiline='^\d{4}-\d{2}-\d{2}'` or set `multiline_start` on an `include` item (the label wins;
+  add `- name: "*"` so the include list still selects every container). Lines are grouped per stream (stdout/stderr) like `logs.files`:
+  flushed on the next start line or after 2 s idle, cut at `max_line_bytes`.
 
 **Masking**: log bodies are user data and are not masked unless `logs.mask_secrets: true` (same patterns as command lines, without the MySQL `-p` rule).
 
@@ -297,6 +302,21 @@ The systemd unit runs as `openlog-agent` with `CAP_DAC_READ_SEARCH` and `CAP_SYS
 `/proc/<pid>/exe` and fd links. Anything it cannot read is skipped and counted in `openlog.agent.permission_denied`.
 It uses `Restart=always` (the agent exits with status 0 to restart into an update). The agent can write only
 `/var/lib/openlog-infra-agent`; the unit's privileged pre-start step (`ExecStartPre=-+… -apply`, root) installs updates.
+
+## Kubernetes
+
+Install with the `deploy/helm/openlog-agent` chart ([docs/operations/kubernetes.md](../../docs/operations/kubernetes.md)). Inside a pod
+(`KUBERNETES_SERVICE_HOST`, `kubernetes.enabled: auto`) the agent runs in one of two modes (`internal/k8s`, semantic-conventions §7):
+
+- **node** (DaemonSet): the host agent plus a watch of the node's pods, which adds `k8s.pod.uid`, owner workload, node, cluster and
+  allowlisted pod labels to container metrics and container logs (`/var/log/pods`), and kubelet `/stats/summary` metrics
+  (`k8s.node.*`, `k8s.pod.*`, `k8s.container.*`).
+- **cluster** (`kubernetes.mode: cluster`, Deployment): no host collection, updates or agent sync; the `coordination.k8s.io` Lease
+  holder lists nodes, pods, workloads, jobs, HPAs, namespaces and quotas every 30 s (kube-state metrics) and sends Kubernetes events
+  as logs. `-once` prints one listing.
+
+No `client-go`: a small typed REST client (list, watch, Lease) with the ServiceAccount token. Live test on kind with an OTLP capture
+server: `agents/infra/test/k8s/run.sh`.
 
 ## Self-update
 
@@ -381,6 +401,34 @@ docker run -d --pid=host --network=host -v /:/host:ro \
   --cap-add SYS_PTRACE --cap-add DAC_READ_SEARCH \
   -e OPENLOG_LICENSE_KEY=... -e OPENLOG_ENDPOINT=https://ingest.example:4318 openlog/openlog-infra-agent
 ```
+
+## PHP agent installation
+
+Contract: `openlog/docs/contracts/php-agent.md` §7.3. The agent reports the host's PHP runtimes (`php`, `php-cgi`,
+`php-fpm` binaries: version, ABI, whether `openlog.so` is enabled and loaded) in every sync, and can install, upgrade
+and remove the PHP agent (`/opt/openlog/php-agent`) — by default it only reports (`mode: manual`). The Fleet page sets
+the mode for all hosts (update policy) or per host; `config.yaml` works without the backend:
+
+```yaml
+php_agent:
+  mode: auto               # off | manual (default) | auto
+  version: agent           # agent (= this agent's version, default) or e.g. 0.9.1
+  reload: graceful         # none (default: PHP-FPM loads the module at its next reload) | graceful
+  exclude_bins: [/usr/bin/php7.4]
+  remote_config: true      # fleet settings replace these (default)
+  health_check_after: 5m
+```
+
+- Installing needs the privileged pre-start step (`ExecStartPre=+… -apply`) of the current unit: the agent downloads and
+  verifies the signed release into `/var/lib/openlog-infra-agent/php-agent/`, exits once, and `-apply` verifies it
+  again, installs it root-owned, runs `openlog-php-install install` and writes `/opt/openlog/infra-agent/php-agent-status.json`.
+  `health_check_after` later the agent checks that PHP loads the module, reloaded units are active and PHP services
+  still send data; otherwise the next start switches back to the previous version (or removes it).
+- Installations from the `openlog-php-agent` deb/rpm/apk package or by hand are reported (`managed_by: package` /
+  `manual`) and never changed. The fleet marks its own installation with `/opt/openlog/php-agent/.managed-by-openlog-infra-agent`.
+- `mode: off` removes a fleet installation (ini files and `/opt/openlog/php-agent`).
+- Self-telemetry: `openlog.agent.php_agent.operations{operation, result}`; the host carries `openlog.php_agent.version`.
+- Spans of PHP-FPM workers reach the agent through `php.sock` (see "PHP forwarder" for its group and mode).
 
 ## Configuration
 

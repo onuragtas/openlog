@@ -43,6 +43,53 @@ export interface TimeSeriesChartProps {
   yCap?: number;
   /** Series labels hidden until enabled in the legend (e.g. cpu "idle"). */
   hidden?: readonly string[];
+  /** Draw bars instead of lines (OQL bar widgets). */
+  bars?: boolean;
+  /** Series labels drawn dashed (e.g. OQL COMPARE WITH "(previous)" series). */
+  dashed?: readonly string[];
+  /** Show the legend below the plot (default true). */
+  showLegend?: boolean;
+  /** Vertical dashed marker lines (e.g. deployments), `t` in unix ms. */
+  markers?: readonly ChartMarker[];
+}
+
+export interface ChartMarker {
+  t: number;
+  label: string;
+}
+
+/** Draws `markers` as dashed vertical lines with a small label (theme color --chart-axis). */
+function markersPlugin(getMarkers: () => readonly ChartMarker[] | undefined, color: string, font: string): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u) => {
+        const markers = getMarkers();
+        const ctx = u.ctx as CanvasRenderingContext2D | null;
+        if (!markers?.length || !ctx) return;
+        const ratio = uPlot.pxRatio || 1;
+        const { left, top, width, height } = u.bbox;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = ratio;
+        ctx.setLineDash([4 * ratio, 3 * ratio]);
+        ctx.font = font.replace(/^(\d+)px/, (_m, px: string) => `${Math.round(Number(px) * 0.9 * ratio)}px`);
+        ctx.textBaseline = "top";
+        for (const m of markers) {
+          const x = Math.round(u.valToPos(m.t / 1000, "x", true));
+          if (!Number.isFinite(x) || x < left || x > left + width) continue;
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, top);
+          ctx.lineTo(x + 0.5, top + height);
+          ctx.stroke();
+          const textWidth = ctx.measureText(m.label).width;
+          const tx = x + 3 * ratio + textWidth > left + width ? x - 3 * ratio - textWidth : x + 3 * ratio;
+          ctx.fillText(m.label, tx, top + 2 * ratio);
+        }
+        ctx.restore();
+      },
+    },
+  };
 }
 
 /** Legend entries shown before "show all" (fewer on phones). */
@@ -270,7 +317,7 @@ function ChartLegend({ items, time, since, collapsedCount, onToggle }: { items: 
  * data refreshes and legend toggles go through setSeries/setData, and
  * container width changes (resize, rotation, drawer) go through setSize.
  */
-export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden }: TimeSeriesChartProps) {
+export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers }: TimeSeriesChartProps) {
   const { t, i18n } = useTranslation();
   const { resolved } = useTheme();
   const mobile = useIsMobile();
@@ -279,6 +326,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   const plotRef = useRef<uPlot | null>(null);
   const plotKeyRef = useRef("");
   const liveRef = useRef<Live | null>(null);
+  const markersRef = useRef<readonly ChartMarker[] | undefined>(markers);
   const widthRef = useRef(0);
   const [width, setWidth] = useState(0);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -296,10 +344,11 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   // The plot is created once the container has a measured width; later
   // width changes only resize it (see the setSize effect).
   const measured = width > 0;
-  const structureKey = hasData ? JSON.stringify([aligned.labels, unit, !!stacked, height, resolved, locale, yMax ?? null, yCap ?? null]) : "";
+  const structureKey = hasData ? JSON.stringify([aligned.labels, unit, !!stacked, height, resolved, locale, yMax ?? null, yCap ?? null, !!bars, dashed ?? []]) : "";
 
   useLayoutEffect(() => {
     liveRef.current = aligned ? { data: aligned, drawn, visible, from, to } : null;
+    markersRef.current = markers;
     widthRef.current = width;
   });
 
@@ -378,7 +427,9 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
             show: live.visible[i] !== false,
             stroke: color,
             width: 1.5,
-            fill: stacked ? withAlpha(color, resolved === "dark" ? 0.3 : 0.35) : undefined,
+            fill: stacked || bars ? withAlpha(color, resolved === "dark" ? 0.3 : 0.35) : undefined,
+            dash: dashed?.includes(label) ? [6, 4] : undefined,
+            paths: bars ? uPlot.paths.bars?.({ size: [0.7, 48] }) : undefined,
             spanGaps: false,
             points: { show: false },
           } satisfies uPlot.Series;
@@ -393,6 +444,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
           colorOf,
           (idx) => setHoverIdx((prev) => (prev === idx ? prev : idx)),
         ),
+        markersPlugin(() => markersRef.current, axisColor, AXIS_FONT),
       ],
     };
     const plot = new uPlot(opts, [live.data.xs, ...live.drawn] as uPlot.AlignedData, el);
@@ -415,7 +467,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
       if (plot.series[i + 1] && plot.series[i + 1]!.show !== v) plot.setSeries(i + 1, { show: v });
     });
     plot.setData([aligned.xs, ...drawn] as uPlot.AlignedData);
-  }, [aligned, drawn, visible, from, to, structureKey]);
+  }, [aligned, drawn, visible, from, to, structureKey, markers]);
 
   useEffect(() => {
     if (plotRef.current && width > 0) plotRef.current.setSize({ width, height });
@@ -448,7 +500,14 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   return (
     <div className="min-w-0">
       <div ref={containerRef} role="img" aria-label={title} className="relative w-full min-w-0" data-testid="timeseries-chart" />
-      <ChartLegend
+      {markers && markers.length > 0 && (
+        <ul className="sr-only" aria-label={t("charts.markers")} data-testid="chart-markers">
+          {markers.map((m) => (
+            <li key={`${m.t}|${m.label}`}>{t("charts.marker", { label: m.label, time: formatDateTime(m.t, locale) })}</li>
+          ))}
+        </ul>
+      )}
+      {showLegend && <ChartLegend
         items={items}
         time={lv.time !== null ? formatDateTime(lv.time * 1000, locale) : "–"}
         since={since}
@@ -457,7 +516,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
           const label = aligned.labels[i]!;
           setOverrides((o) => ({ ...o, [label]: !(visible[i] !== false) }));
         }}
-      />
+      />}
     </div>
   );
 }

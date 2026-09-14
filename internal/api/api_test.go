@@ -121,6 +121,16 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/apm/traces?service=orders&transaction=x&min_duration_ms=10&max_duration_ms=99&error=true&attr.http.route=%2Fx&sort=duration",
 		"/api/v1/apm/traces",
 		"/api/v1/apm/services/orders/containers?environment=prod",
+		// APM GA (apm_error_inbox.go, apm_deployments.go, apm_map_path.go)
+		"/api/v1/apm/errors?status=unresolved,resolved&assignee=none&q=shard&sort=last_seen&environment=prod",
+		"/api/v1/apm/errors?service=orders&namespace=shop",
+		"/api/v1/apm/errors/groups/00000000000000ff/comments",
+		"/api/v1/apm/services/orders/deployments?gap=10m",
+		"/api/v1/apm/services/orders/deployments/compare?at=1757757600000&window=15m",
+		"/api/v1/apm/map/path?service=orders&transaction=GET%20%2Forders&environment=prod",
+		"/api/v1/apm/map?environment=prod&namespace=shop",
+		"/api/v1/logs?service=orders&transaction=GET%20%2Forders&transaction_service=orders&span_id=00f067aa0ba902b7",
+		"/api/v1/logs?cursor=" + encodeLogCursor(logPos{ts: 1757757600000000000, key: 42}, 2),
 		// containers (containers.go)
 		"/api/v1/containers?host_id=h1&compose_project=shop&compose_service=orders&state=running&q=ord",
 		"/api/v1/containers/groups?host_id=h1",

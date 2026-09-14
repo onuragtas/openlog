@@ -7,7 +7,8 @@
  *                   (Observer API on PHP >= 8.0; zend_execute_ex / zend_execute_internal on 7.1-8.1 where needed)
  *   - ol_core.c     request state: bounded arena, node table (spans + function segments), span stack, tracer
  *   - ol_context.c  W3C trace context, sampling, resource
- *   - ol_json.c     JSON encoder, datagram splitting, non-blocking transport
+ *   - ol_json.c     message encoding, datagram splitting, non-blocking transport
+ *   ol_text.c     PHP-independent text code: JSON writer, UTF-8, SQL sanitizing, paths, traceparent (fuzzed)
  *   - ol_util.c     property reads without magic, internal calls, exceptions, SQL/URL/route helpers
  *   - inst_*.c      instrumentation (frameworks, datastores, HTTP clients)
  */
@@ -24,6 +25,7 @@
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
 #include "php_openlog.h"
+#include "ol_text.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -170,6 +172,7 @@ typedef struct ol_hook {
 
 #define OL_HF_PROPAGATE 0x01 /* also active in unsampled requests (header propagation) */
 #define OL_HF_ANY       0x02 /* runs even when the request is not recording (bookkeeping, e.g. connect) */
+#define OL_HF_ALWAYS    0x04 /* runs even without an active transaction (worker request boundaries) */
 
 #define OL_QUERY_SANITIZED 0
 #define OL_QUERY_RAW       1
@@ -182,6 +185,67 @@ typedef struct ol_hook {
 #define OL_LOG_DEBUG   4
 
 #define OL_SAVED_CTX_MAX 8
+
+/* per-request cache of query analysis (ol_util.c), keyed by the full query text */
+#define OL_QCACHE_SIZE 64
+typedef struct ol_qcache {
+	const char *raw;    /* arena copy of the query text */
+	const char *system;
+	const char *name;
+	const char *op;
+	const char *coll;
+	const char *text;   /* db.query.text as recorded (sanitized / raw) or NULL */
+	uint32_t len;
+	uint32_t gen;       /* == OLG(qgen): valid in this request */
+	uint16_t oplen;
+	uint16_t colllen;
+	uint16_t textlen;
+	uint8_t mode;
+} ol_qcache;
+
+typedef struct ol_str {
+	const char *p;
+	size_t len;
+} ol_str;
+
+/* description of a request a transaction starts from (SAPI request or long-running worker request object) */
+typedef struct ol_reqinfo {
+	bool web;
+	bool https;
+	ol_str method;
+	ol_str uri;         /* request target: path[?query] or absolute-form */
+	ol_str host;        /* host[:port] */
+	ol_str remote_addr;
+	ol_str user_agent;
+	ol_str protocol;    /* "HTTP/1.1" */
+	ol_str traceparent;
+	ol_str tracestate;
+} ol_reqinfo;
+
+/* a concurrent ("light") worker request: recorded as a root span only (inst_workers.c) */
+#define OL_WTX_MAX 64
+typedef struct ol_wtx {
+	zend_ulong key;            /* 0: free slot */
+	zend_execute_data *frame;  /* handler frame: identifies the coroutine */
+	uint64_t span_id;
+	uint64_t remote_parent;
+	uint64_t start_mono;
+	uint64_t start_unix;
+	int64_t port;
+	zend_long status;
+	double ratio;
+	uint8_t trace_id[16];
+	uint8_t trace_flags;
+	bool sampled;
+	bool https;
+	char method[17];
+	char proto[9];
+	char client[65];
+	char host[257];
+	char ua[257];
+	char tracestate[520];
+	char path[1024];
+} ol_wtx;
 
 ZEND_BEGIN_MODULE_GLOBALS(openlog)
 	/* ini */
@@ -199,8 +263,26 @@ ZEND_BEGIN_MODULE_GLOBALS(openlog)
 	zend_long tt_min_segment_ms;
 	zend_long tt_max_memory_kb;
 	char *log_level;
+	ol_bool userland_hooks;
 
 	/* request state */
+	uint32_t qgen;
+	ol_qcache qcache[OL_QCACHE_SIZE];
+	char txn_method[17];
+	zend_long txn_status;   /* status set by a worker (0: SAPI response code) */
+	ol_bool txn_web;        /* transaction is an HTTP request (web SAPI or worker request) */
+
+	/* long-running workers (inst_workers.c) */
+	ol_bool worker_mode;    /* this PHP request is a worker handling many requests */
+	ol_bool concurrent;     /* several worker requests in progress: only root spans are recorded */
+	ol_bool wprimary;       /* a worker request owns the node table */
+	zend_ulong wkey;
+	zend_execute_data *wframe;
+	uint64_t wstart;
+	ol_wtx *wtx;            /* concurrent requests (OL_WTX_MAX, emalloc'ed on first use) */
+	uint32_t nwtx;
+	const zend_op *worker_cbs[8]; /* opcodes of the registered Swoole request callbacks */
+	uint32_t nworker_cbs;
 	ol_bool active;     /* instrumentation running for this request (fail-open clears it) */
 	ol_bool recording;  /* sampled: spans are recorded */
 	ol_bool tracing;    /* function segments are recorded */
@@ -310,6 +392,7 @@ uint64_t ol_unix_ns(void);
 uint64_t ol_rand64(void);
 void *ol_alloc(size_t n);
 const char *ol_strdup(const char *s, size_t len, size_t max);
+const char *ol_strdup_n(const char *s, size_t len, size_t max, size_t *out_len);
 const char *ol_strdup_lit(const char *s);
 void ol_arena_reset(void);
 void ol_arena_release(void);
@@ -332,6 +415,7 @@ void ol_close_open_nodes(void);
 void ol_attr_str(ol_node *n, const char *key, const char *s, size_t len);
 void ol_attr_cstr(ol_node *n, const char *key, const char *s);
 void ol_attr_static(ol_node *n, const char *key, const char *s);
+void ol_attr_static_n(ol_node *n, const char *key, const char *s, size_t len);
 void ol_attr_int(ol_node *n, const char *key, int64_t v);
 void ol_attr_dbl(ol_node *n, const char *key, double v);
 void ol_attr_bool(ol_node *n, const char *key, bool v);
@@ -353,15 +437,25 @@ void ol_sampler_finish(void);
 void ol_segs_release(void);
 uint32_t ol_sample_now(zend_execute_data *ex);
 
+/* ---- ol_module.c ---- */
+void ol_txn_start(const ol_reqinfo *ri);
+void ol_txn_finish(bool emit);
+
 /* ---- ol_context.c ---- */
-bool ol_parse_traceparent(const char *tp, size_t len, uint8_t *trace_id, uint64_t *parent, uint8_t *flags);
-void ol_request_context(void);
+void ol_request_context(const ol_reqinfo *ri);
+size_t ol_reqinfo_sapi(ol_reqinfo *ri, char **owned, size_t max);
+bool ol_trace_decision(const ol_str *tp, const ol_str *ts, uint8_t *tid, uint64_t *parent, uint8_t *flags,
+	char *tracestate, size_t tscap, double *ratio, bool *parent_ok);
+const char *ol_tracestate(void);
+size_t ol_req_path(const ol_str *uri, const char **path);
+size_t ol_req_host(const ol_str *host, int64_t *port);
 size_t ol_format_traceparent(char *buf, size_t cap, uint64_t span_id);
 void ol_process_info(void);
 char *ol_server_var(const char *name, size_t len); /* emalloc'ed or NULL */
 
 /* ---- ol_json.c ---- */
 void ol_emit(void);
+void ol_emit_light(const ol_wtx *t);
 bool ol_transport_parse(const char *spec);
 
 /* ---- ol_hooks.c ---- */
@@ -370,9 +464,18 @@ void ol_hooks_mshutdown(void);
 void ol_hooks_rinit(void);
 void ol_hooks_rshutdown(void);
 const ol_hook *ol_hook_lookup(zend_function *fn);
+const char *ol_hooks_describe(void);
 extern const ol_hook ol_hooks_frameworks[];
 extern const ol_hook ol_hooks_datastores[];
 extern const ol_hook ol_hooks_http[];
+extern const ol_hook ol_hooks_workers[];
+
+/* ---- inst_workers.c ---- */
+bool ol_worker_callback(zend_function *fn);
+void ol_worker_callback_begin(zend_execute_data *ex);
+void ol_worker_callback_end(zend_execute_data *ex);
+int ol_worker_context(const ol_wtx **out);
+void ol_worker_rshutdown(void);
 
 /* ---- ol_util.c ---- */
 zval *ol_arg(zend_execute_data *ex, uint32_t n);
@@ -386,19 +489,14 @@ bool ol_call_method0(zend_object *obj, const char *name, size_t len, zval *rv);
 void ol_record_exception(ol_node *n, zend_object *ex, bool set_status);
 bool ol_exception_seen(zend_object *ex);
 void ol_record_error(ol_node *n, int type, const char *file, uint32_t line, const char *msg, size_t msg_len);
-size_t ol_utf8_clean(char *dst, const char *src, size_t len, size_t max);
-size_t ol_sql_sanitize(char *dst, size_t cap, const char *sql, size_t len, bool double_quote_strings);
-size_t ol_sql_operation(const char *sql, size_t len, char *op, size_t opcap, char *coll, size_t collcap);
 void ol_db_query_attrs(ol_node *n, const char *system, const char *sql, size_t len);
-size_t ol_normalize_path(char *dst, size_t cap, const char *path, size_t len);
-size_t ol_route_from_pattern(char *dst, size_t cap, const char *pat, size_t len);
-bool ol_str_starts_ci(const char *s, size_t len, const char *prefix);
 void ol_url_attrs(ol_node *n, const char *url, size_t len);
 void ol_report_exception(zend_object *e);
 void ol_uncaught_exception(zend_object *e);
 
 /* ---- inst_http.c ---- */
 void ol_http_rshutdown(void);
+void ol_http_txn_end(void);
 void ol_http_minit(void);
 void ol_http_mshutdown(void);
 

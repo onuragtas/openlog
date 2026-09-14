@@ -35,6 +35,8 @@ type EvaluatorOptions struct {
 	// ApdexSettings resolves per-service Apdex thresholds for APM rules (nil: DefaultApdexT for every service).
 	ApdexSettings ApdexSettingsFunc
 	DefaultApdexT time.Duration
+	// ErrorStates is the APM error workflow for apm_error rules (nil: regressed conditions fail).
+	ErrorStates apm.ErrorStateStore
 	// Summaries receives the rows of every committed evaluation (alert_evaluations, §3.6); nil = not recorded.
 	Summaries EvaluationSink
 }
@@ -283,6 +285,9 @@ func (e *Evaluator) plan(ctx context.Context, rule *Rule, chans []ChannelRef, l 
 			}
 		}
 		qctx = WithApdexT(qctx, ApdexLookup(settings, e.o.DefaultApdexT))
+	}
+	if rule.Type == TypeAPMError && e.o.ErrorStates != nil {
+		qctx = WithErrorWorkflow(qctx, ErrorWorkflow{OrgID: rule.OrgID, Store: e.o.ErrorStates})
 	}
 	res, err := rule.Condition.Evaluate(qctx, sc, end, e.o.Limits)
 	cancel()

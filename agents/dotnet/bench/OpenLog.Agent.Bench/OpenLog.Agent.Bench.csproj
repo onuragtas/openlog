@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Overhead benchmark: the sample app (minimal API route with an ILogger call) without the agent, with the agent
+       sampled and not sampled, each in its own process, driven by a keep-alive load generator. -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../samples/OpenLog.SampleApp/OpenLog.SampleApp.csproj" />
+  </ItemGroup>
+
+</Project>

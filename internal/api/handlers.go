@@ -292,12 +292,40 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request, sc *query.Scop
 		return err
 	}
 	qp := r.URL.Query()
+	var cursor *logPos
+	skip := 0
+	if v := qp.Get("cursor"); v != "" {
+		pos, n, err := decodeLogCursor(v)
+		if err != nil {
+			return err
+		}
+		cursor, skip = &pos, n
+	}
 	q := sc.From(query.Logs).Columns("timestamp", "severity_text", "severity_number", "body", "host_id", "service_name",
-		"trace_id", "span_id", "attributes", "resource_attributes").
+		"trace_id", "span_id", "attributes", "resource_attributes", logRowKey).
 		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp <= fromUnixTimestamp64Nano({t_to:Int64})").
 		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
 		Where("NOT startsWith(event_name, {inventory_prefix:String})").Param("inventory_prefix", "openlog.inventory.").
-		OrderBy("timestamp DESC").Limit(limit)
+		OrderBy("timestamp DESC", "l_key DESC").Limit(limit + skip + 1)
+	if cursor != nil {
+		q.Where("timestamp <= fromUnixTimestamp64Nano({c_ts:Int64})").
+			Where("(timestamp < fromUnixTimestamp64Nano({c_ts:Int64}) OR l_key <= {c_key:UInt64})").
+			Param("c_ts", cursor.ts).Param("c_key", cursor.key)
+	}
+	if v := qp.Get("span_id"); v != "" {
+		q.Where("span_id = {span_id:String}").Param("span_id", strings.ToLower(v))
+	}
+	// Logs correlated with the traces of one transaction (entry spans in the range, at most 10000 traces).
+	if txn, txnSvc := qp.Get("transaction"), qp.Get("transaction_service"); txn != "" || txnSvc != "" {
+		if txn == "" || txnSvc == "" || len(txn) > 4096 || len(txnSvc) > maxServiceNameBytes {
+			return badRequest("transaction and transaction_service must be given together")
+		}
+		traces := spanRange(sc.From(query.Spans).Columns("trace_id"), from, to).
+			Where("service_name = {txn_service:String}").Param("txn_service", txnSvc).
+			Where("is_entry AND transaction_name = {txn:String}").Param("txn", txn).
+			GroupBy("trace_id").Limit(10000)
+		q.WhereIn("trace_id", traces)
+	}
 	if v := qp.Get("host_id"); v != "" {
 		q.Where("host_id = {host_id:String}").Param("host_id", v)
 	}
@@ -319,6 +347,10 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request, sc *query.Scop
 	}
 	if v := qp.Get("compose_project"); v != "" {
 		q.Where("resource_attributes['docker.compose.project'] = {compose_project:String}").Param("compose_project", v)
+	}
+	// Kubernetes pod logs (semantic-conventions §7.2): resource attribute with a skip index (0043_k8s_logs_indexes).
+	if v := qp.Get("k8s_pod_uid"); v != "" {
+		q.Where("resource_attributes['k8s.pod.uid'] = {k8s_pod_uid:String}").Param("k8s_pod_uid", v)
 	}
 	if v := qp.Get("severity_min"); v != "" {
 		n, err := strconv.Atoi(v)
@@ -351,20 +383,28 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request, sc *query.Scop
 		ResourceAttributes map[string]string `json:"resource_attributes"`
 	}
 	logs := []logJSON{}
+	positions := []logPos{}
 	for rows.Next() {
 		var l logJSON
 		var ts time.Time
-		if err := rows.Scan(&ts, &l.SeverityText, &l.SeverityNumber, &l.Body, &l.HostID, &l.ServiceName, &l.TraceID, &l.SpanID, &l.Attributes, &l.ResourceAttributes); err != nil {
+		var key uint64
+		if err := rows.Scan(&ts, &l.SeverityText, &l.SeverityNumber, &l.Body, &l.HostID, &l.ServiceName, &l.TraceID, &l.SpanID, &l.Attributes, &l.ResourceAttributes, &key); err != nil {
 			return err
 		}
 		l.Timestamp = formatTime(ts)
 		l.Attributes, l.ResourceAttributes = nonNilMap(l.Attributes), nonNilMap(l.ResourceAttributes)
 		logs = append(logs, l)
+		positions = append(positions, logPos{ts: ts.UnixNano(), key: key})
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"logs": logs})
+	first, end, next := logPage(positions, cursor, skip, limit)
+	var nextCursor *string
+	if next != "" {
+		nextCursor = &next
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"logs": logs[first:end], "next_cursor": nextCursor})
 	return nil
 }
 

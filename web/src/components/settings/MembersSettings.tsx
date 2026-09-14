@@ -4,12 +4,14 @@ import { Loader2, UserPlus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  authConfigQuery,
   createInvitation,
   invitationLink,
   invitationsQuery,
   meQuery,
   membersQuery,
   removeMember,
+  resendInvitation,
   revokeInvitation,
   updateMemberRole,
   useMe,
@@ -39,10 +41,11 @@ export function MembersSettings() {
   const canInvite = can(role, "invitations.manage");
   const members = useQuery(membersQuery());
   const invitations = useQuery({ ...invitationsQuery(), enabled: canInvite });
+  const emailEnabled = useQuery(authConfigQuery()).data?.email_enabled === true;
 
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
-  const [invited, setInvited] = useState<{ email: string; link: string } | null>(null);
+  const [invited, setInvited] = useState<{ email: string; link: string; emailSent: boolean; resent: boolean } | null>(null);
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: membersQuery().queryKey });
@@ -67,11 +70,24 @@ export function MembersSettings() {
   const invite = useMutation({
     mutationFn: (v: { email: string; role: Role }) => createInvitation(v.email, v.role),
     onSuccess: (res) => {
-      setInvited({ email: res.invitation.email, link: invitationLink(res.token) });
+      setInvited({ email: res.invitation.email, link: invitationLink(res.token), emailSent: res.email_sent, resent: false });
       setEmail("");
       void qc.invalidateQueries({ queryKey: invitationsQuery().queryKey });
     },
   });
+  const resend = useMutation({
+    mutationFn: (invitationId: string) => resendInvitation(invitationId),
+    onSuccess: (res) => setInvited({ email: res.invitation.email, link: invitationLink(res.token), emailSent: res.email_sent, resent: true }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: invitationsQuery().queryKey }),
+  });
+  const revealLabel = (inv: NonNullable<typeof invited>) =>
+    inv.emailSent
+      ? t("settings.members.inviteEmailed", { email: inv.email })
+      : emailEnabled
+        ? t("settings.members.inviteEmailFailed", { email: inv.email })
+        : inv.resent
+          ? t("settings.members.resendLink", { email: inv.email })
+          : t("settings.members.inviteLink", { email: inv.email });
   const revoke = useMutation({
     mutationFn: (invitationId: string) => revokeInvitation(invitationId),
     onSettled: () => void qc.invalidateQueries({ queryKey: invitationsQuery().queryKey }),
@@ -152,7 +168,10 @@ export function MembersSettings() {
       </SettingsSection>
 
       {canInvite && (
-        <SettingsSection title={t("settings.members.inviteTitle")} description={t("settings.members.inviteDescription")}>
+        <SettingsSection
+          title={t("settings.members.inviteTitle")}
+          description={emailEnabled ? t("settings.members.inviteDescriptionEmail") : t("settings.members.inviteDescription")}
+        >
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -179,10 +198,10 @@ export function MembersSettings() {
               {t("settings.members.invite")}
             </Button>
           </form>
-          <FormError error={invite.error ?? revoke.error} />
+          <FormError error={invite.error ?? revoke.error ?? resend.error} />
           {invited && (
             <SecretReveal
-              label={t("settings.members.inviteLink", { email: invited.email })}
+              label={revealLabel(invited)}
               secret={invited.link}
               note={t("settings.members.inviteLinkNote")}
               onDone={() => setInvited(null)}
@@ -203,6 +222,7 @@ export function MembersSettings() {
                   <TableHead>{t("settings.columns.role")}</TableHead>
                   <TableHead className="hidden md:table-cell">{t("settings.columns.invitedBy")}</TableHead>
                   <TableHead>{t("settings.columns.expires")}</TableHead>
+                  {emailEnabled && <TableHead className="hidden md:table-cell">{t("settings.members.lastSent")}</TableHead>}
                   <TableHead>
                     <span className="sr-only">{t("settings.columns.actions")}</span>
                   </TableHead>
@@ -219,10 +239,20 @@ export function MembersSettings() {
                       {inv.invited_by_email}
                     </TableCell>
                     <TableCell label={t("settings.columns.expires")}>
-                      <DateTimeText value={inv.expires_at} relative />
+                      {inv.expired ? <Badge variant="warning">{t("settings.expired")}</Badge> : <DateTimeText value={inv.expires_at} relative />}
                     </TableCell>
+                    {emailEnabled && (
+                      <TableCell label={t("settings.members.lastSent")} className="hidden md:table-cell">
+                        {inv.last_sent_at ? <DateTimeText value={inv.last_sent_at} relative /> : <span className="text-muted-foreground">{t("settings.members.notSent")}</span>}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
-                      <ConfirmButton label={t("settings.revoke")} confirmLabel={t("settings.confirmRevoke")} pending={revoke.isPending} onConfirm={() => revoke.mutate(inv.id)} />
+                      <span className="inline-flex flex-wrap justify-end gap-1">
+                        <Button type="button" variant="outline" size="sm" disabled={resend.isPending} onClick={() => resend.mutate(inv.id)}>
+                          {t("settings.members.resend")}
+                        </Button>
+                        <ConfirmButton label={t("settings.revoke")} confirmLabel={t("settings.confirmRevoke")} pending={revoke.isPending} onConfirm={() => revoke.mutate(inv.id)} />
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}

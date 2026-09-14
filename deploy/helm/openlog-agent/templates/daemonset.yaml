@@ -1,0 +1,120 @@
+{{- if .Values.node.enabled }}
+{{- $fullname := include "openlog-agent.fullname" . }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ printf "%s-node" $fullname }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openlog-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node
+spec:
+  selector:
+    matchLabels:
+      {{- include "openlog-agent.selector" (dict "root" . "component" "node") | nindent 6 }}
+  {{- with .Values.node.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "openlog-agent.selector" (dict "root" . "component" "node") | nindent 8 }}
+        {{- with .Values.node.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.node.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ printf "%s-node" $fullname }}
+      automountServiceAccountToken: true
+      hostNetwork: {{ .Values.node.hostNetwork }}
+      hostPID: {{ .Values.node.hostPID }}
+      {{- if .Values.node.hostNetwork }}
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      {{- with .Values.node.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.node.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: agent
+          image: {{ include "openlog-agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/bin/openlog-infra-agent", "-config", "/etc/openlog-agent/config.yaml"]
+          env:
+            {{- include "openlog-agent.env" . | nindent 12 }}
+            - name: OPENLOG_K8S_HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          securityContext:
+            # Root without most capabilities: DAC_READ_SEARCH reads root-only host files (container logs under
+            # /var/log/pods, /proc/<pid>/* of other users), SYS_PTRACE reads per-process I/O and exe links.
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_READ_SEARCH", "SYS_PTRACE"]
+            seccompProfile:
+              type: RuntimeDefault
+          {{- with .Values.node.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/openlog-agent
+              readOnly: true
+            - name: hostroot
+              mountPath: /host
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: state
+              mountPath: /var/lib/openlog-infra-agent
+            - name: run
+              mountPath: /run/openlog-infra-agent
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ printf "%s-node" $fullname }}
+        # The host root (read-only) covers /proc, /sys/fs/cgroup, /var/log/pods and the CRI socket
+        # (/run/containerd/containerd.sock, /var/run/crio/crio.sock).
+        - name: hostroot
+          hostPath:
+            path: /
+        - name: state
+          hostPath:
+            path: {{ .Values.node.stateHostPath }}
+            type: DirectoryOrCreate
+        - name: run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.node.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.node.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.node.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

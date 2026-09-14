@@ -21,6 +21,7 @@ import (
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/dashboard"
 	"github.com/onuragtas/openlog/internal/fleet"
 	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/updatereq"
@@ -47,6 +48,13 @@ type Server struct {
 	alerts   *alert.Manager // nil: no alerting endpoints (alerts.go; static auth mode)
 	// nil: no integration settings endpoints (intsettings.go; static auth mode)
 	intSettings *intsettings.Manager
+	dashboards  *dashboard.Manager // nil: no dashboard endpoints (dashboards.go; static auth mode)
+	// tail sampling policy endpoints (tailsampling.go, D-075)
+	tailSampling *tailSamplingState
+	// usage, plan and billing endpoints (usage.go, D-079..D-081); nil: none
+	usage *UsageDeps
+	// single sign-on, domain verification and SCIM endpoints (sso.go, D-077, D-078); nil: none
+	sso ssoService
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -102,12 +110,18 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/v1/traces/{trace_id}", s.getTrace)
 	s.apmRoutes(mux)
 	s.containerRoutes(mux)
+	s.kubernetesRoutes(mux) // kubernetes.go
 	s.accountRoutes(mux)
 	s.versionRoutes(mux)
 	s.updateRoutes(mux)
 	s.fleetRoutes(mux)
 	s.alertRoutes(mux)
 	s.integrationSettingsRoutes(mux)
+	s.oqlRoutes(mux)          // oql.go
+	s.dashboardRoutes(mux)    // dashboards.go
+	s.tailSamplingRoutes(mux) // tailsampling.go (D-075)
+	s.usageRoutes(mux)        // usage.go (D-079..D-081)
+	s.ssoRoutes(mux)          // sso.go: single sign-on, domains, SCIM (D-077, D-078)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})
@@ -231,6 +245,13 @@ func (s *Server) toAPIError(err error) *apiError {
 			msg = strings.ReplaceAll(string(au.Code), "_", " ")
 		}
 		return &apiError{status, string(au.Code), msg}
+	}
+	if le, ok := query.AsLimitError(err); ok { // per-tenant limits (D-047)
+		if le.Retryable {
+			return &apiError{http.StatusTooManyRequests, "resource_exhausted", "too many queries are running for this organization; retry later"}
+		}
+		return &apiError{http.StatusUnprocessableEntity, "resource_exhausted",
+			"query exceeded the " + le.Limit + " limit of this organization; narrow the time range or add filters"}
 	}
 	var ex *ch.Exception
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ex) && (ex.Code == 159 || ex.Code == 160)) {

@@ -130,6 +130,214 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kubernetes/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Clusters with data in [from, to] (default last hour), ordered by name. Counts include current objects only (api.md "Kubernetes"). */
+        get: operations["listKubernetesClusters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/clusters/{cluster_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A cluster (any time within retention) with workload health by kind, recent Warning events and resource totals over [from, to]. */
+        get: operations["getKubernetesCluster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Nodes seen in [from, to], ordered by cluster name and node name. `q` matches every term against name, uid, cluster, roles, IP, kubelet version and OS image. */
+        get: operations["listKubernetesNodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/workloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Workloads seen in [from, to], ordered by cluster name, namespace, kind and name; sparklines have ≈ 30 buckets (`step`). */
+        get: operations["listKubernetesWorkloads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/workloads/{cluster_uid}/{namespace}/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A workload (any time within retention) with its pods seen in [from, to], its HPA and latest status attributes. */
+        get: operations["getKubernetesWorkload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/workloads/{cluster_uid}/{namespace}/{kind}/{name}/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getKubernetesWorkloadTimeseries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/pods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pods seen in [from, to], ordered by cluster name, namespace and pod name. */
+        get: operations["listKubernetesPods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/pods/{pod_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A pod (any time within retention) with its containers, labels, APM services and node host. */
+        get: operations["getKubernetesPod"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/pods/{pod_uid}/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getKubernetesPodTimeseries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/pods/{pod_uid}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Events whose involved object is the pod, newest first. */
+        get: operations["listKubernetesPodEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Kubernetes events (log records with event_name `k8s.event`) in [from, to], newest first. Updates of one event
+         *     (same `k8s.event.uid`) are returned once, as the latest record. Limit above 1000 is capped.
+         */
+        get: operations["listKubernetesEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/kubernetes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Pods of the service seen in [from, to]: pods whose containers carried the service's container ids
+         *     (apm_service_containers, since `from`) or whose uid the service's spans carried as resource `k8s.pod.uid`.
+         */
+        get: operations["listApmServiceKubernetesPods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metrics/names": {
         parameters: {
             query?: never;
@@ -375,6 +583,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apm/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Error inbox across services (apm.md §3.4); `service`, `namespace` and `environment` narrow it. */
+        get: operations["listApmErrorInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/errors/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Bulk status and assignee change (signed-in member, admin or owner; API keys 403). Writes the audit event
+         *     apm.error_group.update per changed group. 404 when a group id is unknown; not available in static auth mode.
+         */
+        patch: operations["updateApmErrorGroups"];
+        trace?: never;
+    };
+    "/api/v1/apm/errors/groups/{group_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listApmErrorComments"];
+        put?: never;
+        /** @description Signed-in member or above; audit event apm.error_group.comment. */
+        post: operations["addApmErrorComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/errors/groups/{group_id}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description The author, or an admin/owner, deletes a comment (audit event apm.error_group.comment_delete). */
+        delete: operations["deleteApmErrorComment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description service.version changes in the range (apm.md §12), oldest first. */
+        get: operations["listApmDeployments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/services/{service_name}/deployments/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description RED and Apdex of [at − window, at) against [at, at + window) (capped at now), and error groups first seen after at. */
+        get: operations["compareApmDeployment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apm/services/{service_name}/databases": {
         parameters: {
             query?: never;
@@ -440,6 +753,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apm/sampling": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The organization's tail sampling policy (D-075, apm.md §4.2). `is_default` when none is stored (the sampler then uses OPENLOG_TAILSAMPLING_DEFAULT_POLICY). `enabled` reports OPENLOG_TAILSAMPLING_ENABLED of this api. */
+        get: operations["getTailSamplingPolicy"];
+        /** @description Signed-in admin or owner; audit event apm.tail_sampling.update. `version` is the version that was edited (0 when none is stored); a different stored version answers 409. Not available in static auth mode (404). */
+        put: operations["putTailSamplingPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/sampling/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Estimates what a (not yet saved) policy keeps, from the traces stored in the last `window_minutes` (default 60, at most 1440). Every stored trace counts with its adjusted count (sample_weight), so the ratios refer to the original traffic; at most 20000 traces are examined (hash sample of trace ids). Rate limits are not simulated. */
+        post: operations["previewTailSamplingPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apm/hosts/{host_id}/services": {
         parameters: {
             query?: never;
@@ -464,6 +812,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getApmServiceMap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/map/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Service map node and edge ids (as in GET /apm/map) used by up to 50 traces of a transaction. */
+        get: operations["getApmMapPath"];
         put?: never;
         post?: never;
         delete?: never;
@@ -662,6 +1027,349 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Confirms the e-mail address with the token of the verification link (/verify-email#token=olv_…). */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify-email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description E-mails a new verification link to the signed-in, unverified user (5 per hour). */
+        post: operations["resendVerificationEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sso/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Whether the e-mail address belongs to a verified domain with an enabled connection. Rate limited per client IP. */
+        post: operations["discoverSSO"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sso/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Starts an SP-initiated sign-in and sets the browser binding cookie `openlog_sso_<id>` (HttpOnly, SameSite=Lax, Path=/api/v1/sso, 10 minutes). The browser then navigates to `redirect_url` (the identity provider). */
+        post: operations["startSSOLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description OIDC redirect URI. Always answers 303 — to the UI path of the sign-in with the session cookie, or to `/login?sso_error=<code>`. */
+        get: operations["oidcCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/saml/{connection_id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["samlMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/saml/{connection_id}/acs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Assertion consumer service (HTTP-POST binding). Answers 303 to `/api/v1/sso/saml/complete` or `/login?sso_error=<code>`. */
+        post: operations["samlACS"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/saml/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["samlComplete"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description admin, owner */
+        get: operations["getSSOConnection"];
+        /** @description admin, owner. Creates or replaces the connection; every save increases config_version (enforcement needs a new test). */
+        put: operations["saveSSOConnection"];
+        post?: never;
+        /** @description admin, owner. Refused (409) while enforced; ends the connection's SSO sessions. */
+        delete: operations["deleteSSOConnection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connection/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner. Server-side checks (OIDC discovery, JWKS, PKCE; SAML metadata, certificates, SP key). */
+        post: operations["testSSOConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connection/test/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner. Starts a test sign-in (also for a disabled connection); the result is stored as last_test and the browser returns to /settings/sso?sso_test=ok|failed. No user, membership or session is created. */
+        post: operations["startSSOTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/enforcement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description owner. Turning enforcement on requires an enabled, successfully tested connection, a verified domain, at least one break-glass owner and that the caller keeps access (409 otherwise). */
+        put: operations["updateSSOEnforcement"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/role-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description admin, owner */
+        get: operations["listSSORoleMappings"];
+        /** @description admin, owner. Replaces all mappings (at most 200); roles of SCIM-provisioned members are recomputed. */
+        put: operations["replaceSSORoleMappings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description admin, owner */
+        get: operations["listSSODomains"];
+        put?: never;
+        /** @description admin, owner (confirmed e-mail address). At most 20 domains. */
+        post: operations["addSSODomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/domains/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner. `dns_txt` looks up the TXT record now; `email` sends a link to <email_local_part>@<domain> (SMTP and OPENLOG_PUBLIC_URL required). */
+        post: operations["verifySSODomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/domains/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description admin, owner. The last verified domain cannot be removed while SSO is enforced (409). */
+        delete: operations["deleteSSODomain"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/domains/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Confirms a domain with the token of the e-mailed link (/sso/verify-domain#token=oldv_…). */
+        post: operations["verifySSODomainEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scim/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description admin, owner */
+        get: operations["listSCIMTokens"];
+        put?: never;
+        /** @description admin, owner (confirmed e-mail address). At most 20 active tokens. */
+        post: operations["createSCIMToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scim/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description admin, owner */
+        delete: operations["revokeSCIMToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scim/v2/Users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description SCIM 2.0 (RFC 7644) list; filter `userName eq "…"` or `externalId eq "…"`, startIndex, count (≤ 500). Also POST; /Users/{id} supports GET, PUT, PATCH, DELETE; /Groups the same; /ServiceProviderConfig, /ResourceTypes, /Schemas. See api.md "SCIM". */
+        get: operations["scimListUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orgs/current": {
         parameters: {
             query?: never;
@@ -740,6 +1448,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["revokeInvitation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description New token and expiry for an invitation that is neither accepted nor revoked (also expired); e-mails it when configured. The previous link stops working. */
+        post: operations["resendInvitation"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -955,6 +1680,26 @@ export interface paths {
         post?: never;
         /** @description Idempotent. */
         delete: operations["deleteFleetHostOverride"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fleet/hosts/{host_id}/php-agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Admin or owner. Sets the host's PHP agent mode instead of the policy's (php-agent.md §7.3); an auto override skips PHP agent waves. Audit action fleet.php_agent_override.set. */
+        put: operations["putFleetHostPHPAgentOverride"];
+        post?: never;
+        /** @description Idempotent; the host follows the policy again. Audit action fleet.php_agent_override.delete. */
+        delete: operations["deleteFleetHostPHPAgentOverride"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1389,6 +2134,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/mutes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Validates an unsaved recurring schedule (alerting.md §5.2) and returns its next occurrences, with exception
+         *     dates and holiday calendars applied. Any role.
+         */
+        post: operations["previewAlertMuteSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/holiday-calendars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAlertHolidayCalendars"];
+        put?: never;
+        /** @description Signed-in admin or owner. */
+        post: operations["createAlertHolidayCalendar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/holiday-calendars/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAlertHolidayCalendar"];
+        /** @description Signed-in admin or owner. Mutes that reference the calendar use the new dates from their next check. */
+        put: operations["updateAlertHolidayCalendar"];
+        post?: never;
+        /** @description Signed-in admin or owner. `409 failed_precondition` while mutes reference the calendar. */
+        delete: operations["deleteAlertHolidayCalendar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Recommended alert templates (alerting.md §2.8). Any role. */
+        get: operations["listAlertTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/templates/{id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Renders a template to a rule definition (not stored): preview it with `POST /alerts/rules/preview` and create it
+         *     with `POST /alerts/rules`. Ratio templates read the latest value of their reference metric (last hour) on the
+         *     given instance through the tenant-scoped query layer (viewer); `409 failed_precondition` when it is missing or 0.
+         */
+        post: operations["renderAlertTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/deliveries": {
         parameters: {
             query?: never;
@@ -1405,10 +2247,511 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Runs an OQL query (oql.md) for the caller's organization. Any role and API keys. `from`/`to` override
+         *     SINCE/UNTIL. Organization query limits apply (422/429), timeouts are 504.
+         */
+        post: operations["runOqlQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/query/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Parses and plans an OQL query without reading telemetry. Answers 200 also for invalid queries. */
+        post: operations["validateOqlQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/query/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Event types, attributes, functions and keywords for editors; with `event_type` also frequent map keys of the last hour. */
+        get: operations["getOqlSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDashboards"];
+        put?: never;
+        post: operations["createDashboard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["importDashboard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getDashboard"];
+        put: operations["updateDashboard"];
+        post?: never;
+        delete: operations["deleteDashboard"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/widgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addDashboardWidget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["duplicateDashboard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["exportDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage of a billing period against the plan limits (any role, API keys) */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUsageDaily"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/top": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUsageTop"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Invoice-period export (admin, owner) */
+        get: operations["exportUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/usage/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest quota evaluation of the organization (banner) */
+        get: operations["getUsageStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orgs/{org}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        /** Plan assignment of any organization (superadmin, OPENLOG_SUPERADMIN_EMAILS) */
+        get: operations["getOrgPlan"];
+        /** Assign a plan, overrides and billing ids (superadmin; audit plan.update) */
+        put: operations["putOrgPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/webhooks/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Billing provider webhook (signature verified by the provider implementation) */
+        post: operations["billingWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        UsagePeriod: {
+            /** @description YYYY-MM */
+            id: string;
+            start: components["schemas"]["Timestamp"];
+            end: components["schemas"]["Timestamp"];
+            data_until: components["schemas"]["Timestamp"];
+        };
+        PlanQueryLimits: {
+            max_memory_usage?: number;
+            max_rows_to_read?: number;
+            max_bytes_to_read?: number;
+        };
+        /** @description 0 or absent = unlimited (retention_days absent = table default) */
+        PlanLimits: {
+            /** @description GiB per billing period */
+            ingest_gb_month?: number;
+            hosts?: number;
+            users?: number;
+            /** @description keys logs, traces, metrics */
+            retention_days: {
+                [key: string]: number;
+            };
+            query: components["schemas"]["PlanQueryLimits"];
+            ingest_bytes_per_second?: number;
+            ingest_burst_bytes?: number;
+        };
+        PlanEnforcement: {
+            hard_ingest_limit?: boolean;
+            grace_percent?: number;
+        };
+        Plan: {
+            id: string;
+            name: string;
+            description: string;
+            limits: components["schemas"]["PlanLimits"];
+            enforcement: components["schemas"]["PlanEnforcement"];
+        };
+        PlanCatalog: {
+            plans: components["schemas"]["Plan"][];
+            default: string;
+        };
+        /** @description Organization-specific limits replacing the plan's; absent fields keep the plan's value */
+        PlanOverrides: {
+            ingest_gb_month?: number;
+            hosts?: number;
+            users?: number;
+            retention_days?: {
+                [key: string]: number;
+            };
+            query?: components["schemas"]["PlanQueryLimits"];
+            ingest_bytes_per_second?: number;
+            ingest_burst_bytes?: number;
+            hard_ingest_limit?: boolean;
+            grace_percent?: number;
+        };
+        QuotaMetric: {
+            /** @enum {string} */
+            metric: "ingest_bytes" | "hosts" | "users";
+            used: number;
+            /** @description 0 = unlimited */
+            limit: number;
+            percent: number;
+            level: components["schemas"]["QuotaLevel"];
+        };
+        /** @enum {string} */
+        QuotaLevel: "ok" | "warning" | "exceeded";
+        UsageSignal: {
+            /** @enum {string} */
+            signal: "traces" | "logs" | "metrics";
+            /** @description Stored spans */
+            items: number;
+            /** @description Estimated uncompressed bytes of the stored rows */
+            bytes: number;
+            /** @description Uncompressed OTLP protobuf bytes */
+            ingest_bytes: number;
+            ingest_requests: number;
+        };
+        UsageQuery: {
+            queries: number;
+            failed: number;
+            read_rows: number;
+            read_bytes: number;
+            cpu_seconds: number;
+            /** @description Sum of per-query peak memory */
+            memory_bytes: number;
+        };
+        UsageTotals: {
+            signals: components["schemas"]["UsageSignal"][];
+            ingest_bytes: number;
+            /** @description Distinct hosts in the range */
+            hosts: number;
+            containers: number;
+            services: number;
+            /** @description Larger distinct host count of the last day and the day before */
+            active_hosts: number;
+            query: components["schemas"]["UsageQuery"];
+        };
+        UsageStored: {
+            /** @enum {string} */
+            signal: "traces" | "logs" | "metrics";
+            retention_days: number;
+            bytes: number;
+            /** @description bytes x the table's current compression ratio */
+            compressed_bytes: number;
+        };
+        UsageOverview: {
+            organization: {
+                id: string;
+                name: string;
+                tenant_id: string;
+            };
+            period: components["schemas"]["UsagePeriod"];
+            saas_mode: boolean;
+            plan: components["schemas"]["Plan"];
+            /** @description false = the default plan applies */
+            plan_assigned: boolean;
+            usage: components["schemas"]["UsageTotals"];
+            stored: components["schemas"]["UsageStored"][];
+            limits: components["schemas"]["QuotaMetric"][];
+            level: components["schemas"]["QuotaLevel"];
+            ingest_blocked: boolean;
+            projection: {
+                /** @description Projected ingest at period end */
+                ingest_bytes: number;
+                ingest_percent?: number;
+            };
+            /** @description The caller is a superadmin */
+            can_manage_plan: boolean;
+            billing_enabled: boolean;
+        };
+        UsageDay: {
+            /** Format: date */
+            day: string;
+            signals: components["schemas"]["UsageSignal"][];
+            ingest_bytes: number;
+            hosts: number;
+            containers: number;
+            services: number;
+            query: components["schemas"]["UsageQuery"];
+        };
+        UsageDaily: {
+            period: components["schemas"]["UsagePeriod"];
+            days: components["schemas"]["UsageDay"][];
+        };
+        UsageTopEntry: {
+            key: string;
+            items: number;
+            bytes: number;
+            bytes_by_signal: {
+                [key: string]: number;
+            };
+        };
+        UsageTop: {
+            period: components["schemas"]["UsagePeriod"];
+            /** @enum {string} */
+            by: "service" | "host";
+            entries: components["schemas"]["UsageTopEntry"][];
+        };
+        UsageExport: {
+            organization: {
+                [key: string]: string;
+            };
+            plan_id: string;
+            period: components["schemas"]["UsagePeriod"];
+            totals: components["schemas"]["UsageTotals"];
+            days: components["schemas"]["UsageDay"][];
+        };
+        UsageStatus: {
+            level: components["schemas"]["QuotaLevel"];
+            ingest_blocked: boolean;
+            metrics: components["schemas"]["QuotaMetric"][];
+            saas_mode: boolean;
+            plan_id?: string;
+            evaluated_at?: components["schemas"]["Timestamp"];
+            /** Format: date */
+            period_start?: string;
+        };
+        OrgPlan: {
+            organization: {
+                id: string;
+                name: string;
+                tenant_id: string;
+            };
+            plan_id: string;
+            assigned: boolean;
+            overrides: components["schemas"]["PlanOverrides"];
+            billing: {
+                provider: string;
+                customer_id: string;
+                subscription_id: string;
+            };
+            note: string;
+            updated_at: components["schemas"]["NullableTimestamp"];
+            updated_by: string;
+            effective: components["schemas"]["Plan"];
+        };
+        OrgPlanInput: {
+            plan_id: string;
+            overrides?: components["schemas"]["PlanOverrides"];
+            billing?: {
+                provider?: string;
+                customer_id?: string;
+                subscription_id?: string;
+            };
+            note?: string;
+        };
         Error: {
             error: {
                 /** @enum {string} */
@@ -1432,6 +2775,282 @@ export interface components {
             agent_version: string;
             last_seen: components["schemas"]["Timestamp"];
             resource_attributes: components["schemas"]["StringMap"];
+        };
+        /**
+         * @description `Pod` is accepted but the cluster agent reports no Pod workloads
+         * @enum {string}
+         */
+        KubernetesWorkloadKind: "Deployment" | "StatefulSet" | "DaemonSet" | "Job" | "CronJob" | "ReplicaSet" | "Pod";
+        /** @enum {string} */
+        KubernetesWorkloadHealth: "healthy" | "degraded" | "unavailable" | "unknown";
+        /** @enum {string} */
+        KubernetesPodPhase: "Pending" | "Running" | "Succeeded" | "Failed" | "Unknown";
+        /** @enum {string} */
+        KubernetesEventType: "Normal" | "Warning";
+        KubernetesCluster: {
+            /** @description Resource k8s.cluster.uid (uid of the kube-system namespace) */
+            cluster_uid: string;
+            cluster_name: string;
+            /** @example v1.31.2 */
+            version: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description Data within the last 5 minutes */
+            reporting: boolean;
+            /** @description Current nodes */
+            nodes: number;
+            nodes_ready: number;
+            /** @description Current pods by phase */
+            pods: {
+                Pending: number;
+                Running: number;
+                Succeeded: number;
+                Failed: number;
+                Unknown: number;
+            };
+            /** @description Current Running pods that are not ready */
+            pods_not_ready: number;
+            /** @description Current workloads */
+            workloads: number;
+            /** @description degraded + unavailable */
+            workloads_unhealthy: number;
+            /** @description Namespaces with pods or workloads in the range */
+            namespaces: string[];
+        };
+        KubernetesWorkloadKindCount: {
+            kind: string;
+            total: number;
+            healthy: number;
+            degraded: number;
+            unavailable: number;
+            unknown: number;
+        };
+        KubernetesClusterDetail: components["schemas"]["KubernetesCluster"] & {
+            workloads_by_kind: components["schemas"]["KubernetesWorkloadKindCount"][];
+            /** @description Latest 20 Warning events in the range, newest first */
+            warning_events: components["schemas"]["KubernetesEvent"][];
+            /** @description cores, sum over nodes (node agents) */
+            cpu_usage: number | null;
+            /** @description bytes */
+            memory_working_set: number | null;
+            /** @description cores */
+            allocatable_cpu: number | null;
+            /** @description bytes */
+            allocatable_memory: number | null;
+        };
+        KubernetesNodeCondition: {
+            /** @example Ready */
+            condition: string;
+            /** @enum {string} */
+            status: "true" | "false" | "unknown";
+        };
+        KubernetesNode: {
+            cluster_uid: string;
+            cluster_name: string;
+            node_name: string;
+            node_uid: string;
+            /** @enum {string} */
+            ready: "true" | "false" | "unknown";
+            unschedulable: boolean;
+            roles: string[];
+            kubelet_version: string;
+            os_image: string;
+            container_runtime: string;
+            internal_ip: string;
+            /** @description RFC3339 */
+            created_at: string | null;
+            /** @description cores */
+            allocatable_cpu: number | null;
+            /** @description bytes */
+            allocatable_memory: number | null;
+            allocatable_pods: number | null;
+            /** @description cores (k8s.node.cpu.usage) */
+            cpu_usage: number | null;
+            /** @description bytes */
+            memory_working_set: number | null;
+            /** @description Current Running and Pending pods on the node */
+            pods: number;
+            /** @description Host of the node agent (resource k8s.cluster.name + k8s.node.name) */
+            host_id: string | null;
+            host_name: string | null;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            reporting: boolean;
+            conditions: components["schemas"]["KubernetesNodeCondition"][];
+        };
+        KubernetesWorkload: {
+            cluster_uid: string;
+            cluster_name: string;
+            namespace: string;
+            kind: string;
+            name: string;
+            uid: string;
+            desired: number;
+            ready: number;
+            /** @description Jobs: succeeded pods */
+            available: number;
+            /** @description Jobs: failed pods */
+            updated: number;
+            health: components["schemas"]["KubernetesWorkloadHealth"];
+            /** @description Current pods of the workload */
+            pods: number;
+            /** @description Sum of the restarts of its current pods */
+            restarts: number;
+            /** @description cores, sum over pods */
+            cpu_usage: number | null;
+            /** @description bytes, sum over pods */
+            memory_working_set: number | null;
+            cpu_sparkline: components["schemas"]["MetricPoint"][];
+            memory_sparkline: components["schemas"]["MetricPoint"][];
+            /** @description RFC3339 */
+            created_at: string | null;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            reporting: boolean;
+        };
+        KubernetesHPA: {
+            name: string;
+            min_replicas: number | null;
+            max_replicas: number | null;
+            current_replicas: number | null;
+            desired_replicas: number | null;
+        };
+        KubernetesWorkloadDetail: components["schemas"]["KubernetesWorkload"] & {
+            pod_list: components["schemas"]["KubernetesPod"][];
+            hpa: components["schemas"]["KubernetesHPA"] | null;
+            attributes: components["schemas"]["StringMap"];
+        };
+        KubernetesWorkloadTimeseries: {
+            /** @example 20s */
+            step: string;
+            /** @description unix ms */
+            from: number;
+            /** @description unix ms */
+            to: number;
+            series: {
+                cpu_usage: components["schemas"]["MetricPoint"][];
+                memory_working_set: components["schemas"]["MetricPoint"][];
+                ready: components["schemas"]["MetricPoint"][];
+                desired: components["schemas"]["MetricPoint"][];
+                restarts: components["schemas"]["MetricPoint"][];
+            };
+        };
+        KubernetesPod: {
+            cluster_uid: string;
+            cluster_name: string;
+            namespace: string;
+            pod_name: string;
+            pod_uid: string;
+            node_name: string;
+            /** @description Top-level owner kind, Pod for bare pods */
+            workload_kind: string;
+            workload_name: string;
+            /** @example Running */
+            phase: string;
+            ready: boolean;
+            /** @example CrashLoopBackOff */
+            reason: string;
+            /** @description reason when set, else phase */
+            status: string;
+            restarts: number;
+            pod_ip: string;
+            qos_class: string;
+            /** @description RFC3339 */
+            created_at: string | null;
+            /** @description RFC3339 */
+            started_at: string | null;
+            /** @description cores (k8s.pod.cpu.usage) */
+            cpu_usage: number | null;
+            /** @description bytes */
+            memory_working_set: number | null;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            reporting: boolean;
+        };
+        KubernetesPodContainer: {
+            name: string;
+            /** @description Empty before the container started */
+            container_id: string;
+            image: string;
+            ready: boolean;
+            restarts: number;
+            state: string;
+            reason: string;
+            /** @description The container is in the containers table (GET /containers/{container_id}) */
+            known: boolean;
+            host_id: string | null;
+            /** @description cores */
+            cpu_usage: number | null;
+            /** @description bytes */
+            memory_working_set: number | null;
+            /** @description cores */
+            cpu_request: number | null;
+            /** @description cores */
+            cpu_limit: number | null;
+            /** @description bytes */
+            memory_request: number | null;
+            /** @description bytes */
+            memory_limit: number | null;
+        };
+        KubernetesPodDetail: components["schemas"]["KubernetesPod"] & {
+            containers: components["schemas"]["KubernetesPodContainer"][];
+            labels: components["schemas"]["StringMap"];
+            services: {
+                service_name: string;
+                service_namespace: string;
+                deployment_environment: string;
+            }[];
+            host_id: string | null;
+            host_name: string | null;
+        };
+        KubernetesPodTimeseries: {
+            /** @example 20s */
+            step: string;
+            /** @description unix ms */
+            from: number;
+            /** @description unix ms */
+            to: number;
+            series: {
+                cpu_usage: components["schemas"]["MetricPoint"][];
+                memory_working_set: components["schemas"]["MetricPoint"][];
+                /** @description bytes/s */
+                network_receive: components["schemas"]["MetricPoint"][];
+                /** @description bytes/s */
+                network_transmit: components["schemas"]["MetricPoint"][];
+                restarts: components["schemas"]["MetricPoint"][];
+            };
+        };
+        KubernetesEvent: {
+            timestamp: components["schemas"]["Timestamp"];
+            /** @example Warning */
+            type: string;
+            /** @example BackOff */
+            reason: string;
+            message: string;
+            count: number;
+            namespace: string;
+            object_kind: string;
+            object_name: string;
+            object_uid: string;
+            source: string;
+            cluster_uid: string;
+            cluster_name: string;
+        };
+        KubernetesEventList: {
+            events: components["schemas"]["KubernetesEvent"][];
+        };
+        KubernetesServicePod: {
+            cluster_uid: string;
+            cluster_name: string;
+            namespace: string;
+            pod_name: string;
+            pod_uid: string;
+            workload_kind: string;
+            workload_name: string;
+            node_name: string;
+            phase: string;
+            ready: boolean;
+            reporting: boolean;
         };
         /**
          * @description `unknown`: the agent sends no state (no Docker API access, or an agent without openlog.container.status)
@@ -1580,6 +3199,8 @@ export interface components {
             instance?: string;
             /** @description Name of the running process (e.g. `redis-server`) when it differs from what `instance` (the executable path) suggests. Optional; older agents omit it. */
             command?: string;
+            /** @description Invoked path of a multi-call or symlinked executable (e.g. `/usr/bin/redis-server` when `instance` is `/usr/bin/redis-check-rdb`). Display only; `instance` stays the key. Optional. */
+            display_instance?: string;
             version?: string;
             matched_by?: string[];
             pids?: number[];
@@ -1776,6 +3397,9 @@ export interface components {
         ApmErrorGroup: {
             /** @description 16 hex digits */
             group_id: string;
+            service_name: string;
+            service_namespace: string;
+            environment: string;
             error_type: string;
             /** @description Normalized message */
             message: string;
@@ -1788,7 +3412,7 @@ export interface components {
             last_trace_id: string;
             last_span_name: string;
             sparkline: components["schemas"]["MetricPoint"][];
-        };
+        } & components["schemas"]["ApmErrorWorkflow"];
         ApmErrorSample: {
             trace_id: string;
             span_id: string;
@@ -1797,9 +3421,20 @@ export interface components {
             transaction_name: string;
             duration_ms: number;
             message: string;
+            /** @description service.version of the span resource */
+            version: string;
+            host_id: string;
         };
         ApmErrorGroupDetail: {
             group_id: string;
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+            affected: components["schemas"]["ApmErrorAffected"];
+            comments: components["schemas"]["ApmErrorComment"][];
+            activity: components["schemas"]["ApmErrorActivity"][];
+            /** @description false without PostgreSQL (static auth mode): no state, comments or activity */
+            workflow: boolean;
             error_type: string;
             message: string;
             count: number;
@@ -1814,7 +3449,7 @@ export interface components {
             step: string;
             series: components["schemas"]["MetricPoint"][];
             samples: components["schemas"]["ApmErrorSample"][];
-        };
+        } & components["schemas"]["ApmErrorWorkflow"];
         ApmDbQuery: {
             db_system: string;
             db_name: string;
@@ -1850,6 +3485,62 @@ export interface components {
         ApmSettingsInput: {
             apdex_t_ms: number;
         };
+        /** @description One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2). */
+        TailSamplingRule: {
+            name: string;
+            /** @enum {string} */
+            type: "error" | "latency" | "service" | "route" | "attribute";
+            /** @description Keep probability, default 1 */
+            ratio?: number;
+            /** @description latency: trace duration, or a span of `service` */
+            threshold_ms?: number;
+            /** @description Restricts error, latency, route and attribute rules to spans of this service */
+            service?: string;
+            /** @description service rule */
+            services?: string[];
+            /** @description route rule: glob on http.route (span name without route); a trailing * is a prefix match */
+            route?: string;
+            /** @description attribute rule: span or resource attribute key */
+            key?: string;
+            /** @description attribute rule: required value (empty: key present) */
+            value?: string;
+        };
+        TailSamplingPolicy: {
+            /** @description false keeps every trace (the policy is stored but inactive) */
+            enabled: boolean;
+            baseline_ratio: number;
+            /** @description Per sampler instance; 0 = unlimited */
+            max_spans_per_second: number;
+            rules: components["schemas"]["TailSamplingRule"][];
+        };
+        TailSamplingPolicyInput: {
+            policy: components["schemas"]["TailSamplingPolicy"];
+            version: number;
+        };
+        TailSamplingPolicyState: {
+            /** @description OPENLOG_TAILSAMPLING_ENABLED */
+            enabled: boolean;
+            policy: components["schemas"]["TailSamplingPolicy"];
+            is_default: boolean;
+            version: number;
+            updated_at: components["schemas"]["NullableTimestamp"];
+            updated_by_email: string;
+        };
+        TailSamplingPreview: {
+            window_minutes: number;
+            traces_examined: number;
+            sampled_fraction: number;
+            /** @description Adjusted count of traces in the window */
+            estimated_traces: number;
+            kept_trace_ratio: number;
+            kept_span_ratio: number;
+            /** @description Per rule in order, then `baseline` (traces matching no rule) */
+            rules: {
+                name: string;
+                matched_trace_ratio: number;
+                kept_trace_ratio: number;
+            }[];
+        };
         ApmMapNode: {
             id: string;
             /** @enum {string} */
@@ -1863,6 +3554,10 @@ export interface components {
             avg_ms: components["schemas"]["ApmNullableNumber"];
             p95_ms: components["schemas"]["ApmNullableNumber"];
             apdex: components["schemas"]["ApmNullableNumber"];
+            /** @description Services: hosts that reported the service since from (0 for dependencies) */
+            host_count: number;
+            /** @description Services: containers that reported the service since from */
+            container_count: number;
         };
         ApmMapEdge: {
             id: string;
@@ -1881,6 +3576,123 @@ export interface components {
             nodes: components["schemas"]["ApmMapNode"][];
             edges: components["schemas"]["ApmMapEdge"][];
         };
+        /** @enum {string} */
+        ApmErrorStatus: "unresolved" | "resolved" | "ignored";
+        ApmErrorAssignee: {
+            user_id: string;
+            email: string;
+            name: string;
+        };
+        /** @description Workflow state of an error group (apm.md §3.4); a group without state is unresolved and unassigned. */
+        ApmErrorWorkflow: {
+            status: components["schemas"]["ApmErrorStatus"];
+            assignee: components["schemas"]["ApmErrorAssignee"] | null;
+            resolved_at: components["schemas"]["NullableTimestamp"];
+            resolved_in_version: string;
+            resolved_by_email: string;
+            regressed_at: components["schemas"]["NullableTimestamp"];
+            regression_count: number;
+            comment_count: number;
+            updated_at: components["schemas"]["NullableTimestamp"];
+            updated_by_email: string;
+        };
+        ApmErrorInbox: {
+            step: string;
+            groups: components["schemas"]["ApmErrorGroup"][];
+            /** @description Groups per status after the assignee and q filters (before the status filter) */
+            counts: {
+                unresolved: number;
+                resolved: number;
+                ignored: number;
+            };
+            /** @description More than 2000 candidate groups or more than limit results */
+            truncated: boolean;
+            /** @description false without PostgreSQL (static auth mode): every group is unresolved */
+            workflow: boolean;
+        };
+        ApmErrorGroupState: {
+            group_id: string;
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+        } & components["schemas"]["ApmErrorWorkflow"];
+        ApmErrorGroupPatch: {
+            group_ids: string[];
+            status?: components["schemas"]["ApmErrorStatus"];
+            /** @description A member's user id; "" unassigns; omitted = unchanged */
+            assignee_user_id?: string;
+            /** @description Only with status resolved (apm.md §3.4 regression rules) */
+            resolved_in_version?: string;
+        };
+        ApmErrorComment: {
+            id: string;
+            author_user_id: string;
+            author_email: string;
+            author_name: string;
+            body: string;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        ApmErrorCommentInput: {
+            body: string;
+        };
+        ApmErrorActivity: {
+            /** @description apm.error_group.update, .regressed, .comment, .comment_delete */
+            action: string;
+            actor_email: string;
+            details: {
+                [key: string]: unknown;
+            };
+            created_at: components["schemas"]["Timestamp"];
+        };
+        ApmAffected: {
+            value: string;
+            /** @description Host or container name when known */
+            name: string;
+            count: number;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        /** @description Top 20 per dimension over retention (apm_error_group_dims) */
+        ApmErrorAffected: {
+            versions: components["schemas"]["ApmAffected"][];
+            hosts: components["schemas"]["ApmAffected"][];
+            containers: components["schemas"]["ApmAffected"][];
+            transactions: components["schemas"]["ApmAffected"][];
+        };
+        ApmDeployment: {
+            timestamp: components["schemas"]["Timestamp"];
+            /** @description Unix milliseconds */
+            t: number;
+            service_namespace: string;
+            environment: string;
+            version: string;
+            previous_version: string;
+            initial: boolean;
+            rollback: boolean;
+        };
+        ApmPeriod: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+        } & components["schemas"]["ApmRed"];
+        ApmDeploymentCompare: {
+            at: components["schemas"]["Timestamp"];
+            window_seconds: number;
+            apdex_t_ms: number;
+            before: components["schemas"]["ApmPeriod"];
+            after: components["schemas"]["ApmPeriod"];
+            new_error_groups: {
+                group_id: string;
+                error_type: string;
+                message: string;
+                first_seen: components["schemas"]["Timestamp"];
+                total_count: number;
+            }[];
+        };
+        ApmMapPath: {
+            trace_count: number;
+            nodes: string[];
+            edges: string[];
+        };
         ApmTraceResult: components["schemas"]["ApmTraceSample"] & {
             service_namespace: string;
             environment: string;
@@ -1894,6 +3706,178 @@ export interface components {
             mode: "postgres" | "static";
             signup_enabled: boolean;
             password_min_length: number;
+            /** @description Invitation and verification e-mails are sent (SMTP and OPENLOG_PUBLIC_URL configured) */
+            email_enabled: boolean;
+            /** @description Sign-ups must confirm their e-mail before creating keys or inviting */
+            email_verification_required: boolean;
+            /** @description CAPTCHA widget for sign-up; null when not configured or sign-up is disabled. */
+            captcha: {
+                /** @enum {string} */
+                provider: "turnstile" | "hcaptcha";
+                site_key: string;
+            } | null;
+            /** @description “Sign in with SSO” is offered (postgres mode, OPENLOG_SSO_ENABLED, OPENLOG_PUBLIC_URL). Always present since M4. */
+            sso_enabled?: boolean;
+        };
+        SSODiscovery: {
+            sso: boolean;
+            organization_name: string | null;
+            protocol: ("oidc" | "saml") | null;
+            enforced: boolean;
+        };
+        SSOState: {
+            /** @description OPENLOG_PUBLIC_URL is set (SSO cannot be used without it) */
+            available: boolean;
+            /** @description Client secrets and SP keys are sealed (OPENLOG_SSO_SECRET_KEY or OPENLOG_KEY_HASH_SECRET) */
+            secrets_encrypted: boolean;
+            scim_enabled: boolean;
+            /** @description Domains can be verified by e-mail (SMTP configured) */
+            email_verification_available: boolean;
+            domain_email_local_parts: string[];
+            /** @description Values to register at the identity provider. SAML values exist once a SAML connection is saved. */
+            service_provider: {
+                oidc_redirect_uri: string;
+                scim_base_url: string;
+                saml_entity_id: string | null;
+                saml_acs_url: string | null;
+                saml_metadata_url: string | null;
+                saml_certificate_pem: string | null;
+            };
+            connection: components["schemas"]["SSOConnection"] | null;
+        };
+        SSOConnection: {
+            id: string;
+            /** @enum {string} */
+            protocol: "oidc" | "saml";
+            name: string;
+            enabled: boolean;
+            oidc: {
+                issuer: string;
+                client_id: string;
+                scopes: string[];
+                require_email_verified: boolean;
+                /** @description The secret itself is never returned */
+                client_secret_set: boolean;
+            } | null;
+            saml: {
+                idp_metadata_url: string;
+                idp_entity_id: string;
+                idp_sso_url: string;
+                /** @description SHA-256 fingerprints of the IdP signing certificates */
+                idp_certificates: string[];
+                idp_cert_not_after: components["schemas"]["NullableTimestamp"];
+                allow_idp_initiated: boolean;
+                relay_state_allowlist: string[];
+                sign_authn_requests: boolean;
+            } | null;
+            /** @description Empty = default (OIDC email; SAML email/mail/… or an e-mail NameID) */
+            email_attribute: string;
+            name_attribute: string;
+            /** @description Empty = groups */
+            groups_attribute: string;
+            jit_enabled: boolean;
+            /** @enum {string} */
+            default_role: "admin" | "member" | "viewer";
+            /** @description 0 = OPENLOG_SESSION_TTL only */
+            session_max_age_seconds: number;
+            enforce: boolean;
+            break_glass_user_ids: string[];
+            config_version: number;
+            /** @description The current settings passed a test sign-in (required for enforcement) */
+            tested: boolean;
+            last_test: {
+                at: components["schemas"]["Timestamp"];
+                ok: boolean;
+                /** @description false when the settings changed since this successful test */
+                current: boolean;
+                error: string;
+                /** @description email, name, subject, groups, role, role_mapped */
+                details: {
+                    [key: string]: unknown;
+                };
+            } | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        SSOConnectionInput: {
+            /** @enum {string} */
+            protocol: "oidc" | "saml";
+            name?: string;
+            enabled: boolean;
+            oidc?: {
+                issuer: string;
+                client_id: string;
+                /** @description Omitted or null keeps the stored secret; empty removes it */
+                client_secret?: string | null;
+                scopes?: string[];
+                /** @default true */
+                require_email_verified: boolean;
+            };
+            saml?: {
+                /** @description Fetched when saved */
+                idp_metadata_url?: string;
+                idp_metadata_xml?: string;
+                allow_idp_initiated?: boolean;
+                relay_state_allowlist?: string[];
+                sign_authn_requests?: boolean;
+            };
+            email_attribute?: string;
+            name_attribute?: string;
+            groups_attribute?: string;
+            /** @default true */
+            jit_enabled: boolean;
+            /**
+             * @default viewer
+             * @enum {string}
+             */
+            default_role: "admin" | "member" | "viewer";
+            /** @description 0 or 300–2592000 */
+            session_max_age_seconds?: number;
+        };
+        SSOTestResult: {
+            ok: boolean;
+            checks: {
+                /** @description public_url, discovery, signing_algorithms, jwks, pkce, client_secret, idp_metadata, idp_certificate, sp_key */
+                name: string;
+                ok: boolean;
+                message: string;
+            }[];
+        };
+        SSODomain: {
+            id: string;
+            domain: string;
+            verified: boolean;
+            verified_at: components["schemas"]["NullableTimestamp"];
+            /** @description dns_txt or email */
+            verification_method: string | null;
+            dns_record: {
+                /** @enum {string} */
+                type: "TXT";
+                /** @description _openlog-verification.<domain> */
+                name: string;
+                /** @description openlog-domain-verification=<token> */
+                value: string;
+            };
+            /** @description Address of a pending e-mail verification */
+            email_address: string | null;
+            email_expires_at: components["schemas"]["NullableTimestamp"];
+            last_checked_at: components["schemas"]["NullableTimestamp"];
+            created_at: components["schemas"]["Timestamp"];
+        };
+        SSORoleMapping: {
+            group: string;
+            /** @enum {string} */
+            role: "admin" | "member" | "viewer";
+        };
+        SCIMToken: {
+            id: string;
+            name: string;
+            prefix: string;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            last_used_at: components["schemas"]["NullableTimestamp"];
+            expires_at: components["schemas"]["NullableTimestamp"];
+            revoked_at: components["schemas"]["NullableTimestamp"];
         };
         LoginRequest: {
             email: string;
@@ -1904,6 +3888,8 @@ export interface components {
             password: string;
             name?: string;
             organization_name: string;
+            /** @description Widget response; required when AuthConfig.captcha is set */
+            captcha_token?: string;
         };
         PasswordChangeRequest: {
             current_password: string;
@@ -1916,6 +3902,8 @@ export interface components {
             id: string;
             email: string;
             name: string;
+            /** @description false only for sign-ups that have not confirmed their address */
+            email_verified: boolean;
         };
         VersionInfo: {
             /** @description "Check now" / "Update now" channel to openlog-updater; null in OPENLOG_AUTH_MODE=static. */
@@ -2054,6 +4042,10 @@ export interface components {
             invited_by_email: string;
             created_at: components["schemas"]["Timestamp"];
             expires_at: components["schemas"]["Timestamp"];
+            expired: boolean;
+            last_sent_at: components["schemas"]["NullableTimestamp"];
+            /** @description Invitation e-mails sent */
+            send_count: number;
         };
         InvitationLookup: {
             organization_name: string;
@@ -2204,6 +4196,27 @@ export interface components {
             wave_soak_minutes: number;
             halt_failure_rate: number;
             maintenance_windows: components["schemas"]["MaintenanceWindow"][];
+            /** @description Omitted = keep the stored section. changed_at is set by the server. */
+            php_agent?: components["schemas"]["FleetPHPAgentPolicyInput"];
+        };
+        /** @enum {string} */
+        FleetPHPAgentMode: "off" | "manual" | "auto";
+        FleetPHPAgentPolicyInput: {
+            mode: components["schemas"]["FleetPHPAgentMode"];
+            /** @description agent (the host's infra agent version; default) or a SemVer version */
+            version?: string;
+            /** @enum {string} */
+            reload?: "none" | "graceful";
+            exclude_bins?: string[];
+        };
+        FleetPHPAgentPolicy: {
+            mode: components["schemas"]["FleetPHPAgentMode"];
+            version: string;
+            /** @enum {string} */
+            reload: "none" | "graceful";
+            exclude_bins: string[];
+            /** @description Last change of the section; PHP agent waves start then (or at the target's release time if later) */
+            changed_at: components["schemas"]["NullableTimestamp"];
         };
         FleetPolicy: {
             mode: components["schemas"]["FleetMode"];
@@ -2214,6 +4227,7 @@ export interface components {
             wave_soak_minutes: number;
             halt_failure_rate: number;
             maintenance_windows: components["schemas"]["MaintenanceWindow"][];
+            php_agent: components["schemas"]["FleetPHPAgentPolicy"];
             is_default: boolean;
             updated_at: components["schemas"]["NullableTimestamp"];
             updated_by_email: string;
@@ -2308,6 +4322,65 @@ export interface components {
             version: string | null;
             updated_at: components["schemas"]["Timestamp"];
         };
+        FleetPHPOverride: {
+            mode: components["schemas"]["FleetPHPAgentMode"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        /** @description One PHP binary of the host (openlog-php-install status --json, php-agent.md §7.2) */
+        FleetPHPRuntime: {
+            bin: string;
+            version: string;
+            /** @description ZEND_MODULE_API_NO */
+            api: string;
+            zts: boolean;
+            debug: boolean;
+            libc: string;
+            scan_dir: string;
+            /** @description <api>-<nts|zts>-<glibc|musl> */
+            module: string;
+            /** @description A module exists for the ABI */
+            supported: boolean;
+            /** @description The managed ini file exists */
+            enabled: boolean;
+            /** @description `-m` lists openlog */
+            loaded: boolean;
+            /** @description Matched by php_agent.exclude_bins */
+            excluded: boolean;
+        };
+        FleetPHPAgentUpdate: {
+            /** @description install, upgrade, rollback or uninstall */
+            operation: string;
+            version: string;
+            /** @description downloading, restarting, confirming, applied, failed, rolled_back, uninstalled */
+            state: string;
+            error: string;
+            changed_at: string;
+        };
+        FleetHostPHPAgent: {
+            /** @description false for agents that do not report PHP runtimes (older versions) */
+            reported: boolean;
+            mode: components["schemas"]["FleetPHPAgentMode"];
+            /** @description Mode the agent applies ("" when not reported) */
+            agent_mode: string;
+            /** @description remote (fleet settings) or local (config.yaml) */
+            source: string;
+            /** @description The privileged pre-start step runs on the host */
+            capable: boolean;
+            reason: string;
+            /** @enum {string} */
+            managed_by: "fleet" | "package" | "manual" | "none";
+            /** @description Installed PHP agent version */
+            version: string | null;
+            runtimes: components["schemas"]["FleetPHPRuntime"][];
+            update: components["schemas"]["FleetPHPAgentUpdate"] | null;
+            override: components["schemas"]["FleetPHPOverride"] | null;
+            /**
+             * @description PHP agent decision for the host now
+             * @enum {string}
+             */
+            status: "offer" | "up_to_date" | "mode_off" | "manual" | "not_reported" | "not_capable" | "managed_elsewhere" | "no_php" | "invalid_version" | "no_catalog" | "target_unavailable" | "no_artifact" | "already_failed" | "not_in_wave" | "outside_window";
+            status_target: string | null;
+        };
         FleetHost: {
             host_id: string;
             host_name: string;
@@ -2340,9 +4413,10 @@ export interface components {
              */
             status: "offer" | "no_catalog" | "mode_off" | "notify_only" | "invalid_version" | "hold" | "not_capable" | "no_rollout" | "rollout_paused" | "rollout_halted" | "rollout_outdated" | "not_in_rollout" | "up_to_date" | "not_in_wave" | "target_unavailable" | "incompatible" | "already_failed" | "no_artifact" | "outside_window";
             status_target: string | null;
+            php_agent: components["schemas"]["FleetHostPHPAgent"];
         };
         /** @enum {string} */
-        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data";
+        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data" | "apm_error" | "oql";
         /** @enum {string} */
         AlertSeverity: "critical" | "warning" | "info";
         /** @enum {string} */
@@ -2388,6 +4462,10 @@ export interface components {
          *     transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
          *     apm_no_data (§2.7): service_name ("" = every service), service_namespace, environment, group_by (namespace,
          *     environment), window_seconds, lookback_seconds.
+         *     apm_error (§2.9): event (new_group, regressed), service_name ("" = every service), service_namespace, environment,
+         *     match, window_seconds, min_count (new_group only).
+         *     oql (§2.10): query (OQL with exactly one number column; FACET = series labels; no TIMESERIES, SINCE/UNTIL,
+         *     COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
          */
         AlertCondition: {
             metric?: string;
@@ -2415,8 +4493,9 @@ export interface components {
             /** @enum {string} */
             signal?: "host" | "metric" | "log";
             /** @enum {string} */
-            event?: "service_disappeared" | "port_opened";
+            event?: "service_disappeared" | "port_opened" | "new_group" | "regressed";
             match?: string;
+            min_count?: number;
         };
         AlertFlapping: {
             enabled: boolean;
@@ -2676,8 +4755,8 @@ export interface components {
             timezone?: string;
             days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
             /**
-             * @description Subset FREQ=WEEKLY;BYDAY=MO,TU,… or FREQ=DAILY
-             * @example FREQ=WEEKLY;BYDAY=MO,FR
+             * @description Subset FREQ=DAILY, FREQ=WEEKLY;BYDAY=MO,TU,… or FREQ=MONTHLY with BYMONTHDAY (±1..31), BYDAY (MO, 1MO, -1FR) and BYSETPOS (±1..31)
+             * @example FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1
              */
             rrule?: string;
             /** @example 22:00 */
@@ -2688,9 +4767,14 @@ export interface components {
             from?: string | null;
             /** @description RFC3339 or unix ms; empty = no end */
             until?: string | null;
+            /** @description Local dates (YYYY-MM-DD or YYYYMMDD) on which no occurrence starts */
+            exdates?: string[];
+            /** @description Holiday calendars of the organization whose dates are exceptions too */
+            holiday_calendar_ids?: string[];
         };
         AlertMuteSchedule: {
             timezone: string;
+            /** @description Weekly days (empty for monthly rules) */
             days: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
             /** @description Normalized rule when the mute was created with one */
             rrule: string | null;
@@ -2698,6 +4782,12 @@ export interface components {
             end_time: string;
             from: components["schemas"]["Timestamp"];
             until: components["schemas"]["NullableTimestamp"];
+            exdates: string[];
+            holiday_calendar_ids: string[];
+        };
+        AlertMuteOccurrence: {
+            starts_at: components["schemas"]["Timestamp"];
+            ends_at: components["schemas"]["Timestamp"];
         };
         AlertMuteInput: {
             name: string;
@@ -2722,11 +4812,91 @@ export interface components {
             rule_ids: string[];
             matchers: components["schemas"]["AlertMuteMatcher"][];
             schedule: components["schemas"]["AlertMuteSchedule"] | null;
+            /** @description Recurring mutes, the current or next occurrences (up to 5); empty for one-off mutes */
+            upcoming: components["schemas"]["AlertMuteOccurrence"][];
             active: boolean;
             created_by_user_id: string | null;
             created_by_email: string;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
+        };
+        AlertHolidayCalendarInput: {
+            name: string;
+            description?: string;
+            /** @description YYYY-MM-DD (one date), MM-DD or --MM-DD (every year); stored sorted and deduplicated */
+            dates: string[];
+        };
+        AlertHolidayCalendar: {
+            id: string;
+            name: string;
+            description: string;
+            dates: string[];
+            /** @description Mutes that reference the calendar */
+            mute_count: number;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        /** @description Text per language */
+        AlertTemplateText: {
+            en: string;
+            tr: string;
+        };
+        AlertTemplateParam: {
+            /** @example threshold */
+            key: string;
+            /** @enum {string} */
+            kind: "number" | "duration" | "host" | "instance" | "service" | "environment" | "text";
+            /**
+             * @description number: ratio (0..1), seconds, count, per_second, ms, bytes, score
+             * @example ratio
+             */
+            unit?: string;
+            required: boolean;
+            /** @description Default value (number or string) */
+            default: unknown;
+            min?: number;
+            max?: number;
+            label: components["schemas"]["AlertTemplateText"];
+        };
+        AlertTemplate: {
+            /** @example redis_memory_high */
+            id: string;
+            /** @enum {string} */
+            category: "host" | "container" | "apm" | "integration" | "kubernetes";
+            /** @description nginx, redis, mysql, postgresql (category integration) */
+            integration?: string;
+            rule_type: components["schemas"]["AlertRuleType"];
+            severity: components["schemas"]["AlertSeverity"];
+            /** @description Main metric of metric_threshold templates */
+            metric?: string;
+            /** @description Ratio templates: threshold = ratio × latest value of this metric on the instance */
+            reference_metric?: string;
+            name: components["schemas"]["AlertTemplateText"];
+            description: components["schemas"]["AlertTemplateText"];
+            params: components["schemas"]["AlertTemplateParam"][];
+        };
+        AlertTemplateRenderInput: {
+            /** @description Values by parameter key (unknown keys → 400); integration targets: host_id, discovery_id + instance (empty = every instance) */
+            params?: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description Language of the generated name and description (default en)
+             * @enum {string}
+             */
+            language?: "en" | "tr";
+            /** @description Rule name (default template name – target) */
+            name?: string;
+            channel_ids?: string[];
+        };
+        AlertTemplateRender: {
+            rule: components["schemas"]["AlertRuleInput"];
+            reference: {
+                metric: string;
+                value: number;
+                ratio: number;
+            } | null;
         };
         AlertDeliveryAttempt: {
             attempt: number;
@@ -2754,6 +4924,246 @@ export interface components {
             next_attempt_at: components["schemas"]["NullableTimestamp"];
             last_error: string;
             attempt_log: components["schemas"]["AlertDeliveryAttempt"][];
+        };
+        /** @description Dashboard variable values: {"name": "value" | ["v1", "v2"]} */
+        OqlVariables: {
+            [key: string]: string | string[];
+        };
+        OqlQueryRequest: {
+            query: string;
+            /** @description RFC3339 or unix ms; overrides SINCE (requires to) */
+            from?: string;
+            /** @description RFC3339 or unix ms; overrides UNTIL (requires from) */
+            to?: string;
+            variables?: components["schemas"]["OqlVariables"];
+        };
+        OqlColumn: {
+            /** @description Alias or rendered aggregate */
+            name: string;
+            /** @example percentile */
+            function: string;
+            /** @enum {string} */
+            type: "number" | "string";
+        };
+        OqlValue: number | string | null;
+        OqlRow: {
+            facets: string[];
+            values: components["schemas"]["OqlValue"][];
+        };
+        /** @description [bucket start unix milliseconds, value] */
+        OqlPoint: [
+            number,
+            number | null
+        ];
+        OqlSeries: {
+            facets: string[];
+            /** @description Index into columns */
+            column: number;
+            points: components["schemas"]["OqlPoint"][];
+        };
+        OqlHistogramBucket: {
+            from: number;
+            to: number;
+            count: number;
+        };
+        OqlCompare: {
+            offset_seconds: number;
+            rows: components["schemas"]["OqlRow"][];
+            series: components["schemas"]["OqlSeries"][];
+            buckets: components["schemas"]["OqlHistogramBucket"][];
+        };
+        OqlMetadata: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            bucket_seconds: number | null;
+            rollup: boolean;
+            table: string;
+            rows_read: number;
+            bytes_read: number;
+            elapsed_ms: number;
+            queries: number;
+            facet_limit: number;
+            truncated: boolean;
+            warnings: string[];
+        };
+        OqlResult: {
+            /** @enum {string} */
+            kind: "single" | "facets" | "timeseries" | "histogram";
+            event_type: string;
+            columns: components["schemas"]["OqlColumn"][];
+            facets: string[];
+            rows: components["schemas"]["OqlRow"][];
+            series: components["schemas"]["OqlSeries"][];
+            buckets: components["schemas"]["OqlHistogramBucket"][];
+            compare: components["schemas"]["OqlCompare"] | null;
+            metadata: components["schemas"]["OqlMetadata"];
+        };
+        OqlValidateRequest: {
+            query: string;
+            variables?: components["schemas"]["OqlVariables"];
+        };
+        OqlDiagnostic: {
+            message: string;
+            /** @description Byte offset in the query */
+            offset: number;
+            length: number;
+            /** @description 1-based */
+            line: number;
+            /** @description 1-based (characters) */
+            column: number;
+        };
+        OqlValidation: {
+            valid: boolean;
+            event_type: string | null;
+            /** @enum {string|null} */
+            kind: "single" | "facets" | "timeseries" | "histogram" | null;
+            variables: string[];
+            errors: components["schemas"]["OqlDiagnostic"][];
+            warnings: components["schemas"]["OqlDiagnostic"][];
+        };
+        OqlSchema: {
+            event_types: {
+                name: string;
+                description: string;
+                maps: ("attributes" | "resource")[];
+                max_range_seconds: number;
+                attributes: {
+                    name: string;
+                    /** @enum {string} */
+                    type: "string" | "number" | "bool";
+                    aliases: string[];
+                    /** @description Available on the Metric 1-minute rollup */
+                    rollup: boolean;
+                }[];
+            }[];
+            functions: {
+                name: string;
+                signature: string;
+                description: string;
+            }[];
+            keywords: string[];
+            attribute_keys: string[];
+            resource_keys: string[];
+            metric_names: string[];
+        };
+        /** @enum {string} */
+        DashboardVisibility: "org" | "private";
+        DashboardVariable: {
+            name: string;
+            label: string;
+            /** @enum {string} */
+            type: "query" | "list" | "text";
+            /** @description OQL query with FACET (type query) */
+            query: string;
+            /** @description Static values (type list) */
+            values: string[];
+            default: string[];
+            multi: boolean;
+            include_all: boolean;
+        };
+        DashboardWidgetLayout: {
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        };
+        DashboardThreshold: {
+            value: number;
+            /** @enum {string} */
+            severity: "warning" | "critical";
+        };
+        /** @enum {string} */
+        DashboardVisualization: "line" | "area" | "bar" | "table" | "billboard" | "pie" | "heatmap" | "markdown";
+        DashboardWidgetOptions: {
+            stacked?: boolean;
+            legend?: boolean;
+        };
+        /** @enum {string} */
+        DashboardUnit: "" | "number" | "percent" | "bytes" | "bytesPerSec" | "ms" | "s";
+        DashboardWidget: {
+            id: string;
+            title: string;
+            visualization: components["schemas"]["DashboardVisualization"];
+            layout: components["schemas"]["DashboardWidgetLayout"];
+            query: string;
+            markdown: string;
+            unit: components["schemas"]["DashboardUnit"];
+            thresholds: components["schemas"]["DashboardThreshold"][];
+            options: components["schemas"]["DashboardWidgetOptions"];
+        };
+        DashboardWidgetInput: {
+            /** @description Kept when it is a widget id of the same dashboard */
+            id?: string;
+            title?: string;
+            visualization: components["schemas"]["DashboardVisualization"];
+            layout: components["schemas"]["DashboardWidgetLayout"];
+            query?: string;
+            markdown?: string;
+            unit?: components["schemas"]["DashboardUnit"];
+            thresholds?: components["schemas"]["DashboardThreshold"][];
+            options?: components["schemas"]["DashboardWidgetOptions"];
+        };
+        DashboardPage: {
+            id: string;
+            name: string;
+            widgets: components["schemas"]["DashboardWidget"][];
+        };
+        DashboardPageInput: {
+            id?: string;
+            name: string;
+            widgets: components["schemas"]["DashboardWidgetInput"][];
+        };
+        Dashboard: {
+            id: string;
+            name: string;
+            description: string;
+            visibility: components["schemas"]["DashboardVisibility"];
+            version: number;
+            variables: components["schemas"]["DashboardVariable"][];
+            pages: components["schemas"]["DashboardPage"][];
+            created_by_user_id: string | null;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            can_edit: boolean;
+        };
+        DashboardInput: {
+            name: string;
+            description?: string;
+            visibility?: components["schemas"]["DashboardVisibility"];
+            variables?: components["schemas"]["DashboardVariable"][];
+            pages?: components["schemas"]["DashboardPageInput"][];
+            /** @description Required on PUT (optimistic concurrency) */
+            version?: number;
+        };
+        DashboardSummary: {
+            id: string;
+            name: string;
+            description: string;
+            visibility: components["schemas"]["DashboardVisibility"];
+            page_count: number;
+            widget_count: number;
+            created_by_email: string;
+            updated_at: components["schemas"]["Timestamp"];
+            can_edit: boolean;
+        };
+        DashboardAddWidget: {
+            page_id?: string;
+            widget: components["schemas"]["DashboardWidgetInput"];
+        };
+        DashboardExport: {
+            /** @enum {integer} */
+            openlog_dashboard: 1;
+            name: string;
+            description: string;
+            variables: components["schemas"]["DashboardVariable"][];
+            pages: {
+                name: string;
+                widgets: components["schemas"]["DashboardWidgetInput"][];
+            }[];
+        };
+        DashboardImport: components["schemas"]["DashboardExport"] & {
+            visibility?: components["schemas"]["DashboardVisibility"];
         };
     };
     responses: {
@@ -2841,6 +5251,11 @@ export interface components {
     };
     parameters: {
         HostID: string;
+        K8sClusterUID: string;
+        K8sNamespace: string;
+        K8sWorkloadKind: components["schemas"]["KubernetesWorkloadKind"];
+        K8sWorkloadName: string;
+        K8sPodUID: string;
         /** @description 64 hex characters (case-insensitive) */
         ContainerID: string;
         /** @description RFC3339 or unix milliseconds. Default now − 1h. */
@@ -2857,6 +5272,15 @@ export interface components {
         ApmEnvironment: string;
         /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
         ApmStep: string;
+        /** @description all (default) or a comma-separated list of unresolved, resolved, ignored */
+        ApmErrorStatus: string;
+        /** @description any (default), none (unassigned), me (signed-in user) or a user id */
+        ApmErrorAssignee: string;
+        /** @description Case-insensitive substring of the error type, message, service name or span name */
+        ApmErrorQuery: string;
+        ApmErrorSort: "count" | "last_seen" | "first_seen";
+        /** @description 16 hex digits */
+        ApmGroupID: string;
     };
     requestBodies: never;
     headers: never;
@@ -3097,6 +5521,437 @@ export interface operations {
             504: components["responses"]["Timeout"];
         };
     };
+    listKubernetesClusters: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clusters: components["schemas"]["KubernetesCluster"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getKubernetesCluster: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                cluster_uid: components["parameters"]["K8sClusterUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesClusterDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listKubernetesNodes: {
+        parameters: {
+            query?: {
+                cluster_uid?: string;
+                q?: string;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        nodes: components["schemas"]["KubernetesNode"][];
+                        /** @description Matching nodes before limit */
+                        total: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listKubernetesWorkloads: {
+        parameters: {
+            query?: {
+                cluster_uid?: string;
+                namespace?: string;
+                kind?: components["schemas"]["KubernetesWorkloadKind"];
+                health?: components["schemas"]["KubernetesWorkloadHealth"];
+                q?: string;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        workloads: components["schemas"]["KubernetesWorkload"][];
+                        /** @description Matching workloads before limit */
+                        total: number;
+                        /** @example 120s */
+                        step: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getKubernetesWorkload: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                cluster_uid: components["parameters"]["K8sClusterUID"];
+                namespace: components["parameters"]["K8sNamespace"];
+                kind: components["parameters"]["K8sWorkloadKind"];
+                name: components["parameters"]["K8sWorkloadName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesWorkloadDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getKubernetesWorkloadTimeseries: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 10s; default ≈ 300 points */
+                step?: string;
+            };
+            header?: never;
+            path: {
+                cluster_uid: components["parameters"]["K8sClusterUID"];
+                namespace: components["parameters"]["K8sNamespace"];
+                kind: components["parameters"]["K8sWorkloadKind"];
+                name: components["parameters"]["K8sWorkloadName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesWorkloadTimeseries"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listKubernetesPods: {
+        parameters: {
+            query?: {
+                cluster_uid?: string;
+                namespace?: string;
+                node?: string;
+                workload_kind?: components["schemas"]["KubernetesWorkloadKind"];
+                workload_name?: string;
+                phase?: components["schemas"]["KubernetesPodPhase"];
+                q?: string;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pods: components["schemas"]["KubernetesPod"][];
+                        /** @description Matching pods before limit */
+                        total: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getKubernetesPod: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                pod_uid: components["parameters"]["K8sPodUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesPodDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getKubernetesPodTimeseries: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 10s; default ≈ 300 points */
+                step?: string;
+            };
+            header?: never;
+            path: {
+                pod_uid: components["parameters"]["K8sPodUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesPodTimeseries"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listKubernetesPodEvents: {
+        parameters: {
+            query?: {
+                type?: components["schemas"]["KubernetesEventType"];
+                reason?: string;
+                limit?: number;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                pod_uid: components["parameters"]["K8sPodUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesEventList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listKubernetesEvents: {
+        parameters: {
+            query?: {
+                cluster_uid?: string;
+                namespace?: string;
+                type?: components["schemas"]["KubernetesEventType"];
+                object_kind?: string;
+                object_name?: string;
+                object_uid?: string;
+                reason?: string;
+                limit?: number;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesEventList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listApmServiceKubernetesPods: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pods: components["schemas"]["KubernetesServicePod"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
     listMetricNames: {
         parameters: {
             query?: {
@@ -3285,6 +6140,8 @@ export interface operations {
                 "attr.openlog.log.source"?: string;
                 /** @description Container logs (resource attribute `container.id`) */
                 container_id?: string;
+                /** @description Kubernetes pod logs (resource attribute `k8s.pod.uid`) */
+                k8s_pod_uid?: string;
                 /** @description Resource attribute `docker.compose.service` */
                 compose_service?: string;
                 /** @description Resource attribute `docker.compose.project` */
@@ -3297,6 +6154,14 @@ export interface operations {
                 "attr.openlog.discovery.id"?: string;
                 "attr.openlog.systemd.unit"?: string;
                 "attr.openlog.syslog.identifier"?: string;
+                /** @description Log records of one span (16 hex characters, case-insensitive) */
+                span_id?: string;
+                /** @description With transaction_service, log records of the traces of that transaction (its entry spans in the range, at most 10000 traces) */
+                transaction?: string;
+                /** @description service.name of `transaction` */
+                transaction_service?: string;
+                /** @description next_cursor of the previous page (opaque). Send the same filters, from and to; a cursor overrides nothing else. */
+                cursor?: string;
                 /** @description RFC3339 or unix milliseconds. Default now − 1h. */
                 from?: components["parameters"]["From"];
                 /** @description RFC3339 or unix milliseconds. Default now. */
@@ -3318,6 +6183,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         logs: components["schemas"]["LogRecord"][];
+                        /** @description Cursor of the next (older) page; null when this page is the last one */
+                        next_cursor: string | null;
                     };
                 };
             };
@@ -3555,6 +6422,13 @@ export interface operations {
                 /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
                 step?: components["parameters"]["ApmStep"];
                 limit?: number;
+                /** @description all (default) or a comma-separated list of unresolved, resolved, ignored */
+                status?: components["parameters"]["ApmErrorStatus"];
+                /** @description any (default), none (unassigned), me (signed-in user) or a user id */
+                assignee?: components["parameters"]["ApmErrorAssignee"];
+                /** @description Case-insensitive substring of the error type, message, service name or span name */
+                q?: components["parameters"]["ApmErrorQuery"];
+                sort?: components["parameters"]["ApmErrorSort"];
             };
             header?: never;
             path: {
@@ -3565,16 +6439,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Error groups with occurrences in the range, most frequent first */
+            /** @description Error inbox of the service (groups with occurrences in the range, plus groups whose workflow state matches the filter) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        step: string;
-                        groups: components["schemas"]["ApmErrorGroup"][];
-                    };
+                    "application/json": components["schemas"]["ApmErrorInbox"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -3617,6 +6488,234 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listApmErrorInbox: {
+        parameters: {
+            query?: {
+                service?: string;
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration >= 60s (default ~60 points), rounded up to whole minutes */
+                step?: components["parameters"]["ApmStep"];
+                limit?: number;
+                /** @description all (default) or a comma-separated list of unresolved, resolved, ignored */
+                status?: components["parameters"]["ApmErrorStatus"];
+                /** @description any (default), none (unassigned), me (signed-in user) or a user id */
+                assignee?: components["parameters"]["ApmErrorAssignee"];
+                /** @description Case-insensitive substring of the error type, message, service name or span name */
+                q?: components["parameters"]["ApmErrorQuery"];
+                sort?: components["parameters"]["ApmErrorSort"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Error groups with workflow state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmErrorInbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    updateApmErrorGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApmErrorGroupPatch"];
+            };
+        };
+        responses: {
+            /** @description The states after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        groups: components["schemas"]["ApmErrorGroupState"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listApmErrorComments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 16 hex digits */
+                group_id: components["parameters"]["ApmGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Comments, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        comments: components["schemas"]["ApmErrorComment"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    addApmErrorComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 16 hex digits */
+                group_id: components["parameters"]["ApmGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApmErrorCommentInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmErrorComment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteApmErrorComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 16 hex digits */
+                group_id: components["parameters"]["ApmGroupID"];
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listApmDeployments: {
+        parameters: {
+            query?: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Absence after which a version counts as deployed again (5m-24h) */
+                gap?: string;
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deployments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        gap_seconds: number;
+                        deployments: components["schemas"]["ApmDeployment"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    compareApmDeployment: {
+        parameters: {
+            query: {
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds (truncated to the minute) */
+                at: string;
+                /** @description 5m-24h */
+                window?: string;
+            };
+            header?: never;
+            path: {
+                /** @description service.name (URL-encoded) */
+                service_name: components["parameters"]["ApmServiceName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Before/after comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmDeploymentCompare"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
         };
     };
     listApmDatabaseQueries: {
@@ -3790,6 +6889,85 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getTailSamplingPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TailSamplingPolicyState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    putTailSamplingPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TailSamplingPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description Stored policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TailSamplingPolicyState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    previewTailSamplingPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    policy: components["schemas"]["TailSamplingPolicy"];
+                    window_minutes?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Estimate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TailSamplingPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
     listApmHostServices: {
         parameters: {
             query?: {
@@ -3845,6 +7023,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApmMap"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getApmMapPath: {
+        parameters: {
+            query: {
+                service: string;
+                transaction: string;
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Path of the transaction */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApmMapPath"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4043,6 +7254,8 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["Unavailable"];
         };
     };
     getMe: {
@@ -4111,6 +7324,675 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verified */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resendVerificationEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    discoverSSO: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSODiscovery"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    startSSOLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                    /** @description Relative UI path after sign-in (default /) */
+                    redirect?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Identity provider URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        redirect_url: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    oidcCallback: {
+        parameters: {
+            query: {
+                state: string;
+                code?: string;
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the UI */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    samlMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SAML SP metadata (entity ID = this URL) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/samlmetadata+xml": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    samlACS: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    SAMLResponse: string;
+                    RelayState?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Redirect */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    samlComplete: {
+        parameters: {
+            query: {
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the UI (session cookie set on success) */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection (null when none) and the service provider values to register at the identity provider */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    saveSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSOConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    testSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    startSSOTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Identity provider URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        redirect_url: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updateSSOEnforcement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enforce: boolean;
+                    break_glass_user_ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listSSORoleMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mappings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        mappings: components["schemas"]["SSORoleMapping"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    replaceSSORoleMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    mappings: components["schemas"]["SSORoleMapping"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        mappings: components["schemas"]["SSORoleMapping"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listSSODomains: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Claimed domains */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        domains: components["schemas"]["SSODomain"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    addSSODomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    domain: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Claimed (not verified yet) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSODomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    verifySSODomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    method: "dns_txt" | "email";
+                    /** @enum {string} */
+                    email_local_part?: "admin" | "administrator" | "hostmaster" | "postmaster" | "webmaster";
+                };
+            };
+        };
+        responses: {
+            /** @description Verified (dns_txt) or e-mail sent (email) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSODomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteSSODomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    verifySSODomainEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        domain: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listSCIMTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens, including revoked ones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tokens: components["schemas"]["SCIMToken"][];
+                        base_url: string;
+                        enabled: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createSCIMToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @description RFC3339 or unix milliseconds, in the future */
+                    expires_at?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Created; the secret (ols_…) is shown only in this response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token: components["schemas"]["SCIMToken"];
+                        secret: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revokeSCIMToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    scimListUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ListResponse */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/scim+json": Record<string, never>;
+                };
+            };
+            /** @description SCIM error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getCurrentOrg: {
@@ -4245,7 +8127,10 @@ export interface operations {
     };
     listInvitations: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also list expired invitations that were neither accepted nor revoked. */
+                include_expired?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4293,6 +8178,8 @@ export interface operations {
                         invitation: components["schemas"]["Invitation"];
                         /** @description oli_… (shown once) */
                         token: string;
+                        /** @description The invitation was e-mailed (e-mail configured and within limits) */
+                        email_sent: boolean;
                     };
                 };
             };
@@ -4319,6 +8206,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resendInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Renewed; the token is shown only in this response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        invitation: components["schemas"]["Invitation"];
+                        token: string;
+                        email_sent: boolean;
+                    };
+                };
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
@@ -4603,6 +8519,16 @@ export interface operations {
             query?: {
                 /** @description Default 100, max 500. */
                 limit?: number;
+                /** @description Case-insensitive substring of the actor e-mail */
+                actor?: string;
+                /** @description Action prefix, e.g. member. or member.remove */
+                action?: string;
+                /** @description Inclusive start (RFC3339 or unix ms) */
+                from?: string;
+                /** @description Exclusive end (RFC3339 or unix ms) */
+                to?: string;
+                /** @description next_cursor of the previous page (same filters) */
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -4618,6 +8544,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         events: components["schemas"]["AuditEvent"][];
+                        /** @description Cursor of the next page; null when this page was not full */
+                        next_cursor: string | null;
                     };
                 };
             };
@@ -4770,6 +8698,60 @@ export interface operations {
         };
     };
     deleteFleetHostOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putFleetHostPHPAgentOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    mode: components["schemas"]["FleetPHPAgentMode"];
+                };
+            };
+        };
+        responses: {
+            /** @description Override stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetPHPOverride"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteFleetHostPHPAgentOverride: {
         parameters: {
             query?: never;
             header?: never;
@@ -5726,6 +9708,228 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    previewAlertMuteSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    schedule: components["schemas"]["AlertMuteScheduleInput"];
+                };
+            };
+        };
+        responses: {
+            /** @description Up to 5 occurrences, the current one first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        occurrences: components["schemas"]["AlertMuteOccurrence"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAlertHolidayCalendars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Holiday calendars ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        calendars: components["schemas"]["AlertHolidayCalendar"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAlertHolidayCalendar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertHolidayCalendarInput"];
+            };
+        };
+        responses: {
+            /** @description Calendar */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertHolidayCalendar"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAlertHolidayCalendar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertHolidayCalendar"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAlertHolidayCalendar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertHolidayCalendarInput"];
+            };
+        };
+        responses: {
+            /** @description Calendar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertHolidayCalendar"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteAlertHolidayCalendar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAlertTemplates: {
+        parameters: {
+            query?: {
+                category?: "host" | "container" | "apm" | "integration" | "kubernetes";
+                integration?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Template catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        templates: components["schemas"]["AlertTemplate"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    renderAlertTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertTemplateRenderInput"];
+            };
+        };
+        responses: {
+            /** @description Rendered rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertTemplateRender"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            504: components["responses"]["Timeout"];
+        };
+    };
     listAlertDeliveries: {
         parameters: {
             query?: {
@@ -5755,6 +9959,589 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    runOqlQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OqlQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description Query result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OqlResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    validateOqlQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OqlValidateRequest"];
+            };
+        };
+        responses: {
+            /** @description Validation result with positions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OqlValidation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOqlSchema: {
+        parameters: {
+            query?: {
+                event_type?: "Log" | "Span" | "Transaction" | "Metric" | "Host" | "Container";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schema */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OqlSchema"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listDashboards: {
+        parameters: {
+            query?: {
+                /** @description Name substring (case-insensitive) */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dashboards visible to the caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dashboards: components["schemas"]["DashboardSummary"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    importDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardImport"];
+            };
+        };
+        responses: {
+            /** @description Imported */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dashboard */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addDashboardWidget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardAddWidget"];
+            };
+        };
+        responses: {
+            /** @description Dashboard with the appended widget */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    duplicateDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Copy */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Portable dashboard document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardExport"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getUsage: {
+        parameters: {
+            query?: {
+                /** @description current (default), previous or YYYY-MM (UTC calendar month) */
+                period?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getUsageDaily: {
+        parameters: {
+            query?: {
+                /** @description current (default), previous or YYYY-MM */
+                period?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per day with usage, ordered by day */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageDaily"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getUsageTop: {
+        parameters: {
+            query?: {
+                /** @description current (default), previous or YYYY-MM */
+                period?: string;
+                by?: "service" | "host";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Services or hosts with the most stored bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageTop"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    exportUsage: {
+        parameters: {
+            query?: {
+                /** @description current (default), previous or YYYY-MM */
+                period?: string;
+                format?: "csv" | "json";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attachment openlog-usage-<tenant>-<period>.<format>; CSV columns tenant_id,period,day,metric,value (usage.md "Export") */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/json": components["schemas"]["UsageExport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getUsageStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Level ok with no metrics when the organization was not evaluated yet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan catalog (OPENLOG_PLANS / OPENLOG_PLANS_FILE) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCatalog"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOrgPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment and effective plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgPlan"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putOrgPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Updated assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgPlan"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    billingWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description OPENLOG_BILLING_PROVIDER */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Event accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        received: boolean;
+                        /** @description The organization's plan assignment changed */
+                        changed: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

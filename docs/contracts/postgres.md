@@ -31,14 +31,31 @@ Nothing that grants access is stored in plaintext:
 
 | Secret | Format | Stored as |
 |---|---|---|
-| Ingest license key | `olk_` + 48 hex chars (192 random bits), or an imported value (16–256 printable ASCII chars, see [api.md](api.md#post-apiv1license-keys-name-key)) | `license_keys.key_hash = sha256(key)`, `key_prefix` = first 12 chars (at most half of an imported value) |
-| API key | `ola_` + 48 hex chars | `api_keys.key_hash = sha256(key)`, `key_prefix` = first 12 chars |
+| Ingest license key | `olk_` + 48 hex chars (192 random bits), or an imported value (16–256 printable ASCII chars, see [api.md](api.md#post-apiv1license-keys-name-key)) | `license_keys.key_hash = HMAC-SHA256(OPENLOG_KEY_HASH_SECRET, key)`, or `sha256(key)` without a secret; `key_prefix` = first 12 chars (at most half of an imported value) |
+| API key | `ola_` + 48 hex chars | `api_keys.key_hash`, hashed like license keys; `key_prefix` = first 12 chars |
 | Invitation token | `oli_` + 48 hex chars | `invitations.token_hash = sha256(token)` |
+| E-mail verification token | `olv_` + 48 hex chars | `email_verifications.token_hash = sha256(token)` |
 | Session token (cookie) | 32 random bytes, base64url | `sessions.token_hash = sha256(token)` |
+| SCIM token | `ols_` + 48 hex chars | `scim_tokens.key_hash`, hashed like API keys (D-044); `key_prefix` = first 12 chars |
+| SSO sign-in state / binding cookie | 32 random bytes each, base64url | `sso_login_states.state_hash` / `binding_hash = sha256(…)`; the PKCE verifier and nonce are stored for 10 minutes |
+| Domain verification e-mail token | `oldv_` + 48 hex chars | `sso_domains.email_token_hash = sha256(token)` |
+| OIDC client secret, SAML SP private key | IdP-issued / generated RSA 2048 | `sso_connections.secret_enc` / `sp_key_enc` = AES-256-GCM with a key from `OPENLOG_SSO_SECRET_KEY` (else derived from `OPENLOG_KEY_HASH_SECRET`; `_PREVIOUS` values decrypt), associated data = purpose + connection id. Format `0x01 ‖ key id (4) ‖ nonce ‖ ciphertext`; `0x00 ‖ plaintext` without any key (warning) |
 | Password | user-chosen, 8–256 chars | `users.password_hash` = argon2id PHC string (`m=19456,t=2,p=1`, 16-byte salt, 32-byte key) |
 
-Keys are high-entropy random values, so an unsalted SHA-256 is sufficient and allows an indexed lookup.
-Keys are shown once, in the response that creates them. Operator-chosen keys — imported under
+Keys are high-entropy random values, so an unsalted hash is sufficient and allows an indexed lookup.
+Keys are shown once, in the response that creates them.
+
+**Server-side key hash secret (D-044).** With `OPENLOG_KEY_HASH_SECRET` the stored hash of license and API keys
+is an HMAC, so a database dump alone does not allow offline guessing of (possibly low-entropy) imported values.
+A lookup sends every candidate hash in one query — HMAC with the current secret, HMAC with
+`OPENLOG_KEY_HASH_SECRET_PREVIOUS`, plain SHA-256 — ordered by preference
+(`key_hash = ANY($1) ORDER BY array_position($1, key_hash)`); a row found by a later candidate is rewritten to the
+current hash in the same statement (data-modifying CTE, skipped if that hash already exists, active keys only).
+Ingest does this only on a cache miss, so the hot path is unchanged. Creating an imported or bootstrap key also
+refuses a value whose older-format hash exists (active or revoked). Revoked rows keep their old hash. Rotation:
+set the new secret and the old one as `_PREVIOUS` on every service at once; drop `_PREVIOUS` once every active
+key has `last_used_at` after the rotation. Session, invitation and verification tokens stay SHA-256 (random,
+short-lived, never operator-chosen). Operator-chosen keys — imported under
 Settings → License keys, or given to `openlog-admin bootstrap` (`OPENLOG_BOOTSTRAP_LICENSE_KEY`) — are
 hashed the same way; their displayed prefix reveals at most half of the key. An imported value should
 itself be high-entropy (e.g. an existing 32-character random key). Bootstrap keys follow the same character
@@ -63,6 +80,13 @@ rules but may be as short as 8 characters, so development defaults such as `dev-
 | `password_hash` | text NULL | NULL = no password sign-in (reserved for SSO, M4) |
 | `created_at`, `updated_at`, `last_login_at` | timestamptz | |
 | `disabled_at` | timestamptz NULL | disabled users cannot sign in; their sessions stop working |
+| `email_verified_at` | timestamptz NULL | `0011_email_verification`: NULL only for self-service sign-ups that have not confirmed their address (`OPENLOG_SIGNUP_REQUIRE_VERIFICATION`); they cannot create license/API keys or invite. Existing rows were backfilled with `created_at`; the column default `now()` keeps users created by older binaries verified |
+
+### `email_verifications` (`0011_email_verification`)
+`id`, `user_id`, `email`, `token_hash` (UNIQUE), `created_at`, `expires_at` (`OPENLOG_EMAIL_VERIFICATION_TTL`),
+`used_at`. Opening the link sets `used_at` and `users.email_verified_at` in one transaction (only while the
+user still has that e-mail). Every resend creates a new row; older unused links stay valid until they expire. Rows
+expired or used more than a day ago are deleted by the hourly auth cleanup.
 
 ### `memberships`
 `(org_id, user_id)` PK, `role` ∈ `owner`, `admin`, `member`, `viewer`, `created_at`. A user's default
@@ -96,7 +120,10 @@ ago (hourly, from every API pod; idempotent).
 `id`, `org_id`, `email`, `role`, `token_hash` (UNIQUE), `invited_by`, `created_at`, `expires_at`
 (`OPENLOG_INVITATION_TTL`), `accepted_at`, `accepted_by`, `revoked_at`. At most one pending invitation
 per `(org_id, email)` (partial unique index); an expired pending invitation is revoked when a new one is
-created. Accepting marks the invitation and inserts the membership in one transaction.
+created. Accepting marks the invitation and inserts the membership in one transaction. `last_sent_at` and
+`send_count` (`0010_invitation_email`) record invitation e-mails. Resending replaces `token_hash` and
+`expires_at` of an invitation that is neither accepted nor revoked (also after expiry), so the previous link stops
+working.
 
 ### `audit_log`
 `id` (identity), `org_id` (NULL for user-level events such as sign-in), `actor_user_id`, `actor_email`,
@@ -105,8 +132,9 @@ created. Accepting marks the invitation and inserts the membership in one transa
 | Action | Target |
 |---|---|
 | `org.create`, `org.rename`, `bootstrap` | organization |
-| `member.role_change` (`details.from`/`to`), `member.remove` | user |
-| `invitation.create`, `invitation.revoke`, `invitation.accept` | invitation |
+| `member.role_change` (`details.from`/`to`), `member.remove` (`details.role`, `details.revoked_api_keys` when the removed user's API keys were revoked) | user |
+| `invitation.create`, `invitation.resend` (`details.email_sent`), `invitation.revoke`, `invitation.accept` | invitation |
+| `user.email_verified`, `user.verification_resend` (no organization) | user |
 | `license_key.create`, `license_key.revoke` | license_key (`details.name`, `details.prefix`; `details.custom = true` for an imported value) |
 | `api_key.create`, `api_key.revoke` | api_key |
 | `user.login`, `user.logout`, `user.password_change`, `user.password_reset`, `session.revoke` | session / user |
@@ -116,6 +144,8 @@ created. Accepting marks the invitation and inserts the membership in one transa
 | `update.check_requested`, `update.apply_requested` (`details.from`/`to`/`ignore_maintenance_window`/`engine`) | update_request |
 | `fleet.rollout.create`, `fleet.rollout.advance`, `fleet.rollout.halt`, `fleet.rollout.complete`, `fleet.rollout.supersede` (actor email `openlog-controller`, no user) | rollout |
 | `integration_setting.create`, `integration_setting.update`, `integration_setting.delete` (`details.integration`/`host_id`/`changed`/`password_changed`) | integration_setting |
+| `apm.error_group.update` (`details.service_name`/`service_namespace`/`environment`, `status` and `assignee_user_id` from/to, `resolved_in_version`), `apm.error_group.comment`, `apm.error_group.comment_delete` (`details.comment_id`) | apm_error_group (target id = 16 hex digit group id) |
+| `apm.error_group.regressed` (actor email `openlog-apm`, no user; `details.resolved_at`/`resolved_in_version`/`occurrence_at`/`version`) | apm_error_group |
 
 Audit writes are best effort: a failed write is logged (`cannot write audit log`) and does not fail the
 operation.
@@ -125,6 +155,78 @@ operation.
 during invitation acceptance and password change) is refused with `429 resource_exhausted` after
 `OPENLOG_LOGIN_MAX_FAILURES` failures within `OPENLOG_LOGIN_WINDOW`; a successful sign-in clears the
 counter. Shared by all API pods. Rows older than a day are deleted hourly.
+The same table holds the other API rate-limit counters, with `key_hash = sha256(purpose, subject)`: sign-up
+attempts per client IP and per e-mail (`OPENLOG_SIGNUP_MAX_PER_IP`/`_PER_EMAIL`), invitation e-mails per
+organization and per invited address, and verification e-mails per user (windows ≤ 24 h).
+
+Listing (`GET /audit-log`) filters by `actor_email` substring, `action` prefix (`starts_with`) and time, newest
+first with a keyset cursor on `(created_at, id)`, served by `audit_log_org_idx`.
+
+## Single sign-on and SCIM (`0030_sso`)
+
+OIDC/SAML connections, claimed domains, role mappings, sign-in states, the SAML replay cache and SCIM provisioning
+([api.md](api.md#single-sign-on), D-077, D-078, code `internal/sso`, `internal/scim`, store
+`internal/store/postgres/sso.go`).
+
+### `sso_connections`
+`id` (PK), `org_id` (UNIQUE, FK organizations: one connection per organization), `protocol` (`oidc`·`saml`),
+`name`, `enabled`, `config` (jsonb `{"oidc": {issuer, client_id, scopes, require_email_verified}}` or
+`{"saml": {idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_certificates, idp_cert_not_after,
+allow_idp_initiated, relay_state_allowlist, sign_authn_requests, sp_certificate_pem}}`), `secret_enc`, `sp_key_enc`
+(sealed, see "Secrets"), `email_attribute`, `name_attribute`, `groups_attribute` (empty = defaults), `jit_enabled`,
+`default_role` (admin·member·viewer), `session_max_age_seconds` (0 = session TTL), `enforce`
+(CHECK: only when `enabled`), `break_glass_user_ids uuid[]`, `config_version` (incremented by every settings save),
+`tested_version` (set by a successful test sign-in of that version), `last_test_at`, `last_test_ok`,
+`last_test_error`, `last_test_details` (jsonb: email, groups, role), `created_by`, `updated_by`, timestamps.
+The session policy reads `enabled`, `enforce`, `break_glass_user_ids`, `session_max_age_seconds` and whether the
+user's e-mail domain is verified in **one** statement per session-authenticated request (`org_id` unique index,
+`sso_domains (org_id, domain)`).
+
+### `sso_domains`
+`id`, `org_id`, `domain` (lower case), `dns_token` (public TXT value), `email_token_hash`/`email_address`/
+`email_expires_at` (pending e-mail verification, 24 h), `verified_at`, `verification_method` (`dns_txt`·`email`),
+`last_checked_at`, `created_by`, `created_at`. UNIQUE `(org_id, domain)`; **partial UNIQUE `(domain) WHERE
+verified_at IS NOT NULL`**: a domain is verified by one organization only (a second verification →
+`already_exists`).
+
+### `sso_role_mappings`
+PK `(org_id, group_name)`, `role` (admin·member·viewer; owners are never mapped), `created_at`. Shared by SSO sign-in
+and SCIM groups; replaced as a whole in one transaction.
+
+### `sso_login_states`
+In-flight sign-ins: `state_hash` (UNIQUE), `binding_hash` (NULL for IdP-initiated SAML), `org_id`, `connection_id`
+(FK, cascade), `purpose` (`login`·`test`), `idp_initiated`, `nonce`, `pkce_verifier`, `saml_request_id`,
+`redirect_to`, `actor_user_id` (test), `config_version` (a settings change during the sign-in expires it), `result`
+(jsonb verified identity between SAML ACS and completion), `created_at`, `expires_at` (`OPENLOG_SSO_LOGIN_TTL`;
+IdP-initiated 1 min), `consumed_at`. Consumption is a single `UPDATE … WHERE consumed_at IS NULL AND expires_at > now
+RETURNING`, so a state completes once across all pods; `result` is written only while NULL.
+
+### `sso_saml_assertions`
+PK `(connection_id, assertion_id)`, `expires_at` (latest `NotOnOrAfter` + clock skew, at least 10 min). `INSERT … ON
+CONFLICT DO UPDATE … WHERE expires_at < now()`: an id is accepted once until it expires (replay protection across
+pods).
+
+### `scim_tokens`
+Like `api_keys`: `id`, `org_id`, `name`, `key_prefix`, `key_hash` (UNIQUE, HMAC/SHA-256 per D-044; rehashed on lookup),
+`created_by`, `created_at`, `last_used_at` (≤ 1 write/min), `expires_at`, `revoked_at`.
+
+### `scim_users`
+PK `(org_id, user_id)` (FK users, cascade), `user_name` (UNIQUE per organization, case-insensitive), `external_id`
+(UNIQUE per organization when not empty), `active`, `display_name`, `given_name`, `family_name`, timestamps. The row
+stays when SCIM deactivates the user (the membership is removed), which keeps JIT sign-in from re-adding them.
+
+### `scim_groups`, `scim_group_members`
+`scim_groups`: `id`, `org_id`, `display_name` (UNIQUE per organization, case-insensitive), `external_id`, timestamps.
+`scim_group_members`: PK `(group_id, user_id)`, index on `user_id`; deleting a SCIM user removes it from the
+organization's groups.
+
+### `sessions` (columns added by `0030_sso`)
+`auth_method` (`password`·`oidc`·`saml`, default `password`), `org_id` (FK organizations, cascade; SSO sessions act
+only in this organization), `sso_connection_id` (FK `sso_connections`, **ON DELETE CASCADE**: deleting a connection
+deletes its sessions). Older api binaries insert password sessions with the defaults.
+
+Cleanup (api, every 10 minutes, idempotent): login states expired more than an hour ago, expired assertion ids,
+expired domain e-mail tokens.
 
 ## Fleet (agent updates, `0002_fleet`)
 
@@ -136,8 +238,14 @@ Agent update policy, host exceptions, rollouts and the agents that sync with ing
 (`latest`·`patch`·`pinned`), `pinned_version` (text, required when `target = pinned`), `waves` (int[], strictly
 increasing percentages ending at 100), `wave_soak_minutes` (0–43200), `halt_failure_rate` (0–1),
 `maintenance_windows` (jsonb `[{"days": ["mon",…], "start": "HH:MM", "end": "HH:MM"}]`, UTC; `[]` = always;
-`end <= start` spans midnight), `updated_at`, `updated_by`. **No row = the default policy** (`auto`, `stable`,
-`latest`, `[10,50,100]`, 60 min, 0.05, no windows). Validation is done by the API.
+`end <= start` spans midnight), `updated_at`, `updated_by`, `php_agent` (`0045_php_agent_fleet`, jsonb
+`{"mode": "off|manual|auto", "version": "agent|<semver>", "reload": "none|graceful", "exclude_bins": [], "changed_at"}`;
+`{}` = defaults: `manual`, `agent`, `none`). **No row = the default policy** (`auto`, `stable`, `latest`,
+`[10,50,100]`, 60 min, 0.05, no windows, PHP agent `manual`). Validation is done by the API.
+
+### `agent_php_host_overrides` (`0045_php_agent_fleet`)
+`(org_id, host_id)` PK, `mode` (`off`·`manual`·`auto`: the host's PHP agent mode instead of the policy's; an `auto`
+override skips PHP agent waves), `updated_at`, `updated_by`. Rows are kept when the host disappears.
 
 ### `agent_update_host_overrides`
 `(org_id, host_id)` PK, `action` (`hold` = never update; `pin` = move this host to `version`, up or down, outside
@@ -170,7 +278,9 @@ rate), `created_by` (NULL = controller), `created_at`, `updated_at`, `ended_at`.
 `update_changed_at`, `config_hash`, `first_seen_at`, `last_sync_at`, `rollout_id` (last rollout that offered this
 host an update; soft reference, never cleared by later syncs), `integrations_config_revision` (`0008_integration_settings`;
 the remote integration config revision the agent reported in its last sync: `''` = none, `disabled` = remote config
-turned off on the host).
+turned off on the host), `php_agent` (`0045_php_agent_fleet`, jsonb: the `php_agent` section of the last sync request —
+PHP runtimes, installed PHP agent version, `managed_by`, last operation — bounded by ingest; NULL when the agent does
+not report one).
 
 Written **only by ingest, asynchronously**: sync requests are answered from memory; reports are queued per pod
 (coalesced per host, bounded by `OPENLOG_FLEET_REPORT_QUEUE_SIZE`, the oldest report is dropped when full:
@@ -180,7 +290,7 @@ dropped; agents report again on their next sync.
 
 ### Access pattern and leader
 - Ingest reads, per tenant and pod at most once per `OPENLOG_FLEET_POLICY_CACHE_TTL` (≤ 30 s, singleflight):
-  the organization by `tenant_id`, its policy, overrides, current rollout and integration settings. While PostgreSQL is unreachable,
+  the organization by `tenant_id`, its policy, overrides, PHP agent overrides, current rollout and integration settings. While PostgreSQL is unreachable,
   cached state is served for 5 minutes; uncached organizations get no updates (sync still answers `200`).
 - The rollout controller runs on the api leader (session advisory lock `postgres.LeaderLock`, shared with the
   update check) every `OPENLOG_FLEET_CONTROLLER_INTERVAL`: per organization with agents it reads the policy,
@@ -226,6 +336,54 @@ services without a row use `OPENLOG_APM_DEFAULT_APDEX_T`. Written by `PUT /api/v
 together with the audit event `apm.service_settings.update` (target `apm_service` = service name,
 `details.service_namespace`/`environment`/`apdex_t_ms`/`previous_apdex_t_ms`) in one transaction.
 
+### `tail_sampling_policies` (`0040_tail_sampling`)
+One tail sampling policy per organization ([apm.md](apm.md) §4.2, D-075). Primary key `org_id`; `policy` jsonb object
+(validated by the api: `internal/tailsampling.ParsePolicy`), `version` (starts at 1, +1 per save; `PUT
+/api/v1/apm/sampling` sends the edited version and gets 409 on mismatch), `updated_at`, `updated_by` (user, nullable).
+Written together with the audit event `apm.tail_sampling.update` (target `tail_sampling_policy` = org id,
+`details.version`/`enabled`/`baseline_ratio`/`max_spans_per_second`/`rules` count) in one transaction.
+`openlog-sampler` reads all rows joined with `organizations.tenant_id` every `OPENLOG_TAILSAMPLING_POLICY_REFRESH`;
+invalid documents are skipped (the default policy applies).
+
+## APM error workflow (`0025_apm_error_workflow`)
+
+Error inbox state ([apm.md](apm.md) §3.4). A group without a row is unresolved and unassigned.
+
+### `apm_error_group_states`
+Primary key (`org_id`, `group_id`); `group_id` = the 16 lower-case hex digit ClickHouse error group id (it already
+encodes the service); `service_name`, `service_namespace`, `deployment_environment` for filtering; `status`
+(`unresolved`/`resolved`/`ignored`), `assignee_user_id` (member; `ON DELETE SET NULL`), `resolved_at` (set exactly
+while resolved, CHECK), `resolved_in_version` (≤ 256 bytes, only while resolved, CHECK), `resolved_by`,
+`regressed_at`, `regression_count`, `created_at`, `updated_at`, `updated_by` (NULL for automatic reopenings). Indexes:
+(`org_id`, `status`, `updated_at DESC`), (`org_id`, `assignee_user_id`) where assigned, (`org_id`, service triple).
+Written by `PATCH /api/v1/apm/errors/groups` (upsert under `SELECT … FOR UPDATE` per group, audit event in the same
+transaction; the assignee must have a `memberships` row) and by regression detection (conditional
+`UPDATE … WHERE status = 'resolved' AND resolved_at < occurrence`, audit `apm.error_group.regressed`).
+
+### `apm_error_group_comments`
+`id` (uuid), `org_id`, `group_id`, `author_user_id` (`ON DELETE SET NULL`), `author_email`, `body` (1–4000),
+`created_at`; index (`org_id`, `group_id`, `created_at`). Deleted by the author or an admin/owner.
+
+The migration also adds `audit_log_target_idx` (`org_id`, `target_type`, `target_id`, `created_at DESC`) for a group's
+activity and extends `alert_rules_type_check` with `apm_error` (and `oql`, so the order of the parallel expand
+migrations does not matter).
+
+## Dashboards (`0020_dashboards`)
+
+Custom dashboards of OQL widgets ([api.md](api.md#dashboards), [oql.md](oql.md), code: `internal/dashboard`, D-064).
+
+| Table | Key | Content |
+|---|---|---|
+| `dashboards` | `id` | `org_id` (cascade), `name` (1–200), `description` (≤ 2000), `visibility` (`org`·`private`), `variables` (jsonb: `[{name, label, type, query, values, default, multi, include_all}]`), `version` (+1 on every save), `created_by`/`updated_by` (SET NULL), timestamps. Index `(org_id, lower(name))` |
+| `dashboard_pages` | `id` | `dashboard_id` (cascade), `position` (unique per dashboard), `name` (1–100) |
+| `dashboard_widgets` | `id` | `dashboard_id`, `page_id` (both cascade), `position` (unique per page), `title` (≤ 200), `visualization` (`line`·`area`·`bar`·`table`·`billboard`·`pie`·`heatmap`·`markdown`), `x`/`y`/`w`/`h` (12-column grid: `0 ≤ x ≤ 11`, `1 ≤ w ≤ 12`, `x + w ≤ 12`, `0 ≤ y ≤ 10000`, `1 ≤ h ≤ 50`), `query` (≤ 8192), `markdown` (≤ 20000), `unit`, `thresholds` (jsonb `[{value, severity}]`), `options` (jsonb `{stacked, legend}`) |
+
+A save replaces the whole document in one transaction: the dashboard row is locked `FOR UPDATE`, its `version` compared
+with the version the client read (mismatch → `409`), then pages (and, by cascade, widgets) are deleted and re-inserted
+with the kept ids. Reads of one dashboard use a repeatable-read, read-only transaction. Visibility is filtered in SQL
+(`visibility = 'org' OR created_by = viewer OR (created_by IS NULL AND admin)`). Audit: `dashboard.{create,update,delete,duplicate,import}`.
+`0021_alert_oql` adds `oql` to `alert_rules.type` ([alerting.md](alerting.md) §2.10).
+
 ## Alerting (`0004_alerting`)
 
 Rules, evaluation state, incidents, channels, mutes and the notification outbox ([alerting.md](alerting.md), API:
@@ -242,6 +400,7 @@ Rules, evaluation state, incidents, channels, mutes and the notification outbox 
 | `alert_incidents` | `id` | `org_id`, `rule_id` (SET NULL on delete), `rule_name`/`rule_type`/`severity` snapshot, `series_key`, `labels`, `summary`, `state` (`open`·`acknowledged`·`resolved`), `value`, `last_value`, `threshold`, `channel_ids` (uuid[] notified at open), `flapping`, `opened_at`, `acknowledged_at/by`, `resolved_at/by`, `resolve_reason`. Partial unique index `alert_incidents_open_uniq (rule_id, series_key) WHERE state <> 'resolved'` |
 | `alert_incident_events` | `id` (identity) | timeline: `incident_id`, `at`, `kind`, `actor_user_id`, `actor_email`, `message` (≤ 4000), `details` |
 | `alert_mutes` | `id` | `org_id`, `name`, `comment`, `starts_at`, `ends_at`, `rule_ids` (uuid[], empty = all), `matchers` (jsonb), `schedule` (jsonb, `0006_alerting_m2`; NULL = one-off; recurring mutes keep the current or next occurrence in `starts_at`/`ends_at`, rolled forward by dispatchers), `created_by`, timestamps |
+| `alert_holiday_calendars` | `id` | `0015_alert_holiday_calendars`: `org_id`, `name` (unique per org), `description`, `dates` (text[], `YYYY-MM-DD` or `MM-DD`), `created_by`, timestamps; referenced by id from `alert_mutes.schedule->holiday_calendar_ids` (no FK: delete is refused while referenced) |
 | `alert_notifications` | `id` (+ `seq` identity for ordering) | outbox: `org_id`, `incident_id`, `rule_id`, `channel_id` (SET NULL), `channel_type`, `kind`, `idempotency_key` (UNIQUE), `payload` (jsonb event), `status` (`pending`·`sending`·`delivered`·`failed`·`suppressed`), `attempts`, `next_attempt_at`, `claimed_by`, `claimed_until`, `muted_logged`, `last_error`, `created_at`, `finished_at`. Finished rows older than 30 days are pruned |
 | `alert_delivery_attempts` | `id` (identity) | delivery log: `notification_id` (cascade), `attempt`, `instance_id`, `started_at`, `duration_ms`, `success`, `status_code`, `error` (≤ 2000) |
 
@@ -251,7 +410,7 @@ commit locks the rule's lease row `FOR UPDATE` and checks owner, expiry, `last_e
 rule or incident lock the same lease row first (same lock order), so they serialize with evaluations. Dispatchers claim
 outbox rows with `FOR UPDATE SKIP LOCKED` and finish them conditionally (`status = 'sending' AND claimed_by = me`);
 expired claims return to `pending`. Audit: `alert.rule.*`, `alert.channel.*`, `alert.mute.*`,
-`alert.incident.{acknowledge,resolve}` (details: names, `condition_changed`, `success` of test sends).
+`alert.holiday_calendar.*`, `alert.incident.{acknowledge,resolve}` (details: names, `condition_changed`, `success` of test sends).
 
 ## Versions and updates (`0003_component_heartbeats`)
 
@@ -281,6 +440,39 @@ action per 30 s; one open `apply`). The table stays small (a few rows per admin 
 Updater events are also written to `audit_log` with `org_id NULL`, `actor_email = 'openlog-updater'`,
 `action` `updater.update_{available,started,succeeded,failed,rolled_back,rollback_failed}`,
 `target_type = 'openlog_release'`, `target_id` = target version.
+
+## Usage, plans and billing (`0035_usage_plans`)
+
+Plan definitions are configuration (`OPENLOG_PLANS`, [usage.md](usage.md) §4); these tables hold assignments and the
+bookkeeping of quota evaluation, notifications, billing pushes and per-tenant retention (D-079–D-081).
+
+### `org_plans`
+One row per organization with an explicit assignment (none = `OPENLOG_DEFAULT_PLAN`): `plan_id` (catalog id; unknown ids
+fall back to the default plan), `overrides` jsonb (partial limits, `quota.Overrides`), `billing_provider`,
+`billing_customer_id`, `billing_subscription_id` (empty until connected; partial index on provider + customer),
+`note`, `updated_by`, `updated_at`. Written only by superadmins (`PUT /api/v1/admin/orgs/{org}/plan`) and billing
+webhooks, each change with audit action `plan.update` (target `organization`).
+
+### `tenant_quota_status`
+Latest evaluation per tenant (PK `tenant_id`), upserted by the api leader every `OPENLOG_USAGE_EVALUATION_INTERVAL`:
+`org_id`, `plan_id`, `period_start`, `level` (`ok`/`warning`/`exceeded`), `ingest_bytes`, `ingest_limit_bytes`,
+`ingest_blocked`, `rate_bytes_per_second`, `burst_bytes`, `metrics` jsonb, `evaluated_at`. Every ingest pod reads the rows
+evaluated within the last hour that are blocked or rate limited (`OPENLOG_QUOTA_REFRESH_INTERVAL`); the UI banner reads
+its organization's row. Rows of deleted organizations cascade.
+
+### `usage_notifications`
+PK `(org_id, period_start, metric, threshold)`: the insert claims an owner e-mail for a billing period; released
+(deleted) when no e-mail could be sent, `recipients`/`sent_at` updated after sending.
+
+### `billing_usage_pushes`
+PK `idempotency_key` (`openlog:<org_id>:<day>:<metric>`, also sent to the provider): `provider`, `metric`, `day`,
+`quantity`, `status` (`pending`/`pushed`/`failed`), `attempts`, `error`. A failed record is re-claimed until 5 attempts; a
+pending claim older than 15 minutes is taken over.
+
+### `usage_retention_mutations`
+PK `(table_name, partition_id, tenants_hash)`: ClickHouse `ALTER … DELETE IN PARTITION` mutations submitted by the
+per-tenant retention job (`retention_days`, `tenants`, `submitted_at`); not re-submitted for the same tenant set within
+24 h; rows older than 30 days are pruned.
 
 ## Sizing and operations
 

@@ -47,6 +47,13 @@ type ManagerStore interface {
 	UpdateMute(ctx context.Context, orgID, id string, m *ValidMute, actor Actor) (*Mute, error)
 	DeleteMute(ctx context.Context, orgID, id string, actor Actor) error
 
+	ListHolidayCalendars(ctx context.Context, orgID string) ([]HolidayCalendar, error)
+	GetHolidayCalendar(ctx context.Context, orgID, id string) (*HolidayCalendar, error)
+	CreateHolidayCalendar(ctx context.Context, orgID string, v *ValidHolidayCalendar, actor Actor) (*HolidayCalendar, error)
+	UpdateHolidayCalendar(ctx context.Context, orgID, id string, v *ValidHolidayCalendar, actor Actor) (*HolidayCalendar, error)
+	DeleteHolidayCalendar(ctx context.Context, orgID, id string, actor Actor) error
+	HolidayCalendarDates(ctx context.Context, orgID string, ids []string) (map[string][]string, error)
+
 	ListDeliveries(ctx context.Context, orgID string, f DeliveryFilter) ([]DeliveryView, error)
 }
 
@@ -66,7 +73,9 @@ type ManagerOptions struct {
 	QueryTimeout   time.Duration
 	DefaultApdexT  time.Duration
 	ApdexSettings  ApdexSettingsFunc
-	Now            func() time.Time
+	// ErrorStates is the APM error workflow for apm_error previews (nil: regressed previews fail).
+	ErrorStates apm.ErrorStateStore
+	Now         func() time.Time
 }
 
 // Manager implements the alerting API operations (docs/contracts/alerting.md §7). Role checks that depend only
@@ -182,6 +191,9 @@ func (m *Manager) Preview(ctx context.Context, sc *query.Scope, orgID string, in
 	}
 	qctx, cancel := context.WithTimeout(m.WithApdex(ctx, orgID), m.o.QueryTimeout)
 	defer cancel()
+	if m.o.ErrorStates != nil {
+		qctx = WithErrorWorkflow(qctx, ErrorWorkflow{OrgID: orgID, Store: m.o.ErrorStates})
+	}
 	lim := m.o.Limits
 	return Preview(qctx, sc, d, hours, m.o.Now(), m.o.Delay, lim)
 }
@@ -340,11 +352,41 @@ func (m *Manager) ListMutes(ctx context.Context, orgID string, includeExpired bo
 }
 
 func (m *Manager) CreateMute(ctx context.Context, orgID string, in MuteInput, parseTime func(string) (time.Time, error), actor Actor) (*Mute, error) {
-	v, err := in.Validate(parseTime, m.o.Now())
+	v, err := m.validMute(ctx, orgID, in, parseTime)
 	if err != nil {
 		return nil, err
 	}
 	return m.store.CreateMute(ctx, orgID, v, actor)
+}
+
+// validMute validates a mute write and resolves the holiday calendars of its schedule (they must exist in the
+// organization); the first occurrence then skips holidays.
+func (m *Manager) validMute(ctx context.Context, orgID string, in MuteInput, parseTime func(string) (time.Time, error)) (*ValidMute, error) {
+	now := m.o.Now()
+	v, err := in.Validate(parseTime, now)
+	if err != nil {
+		return nil, err
+	}
+	if v.Schedule == nil || len(v.Schedule.HolidayCalendarIDs) == 0 {
+		return v, nil
+	}
+	cals, err := m.store.HolidayCalendarDates(ctx, orgID, v.Schedule.HolidayCalendarIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := v.ApplyHolidays(cals, now); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// PreviewMuteSchedule validates a schedule and returns its next n occurrences (holiday calendars resolved).
+func (m *Manager) PreviewMuteSchedule(ctx context.Context, orgID string, in MuteScheduleInput, parseTime func(string) (time.Time, error), n int) ([][2]time.Time, error) {
+	v, err := m.validMute(ctx, orgID, MuteInput{Name: "preview", Schedule: &in}, parseTime)
+	if err != nil {
+		return nil, err
+	}
+	return v.Schedule.Occurrences(m.o.Now(), n), nil
 }
 
 func (m *Manager) ownedMute(ctx context.Context, orgID, id string, actor Actor, manageAny bool) error {
@@ -359,7 +401,7 @@ func (m *Manager) ownedMute(ctx context.Context, orgID, id string, actor Actor, 
 }
 
 func (m *Manager) UpdateMute(ctx context.Context, orgID, id string, in MuteInput, parseTime func(string) (time.Time, error), actor Actor, manageAny bool) (*Mute, error) {
-	v, err := in.Validate(parseTime, m.o.Now())
+	v, err := m.validMute(ctx, orgID, in, parseTime)
 	if err != nil {
 		return nil, err
 	}
@@ -374,6 +416,36 @@ func (m *Manager) DeleteMute(ctx context.Context, orgID, id string, actor Actor,
 		return err
 	}
 	return m.store.DeleteMute(ctx, orgID, id, actor)
+}
+
+// ---- holiday calendars ----
+
+func (m *Manager) ListHolidayCalendars(ctx context.Context, orgID string) ([]HolidayCalendar, error) {
+	return m.store.ListHolidayCalendars(ctx, orgID)
+}
+
+func (m *Manager) GetHolidayCalendar(ctx context.Context, orgID, id string) (*HolidayCalendar, error) {
+	return m.store.GetHolidayCalendar(ctx, orgID, id)
+}
+
+func (m *Manager) CreateHolidayCalendar(ctx context.Context, orgID string, in HolidayCalendarInput, actor Actor) (*HolidayCalendar, error) {
+	v, err := in.Validate()
+	if err != nil {
+		return nil, err
+	}
+	return m.store.CreateHolidayCalendar(ctx, orgID, v, actor)
+}
+
+func (m *Manager) UpdateHolidayCalendar(ctx context.Context, orgID, id string, in HolidayCalendarInput, actor Actor) (*HolidayCalendar, error) {
+	v, err := in.Validate()
+	if err != nil {
+		return nil, err
+	}
+	return m.store.UpdateHolidayCalendar(ctx, orgID, id, v, actor)
+}
+
+func (m *Manager) DeleteHolidayCalendar(ctx context.Context, orgID, id string, actor Actor) error {
+	return m.store.DeleteHolidayCalendar(ctx, orgID, id, actor)
 }
 
 // ---- deliveries ----

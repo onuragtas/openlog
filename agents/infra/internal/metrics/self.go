@@ -78,6 +78,20 @@ func SelfTelemetry(stats *selfmon.Stats, now time.Time) []*metricspb.Metric {
 			otlputil.Gauge("openlog.agent.php.pending_traces", "{trace}", now, otlputil.IntPoint(p.PendingTraces)),
 		)
 	}
+	if len(snap.PHPAgentOps) > 0 {
+		keys := make([]selfmon.PHPAgentOp, 0, len(snap.PHPAgentOps))
+		for k := range snap.PHPAgentOps {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].Operation+"\x00"+keys[i].Result < keys[j].Operation+"\x00"+keys[j].Result
+		})
+		var pts []otlputil.Point
+		for _, k := range keys {
+			pts = append(pts, otlputil.IntPoint(int64(snap.PHPAgentOps[k]), otlputil.Str("operation", k.Operation), otlputil.Str("result", k.Result)))
+		}
+		out = append(out, otlputil.Sum("openlog.agent.php_agent.operations", "{operation}", true, start, now, pts...))
+	}
 	if snap.UpdateState != "" {
 		out = append(out, otlputil.Gauge("openlog.agent.update.state", "1", now,
 			otlputil.IntPoint(1, otlputil.Str("state", snap.UpdateState))))

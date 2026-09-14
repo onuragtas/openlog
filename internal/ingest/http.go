@@ -84,6 +84,15 @@ func (s *Service) httpExport(sig queue.Signal) http.Handler {
 			s.httpError(w, sig, isJSON, http.StatusBadRequest, codes.InvalidArgument, "cannot decode request: "+err.Error())
 			return
 		}
+		size := len(body)
+		if isJSON {
+			size = proto.Size(msg)
+		}
+		if d, ok := s.checkLimit(tenantID, sig, size); !ok { // tenant quota (limit.go, D-014, D-080)
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(d.RetryAfter)))
+			s.httpError(w, sig, isJSON, http.StatusTooManyRequests, codes.ResourceExhausted, d.Message)
+			return
+		}
 
 		p := prepare(sig, tenantID, msg)
 		raw := body

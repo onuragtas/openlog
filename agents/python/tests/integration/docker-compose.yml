@@ -1,0 +1,56 @@
+# Real databases for the Python agent's instrumentation tests (compose project openlog-m4-python-test).
+#
+#   docker compose -p openlog-m4-python-test -f tests/integration/docker-compose.yml up -d --wait postgres mysql redis
+#   PG_URL=postgresql://openlog:openlog@127.0.0.1:55433/openlog MYSQL_HOST=127.0.0.1 MYSQL_PORT=53307 \
+#     REDIS_URL=redis://127.0.0.1:56380/0 python -m pytest tests/integration
+#   docker compose -p openlog-m4-python-test -f tests/integration/docker-compose.yml down -v
+#
+# `runner` runs the suite inside the compose network (make -C agents/python test-integration):
+#   docker compose -p openlog-m4-python-test -f tests/integration/docker-compose.yml run --rm --build runner
+name: openlog-m4-python-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: {POSTGRES_DB: openlog, POSTGRES_USER: openlog, POSTGRES_PASSWORD: openlog}
+    ports: ["127.0.0.1:55433:5432"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"], interval: 2s, timeout: 3s, retries: 30}
+    tmpfs: [/var/lib/postgresql/data]
+
+  mysql:
+    image: mysql:8.4
+    environment: {MYSQL_DATABASE: openlog, MYSQL_USER: openlog, MYSQL_PASSWORD: openlog, MYSQL_ROOT_PASSWORD: openlog}
+    ports: ["127.0.0.1:53307:3306"]
+    healthcheck: {test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uopenlog", "-popenlog"], interval: 2s, timeout: 3s, retries: 60}
+    tmpfs: [/var/lib/mysql]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["127.0.0.1:56380:6379"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 2s, timeout: 3s, retries: 30}
+
+  runner:
+    profiles: [runner]
+    build:
+      context: ../
+      dockerfile: integration/Dockerfile
+      args: {PYTHON_VERSION: "${PYTHON_VERSION:-3.12}"}
+    image: openlog-m4-python-test-runner:${PYTHON_VERSION:-3.12}
+    volumes:
+      - ../../..:/src/agents:ro
+    working_dir: /src/agents/python
+    environment:
+      PG_URL: postgresql://openlog:openlog@postgres:5432/openlog
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      REDIS_URL: redis://redis:6379/0
+      PYTHONDONTWRITEBYTECODE: "1"
+    command:
+      - sh
+      - -c
+      - cp -r /src/agents/python /tmp/agent && pip install -q --root-user-action=ignore /tmp/agent && cd /tmp/agent && python -m pytest -p no:cacheprovider -q tests/integration
+    depends_on:
+      postgres: {condition: service_healthy}
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}

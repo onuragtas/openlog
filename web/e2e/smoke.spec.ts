@@ -58,7 +58,7 @@ test("logs load older pages; big traces are virtualized", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/logs/);
 
-  // 400 mock records in 24h, 200 per page.
+  // 419 mock records in 24h (400 host + 15 container logs + 4 trace logs, mocks/containers.ts and handlers.ts), 200 per page.
   await expect(page.getByText("Newest 200 records")).toBeVisible();
   await page.getByRole("button", { name: "Load older logs" }).click();
   await expect(page.getByText(/Newest (399|400) records/)).toBeVisible();
@@ -66,7 +66,7 @@ test("logs load older pages; big traces are virtualized", async ({ page }) => {
   const more = page.getByRole("button", { name: "Load older logs" });
   if (await more.isVisible()) await more.click();
   await expect(page.getByText("No older logs in this range")).toBeAttached();
-  await expect(page.getByText(/Newest (399|400) records/)).toBeVisible();
+  await expect(page.getByText(/Newest (418|419) records/)).toBeVisible();
   // Only visible rows are in the DOM.
   expect(await page.locator('[data-testid="log-scroll"] [role="row"]').count()).toBeLessThan(120);
 
@@ -78,5 +78,16 @@ test("logs load older pages; big traces are virtualized", async ({ page }) => {
   await rows.first().click();
   await page.keyboard.press("End");
   await expect(page).toHaveURL(/span=/);
-  await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveAttribute("aria-posinset", "12000");
+  await expect(page.locator('[role="treeitem"][aria-selected="true"]')).toHaveAttribute("data-row", "11999");
+
+  // Search steps through matches; collapsing hides subtrees and ArrowRight expands again.
+  const tree = page.getByRole("tree", { name: "Span waterfall" });
+  await page.getByRole("button", { name: "Collapse all" }).click();
+  const collapsedCount = await rows.count();
+  expect(collapsedCount).toBeLessThan(100);
+  await page.getByRole("searchbox", { name: "Search spans" }).fill("import.chunk 39");
+  await page.getByRole("searchbox", { name: "Search spans" }).press("Enter");
+  await expect(page.getByTestId("waterfall-match-count")).toHaveText("1 / 1");
+  await expect(tree.locator('[aria-selected="true"] mark')).toBeVisible();
+  await expect(rows.count()).resolves.toBeLessThan(100);
 });

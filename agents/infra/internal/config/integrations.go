@@ -70,6 +70,17 @@ type InstanceSettings struct {
 	// TopNTables bounds per-table/per-index series (mysql, postgresql); 0 = default.
 	TopNTables int        `yaml:"top_n_tables"`
 	TLS        *TLSConfig `yaml:"tls"`
+	// QueryStats enables top statements from pg_stat_statements (postgresql).
+	QueryStats *QueryStatsConfig `yaml:"query_stats"`
+}
+
+// QueryStatsConfig configures pg_stat_statements collection (postgresql, opt-in).
+type QueryStatsConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// TopN bounds the statements by total execution time (0 = 20, max 100).
+	TopN int `yaml:"top_n"`
+	// MinCalls skips statements executed fewer times (0 = 1).
+	MinCalls int `yaml:"min_calls"`
 }
 
 // TLSConfig configures client TLS of an integration connection.
@@ -150,6 +161,9 @@ func (s InstanceSettings) Merge(o InstanceSettings) InstanceSettings {
 	if o.TLS != nil {
 		s.TLS = o.TLS
 	}
+	if o.QueryStats != nil {
+		s.QueryStats = o.QueryStats
+	}
 	return s
 }
 
@@ -167,7 +181,7 @@ var integrationKeys = map[string]map[string]bool{
 	IntegrationNginx:      {"endpoint": true, "tls": true},
 	IntegrationRedis:      {"endpoint": true, "username": true, "password": true, "tls": true},
 	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true},
-	IntegrationPostgreSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true},
+	IntegrationPostgreSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
 	IntegrationDocker:     {},
 }
 
@@ -186,6 +200,7 @@ func (s InstanceSettings) usedKeys() []string {
 	add("exclude_databases", len(s.ExcludeDatabases) > 0)
 	add("top_n_tables", s.TopNTables != 0)
 	add("tls", s.TLS != nil)
+	add("query_stats", s.QueryStats != nil)
 	return k
 }
 
@@ -202,6 +217,9 @@ func (s InstanceSettings) validate(id, prefix string) []error {
 	}
 	if s.TopNTables < 0 {
 		add("top_n_tables must be >= 0")
+	}
+	if q := s.QueryStats; q != nil && (q.TopN < 0 || q.TopN > 100 || q.MinCalls < 0) {
+		add("query_stats: top_n must be 0..100 and min_calls >= 0")
 	}
 	if s.TLS != nil && s.TLS.CAFile != "" && !filepath.IsAbs(s.TLS.CAFile) {
 		add("tls.ca_file must be an absolute path")

@@ -29,6 +29,7 @@ type fakeAlertStore struct {
 	mutes     map[string]*alert.Mute
 	incidents map[string]*alert.Incident
 	tests     int
+	calendars map[string]*alert.HolidayCalendar // alert_calendars_test.go
 }
 
 func newFakeAlertStore() *fakeAlertStore {
@@ -226,7 +227,7 @@ func (f *fakeAlertStore) CreateMute(_ context.Context, orgID string, v *alert.Va
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	m := &alert.Mute{ID: uuid.NewString(), OrgID: orgID, Name: v.Name, StartsAt: v.StartsAt, EndsAt: v.EndsAt, RuleIDs: v.RuleIDs,
-		Matchers: v.Matchers, CreatedBy: actor.UserID}
+		Matchers: v.Matchers, Schedule: v.Schedule, CreatedBy: actor.UserID}
 	f.mutes[m.ID] = m
 	return m, nil
 }

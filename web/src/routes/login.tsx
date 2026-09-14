@@ -1,11 +1,12 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi, useRouter } from "@tanstack/react-router";
-import { Loader2, LogIn } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi, Link, useRouter } from "@tanstack/react-router";
+import { KeyRound, Loader2, LogIn } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { login, meQuery } from "@/api/account";
+import { authConfigQuery, login, meQuery } from "@/api/account";
 import { ApiError } from "@/api/client";
 import { AuthLayout } from "@/components/settings/AuthLayout";
+import { SsoSignIn } from "@/components/settings/SsoSignIn";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,13 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>("idle");
+  // Single sign-on (components/settings/SsoSignIn): chosen by the user, or required by the organization.
+  const [mode, setMode] = useState<"password" | "sso">("password");
+  const [ssoNotice, setSsoNotice] = useState<string | null>(null);
+  const authConfig = useQuery(authConfigQuery()).data;
+  const signupEnabled = authConfig?.signup_enabled === true;
+  const ssoEnabled = authConfig?.sso_enabled === true;
+  const target = search.redirect && search.redirect.startsWith("/") && !search.redirect.startsWith("//") ? search.redirect : "/hosts";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,17 +44,37 @@ export function LoginPage() {
       const me = await login(email.trim(), password);
       queryClient.clear();
       queryClient.setQueryData(meQuery().queryKey, me);
-      const target = search.redirect && search.redirect.startsWith("/") && !search.redirect.startsWith("//") ? search.redirect : "/hosts";
       router.history.push(target);
     } catch (err) {
       setPassword("");
       if (!(err instanceof ApiError)) setStatus("unreachable");
       else if (err.status === 401 || err.status === 400) setStatus("invalid");
-      else if (err.status === 429) setStatus("rateLimited");
+      else if (err.status === 403) {
+        // Correct password, but every organization of the user enforces single sign-on.
+        setStatus("idle");
+        setSsoNotice(t("sso.login.required"));
+        setMode("sso");
+      } else if (err.status === 429) setStatus("rateLimited");
       else if (err.status === 404) setStatus("staticMode");
       else setStatus("unreachable");
     }
   };
+
+  if (mode === "sso") {
+    return (
+      <AuthLayout>
+        <SsoSignIn
+          initialEmail={email.trim()}
+          redirect={target}
+          notice={ssoNotice}
+          onBack={() => {
+            setMode("password");
+            setSsoNotice(null);
+          }}
+        />
+      </AuthLayout>
+    );
+  }
 
   const messages: Partial<Record<Status, string>> = {
     invalid: t("login.invalid"),
@@ -55,8 +83,10 @@ export function LoginPage() {
     required: t("login.required"),
     staticMode: t("login.staticMode"),
   };
-  const message = messages[status] ?? (search.expired ? t("login.sessionExpired") : null);
+  const ssoError = search.sso_error ? t(`sso.login.errors.${search.sso_error}`) : null;
+  const message = messages[status] ?? ssoError ?? (search.expired ? t("login.sessionExpired") : null);
   const invalid = status === "invalid" || status === "required";
+  const warningTone = status === "idle" && !ssoError;
 
   return (
     <AuthLayout>
@@ -101,11 +131,26 @@ export function LoginPage() {
             />
           </div>
           {message && (
-            <p id={`${id}-msg`} role="alert" className={status === "idle" ? "text-sm text-warning" : "text-sm text-destructive"}>
+            <p id={`${id}-msg`} role="alert" className={warningTone ? "text-sm text-warning" : "text-sm text-destructive"}>
               {message}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">{t("login.note")}</p>
+          {ssoEnabled && (
+            <Button type="button" variant="outline" onClick={() => setMode("sso")}>
+              <KeyRound aria-hidden="true" />
+              {t("sso.login.button")}
+            </Button>
+          )}
+          {signupEnabled ? (
+            <p className="text-sm text-muted-foreground">
+              {t("login.signupPrompt")}{" "}
+              <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
+                {t("login.signupLink")}
+              </Link>
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("login.note")}</p>
+          )}
         </CardContent>
         <CardFooter className="mt-4 justify-end">
           <Button type="submit" disabled={status === "checking"}>

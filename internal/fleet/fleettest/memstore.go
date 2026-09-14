@@ -23,6 +23,7 @@ type MemStore struct {
 	mu        sync.Mutex
 	policies  map[string]fleet.Policy
 	overrides map[string]map[string]fleet.Override
+	phpOvs    map[string]map[string]fleet.PHPOverride
 	hosts     map[string]map[string]fleet.Host
 	rollouts  []*fleet.Rollout
 	audit     []fleet.AuditEntry
@@ -36,7 +37,36 @@ var _ fleet.Store = (*MemStore)(nil)
 // NewMemStore creates an empty store.
 func NewMemStore() *MemStore {
 	return &MemStore{TenantOrgs: map[string]string{}, policies: map[string]fleet.Policy{},
-		overrides: map[string]map[string]fleet.Override{}, hosts: map[string]map[string]fleet.Host{}}
+		overrides: map[string]map[string]fleet.Override{}, hosts: map[string]map[string]fleet.Host{},
+		phpOvs: map[string]map[string]fleet.PHPOverride{}}
+}
+
+func (s *MemStore) ListPHPOverrides(_ context.Context, orgID string) (map[string]fleet.PHPOverride, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]fleet.PHPOverride{}
+	for k, v := range s.phpOvs[orgID] {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *MemStore) PutPHPOverride(_ context.Context, orgID string, o fleet.PHPOverride, _ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.phpOvs[orgID] == nil {
+		s.phpOvs[orgID] = map[string]fleet.PHPOverride{}
+	}
+	s.phpOvs[orgID][o.HostID] = o
+	return nil
+}
+
+func (s *MemStore) DeletePHPOverride(_ context.Context, orgID, hostID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.phpOvs[orgID][hostID]
+	delete(s.phpOvs[orgID], hostID)
+	return ok, nil
 }
 
 // SetErr makes LoadOrgState and UpsertHosts fail with err (nil clears it).
@@ -86,7 +116,8 @@ func (s *MemStore) LoadOrgState(ctx context.Context, tenantID string) (fleet.Org
 	sp, _ := s.GetPolicy(ctx, org)
 	ovs, _ := s.ListOverrides(ctx, org)
 	cur, _ := s.CurrentRollout(ctx, org)
-	st := fleet.OrgState{OrgID: org, Policy: sp.Policy, Overrides: ovs, Rollout: cur, IntegrationsLoaded: true}
+	phpOvs, _ := s.ListPHPOverrides(ctx, org)
+	st := fleet.OrgState{OrgID: org, Policy: sp.Policy, Overrides: ovs, Rollout: cur, IntegrationsLoaded: true, PHPOverrides: phpOvs}
 	if s.Integrations != nil {
 		ints, err := s.Integrations.ListSettings(ctx, org)
 		if err != nil {

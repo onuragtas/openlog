@@ -267,7 +267,7 @@ func (s *Server) hostMetrics(w http.ResponseWriter, r *http.Request, sc *query.S
 
 // metricResourceKeys are the resource attributes accepted as `resource.<key>=<value>` filters and
 // `group_by=resource.<key>` on GET /hosts/{host_id}/metrics: integration instance identity and
-// PostgreSQL entities (semantic-conventions §6.1, §6.5). The allowlist keeps queries on attributes
+// PostgreSQL entities and pg_stat_statements queries (semantic-conventions §6.1, §6.5). The allowlist keeps queries on attributes
 // the infra agent sets.
 var metricResourceKeys = map[string]bool{
 	"openlog.discovery.id":       true,
@@ -279,6 +279,10 @@ var metricResourceKeys = map[string]bool{
 	"postgresql.database.name":   true,
 	"postgresql.table.name":      true,
 	"postgresql.index.name":      true,
+	// pg_stat_statements query resources (semantic-conventions §6.5, opt-in query_stats)
+	"postgresql.queryid": true,
+	"postgresql.rolname": true,
+	"db.query.text":      true,
 }
 
 const maxMetricResourceFilters = 4

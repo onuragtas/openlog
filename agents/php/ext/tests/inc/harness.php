@@ -51,6 +51,16 @@ function ol_run($code, array $opts = [])
         'html_errors' => '0',
         'opcache.enable_cli' => '0',
     ];
+    /* compatibility runs (build/Dockerfile.compat, e.g. JIT): "key=value;key=value", below the per-test settings */
+    $extra = getenv('OPENLOG_TEST_INI');
+    if ($extra) {
+        foreach (explode(';', $extra) as $kv) {
+            if (strpos($kv, '=') !== false) {
+                list($k, $v) = explode('=', $kv, 2);
+                $ini[trim($k)] = trim($v);
+            }
+        }
+    }
     if (isset($opts['ini'])) {
         foreach ($opts['ini'] as $k => $v) {
             $ini[$k] = $v;

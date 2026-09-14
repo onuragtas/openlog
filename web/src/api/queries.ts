@@ -2,8 +2,7 @@
 // useQuery(xxxQuery(...)); keys are stable and include the *range spec*
 // (not resolved timestamps) so relative ranges refetch with a fresh "now".
 import { infiniteQueryOptions, keepPreviousData, queryOptions } from "@tanstack/react-query";
-import { nextLogCursor } from "@/lib/logs";
-import { parseTimestampNs, resolveRange, type RangeSpec } from "@/lib/time";
+import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { Aggregation, LogRecord, MetricSeriesResponse } from "./types";
 
@@ -121,33 +120,50 @@ export interface LogsRequest {
   q?: string;
   severity?: string;
   traceId?: string;
+  /** log records of one span (16 hex) */
+  spanId?: string;
+  /** with transactionService: log records of the traces of that transaction */
+  transaction?: string;
+  transactionService?: string;
   /** container logs (resource attribute container.id) */
   containerId?: string;
+  /** Kubernetes pod logs (resource attribute k8s.pod.uid) */
+  k8sPodUid?: string;
   attrs?: LogAttrFilters;
   limit?: number;
 }
 
+const logsKey = (r: LogsRequest) => [
+  r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "",
+  r.spanId ?? "", r.transaction ?? "", r.transactionService ?? "", r.containerId ?? "", r.k8sPodUid ?? "", ...logAttrKey(r.attrs),
+];
+
+/** Filter parameters of GET /api/v1/logs (without the window, limit and cursor). */
+const logsFilterQuery = (r: LogsRequest) => {
+  // The API requires transaction and transaction_service together.
+  const txn = r.transaction && r.transactionService ? { transaction: r.transaction, transaction_service: r.transactionService } : {};
+  return {
+    host_id: r.hostId || undefined,
+    service: r.service || undefined,
+    q: r.q || undefined,
+    severity_min: r.severity || undefined,
+    trace_id: r.traceId || undefined,
+    span_id: r.spanId || undefined,
+    container_id: r.containerId || undefined,
+    k8s_pod_uid: r.k8sPodUid || undefined,
+    ...txn,
+    ...logAttrQuery(r.attrs),
+  };
+};
+
 export const logsQuery = (r: LogsRequest) =>
   queryOptions({
-    queryKey: ["logs", r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "", r.containerId ?? "", ...logAttrKey(r.attrs), r.limit ?? 200],
+    queryKey: ["logs", ...logsKey(r), r.limit ?? 200],
     queryFn: async ({ signal }) => {
       const { from, to } = resolveRange(r.range, Date.now());
       return unwrap(
         await api.GET("/api/v1/logs", {
-          params: {
-            query: {
-              from: String(from),
-              to: String(to),
-              host_id: r.hostId || undefined,
-              service: r.service || undefined,
-              q: r.q || undefined,
-              severity_min: r.severity || undefined,
-              trace_id: r.traceId || undefined,
-              container_id: r.containerId || undefined,
-              ...logAttrQuery(r.attrs),
-              limit: r.limit ?? 200,
-            },
-          },
+          params: { query: { from: String(from), to: String(to), ...logsFilterQuery(r), limit: r.limit ?? 200 } },
           signal,
         }),
       ).logs;
@@ -158,61 +174,39 @@ export const logsQuery = (r: LogsRequest) =>
 export const LOG_PAGE_SIZE = 200;
 
 export interface LogPageParam {
-  /** unix ms, fixed for all pages of one listing */
+  /** unix ms, resolved once for the first page and kept for all pages of one listing */
   from: number;
-  /** unix ms (first page) or the RFC3339Nano cursor of the previous page's oldest row */
-  to: string;
+  to: number;
+  /** next_cursor of the previous page */
+  cursor: string;
 }
 
 export interface LogPage {
   logs: LogRecord[];
+  nextCursor: string | null;
   from: number;
+  to: number;
 }
 
-/** Newest-first log listing with "load older" pages (cursor = oldest row's timestamp; see lib/logs.ts). */
+/** Newest-first log listing with "load older" pages (opaque server cursor, same filters and window on every page). */
 export const logsInfiniteQuery = (r: LogsRequest) => {
   const limit = r.limit ?? LOG_PAGE_SIZE;
   return infiniteQueryOptions({
-    queryKey: ["logs-pages", r.range.range ?? "", r.range.from ?? "", r.range.to ?? "", r.hostId ?? "", r.service ?? "", r.q ?? "", r.severity ?? "", r.traceId ?? "", r.containerId ?? "", ...logAttrKey(r.attrs), limit],
+    queryKey: ["logs-pages", ...logsKey(r), limit],
     initialPageParam: null as LogPageParam | null,
     queryFn: async ({ pageParam, signal }): Promise<LogPage> => {
-      let page = pageParam;
-      if (!page) {
-        const { from, to } = resolveRange(r.range, Date.now());
-        page = { from, to: String(to) };
-      }
+      const win = pageParam ?? resolveRange(r.range, Date.now());
       const data = unwrap(
         await api.GET("/api/v1/logs", {
           params: {
-            query: {
-              from: String(page.from),
-              to: page.to,
-              host_id: r.hostId || undefined,
-              service: r.service || undefined,
-              q: r.q || undefined,
-              severity_min: r.severity || undefined,
-              trace_id: r.traceId || undefined,
-              container_id: r.containerId || undefined,
-              ...logAttrQuery(r.attrs),
-              limit,
-            },
+            query: { from: String(win.from), to: String(win.to), ...logsFilterQuery(r), limit, cursor: pageParam?.cursor },
           },
           signal,
         }),
       );
-      return { logs: data.logs, from: page.from };
+      return { logs: data.logs, nextCursor: data.next_cursor ?? null, from: win.from, to: win.to };
     },
-    getNextPageParam: (last, all): LogPageParam | undefined => {
-      const to = nextLogCursor(
-        all.map((p) => p.logs),
-        limit,
-      );
-      if (!to) return undefined;
-      const toNs = parseTimestampNs(to);
-      // The API rejects from >= to.
-      if (toNs === null || toNs <= BigInt(last.from) * 1_000_000n) return undefined;
-      return { from: last.from, to };
-    },
+    getNextPageParam: (last): LogPageParam | undefined => (last.nextCursor ? { from: last.from, to: last.to, cursor: last.nextCursor } : undefined),
     placeholderData: keepPreviousData,
   });
 };

@@ -5,7 +5,16 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search } from "lucide-react";
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { clearHostOverride, fleetHostsQuery, setHostOverride, type FleetHost, type FleetHostFilter } from "@/api/fleet";
+import {
+  clearHostOverride,
+  clearHostPHPAgentMode,
+  fleetHostsQuery,
+  setHostOverride,
+  setHostPHPAgentMode,
+  type FleetHost,
+  type FleetHostFilter,
+  type FleetPHPAgentMode,
+} from "@/api/fleet";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +28,32 @@ import { cn } from "@/lib/utils";
 
 const STATES = ["idle", "downloading", "verifying", "staged", "restarting", "confirming", "succeeded", "failed", "rolled_back"] as const;
 
-const GRID = "minmax(9rem,1.4fr) minmax(7rem,0.9fr) minmax(6rem,0.7fr) minmax(9rem,1.3fr) minmax(9rem,1.2fr) minmax(6rem,0.8fr) minmax(6rem,0.7fr) minmax(8rem,auto)";
-/** The grid needs 64rem; below this container width rows become cards. */
+const GRID =
+  "minmax(9rem,1.4fr) minmax(7rem,0.9fr) minmax(6rem,0.7fr) minmax(9rem,1.3fr) minmax(9rem,1.2fr) minmax(11rem,1.3fr) minmax(6rem,0.8fr) minmax(6rem,0.7fr) minmax(8rem,auto)";
+/** The grid needs 75rem; below this container width rows become cards. */
 const COMPACT_BELOW = 768;
+
+type PHPTone = "default" | "secondary" | "outline" | "warning" | "destructive";
+
+function phpStatusTone(status: FleetHost["php_agent"]["status"]): PHPTone {
+  switch (status) {
+    case "offer":
+      return "secondary";
+    case "up_to_date":
+      return "default";
+    case "already_failed":
+    case "not_capable":
+      return "warning";
+    default:
+      return "outline";
+  }
+}
+
+function phpStateTone(state: string): PHPTone {
+  if (state === "failed" || state === "rolled_back") return "destructive";
+  if (state === "applied") return "default";
+  return "secondary";
+}
 
 export function FleetHostsTable({
   filter,
@@ -54,12 +86,16 @@ export function FleetHostsTable({
     onSettled: invalidate,
   });
   const clear = useMutation({ mutationFn: clearHostOverride, onSettled: invalidate });
+  const phpMode = useMutation({
+    mutationFn: (p: { hostId: string; mode: FleetPHPAgentMode | "" }) => (p.mode === "" ? clearHostPHPAgentMode(p.hostId) : setHostPHPAgentMode(p.hostId, p.mode)),
+    onSettled: invalidate,
+  });
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is not compiler-compatible yet
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => (compact ? 190 : 52),
+    estimateSize: () => (compact ? 230 : 60),
     overscan: compact ? 4 : 10,
     // The layout is part of the key: switching remounts rows so their new heights are measured.
     getItemKey: (i) => `${compact ? "c" : "w"}|${rows[i]!.host_id}`,
@@ -71,6 +107,7 @@ export function FleetHostsTable({
     t("fleet.hosts.columns.install"),
     t("fleet.hosts.columns.update"),
     t("fleet.hosts.columns.status"),
+    t("fleet.hosts.columns.php"),
     t("fleet.hosts.columns.override"),
     t("fleet.hosts.columns.lastSync"),
     t("fleet.hosts.columns.actions"),
@@ -121,7 +158,7 @@ export function FleetHostsTable({
         </div>
         {hosts.data && <p className="ml-auto text-xs text-muted-foreground" aria-live="polite">{t("fleet.hosts.count", { count: rows.length })}</p>}
       </div>
-      <FormError error={hold.error ?? pin.error ?? clear.error} />
+      <FormError error={hold.error ?? pin.error ?? clear.error ?? phpMode.error} />
 
       <div ref={measureRef} className="rounded-xl border bg-card text-sm">
         {hosts.isPending ? (
@@ -132,7 +169,7 @@ export function FleetHostsTable({
           <EmptyState>{filter.q || filter.version || filter.state ? t("fleet.hosts.noMatch") : t("fleet.hosts.empty")}</EmptyState>
         ) : (
           <div role="table" aria-label={t("fleet.hosts.title")} aria-rowcount={rows.length + 1} className={compact ? undefined : "overflow-x-auto"}>
-            <div className={compact ? undefined : "min-w-[64rem]"}>
+            <div className={compact ? undefined : "min-w-[75rem]"}>
               <div role="rowgroup" className={compact ? "sr-only" : "border-b"}>
                 <div role="row" className="grid items-center px-2" style={{ gridTemplateColumns: GRID }}>
                   {header.map((h, i) => (
@@ -172,6 +209,8 @@ export function FleetHostsTable({
                           labels={compact ? header : undefined}
                           pinning={pinning?.hostId === h.host_id ? pinning : null}
                           busy={hold.isPending || pin.isPending || clear.isPending}
+                          phpBusy={phpMode.isPending}
+                          onPHPMode={(mode) => phpMode.mutate({ hostId: h.host_id, mode })}
                           onHold={() => hold.mutate(h.host_id)}
                           onClear={() => clear.mutate(h.host_id)}
                           onPinStart={() => setPinning({ hostId: h.host_id, version: h.override?.version ?? h.agent.version })}
@@ -205,6 +244,8 @@ function HostCells({
   labels,
   pinning,
   busy,
+  phpBusy,
+  onPHPMode,
   onHold,
   onClear,
   onPinStart,
@@ -218,6 +259,8 @@ function HostCells({
   labels?: string[];
   pinning: { version: string } | null;
   busy: boolean;
+  phpBusy: boolean;
+  onPHPMode: (mode: FleetPHPAgentMode | "") => void;
   onHold: () => void;
   onClear: () => void;
   onPinStart: () => void;
@@ -279,13 +322,17 @@ function HostCells({
         </Badge>
         {h.status_target && <span className="font-mono text-[11px] text-muted-foreground">{h.status_target}</span>}
       </div>
+      <div role="cell" className={cn(cell, card && "col-span-2")} data-testid="fleet-host-php">
+        {label(5)}
+        <PHPCell host={h} canManage={canManage} busy={phpBusy} onMode={onPHPMode} name={name} />
+      </div>
       <div role="cell" className={cn(cell, card && !h.override && "hidden")}>
-        {h.override && label(5)}
+        {h.override && label(6)}
         {h.override?.action === "hold" && <Badge variant="warning">{t("fleet.hosts.held")}</Badge>}
         {h.override?.action === "pin" && <Badge variant="secondary">{t("fleet.hosts.pinnedTo", { version: h.override.version ?? "" })}</Badge>}
       </div>
       <div role="cell" className={cell}>
-        {label(6)}
+        {label(7)}
         <DateTimeText value={h.last_sync_at} relative />
       </div>
       <div role="cell" className={cn(cell, card ? "col-span-2" : "items-end", card && !canManage && "hidden")} aria-label={t("fleet.hosts.actionsFor", { host: name })}>
@@ -335,6 +382,84 @@ function HostCells({
             </span>
           ))}
       </div>
+    </>
+  );
+}
+
+/** PHP runtimes, installed PHP agent, last operation, decision and the per-host mode (php-agent.md §7.3). */
+function PHPCell({
+  host: h,
+  canManage,
+  busy,
+  onMode,
+  name,
+}: {
+  host: FleetHost;
+  canManage: boolean;
+  busy: boolean;
+  onMode: (mode: FleetPHPAgentMode | "") => void;
+  name: string;
+}) {
+  const { t } = useTranslation();
+  const id = useId();
+  const p = h.php_agent;
+  if (!p.reported) {
+    return <span className="text-muted-foreground">{t("fleet.hosts.phpNotReported")}</span>;
+  }
+  const runtimeTitle = p.runtimes
+    .map((r) => {
+      const state = r.excluded ? t("fleet.hosts.phpExcluded") : !r.supported ? t("fleet.hosts.phpUnsupported") : r.loaded ? t("fleet.hosts.phpLoaded") : t("fleet.hosts.phpNotLoaded");
+      return `${t("fleet.hosts.phpRuntime", { bin: r.bin, version: r.version })} (${state})`;
+    })
+    .join("\n");
+  return (
+    <>
+      <span className="flex flex-wrap items-center gap-1">
+        {p.runtimes.length === 0 ? (
+          <span className="text-muted-foreground">{t("fleet.hosts.phpNone")}</span>
+        ) : (
+          <span title={runtimeTitle} className="underline decoration-dotted underline-offset-2">
+            {t("fleet.hosts.phpRuntimes", { count: p.runtimes.length })}
+          </span>
+        )}
+        {p.version && <span className="font-mono text-[11px]">{t("fleet.hosts.phpInstalled", { version: p.version })}</span>}
+      </span>
+      <span className="flex flex-wrap items-center gap-1">
+        <Badge variant={phpStatusTone(p.status)} className="max-w-full">
+          <span className="truncate">
+            {p.status === "offer" ? t("fleet.phpStatus.offer", { version: p.status_target ?? "" }) : translateOptional(`fleet.phpStatus.${p.status}`, p.status)}
+          </span>
+        </Badge>
+        {p.update && p.update.state !== "applied" && (
+          <Badge variant={phpStateTone(p.update.state)} title={p.update.error || undefined}>
+            {translateOptional(`fleet.phpState.${p.update.state}`, p.update.state)} {p.update.version}
+          </Badge>
+        )}
+      </span>
+      {p.update?.error && (
+        <span className="max-w-full truncate text-destructive-text" title={p.update.error}>
+          {t("fleet.hosts.error", { message: p.update.error })}
+        </span>
+      )}
+      {canManage && (
+        <>
+          <label htmlFor={`${id}-php`} className="sr-only">
+            {t("fleet.hosts.phpModeFor", { host: name })}
+          </label>
+          <NativeSelect
+            id={`${id}-php`}
+            className="h-7 text-xs"
+            value={p.override?.mode ?? ""}
+            disabled={busy}
+            onChange={(e) => onMode(e.target.value as FleetPHPAgentMode | "")}
+          >
+            <option value="">{t("fleet.hosts.phpFollowPolicy")}</option>
+            <option value="auto">{t("fleet.hosts.phpForce.auto")}</option>
+            <option value="manual">{t("fleet.hosts.phpForce.manual")}</option>
+            <option value="off">{t("fleet.hosts.phpForce.off")}</option>
+          </NativeSelect>
+        </>
+      )}
     </>
   );
 }

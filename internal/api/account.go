@@ -52,6 +52,9 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	public("POST /api/v1/auth/signup", s.signup)
 	public("POST /api/v1/invitations/lookup", s.lookupInvitation)
 	public("POST /api/v1/invitations/accept", s.acceptInvitation)
+	public("POST /api/v1/auth/verify-email", s.verifyEmail)               // account_email.go
+	authed("POST /api/v1/auth/verify-email/resend", s.resendVerification) // account_email.go
+	authed("POST /api/v1/invitations/{id}/resend", s.resendInvitation)    // account_email.go
 	authed("POST /api/v1/auth/logout", s.logout)
 	authed("POST /api/v1/auth/password", s.changePassword)
 	authed("GET /api/v1/orgs/current", s.currentOrg)
@@ -112,6 +115,8 @@ type userJSON struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
+	// EmailVerified is false only for sign-ups that have not confirmed their address yet.
+	EmailVerified bool `json:"email_verified"`
 }
 
 type orgJSON struct {
@@ -134,7 +139,7 @@ type meJSON struct {
 func meResponse(p *auth.Principal, ms []auth.Membership) meJSON {
 	out := meJSON{Auth: string(p.Kind), Organizations: []orgJSON{}}
 	if p.Kind == auth.KindSession {
-		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name}
+		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name, EmailVerified: p.EmailVerified}
 		tok := p.CSRFToken
 		out.CSRFToken = &tok
 	}
@@ -152,11 +157,20 @@ func meResponse(p *auth.Principal, ms []auth.Membership) meJSON {
 // ---- auth ----
 
 func (s *Server) authConfig(w http.ResponseWriter, _ *http.Request) error {
-	mode, signup := "static", false
-	if s.accounts != nil {
-		mode, signup = "postgres", s.accounts.Config().SignupEnabled
+	out := map[string]any{"mode": "static", "signup_enabled": false, "password_min_length": auth.MinPasswordLen,
+		"email_enabled": false, "email_verification_required": false, "captcha": nil, "sso_enabled": false}
+	if s.sso != nil { // sso.go: "Sign in with SSO" on the login page
+		out["sso_enabled"] = s.sso.Available()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"mode": mode, "signup_enabled": signup, "password_min_length": auth.MinPasswordLen})
+	if s.accounts != nil {
+		cfg := s.accounts.Config()
+		out["mode"], out["signup_enabled"] = "postgres", cfg.SignupEnabled
+		out["email_enabled"], out["email_verification_required"] = s.accounts.EmailEnabled(), cfg.RequireEmailVerification
+		if cfg.SignupEnabled && cfg.Captcha != nil {
+			out["captcha"] = map[string]string{"provider": cfg.Captcha.Provider(), "site_key": cfg.Captcha.SiteKey()}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 	return nil
 }
 
@@ -178,7 +192,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, p *auth.Principal) e
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, res auth.LoginResult, status int) error {
 	http.SetCookie(w, s.accounts.SessionCookie(res.Token, res.Session.ExpiresAt))
 	p := &auth.Principal{Kind: auth.KindSession, UserID: res.User.ID, Email: res.User.Email, Name: res.User.Name,
-		SessionID: res.Session.ID, CSRFToken: res.Session.CSRFToken}
+		SessionID: res.Session.ID, CSRFToken: res.Session.CSRFToken, EmailVerified: res.User.EmailVerifiedAt != nil}
 	me, err := s.accounts.Me(r.Context(), p)
 	if err != nil {
 		return err
@@ -212,11 +226,13 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) error {
 		Password         string `json:"password"`
 		Name             string `json:"name"`
 		OrganizationName string `json:"organization_name"`
+		CaptchaToken     string `json:"captcha_token"`
 	}
 	if err := decodeJSON(r, &in); err != nil {
 		return err
 	}
-	res, _, err := s.accounts.Signup(r.Context(), auth.SignupInput{Email: in.Email, Password: in.Password, Name: in.Name, OrgName: in.OrganizationName}, s.accounts.Meta(r))
+	res, _, err := s.accounts.Signup(r.Context(), auth.SignupInput{Email: in.Email, Password: in.Password, Name: in.Name,
+		OrgName: in.OrganizationName, CaptchaToken: in.CaptchaToken}, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
@@ -321,27 +337,40 @@ func (s *Server) removeMember(w http.ResponseWriter, r *http.Request, p *auth.Pr
 // ---- invitations ----
 
 type invitationJSON struct {
-	ID             string `json:"id"`
-	Email          string `json:"email"`
-	Role           string `json:"role"`
-	InvitedByEmail string `json:"invited_by_email"`
-	CreatedAt      string `json:"created_at"`
-	ExpiresAt      string `json:"expires_at"`
+	ID             string  `json:"id"`
+	Email          string  `json:"email"`
+	Role           string  `json:"role"`
+	InvitedByEmail string  `json:"invited_by_email"`
+	CreatedAt      string  `json:"created_at"`
+	ExpiresAt      string  `json:"expires_at"`
+	Expired        bool    `json:"expired"`
+	LastSentAt     *string `json:"last_sent_at"`
+	SendCount      int     `json:"send_count"`
 }
 
-func invitationResponse(i auth.Invitation) invitationJSON {
+func invitationResponse(i auth.Invitation, now time.Time) invitationJSON {
 	return invitationJSON{ID: i.ID, Email: i.Email, Role: string(i.Role), InvitedByEmail: i.InvitedByEmail,
-		CreatedAt: formatTime(i.CreatedAt), ExpiresAt: formatTime(i.ExpiresAt)}
+		CreatedAt: formatTime(i.CreatedAt), ExpiresAt: formatTime(i.ExpiresAt), Expired: i.Expired(now),
+		LastSentAt: optTime(i.LastSentAt), SendCount: i.SendCount}
 }
 
 func (s *Server) listInvitations(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	invs, err := s.accounts.ListInvitations(r.Context(), p)
+	includeExpired := false
+	if v := r.URL.Query().Get("include_expired"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return badRequest("include_expired must be true or false")
+		}
+		includeExpired = b
+	}
+	invs, err := s.accounts.ListInvitations(r.Context(), p, includeExpired)
 	if err != nil {
 		return err
 	}
+	now := s.now()
 	out := make([]invitationJSON, 0, len(invs))
 	for _, i := range invs {
-		out = append(out, invitationResponse(i))
+		out = append(out, invitationResponse(i, now))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
 	return nil
@@ -359,7 +388,7 @@ func (s *Server) createInvitation(w http.ResponseWriter, r *http.Request, p *aut
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"invitation": invitationResponse(inv), "token": token})
+	writeJSON(w, http.StatusCreated, map[string]any{"invitation": invitationResponse(inv, s.now()), "token": token, "email_sent": inv.LastSentAt != nil})
 	return nil
 }
 
@@ -573,15 +602,11 @@ func (s *Server) revokeSession(w http.ResponseWriter, r *http.Request, p *auth.P
 }
 
 func (s *Server) listAudit(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	limit := 100
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
-			return badRequest("limit must be a positive integer")
-		}
-		limit = min(n, 500)
+	f, err := auditFilter(r) // audit.go
+	if err != nil {
+		return err
 	}
-	evs, err := s.accounts.ListAuditEvents(r.Context(), p, limit)
+	evs, err := s.accounts.ListAuditEvents(r.Context(), p, f)
 	if err != nil {
 		return err
 	}
@@ -604,6 +629,11 @@ func (s *Server) listAudit(w http.ResponseWriter, r *http.Request, p *auth.Princ
 		out = append(out, eventJSON{ID: e.ID, ActorEmail: e.ActorEmail, Action: e.Action, TargetType: e.TargetType,
 			TargetID: e.TargetID, Details: d, IP: e.IP, CreatedAt: formatTime(e.CreatedAt)})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": out})
+	var next *string
+	if len(evs) == f.Limit {
+		c := encodeAuditCursor(evs[len(evs)-1])
+		next = &c
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": out, "next_cursor": next})
 	return nil
 }

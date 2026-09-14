@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<!--
+  Tiered storage for openlog (D-066, docs/operations/tiered-storage.md): storage policy `openlog_tiered`
+  with the volumes
+    hot   the default data disk (/var/lib/clickhouse); every insert lands here
+    cold  an S3 bucket (disk `openlog_s3`, metadata on the local disk) read through a bounded filesystem
+          cache (disk `openlog_s3_cache`)
+  openlog-migrate switches the telemetry tables to this policy and adds `TTL ... TO VOLUME 'cold'` when
+  OPENLOG_STORAGE_TIERING_ENABLED=true. Mount it into /etc/clickhouse-server/config.d/ (Compose:
+  OPENLOG_CLICKHOUSE_STORAGE_CONFIG=./clickhouse/storage-tiered.xml). Every value comes from the ClickHouse
+  server's environment:
+
+    OPENLOG_S3_ENDPOINT          bucket URL with a trailing prefix, e.g.
+                                 https://my-bucket.s3.eu-central-1.amazonaws.com/openlog/{replica}/
+                                 ({shard}/{replica} macros are expanded; keep one prefix per replica)
+    OPENLOG_S3_REGION            e.g. eu-central-1 (empty: taken from the endpoint)
+    OPENLOG_S3_ACCESS_KEY_ID     static credentials; leave both empty for IAM roles / IRSA / instance
+    OPENLOG_S3_SECRET_ACCESS_KEY profiles together with OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS=true
+    OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS  true|false
+    OPENLOG_S3_CACHE_MAX_SIZE    local read cache of cold parts, e.g. 10Gi
+    OPENLOG_S3_CACHE_PATH        cache directory (on a local disk, not the S3 bucket)
+
+  Credentials from a file instead of the environment and server-side encryption: add a second config.d
+  file (storage-tiered-credentials.xml.example, storage-tiered-sse.xml.example).
+-->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <openlog_s3>
+                <type>object_storage</type>
+                <object_storage_type>s3</object_storage_type>
+                <metadata_type>local</metadata_type>
+                <endpoint from_env="OPENLOG_S3_ENDPOINT"/>
+                <region from_env="OPENLOG_S3_REGION"/>
+                <access_key_id from_env="OPENLOG_S3_ACCESS_KEY_ID"/>
+                <secret_access_key from_env="OPENLOG_S3_SECRET_ACCESS_KEY"/>
+                <use_environment_credentials from_env="OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS"/>
+                <!-- Start even when S3 is unreachable: only reads of cold parts and moves fail. -->
+                <skip_access_check>true</skip_access_check>
+                <!-- Every replica keeps its own copy (zero-copy replication stays off, D-066). -->
+            </openlog_s3>
+            <openlog_s3_cache>
+                <type>cache</type>
+                <disk>openlog_s3</disk>
+                <path from_env="OPENLOG_S3_CACHE_PATH"/>
+                <max_size from_env="OPENLOG_S3_CACHE_MAX_SIZE"/>
+                <cache_on_write_operations>false</cache_on_write_operations>
+            </openlog_s3_cache>
+        </disks>
+        <policies>
+            <openlog_tiered>
+                <volumes>
+                    <!-- The hot volume. It must keep the name and disk of the `default` policy's volume:
+                         ALTER TABLE ... MODIFY SETTING storage_policy requires the new policy to contain
+                         every volume and disk of the old one. -->
+                    <default>
+                        <disk>default</disk>
+                        <volume_priority>1</volume_priority>
+                    </default>
+                    <!-- storage-tiered-warm.xml adds `warm` (priority 2) between the two. -->
+                    <cold>
+                        <disk>openlog_s3_cache</disk>
+                        <volume_priority>3</volume_priority>
+                        <!-- Late rows (agent backlog older than the move age) are inserted into hot and moved by
+                             the background mover, so inserts never write to S3 and keep working without it. -->
+                        <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
+                    </cold>
+                </volumes>
+                <!-- Below 10% free space on hot, the largest parts move to cold early. -->
+                <move_factor>0.1</move_factor>
+            </openlog_tiered>
+        </policies>
+    </storage_configuration>
+</clickhouse>

@@ -41,7 +41,11 @@ type Rows struct {
 	Spans              []SpanRow
 	InventoryItems     []InventoryItemRow
 	InventorySnapshots []InventorySnapshotRow
-	hosts              map[[2]string]*HostRow
+	// RelinkQueue is filled by the processor after conversion (relink.go), not by the Add* methods.
+	RelinkQueue []RelinkQueueRow
+	hosts       map[[2]string]*HostRow
+	// usageIngest accumulates ingested bytes per (tenant, hour, signal) (usage.go).
+	usageIngest map[usageIngestKey]*UsageIngestRow
 	// Dropped counts individual items that could not be stored, by reason.
 	Dropped map[string]int
 }
@@ -64,8 +68,12 @@ func (r *Rows) Len(table string) int {
 		return len(r.InventoryItems)
 	case TableInventorySnapshots:
 		return len(r.InventorySnapshots)
+	case TableRelinkQueue:
+		return len(r.RelinkQueue)
 	case TableHosts:
 		return len(r.hosts)
+	case TableUsageIngest:
+		return len(r.usageIngest)
 	}
 	return 0
 }
@@ -123,11 +131,22 @@ func (r *Rows) Values(table string) [][]any {
 		for i := range r.InventorySnapshots {
 			out[i] = r.InventorySnapshots[i].Values()
 		}
+	case TableRelinkQueue:
+		out = make([][]any, len(r.RelinkQueue))
+		for i := range r.RelinkQueue {
+			out[i] = r.RelinkQueue[i].Values()
+		}
 	case TableHosts:
 		hosts := r.Hosts()
 		out = make([][]any, len(hosts))
 		for i := range hosts {
 			out[i] = hosts[i].Values()
+		}
+	case TableUsageIngest:
+		usage := r.UsageIngest()
+		out = make([][]any, len(usage))
+		for i := range usage {
+			out[i] = usage[i].Values()
 		}
 	}
 	return out

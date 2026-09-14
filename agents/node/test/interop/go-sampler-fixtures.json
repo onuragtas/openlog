@@ -1,0 +1,387 @@
+{
+  "cases": [
+    {
+      "name": "root ratio 1",
+      "ratio": 1,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000012345678",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65a00000012345678-0102030405060708-03",
+        "tracestate": "",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65a00000012345678-0a0b0c0d0e0f1011-03",
+        "tracestate": "",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0",
+      "ratio": 0,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65affffffffffffff",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": false,
+        "traceparent": "00-4bf92f3577b34da65affffffffffffff-0102030405060708-02",
+        "tracestate": "",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": false,
+        "traceparent": "00-4bf92f3577b34da65affffffffffffff-0a0b0c0d0e0f1011-02",
+        "tracestate": "",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.25 sampled",
+      "ratio": 0.25,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65ad0000000000000",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65ad0000000000000-0102030405060708-03",
+        "tracestate": "ot=th:c",
+        "samplingRatio": 0.25
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65ad0000000000000-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:c",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.25 at threshold",
+      "ratio": 0.25,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65ac0000000000000",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65ac0000000000000-0102030405060708-03",
+        "tracestate": "ot=th:c",
+        "samplingRatio": 0.25
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65ac0000000000000-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:c",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.25 dropped",
+      "ratio": 0.25,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65abfffffffffffff",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": false,
+        "traceparent": "00-4bf92f3577b34da65abfffffffffffff-0102030405060708-02",
+        "tracestate": "",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": false,
+        "traceparent": "00-4bf92f3577b34da65abfffffffffffff-0a0b0c0d0e0f1011-02",
+        "tracestate": "",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.1 sampled",
+      "ratio": 0.1,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65af0000000000000",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65af0000000000000-0102030405060708-03",
+        "tracestate": "ot=th:e6666666666666",
+        "samplingRatio": 0.1
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65af0000000000000-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:e6666666666666",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.001 sampled",
+      "ratio": 0.001,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65affffffffffffff",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65affffffffffffff-0102030405060708-03",
+        "tracestate": "ot=th:ffbe76c8b43958",
+        "samplingRatio": 0.001
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65affffffffffffff-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:ffbe76c8b43958",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.5 writeRV sampled",
+      "ratio": 0.5,
+      "writeRV": true,
+      "traceId": "4bf92f3577b34da65a00000000000000",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "randomness": "80000000000001",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65a00000000000000-0102030405060708-03",
+        "tracestate": "ot=th:8;rv:80000000000001",
+        "samplingRatio": 0.5
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65a00000000000000-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:8;rv:80000000000001",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 0.5 writeRV dropped",
+      "ratio": 0.5,
+      "writeRV": true,
+      "traceId": "4bf92f3577b34da65affffffffffffff",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "randomness": "00000000000001",
+      "incoming": null,
+      "span": {
+        "sampled": false,
+        "traceparent": "00-4bf92f3577b34da65affffffffffffff-0102030405060708-02",
+        "tracestate": "ot=rv:00000000000001",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": false,
+        "traceparent": "00-4bf92f3577b34da65affffffffffffff-0a0b0c0d0e0f1011-02",
+        "tracestate": "ot=rv:00000000000001",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "root ratio 1 writeRV",
+      "ratio": 1,
+      "writeRV": true,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "randomness": "0123456789abcd",
+      "incoming": null,
+      "span": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65a00000000000001-0102030405060708-03",
+        "tracestate": "ot=rv:0123456789abcd",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-4bf92f3577b34da65a00000000000001-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=rv:0123456789abcd",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote sampled level1 th",
+      "ratio": 1,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+        "tracestate": "ot=th:c"
+      },
+      "span": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-01",
+        "tracestate": "ot=th:c",
+        "samplingRatio": 0.25
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-01",
+        "tracestate": "ot=th:c",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote sampled level2 th rv vendor",
+      "ratio": 0.25,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-03",
+        "tracestate": "ot=th:8;rv:abcdefabcdefab,congo=t61rcWkgMzE"
+      },
+      "span": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-03",
+        "tracestate": "ot=th:8;rv:abcdefabcdefab,congo=t61rcWkgMzE",
+        "samplingRatio": 0.5
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:8;rv:abcdefabcdefab,congo=t61rcWkgMzE",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote sampled legacy p",
+      "ratio": 1,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+        "tracestate": "ot=p:2"
+      },
+      "span": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-01",
+        "tracestate": "ot=p:2",
+        "samplingRatio": 0.25
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-01",
+        "tracestate": "ot=p:2",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote sampled no ot",
+      "ratio": 0.5,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+        "tracestate": "vendor=value"
+      },
+      "span": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-01",
+        "tracestate": "vendor=value",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-01",
+        "tracestate": "vendor=value",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote sampled th 0",
+      "ratio": 1,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-03",
+        "tracestate": "ot=th:0"
+      },
+      "span": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-03",
+        "tracestate": "ot=th:0",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:0",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote not sampled",
+      "ratio": 1,
+      "writeRV": false,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-02",
+        "tracestate": "ot=rv:00000000000001"
+      },
+      "span": {
+        "sampled": false,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-02",
+        "tracestate": "ot=rv:00000000000001",
+        "samplingRatio": null
+      },
+      "child": {
+        "sampled": false,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-02",
+        "tracestate": "ot=rv:00000000000001",
+        "samplingRatio": null
+      }
+    },
+    {
+      "name": "remote sampled writeRV keeps state",
+      "ratio": 0.5,
+      "writeRV": true,
+      "traceId": "4bf92f3577b34da65a00000000000001",
+      "spanId": "0102030405060708",
+      "childSpanId": "0a0b0c0d0e0f1011",
+      "randomness": "11111111111111",
+      "incoming": {
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-03",
+        "tracestate": "ot=th:c;x:y"
+      },
+      "span": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0102030405060708-03",
+        "tracestate": "ot=th:c;x:y",
+        "samplingRatio": 0.25
+      },
+      "child": {
+        "sampled": true,
+        "traceparent": "00-0af7651916cd43dd8448eb211c80319c-0a0b0c0d0e0f1011-03",
+        "tracestate": "ot=th:c;x:y",
+        "samplingRatio": null
+      }
+    }
+  ],
+  "generator": "agents/node/scripts/gen-go-fixtures.sh (Go agent sampler.go, package openlog)"
+}

@@ -61,6 +61,13 @@ func TestClassify(t *testing.T) {
 		"openlog-infra-agent_0.4.0_linux_arm64.deb":    {Component: "infra-agent", OS: "linux", Arch: "arm64", Format: "deb"},
 		"openlog-infra-agent_0.4.0_linux_amd64.rpm":    {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "rpm"},
 		"openlog_0.4.0_linux_arm64.tar.gz":             {Component: "backend", OS: "linux", Arch: "arm64", Format: "tar.gz"},
+		"openlog-php-agent_0.4.0_linux_amd64.tar.gz":   {Component: "php-agent", OS: "linux", Arch: "amd64", Format: "tar.gz"},
+		"openlog-php-agent_0.4.0_linux_arm64.deb":      {Component: "php-agent", OS: "linux", Arch: "arm64", Format: "deb"},
+		"openlog-php-agent_0.4.0_linux_amd64.rpm":      {Component: "php-agent", OS: "linux", Arch: "amd64", Format: "rpm"},
+		"openlog-php-agent_0.4.0_linux_arm64.apk":      {Component: "php-agent", OS: "linux", Arch: "arm64", Format: "apk"},
+		"openlog-php-agent_0.3.0_linux_amd64.apk":      nil,
+		"openlog-infra-agent_0.4.0_linux_amd64.apk":    {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "apk"},
+		"openlog_0.4.0_linux_amd64.zip":                nil,
 		"openlog-infra-agent_0.3.0_linux_amd64.tar.gz": nil, // other version
 		"openlog-0.4.0.tgz":                            nil,
 		"manifest.json":                                nil,
@@ -90,6 +97,8 @@ func TestReleaseFlow(t *testing.T) {
 	writeFile(t, filepath.Join(dist, "openlog-infra-agent_0.4.0_linux_amd64.tar.gz"), "agent-amd64")
 	writeFile(t, filepath.Join(dist, "openlog-infra-agent_0.4.0_linux_amd64.deb"), "deb")
 	writeFile(t, filepath.Join(dist, "openlog_0.4.0_linux_amd64.tar.gz"), "backend")
+	writeFile(t, filepath.Join(dist, "openlog-php-agent_0.4.0_linux_amd64.tar.gz"), "php-modules")
+	writeFile(t, filepath.Join(dist, "openlog-php-agent_0.4.0_linux_amd64.apk"), "apk")
 	writeFile(t, filepath.Join(dist, "openlog-0.4.0.tgz"), "chart")
 	writeFile(t, filepath.Join(dist, "install.sh"), "#!/bin/sh\n")
 	mig := filepath.Join(root, "migrations")
@@ -113,8 +122,14 @@ func TestReleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Channel != "stable" || m.Version != "0.4.0" || len(m.Artifacts) != 3 {
+	if m.Channel != "stable" || m.Version != "0.4.0" || len(m.Artifacts) != 5 {
 		t.Fatalf("manifest = %+v", m)
+	}
+	if a, ok := m.Artifact(lib.ComponentPHPAgent, "linux", "amd64", lib.FormatTarGz); !ok || a.Size != int64(len("php-modules")) {
+		t.Errorf("php-agent tarball = %+v %v", a, ok)
+	}
+	if _, ok := m.Artifact(lib.ComponentPHPAgent, "linux", "amd64", lib.FormatAPK); !ok {
+		t.Error("php-agent apk missing from the manifest")
 	}
 	if m.Compatibility != (lib.Compatibility{MinUpgradeFrom: "0.3.0", OldestSupportedAgent: "0.2.0", RollbackFloor: "0.3.0"}) {
 		t.Errorf("compatibility = %+v", m.Compatibility)

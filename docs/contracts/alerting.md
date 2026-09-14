@@ -169,6 +169,88 @@ A service stopped reporting transactions (the no-data semantics of §2.4 on the 
   key: `service.name=…[|service.namespace=…][|environment=…]`.
 - `for_seconds` applies; `interval_seconds` default 60. Entry spans with `sample_weight = 0` do not count (apm.md §4).
 
+### 2.9 `apm_error`
+
+Event rule on the error inbox ([apm.md](apm.md) §3.4): a **new error group** appeared, or a resolved group **regressed**.
+```json
+{"event": "new_group", "service_name": "checkout", "service_namespace": null, "environment": "prod",
+ "match": "timeout", "window_seconds": 300, "min_count": 5}
+```
+| Field | Default | Notes |
+|---|---|---|
+| `event` | required | `new_group` · `regressed` |
+| `service_name` | `""` | exact `service.name`; `""` = every service |
+| `service_namespace`, `environment` | `null` | `null` = all, a string (also `""`) = exact match |
+| `match` | `""` | case-insensitive substring of the error type or the normalized message |
+| `window_seconds` | `300` | 60–86400, rounded up to whole minutes |
+| `min_count` | `0` | `new_group` only: weighted occurrences within the window at least (avoids alerting on a single occurrence); 400 with `regressed` |
+
+- `new_group`: groups (`apm_error_groups`) whose first occurrence is within `[end − window, end)`, excluding ignored
+  groups. `regressed`: first runs regression detection on the resolved groups in scope (reopening them, apm.md §3.4),
+  then reports the groups with `regressed_at` within the window. Needs PostgreSQL (evaluation error otherwise).
+- One series per group: key `error.group_id=<16 hex>`; labels `service.name`, `service.namespace`, `environment`,
+  `error.group_id`, `error.type`, `error.message`. Value 1 while the event is in the window; the series then
+  disappears and resolves as `expired` (like `discovery`). `for_seconds` is ignored; `interval_seconds` default 60.
+- Preview (`Range`) is approximate: `new_group` uses first-seen times without `min_count`; `regressed` uses the stored
+  `regressed_at` (no detection).
+- Summary: `new error group in checkout (prod): TimeoutError: upstream timed out after <n>ms` /
+  `error group regressed in …`.
+
+### 2.10 `oql`
+
+Threshold on an OQL query ([oql.md](oql.md), D-065; `0021_alert_oql`):
+```json
+{"query": "SELECT percentile(duration.ms, 95) FROM Transaction WHERE service.name = 'checkout' FACET transaction.name",
+ "window_seconds": 300, "operator": "gt", "threshold": 800, "recovery_threshold": 600, "missing_data": "keep"}
+```
+| Field | Default | Notes |
+|---|---|---|
+| `query` | required | exactly one number column; no `TIMESERIES`, `SINCE`/`UNTIL`, `COMPARE WITH`, `histogram` or `{{variables}}` (`400` with the position) |
+| `window_seconds` | `300` | 60–21600; the query range is `[end − window, end)` |
+| `operator`, `threshold`, `recovery_threshold`, `missing_data` | | as §2.2 |
+
+- Without `FACET` one series (key `*`); with `FACET` one series per group, labels = facet attribute names (as written) →
+  values, key `name=value|…`. Without `LIMIT` at most `OPENLOG_ALERT_MAX_SERIES_PER_RULE` groups are read (more →
+  evaluation error `too many series`); a `LIMIT` keeps the top groups by value.
+- Raw data is always read (no Metric rollup). A group without events has no value (missing data), except `count`,
+  `sum`, `uniqueCount` and `rate` without `FACET`, which are `0`.
+- Preview (`Range`) is exact: one query assigns every event to each window that contains it (`arrayJoin`), so windows may
+  overlap; `window_seconds / step` must be at most 720.
+- Summary: `<column> over 5m is 912 (> 800) (transaction.name=GET /cart)`. `interval_seconds` default 60.
+
+### 2.8 Recommended templates
+
+A catalog of prebuilt rules (code: `internal/alert/templates.go`) for hosts (`host_cpu_high`, `host_memory_high`,
+`host_disk_full`, `host_not_reporting`, `service_disappeared`), containers (`container_restarts`, `container_cpu_high`,
+`container_unhealthy`), APM services (`apm_error_rate`, `apm_apdex_low`, `apm_latency_p95`, `apm_service_silent`),
+Kubernetes (`k8s_pod_crashloop`, `k8s_pod_not_ready`, `k8s_node_not_ready`, `k8s_workload_replicas_unavailable`; code
+`internal/alert/templates_k8s.go`, metrics of semantic-conventions §7.4) and integrations (nginx, Redis, MySQL, PostgreSQL; metric names of semantic-conventions §6). `GET /alerts/templates` lists
+them with `en`/`tr` names, descriptions and parameters (`kind` number/duration/host/instance/service/environment/text,
+`unit`, `required`, `default`, `min`/`max`). `POST /alerts/templates/{id}/render` `{"params", "language", "name",
+"channel_ids"}` returns a validated `RuleInput` (label `openlog.template=<id>`) that is previewed and created with the
+normal rule endpoints; nothing is stored by rendering.
+
+- Targets: host templates filter `host.id` when `host_id` is given (else all hosts, one series per host). Integration
+  templates select one instance (`host_id` + `discovery_id` + `instance` → `resource.openlog.discovery.id/instance`
+  filters, one series per host) or, without an instance, every instance of the integration
+  (`resource.openlog.integration.id eq <id>`, grouped by `host` and `resource.openlog.discovery.instance`). APM
+  templates take `service_name` and optional `environment`.
+- Ratio thresholds (`redis_memory_high`: `ratio` × `redis.maxmemory`, `postgresql_connections_high`: `ratio` ×
+  `postgresql.connection.max`) need one instance and resolve the reference's latest value in the last hour at render
+  time (through the tenant-scoped query layer); missing or `0` → `409 failed_precondition`. The rule keeps the
+  resolved number (re-render after changing the server setting).
+- `container_restarts` alerts when the Docker restart count grew by at least `restarts` within the window
+  (`rate` > (`restarts` − 0.5) / window).
+- Kubernetes templates (category `kubernetes`) take optional `cluster_name` (`resource.k8s.cluster.name eq`) and
+  `namespace` (`attr.k8s.namespace.name eq`; not on `k8s_node_not_ready`) and are always grouped by
+  `resource.k8s.cluster.name` plus the object: `k8s_pod_crashloop` (`openlog.k8s.pod.status` with
+  `attr.openlog.k8s.pod.reason eq CrashLoopBackOff`, `last`/`sum` > 0, per namespace and pod, missing data ok),
+  `k8s_pod_not_ready` (`attr.openlog.k8s.pod.ready eq false`, phase not `Succeeded`/`Failed`, for 5 min),
+  `k8s_node_not_ready` (`k8s.node.condition` with `attr.condition eq Ready`, `last`/`min` < 1 per `attr.k8s.node.name`,
+  for 2 min: false and unknown alert), `k8s_workload_replicas_unavailable` (`openlog.k8s.workload.unavailable`, `min` over
+  the window > 0 per namespace, kind and name; optional `kind` filter).
+- Unknown or out-of-range parameters → `400` with `params.<key>`; unknown template → `404`.
+
 ## 3. Evaluation semantics
 
 ### 3.1 Schedule and alignment
@@ -324,19 +406,39 @@ Evaluation, incidents and the timeline are not affected by mutes. Incidents show
 | `days` | `mon` … `sun` (stored deduplicated, Monday first) — or instead `rrule`: the RFC 5545 subset `FREQ=WEEKLY;BYDAY=MO,TU,…` (no ordinals) or `FREQ=DAILY`, optional `RRULE:` prefix and `INTERVAL=1`; stored normalized with the derived `days`. Other parts (`COUNT`, `UNTIL`, `BYHOUR`, …) → `400` |
 | `start_time`, `end_time` | local `HH:MM`; `end_time` ≤ `start_time` means the next day (max. 23 h 59 min); equal → `400` |
 | `from`, `until` | optional RFC3339 / unix ms bounds; `from` defaults to now; occurrences are clipped to `[from, until)` |
+| `exdates` | optional, ≤ 366 local dates (`YYYY-MM-DD` or RFC 5545 `YYYYMMDD`) on which no occurrence **starts** (EXDATE subset); stored sorted and deduplicated |
+| `holiday_calendar_ids` | optional, ≤ 10 holiday calendars of the organization whose dates are exceptions too (`400` for an unknown id) |
+
+**Monthly rules.** `rrule` also accepts `FREQ=MONTHLY` with `BYMONTHDAY=1,15,-1` (±1..31; `-1` = last day; a day a
+month does not have is skipped), `BYDAY=MO,TU` (every such weekday), ordinals `BYDAY=1MO,-1FR` (first Monday, last
+Friday; ±1..5) and `BYSETPOS=±1..31` (positions in the month's set of days matching `BYMONTHDAY`/`BYDAY`, e.g.
+`FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1` = last weekday). `BYMONTHDAY` and `BYDAY` together restrict each other
+(`BYDAY=FR;BYMONTHDAY=13`). Duplicate parts, ordinals outside `MONTHLY`, `BYSETPOS` without `BYDAY`/`BYMONTHDAY` → `400`.
+Monthly schedules store `days: []` and the normalized rule.
+
+**Holiday calendars** (`alert_holiday_calendars`, `/alerts/holiday-calendars`): named date sets (≤ 1000 dates:
+`YYYY-MM-DD` for one date, `MM-DD` or `--MM-DD` for every year) managed by admins and owners, read by every role. Dates
+are local dates in each mute's time zone. Calendar edits apply to referencing mutes from their next check; a calendar
+referenced by a mute cannot be deleted (`409 failed_precondition`).
 
 - **Occurrences** start on every selected local date at `start_time` and end at `end_time` (same or next date). They
   keep local wall-clock times across DST changes (a 01:00–04:00 occurrence lasts 2 h on the night clocks go forward,
   4 h when they go back). A local time that does not exist (DST gap) moves forward by the gap (02:30 → 03:30); an
   ambiguous local time is the later instant (after the clocks went back). An occurrence whose converted end is not
   after its start is skipped.
+- **Exceptions** skip occurrences that start on an exception date (exdate or holiday); an overnight occurrence that
+  started the evening before still runs into the exception date. The next occurrence is searched up to 800 days ahead.
+- Responses carry `upcoming` (up to 5 current/next occurrences with exceptions applied); `POST /alerts/mutes/preview`
+  `{"schedule"}` returns the same for an unsaved schedule.
 - A mute is active inside an occurrence (end exclusive); matching `opened`/`resolved` rows are postponed to the end of
   the **current occurrence**. Creating a mute whose schedule has no occurrence after now → `400`.
 - Responses: `starts_at`/`ends_at` = the current or next occurrence (the last one after `until`), `schedule` as
   stored (`null` for one-off mutes), `active`. `GET /mutes` keeps recurring mutes until 7 days after `until`.
 - Storage and mixed versions: `alert_mutes.schedule` (jsonb). `starts_at`/`ends_at` hold the current or next occurrence;
   dispatchers move them to the next occurrence once a minute after an occurrence ended, so dispatchers of an older
-  version (which ignore `schedule`) mute during the same occurrences.
+  version (which ignore `schedule`) mute during the same occurrences. Monthly rules and exceptions are ignored by
+  dispatchers older than `0015_alert_holiday_calendars`: during a rolling upgrade they do not mute monthly schedules
+  (empty `days`) and mute on exception dates.
 
 ### 5.3 Payloads
 
@@ -421,11 +523,12 @@ Incident labels = series labels + rule `labels` + `alert.severity`, `alert.rule_
 | Create rules; update, enable/disable, delete **own** rules | | ✓ | ✓ |
 | Acknowledge, resolve, add notes to incidents | | ✓ | ✓ |
 | Create mutes; update/delete **own** mutes | | ✓ | ✓ |
-| Update/delete any rule or mute; channels create/update/delete/test | | | ✓ |
+| Render templates (`/alerts/templates/{id}/render`), mute schedule preview | ✓ | ✓ | ✓ |
+| Update/delete any rule or mute; channels create/update/delete/test; holiday calendars create/update/delete | | | ✓ |
 
 Writes need a signed-in user (API keys are read-only) and CSRF as usual. Every write is in the audit log
 (`alert.rule.{create,update,delete,enable,disable}`, `alert.channel.{create,update,delete,test}`,
-`alert.mute.{create,update,delete}`, `alert.incident.{acknowledge,resolve}`). Not available with
+`alert.mute.{create,update,delete}`, `alert.holiday_calendar.{create,update,delete}`, `alert.incident.{acknowledge,resolve}`). Not available with
 `OPENLOG_AUTH_MODE=static`.
 
 ## 8. Metrics (`openlog-alert` admin `/metrics`)
@@ -446,5 +549,5 @@ Writes need a signed-in user (API keys are read-only) and CSRF as usual. Every w
 | `openlog_alert_evaluation_write_errors_total` | — (failed inserts, retried) |
 
 ## 9. Not in M2
-PagerDuty/Opsgenie (M3); mute schedules beyond weekly days (monthly rules, exceptions/holidays, RRULE `COUNT`/`UNTIL`);
+PagerDuty/Opsgenie (M3); mute schedules beyond the §5.2 subset (yearly rules, `INTERVAL` > 1, RRULE `COUNT`/`UNTIL`, `RDATE`);
 evaluation history for previews.

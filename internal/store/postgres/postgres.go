@@ -10,7 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/onuragtas/openlog/internal/config"
 )
 
 // Options configure the connection pool.
@@ -55,7 +59,45 @@ func Open(ctx context.Context, o Options) (*pgxpool.Pool, error) {
 	}
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.HealthCheckPeriod = 30 * time.Second
+	if err := reloadTLSFiles(cfg, dsn, o); err != nil {
+		return nil, err
+	}
 	return pgxpool.NewWithConfig(ctx, cfg)
+}
+
+// reloadTLSFiles makes new pool connections use the current content of the OPENLOG_POSTGRES_TLS_* files
+// (D-048): when they change, the DSN is parsed again (same libpq sslmode semantics) and its TLS
+// configurations replace the ones parsed at start-up. Files named only inside the DSN are not watched.
+func reloadTLSFiles(cfg *pgxpool.Config, dsn string, o Options) error {
+	if o.TLSCAFile == "" && o.TLSCertFile == "" && o.TLSKeyFile == "" {
+		return nil
+	}
+	rl, err := config.NewReloadable("OPENLOG_POSTGRES_TLS", []string{o.TLSCAFile, o.TLSCertFile, o.TLSKeyFile}, func() (*pgconn.Config, error) {
+		c, err := pgconn.ParseConfig(dsn)
+		if err != nil {
+			// Never echo the DSN: it may contain the password.
+			return nil, errors.New("OPENLOG_POSTGRES_TLS_*: cannot load the TLS files")
+		}
+		return c, nil
+	})
+	if err != nil {
+		return fmt.Errorf("OPENLOG_POSTGRES_TLS_*: %w", err)
+	}
+	cfg.BeforeConnect = func(_ context.Context, cc *pgx.ConnConfig) error {
+		fresh := rl.Get()
+		cc.TLSConfig = fresh.TLSConfig
+		if len(cc.Fallbacks) == len(fresh.Fallbacks) {
+			fbs := make([]*pgconn.FallbackConfig, len(cc.Fallbacks))
+			for i, fb := range cc.Fallbacks {
+				c := *fb
+				c.TLSConfig = fresh.Fallbacks[i].TLSConfig
+				fbs[i] = &c
+			}
+			cc.Fallbacks = fbs
+		}
+		return nil
+	}
+	return nil
 }
 
 // WaitReady pings until PostgreSQL answers or ctx is done.

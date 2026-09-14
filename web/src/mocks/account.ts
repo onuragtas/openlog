@@ -4,7 +4,7 @@
 // keep the session and tests can end it; in Vitest it lives in memory and
 // `resetMockAccounts()` runs after every test.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { ApiKey, Invitation, LicenseKey, Member, Session } from "@/api/account";
+import type { ApiKey, AuditEvent, AuthConfig, Invitation, LicenseKey, Member, Session } from "@/api/account";
 import { customKeyProblem } from "@/api/licenseKeyValue";
 import type { Role } from "@/api/roles";
 import { formatTs } from "./fixtures";
@@ -13,6 +13,7 @@ export const MOCK_EMAIL = "admin@openlog.local";
 export const MOCK_PASSWORD = "openlog-dev-password";
 export const MOCK_API_KEY = "ola_mock-read-only-api-key";
 export const MOCK_INVITE_TOKEN = "oli_mock-invitation";
+export const MOCK_VERIFY_TOKEN = "olv_mock-verification";
 export const MOCK_DEFAULT_ORG_ID = "0f7b3c1e-5a2d-4c1b-9e8f-00000000000a";
 export const MOCK_STAGING_ORG_ID = "0f7b3c1e-5a2d-4c1b-9e8f-00000000000b";
 const SESSION_KEY = "openlog.mock.session";
@@ -87,7 +88,18 @@ function seed() {
   const now = Date.now();
   const ago = (ms: number) => formatTs(now - ms);
   const day = 86_400_000;
-  const user = { id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000001", email: MOCK_EMAIL, name: "Ada Admin" };
+  const user = { id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000001", email: MOCK_EMAIL, name: "Ada Admin", email_verified: true };
+  const actions = ["license_key.create", "member.role_change", "invitation.create", "api_key.revoke", "user.login", "fleet.policy.update"];
+  const audit: AuditEvent[] = Array.from({ length: 60 }, (_, i) => ({
+    id: 60 - i,
+    actor_email: i % 3 === 0 ? "grace@example.com" : user.email,
+    action: actions[i % actions.length]!,
+    target_type: "object",
+    target_id: `t-${60 - i}`,
+    details: { n: 60 - i },
+    ip: "203.0.113.20",
+    created_at: ago((i + 1) * 3_600_000),
+  }));
   return {
     user,
     orgs: [
@@ -100,8 +112,11 @@ function seed() {
       { user_id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000003", email: "linus@example.com", name: "Linus", role: "viewer", joined_at: ago(3 * day) },
     ] as Member[],
     invitations: [
-      { id: "inv-1", email: "new@example.com", role: "member", invited_by_email: user.email, created_at: ago(day), expires_at: formatTs(now + 6 * day) },
+      { id: "inv-1", email: "new@example.com", role: "member", invited_by_email: user.email, created_at: ago(day), expires_at: formatTs(now + 6 * day), expired: false, last_sent_at: null, send_count: 0 },
+      { id: "inv-2", email: "late@example.com", role: "viewer", invited_by_email: user.email, created_at: ago(9 * day), expires_at: ago(2 * day), expired: true, last_sent_at: null, send_count: 0 },
     ] as Invitation[],
+    audit,
+    config: { mode: "postgres", signup_enabled: false, password_min_length: 8, email_enabled: false, email_verification_required: false, captcha: null, sso_enabled: true } as AuthConfig,
     licenseKeys: [
       { id: "lk-1", name: "production hosts", prefix: "olk_9f3c2a71", custom: false, created_by_email: user.email, created_at: ago(20 * day), last_used_at: ago(45_000), revoked_at: null },
       { id: "lk-2", name: "old staging", prefix: "olk_77aa01b3", custom: false, created_by_email: "grace@example.com", created_at: ago(35 * day), last_used_at: ago(9 * day), revoked_at: ago(8 * day) },
@@ -127,6 +142,26 @@ let db = seed();
 export function resetMockAccounts(): void {
   db = seed();
   mockAuth.signOut();
+}
+
+/** Changes the emulated GET /auth/config (tests; reset by resetMockAccounts). */
+export function setMockAuthConfig(patch: Partial<AuthConfig>): void {
+  db.config = { ...db.config, ...patch };
+}
+
+/** Members of the organization (APM error inbox assignees, mocks/apm.ts). */
+export function mockMembers(): Member[] {
+  return db.members;
+}
+
+/** The signed-in mock user. */
+export function mockUser(): { id: string; email: string; name: string } {
+  return db.user;
+}
+
+/** Marks the signed-in mock user unverified (tests). */
+export function setMockEmailVerified(verified: boolean): void {
+  db.user = { ...db.user, email_verified: verified };
 }
 
 const hex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
@@ -201,7 +236,61 @@ const param = (info: Info, name: string) => String(info.params[name] ?? "");
 const API = "*/api/v1";
 
 export const accountHandlers = [
-  http.get(`${API}/auth/config`, () => HttpResponse.json({ mode: "postgres", signup_enabled: false, password_min_length: 8 })),
+  http.get(`${API}/auth/config`, () => HttpResponse.json(db.config)),
+
+  http.post(`${API}/auth/signup`, async ({ request }) => {
+    if (!db.config.signup_enabled) return fail("permission_denied", "sign-up is disabled on this server");
+    const b = await body<{ email: string; password: string; name: string; organization_name: string; captcha_token?: string }>(request);
+    const email = (b.email ?? "").trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+$/.test(email)) return fail("invalid_argument", "a valid email address is required");
+    if ((b.password ?? "").length < 8) return fail("invalid_argument", "password must be at least 8 characters");
+    if (!b.organization_name?.trim()) return fail("invalid_argument", "organization name is required");
+    if (db.config.captcha && !b.captcha_token) return fail("invalid_argument", "complete the CAPTCHA");
+    if (email === MOCK_EMAIL) return fail("already_exists", "an account with this email already exists");
+    db.user = { ...db.user, email, name: b.name ?? "", email_verified: !db.config.email_verification_required };
+    mockAuth.signIn();
+    return HttpResponse.json(me({ org: db.orgs[0]!, role: "owner", kind: "session" }), { status: 201 });
+  }),
+
+  http.post(`${API}/auth/verify-email`, async ({ request }) => {
+    const { token } = await body<{ token: string }>(request);
+    if (token !== MOCK_VERIFY_TOKEN) return fail("not_found", "the verification link is invalid, already used or expired");
+    db.user = { ...db.user, email_verified: true };
+    return noContent();
+  }),
+
+  http.post(`${API}/auth/verify-email/resend`, sessionOnly(() => {
+    if (db.user.email_verified) return fail("failed_precondition", "your e-mail address is already confirmed");
+    return noContent();
+  })),
+
+  http.post(`${API}/invitations/:id/resend`, authed("admin", (_ctx, info) => {
+    const inv = db.invitations.find((i) => i.id === param(info, "id"));
+    if (!inv) return fail("not_found", "invitation not found, already accepted or revoked");
+    const now = Date.now();
+    inv.expires_at = formatTs(now + 7 * 86_400_000);
+    inv.expired = false;
+    if (db.config.email_enabled) {
+      inv.last_sent_at = formatTs(now);
+      inv.send_count += 1;
+    }
+    return HttpResponse.json({ invitation: inv, token: `oli_${hex(48)}`, email_sent: db.config.email_enabled });
+  })),
+
+  http.get(`${API}/audit-log`, authed("admin", (_ctx, { request }) => {
+    const url = new URL(request.url);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 100), 500);
+    const actor = url.searchParams.get("actor")?.toLowerCase();
+    const action = url.searchParams.get("action");
+    const from = url.searchParams.get("from");
+    const offset = Number(url.searchParams.get("cursor") ?? 0);
+    const matching = db.audit.filter(
+      (e) => (!actor || e.actor_email.toLowerCase().includes(actor)) && (!action || e.action.startsWith(action)) && (!from || Date.parse(e.created_at) >= Date.parse(from)),
+    );
+    const events = matching.slice(offset, offset + limit);
+    const next = offset + limit < matching.length && events.length === limit ? String(offset + limit) : null;
+    return HttpResponse.json({ events, next_cursor: next });
+  })),
 
   http.post(`${API}/auth/login`, async ({ request }) => {
     const { email, password } = await body<{ email: string; password: string }>(request);
@@ -282,9 +371,13 @@ export const accountHandlers = [
     if (db.members.some((m) => m.email === email)) return fail("already_exists", "this user is already a member");
     if (db.invitations.some((i) => i.email === email)) return fail("already_exists", "a pending invitation for this email already exists");
     const now = Date.now();
-    const invitation: Invitation = { id: nextId("inv"), email, role: b.role, invited_by_email: db.user.email, created_at: formatTs(now), expires_at: formatTs(now + 7 * 86_400_000) };
+    const sent = db.config.email_enabled;
+    const invitation: Invitation = {
+      id: nextId("inv"), email, role: b.role, invited_by_email: db.user.email, created_at: formatTs(now), expires_at: formatTs(now + 7 * 86_400_000),
+      expired: false, last_sent_at: sent ? formatTs(now) : null, send_count: sent ? 1 : 0,
+    };
     db.invitations.unshift(invitation);
-    return HttpResponse.json({ invitation, token: `oli_${hex(48)}` }, { status: 201 });
+    return HttpResponse.json({ invitation, token: `oli_${hex(48)}`, email_sent: sent }, { status: 201 });
   })),
 
   http.delete(`${API}/invitations/:id`, authed("admin", (_ctx, info) => {

@@ -1,0 +1,69 @@
+# Real databases for the .NET agent integration tests (compose project openlog-m4-dotnet-test).
+#
+#   docker compose -p openlog-m4-dotnet-test -f test/docker-compose.yml up -d --wait postgres mysql redis
+#   docker compose -p openlog-m4-dotnet-test -f test/docker-compose.yml run --rm runner      # DOTNET_VERSION=8.0 or 9.0
+#   docker compose -p openlog-m4-dotnet-test -f test/docker-compose.yml down -v
+#
+# From the host (CI) instead of `runner`:
+#   PG_CONNECTION="Host=127.0.0.1;Port=45433;Username=openlog;Password=openlog;Database=openlog" \
+#   MYSQL_CONNECTION="Server=127.0.0.1;Port=43307;User ID=openlog;Password=openlog;Database=openlog" \
+#   REDIS_CONNECTION="127.0.0.1:46380" dotnet test test/OpenLog.Agent.IntegrationTests
+name: openlog-m4-dotnet-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: {POSTGRES_DB: openlog, POSTGRES_USER: openlog, POSTGRES_PASSWORD: openlog}
+    ports: ["127.0.0.1:45433:5432"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"], interval: 2s, timeout: 3s, retries: 30}
+    tmpfs: [/var/lib/postgresql/data]
+
+  mysql:
+    image: mysql:8.4
+    environment: {MYSQL_DATABASE: openlog, MYSQL_USER: openlog, MYSQL_PASSWORD: openlog, MYSQL_ROOT_PASSWORD: openlog}
+    ports: ["127.0.0.1:43307:3306"]
+    healthcheck: {test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uopenlog", "-popenlog"], interval: 2s, timeout: 3s, retries: 60}
+    tmpfs: [/var/lib/mysql]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["127.0.0.1:46380:6379"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 2s, timeout: 3s, retries: 30}
+
+  runner:
+    profiles: [runner]
+    image: mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION:-9.0}
+    working_dir: /src
+    volumes:
+      - ..:/src
+      - ../../node/test/interop:/node/test/interop:ro
+      - nuget:/root/.nuget/packages
+      - artifacts:/artifacts
+    environment:
+      OPENLOG_DOTNET_ARTIFACTS: /artifacts
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      PG_CONNECTION: Host=postgres;Username=openlog;Password=openlog;Database=openlog
+      MYSQL_CONNECTION: Server=mysql;User ID=openlog;Password=openlog;Database=openlog
+      REDIS_CONNECTION: redis:6379
+      DOTNET_VERSION: ${DOTNET_VERSION:-9.0}
+    # the 8.0 SDK cannot evaluate the net9.0 targets: build only net8.0 there (CI installs both SDKs instead)
+    command:
+      - sh
+      - -c
+      - |
+        props=""
+        if [ "$$DOTNET_VERSION" = 8.0 ]; then props="-p:TargetFrameworks=net8.0"; fi
+        dotnet test test/OpenLog.Agent.IntegrationTests/OpenLog.Agent.IntegrationTests.csproj -f "net$$DOTNET_VERSION" $$props
+    depends_on:
+      postgres: {condition: service_healthy}
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+volumes:
+  # shared with `make` (docker run); compose warns that it did not create them, which is harmless
+  nuget:
+    name: openlog-m4-dotnet-nuget
+  artifacts:
+    name: openlog-m4-dotnet-artifacts

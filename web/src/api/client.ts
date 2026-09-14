@@ -25,7 +25,7 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 }
 
 /** Endpoints whose 401 means "wrong credentials", not "the session ended". */
-const PUBLIC_PATHS = new Set(["/api/v1/auth/login", "/api/v1/auth/signup", "/api/v1/auth/config", "/api/v1/invitations/lookup", "/api/v1/invitations/accept"]);
+const PUBLIC_PATHS = new Set(["/api/v1/auth/login", "/api/v1/auth/signup", "/api/v1/auth/config", "/api/v1/auth/verify-email", "/api/v1/invitations/lookup", "/api/v1/invitations/accept"]);
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function isPublic(url: string): boolean {

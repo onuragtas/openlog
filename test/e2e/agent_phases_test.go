@@ -200,6 +200,187 @@ func countPhase(m map[string]int, phase string) int {
 	return n
 }
 
+// Forced rotation with unread lines (agent_log_rotation_unread). The agent tails
+// /var/log/e2e-rotate/*.log (logs.files, default logs.rate_limit_lines). One exec appends
+// rotateUnread lines to app.log, renames it to app.log.1 (outside the glob) and writes rotateNew
+// lines to a new app.log. The tailer starts the burst with at most rotateRateLimit tokens and
+// refills rotateRateLimit per second, so when the mv runs `ms` after the burst began at most
+// rotateRateLimit*(1+ms/1000) burst lines were read: the rest exists only in the renamed file,
+// which the agent must read to its end.
+const (
+	rotateUnread    = 10000
+	rotateNew       = 2000
+	rotateRateLimit = 2000 // logs.rate_limit_lines default
+	rotateDir       = "/var/log/e2e-rotate"
+)
+
+func rotateMarker() string { return "/e2e-rotate/" + logRunID + "/" }
+
+func testAgentLogRotationUnread(t *testing.T) {
+	m := rotateMarker()
+	params := map[string]string{"h": targetID(), "m": m}
+	// The file must be tailed (at its end) before the burst: one line, then wait for its record.
+	if out, err := compose("exec", "-T", "target", "bash", "-c", fmt.Sprintf("echo 'rotation %sa/0' >>%s/app.log", m, rotateDir)); err != nil {
+		t.Fatalf("create %s/app.log: %v\n%s", rotateDir, err, out)
+	}
+	if !eventually(t, 2*time.Minute, 2*time.Second, "first line of "+rotateDir+"/app.log", func() error {
+		rows, err := chQuery("SELECT count() FROM openlog.logs WHERE host_id = {h:String} AND position(body, {m:String}) > 0", params)
+		if err != nil {
+			return err
+		}
+		if len(rows) != 1 || rows[0][0] == "0" {
+			return fmt.Errorf("no record yet (%v)", rows)
+		}
+		return nil
+	}) {
+		return
+	}
+
+	script := fmt.Sprintf(`set -e
+cd %[1]s
+start=$(date +%%s%%N)
+awk -v m=%[2]q -v n=%[3]d 'BEGIN { for (i = 1; i <= n; i++) printf "rotation %%sa/%%d\n", m, i }' >>app.log
+mv app.log app.log.1
+rotated=$(( ($(date +%%s%%N) - start) / 1000000 ))
+awk -v m=%[2]q -v n=%[4]d 'BEGIN { for (i = 1; i <= n; i++) printf "rotation %%sb/%%d\n", m, i }' >>app.log
+echo "$rotated"`, rotateDir, m, rotateUnread, rotateNew)
+	out, err := compose("exec", "-T", "target", "bash", "-c", script)
+	if err != nil {
+		t.Fatalf("burst + rotation: %v\n%s", err, out)
+	}
+	ms, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		t.Fatalf("burst + rotation output %q: %v", out, err)
+	}
+	unread := rotateUnread - rotateRateLimit*(1000+ms)/1000
+	t.Logf("appended %d lines and renamed app.log after %d ms (>= %d lines unread at the rotation), then %d lines to the new file, marker %s", rotateUnread, ms, unread, rotateNew, m)
+	if unread <= 0 {
+		t.Fatalf("burst + rotation took %d ms: unread lines at the rotation are not guaranteed", ms)
+	}
+
+	want := 1 + rotateUnread + rotateNew
+	const re = `'/e2e-rotate/[0-9a-z]+/[ab]/[0-9]+'`
+	var rows [][]string
+	ok := eventually(t, 4*time.Minute, 3*time.Second, "every line of app.log and app.log.1 has a record", func() error {
+		var err error
+		rows, err = chQuery(`SELECT count(), uniqExact(extract(body, `+re+`)), uniqExactIf(extract(body, `+re+`), position(body, '/a/') > 0),
+  countIf(position(body, '\n') > 0), countIf(attributes['e2e.source'] != 'rotation')
+FROM openlog.logs WHERE host_id = {h:String} AND position(body, {m:String}) > 0`, params)
+		if err != nil {
+			return err
+		}
+		if len(rows) != 1 || len(rows[0]) != 5 {
+			return fmt.Errorf("clickhouse rows %v", rows)
+		}
+		if rows[0][1] != strconv.Itoa(want) {
+			return fmt.Errorf("unique lines %s/%d (old file %s/%d)", rows[0][1], want, rows[0][2], 1+rotateUnread)
+		}
+		return nil
+	})
+	if len(rows) == 1 && len(rows[0]) == 5 {
+		t.Logf("clickhouse: %s records, %s unique lines (%s from before the rotation), %s multi-line, %s without e2e.source=rotation", rows[0][0], rows[0][1], rows[0][2], rows[0][3], rows[0][4])
+	}
+	if !ok {
+		return
+	}
+	if r := rows[0]; r[0] != strconv.Itoa(want) || r[2] != strconv.Itoa(1+rotateUnread) || r[3] != "0" || r[4] != "0" {
+		t.Errorf("want each of %d lines exactly once (%d before the rotation), no multi-line record, all with e2e.source=rotation: got %v", want, 1+rotateUnread, r)
+	}
+	// After reading app.log.1 to its end (and the rotation grace period) the agent closes it.
+	eventually(t, time.Minute, 2*time.Second, "agent closed app.log.1", func() error {
+		out, err := compose("exec", "-T", "target", "bash", "-c", "ls -l /proc/$(pgrep -x openlog-infra-a)/fd | grep -c 'e2e-rotate/app.log.1' || true")
+		if err != nil {
+			return fmt.Errorf("%v: %s", err, out)
+		}
+		if n := strings.TrimSpace(out); n != "0" {
+			return fmt.Errorf("%s open descriptors", n)
+		}
+		return nil
+	})
+}
+
+const journalEntries = 20
+
+func journalMarker() string { return "/e2e-journal/" + logRunID + "/" }
+
+// testAgentJournald writes entries to the target's systemd-journald (standalone, see
+// target/entrypoint.sh) with systemd-cat (priority err, stdout stream) and logger (warning,
+// through /dev/log); the agent reads the journal with journalctl (logs.journald.enabled).
+func testAgentJournald(t *testing.T) {
+	from := strconv.FormatInt(time.Now().Add(-2*time.Minute).UnixMilli(), 10)
+	m := journalMarker()
+	script := fmt.Sprintf(`set -e
+for i in $(seq 1 %[1]d); do
+  if [ $((i %% 2)) = 0 ]; then echo "journal entry %[2]s$i" | systemd-cat -t openlog-e2e -p err
+  else logger --socket-errors=on -t openlog-e2e -p user.warning "journal entry %[2]s$i"; fi
+done`, journalEntries, m)
+	if out, err := compose("exec", "-T", "target", "bash", "-c", script); err != nil {
+		t.Fatalf("write journal entries: %v\n%s", err, out)
+	}
+	t.Logf("wrote %d journal entries, marker %s", journalEntries, m)
+
+	byBody := map[string]logRecordJSON{}
+	var logs []logRecordJSON
+	ok := eventually(t, 2*time.Minute, 3*time.Second, "every journal entry has a record", func() error {
+		var err error
+		logs, err = listLogs(key(), url.Values{"host_id": {targetID()}, "q": {m}, "from": {from}, "limit": {"1000"}, "attr.openlog.log.source": {"journald"}})
+		if err != nil {
+			return err
+		}
+		clear(byBody)
+		for _, l := range logs {
+			byBody[l.Body] = l
+		}
+		if len(byBody) != journalEntries {
+			return fmt.Errorf("%d unique journald records, want %d", len(byBody), journalEntries)
+		}
+		return nil
+	})
+	t.Logf("records: %d (%d unique)", len(logs), len(byBody))
+	if !ok {
+		return
+	}
+	for i := 1; i <= journalEntries; i++ {
+		body := fmt.Sprintf("journal entry %s%d", m, i)
+		l, found := byBody[body]
+		if !found {
+			t.Errorf("no record with body %q", body)
+			continue
+		}
+		sev := "WARN"
+		if i%2 == 0 {
+			sev = "ERROR"
+		}
+		checks := map[string][2]string{
+			"host_id":                   {l.HostID, targetID()},
+			"service_name":              {l.ServiceName, ""},
+			"severity_text":             {l.SeverityText, sev},
+			"openlog.log.source":        {l.Attributes["openlog.log.source"], "journald"},
+			"openlog.syslog.identifier": {l.Attributes["openlog.syslog.identifier"], "openlog-e2e"},
+		}
+		for name, gw := range checks {
+			if gw[0] != gw[1] {
+				t.Errorf("%s = %q, want %q (body %q)", name, gw[0], gw[1], body)
+			}
+		}
+		if l.Timestamp == "" {
+			t.Errorf("no timestamp: %q", body)
+		}
+		if i == 1 {
+			t.Logf("journald record: %+v", l)
+		}
+	}
+	// Server-side filter by syslog identifier.
+	ls, err := listLogs(key(), url.Values{"host_id": {targetID()}, "q": {m}, "from": {from}, "limit": {"1000"}, "attr.openlog.syslog.identifier": {"openlog-e2e"}})
+	uniq := map[string]bool{}
+	for _, l := range ls {
+		uniq[l.Body] = true
+	}
+	if err != nil || len(uniq) != journalEntries {
+		t.Errorf("filter attr.openlog.syslog.identifier=openlog-e2e: %d unique (%v), want %d", len(uniq), err, journalEntries)
+	}
+}
+
 func testProcessMetrics(t *testing.T) {
 	want := map[string]string{"nginx": "nginx", "redis-server": "redis"}
 	eventually(t, 90*time.Second, 5*time.Second, "process.memory.usage for nginx and redis-server with openlog.discovery.id", func() error {

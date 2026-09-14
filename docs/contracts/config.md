@@ -21,14 +21,26 @@ Durations use Go syntax (`2s`, `500ms`). Lists are comma-separated.
 | `OPENLOG_POSTGRES_DSN` | `` | `postgres` mode (ingest, api, migrate, allinone, admin): e.g. `postgres://openlog@postgres:5432/openlog?sslmode=require` (libpq URL or key=value form; `sslmode`, `connect_timeout`, … are honoured) |
 | `OPENLOG_POSTGRES_PASSWORD` | `` | Overrides the password in the DSN (lets the password come from a separate Secret) |
 | `OPENLOG_POSTGRES_MAX_CONNS` | `10` | Connection pool size per process |
+| `OPENLOG_KEY_HASH_SECRET` | `` | `postgres` mode (ingest, api, allinone, admin — **same value everywhere**): ingest license keys and API keys are stored as `HMAC-SHA256(secret, key)` instead of `SHA-256(key)` (D-044). At least 32 bytes (`openssl rand -base64 48`); keep it with your backups. Rows written without a secret keep working and are rewritten to the HMAC on their first successful use (one extra `UPDATE` in the same statement, only on a cache miss). Set it **after** every pod runs a version that knows it (older pods cannot resolve rewritten keys). **Recommended for SaaS** |
+| `OPENLOG_KEY_HASH_SECRET_PREVIOUS` | `` | Rotation: the previous secret. Keys hashed with it keep resolving and are rewritten to the current secret on use. Keep it until every active key was used since the rotation (`last_used_at`); removing it earlier makes unused keys invalid. Never drop a secret that still has rows (there is no plaintext to re-hash) |
 
 ### TLS and SASL (all services that use the dependency)
 
 Kafka settings apply to every Kafka client (ingest producer, processor consumer group, migrate topic creation);
 ClickHouse settings to every native connection (processor bootstrap **and direct shard/replica connections**, api,
-migrate); PostgreSQL settings to ingest, api, migrate, allinone and admin. Certificate files are read at start-up
-(ClickHouse replica pools also when they are opened after a topology change): **restart the pods after rotating
-certificates**. Invalid combinations or unreadable files stop the service at start-up with a configuration error.
+migrate); PostgreSQL settings to ingest, api, migrate, allinone and admin. Invalid combinations or unreadable files
+stop the service at start-up with a configuration error.
+
+**Certificate rotation without restart (D-048).** The CA, certificate and key files are re-read when their content
+changes (checked at most every 10 s, on the next new connection): new Kafka broker, ClickHouse (bootstrap and replica
+pools) and PostgreSQL pool connections use the renewed files; open connections keep their certificates until they
+close (ClickHouse pools recycle connections after 1 h, PostgreSQL after 5 min idle; Kafka connections are long-lived
+and re-dial only after a broker disconnect). Replace the files atomically (Kubernetes Secret volumes and cert-manager
+do). A file set that does not load (e.g. a new certificate with the old key while the rotation is in progress) is
+logged once (`certificate reload failed; keeping the previous certificates`) and the previous certificates stay in
+use until it loads; `certificates reloaded` is logged on success. PostgreSQL: only the `OPENLOG_POSTGRES_TLS_*` files
+are watched (not `sslrootcert=` etc. written into the DSN). ingest and api serve plain HTTP/gRPC; TLS towards
+clients is terminated by the ingress / Envoy.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -59,6 +71,43 @@ to plaintext and `disable` never encrypts — use those only on trusted networks
 **Kafka.** In the cluster profile use a `SASL_SSL` listener with `SCRAM-SHA-512` (Strimzi: listener `tls: true` +
 `authentication: {type: scram-sha-512}` and a `KafkaUser`), or mutual TLS (`authentication: {type: tls}`), see the Helm
 chart README.
+
+### ClickHouse read-only user and per-tenant query limits (api, alert, allinone; D-047)
+
+Tenant queries of `openlog-api` and `openlog-alert` (every `/api/v1` telemetry read, alert evaluations and previews)
+use a separate connection as a read-only user. The writer (`OPENLOG_CLICKHOUSE_USER`) stays in use for openlog-migrate,
+the processor, APM edge linking and alert evaluation history inserts, so api/alert pods still need both.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENLOG_CLICKHOUSE_READ_USER` | `` | Read-only user; same addresses, database and TLS as the writer. Empty = queries use `OPENLOG_CLICKHOUSE_USER` and the service logs a warning. At start-up the service warns when the user's `readonly` setting is `0` |
+| `OPENLOG_CLICKHOUSE_READ_PASSWORD` | `` | Its password (requires the user) |
+| `OPENLOG_QUERY_MAX_MEMORY_USAGE` | `2147483648` | `max_memory_usage` (bytes) of every tenant query; `0` = not set by openlog (the user's profile applies) |
+| `OPENLOG_QUERY_MAX_ROWS_TO_READ` | `2000000000` | `max_rows_to_read` (rows read from tables, on every shard); `0` = not set |
+| `OPENLOG_QUERY_MAX_BYTES_TO_READ` | `0` | `max_bytes_to_read` (uncompressed); `0` = not set |
+| `OPENLOG_QUERY_TENANT_LIMITS` | `` | Per-tenant overrides: `tenant:key=value[;key=value],tenant2:…` with keys `max_memory_usage`, `max_rows_to_read`, `max_bytes_to_read` (unset keys inherit the defaults), e.g. `acme:max_memory_usage=8589934592;max_rows_to_read=0` |
+
+Every tenant query also sets `max_execution_time` (`OPENLOG_API_QUERY_TIMEOUT` / `OPENLOG_ALERT_QUERY_TIMEOUT`),
+`log_comment` = `{"component":"api"|"alert","tenant_id":"<tenant>"}` (visible in `system.query_log`) and the native
+protocol `quota_key` = tenant id, so a ClickHouse quota with `<keyed/>` on the read user's profile counts every
+tenant separately. Overrides are environment-only (there is no organization settings store in PostgreSQL yet).
+
+Errors: a query stopped by `max_memory_usage`, `max_rows_to_read` or `max_bytes_to_read` (ClickHouse codes 241, 158,
+307, 396) returns `422` `{"error":{"code":"resource_exhausted"}}` naming the limit; a quota (201), too many simultaneous
+queries (202) or the server's total memory limit returns `429 resource_exhausted` with `Retry-After`; `max_execution_time`
+stays `504 timeout`. Alert evaluations record `query limit exceeded (<limit>): …` as the evaluation error.
+
+The read user needs a profile with `readonly = 2` (reads only; openlog must be able to set the limits above) and
+`SELECT` on `openlog.*` only. Compose creates `openlog_reader` from `deploy/compose/clickhouse/openlog-reader.xml`
+(password `OPENLOG_CLICKHOUSE_READ_PASSWORD` of the clickhouse container); the Helm chart creates it in the
+ClickHouseInstallation (`clickhouse.readUser`). External ClickHouse, SQL-managed users:
+
+```sql
+CREATE SETTINGS PROFILE IF NOT EXISTS openlog_readonly ON CLUSTER openlog SETTINGS readonly = 2, allow_ddl = 0;
+CREATE USER IF NOT EXISTS openlog_reader ON CLUSTER openlog IDENTIFIED WITH sha256_password BY '<password>'
+    SETTINGS PROFILE 'openlog_readonly';
+GRANT ON CLUSTER openlog SELECT ON openlog.* TO openlog_reader;
+```
 
 ## `openlog-ingest`
 
@@ -110,7 +159,7 @@ per pod. Metric: `openlog_license_key_resolutions_total{result="hit|miss|negativ
 | Variable | Default | Description |
 |---|---|---|
 | `OPENLOG_API_HTTP_ADDR` | `:8080` | See [api.md](api.md) |
-| `OPENLOG_API_QUERY_TIMEOUT` | `30s` | Sets ClickHouse `max_execution_time` |
+| `OPENLOG_API_QUERY_TIMEOUT` | `30s` | Sets ClickHouse `max_execution_time` (per-tenant limits: see "ClickHouse read-only user and per-tenant query limits") |
 | `OPENLOG_API_MAX_ROWS` | `10000` | Upper bound for list endpoints |
 | `OPENLOG_API_UI_ENABLED` | `true` | Serve the embedded web UI at `/` (SPA fallback for non-`/api` paths) |
 | `OPENLOG_SESSION_TTL` | `168h` | Absolute session lifetime (`postgres` mode) |
@@ -122,6 +171,30 @@ per pod. Metric: `openlog_license_key_resolutions_total{result="hit|miss|negativ
 | `OPENLOG_LOGIN_WINDOW` | `15m` | Sliding window for `OPENLOG_LOGIN_MAX_FAILURES` (shared by all api pods through PostgreSQL) |
 | `OPENLOG_INVITATION_TTL` | `168h` | Invitation validity |
 | `OPENLOG_API_TRUSTED_PROXIES` | `` | CIDRs/addresses of reverse proxies whose `X-Forwarded-For` is trusted for the client IP (rate limiting, sessions, audit log). Empty = use the TCP peer address |
+| `OPENLOG_SIGNUP_REQUIRE_VERIFICATION` | automatic | Sign-ups must confirm their e-mail address before creating license/API keys or inviting (D-045). Unset = `true` when e-mail is configured (`OPENLOG_SMTP_HOST` and `OPENLOG_PUBLIC_URL`), else `false`. `true` without them is a configuration error |
+| `OPENLOG_EMAIL_VERIFICATION_TTL` | `48h` | Validity of verification links |
+| `OPENLOG_SIGNUP_MAX_PER_IP` | `10` | Sign-up attempts per client IP within the window before `429` (every attempt that passes input validation counts, successful or not) |
+| `OPENLOG_SIGNUP_MAX_PER_EMAIL` | `5` | Sign-up attempts per e-mail address within the window |
+| `OPENLOG_SIGNUP_RATE_WINDOW` | `1h` | Window of both sign-up limits (1s–24h; counters live in `login_failures`, shared by all api pods) |
+| `OPENLOG_SIGNUP_BLOCKED_EMAIL_DOMAINS` | `` | Comma-separated e-mail domains refused at sign-up (subdomains included), e.g. disposable address providers |
+| `OPENLOG_SIGNUP_BLOCKED_EMAIL_DOMAINS_FILE` | `` | File with one blocked domain per line (`#` comments), merged with the list above; read at start-up (e.g. a mounted disposable-domain list) |
+| `OPENLOG_SIGNUP_CAPTCHA_PROVIDER` | `` | `turnstile` (Cloudflare) or `hcaptcha`: sign-up requires a CAPTCHA token verified server-side (`siteverify`, 10 s timeout; provider errors → `503`) |
+| `OPENLOG_SIGNUP_CAPTCHA_SECRET` | `` | Provider secret key (required with a provider) |
+| `OPENLOG_SIGNUP_CAPTCHA_SITE_KEY` | `` | Public site key, returned by `GET /api/v1/auth/config` for the UI widget (required with a provider) |
+| `OPENLOG_SSO_ENABLED` | `true` | Single sign-on endpoints, session policy and SCIM (postgres mode; D-077). SSO also needs `OPENLOG_PUBLIC_URL` (redirect URI, SAML entity ID/ACS URL, SCIM base URL); without it the settings page reports SSO as unavailable |
+| `OPENLOG_SSO_SECRET_KEY` | `` | ≥ 32 bytes. Encrypts OIDC client secrets and SAML SP private keys (AES-256-GCM). Empty = key derived from `OPENLOG_KEY_HASH_SECRET`; neither = stored unencrypted (warning). Same value on every api pod |
+| `OPENLOG_SSO_SECRET_KEY_PREVIOUS` | `` | Previous key, still accepted for decryption during a rotation (requires `OPENLOG_SSO_SECRET_KEY`) |
+| `OPENLOG_SSO_ALLOW_PRIVATE_NETWORKS` | automatic | Identity provider URLs (OIDC issuer, SAML metadata) may use `http` and resolve to loopback/private/link-local addresses. Unset = `true` unless `OPENLOG_SIGNUP_ENABLED=true` (then organization admins are not operators: https and public addresses only, checked at connect time) |
+| `OPENLOG_SSO_LOGIN_TTL` | `10m` | Time from "Sign in with SSO" to the callback (1m–1h) |
+| `OPENLOG_SSO_CLOCK_SKEW` | `2m` | Tolerated IdP clock difference for ID token `exp`/`iat` and SAML time conditions (0–10m; process-wide) |
+| `OPENLOG_SSO_HTTP_TIMEOUT` | `10s` | Timeout of requests to identity providers: discovery, JWKS, token, UserInfo, SAML metadata (1s–1m; bodies ≤ 2 MiB) |
+| `OPENLOG_SCIM_ENABLED` | `true` | SCIM 2.0 provisioning at `/api/scim/v2` and SCIM token management (D-078) |
+
+**E-mail (invitations, address verification).** The api sends transactional e-mail through the global SMTP server
+of `openlog-alert` (`OPENLOG_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FROM`, `_TLS`, `_INSECURE_SKIP_VERIFY`;
+see below) with links to `OPENLOG_PUBLIC_URL`. Both must be set; otherwise invitations are shared as copyable links
+(the UI shows the link) and sign-ups are not verified. Sending is synchronous (15 s timeout) and limited to 100
+invitation e-mails per organization and 5 per invited address per hour, and 5 verification e-mails per user per hour.
 
 **APM** ([apm.md](apm.md)):
 
@@ -130,16 +203,24 @@ per pod. Metric: `openlog_license_key_resolutions_total{result="hit|miss|negativ
 | `OPENLOG_APM_DEFAULT_APDEX_T` | `500ms` | Apdex T of services without a setting (1ms–10m) |
 | `OPENLOG_APM_LINK_ENABLED` | `true` | Run the edge-linking job (trace-linked service map edges). Runs on the api leader (PostgreSQL advisory lock); with `OPENLOG_AUTH_MODE=static` in every api process |
 | `OPENLOG_APM_LINK_INTERVAL` | `1m` | Time between runs (≥ 10s) |
-| `OPENLOG_APM_LINK_LOOKBACK` | `10m` | Every run recomputes the whole minutes of `[now − lookback, now − delay)`; spans arriving later than this are not linked (1m–24h) |
+| `OPENLOG_APM_LINK_LOOKBACK` | `10m` | Every run recomputes the whole minutes of `[now − lookback, now − delay)`; later spans are linked by the catch-up and the late-span re-link (1m–24h) |
 | `OPENLOG_APM_LINK_DELAY` | `1m` | Minutes younger than this are left for the next run (0–1h); keep it above the processor's ingest-to-queryable delay |
 | `OPENLOG_APM_LINK_CATCHUP_ENABLED` | `true` | Daily catch-up pass that re-links the previous UTC day (spans later than the lookback), [apm.md](apm.md) §6 |
 | `OPENLOG_APM_LINK_CATCHUP_AT` | `03:00` | `HH:MM` UTC when the pass starts (started up to 6 h later, e.g. after a leader change) |
-| `OPENLOG_APM_LINK_CATCHUP_BATCH` | `1h` | Window of one catch-up step (5m–6h); steps run one at a time with a 10 s pause |
-| `OPENLOG_APM_RETENTION_DAYS` | `30` | `openlog-migrate` / `openlog-allinone` (migrations): TTL of the APM tables (1–3650). A changed value is applied with `ALTER TABLE … ON CLUSTER … MODIFY TTL` after the migrations ([apm.md](apm.md) §8 "Retention") |
+| `OPENLOG_APM_LINK_CATCHUP_BATCH` | `1h` | Window of one catch-up step (5m–6h); steps run one at a time with a 10 s pause. Also the longest window of a re-link pass |
+| `OPENLOG_APM_RELINK_ENABLED` | `true` | `openlog-processor`: enqueue the client minutes of late spans into `apm_relink_queue`; api leader: re-link them ([apm.md](apm.md) §6 "Late-span re-link", schema 0020) |
+| `OPENLOG_APM_RELINK_AFTER` | `OPENLOG_APM_LINK_LOOKBACK` | `openlog-processor`: minutes older than this when their spans are processed are enqueued (1m – `OPENLOG_APM_LINK_LOOKBACK`; keep it ≤ the api's lookback) |
+| `OPENLOG_APM_RELINK_MAX_AGE` | `168h` | Processor: late spans older than this are only counted; api: queued minutes older than this are ignored (1h – 30 days, ≤ `OPENLOG_APM_RETENTION_DAYS`) |
+| `OPENLOG_APM_RELINK_INTERVAL` | `5m` | Api leader: time between re-link passes (10s–1h) |
+| `OPENLOG_APM_RELINK_MAX_MINUTES` | `120` | Api leader: queued minutes re-linked per pass, oldest first; the rest waits for the next pass (1–1440) |
+| `OPENLOG_APM_RETENTION_DAYS` | `30` | `openlog-migrate` / `openlog-allinone` (migrations): TTL of the APM tables (1–3650). A changed value is applied with `ALTER TABLE … ON CLUSTER … MODIFY TTL` after the migrations ([apm.md](apm.md) §8 "Retention"), together with the tiered storage moves of the APM tables (see "Tiered storage") |
 
 The job connects to one replica per shard from `system.clusters` (like direct processor inserts, the replica
 `host_name:port` must be reachable from the api; TLS settings apply). Metrics: `openlog_apm_link_runs_total{result}`,
-`openlog_apm_link_rows_total`, `openlog_apm_link_duration_seconds`, `openlog_apm_link_lag_seconds`.
+`openlog_apm_link_rows_total`, `openlog_apm_link_duration_seconds`, `openlog_apm_link_lag_seconds`; late-span re-link:
+`openlog_apm_relink_runs_total{result}`, `openlog_apm_relink_minutes_total`, `openlog_apm_relink_backlog_minutes`,
+`openlog_apm_relink_late_calls_total`, `openlog_apm_relink_duration_seconds` (api), `openlog_apm_relink_enqueued_total`,
+`openlog_apm_relink_too_old_total` (processor).
 
 Session cookie: `openlog_session`, `HttpOnly`, `SameSite=Strict`, `Path=/api`, `Secure` per
 `OPENLOG_COOKIE_SECURE`. The api waits for PostgreSQL at start-up and adds a `postgres` readiness check.
@@ -166,6 +247,45 @@ nothing (no topics either); `-force-contract` applies blocked contract migration
 
 Topics that already exist are left as they are (partition count is never changed automatically; see `docs/operations/scaling.md`).
 
+### Tiered storage (openlog-migrate, openlog-allinone migrations; D-066, D-067)
+
+Moves old parts of the telemetry tables from the local disk to an optional warm disk and to S3
+([tiered-storage.md](../operations/tiered-storage.md)). After the schema migrations, migrate owns the whole TTL of
+the managed tables (retention + moves): it checks that every replica defines the storage policy, runs
+`ALTER TABLE … ON CLUSTER … MODIFY SETTING storage_policy = '<policy>', materialize_ttl_recalculate_only = 1` for tables
+that get a move and `MODIFY TTL … TO VOLUME 'warm'|'cold', … <retention>` for changed TTLs, and records each applied TTL
+in `openlog.table_settings` (`ttl:<table>`). Idempotent; nothing runs while tiering was never enabled and
+`OPENLOG_APM_RETENTION_DAYS` is unchanged. `-plan` prints the pending ALTERs.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENLOG_STORAGE_TIERING_ENABLED` | `false` | Add the moves. `false` after `true` removes the move clauses again; tables keep the policy and parts on S3 stay readable there. Migrate fails with `storage policy "<policy>" is not usable … <host>: …` when a replica lacks the policy or its volumes |
+| `OPENLOG_STORAGE_POLICY` | `openlog_tiered` | ClickHouse storage policy: first volume named `default` with disk `default` (required to switch existing tables), `cold`, optional `warm` |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_METRICS` | `7` | Days after which parts move to volume `cold`: `metrics_local` (retention 30 d). `0` = no move; a value ≥ the retention is ignored (0–3650) |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_METRICS_1M` | `30` | `metrics_1m_local` (retention 395 d) |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_LOGS` | `3` | `logs_local` (14 d) |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_TRACES` | `3` | `spans_local`, `trace_index_local` (7 d) |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_APM` | `7` | The 8 `apm_*` rollup tables of `OPENLOG_APM_RETENTION_DAYS` |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_ALERTS` | `7` | `alert_evaluations_local` (30 d) |
+| `OPENLOG_STORAGE_WARM_AFTER_DAYS_<CLASS>` | `0` | Same classes: days after which parts move to volume `warm` (must be below the cold age when both are set; requires a `warm` volume on every replica) |
+
+**ClickHouse server variables** (not read by openlog; used by `deploy/compose/clickhouse/storage-tiered.xml` through
+`from_env` in the ClickHouse container, and set by the Helm chart from `clickhouse.tieredStorage.s3` in operators mode):
+
+| Variable | Compose default | Description |
+|---|---|---|
+| `OPENLOG_CLICKHOUSE_STORAGE_CONFIG` | `./clickhouse/storage-none.xml` | Compose only: file mounted as `config.d/openlog-storage.xml`; `./clickhouse/storage-tiered.xml` defines the policy |
+| `OPENLOG_CLICKHOUSE_STORAGE_WARM_CONFIG` | `./clickhouse/storage-none.xml` | Compose only: `./clickhouse/storage-tiered-warm.xml` adds the warm volume (Docker volume `clickhouse-warm`) |
+| `OPENLOG_CLICKHOUSE_S3_CREDENTIALS_FILE` | `./clickhouse/storage-none.xml` | Compose only: XML with the keys (`storage-tiered-credentials.xml.example`), overrides the two key variables |
+| `OPENLOG_S3_ENDPOINT` | `http://minio:9000/openlog-cold/ch-1/` | Bucket URL with a trailing prefix, one prefix per replica (`{shard}`/`{replica}` macros are expanded) |
+| `OPENLOG_S3_REGION` | `` | Region; empty = from the endpoint |
+| `OPENLOG_S3_ACCESS_KEY_ID` / `OPENLOG_S3_SECRET_ACCESS_KEY` | MinIO profile keys | Static credentials; set both empty for IAM roles |
+| `OPENLOG_S3_USE_ENVIRONMENT_CREDENTIALS` | `false` | `true`: AWS default credential chain (`AWS_*`, IRSA/web identity, instance profile) |
+| `OPENLOG_S3_CACHE_MAX_SIZE` | `10Gi` | Filesystem cache for cold reads (local disk) |
+| `OPENLOG_S3_CACHE_PATH` / `OPENLOG_WARM_PATH` | `/var/lib/clickhouse/openlog_s3_cache/` / `/var/lib/clickhouse-warm/` | Cache directory and warm disk path (one level below an existing directory: the image entrypoint creates missing parents as root) |
+
+`COMPOSE_PROFILES=tiered` starts a local MinIO with bucket `openlog-cold` for testing.
+
 ## `openlog-allinone`
 
 Runs ingest + processor + api in one process with all variables above (one `OPENLOG_SECRETS_KEY` serves the api,
@@ -186,6 +306,7 @@ PostgreSQL migrations before every command. It does not start an admin server.
 | `bootstrap` | Idempotently ensure the organization, owner and keys described by `OPENLOG_BOOTSTRAP_*` (exits 0 without changes when `OPENLOG_BOOTSTRAP_OWNER_EMAIL` and both keys are empty) |
 | `create-owner --email E --org NAME [--tenant-id ID] [--name N] [--password-stdin] [--no-license-key]` | Self-hosted first run: creates the organization (tenant id generated unless given), the owner and an ingest license key; prints a generated password and the key once |
 | `reset-password --email E [--password-stdin]` | Sets a new (generated or stdin) password and revokes all of the user's sessions |
+| `storage status [--json]` | ClickHouse only (no PostgreSQL, uses `OPENLOG_CLICKHOUSE_*` writer credentials and `OPENLOG_STORAGE_*`): storage policy volumes, disks per replica, bytes/parts/rows per managed table per volume summed over the replicas, parts past their move TTL still on the hot volume, running moves, failed moves of the last 24 h (`system.part_log`), detached parts by reason and the TTL/policy ALTERs openlog-migrate would still apply ([tiered-storage.md](../operations/tiered-storage.md)) |
 
 | Variable | Default | Description |
 |---|---|---|
@@ -296,6 +417,49 @@ while channels still use another key). Readiness checks: `postgres`, `clickhouse
 running evaluations and deliveries finish, then the pod releases its leases (grace period ≥ query timeout + delivery
 timeout). `openlog-alert` records itself in `component_heartbeats`.
 
+## Tail sampling (`openlog-sampler`; flag also on ingest, processor, api, allinone; D-075)
+
+Off by default; off means no behavior change. `OPENLOG_TAILSAMPLING_ENABLED` must have the same value on ingest (one traces record per trace id), processor (reads `<prefix>.otlp.traces.sampled.v1`), `openlog-sampler` and allinone (runs the sampler in-process). The api only reports it. Operations: docs/operations/tail-sampling.md.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENLOG_TAILSAMPLING_ENABLED` | `false` | Enables the tail sampling stage |
+| `OPENLOG_TAILSAMPLING_GROUP` | `openlog-sampler` | Consumer group of the sampler |
+| `OPENLOG_TAILSAMPLING_DECISION_WAIT` | `30s` | Time from a trace's first span to its decision (1s–10m) |
+| `OPENLOG_TAILSAMPLING_MAX_TRACES` | `100000` | Buffered traces per instance; the oldest is decided early when full |
+| `OPENLOG_TAILSAMPLING_MAX_SPANS_PER_TRACE` | `2000` | A trace reaching this is decided early; later spans follow the decision |
+| `OPENLOG_TAILSAMPLING_MAX_BUFFERED_BYTES` | `536870912` | Protobuf span bytes buffered per instance (≥ 1 MiB); oldest traces decided early above it |
+| `OPENLOG_TAILSAMPLING_DECISION_CACHE_TTL` | `10m` | How long decisions are remembered for late spans (≥ decision wait, ≤ 24h) |
+| `OPENLOG_TAILSAMPLING_DECISION_CACHE_SIZE` | `500000` | Remembered decisions per instance |
+| `OPENLOG_TAILSAMPLING_POLICY_REFRESH` | `30s` | Reload interval of `tail_sampling_policies` (postgres auth mode; 1s–1h) |
+| `OPENLOG_TAILSAMPLING_PRODUCE_TIMEOUT` | `10s` | Produce timeout per attempt to the sampled topic (retried) |
+| `OPENLOG_TAILSAMPLING_DEFAULT_POLICY` | empty | JSON policy (apm.md §4.2) for tenants without a stored policy; empty keeps everything. Static auth mode uses only this |
+
+## Usage, plans and billing
+
+Usage metering is always on (schema `0050_usage`, processor accounting). Plans, quotas and billing: [usage.md](usage.md),
+operator guide [docs/operations/saas.md](../operations/saas.md), D-079–D-081. Self-hosted defaults enforce nothing.
+
+| Variable | Default | Services | Description |
+|---|---|---|---|
+| `OPENLOG_SAAS_MODE` | `false` | ingest, api, migrate, allinone | Hard enforcement: ingest `429` over the monthly quota and per-tenant rate limits; default of per-tenant retention. Requires `OPENLOG_AUTH_MODE=postgres` |
+| `OPENLOG_PLANS` | empty | api, migrate, allinone | Plan catalog JSON (usage.md §4.1). Empty (and no file): one `unlimited` plan |
+| `OPENLOG_PLANS_FILE` | empty | api, migrate, allinone | File with the plan catalog; mutually exclusive with `OPENLOG_PLANS` |
+| `OPENLOG_DEFAULT_PLAN` | catalog `default`, else first plan | api, migrate | Plan of organizations without an assignment |
+| `OPENLOG_SUPERADMIN_EMAILS` | empty | api | Comma-separated e-mail addresses of SaaS operators allowed to assign plans to any organization |
+| `OPENLOG_USAGE_EVALUATION_INTERVAL` | `1m` | api | Quota evaluation interval of the leader (10s–1h) |
+| `OPENLOG_USAGE_QUERY_COLLECTION_ENABLED` | `true` | api | Collect query compute from `system.query_log` into `usage_queries_1h` (leader, every 15m) |
+| `OPENLOG_USAGE_NOTIFY_THRESHOLDS` | `80,100` | api | Percentages that e-mail owners (once per billing period); the lowest below 100 is the warning level |
+| `OPENLOG_QUOTA_REFRESH_INTERVAL` | `30s` | ingest | Reload interval of `tenant_quota_status` (1s–10m) |
+| `OPENLOG_QUOTA_INGEST_PODS` | `0` | ingest | Divides tenant rate limits among pods; `0` = live ingest/allinone instances from `component_heartbeats` |
+| `OPENLOG_QUOTA_BLOCKED_RETRY_AFTER` | `5m` | ingest | `Retry-After` of requests over the monthly quota (1s–24h) |
+| `OPENLOG_QUOTA_RETENTION_ENABLED` | `OPENLOG_SAAS_MODE` | api, migrate, allinone | Per-tenant retention: migrate widens raw table TTLs to the longest plan retention, the api leader deletes older data of shorter-retention tenants (D-081) |
+| `OPENLOG_QUOTA_RETENTION_MAX_MUTATIONS` | `20` | api | Per-tenant retention mutations submitted per hourly run (1–1000) |
+| `OPENLOG_BILLING_PROVIDER` | `none` | api | `none` or `noop` (no real provider yet; saas.md §6) |
+| `OPENLOG_BILLING_PUSH_AT` | `02:00` | api | Daily usage push time (HH:MM UTC) |
+
+Owner e-mails use `OPENLOG_SMTP_*` and link to `OPENLOG_PUBLIC_URL`.
+
 ## Ports summary
 
 | Port | Service |
@@ -307,5 +471,4 @@ timeout). `openlog-alert` records itself in `component_heartbeats`.
 
 ## Not yet specified
 
-- Certificate hot reload (a restart is required after rotation).
 - Kafka `OAUTHBEARER`/`GSSAPI` SASL mechanisms and ClickHouse HTTPS (the services use the native protocol only).

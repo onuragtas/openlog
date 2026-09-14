@@ -1,9 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import { Plus, Trash2, X } from "lucide-react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { alertMutesQuery, alertRulesQuery, createAlertMute, deleteAlertMute, updateAlertMute, type AlertMute, type AlertMuteInput, type AlertMuteMatcher, type AlertRule } from "@/api/alerts";
+import {
+  alertHolidayCalendarsQuery,
+  alertMutesQuery,
+  alertRulesQuery,
+  createAlertMute,
+  deleteAlertMute,
+  muteSchedulePreviewQuery,
+  updateAlertMute,
+  type AlertMute,
+  type AlertMuteInput,
+  type AlertMuteMatcher,
+  type AlertMuteScheduleInput,
+  type AlertRule,
+} from "@/api/alerts";
 import { can } from "@/api/roles";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
@@ -15,13 +28,25 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { canEditOwned } from "@/lib/alerts";
 import { useNow } from "@/lib/hooks";
+import {
+  DEFAULT_MONTHLY,
+  monthlyRRule,
+  monthlySummary,
+  normalizeDates,
+  ORDINALS,
+  parseMonthlyRRule,
+  WEEK_DAYS,
+  type MonthlyDay,
+  type MonthlyForm,
+  type Ordinal,
+  type Recurrence,
+  type WeekDay,
+} from "@/lib/mute-schedule";
 import { fromDateTimeLocal, toDateTimeLocal } from "@/lib/time";
 import { Field } from "./fields";
+import { HolidayCalendarsManager } from "./HolidayCalendarsManager";
 
 const parse = (s: string) => Date.parse(s.replace(/(\.\d{3})\d+/, "$1"));
-
-const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
-type Day = (typeof DAYS)[number];
 
 function browserTimeZone(): string {
   try {
@@ -29,6 +54,44 @@ function browserTimeZone(): string {
   } catch {
     return "UTC";
   }
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return v;
+}
+
+/** Human summary of a stored schedule: weekly days or the monthly rule, local times and zone. */
+function ScheduleSummary({ schedule }: { schedule: NonNullable<AlertMute["schedule"]> }) {
+  const { t } = useTranslation();
+  const monthly = monthlySummary(schedule.rrule);
+  let when: string;
+  if (schedule.rrule?.startsWith("FREQ=MONTHLY")) {
+    when = !monthly
+      ? schedule.rrule
+      : monthly.key === "monthday"
+        ? t("alerts.mutes.monthly.summaryMonthday", { days: monthly.days })
+        : monthly.key === "nthWeekday"
+          ? t("alerts.mutes.monthly.summaryNthWeekday", { ordinal: t(`alerts.mutes.monthly.ordinals.${monthly.ordinal}`) })
+          : t("alerts.mutes.monthly.summaryNthDay", { ordinal: t(`alerts.mutes.monthly.ordinals.${monthly.ordinal}`), day: t(`alerts.mutes.dayNames.${monthly.day}`) });
+  } else {
+    when = schedule.days.map((d) => t(`alerts.mutes.dayNames.${d}`)).join(", ");
+  }
+  const exceptions = schedule.exdates.length + schedule.holiday_calendar_ids.length;
+  return (
+    <p data-testid="mute-schedule">
+      {when} {schedule.start_time}–{schedule.end_time} ({schedule.timezone})
+      {exceptions > 0 && (
+        <span className="block text-xs text-muted-foreground">
+          {t("alerts.mutes.exceptionsSummary", { dates: schedule.exdates.length, calendars: schedule.holiday_calendar_ids.length })}
+        </span>
+      )}
+    </p>
+  );
 }
 
 function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: AlertRule[]; onDone: () => void }) {
@@ -43,12 +106,40 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
   const [ruleIds, setRuleIds] = useState<string[]>(mute?.rule_ids ?? []);
   const [matchers, setMatchers] = useState<AlertMuteMatcher[]>(mute?.matchers ?? []);
   // Recurring schedule (alerting.md §5.2)
-  const [recurring, setRecurring] = useState(!!mute?.schedule);
-  const [timezone, setTimezone] = useState(mute?.schedule?.timezone ?? browserTimeZone());
-  const [days, setDays] = useState<Day[]>((mute?.schedule?.days as Day[] | undefined) ?? ["mon", "tue", "wed", "thu", "fri"]);
-  const [startTime, setStartTime] = useState(mute?.schedule?.start_time ?? "22:00");
-  const [endTime, setEndTime] = useState(mute?.schedule?.end_time ?? "06:00");
+  const sched = mute?.schedule;
+  const storedMonthly = sched?.rrule?.startsWith("FREQ=MONTHLY") ?? false;
+  const [recurring, setRecurring] = useState(!!sched);
+  const [recurrence, setRecurrence] = useState<Recurrence>(storedMonthly ? "monthly" : "weekly");
+  const [monthly, setMonthly] = useState<MonthlyForm>(() => parseMonthlyRRule(sched?.rrule) ?? DEFAULT_MONTHLY);
+  // A stored monthly rule the form cannot represent is kept as is until the user picks another shape.
+  const [customRRule, setCustomRRule] = useState<string | null>(storedMonthly && !parseMonthlyRRule(sched?.rrule) ? sched!.rrule! : null);
+  const [timezone, setTimezone] = useState(sched?.timezone ?? browserTimeZone());
+  const [days, setDays] = useState<WeekDay[]>((sched?.days as WeekDay[] | undefined)?.length ? (sched!.days as WeekDay[]) : ["mon", "tue", "wed", "thu", "fri"]);
+  const [startTime, setStartTime] = useState(sched?.start_time ?? "22:00");
+  const [endTime, setEndTime] = useState(sched?.end_time ?? "06:00");
+  const [exdates, setExdates] = useState<string[]>(sched?.exdates ?? []);
+  const [newDate, setNewDate] = useState("");
+  const [calendarIds, setCalendarIds] = useState<string[]>(sched?.holiday_calendar_ids ?? []);
+  const calendars = useQuery({ ...alertHolidayCalendarsQuery(), enabled: recurring });
   const id = (n: string) => `${uid}-${n}`;
+
+  const rrule = recurrence === "monthly" ? (customRRule ?? monthlyRRule(monthly)) : null;
+  const scheduleInput: AlertMuteScheduleInput | null = !recurring
+    ? null
+    : {
+        timezone: timezone.trim(),
+        ...(recurrence === "weekly" ? { days: WEEK_DAYS.filter((d) => days.includes(d)) } : { rrule: rrule ?? "" }),
+        start_time: startTime,
+        end_time: endTime,
+        from: sched?.from ?? null,
+        until: sched?.until ?? null,
+        exdates,
+        holiday_calendar_ids: calendarIds,
+      };
+  const schedulePreviewable = recurring && (recurrence === "weekly" ? days.length > 0 : !!rrule) && /^\d{2}:\d{2}$/.test(startTime) && /^\d{2}:\d{2}$/.test(endTime);
+  const debounced = useDebounced(schedulePreviewable ? JSON.stringify(scheduleInput) : "", 500);
+  const upcoming = useQuery(muteSchedulePreviewQuery(debounced ? (JSON.parse(debounced) as AlertMuteScheduleInput) : null));
+
   const save = useMutation({
     mutationFn: () => {
       const s = fromDateTimeLocal(starts);
@@ -58,17 +149,8 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
         comment,
         rule_ids: ruleIds,
         matchers: matchers.filter((m) => m.label.trim()),
-        ...(recurring
-          ? {
-              schedule: {
-                timezone: timezone.trim(),
-                days: DAYS.filter((d) => days.includes(d)),
-                start_time: startTime,
-                end_time: endTime,
-                from: mute?.schedule?.from ?? null,
-                until: mute?.schedule?.until ?? null,
-              },
-            }
+        ...(scheduleInput
+          ? { schedule: scheduleInput }
           : {
               starts_at: s === null ? starts : new Date(s).toISOString(),
               ends_at: e === null ? ends : new Date(e).toISOString(),
@@ -82,6 +164,17 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
       onDone();
     },
   });
+  const setMonthlyField = (patch: Partial<MonthlyForm>) => {
+    setCustomRRule(null);
+    setMonthly((m) => ({ ...m, ...patch }));
+  };
+  const addDate = () => {
+    const { dates } = normalizeDates([...exdates, newDate]);
+    setExdates(dates);
+    setNewDate("");
+  };
+  const monthDaysInvalid = recurrence === "monthly" && monthly.mode === "monthday" && !customRRule && !rrule;
+
   return (
     <form
       className="flex flex-col gap-4 rounded-xl border bg-card p-4"
@@ -108,7 +201,7 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
           </>
         )}
       </div>
-      <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
+      <fieldset className="flex min-w-0 flex-col gap-3 rounded-lg border p-3">
         <legend className="px-1 text-sm font-medium">{t("alerts.mutes.recurring")}</legend>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
@@ -116,7 +209,13 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
         </label>
         {recurring && (
           <>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Field id={id("freq")} label={t("alerts.mutes.frequency")}>
+                <NativeSelect id={id("freq")} value={recurrence} onChange={(e) => setRecurrence(e.target.value as Recurrence)}>
+                  <option value="weekly">{t("alerts.mutes.frequencies.weekly")}</option>
+                  <option value="monthly">{t("alerts.mutes.frequencies.monthly")}</option>
+                </NativeSelect>
+              </Field>
               <Field id={id("tz")} label={t("alerts.mutes.timezone")}>
                 <Input id={id("tz")} value={timezone} placeholder="Europe/Istanbul" onChange={(e) => setTimezone(e.target.value)} />
               </Field>
@@ -127,13 +226,114 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
                 <Input id={id("etime")} type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </Field>
             </div>
-            <div role="group" aria-label={t("alerts.mutes.days")} className="flex flex-wrap gap-2">
-              {DAYS.map((d) => (
-                <label key={d} className="flex items-center gap-2 rounded-md border px-2 py-1 text-sm has-checked:border-primary">
-                  <input type="checkbox" checked={days.includes(d)} onChange={(e) => setDays(e.target.checked ? [...days, d] : days.filter((x) => x !== d))} />
-                  {t(`alerts.mutes.dayNames.${d}`)}
-                </label>
-              ))}
+            {recurrence === "weekly" ? (
+              <div role="group" aria-label={t("alerts.mutes.days")} className="flex flex-wrap gap-2">
+                {WEEK_DAYS.map((d) => (
+                  <label key={d} className="flex min-h-10 items-center gap-2 rounded-md border px-2 py-1 text-sm has-checked:border-primary">
+                    <input type="checkbox" checked={days.includes(d)} onChange={(e) => setDays(e.target.checked ? [...days, d] : days.filter((x) => x !== d))} />
+                    {t(`alerts.mutes.dayNames.${d}`)}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3" data-testid="mute-monthly">
+                <div role="radiogroup" aria-label={t("alerts.mutes.monthly.mode")} className="flex flex-wrap gap-2">
+                  {(["monthday", "weekday"] as const).map((m) => (
+                    <label key={m} className="flex min-h-10 items-center gap-2 rounded-md border px-2 py-1 text-sm has-checked:border-primary">
+                      <input type="radio" name={id("mmode")} checked={monthly.mode === m && !customRRule} onChange={() => setMonthlyField({ mode: m })} />
+                      {t(`alerts.mutes.monthly.modes.${m}`)}
+                    </label>
+                  ))}
+                </div>
+                {customRRule ? (
+                  <p className="text-sm">
+                    {t("alerts.mutes.monthly.custom")}: <code className="font-mono">{customRRule}</code>
+                  </p>
+                ) : monthly.mode === "monthday" ? (
+                  <Field id={id("mdays")} label={t("alerts.mutes.monthly.monthDays")} hint={t("alerts.mutes.monthly.monthDaysHint")} error={monthDaysInvalid ? t("alerts.mutes.monthly.monthDaysInvalid") : undefined}>
+                    <Input id={id("mdays")} value={monthly.monthDays} placeholder="1, 15, -1" aria-invalid={monthDaysInvalid} onChange={(e) => setMonthlyField({ monthDays: e.target.value })} />
+                  </Field>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field id={id("ord")} label={t("alerts.mutes.monthly.ordinal")}>
+                      <NativeSelect id={id("ord")} value={monthly.ordinal} onChange={(e) => setMonthlyField({ ordinal: Number(e.target.value) as Ordinal })}>
+                        {ORDINALS.map((o) => (
+                          <option key={o} value={o}>
+                            {t(`alerts.mutes.monthly.ordinals.${o}`)}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </Field>
+                    <Field id={id("mday")} label={t("alerts.mutes.monthly.day")}>
+                      <NativeSelect id={id("mday")} value={monthly.day} onChange={(e) => setMonthlyField({ day: e.target.value as MonthlyDay })}>
+                        {WEEK_DAYS.map((d) => (
+                          <option key={d} value={d}>
+                            {t(`alerts.mutes.dayNamesLong.${d}`)}
+                          </option>
+                        ))}
+                        <option value="weekday">{t("alerts.mutes.monthly.weekday")}</option>
+                      </NativeSelect>
+                    </Field>
+                  </div>
+                )}
+              </div>
+            )}
+            <fieldset className="flex min-w-0 flex-col gap-2">
+              <legend className="mb-1 text-sm font-medium">{t("alerts.mutes.exceptions")}</legend>
+              <p className="text-xs text-muted-foreground">{t("alerts.mutes.exceptionsHint")}</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <Field id={id("exdate")} label={t("alerts.mutes.exceptionDate")}>
+                  <Input id={id("exdate")} type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+                </Field>
+                <Button type="button" variant="outline" className="min-h-10" disabled={!newDate} onClick={addDate}>
+                  <Plus aria-hidden="true" />
+                  {t("alerts.mutes.addException")}
+                </Button>
+              </div>
+              {exdates.length > 0 && (
+                <ul className="flex flex-wrap gap-2" aria-label={t("alerts.mutes.exceptionDates")}>
+                  {exdates.map((d) => (
+                    <li key={d}>
+                      <Badge variant="secondary" className="gap-1 font-mono">
+                        {d}
+                        <button type="button" className="rounded-sm p-1 hover:bg-muted" aria-label={t("alerts.mutes.removeException", { date: d })} onClick={() => setExdates(exdates.filter((x) => x !== d))}>
+                          <X className="size-3" aria-hidden="true" />
+                        </button>
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(calendars.data ?? []).length > 0 && (
+                <div role="group" aria-label={t("alerts.mutes.holidayCalendars")} className="flex flex-wrap gap-2">
+                  {calendars.data!.map((c) => (
+                    <label key={c.id} className="flex min-h-10 items-center gap-2 rounded-md border px-2 py-1 text-sm has-checked:border-primary">
+                      <input type="checkbox" checked={calendarIds.includes(c.id)} onChange={(e) => setCalendarIds(e.target.checked ? [...calendarIds, c.id] : calendarIds.filter((x) => x !== c.id))} />
+                      {c.name} <span className="text-xs text-muted-foreground">({c.dates.length})</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </fieldset>
+            <div className="text-sm" aria-live="polite" data-testid="mute-upcoming">
+              <p className="font-medium">{t("alerts.mutes.upcoming")}</p>
+              {!debounced ? (
+                <p className="text-muted-foreground">{t("alerts.mutes.upcomingInvalid")}</p>
+              ) : upcoming.isError ? (
+                <FormError error={upcoming.error} />
+              ) : !upcoming.data ? (
+                <p className="text-muted-foreground">{t("common.loading")}</p>
+              ) : upcoming.data.length === 0 ? (
+                <p className="text-muted-foreground">{t("alerts.mutes.upcomingNone")}</p>
+              ) : (
+                <ol className="list-inside list-decimal text-muted-foreground">
+                  {upcoming.data.map((o) => (
+                    <li key={o.starts_at}>
+                      <DateTimeText value={o.starts_at} /> – <DateTimeText value={o.ends_at} />
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
           </>
         )}
@@ -180,7 +380,7 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
         })}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={save.isPending}>
+        <Button type="submit" disabled={save.isPending || monthDaysInvalid}>
           {mute ? t("alerts.mutes.save") : t("alerts.mutes.create")}
         </Button>
         <Button type="button" variant="ghost" onClick={onDone}>
@@ -255,13 +455,9 @@ export function MutesManager() {
                       <span className="font-medium">{m.name}</span>
                       {m.comment && <p className="text-xs text-muted-foreground">{m.comment}</p>}
                     </TableCell>
-                    <TableCell label={t("alerts.mutes.columns.window")} className="whitespace-nowrap text-sm">
-                      {m.schedule && (
-                        <p data-testid="mute-schedule">
-                          {m.schedule.days.map((d) => t(`alerts.mutes.dayNames.${d}`)).join(", ")} {m.schedule.start_time}–{m.schedule.end_time} ({m.schedule.timezone})
-                        </p>
-                      )}
-                      <span className={m.schedule ? "text-xs text-muted-foreground" : undefined}>
+                    <TableCell label={t("alerts.mutes.columns.window")} className="text-sm">
+                      {m.schedule && <ScheduleSummary schedule={m.schedule} />}
+                      <span className={m.schedule ? "text-xs whitespace-nowrap text-muted-foreground" : "whitespace-nowrap"}>
                         {m.schedule && `${t("alerts.mutes.occurrence")}: `}
                         <DateTimeText value={m.starts_at} /> – <DateTimeText value={m.ends_at} />
                       </span>
@@ -289,6 +485,7 @@ export function MutesManager() {
           </Table>
         </div>
       )}
+      <HolidayCalendarsManager />
     </div>
   );
 }

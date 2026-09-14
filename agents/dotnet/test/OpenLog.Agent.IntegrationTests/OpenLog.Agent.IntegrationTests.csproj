@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- End-to-end tests: the sample ASP.NET Core app with the real agent exporting to an in-process OTLP capture server.
+       Database tests run when PG_CONNECTION / MYSQL_CONNECTION / REDIS_CONNECTION are set (test/docker-compose.yml). -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <IsTestProject>true</IsTestProject>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../src/OpenLog.Agent/OpenLog.Agent.csproj" />
+    <ProjectReference Include="../../samples/OpenLog.SampleApp/OpenLog.SampleApp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+</Project>

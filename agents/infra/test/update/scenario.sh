@@ -56,6 +56,11 @@ containers:
 update:
   enabled: true
   install_root: /opt/openlog/infra-agent
+# PHP-FPM workers run as www-data: let them reach php.sock without adding the agent to the group.
+php_forwarder:
+  socket_mode: "0666"
+php_agent:
+  health_check_after: 20s
 EOF
 chown root:openlog-agent "$CONFIG"
 chmod 0640 "$CONFIG"
@@ -134,6 +139,57 @@ grep -q OPENLOG_E2E_UNIT "$UNIT" && fail "unit of 0.9.1 not restored"
 pid=$(main_pid)
 tr '\0' '\n' <"/proc/$pid/environ" | grep -q OPENLOG_E2E_UNIT && fail "agent still runs under the 0.9.2 unit"
 root_owned || fail "install root not root-owned at the end"
+
+PHP_ROOT=/opt/openlog/php-agent
+php_loaded() { "$1" -m 2>/dev/null | grep -qx openlog; }
+fpm_request() {
+  mkdir -p /var/www/html
+  printf '<?php usleep(2000); echo "ok";\n' >/var/www/html/e2e.php
+  SCRIPT_NAME=/e2e.php SCRIPT_FILENAME=/var/www/html/e2e.php REQUEST_METHOD=GET REQUEST_URI=/e2e.php QUERY_STRING= \
+    SERVER_NAME=localhost SERVER_PORT=80 SERVER_PROTOCOL=HTTP/1.1 cgi-fcgi -bind -connect /run/php/php8.2-fpm.sock >/dev/null
+}
+
+say "PHP agent: inventory of php8.2-fpm, nothing installed while the fleet mode is manual"
+wait_step 12
+[ ! -e "$PHP_ROOT" ] || fail "PHP agent installed in manual mode"
+php_loaded /usr/sbin/php-fpm8.2 && fail "openlog loaded before the installation"
+
+wait_step 13
+say "check the fleet installation of PHP agent 0.9.6: root-owned tree, ini files, PHP-FPM reloaded, spans flow"
+[ "$(readlink "$PHP_ROOT/current")" = versions/0.9.6 ] || fail "current is not 0.9.6"
+[ -f "$PHP_ROOT/.managed-by-openlog-infra-agent" ] || fail "fleet marker missing"
+[ -z "$(find "$PHP_ROOT" ! -user root -print -quit)" ] || fail "PHP agent tree not root-owned"
+[ -z "$(find "$PHP_ROOT" -perm /6000 -print -quit)" ] || fail "setuid/setgid bits in the PHP agent tree"
+php_loaded /usr/bin/php8.2 || fail "php -m does not list openlog"
+php_loaded /usr/sbin/php-fpm8.2 || fail "php-fpm8.2 -m does not list openlog"
+head -n1 /etc/php/8.2/mods-available/openlog.ini | grep -q "managed by openlog-php-install" || fail "managed ini missing"
+systemctl is-active --quiet php8.2-fpm || fail "php8.2-fpm not active"
+journalctl -u php8.2-fpm --no-pager | grep -qi reload || fail "php8.2-fpm was not reloaded"
+as_agent sh -c "touch $PHP_ROOT/x" 2>/dev/null && fail "openlog-agent can write the PHP agent tree"
+grep -q '"result": "applied"' "$ROOT/php-agent-status.json" || fail "privileged step status"
+for _ in $(seq 1 30); do
+  fpm_request
+  grep -q "TRACES RECEIVED" "$LOG" && break
+  sleep 2
+done
+grep -q "TRACES RECEIVED" "$LOG" || fail "no spans from PHP-FPM reached the fake ingest"
+echo "PHP agent checks passed"
+gate php-broken
+
+wait_step 14
+say "check the rollback of the broken PHP agent 0.9.7"
+[ "$(readlink "$PHP_ROOT/current")" = versions/0.9.6 ] || fail "current is not 0.9.6 after the rollback"
+[ ! -e "$PHP_ROOT/versions/0.9.7" ] || fail "broken version kept"
+php_loaded /usr/sbin/php-fpm8.2 || fail "openlog not loaded again after the rollback"
+grep -q '"result": "rolled_back"' "$ROOT/php-agent-status.json" || fail "rollback status"
+gate php-off
+
+wait_step 15
+say "check the removal of the PHP agent (fleet mode off)"
+[ ! -e "$PHP_ROOT" ] || fail "PHP agent root left after mode off"
+php_loaded /usr/sbin/php-fpm8.2 && fail "openlog still loaded after the removal"
+[ -z "$(grep -rl "managed by openlog-php-install" /etc/php 2>/dev/null)" ] || fail "managed ini files left"
+systemctl is-active --quiet php8.2-fpm || fail "php8.2-fpm not active after the removal"
 
 sleep 3
 grep -q "SCENARIO PASSED" "$LOG" || fail "server did not finish"

@@ -77,6 +77,30 @@ func TestRecordInfo(t *testing.T) {
 
 // fakeServer speaks enough RESP for AUTH and INFO; password "" disables auth.
 func fakeServer(t *testing.T, user, password string) integrations.Endpoint {
+	return fakeServerWith(t, serverOpts{user: user, password: password})
+}
+
+type serverOpts struct {
+	user, password string
+	cluster        bool // cluster_enabled:1 and CLUSTER INFO/NODES
+	noCluster      bool // ACL user without +cluster
+}
+
+// Recorded from a 3-master redis:7-alpine cluster.
+const (
+	clusterInfoFixture = "cluster_state:ok\r\ncluster_slots_assigned:16384\r\ncluster_slots_ok:16384\r\ncluster_slots_pfail:0\r\ncluster_slots_fail:0\r\n" +
+		"cluster_known_nodes:3\r\ncluster_size:3\r\ncluster_current_epoch:3\r\ncluster_my_epoch:1\r\ncluster_stats_messages_ping_sent:7\r\n" +
+		"cluster_stats_messages_pong_sent:7\r\ncluster_stats_messages_sent:14\r\ncluster_stats_messages_ping_received:9\r\n" +
+		"cluster_stats_messages_pong_received:7\r\ncluster_stats_messages_received:16\r\ntotal_cluster_links_buffer_limit_exceeded:0\r\n"
+	clusterNodesFixture = "a326415241757744a95d439eff9888d46b83bce4 192.168.147.3:6379@16379 master - 0 1789340044711 2 connected 5461-10922\n" +
+		"561ea2657e1610fab573dc0c044a0cdd27855e41 192.168.147.2:6379@16379 myself,master - 0 0 1 connected 0-5460\n" +
+		"5347afcf2c0b758e823837a650cdbdae78887116 192.168.147.4:6379@16379 master - 0 1789340043661 3 connected 10923-16383\n"
+)
+
+func bulk(conn net.Conn, s string) { fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(s), s) }
+
+func fakeServerWith(t *testing.T, o serverOpts) integrations.Endpoint {
+	user, password := o.user, o.password
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +112,7 @@ func fakeServer(t *testing.T, user, password string) integrations.Endpoint {
 			if err != nil {
 				return
 			}
-			go handle(conn, user, password)
+			go handle(conn, user, password, o)
 		}
 	}()
 	_, port, _ := net.SplitHostPort(l.Addr().String())
@@ -96,7 +120,7 @@ func fakeServer(t *testing.T, user, password string) integrations.Endpoint {
 	return integrations.TCP("127.0.0.1", p)
 }
 
-func handle(conn net.Conn, user, password string) {
+func handle(conn net.Conn, user, password string, o serverOpts) {
 	defer conn.Close()
 	rd := bufio.NewReader(conn)
 	authed := password == ""
@@ -131,8 +155,69 @@ func handle(conn net.Conn, user, password string) {
 				fmt.Fprint(conn, "-NOAUTH Authentication required.\r\n")
 				continue
 			}
+			if o.cluster {
+				bulk(conn, infoFixture+"\r\n# Cluster\r\ncluster_enabled:1\r\n")
+				continue
+			}
 			fmt.Fprintf(conn, "$%d\r\n%s\r\n", len(infoFixture), infoFixture)
+		case "CLUSTER":
+			switch {
+			case o.noCluster:
+				fmt.Fprintf(conn, "-NOPERM User %s has no permissions to run the 'cluster|%s' command\r\n", user, strings.ToLower(args[1]))
+			case strings.EqualFold(args[1], "INFO"):
+				bulk(conn, clusterInfoFixture)
+			case strings.EqualFold(args[1], "NODES"):
+				bulk(conn, clusterNodesFixture)
+			}
 		}
+	}
+}
+
+func TestRecordCluster(t *testing.T) {
+	b := integrations.NewBatch(time.Unix(10_000, 0), 0)
+	RecordCluster(b, ParseInfo(clusterInfoFixture), clusterNodesFixture)
+	ps := testutil.Points(b)
+	testutil.Expect(t, ps, "redis.cluster.state", "{state}", false, false, 1, map[string]string{"cluster_state": "ok"})
+	testutil.Expect(t, ps, "redis.cluster.slots_assigned", "{slot}", false, false, 16384, nil)
+	testutil.Expect(t, ps, "redis.cluster.slots_pfail", "{slot}", false, false, 0, nil)
+	testutil.Expect(t, ps, "redis.cluster.known_nodes", "{node}", false, false, 3, nil)
+	testutil.Expect(t, ps, "redis.cluster.node.count", "{node}", false, false, 3, nil)
+	testutil.Expect(t, ps, "redis.cluster.stats_messages_sent", "{message}", true, true, 14, nil)
+	testutil.Expect(t, ps, "redis.cluster.stats_messages_received", "{message}", true, true, 16, nil)
+	testutil.Expect(t, ps, "redis.cluster.links_buffer_limit_exceeded.count", "{count}", true, true, 0, nil)
+	if p := testutil.One(t, ps, "redis.cluster.state", nil); p.Resource["redis.cluster.node.id"] != "561ea2657e1610fab573dc0c044a0cdd27855e41" {
+		t.Errorf("resource = %v", p.Resource)
+	}
+	b = integrations.NewBatch(time.Unix(10_000, 0), 0)
+	RecordCluster(b, map[string]string{"cluster_state": "fail"}, "")
+	testutil.Expect(t, testutil.Points(b), "redis.cluster.state", "{state}", false, false, 0, map[string]string{"cluster_state": "fail"})
+}
+
+func TestClusterCollect(t *testing.T) {
+	b, err := collect(t, fakeServerWith(t, serverOpts{cluster: true}), config.InstanceSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := testutil.Points(b)
+	testutil.Expect(t, ps, "redis.cluster.cluster_enabled", "1", false, false, 1, nil)
+	testutil.Expect(t, ps, "redis.cluster.slots_ok", "{slot}", false, false, 16384, nil)
+
+	// Without +cluster the INFO metrics are kept and the collection is partial.
+	b, err = collect(t, fakeServerWith(t, serverOpts{user: "openlog", password: "pw", cluster: true, noCluster: true}),
+		config.InstanceSettings{Username: "openlog", Password: "pw"})
+	var pe *integrations.PartialError
+	if !errors.As(err, &pe) || !strings.Contains(err.Error(), "+cluster|info") {
+		t.Errorf("noperm: %v", err)
+	}
+	ps = testutil.Points(b)
+	if len(testutil.Find(ps, "redis.uptime", nil)) != 1 || len(testutil.Find(ps, "redis.cluster.state", nil)) != 0 {
+		t.Error("noperm: INFO metrics expected, no cluster metrics")
+	}
+
+	// Standalone servers are not asked for CLUSTER INFO.
+	b, err = collect(t, fakeServer(t, "", ""), config.InstanceSettings{})
+	if err != nil || len(testutil.Find(testutil.Points(b), "redis.cluster.slots_ok", nil)) != 0 {
+		t.Errorf("standalone: %v", err)
 	}
 }
 

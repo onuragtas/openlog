@@ -79,6 +79,8 @@ func (s *Server) alertRoutes(mux *http.ServeMux) {
 	route("PUT /api/v1/alerts/mutes/{id}", alertWrite, s.updateAlertMute)
 	route("DELETE /api/v1/alerts/mutes/{id}", alertWrite, s.deleteAlertMute)
 	route("GET /api/v1/alerts/deliveries", alertRead, s.listAlertDeliveries)
+	s.alertCalendarRoutes(route)      // alert_calendars.go
+	s.alertTemplateRoutes(mux, route) // alert_templates.go
 }
 
 func alertAllowed(p *auth.Principal, access alertAccess) *apiError {
@@ -365,6 +367,8 @@ type alertMuteScheduleJSON struct {
 	EndTime   string   `json:"end_time"`
 	From      string   `json:"from"`
 	Until     *string  `json:"until"`
+	ExDates   []string `json:"exdates"`
+	Calendars []string `json:"holiday_calendar_ids"`
 }
 
 type alertMuteJSON struct {
@@ -376,6 +380,7 @@ type alertMuteJSON struct {
 	RuleIDs         []string               `json:"rule_ids"`
 	Matchers        []alert.MuteMatcher    `json:"matchers"`
 	Schedule        *alertMuteScheduleJSON `json:"schedule"`
+	Upcoming        []muteOccurrenceJSON   `json:"upcoming"`
 	Active          bool                   `json:"active"`
 	CreatedByUserID *string                `json:"created_by_user_id"`
 	CreatedByEmail  string                 `json:"created_by_email"`
@@ -393,7 +398,19 @@ func (s *Server) alertMuteResponse(m *alert.Mute) alertMuteJSON {
 		CreatedByEmail: m.CreatedByEmail, CreatedAt: formatTime(m.CreatedAt), UpdatedAt: formatTime(m.UpdatedAt)}
 	if sc := m.Schedule; sc != nil {
 		out.Schedule = &alertMuteScheduleJSON{Timezone: sc.Timezone, Days: sc.Days, RRule: optString(sc.RRule), StartTime: sc.StartTime,
-			EndTime: sc.EndTime, From: formatTime(sc.From), Until: optTime(sc.Until)}
+			EndTime: sc.EndTime, From: formatTime(sc.From), Until: optTime(sc.Until), ExDates: sc.ExDates, Calendars: sc.HolidayCalendarIDs}
+		if out.Schedule.Days == nil {
+			out.Schedule.Days = []string{}
+		}
+		if out.Schedule.ExDates == nil {
+			out.Schedule.ExDates = []string{}
+		}
+		if out.Schedule.Calendars == nil {
+			out.Schedule.Calendars = []string{}
+		}
+		out.Upcoming = occurrencesJSON(sc.Occurrences(now, upcomingMuteOccurrences))
+	} else {
+		out.Upcoming = occurrencesJSON(nil)
 	}
 	if out.RuleIDs == nil {
 		out.RuleIDs = []string{}

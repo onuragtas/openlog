@@ -19,7 +19,15 @@ const (
 	ChannelBeta   = "beta"
 
 	ComponentInfraAgent = "infra-agent"
-	FormatTarGz         = "tar.gz"
+	// ComponentPHPAgent is the PHP extension (openlog.so for every PHP ABI + openlog-php-install),
+	// docs/contracts/php-agent.md §7. Consumers ignore components and formats they do not know, so adding
+	// them does not change the schema version.
+	ComponentPHPAgent = "php-agent"
+
+	FormatTarGz = "tar.gz"
+	FormatDeb   = "deb"
+	FormatRPM   = "rpm"
+	FormatAPK   = "apk"
 )
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)

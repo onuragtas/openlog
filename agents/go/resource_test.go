@@ -59,7 +59,7 @@ func TestHostIDChainMatchesInfraAgent(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			root := fixture(t, tc.files)
-			id, src := resolveHostID(ctx, hostFS{root: root}, infra, t.TempDir())
+			id, src := resolveHostID(ctx, hostFS{root: root}, "", infra, t.TempDir())
 			eq(t, id, tc.want)
 			eq(t, src, tc.source)
 		})
@@ -68,12 +68,12 @@ func TestHostIDChainMatchesInfraAgent(t *testing.T) {
 	t.Run("generated and persisted", func(t *testing.T) {
 		root := fixture(t, map[string]string{"/etc/machine-id": "\n"})
 		state := t.TempDir()
-		id, src := resolveHostID(ctx, hostFS{root: root}, infra, state)
+		id, src := resolveHostID(ctx, hostFS{root: root}, "", infra, state)
 		if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(id) {
 			t.Fatalf("generated id %q", id)
 		}
 		eq(t, src, hostIDSourceGenerated)
-		again, _ := resolveHostID(ctx, hostFS{root: root}, infra, state)
+		again, _ := resolveHostID(ctx, hostFS{root: root}, "", infra, state)
 		eq(t, again, id)
 	})
 }

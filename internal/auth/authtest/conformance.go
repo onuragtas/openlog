@@ -403,7 +403,7 @@ func roles(t *testing.T, e *Env) {
 	ok(t, err, "member lists license keys")
 	err = e.Svc.UpdateMemberRole(ctx, member.P, viewer.P.UserID, auth.RoleMember, e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "member changes roles")
-	_, err = e.Svc.ListAuditEvents(ctx, member.P, 10)
+	_, err = e.Svc.ListAuditEvents(ctx, member.P, auth.AuditFilter{Limit: 10})
 	expect(t, err, auth.ErrPermissionDenied, "member reads audit log")
 
 	adminKey, _, err := e.Svc.CreateAPIKey(ctx, admin.P, "admin", nil, e.Meta)
@@ -431,7 +431,7 @@ func roles(t *testing.T, e *Env) {
 	ok(t, err, "member revokes own key")
 	_, err = e.Svc.RevokeAPIKey(ctx, admin.P, adminKey.ID, e.Meta)
 	ok(t, err, "admin revokes key")
-	_, err = e.Svc.ListAuditEvents(ctx, admin.P, 10)
+	_, err = e.Svc.ListAuditEvents(ctx, admin.P, auth.AuditFilter{Limit: 10})
 	ok(t, err, "admin reads audit log")
 
 	// Keys and members of another organization are invisible.
@@ -474,7 +474,7 @@ func invitations(t *testing.T, e *Env) {
 	}
 	_, _, err = e.Svc.CreateInvitation(ctx, owner.P, e.Email("new"), auth.RoleViewer, e.Meta)
 	expect(t, err, auth.ErrAlreadyExists, "duplicate pending invitation")
-	list, err := e.Svc.ListInvitations(ctx, owner.P)
+	list, err := e.Svc.ListInvitations(ctx, owner.P, false)
 	ok(t, err, "list invitations")
 	if len(list) != 1 || list[0].InvitedByEmail != e.Email("owner-inv") {
 		t.Fatalf("invitations %+v", list)
@@ -598,7 +598,7 @@ func customLicenseKeys(t *testing.T, e *Env) {
 			t.Fatalf("custom flag %+v", x)
 		}
 	}
-	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, 50)
+	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, auth.AuditFilter{Limit: 50})
 	ok(t, err, "audit")
 	audited := false
 	for _, ev := range evs {
@@ -686,7 +686,7 @@ func auditLog(t *testing.T, e *Env) {
 	_, owner := e.Bootstrap("audit")
 	k, _, err := e.Svc.CreateLicenseKey(ctx, owner.P, "prod", "", e.Meta)
 	ok(t, err, "create key")
-	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, 50)
+	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, auth.AuditFilter{Limit: 50})
 	ok(t, err, "list audit")
 	found := false
 	for _, ev := range evs {

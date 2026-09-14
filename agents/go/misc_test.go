@@ -29,7 +29,7 @@ func (w *syncWriter) Write(p []byte) (int, error) {
 
 func TestSampler(t *testing.T) {
 	rec := tracetest.NewSpanRecorder()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0.5)), sdktrace.WithSpanProcessor(rec))
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0.5, false)), sdktrace.WithSpanProcessor(rec))
 	tr := tp.Tracer("t")
 	sampled := 0
 	for range 2000 {
@@ -61,7 +61,7 @@ func TestSampler(t *testing.T) {
 
 	// A sampled remote parent is followed regardless of the ratio.
 	rec2 := tracetest.NewSpanRecorder()
-	tp2 := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0)), sdktrace.WithSpanProcessor(rec2))
+	tp2 := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(0, false)), sdktrace.WithSpanProcessor(rec2))
 	remote := trace.NewSpanContext(trace.SpanContextConfig{TraceID: trace.TraceID{1}, SpanID: trace.SpanID{1}, TraceFlags: trace.FlagsSampled, Remote: true})
 	_, s := tp2.Tracer("t").Start(trace.ContextWithRemoteSpanContext(context.Background(), remote), "server")
 	s.End()
@@ -75,7 +75,7 @@ func TestSampler(t *testing.T) {
 	}
 	// Ratio 1 adds no attribute.
 	rec3 := tracetest.NewSpanRecorder()
-	tp3 := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(1)), sdktrace.WithSpanProcessor(rec3))
+	tp3 := sdktrace.NewTracerProvider(sdktrace.WithSampler(newSampler(1, false)), sdktrace.WithSpanProcessor(rec3))
 	_, s = tp3.Tracer("t").Start(context.Background(), "root")
 	s.End()
 	if len(rec3.Ended()[0].Attributes()) != 0 {

@@ -1,0 +1,261 @@
+import { context, diag as otelDiag, metrics, propagation, trace } from '@opentelemetry/api';
+import { logs } from '@opentelemetry/api-logs';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { CompositePropagator, W3CBaggagePropagator, W3CTraceContextPropagator } from '@opentelemetry/core';
+import { registerInstrumentations, type Instrumentation } from '@opentelemetry/instrumentation';
+import type { Resource } from '@opentelemetry/resources';
+import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { loadConfig, type Config, type Env, type OpenlogOptions } from './config';
+import { bridgeConsole, type ConsoleBridge } from './console';
+import { Diag, RateLimitedDiagLogger, toDiagLogLevel, type Write } from './diag';
+import { createExporters } from './exporters';
+import { createInstrumentations } from './instrumentations';
+import { DbStatementProcessor, RouteProcessor } from './processors';
+import { buildResource } from './resource';
+import { startRuntimeMetrics, type RuntimeMetrics } from './runtime-metrics';
+import { createSampler, RandomFlagTracerProvider } from './sampler';
+import { VERSION } from './version';
+
+export { ConfigError, LICENSE_KEY_HEADER, loadConfig, PROTOCOL_GRPC, PROTOCOL_HTTP } from './config';
+export type { Config, DbQueryTextMode, OpenlogOptions, Protocol } from './config';
+export type { LogLevel } from './diag';
+export { INSTRUMENTATION_PACKAGES, normalizeInstrumentationName } from './instrumentations';
+export type { InstrumentationName } from './instrumentations';
+export { sanitizeKeyValue, sanitizeSQL } from './sanitize';
+export { createSampler, RandomFlagTracerProvider, SAMPLING_RATIO_KEY } from './sampler';
+export { RUNTIME_SCOPE } from './runtime-metrics';
+export { DISTRO_NAME, VERSION } from './version';
+
+/** A running agent. */
+export interface Agent {
+  readonly config: Config;
+  readonly resource: Resource | undefined;
+  readonly tracerProvider: NodeTracerProvider | undefined;
+  readonly meterProvider: MeterProvider | undefined;
+  readonly loggerProvider: LoggerProvider | undefined;
+  /** Exports buffered telemetry now. */
+  forceFlush(): Promise<void>;
+  /** Flushes buffered telemetry and stops the exporters (bounded by OPENLOG_SHUTDOWN_TIMEOUT, default 5 s). Idempotent. */
+  shutdown(): Promise<void>;
+}
+
+/** Thrown when start() is called while a previous agent is running. */
+export class AlreadyStartedError extends Error {
+  constructor() {
+    super('openlog: already started; call shutdown() first');
+    this.name = 'AlreadyStartedError';
+  }
+}
+
+let current: Agent | undefined;
+
+/** The running agent, if any. */
+export function getAgent(): Agent | undefined {
+  return current;
+}
+
+/** Internal knobs for tests. */
+export interface StartInternals {
+  env?: Env;
+  diagWrite?: Write;
+  instrumentations?: Instrumentation[];
+}
+
+function withTimeout(p: Promise<unknown>, ms: number, what: string): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    p.then(() => undefined),
+    new Promise<void>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms} ms`)), ms);
+      timer.unref();
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Configures OpenTelemetry for openlog and installs the global TracerProvider, MeterProvider, LoggerProvider, the
+ * AsyncLocalStorage context manager, W3C tracecontext + baggage propagators and the auto-instrumentations.
+ *
+ * Configuration precedence: options > OPENLOG_* > OTEL_* > defaults. Export problems are logged (rate limited) and
+ * never thrown into application code; start() itself only throws on invalid configuration (ConfigError) or when an
+ * agent is already running.
+ *
+ *   const { start } = require('@openlog/node');
+ *   const agent = start({ serviceName: 'checkout' });
+ *   process.on('SIGTERM', () => agent.shutdown().finally(() => process.exit(0)));
+ *
+ * Call it before the application requires the libraries to instrument (or use `@openlog/node/register`).
+ */
+export function start(options: OpenlogOptions = {}, internals: StartInternals = {}): Agent {
+  const env = internals.env ?? process.env;
+  const { config: cfg, warnings } = loadConfig(env, options);
+  const log = new Diag(cfg.logLevel, internals.diagWrite);
+  for (const w of warnings) log.warn(w);
+  if (!cfg.enabled) {
+    log.info('disabled (OPENLOG_ENABLED=false)');
+    return noopAgent(cfg);
+  }
+  if (current) throw new AlreadyStartedError();
+
+  otelDiag.setLogger(new RateLimitedDiagLogger(log), { logLevel: toDiagLogLevel(cfg.logLevel), suppressOverrideMessage: true });
+
+  const { resource, hostIdSource } = buildResource(cfg, env);
+  if (hostIdSource === 'generated') {
+    log.info('host.id generated by the Node.js agent; it links to an infra agent only if both read the same machine-id (see README: host linking)');
+  }
+  const exporters = createExporters(cfg);
+
+  const tracerProvider = new NodeTracerProvider({
+    resource,
+    sampler: createSampler(cfg.samplingRatio, cfg.samplingRV),
+    spanProcessors: [
+      new RouteProcessor(),
+      new DbStatementProcessor(cfg.dbQueryText),
+      new BatchSpanProcessor(exporters.trace, {
+        maxQueueSize: 4096,
+        maxExportBatchSize: 512,
+        scheduledDelayMillis: 5000,
+        exportTimeoutMillis: Math.max(30_000, cfg.exportTimeoutMs),
+      }),
+    ],
+  });
+  const tracers = new RandomFlagTracerProvider(tracerProvider);
+  const metricInterval = Math.max(1, Math.round(cfg.metricIntervalMs));
+  const meterProvider = new MeterProvider({
+    resource,
+    readers: [
+      new PeriodicExportingMetricReader({
+        exporter: exporters.metric,
+        exportIntervalMillis: metricInterval,
+        exportTimeoutMillis: Math.min(Math.max(cfg.exportTimeoutMs, 1), metricInterval),
+      }),
+    ],
+  });
+  const loggerProvider = new LoggerProvider({
+    resource,
+    processors: [
+      new BatchLogRecordProcessor({
+        exporter: exporters.log,
+        maxQueueSize: 4096,
+        maxExportBatchSize: 512,
+        scheduledDelayMillis: 2000,
+        exportTimeoutMillis: Math.max(30_000, cfg.exportTimeoutMs),
+      }),
+    ],
+  });
+
+  const contextManager = new AsyncLocalStorageContextManager().enable();
+  context.setGlobalContextManager(contextManager);
+  propagation.setGlobalPropagator(new CompositePropagator({ propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()] }));
+  trace.setGlobalTracerProvider(tracers);
+  metrics.setGlobalMeterProvider(meterProvider);
+  logs.setGlobalLoggerProvider(loggerProvider);
+
+  const created = createInstrumentations(cfg);
+  for (const n of created.unknownDisabled) log.warn(`unknown instrumentation ${JSON.stringify(n)} in the disabled list; ignored`);
+  const instrumentations = [...created.instrumentations, ...(internals.instrumentations ?? [])];
+  const unregister = registerInstrumentations({ instrumentations, tracerProvider: tracers, meterProvider, loggerProvider });
+
+  let runtime: RuntimeMetrics | undefined;
+  if (cfg.runtimeMetrics) runtime = startRuntimeMetrics(meterProvider);
+  let consoleBridge: ConsoleBridge | undefined;
+  if (cfg.logsConsole) consoleBridge = bridgeConsole(loggerProvider);
+
+  log.info('started', {
+    'service.name': cfg.serviceName,
+    endpoint: cfg.endpoint,
+    protocol: cfg.protocol,
+    sampling_ratio: cfg.samplingRatio,
+    'host.id.source': hostIdSource,
+    instrumentations: instrumentations.length,
+    version: VERSION,
+  });
+
+  let shutdownPromise: Promise<void> | undefined;
+  const agent: Agent = {
+    config: cfg,
+    resource,
+    tracerProvider,
+    meterProvider,
+    loggerProvider,
+    async forceFlush(): Promise<void> {
+      await Promise.all([tracerProvider.forceFlush(), meterProvider.forceFlush(), loggerProvider.forceFlush()]);
+    },
+    shutdown(): Promise<void> {
+      if (!shutdownPromise) {
+        shutdownPromise = (async () => {
+          consoleBridge?.restore();
+          runtime?.stop();
+          const results = await Promise.allSettled([
+            withTimeout(tracerProvider.shutdown(), cfg.shutdownTimeoutMs, 'trace shutdown'),
+            withTimeout(meterProvider.shutdown(), cfg.shutdownTimeoutMs, 'metric shutdown'),
+            withTimeout(loggerProvider.shutdown(), cfg.shutdownTimeoutMs, 'log shutdown'),
+          ]);
+          for (const r of results) if (r.status === 'rejected') log.warn('shutdown', { error: r.reason });
+          unregister();
+          trace.disable();
+          metrics.disable();
+          logs.disable();
+          propagation.disable();
+          context.disable();
+          otelDiag.disable();
+          if (current === agent) current = undefined;
+        })();
+      }
+      return shutdownPromise;
+    },
+  };
+  current = agent;
+  return agent;
+}
+
+function noopAgent(config: Config): Agent {
+  return {
+    config,
+    resource: undefined,
+    tracerProvider: undefined,
+    meterProvider: undefined,
+    loggerProvider: undefined,
+    forceFlush: () => Promise.resolve(),
+    shutdown: () => Promise.resolve(),
+  };
+}
+
+/** Shuts the running agent down (no-op when none is running). */
+export function shutdown(): Promise<void> {
+  return current ? current.shutdown() : Promise.resolve();
+}
+
+/**
+ * Entry point of `@openlog/node/register`: starts from the environment, never throws into the application, and (unless
+ * OPENLOG_SHUTDOWN_ON_SIGNAL=false) flushes on beforeExit, SIGTERM and SIGINT. When the application has no signal
+ * handler of its own, the signal is re-raised after the flush so the process terminates as it would without the agent.
+ */
+export function startFromEnvironment(internals: StartInternals = {}): Agent | undefined {
+  let agent: Agent;
+  try {
+    agent = start({}, internals);
+  } catch (err) {
+    const write = internals.diagWrite ?? ((l: string) => process.stderr.write(l + '\n'));
+    new Diag('error', write).error('not started', { error: err instanceof Error ? err.message : String(err) });
+    return undefined;
+  }
+  if (!agent.tracerProvider || !agent.config.shutdownOnSignal) return agent;
+  process.once('beforeExit', () => {
+    void agent.shutdown();
+  });
+  for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+    const onSignal = (): void => {
+      const appHandles = process.listenerCount(sig) > 1;
+      process.removeListener(sig, onSignal);
+      void agent.shutdown().finally(() => {
+        if (!appHandles) process.kill(process.pid, sig);
+      });
+    };
+    process.on(sig, onSignal);
+  }
+  return agent;
+}

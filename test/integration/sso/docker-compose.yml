@@ -1,0 +1,41 @@
+# PostgreSQL and Keycloak for the single sign-on end-to-end test (test/sso, D-077):
+#
+#   docker compose -f test/integration/sso/docker-compose.yml up -d --wait
+#   OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55440/openlog?sslmode=disable \
+#   OPENLOG_TEST_KEYCLOAK_URL=http://127.0.0.1:18080 go test -tags ssoe2e -count=1 ./test/sso
+#   docker compose -f test/integration/sso/docker-compose.yml down -v
+name: openlog-ssotest
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openlog
+      POSTGRES_PASSWORD: openlog
+      POSTGRES_DB: openlog
+    ports:
+      - "127.0.0.1:${SSOTEST_PG_PORT:-55440}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    command: ["start-dev", "--import-realm", "--http-port=8080", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:${SSOTEST_KEYCLOAK_PORT:-18080}:8080"
+    volumes:
+      - ./realm-openlog.json:/opt/keycloak/data/import/realm-openlog.json:ro
+    healthcheck:
+      # The image has no curl/wget: probe the management port with bash.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 40

@@ -10,6 +10,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { createAlertSearch } from "@/lib/alerts";
 import type { Aggregation } from "@/api/types";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
+import { AddToDashboardButton } from "@/components/oql/AddToDashboardButton";
+import { hostMetricOql } from "@/lib/oql";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UnitKind } from "@/lib/format";
 import { fromMetricSeries, type ChartSeriesInput } from "@/lib/series";
@@ -121,6 +123,7 @@ function MetricChartCard({ hostId, range, def, canAlert }: { hostId: string; ran
         <CardTitle>
           <h2>{title}</h2>
         </CardTitle>
+        {canAlert && <AddToDashboardButton className="ml-auto" query={hostMetricOql(alertMetric.name, hostId, alertMetric.groupBy)} title={title} />}
         {canAlert && (
           <Link
             to="/alerts/rules/new"

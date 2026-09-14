@@ -110,16 +110,29 @@ func (s *Service) RemoveMember(ctx context.Context, p *Principal, userID string,
 	if err := s.store.RemoveMember(ctx, p.OrgID, userID); err != nil {
 		return s.fail(err)
 	}
-	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "member.remove", "user", userID, map[string]any{"role": cur.Role})
+	// The removed user's sessions lose this organization on their next request (membership is not cached).
+	// API keys they created would keep reading the organization's data, so they are revoked too (D-046).
+	details := map[string]any{"role": cur.Role}
+	if n, err := s.store.RevokeAPIKeysCreatedBy(ctx, p.OrgID, userID, p.UserID, s.now()); err != nil {
+		s.log.Error("cannot revoke API keys of a removed member", "org_id", p.OrgID, "user_id", userID, "err", err)
+	} else if n > 0 {
+		details["revoked_api_keys"] = n
+	}
+	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "member.remove", "user", userID, details)
 	return nil
 }
 
 // ---- invitations ----
 
 // CreateInvitation invites email with role (admin+). The returned token is
-// shown once; the invitee accepts it with AcceptInvitation.
+// shown once; the invitee accepts it with AcceptInvitation. When e-mail is
+// enabled the invitation is also e-mailed; the returned LastSentAt is set when
+// that succeeded.
 func (s *Service) CreateInvitation(ctx context.Context, p *Principal, email string, role Role, meta ClientMeta) (Invitation, string, error) {
 	if err := s.gate(p, ActManageInvitations); err != nil {
+		return Invitation{}, "", err
+	}
+	if err := s.requireVerified(p); err != nil {
 		return Invitation{}, "", err
 	}
 	email = NormalizeEmail(email)
@@ -154,20 +167,77 @@ func (s *Service) CreateInvitation(ctx context.Context, p *Principal, email stri
 		}
 		return Invitation{}, "", s.fail(err)
 	}
-	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "invitation.create", "invitation", inv.ID, map[string]any{"email": email, "role": role})
+	if sent := s.mailInvitation(ctx, p, inv, token); sent != nil {
+		inv.LastSentAt, inv.SendCount = sent, inv.SendCount+1
+	}
+	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "invitation.create", "invitation", inv.ID,
+		map[string]any{"email": email, "role": role, "email_sent": inv.LastSentAt != nil})
 	return inv, token, nil
 }
 
-// ListInvitations lists pending invitations (admin+).
-func (s *Service) ListInvitations(ctx context.Context, p *Principal) ([]Invitation, error) {
+// ListInvitations lists pending invitations (admin+); with includeExpired also
+// expired ones that were neither accepted nor revoked (they can be resent).
+func (s *Service) ListInvitations(ctx context.Context, p *Principal, includeExpired bool) ([]Invitation, error) {
 	if err := s.gate(p, ActManageInvitations); err != nil {
 		return nil, err
 	}
-	invs, err := s.store.ListInvitations(ctx, p.OrgID, s.now())
+	invs, err := s.store.ListInvitations(ctx, p.OrgID, s.now(), includeExpired)
 	if err != nil {
 		return nil, s.fail(err)
 	}
 	return invs, nil
+}
+
+// ResendInvitation issues a new token for an invitation that is neither
+// accepted nor revoked (also after it expired), restarts its validity
+// (OPENLOG_INVITATION_TTL) and e-mails it when e-mail is enabled (admin+). The
+// previous link stops working. Returns the new token (shown once) and whether
+// the e-mail was sent by this call.
+func (s *Service) ResendInvitation(ctx context.Context, p *Principal, id string, meta ClientMeta) (Invitation, string, bool, error) {
+	if err := s.gate(p, ActManageInvitations); err != nil {
+		return Invitation{}, "", false, err
+	}
+	if err := s.requireVerified(p); err != nil {
+		return Invitation{}, "", false, err
+	}
+	now := s.now()
+	open, err := s.store.ListInvitations(ctx, p.OrgID, now, true)
+	if err != nil {
+		return Invitation{}, "", false, s.fail(err)
+	}
+	var cur *Invitation
+	for i := range open {
+		if open[i].ID == id {
+			cur = &open[i]
+		}
+	}
+	errGone := &Error{Code: CodeNotFound, Message: "invitation not found, already accepted or revoked"}
+	if cur == nil {
+		return Invitation{}, "", false, errGone
+	}
+	if cur.Role == RoleOwner && p.Role != RoleOwner {
+		return Invitation{}, "", false, denied("only owners can invite owners")
+	}
+	token, err := NewSecret(PrefixInvitation)
+	if err != nil {
+		return Invitation{}, "", false, err
+	}
+	inv, err := s.store.RenewInvitation(ctx, p.OrgID, id, HashSecret(token), now.Add(s.cfg.InvitationTTL))
+	if errors.Is(err, ErrNotFound) {
+		return Invitation{}, "", false, errGone
+	}
+	if err != nil {
+		return Invitation{}, "", false, s.fail(err)
+	}
+	inv.InvitedByEmail = cur.InvitedByEmail
+	sent := s.mailInvitation(ctx, p, inv, token)
+	if sent != nil {
+		inv.LastSentAt, inv.SendCount = sent, inv.SendCount+1
+	}
+	inv.TokenHash = nil
+	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "invitation.resend", "invitation", inv.ID,
+		map[string]any{"email": inv.Email, "role": inv.Role, "email_sent": sent != nil})
+	return inv, token, sent != nil, nil
 }
 
 // RevokeInvitation revokes a pending invitation (admin+).
@@ -247,7 +317,8 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, password, name st
 		if err != nil {
 			return LoginResult{}, Organization{}, err
 		}
-		u = User{Email: inv.Email, Name: clean, PasswordHash: hash, CreatedAt: now}
+		// The inviting admin vouches for the address (or it received the invitation e-mail).
+		u = User{Email: inv.Email, Name: clean, PasswordHash: hash, CreatedAt: now, EmailVerifiedAt: &now}
 	}
 	if err := s.store.AcceptInvitation(ctx, inv.ID, &u, now); err != nil {
 		if errors.Is(err, ErrAlreadyExists) {
@@ -289,6 +360,9 @@ func (s *Service) CreateLicenseKey(ctx context.Context, p *Principal, name, cust
 	if err := s.gate(p, ActManageLicenseKeys); err != nil {
 		return LicenseKey{}, "", err
 	}
+	if err := s.requireVerified(p); err != nil {
+		return LicenseKey{}, "", err
+	}
 	name, err := cleanName(name, "name", true)
 	if err != nil {
 		return LicenseKey{}, "", err
@@ -302,7 +376,11 @@ func (s *Service) CreateLicenseKey(ctx context.Context, p *Principal, name, cust
 	} else if secret, err = NewSecret(PrefixLicenseKey); err != nil {
 		return LicenseKey{}, "", err
 	}
-	k := LicenseKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: HashSecret(secret), Custom: custom,
+	hash, legacy := s.keyHashes(secret)
+	if !custom {
+		legacy = nil // 192 random bits: no earlier row can have this value
+	}
+	k := LicenseKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: hash, LegacyHashes: legacy, Custom: custom,
 		CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: s.now()}
 	if err := s.store.CreateLicenseKey(ctx, &k); err != nil {
 		if custom && errors.Is(err, ErrAlreadyExists) {
@@ -353,6 +431,9 @@ func (s *Service) CreateAPIKey(ctx context.Context, p *Principal, name string, e
 	if err := s.gate(p, ActCreateAPIKey); err != nil {
 		return APIKey{}, "", err
 	}
+	if err := s.requireVerified(p); err != nil {
+		return APIKey{}, "", err
+	}
 	name, err := cleanName(name, "name", true)
 	if err != nil {
 		return APIKey{}, "", err
@@ -365,7 +446,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, p *Principal, name string, e
 	if err != nil {
 		return APIKey{}, "", err
 	}
-	k := APIKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: HashSecret(secret), Scope: "read",
+	k := APIKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: s.cfg.KeyHasher.Hash(secret), Scope: "read",
 		CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: now, ExpiresAt: expiresAt}
 	if err := s.store.CreateAPIKey(ctx, &k); err != nil {
 		return APIKey{}, "", s.fail(err)
@@ -432,15 +513,23 @@ func (s *Service) RevokeSession(ctx context.Context, p *Principal, id string, me
 
 // ---- audit ----
 
-// ListAuditEvents returns the newest audit events of the organization (admin+).
-func (s *Service) ListAuditEvents(ctx context.Context, p *Principal, limit int) ([]AuditEvent, error) {
+// ListAuditEvents returns the organization's audit events matching f, newest first (admin+).
+func (s *Service) ListAuditEvents(ctx context.Context, p *Principal, f AuditFilter) ([]AuditEvent, error) {
 	if err := s.gate(p, ActReadAudit); err != nil {
 		return nil, err
 	}
-	if limit <= 0 || limit > 500 {
-		limit = 100
+	if f.Limit <= 0 || f.Limit > 500 {
+		f.Limit = 100
 	}
-	evs, err := s.store.ListAuditEvents(ctx, p.OrgID, limit)
+	f.Actor = strings.TrimSpace(f.Actor)
+	f.Action = strings.TrimSpace(f.Action)
+	if len(f.Actor) > 320 || len(f.Action) > 100 {
+		return nil, invalid("actor and action filters are too long")
+	}
+	if !f.From.IsZero() && !f.To.IsZero() && !f.From.Before(f.To) {
+		return nil, invalid("from must be before to")
+	}
+	evs, err := s.store.ListAuditEvents(ctx, p.OrgID, f)
 	if err != nil {
 		return nil, s.fail(err)
 	}

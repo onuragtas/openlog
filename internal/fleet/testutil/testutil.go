@@ -56,6 +56,13 @@ type ReleaseSpec struct {
 	Platforms            []string // "os/arch"; default linux/amd64 and linux/arm64
 	ReleasedAt           time.Time
 	BaseURL              string // default DefaultBaseURL
+	// PHPAgent adds a php-agent tar.gz artifact for every platform (php-agent.md §7.1).
+	PHPAgent bool
+}
+
+// PHPArtifactName is the tarball name of the PHP agent.
+func PHPArtifactName(version, goos, arch string) string {
+	return fmt.Sprintf("openlog-php-agent_%s_%s_%s.tar.gz", version, goos, arch)
 }
 
 func (s ReleaseSpec) withDefaults() (ReleaseSpec, lib.Version, error) {
@@ -162,6 +169,16 @@ func Build(s Signer, spec ReleaseSpec) (Built, error) {
 			Component: lib.ComponentInfraAgent, OS: goos, Arch: arch, Format: lib.FormatTarGz, Name: name,
 			URL: spec.BaseURL + "/v" + spec.Version + "/" + name, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(body)),
 		})
+		if spec.PHPAgent {
+			php := append([]byte("php agent "+spec.Version+" "), body...)
+			phpName := PHPArtifactName(spec.Version, goos, arch)
+			phpSum := sha256.Sum256(php)
+			files[phpName] = php
+			m.Artifacts = append(m.Artifacts, lib.Artifact{
+				Component: lib.ComponentPHPAgent, OS: goos, Arch: arch, Format: lib.FormatTarGz, Name: phpName,
+				URL: spec.BaseURL + "/v" + spec.Version + "/" + phpName, SHA256: hex.EncodeToString(phpSum[:]), Size: int64(len(php)),
+			})
+		}
 	}
 	raw, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {

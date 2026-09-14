@@ -190,6 +190,27 @@ default
 {{- end -}}
 {{- end -}}
 
+{{/* Read-only user of api/alert queries (D-047); empty when not used. ctx: root */}}
+{{- define "openlog.clickhouse.readUser" -}}
+{{- $r := .Values.clickhouse.readUser -}}
+{{- if $r.enabled -}}
+{{- if .Values.auth.existingSecret -}}
+{{- if .Values.auth.clickhouseReadPasswordKey -}}{{ $r.name }}{{- end -}}
+{{- else if or (include "openlog.operators" .) $r.password -}}
+{{- $r.name -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "openlog.secret.clickhouseReadPasswordKey" -}}
+{{- if .Values.auth.existingSecret -}}{{ .Values.auth.clickhouseReadPasswordKey }}{{- else -}}clickhouse-read-password{{- end -}}
+{{- end -}}
+
+{{/* ClickHouse server TLS configured by the chart (operators mode + clickhouse.tls.server.secretName). */}}
+{{- define "openlog.clickhouse.serverTLS" -}}
+{{- if and (include "openlog.operators" .) .Values.clickhouse.tls.server.secretName -}}true{{- end -}}
+{{- end -}}
+
 {{- define "openlog.keeper.host" -}}
 {{- default (printf "keeper-%s.%s.svc" (include "openlog.keeper.name" .) .Release.Namespace) .Values.clickhouse.altinity.keeper.host -}}
 {{- end -}}
@@ -252,8 +273,14 @@ because every binary validates all configured files at start-up. ctx: root.
 {{- end -}}
 {{- $c := .Values.clickhouse.tls -}}
 {{- if $c.enabled -}}
-{{- with $c.caSecret.name -}}
-{{- $m = append $m (dict "volume" "clickhouse-ca" "secret" . "items" (list (dict "key" $c.caSecret.key "path" "ca.crt"))) -}}
+{{- $caName := $c.caSecret.name -}}
+{{- $caKey := $c.caSecret.key -}}
+{{- if and (not $caName) (include "openlog.clickhouse.serverTLS" .) -}}
+{{- $caName = $c.server.secretName -}}
+{{- $caKey = $c.server.caKey -}}
+{{- end -}}
+{{- if $caName -}}
+{{- $m = append $m (dict "volume" "clickhouse-ca" "secret" $caName "items" (list (dict "key" $caKey "path" "ca.crt"))) -}}
 {{- end -}}
 {{- with $c.clientSecret.name -}}
 {{- $m = append $m (dict "volume" "clickhouse-client" "secret" . "items" (list (dict "key" $c.clientSecret.certKey "path" "tls.crt") (dict "key" $c.clientSecret.keyKey "path" "tls.key"))) -}}
@@ -351,7 +378,7 @@ because every binary validates all configured files at start-up. ctx: root.
 {{- if $c.enabled }}
 - name: OPENLOG_CLICKHOUSE_TLS_ENABLED
   value: "true"
-{{- if $c.caSecret.name }}
+{{- if include "openlog.tls.hasMount" (dict "root" $root "volume" "clickhouse-ca") }}
 - name: OPENLOG_CLICKHOUSE_TLS_CA_FILE
   value: /etc/openlog/tls/clickhouse-ca/ca.crt
 {{- end }}
@@ -427,13 +454,62 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 - name: OPENLOG_CLICKHOUSE_CLUSTER
   value: {{ $root.Values.clickhouse.cluster | quote }}
 {{- include "openlog.tls.env" $root }}
-{{- if has $c (list "processor" "api" "migrate") }}
+{{- if has $c (list "ingest" "processor" "api" "sampler") }}
+{{- /* Tail sampling (D-075): the flag must match on ingest, processor and sampler. */}}
+{{- $ts := $root.Values.tailSampling }}
+- name: OPENLOG_TAILSAMPLING_ENABLED
+  value: {{ $ts.enabled | toString | quote }}
+{{- if eq $c "sampler" }}
+- name: OPENLOG_TAILSAMPLING_DECISION_WAIT
+  value: {{ $ts.decisionWait | quote }}
+- name: OPENLOG_TAILSAMPLING_MAX_TRACES
+  value: {{ include "openlog.envValue" $ts.maxTraces }}
+- name: OPENLOG_TAILSAMPLING_MAX_SPANS_PER_TRACE
+  value: {{ include "openlog.envValue" $ts.maxSpansPerTrace }}
+- name: OPENLOG_TAILSAMPLING_MAX_BUFFERED_BYTES
+  value: {{ include "openlog.envValue" $ts.maxBufferedBytes }}
+- name: OPENLOG_TAILSAMPLING_DECISION_CACHE_TTL
+  value: {{ $ts.decisionCacheTTL | quote }}
+- name: OPENLOG_TAILSAMPLING_DECISION_CACHE_SIZE
+  value: {{ include "openlog.envValue" $ts.decisionCacheSize }}
+- name: OPENLOG_TAILSAMPLING_POLICY_REFRESH
+  value: {{ $ts.policyRefresh | quote }}
+- name: OPENLOG_TAILSAMPLING_DEFAULT_POLICY
+  value: {{ $ts.defaultPolicy | quote }}
+{{- end }}
+{{- end }}
+{{- if has $c (list "processor" "api" "migrate" "alert") }}
+{{- /* alert: evaluation queries and alert_evaluations inserts */}}
 - name: OPENLOG_CLICKHOUSE_PASSWORD
   valueFrom:
     secretKeyRef:
       name: {{ include "openlog.secretName" $root }}
       key: {{ include "openlog.secret.clickhousePasswordKey" $root }}
       optional: {{ not (include "openlog.operators" $root) }}
+{{- end }}
+{{- if has $c (list "api" "alert") }}
+{{- with include "openlog.clickhouse.readUser" $root }}
+# Tenant queries as the read-only ClickHouse user (D-047).
+- name: OPENLOG_CLICKHOUSE_READ_USER
+  value: {{ . | quote }}
+- name: OPENLOG_CLICKHOUSE_READ_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.clickhouseReadPasswordKey" $root }}
+{{- end }}
+{{- with $root.Values.clickhouse.queryLimits }}
+- name: OPENLOG_QUERY_MAX_MEMORY_USAGE
+  value: {{ include "openlog.envValue" .maxMemoryUsage }}
+- name: OPENLOG_QUERY_MAX_ROWS_TO_READ
+  value: {{ include "openlog.envValue" .maxRowsToRead }}
+- name: OPENLOG_QUERY_MAX_BYTES_TO_READ
+  value: {{ include "openlog.envValue" .maxBytesToRead }}
+{{- with .tenantLimits }}
+- name: OPENLOG_QUERY_TENANT_LIMITS
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- if not (include "openlog.postgres.enabled" $root) }}
 {{- if has $c (list "ingest" "api" "migrate") }}
@@ -449,7 +525,7 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
       key: {{ include "openlog.secret.licenseKeysKey" $root }}
       optional: true
 {{- end }}
-{{- else if has $c (list "ingest" "processor" "api" "migrate" "updater" "alert") }}
+{{- else if has $c (list "ingest" "processor" "api" "migrate" "updater" "alert" "sampler") }}
 {{- /* processor: component_heartbeats for contract migrations; updater: status + audit log */}}
 {{ include "openlog.postgresEnv" $root }}
 {{- end }}
@@ -549,6 +625,23 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
   value: {{ include "openlog.envValue" $root.Values.kafka.topics.maxMessageBytes }}
 - name: OPENLOG_MIGRATE_SKIP_KAFKA
   value: {{ include "openlog.migrate.skipKafka" $root | quote }}
+{{- end }}
+{{- if has $c (list "migrate" "api") }}
+{{- /* migrate applies the moves; api pods run `openlog-admin storage status` (docs/operations/tiered-storage.md). */}}
+{{- with $root.Values.clickhouse.tieredStorage }}
+- name: OPENLOG_STORAGE_TIERING_ENABLED
+  value: {{ .enabled | toString | quote }}
+- name: OPENLOG_STORAGE_POLICY
+  value: {{ .policy | quote }}
+{{- range $class, $days := .coldAfterDays }}
+- name: OPENLOG_STORAGE_COLD_AFTER_DAYS_{{ upper $class }}
+  value: {{ include "openlog.envValue" $days }}
+{{- end }}
+{{- range $class, $days := .warmAfterDays }}
+- name: OPENLOG_STORAGE_WARM_AFTER_DAYS_{{ upper $class }}
+  value: {{ include "openlog.envValue" $days }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- range $k, $v := .values.config }}
 - name: {{ $k }}

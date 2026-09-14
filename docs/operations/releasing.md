@@ -26,12 +26,21 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `openlog-infra-agent_<v>_linux_{amd64,arm64}.tar.gz` (one top dir: binary, `LICENSE`, `README.md`, `packaging/`) | `artifacts[]` `component=infra-agent`, `format=tar.gz` |
 | `openlog-infra-agent_<v>_linux_{amd64,arm64}.{deb,rpm}` | `format=deb` / `rpm` |
 | `openlog_<v>_linux_{amd64,arm64}.tar.gz` (all backend binaries) | `component=backend` |
+| `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP agent: 36 modules, `openlog-php-install`; [php-agent.md](../contracts/php-agent.md) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
 | `openlog-<v>.tgz` (Helm chart, `version` = `appVersion` = `<v>`) | `helm_chart` |
 | `ghcr.io/onuragtas/openlog:<v>` (not a file) | `images.openlog` = `…@sha256:<digest>` |
 | `manifest.json`, `manifest.json.sig` | signed |
 | `index.json`, `index.json.sig` | signed; all releases, newest first |
 | `install.sh` | not in the manifest (bootstrap, see [install.sh trust model](#installsh)) |
 | `install-server.sh` | not in the manifest (server bootstrap, see [install-server.sh](#install-serversh)) |
+
+PHP agent artifacts are built by `agents/php/packaging/build-artifacts.sh VERSION DIR` (Docker; one architecture per
+run). `release.yml` runs it in the `php-agent-artifacts` jobs on native `ubuntu-24.04` (amd64) and `ubuntu-24.04-arm`
+(arm64) runners with all 36 modules (about 30–45 min each, in parallel with the image build), install-tests the
+deb/rpm/apk (`agents/php/packaging/test.sh`) and hands the files to the `release` job, which downloads them into
+`dist/v<version>/` before `make release-local`. The CI release dry run builds only `8.2-nts-glibc` and `8.3-nts-musl`
+with deb and apk (about 8 min). Locally: `make release-php-agent VERSION=… [PHP_TARGETS="8.2-nts-glibc"]
+[PHP_PACKAGES=""]` before `make release-local`; without it a local release simply has no PHP agent.
 
 `build-manifest` picks up artifacts by these file names; unknown files are ignored. It fills
 `compatibility` with `oldest_supported_agent = X.(Y-2).0` and `rollback_floor = X.(Y-1).0`; override with
@@ -77,6 +86,28 @@ its version with `-version`.
    Package settings) so that pulls work without credentials.
 5. Protect tags `v*` (Settings → Rules → Tag rulesets) so only maintainers can cut releases.
 
+6. **npm (Node.js agent `@openlog/node`, optional):** on npmjs.com create the organization `openlog` (scope `@openlog`,
+   free for public packages) and a *granular access token* with read/write permission for packages of the `openlog`
+   scope (for the very first publish, before the package exists, grant it on the whole scope; 2FA-enforcing
+   accounts: the token must be allowed to bypass 2FA, i.e. an automation/granular token). Store it as the repository
+   *secret* `NPM_TOKEN`. Without the secret, `release.yml` skips the npm job with a warning and everything else is
+   released. Provenance (`npm publish --provenance`) needs the public GitHub repository and the job's `id-token: write`
+   permission (already set). Rotate the token before it expires (granular tokens have an expiry date).
+
+7. **PyPI (Python agent `openlog-agent`, optional):** publishing uses PyPI *trusted publishing* (OIDC), so no token is
+   stored. On pypi.org (account with 2FA) → *Your projects* → *Publishing* → *Add a new pending publisher* (GitHub):
+   PyPI project name `openlog-agent`, owner `onuragtas`, repository `openlog`, workflow name `release.yml`, environment
+   name `pypi`. The first successful publish turns the pending publisher into the project's trusted publisher and
+   creates the project (add co-maintainers there). In GitHub create the environment `pypi` (Settings → Environments;
+   optional: required reviewers, deployment tags `v*`) and set the repository *variable* `PYPI_PUBLISH` = `true`.
+   Without the variable, `release.yml` skips the PyPI job with a warning and everything else is released. (The name
+   `openlog` is taken on PyPI by an unrelated project, hence `openlog-agent`.)
+7. **NuGet (.NET agent `OpenLog.Agent`, optional):** sign in to nuget.org and create an API key (Account → API Keys)
+   with the scope *Push new packages and package versions*, glob pattern `OpenLog.Agent` and an expiry of at most
+   365 days (the first push creates the package under that account; optionally request the `OpenLog.` ID prefix
+   reservation). Store it as the repository *secret* `NUGET_API_KEY`. Without the secret, `release.yml` skips the
+   NuGet job with a warning and everything else is released. Rotate the key before it expires.
+
 Delete `openlog-release-key-1.env` from any online machine after step 2.
 
 ## Cutting a release
@@ -111,6 +142,16 @@ git push origin v0.4.0
 
 5. `go-agent-tags` – after the GitHub release is published, pushes the Go module tags on the tagged
    commit (atomic push; see below), then asks `proxy.golang.org` for them (best effort).
+
+6. `node-agent-npm` – after the GitHub release is published, sets `agents/node` to the tag version, runs the
+   Node.js agent tests and publishes `@openlog/node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
+
+- `python-agent-pypi` – after the GitHub release is published, sets `agents/python` to the tag version (PEP 440),
+  runs the Python agent tests, builds the wheel/sdist and publishes `openlog-agent==<v>` to PyPI with trusted
+  publishing (see [Python agent package](#python-agent-package)).
+
+7. `dotnet-agent-nuget` – after the GitHub release is published, runs the .NET agent unit tests, packs
+   `OpenLog.Agent` at the tag version and pushes it to nuget.org (see [.NET agent package](#net-agent-package)).
 
 Nothing is published if any step fails; a failed draft can be deleted and the tag re-pushed. A failed
 `go-agent-tags` job can simply be re-run: tags that already point at the commit are skipped.
@@ -162,6 +203,77 @@ Consumers: `go get github.com/onuragtas/openlog/agents/go@vX.Y.Z` (+ `…/instru
 
 Between releases, `agents/go/version.go` keeps the last prepared version, so `go get …@master`
 pseudo-versions report it as `telemetry.distro.version`.
+
+### Node.js agent package
+
+The Node.js agent (`agents/node`) is published to npm as `@openlog/node` at the product version (D-025, D-062). Unlike
+the Go modules it needs **no preparation commit**: npm publishes built files, so `release.yml` (`node-agent-npm`, after
+the `release` job) runs `npm version X.Y.Z --no-git-tag-version` in the checkout (the build writes it into
+`src/version.ts`, reported as `telemetry.distro.version`), `npm ci`, `npm test` (unit + end-to-end), and
+`npm publish --access public --provenance --tag <latest|beta>` (`vX.Y.Z-beta.N` → dist-tag `beta`, so
+`npm install @openlog/node` keeps resolving the latest stable version). An already published version is skipped
+(npm versions are immutable, so re-running the job is safe; a broken version must be deprecated with
+`npm deprecate @openlog/node@X.Y.Z "<reason>"` and fixed by the next release). Between releases,
+`agents/node/package.json` keeps the last released version.
+
+Setup: [one-time setup](#one-time-setup-repository-owner) step 6 (`NPM_TOKEN`). Local check of the package contents:
+`make -C agents/node build` then `npm pack --dry-run` in `agents/node` (the CI job does the same).
+
+### Python agent package
+
+The Python agent (`agents/python`, D-073) is published to PyPI as `openlog-agent` at the product version (D-025). No
+preparation commit is needed: `release.yml` job `python-agent-pypi` runs after the `release` job and
+- converts the tag version to PEP 440 (`X.Y.Z-beta.N` → `X.Y.ZbN`, `-rc.N` → `rcN`; pip installs pre-releases only with
+  `--pre`, so `pip install openlog-agent` keeps resolving the latest stable version) and writes it into
+  `src/openlog_agent/version.py` (reported as `telemetry.distro.version`);
+- installs the agent with the test requirements on Python 3.12, runs the unit and end-to-end tests, builds the pure
+  Python wheel and sdist (`python -m build`) and checks them with `twine check --strict`;
+- publishes with `pypa/gh-action-pypi-publish` using trusted publishing: the job runs in the GitHub environment `pypi`
+  with `id-token: write`, PyPI exchanges the OIDC token for a short-lived upload token, no secret is stored. PyPI
+  attestations (PEP 740) are generated by the action.
+
+An already published version is skipped (PyPI versions and file names are immutable, so a re-run is safe; a broken
+version is *yanked* on pypi.org and fixed by the next release). Without the repository variable `PYPI_PUBLISH=true` the
+job only warns. Between releases, `agents/python/src/openlog_agent/version.py` keeps the last released version.
+
+Setup: [one-time setup](#one-time-setup-repository-owner) step 7 (pending trusted publisher on PyPI, environment `pypi`,
+variable `PYPI_PUBLISH`). Local check of the package: `make -C agents/python build` (wheel and sdist in
+`agents/python/dist/`); the CI job `python-agent` builds and checks them on every change.
+
+### Java agent jar
+
+The Java agent (`agents/java`, D-072) is released as `openlog-javaagent-X.Y.Z.jar` plus `openlog-javaagent-X.Y.Z.jar.sha256`
+(`sha256sum` format) on the GitHub release. No preparation commit is needed. `release.yml` job `java-agent-jar` runs
+after the `release` job and does the following:
+- builds with `./gradlew -Pversion=X.Y.Z :extension:test :agentJar :agentJarChecksum`; the version becomes
+  `telemetry.distro.version` and the `Openlog-Javaagent-Version` manifest attribute;
+- uploads both files with `gh release upload --clobber`. The jar is built reproducibly, with fixed timestamps and
+  file order, so a re-run uploads the same bytes.
+
+`agents/java/gradle.properties` keeps `version=0.0.0-dev` between releases.
+
+The jar is **not in the signed `manifest.json`**. `build-manifest` runs in the `release` job before the jar exists and
+has no `java-agent` component; Java agents are not installed by the infra agent's update pipeline. Users verify the jar
+with the `.sha256` file from the same release. Listing it in the manifest (build the jar before `make release-local`,
+add a component) and publishing to Maven Central (`io.github.onuragtas.openlog:openlog-javaagent`: Sonatype namespace,
+signing key, `maven-publish`) are future work.
+
+Local build: `NO_SERVICES=1 agents/java/test/run.sh -Pversion=X.Y.Z :agentJar :agentJarChecksum` (in the runner volume
+`openlog-m4-java-work`).
+
+### .NET agent package
+
+The .NET agent (`agents/dotnet`) is published to nuget.org as `OpenLog.Agent` at the product version (D-025, D-074).
+No preparation commit is needed: `release.yml` (`dotnet-agent-nuget`, after the `release` job) installs the .NET 8
+and 9 SDKs, runs the unit tests and `dotnet pack -p:OpenLogVersion=X.Y.Z` (the package version, the assembly
+informational version and `telemetry.distro.version`), then `dotnet nuget push --skip-duplicate` (the `.snupkg`
+symbols package is pushed with it). `vX.Y.Z-beta.N` becomes a NuGet prerelease, so `dotnet add package OpenLog.Agent`
+keeps resolving the latest stable version. NuGet versions are immutable: a re-run skips an existing version, and a
+broken version is unlisted or deprecated on nuget.org and fixed by the next release. Between releases,
+`agents/dotnet/Directory.Build.props` keeps the last released version.
+
+Setup: [one-time setup](#one-time-setup-repository-owner) step 7 (`NUGET_API_KEY`). Local check of the package:
+`make -C agents/dotnet pack VERSION=X.Y.Z` (the CI job `dotnet-agent` packs on every run).
 
 ## Verifying a release
 

@@ -38,6 +38,7 @@ const usage = `usage:
   openlog-admin bootstrap
   openlog-admin create-owner --email EMAIL --org NAME [--tenant-id ID] [--name NAME] [--password-stdin] [--no-license-key]
   openlog-admin reset-password --email EMAIL [--password-stdin]
+  openlog-admin storage status [--json]
 `
 
 func main() {
@@ -69,6 +70,9 @@ func main() {
 
 func run(ctx context.Context, cfg config.Config, log *slog.Logger, cmd string, args []string, stdin io.Reader, stdout io.Writer) error {
 	switch cmd {
+	case "storage":
+		// ClickHouse only (storage.go); no PostgreSQL migrations.
+		return storageCommand(ctx, cfg, args, stdout)
 	case "migrate", "bootstrap", "create-owner", "reset-password":
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
@@ -85,7 +89,8 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger, cmd string, a
 	if err := app.MigratePostgres(ctx, pool, log); err != nil {
 		return err
 	}
-	svc := auth.NewService(postgres.NewStore(pool), auth.Config{}, log)
+	// Keys created by bootstrap/create-owner must be hashed like the api and ingest hash them (D-044).
+	svc := auth.NewService(postgres.NewStore(pool), auth.Config{KeyHasher: app.KeyHasher(cfg)}, log)
 
 	switch cmd {
 	case "migrate":

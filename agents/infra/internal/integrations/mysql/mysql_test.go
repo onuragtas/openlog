@@ -143,6 +143,52 @@ func TestPartialAndClassify(t *testing.T) {
 	}
 }
 
+func TestIOWaitsOperationsAndPerformanceSchemaOff(t *testing.T) {
+	// Recorded from MySQL 8.4 after inserts, selects, updates and a delete on app.users
+	// (columns: COUNT_DELETE, _FETCH, _INSERT, _UPDATE, then FLOOR(SUM_TIMER_*/1000) in the same order).
+	b := integrations.NewBatch(time.Now(), 0)
+	s := b.Resource()
+	RecordIOWaits(s, rows([]string{"app", "users", "1", "37", "16", "4", "22992", "80766", "205011", "61578"}), false)
+	RecordIOWaits(s, rows(
+		[]string{"app", "users", "PRIMARY", "1", "6", "0", "4", "22992", "21236", "0", "61578"},
+		[]string{"app", "users", "idx_name", "0", "31", "0", "0", "0", "59530", "0", "0"},
+		[]string{"app", "users", "NONE", "0", "0", "16", "0", "0", "0", "205011", "0"},
+		[]string{"app", "users", "short"}), true)
+	ps := testutil.Points(b)
+	for op, want := range map[string][2]int64{"delete": {1, 22992}, "fetch": {37, 80766}, "insert": {16, 205011}, "update": {4, 61578}} {
+		m := map[string]string{"operation": op, "schema": "app", "table": "users"}
+		testutil.Expect(t, ps, "mysql.table.io.wait.count", "1", true, true, want[0], m)
+		testutil.Expect(t, ps, "mysql.table.io.wait.time", "ns", true, true, want[1], m)
+	}
+	testutil.Expect(t, ps, "mysql.index.io.wait.count", "1", true, true, 16, map[string]string{"operation": "insert", "index": "NONE"})
+	testutil.Expect(t, ps, "mysql.index.io.wait.time", "ns", true, true, 21236, map[string]string{"operation": "fetch", "index": "PRIMARY"})
+	testutil.Expect(t, ps, "mysql.index.io.wait.count", "1", true, true, 31, map[string]string{"operation": "fetch", "index": "idx_name", "schema": "app", "table": "users"})
+	if n := len(testutil.Find(ps, "mysql.index.io.wait.count", nil)); n != 12 {
+		t.Errorf("index points = %d (3 indexes × 4 operations; short rows skipped)", n)
+	}
+	if !strings.Contains(TableIOWaitsQuery(5), "ORDER BY SUM_TIMER_WAIT DESC, OBJECT_SCHEMA, OBJECT_NAME LIMIT 5") ||
+		!strings.Contains(IndexIOWaitsQuery(7), "IFNULL(INDEX_NAME, 'NONE')") {
+		t.Error("queries")
+	}
+
+	q := fakeQuerier{
+		"SHOW GLOBAL STATUS":               {rows: globalStatus},
+		"SELECT @@innodb_buffer_pool_size": {rows: rows([]string{"134217728"})},
+		"SELECT @@performance_schema":      {rows: rows([]string{"0"})},
+		"SELECT OBJECT_SCHEMA":             {},
+		"SHOW REPLICA STATUS":              {cols: []string{"Seconds_Behind_Source"}},
+	}
+	err := collector_(q).collect(context.Background(), integrations.NewBatch(time.Now(), 0))
+	var pe *integrations.PartialError
+	if !errors.As(err, &pe) || !strings.Contains(err.Error(), "performance_schema is disabled") {
+		t.Errorf("performance_schema off: %v", err)
+	}
+	q["SELECT @@performance_schema"] = result{rows: rows([]string{"1"})}
+	if err := collector_(q).collect(context.Background(), integrations.NewBatch(time.Now(), 0)); err != nil {
+		t.Errorf("performance_schema on, no tables yet: %v", err)
+	}
+}
+
 const refUUID = "36230c90-44e6-5815-8415-e76dde42e8c9"
 
 func TestServiceInstanceID(t *testing.T) {

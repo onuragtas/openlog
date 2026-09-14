@@ -24,17 +24,37 @@
 #define OL_CURLINFO_EFFECTIVE_URL 0x100001
 #define OL_CURLINFO_RESPONSE_CODE 0x200002
 
+/* per curl handle, for the whole PHP request (handles outlive transactions in long-running workers) */
 typedef struct {
 	zval headers;       /* application's CURLOPT_HTTPHEADER array (UNDEF: none) */
-	const char *method; /* arena */
-	const char *url;    /* arena */
-	uint32_t node;      /* curl_multi span */
+	char *url;          /* emalloc'ed, UTF-8 cleaned, <= 4 KiB */
+	uint32_t node;      /* curl_multi span of the current transaction */
+	char method[17];
 } ol_curl;
+
+static void curl_set_url(ol_curl *c, const char *s, size_t len)
+{
+	if (c->url) {
+		efree(c->url);
+		c->url = NULL;
+	}
+	if (s) {
+		if (len > OL_STR_MAX) {
+			len = OL_STR_MAX;
+		}
+		c->url = emalloc(len + 1);
+		len = ol_utf8_clean(c->url, s, len, OL_STR_MAX);
+		c->url[len] = '\0';
+	}
+}
 
 static void curl_state_dtor(zval *zv)
 {
 	ol_curl *c = Z_PTR_P(zv);
 	zval_ptr_dtor(&c->headers);
+	if (c->url) {
+		efree(c->url);
+	}
 	efree(c);
 }
 
@@ -70,12 +90,24 @@ static ol_curl *curl_state(zval *ch, bool create)
 	if (c == NULL && create) {
 		c = emalloc(sizeof(ol_curl));
 		ZVAL_UNDEF(&c->headers);
-		c->method = NULL;
+		c->method[0] = '\0';
 		c->url = NULL;
 		c->node = OL_NONE;
 		zend_hash_index_update_ptr(OLG(curl), key, c);
 	}
 	return c;
+}
+
+/* transaction end: curl_multi spans of handles still added belong to the finished transaction */
+void ol_http_txn_end(void)
+{
+	ol_curl *c;
+	if (OLG(curl) == NULL) {
+		return;
+	}
+	ZEND_HASH_FOREACH_PTR(OLG(curl), c) {
+		c->node = OL_NONE;
+	} ZEND_HASH_FOREACH_END();
 }
 
 static void curl_track_option(ol_curl *c, zend_long opt, zval *val)
@@ -91,31 +123,32 @@ static void curl_track_option(ol_curl *c, zend_long opt, zval *val)
 			break;
 		case OL_CURLOPT_URL:
 			if (Z_TYPE_P(val) == IS_STRING) {
-				c->url = ol_strdup(Z_STRVAL_P(val), Z_STRLEN_P(val), OL_STR_MAX);
+				curl_set_url(c, Z_STRVAL_P(val), Z_STRLEN_P(val));
 			}
 			break;
 		case OL_CURLOPT_CUSTOMREQUEST:
 			if (Z_TYPE_P(val) == IS_STRING && Z_STRLEN_P(val) > 0) {
-				c->method = ol_strdup(Z_STRVAL_P(val), Z_STRLEN_P(val), 16);
+				size_t ml = ol_utf8_clean(c->method, Z_STRVAL_P(val), Z_STRLEN_P(val), 16);
+				c->method[ml] = '\0';
 			} else {
-				c->method = NULL;
+				c->method[0] = '\0';
 			}
 			break;
 		case OL_CURLOPT_POST:
 		case OL_CURLOPT_POSTFIELDS:
-			if (zend_is_true(val) && (c->method == NULL || strcmp(c->method, "GET") == 0 || strcmp(c->method, "HEAD") == 0)) {
-				c->method = "POST";
+			if (zend_is_true(val) && (c->method[0] == '\0' || strcmp(c->method, "GET") == 0 || strcmp(c->method, "HEAD") == 0)) {
+				strcpy(c->method, "POST");
 			}
 			break;
 		case OL_CURLOPT_NOBODY:
-			if (zend_is_true(val)) c->method = "HEAD";
+			if (zend_is_true(val)) strcpy(c->method, "HEAD");
 			break;
 		case OL_CURLOPT_PUT:
 		case OL_CURLOPT_UPLOAD:
-			if (zend_is_true(val)) c->method = "PUT";
+			if (zend_is_true(val)) strcpy(c->method, "PUT");
 			break;
 		case OL_CURLOPT_HTTPGET:
-			if (zend_is_true(val)) c->method = "GET";
+			if (zend_is_true(val)) strcpy(c->method, "GET");
 			break;
 	}
 }
@@ -132,9 +165,13 @@ static void curl_init_end(zend_execute_data *ex, zval *rv, const ol_hook *h)
 	if (c) {
 		zval_ptr_dtor(&c->headers);
 		ZVAL_UNDEF(&c->headers);
-		c->method = NULL;
+		c->method[0] = '\0';
 		c->node = OL_NONE;
-		c->url = (url && Z_TYPE_P(url) == IS_STRING) ? ol_strdup(Z_STRVAL_P(url), Z_STRLEN_P(url), OL_STR_MAX) : NULL;
+		if (url && Z_TYPE_P(url) == IS_STRING) {
+			curl_set_url(c, Z_STRVAL_P(url), Z_STRLEN_P(url));
+		} else {
+			curl_set_url(c, NULL, 0);
+		}
 	}
 }
 
@@ -179,8 +216,8 @@ static void curl_reset_begin(zend_execute_data *ex, const ol_hook *h)
 	if (c) {
 		zval_ptr_dtor(&c->headers);
 		ZVAL_UNDEF(&c->headers);
-		c->method = NULL;
-		c->url = NULL;
+		c->method[0] = '\0';
+		curl_set_url(c, NULL, 0);
 	}
 }
 
@@ -207,8 +244,8 @@ static void curl_copy_end(zend_execute_data *ex, zval *rv, const ol_hook *h)
 	if (dst) {
 		zval_ptr_dtor(&dst->headers);
 		ZVAL_COPY(&dst->headers, &src->headers);
-		dst->method = src->method;
-		dst->url = src->url;
+		memcpy(dst->method, src->method, sizeof(dst->method));
+		curl_set_url(dst, src->url, src->url ? strlen(src->url) : 0);
 		dst->node = OL_NONE;
 	}
 }
@@ -246,8 +283,8 @@ static void curl_inject(zval *ch, ol_curl *c, uint64_t span_id)
 	}
 	snprintf(line, sizeof(line), "traceparent: %s", tp);
 	add_next_index_string(&arr, line);
-	if (OLG(tracestate)[0] && !has_state) {
-		snprintf(line, sizeof(line), "tracestate: %s", OLG(tracestate));
+	if (ol_tracestate()[0] && !has_state) {
+		snprintf(line, sizeof(line), "tracestate: %s", ol_tracestate());
 		add_next_index_string(&arr, line);
 	}
 	ZVAL_COPY_VALUE(&args[0], ch);
@@ -260,7 +297,10 @@ static void curl_inject(zval *ch, ol_curl *c, uint64_t span_id)
 
 static void curl_span_attrs(ol_node *n, ol_curl *c)
 {
-	const char *method = c && c->method ? c->method : "GET";
+	const char *method = c && c->method[0] ? ol_strdup(c->method, strlen(c->method), 16) : "GET";
+	if (method == NULL) {
+		method = "GET";
+	}
 	n->name = method;
 	ol_attr_static(n, "http.request.method", method);
 	if (c && c->url) {
@@ -453,8 +493,8 @@ static void stream_begin(zend_execute_data *ex, const ol_hook *h)
 	if (ol_format_traceparent(tp, sizeof(tp), n ? n->id : ol_current_span_id()) == 0) {
 		return;
 	}
-	if (OLG(tracestate)[0]) {
-		snprintf(line, sizeof(line), "traceparent: %s\r\ntracestate: %s", tp, OLG(tracestate));
+	if (ol_tracestate()[0]) {
+		snprintf(line, sizeof(line), "traceparent: %s\r\ntracestate: %s", tp, ol_tracestate());
 	} else {
 		snprintf(line, sizeof(line), "traceparent: %s", tp);
 	}

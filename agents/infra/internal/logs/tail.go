@@ -39,6 +39,8 @@ type source struct {
 	ctrState    string
 	ctrFinished string
 	since       time.Time
+	// ctrCRI: the container log is in the CRI log format (containerd, CRI-O) instead of json-file.
+	ctrCRI bool
 }
 
 type pending struct {
@@ -66,8 +68,10 @@ type tailer struct {
 	// Container logs: partial json-file messages per stream, time filter; drain: a rotated
 	// file read to its end and then closed.
 	dpart [3]pendingLine
-	since time.Time
-	drain bool
+	// mgroup groups complete container log lines into multiline records (src.multiline).
+	mgroup multilineGrouper
+	since  time.Time
+	drain  bool
 
 	lastData time.Time
 	goneAt   time.Time // path renamed/removed; zero while in place
@@ -90,6 +94,9 @@ func (t *tailer) commitOffset() int64 {
 		if p := &t.dpart[i]; p.started && p.start < off {
 			off = p.start
 		}
+		if p := &t.mgroup.parts[i]; p.started && p.start < off {
+			off = p.start
+		}
 	}
 	return off
 }
@@ -100,7 +107,15 @@ func (t *tailer) hasPartial() bool {
 			return true
 		}
 	}
-	return false
+	return t.mgroup.pending()
+}
+
+// unread reports whether the file has data not read yet or the buffer holds complete lines not
+// emitted yet (both happen while the tailer is rate-limited). A trailing partial line does not
+// count: flushTailer emits it.
+func (t *tailer) unread() bool {
+	fi, err := t.f.Stat()
+	return (err == nil && fi.Size() > t.readOff) || bytes.IndexByte(t.buf, '\n') >= 0
 }
 
 // rateLimit is the lines-per-second limit of the tailer's source.
@@ -189,6 +204,9 @@ func (m *Manager) pollFile(t *tailer, now time.Time) {
 	}
 	if t.src.ctr != nil && idle >= multilineFlush && m.canEmit(t) {
 		m.flushContainerParts(t)
+	} else if t.src.ctr != nil && t.mgroup.pending() && m.canEmit(t) {
+		// A stream idle while the other one keeps writing.
+		m.flushContainerGroups(t, now)
 	}
 	if t.fpLen < fingerprintLen && t.readOff > int64(t.fpLen) {
 		t.fpLen, t.fpHash = prefixHash(t.f, fingerprintLen)

@@ -78,6 +78,9 @@ func (s *Service) grpcExport(ctx context.Context, sig queue.Signal, msg proto.Me
 	if err != nil {
 		return prepared{}, status.Error(codes.Unauthenticated, "invalid or missing license key")
 	}
+	if d, ok := s.checkLimit(tenantID, sig, proto.Size(msg)); !ok { // tenant quota (limit.go)
+		return prepared{}, resourceExhaustedError(d)
+	}
 	p := prepare(sig, tenantID, msg)
 	if err := s.export(ctx, sig, tenantID, p, nil); err != nil {
 		return prepared{}, unavailableError()

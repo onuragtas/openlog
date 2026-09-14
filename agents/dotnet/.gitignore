@@ -1,0 +1,7 @@
+bin/
+obj/
+artifacts/
+*.nupkg
+*.snupkg
+BenchmarkDotNet.Artifacts/
+TestResults/

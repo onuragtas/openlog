@@ -1,11 +1,10 @@
 /*
- * Helpers: engine access without side effects, exceptions, SQL / URL / route normalization.
+ * Helpers: engine access without side effects, exceptions, SQL / URL attributes. Pure text functions (UTF-8, SQL
+ * sanitizing, path normalization) live in ol_text.c.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "ol.h"
 #include "zend_smart_str.h"
-
-#include <ctype.h>
 
 /* ---------------- engine access ---------------- */
 
@@ -153,72 +152,6 @@ bool ol_call_method0(zend_object *obj, const char *lcname, size_t len, zval *rv)
 		return false;
 	}
 	return ol_call(fn, obj, rv, 0, NULL);
-}
-
-/* ---------------- strings ---------------- */
-
-/* Copies at most max bytes of src replacing invalid UTF-8 bytes with '?'; never cuts a character in half. */
-size_t ol_utf8_clean(char *dst, const char *src, size_t len, size_t max)
-{
-	size_t i = 0, o = 0;
-	if (len > max) {
-		len = max;
-	}
-	while (i < len) {
-		unsigned char c = (unsigned char) src[i];
-		size_t need;
-		if (c < 0x80) {
-			dst[o++] = (char) c;
-			i++;
-			continue;
-		}
-		if (c >= 0xC2 && c <= 0xDF) {
-			need = 1;
-		} else if (c >= 0xE0 && c <= 0xEF) {
-			need = 2;
-		} else if (c >= 0xF0 && c <= 0xF4) {
-			need = 3;
-		} else {
-			dst[o++] = '?';
-			i++;
-			continue;
-		}
-		if (i + need >= len) {
-			break; /* sequence runs past the (possibly truncated) end */
-		}
-		{
-			size_t k;
-			bool ok = true;
-			unsigned char c1 = (unsigned char) src[i + 1];
-			for (k = 1; k <= need; k++) {
-				if (((unsigned char) src[i + k] & 0xC0) != 0x80) {
-					ok = false;
-					break;
-				}
-			}
-			if (ok && need == 2 && ((c == 0xE0 && c1 < 0xA0) || (c == 0xED && c1 > 0x9F))) {
-				ok = false; /* overlong / surrogate */
-			}
-			if (ok && need == 3 && ((c == 0xF0 && c1 < 0x90) || (c == 0xF4 && c1 > 0x8F))) {
-				ok = false;
-			}
-			if (!ok) {
-				dst[o++] = '?';
-				i++;
-				continue;
-			}
-			memcpy(dst + o, src + i, need + 1);
-			o += need + 1;
-			i += need + 1;
-		}
-	}
-	return o;
-}
-
-bool ol_str_starts_ci(const char *s, size_t len, const char *prefix)
-{
-	size_t pl = strlen(prefix);
-	return len >= pl && zend_binary_strncasecmp(s, pl, prefix, pl, pl) == 0;
 }
 
 /* ---------------- exceptions / errors ---------------- */
@@ -392,229 +325,68 @@ void ol_record_error(ol_node *n, int type, const char *file, uint32_t line, cons
 	n->flags |= OL_NF_FATAL;
 }
 
-/* ---------------- SQL ---------------- */
-
-static inline bool ol_ident_char(char c)
-{
-	return isalnum((unsigned char) c) || c == '_' || c == '$' || c == '@' || c == ':' || (unsigned char) c >= 0x80;
-}
+/* ---------------- SQL attributes ---------------- */
 
 /*
- * Replaces literals with '?': quoted strings ('' and backslash escapes; "..." only when double_quote_strings, i.e.
- * MySQL), dollar-quoted strings, numbers and hex literals. Removes comments, collapses whitespace. Placeholders
- * ($1, :name, ?) stay. Output is NUL terminated, at most cap - 1 bytes.
+ * Query analysis (operation, collection, sanitized text) is cached per request by query text: loops over the same
+ * prepared statement or query string (the common ORM pattern) pay for it once. The cached raw text is compared in
+ * full, so a hash collision only costs a recomputation.
  */
-size_t ol_sql_sanitize(char *dst, size_t cap, const char *s, size_t n, bool dq)
+static uint32_t ol_query_slot(const char *system, const char *sql, size_t len)
 {
-	size_t i = 0, o = 0;
-	bool space = false;
-
-#define OL_PUT(ch) do { if (o + 1 < cap) { dst[o++] = (char) (ch); } } while (0)
-#define OL_FLUSH_SPACE() do { if (space && o > 0) { OL_PUT(' '); } space = false; } while (0)
-
-	if (cap == 0) {
-		return 0;
+	uint64_t a = 0, b = 0, h;
+	memcpy(&a, sql, len < 8 ? len : 8);
+	if (len > 8) {
+		memcpy(&b, sql + len - 8, 8);
 	}
-	while (i < n && o + 8 < cap) {
-		unsigned char c = (unsigned char) s[i];
-		if (c == '-' && i + 1 < n && s[i + 1] == '-') {
-			while (i < n && s[i] != '\n') i++;
-			space = true;
-			continue;
-		}
-		if (c == '#' && dq) {
-			while (i < n && s[i] != '\n') i++;
-			space = true;
-			continue;
-		}
-		if (c == '/' && i + 1 < n && s[i + 1] == '*') {
-			i += 2;
-			while (i + 1 < n && !(s[i] == '*' && s[i + 1] == '/')) i++;
-			i += 2;
-			space = true;
-			continue;
-		}
-		if (isspace(c)) {
-			space = true;
-			i++;
-			continue;
-		}
-		OL_FLUSH_SPACE();
-		if (c == '\'' || (dq && c == '"')) {
-			char q = (char) c;
-			/* E'...' / N'...' / X'...' prefixes */
-			if (o > 0 && (dst[o - 1] == 'E' || dst[o - 1] == 'e' || dst[o - 1] == 'N' || dst[o - 1] == 'n' ||
-					dst[o - 1] == 'X' || dst[o - 1] == 'x' || dst[o - 1] == 'B' || dst[o - 1] == 'b') &&
-					(o == 1 || !ol_ident_char(dst[o - 2]))) {
-				o--;
-			}
-			i++;
-			while (i < n) {
-				if (s[i] == '\\' && i + 1 < n) {
-					i += 2;
-					continue;
-				}
-				if (s[i] == q) {
-					if (i + 1 < n && s[i + 1] == q) {
-						i += 2;
-						continue;
-					}
-					i++;
-					break;
-				}
-				i++;
-			}
-			OL_PUT('?');
-			continue;
-		}
-		if (c == '$') {
-			if (i + 1 < n && isdigit((unsigned char) s[i + 1])) { /* $1 placeholder */
-				OL_PUT('$');
-				i++;
-				while (i < n && isdigit((unsigned char) s[i])) {
-					OL_PUT(s[i]);
-					i++;
-				}
-				continue;
-			}
-			/* $tag$ ... $tag$ */
-			{
-				size_t j = i + 1;
-				while (j < n && (isalnum((unsigned char) s[j]) || s[j] == '_')) j++;
-				if (j < n && s[j] == '$' && (o == 0 || !ol_ident_char(dst[o - 1]))) {
-					size_t taglen = j - i + 1, k = j + 1;
-					bool found = false;
-					while (k + taglen <= n) {
-						if (memcmp(s + k, s + i, taglen) == 0) {
-							found = true;
-							break;
-						}
-						k++;
-					}
-					i = found ? k + taglen : n;
-					OL_PUT('?');
-					continue;
-				}
-			}
-		}
-		if (isdigit(c) && (o == 0 || !ol_ident_char(dst[o - 1]))) {
-			if (c == '0' && i + 1 < n && (s[i + 1] == 'x' || s[i + 1] == 'X')) {
-				i += 2;
-				while (i < n && isxdigit((unsigned char) s[i])) i++;
-			} else {
-				while (i < n && isdigit((unsigned char) s[i])) i++;
-				if (i < n && s[i] == '.') {
-					i++;
-					while (i < n && isdigit((unsigned char) s[i])) i++;
-				}
-				if (i < n && (s[i] == 'e' || s[i] == 'E')) {
-					size_t j = i + 1;
-					if (j < n && (s[j] == '+' || s[j] == '-')) j++;
-					if (j < n && isdigit((unsigned char) s[j])) {
-						i = j;
-						while (i < n && isdigit((unsigned char) s[i])) i++;
-					}
-				}
-			}
-			OL_PUT('?');
-			continue;
-		}
-		OL_PUT(c);
-		i++;
-	}
-	if (i < n && o + 4 < cap) {
-		/* truncated */
-		dst[o++] = '.';
-		dst[o++] = '.';
-		dst[o++] = '.';
-	}
-	dst[o] = '\0';
-	return o;
-#undef OL_PUT
-#undef OL_FLUSH_SPACE
+	h = (a ^ (b * 0x9E3779B97F4A7C15ULL) ^ ((uint64_t) len << 17) ^ (uint64_t) (uintptr_t) system) * 0xff51afd7ed558ccdULL;
+	return (uint32_t) (h >> 58) & (OL_QCACHE_SIZE - 1);
 }
 
-static size_t ol_read_word(const char *s, size_t n, size_t *pos, char *out, size_t cap, bool ident)
+static void ol_query_compute(ol_qcache *e, const char *system, const char *sql, size_t len)
 {
-	size_t i = *pos, k = 0;
-	while (i < n && (isspace((unsigned char) s[i]) || s[i] == '(')) i++;
-	while (i < n && k + 1 < cap) {
-		char c = s[i];
-		if (ident ? (isalnum((unsigned char) c) || c == '_' || c == '.' || c == '`' || c == '"' || c == '[' || c == ']')
-				: isalpha((unsigned char) c)) {
-			if (c != '`' && c != '"' && c != '[' && c != ']') {
-				out[k++] = ident ? c : (char) toupper((unsigned char) c);
-			}
-			i++;
-		} else {
-			break;
-		}
-	}
-	out[k] = '\0';
-	*pos = i;
-	return k;
-}
+	char op[32], coll[128], name[192];
+	size_t l = 0, cl = 0;
 
-/* First keyword (upper case) and, for simple statements, the table ("collection"). */
-size_t ol_sql_operation(const char *sql, size_t len, char *op, size_t opcap, char *coll, size_t collcap)
-{
-	size_t pos = 0, oplen;
-	char w[32];
-	coll[0] = '\0';
-	/* skip leading comments */
-	while (pos < len) {
-		while (pos < len && isspace((unsigned char) sql[pos])) pos++;
-		if (pos + 1 < len && sql[pos] == '/' && sql[pos + 1] == '*') {
-			pos += 2;
-			while (pos + 1 < len && !(sql[pos] == '*' && sql[pos + 1] == '/')) pos++;
-			pos += 2;
-		} else if (pos + 1 < len && sql[pos] == '-' && sql[pos + 1] == '-') {
-			while (pos < len && sql[pos] != '\n') pos++;
-		} else {
-			break;
+	e->name = system;
+	e->op = e->coll = e->text = NULL;
+	e->oplen = e->colllen = e->textlen = 0;
+	e->mode = (uint8_t) OLG(query_mode);
+	if (ol_sql_operation(sql, len, op, sizeof(op), coll, sizeof(coll)) > 0) {
+		e->op = ol_strdup_n(op, strlen(op), sizeof(op), &l);
+		e->oplen = (uint16_t) l;
+		if (coll[0]) {
+			e->coll = ol_strdup_n(coll, strlen(coll), sizeof(coll), &cl);
+			e->colllen = (uint16_t) cl;
+		}
+		if (e->op && e->coll) {
+			memcpy(name, e->op, e->oplen);
+			name[e->oplen] = ' ';
+			memcpy(name + e->oplen + 1, e->coll, e->colllen);
+			e->name = ol_strdup_n(name, (size_t) e->oplen + 1 + e->colllen, sizeof(name), NULL);
+		} else if (e->op && !coll[0]) {
+			e->name = e->op;
+		}
+		if (e->name == NULL) {
+			e->name = system;
 		}
 	}
-	oplen = ol_read_word(sql, len, &pos, op, opcap, false);
-	if (oplen == 0) {
-		return 0;
+	l = 0;
+	if (e->mode == OL_QUERY_RAW) {
+		e->text = ol_strdup_n(sql, len, OL_STR_MAX, &l);
+	} else if (e->mode == OL_QUERY_SANITIZED) {
+		char buf[OL_STR_MAX + 1];
+		size_t sl = ol_sql_sanitize(buf, sizeof(buf), sql, len, system && strcmp(system, "mysql") == 0);
+		e->text = ol_strdup_n(buf, sl, OL_STR_MAX, &l);
 	}
-	if (strcmp(op, "SELECT") == 0 || strcmp(op, "DELETE") == 0) {
-		/* find FROM at nesting level 0 */
-		int depth = 0;
-		size_t i = pos;
-		while (i < len) {
-			char c = sql[i];
-			if (c == '(') depth++;
-			else if (c == ')') depth--;
-			else if (c == '\'' ) { i++; while (i < len && sql[i] != '\'') i++; }
-			else if (depth == 0 && (c == 'f' || c == 'F') && i + 4 < len && (i == 0 || !ol_ident_char(sql[i - 1])) &&
-					zend_binary_strncasecmp(sql + i, 4, "from", 4, 4) == 0 && isspace((unsigned char) sql[i + 4])) {
-				size_t p = i + 4;
-				ol_read_word(sql, len, &p, coll, collcap, true);
-				break;
-			}
-			i++;
-		}
-	} else if (strcmp(op, "INSERT") == 0 || strcmp(op, "REPLACE") == 0) {
-		size_t p = pos;
-		ol_read_word(sql, len, &p, w, sizeof(w), false);
-		if (strcmp(w, "INTO") == 0) {
-			ol_read_word(sql, len, &p, coll, collcap, true);
-		} else if (strcmp(w, "IGNORE") == 0) {
-			ol_read_word(sql, len, &p, w, sizeof(w), false);
-			ol_read_word(sql, len, &p, coll, collcap, true);
-		}
-	} else if (strcmp(op, "UPDATE") == 0) {
-		size_t p = pos;
-		ol_read_word(sql, len, &p, coll, collcap, true);
-	}
-	return oplen;
+	e->textlen = (uint16_t) l;
 }
 
 /* Span name, db.operation.name, db.collection.name, db.query.text (per openlog.capture_query_text). */
 void ol_db_query_attrs(ol_node *n, const char *system, const char *sql, size_t len)
 {
-	char op[32], coll[128], name[192];
+	ol_qcache tmp, *e = &tmp, *slot = NULL;
+
 	if (n == NULL) {
 		return;
 	}
@@ -622,172 +394,41 @@ void ol_db_query_attrs(ol_node *n, const char *system, const char *sql, size_t l
 		n->name = system;
 		return;
 	}
-	if (ol_sql_operation(sql, len, op, sizeof(op), coll, sizeof(coll)) > 0) {
-		ol_attr_str(n, "db.operation.name", op, strlen(op));
-		if (coll[0]) {
-			ol_attr_str(n, "db.collection.name", coll, strlen(coll));
-			snprintf(name, sizeof(name), "%s %s", op, coll);
-			n->name = ol_strdup(name, strlen(name), sizeof(name));
-		} else {
-			n->name = ol_strdup(op, strlen(op), sizeof(op));
+	if (len > 0 && len <= OL_STR_MAX) {
+		slot = &OLG(qcache)[ol_query_slot(system, sql, len)];
+		if (slot->gen == OLG(qgen) && slot->len == len && slot->system == system && slot->mode == OLG(query_mode) &&
+				memcmp(slot->raw, sql, len) == 0) {
+			e = slot;
+			goto apply;
 		}
-	} else {
-		n->name = system;
 	}
-	if (OLG(query_mode) == OL_QUERY_RAW) {
-		ol_attr_str(n, "db.query.text", sql, len);
-	} else if (OLG(query_mode) == OL_QUERY_SANITIZED) {
-		char buf[OL_STR_MAX + 1];
-		size_t l = ol_sql_sanitize(buf, sizeof(buf), sql, len, system && strcmp(system, "mysql") == 0);
-		ol_attr_str(n, "db.query.text", buf, l);
+	ol_query_compute(&tmp, system, sql, len);
+	if (slot) {
+		char *raw = ol_alloc(len);
+		if (raw) {
+			memcpy(raw, sql, len);
+			tmp.raw = raw;
+			tmp.len = (uint32_t) len;
+			tmp.system = system;
+			tmp.gen = OLG(qgen);
+			*slot = tmp;
+			e = slot;
+		}
+	}
+apply:
+	if (e->op) {
+		ol_attr_static_n(n, "db.operation.name", e->op, e->oplen);
+		if (e->coll) {
+			ol_attr_static_n(n, "db.collection.name", e->coll, e->colllen);
+		}
+	}
+	n->name = e->name;
+	if (e->text) {
+		ol_attr_static_n(n, "db.query.text", e->text, e->textlen);
 	}
 }
 
-/* ---------------- paths / routes / URLs ---------------- */
-
-static bool ol_seg_all(const char *s, size_t n, int (*pred)(int))
-{
-	size_t i;
-	for (i = 0; i < n; i++) {
-		if (!pred((unsigned char) s[i])) return false;
-	}
-	return n > 0;
-}
-
-static const char *ol_seg_replacement(const char *s, size_t n)
-{
-	size_t i, digits = 0, alpha = 0, hexletters = 0;
-	bool allhex = true, token = true, email_at = false;
-
-	/* UUID */
-	if (n == 36 && s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-') {
-		bool ok = true;
-		for (i = 0; i < 36 && ok; i++) {
-			if (i == 8 || i == 13 || i == 18 || i == 23) continue;
-			ok = isxdigit((unsigned char) s[i]);
-		}
-		if (ok) return "{uuid}";
-	}
-	/* decimal, optionally signed */
-	if ((s[0] == '-' || s[0] == '+') && n > 1 && ol_seg_all(s + 1, n - 1, isdigit)) return "{id}";
-	if (ol_seg_all(s, n, isdigit)) return "{id}";
-	for (i = 0; i < n; i++) {
-		unsigned char c = (unsigned char) s[i];
-		if (isdigit(c)) digits++;
-		else if (isalpha(c)) alpha++;
-		if (!isxdigit(c)) allhex = false;
-		else if (!isdigit(c)) hexletters++;
-		if (!(isalnum(c) || c == '_' || c == '-')) token = false;
-		if (c == '@') email_at = true;
-	}
-	if (allhex && (n >= 16 || (n >= 8 && digits > 0 && hexletters > 0))) return "{hex}";
-	if (token && n >= 20 && digits > 0) return "{token}";
-	if (email_at) {
-		const char *at = memchr(s, '@', n);
-		if (at && at > s && memchr(at, '.', n - (size_t) (at - s)) != NULL) return "{email}";
-	}
-	(void) alpha;
-	return NULL;
-}
-
-/* apm.md §2.2 path normalization. */
-size_t ol_normalize_path(char *dst, size_t cap, const char *path, size_t len)
-{
-	size_t i = 0, o = 0;
-	int segs = 0;
-	const char *q = memchr(path, '?', len);
-	const char *h = memchr(path, '#', len);
-	if (q) len = (size_t) (q - path);
-	if (h && (size_t) (h - path) < len) len = (size_t) (h - path);
-
-	while (i < len && o + 8 < cap) {
-		size_t start, n;
-		const char *rep;
-		while (i < len && path[i] == '/') i++;
-		if (i >= len) break;
-		start = i;
-		while (i < len && path[i] != '/') i++;
-		n = i - start;
-		if (++segs > 8) {
-			memcpy(dst + o, "/\xE2\x80\xA6", 4); /* "/…" */
-			o += 4;
-			break;
-		}
-		dst[o++] = '/';
-		rep = ol_seg_replacement(path + start, n);
-		if (rep) {
-			size_t rl = strlen(rep);
-			if (o + rl + 1 >= cap) break;
-			memcpy(dst + o, rep, rl);
-			o += rl;
-		} else {
-			if (o + n + 1 >= cap) n = cap - o - 2;
-			memcpy(dst + o, path + start, n);
-			o += n;
-		}
-	}
-	if (o == 0) {
-		dst[o++] = '/';
-	}
-	dst[o] = '\0';
-	return o;
-}
-
-/*
- * Route template from a regex/placeholder pattern: "(?P<id>\d+)" -> "{id}", CodeIgniter "(:num)" -> "{num}",
- * other groups -> "{param}"; anchors dropped.
- */
-size_t ol_route_from_pattern(char *dst, size_t cap, const char *s, size_t n)
-{
-	size_t i = 0, o = 0;
-	while (i < n && o + 2 < cap) {
-		char c = s[i];
-		if (c == '(') {
-			size_t j = i + 1;
-			int depth = 1;
-			const char *name = "param";
-			size_t nlen = 5;
-			while (j < n && depth > 0) {
-				if (s[j] == '\\') { j += 2; continue; }
-				if (s[j] == '(') depth++;
-				else if (s[j] == ')') depth--;
-				j++;
-			}
-			if (i + 3 < n && s[i + 1] == '?' && (s[i + 2] == 'P' || s[i + 2] == '<')) {
-				size_t k = i + (s[i + 2] == 'P' ? 4 : 3);
-				size_t e = k;
-				while (e < n && s[e] != '>') e++;
-				if (e < n && e > k) {
-					name = s + k;
-					nlen = e - k;
-				}
-			} else if (i + 1 < n && s[i + 1] == ':') {
-				size_t k = i + 2, e = k;
-				while (e < n && s[e] != ')') e++;
-				if (e > k) {
-					name = s + k;
-					nlen = e - k;
-				}
-			}
-			if (o + nlen + 3 < cap) {
-				dst[o++] = '{';
-				memcpy(dst + o, name, nlen);
-				o += nlen;
-				dst[o++] = '}';
-			}
-			i = j;
-			if (i < n && (s[i] == '?' || s[i] == '+' || s[i] == '*')) i++;
-			continue;
-		}
-		if (c == '^' || c == '$') { i++; continue; }
-		if (c == '\\' && i + 1 < n) { dst[o++] = s[i + 1]; i += 2; continue; }
-		if (c == '/' && o > 0 && dst[o - 1] == '/') { i++; continue; }
-		dst[o++] = c;
-		i++;
-	}
-	dst[o] = '\0';
-	return o;
-}
+/* ---------------- URLs ---------------- */
 
 /* url.full (without credentials), server.address, server.port */
 void ol_url_attrs(ol_node *n, const char *url, size_t len)
@@ -843,7 +484,7 @@ void ol_url_attrs(ol_node *n, const char *url, size_t len)
 	}
 	if (colon) {
 		const char *c;
-		for (c = colon + 1; c < auth_end && isdigit((unsigned char) *c); c++) {
+		for (c = colon + 1; c < auth_end && OL_ISDIGIT(*c); c++) {
 			port = port * 10 + (*c - '0');
 		}
 	}

@@ -25,7 +25,8 @@ controller();
 show('cli uncaught', ol_run($uncaught));
 show('web uncaught', ol_run($uncaught, ['cgi' => true, 'ini' => ['display_errors' => '0']]));
 show('exception handler', ol_run('<?php set_exception_handler(function ($e) { echo "handled\n"; }); throw new RuntimeException("to handler");'));
-show('memory fatal', ol_run('<?php ini_set("memory_limit", "16M"); $a = []; while (true) { $a[] = str_repeat("x", 1048576); }'));
+/* memory_limit is enforced by the Zend allocator only (sanitizer builds run with USE_ZEND_ALLOC=0) */
+show('memory fatal', ol_run('<?php ini_set("memory_limit", "16M"); $a = []; while (true) { $a[] = str_repeat("x", 1048576); }', ['env' => ['USE_ZEND_ALLOC' => '1']]));
 show('caught only', ol_run('<?php try { throw new Exception("quiet"); } catch (Exception $e) {} echo "fine";'));
 show('exit in function', ol_run('<?php function stop() { exit(3); } stop();'));
 $r = ol_run('<?php function stop() { exit(3); } stop();');

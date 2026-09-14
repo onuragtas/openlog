@@ -51,11 +51,17 @@ func (f *fakeKeys) count() int {
 	return f.lookups
 }
 
-func (f *fakeKeys) LookupLicenseKey(_ context.Context, h []byte) (KeyInfo, error) {
+func (f *fakeKeys) LookupLicenseKey(_ context.Context, hs [][]byte) (KeyInfo, error) {
 	f.mu.Lock()
 	f.lookups++
 	block, err := f.block, f.err
-	info, ok := f.keys[string(h)]
+	var info KeyInfo
+	ok := false
+	for _, h := range hs {
+		if info, ok = f.keys[string(h)]; ok {
+			break
+		}
+	}
 	f.mu.Unlock()
 	if block != nil {
 		<-block

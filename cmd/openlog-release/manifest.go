@@ -20,15 +20,17 @@ import (
 
 // Artifact naming convention inside a release directory (docs/operations/releasing.md):
 //
-//	openlog-infra-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm   component infra-agent
-//	openlog_<v>_<os>_<arch>.tar.gz                         component backend (all backend binaries)
-//	openlog-<v>.tgz                                        Helm chart (manifest.helm_chart)
+//	openlog-infra-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm      component infra-agent
+//	openlog-php-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm|.apk   component php-agent (agents/php/packaging/build-artifacts.sh)
+//	openlog_<v>_<os>_<arch>.tar.gz                            component backend (all backend binaries)
+//	openlog-<v>.tgz                                           Helm chart (manifest.helm_chart)
 var componentPrefixes = map[string]string{
 	"openlog-infra-agent": lib.ComponentInfraAgent,
+	"openlog-php-agent":   lib.ComponentPHPAgent,
 	"openlog":             "backend",
 }
 
-var artifactFormats = []string{"tar.gz", "deb", "rpm"}
+var artifactFormats = []string{lib.FormatTarGz, lib.FormatDeb, lib.FormatRPM, lib.FormatAPK}
 
 // classify maps a file name of a release directory to an artifact. ok is false for files that are
 // not release artifacts (manifest, signatures, install.sh, …).
