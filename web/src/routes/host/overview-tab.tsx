@@ -4,7 +4,9 @@ import { BellPlus } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
+import { fleetHostQuery } from "@/api/fleet";
 import { hostQuery, metricQuery } from "@/api/queries";
+import { PHPAccessNotice } from "@/components/onboarding/PHPAccessNotice";
 import { can } from "@/api/roles";
 import { buttonVariants } from "@/components/ui/button";
 import { createAlertSearch } from "@/lib/alerts";
@@ -160,12 +162,18 @@ function MetricChartCard({ hostId, range, def, canAlert }: { hostId: string; ran
 export function HostOverviewTab({ hostId }: { hostId: string }) {
   const search = route.useSearch();
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
-  const canAlert = can(useMe().data?.role, "alerts.write");
+  const me = useMe().data;
+  const canAlert = can(me?.role, "alerts.write");
+  // PHP-FPM pools that cannot write the agent's socket lose their spans silently; show the fix on the host page too.
+  const phpAccess = useQuery({ ...fleetHostQuery(hostId), enabled: !!me }).data?.php_access;
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {OVERVIEW_CHARTS.map((def) => (
-        <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} canAlert={canAlert} />
-      ))}
+    <div className="flex flex-col gap-4">
+      {phpAccess && <PHPAccessNotice access={phpAccess} />}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {OVERVIEW_CHARTS.map((def) => (
+          <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} canAlert={canAlert} />
+        ))}
+      </div>
     </div>
   );
 }

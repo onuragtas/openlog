@@ -1,12 +1,40 @@
-import { KeyRound } from "lucide-react";
+import { Check, Copy, KeyRound } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FleetPHPAccess } from "@/api/fleet";
+import { Button } from "@/components/ui/button";
 
 const MAX_LISTED = 20;
 const RESTART = "sudo systemctl restart openlog-infra-agent";
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+/** A shell command with a copy button; long lines scroll inside the block. */
+function CopyCommand({ code, label, testId }: { code: string; label: string; testId?: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // No clipboard permission: the text stays selectable in the block.
+    }
+  };
+  return (
+    <div className="flex min-w-0 items-start gap-1 rounded bg-muted/60">
+      <pre className="min-w-0 flex-1 overflow-x-auto p-2 font-mono" data-testid={testId}>
+        {code}
+      </pre>
+      <Button type="button" variant="ghost" size="sm" className="shrink-0" aria-label={t("addData.install.copyLabel", { label })} onClick={() => void copy()}>
+        {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        <span className="hidden sm:inline">{copied ? t("addData.install.copied") : t("addData.install.copy")}</span>
+      </Button>
+    </div>
+  );
 }
 
 /**
@@ -45,13 +73,11 @@ export function PHPAccessNotice({ access }: { access: FleetPHPAccess }) {
       ) : (
         <>
           <p>{t("services.phpAccessRestart")}</p>
-          <pre className="overflow-x-auto rounded bg-muted/60 p-2 font-mono">{RESTART}</pre>
+          <CopyCommand code={RESTART} label="systemctl restart openlog-infra-agent" testId="php-access-restart" />
         </>
       )}
       <p>{t("services.phpAccessManual")}</p>
-      <pre className="overflow-x-auto rounded bg-muted/60 p-2 font-mono" data-testid="php-access-manual">
-        {manual}
-      </pre>
+      <CopyCommand code={manual} label="usermod" testId="php-access-manual" />
     </div>
   );
 }
