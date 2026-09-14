@@ -28,7 +28,7 @@ logs:
 	if len(cfg.Containers.CRISockets) != 1 || cfg.Logs.Containers.Include[0].MultilineStart != `^\d{4}-` {
 		t.Errorf("parsed = %+v %+v", cfg.Containers, cfg.Logs.Containers.Include)
 	}
-	bad := Default()
+	bad := DefaultFor("linux") // containers are off by default on Windows
 	bad.Containers.CRISockets = []string{"run/crio.sock"}
 	bad.Logs.Containers.Include = []ContainerMatch{{Name: "a", MultilineStart: "("}, {MultilineStart: "^x"}}
 	bad.Logs.Containers.Exclude = []ContainerMatch{{Name: "b", MultilineStart: "^x"}}

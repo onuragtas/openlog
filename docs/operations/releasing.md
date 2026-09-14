@@ -119,18 +119,31 @@ Delete `openlog-release-key-1.env` from any online machine after step 2.
 
 ## Cutting a release
 
-```sh
-# 1. prepare the Go agent modules (one commit, reviewed like any change)
-git switch -c release/0.4.0 master
-make release-prepare VERSION=0.4.0        # agents/go/version.go + in-repo requires → v0.4.0
-git commit -am "release: 0.4.0" && git push -u origin release/0.4.0   # PR → merge to master
+Releases are continuous: every push to `master` whose `ci.yml` run is green is released.
 
-# 2. tag the merged commit (master is green: ci.yml, incl. "release dry run")
-git switch master && git pull --ff-only
-make go-agent-release-check VERSION=0.4.0 # the same check release.yml runs
-git tag -s v0.4.0 -m "openlog 0.4.0"      # v0.5.0-beta.1 → channel beta, GitHub pre-release
-git push origin v0.4.0
+1. `ci.yml` job `release-tag` runs after every other job (none failed or was cancelled; skipped path-filtered jobs
+   are fine). It does nothing when the commit is already tagged, when `master` has moved on (the newer push's run
+   releases it) or when the commit message contains `[skip release]`.
+2. Next version: the highest stable tag `vX.Y.Z` plus a patch bump. `[release minor]` or `[release major]` in the
+   commit message bumps the minor or major version instead.
+3. When the Go agent modules are not prepared for that version, it runs `scripts/go-agent-release.sh prepare` and
+   pushes the commit `release: prepare X.Y.Z (Go agent modules)` to `master` as `github-actions[bot]`. A push with
+   `GITHUB_TOKEN` starts no new `ci.yml` run, so this does not loop.
+4. It pushes the annotated tag `vX.Y.Z` and starts `release.yml` on it with `workflow_dispatch` (a tag pushed with
+   `GITHUB_TOKEN` starts no workflow by itself).
+
+Requirements: *Settings → Actions → General → Workflow permissions* allows *Read and write*; branch protection or tag
+rulesets on `master` / `v*` must let GitHub Actions push. Nothing else is needed on your side.
+
+Pre-releases and manual releases still work by pushing a tag yourself (e.g. a beta; a manual tag makes the next
+automatic release continue from the highest *stable* tag):
+
+```sh
+make release-prepare VERSION=0.5.0-beta.1 && git commit -am "release: 0.5.0-beta.1" && git push
+git tag -s v0.5.0-beta.1 -m "openlog 0.5.0-beta.1" && git push origin v0.5.0-beta.1   # channel beta, GitHub pre-release
 ```
+
+Commit with `[skip release]` in the message so the preparation push is not released automatically as well.
 
 `release.yml` then:
 

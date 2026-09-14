@@ -35,7 +35,8 @@
   <?endif?>
 
   <?define ConfigPath = "[CommonAppDataFolder]openlog\infra-agent\config.yaml"?>
-  <?define UtilCA = "Wix4UtilCA_$(sys.BUILDARCHSHORTNAME)"?>
+  <!-- WiX v5 has no sys.BUILDARCHSHORTNAME; the MSI is x64 only (build-msi.ps1 rejects other architectures). -->
+  <?define UtilCA = "Wix4UtilCA_X64"?>
 
   <Package Name="openlog infrastructure agent"
            Manufacturer="openlog"

@@ -9,6 +9,9 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # ci.yml job release-tag starts the release of the tag it pushed (tags pushed with GITHUB_TOKEN start no
+  # workflow); also "Run workflow" with a v* tag selected.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -39,6 +42,9 @@ jobs:
           PUBLIC_KEYS: ${{ vars.OPENLOG_RELEASE_PUBLIC_KEYS }}
           SIGNING_KEY: ${{ secrets.OPENLOG_RELEASE_SIGNING_KEY }}
         run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::run release.yml on a v<SemVer> tag, not on $GITHUB_REF"; exit 1
+          fi
           version="${TAG#v}"
           if ! [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::tag $TAG is not v<SemVer>"; exit 1

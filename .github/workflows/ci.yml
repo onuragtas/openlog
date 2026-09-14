@@ -564,3 +564,74 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make e2e
+
+  # Continuous release: a green push to master gets the next version tag and starts release.yml
+  # (docs/operations/releasing.md "Cutting a release"). Patch bump by default; "[release minor]" or
+  # "[release major]" in the commit message bumps more, "[skip release]" releases nothing.
+  release-tag:
+    name: tag and start the release
+    needs: [changes, go, infra-agent-macos, infra-agent-windows, go-agent, php-ext, php-ext-fuzz, web, node-agent,
+      python-agent, java-agent, dotnet-agent, dotnet-agent-netfx, helm, lint-scripts, release-dryrun, e2e]
+    if: >-
+      !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+      github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+      !contains(github.event.head_commit.message, '[skip release]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # the Go module preparation commit and the version tag
+      actions: write # workflow_dispatch of release.yml (a tag pushed with GITHUB_TOKEN starts no workflow)
+    concurrency:
+      group: release-tag
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agents/go/go.mod
+          cache-dependency-path: agents/go/**/go.sum
+      - name: next version, Go module preparation, tag, release.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force origin
+          if tag="$(git tag --points-at HEAD -l 'v[0-9]*' | head -1)" && [ -n "$tag" ]; then
+            echo "HEAD is already tagged $tag; nothing to release"; exit 0
+          fi
+          remote="$(git ls-remote origin refs/heads/master | cut -f1)"
+          if [ "$remote" != "$GITHUB_SHA" ]; then
+            echo "::notice::master moved on to $remote; the newer push's run releases it"; exit 0
+          fi
+
+          last="$(git tag -l 'v[0-9]*' | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)"
+          IFS=. read -r major minor patch <<<"${last#v}"
+          major="${major:-0}" minor="${minor:-0}" patch="${patch:-0}"
+          case "$MESSAGE" in
+            *"[release major]"*) version="$((major + 1)).0.0" ;;
+            *"[release minor]"*) version="$major.$((minor + 1)).0" ;;
+            *) version="$major.$minor.$((patch + 1))" ;;
+          esac
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::tag v$version already exists"; exit 1
+          fi
+          echo "last stable ${last:-none}, next v$version"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! scripts/go-agent-release.sh check "$version" >/dev/null 2>&1; then
+            scripts/go-agent-release.sh prepare "$version"
+            git commit -qam "release: prepare $version (Go agent modules)"
+            # Pushed with GITHUB_TOKEN: starts no ci run. Rejected when master moved meanwhile.
+            if ! git push origin "HEAD:refs/heads/master"; then
+              echo "::notice::master moved on while preparing v$version; the newer push's run releases it"; exit 0
+            fi
+          fi
+
+          git tag -a "v$version" -m "openlog $version"
+          git push origin "refs/tags/v$version"
+          gh workflow run release.yml --ref "v$version"
+          echo "### v$version tagged, release started" >> "$GITHUB_STEP_SUMMARY"
