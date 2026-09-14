@@ -69,13 +69,19 @@ function fphp_run($root, $worker, array $requests)
         }
         $proc = proc_open('exec ' . $cmd, [0 => ['pipe', 'r'], 1 => ['file', $home . '/server.log', 'w'], 2 => ['file', $home . '/server.log', 'a']], $pipes, null, $env);
         fclose($pipes[0]);
+        /* Ready = the port accepts AND FrankenPHP logged "FrankenPHP started". Caddy starts listening before
+         * frankenphp.Init() has created the regular request channel and attached the PHP threads; in FrankenPHP
+         * <= 1.12.7 a request arriving in that window blocks forever on a nil channel (php/frankenphp#2612: first
+         * request never answered, server then cannot stop). The log line is written at the end of Init(), after the
+         * channel, the regular threads and the workers exist, so waiting for it starts no PHP request. */
         $up = false;
         for ($i = 0; $i < 150 && !$up; $i++) {
             $fp = @fsockopen('127.0.0.1', $port, $en, $es, 0.1);
             if ($fp) {
                 fclose($fp);
-                $up = true;
-            } else {
+                $up = strpos((string) @file_get_contents($home . '/server.log'), 'FrankenPHP started') !== false;
+            }
+            if (!$up) {
                 $st = proc_get_status($proc);
                 if (!$st['running']) {
                     break;

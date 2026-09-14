@@ -102,7 +102,11 @@ One JSON object (UTF-8) per datagram; all IDs lowercase hex; times unix nanoseco
   return ends it; method, path, host, client, user agent, `traceparent` come from the per-request `$_SERVER` /
   `SG(request_info)` FrankenPHP has already reset, the status from `http_response_code` when the callback returns, an
   exception escaping the callback is recorded; `exit()` in a request and worker restarts are handled, the worker
-  script's own run is never sent). FrankenPHP classic mode is a regular SAPI request. The worker
+  script's own run is never sent). FrankenPHP classic mode is a regular SAPI request. Known FrankenPHP issue (not the
+  extension): up to v1.12.7 Caddy accepts connections before `frankenphp.Init()` has created the request channel, and
+  a request arriving in that window is never answered and keeps the server from stopping (php/frankenphp#2612, fixed
+  after 1.12.7); extensions that make PHP startup slower (openlog adds ~10 ms) widen the window. Send traffic only
+  after the `FrankenPHP started` log line (as `tests/044-frankenphp.phpt` does). The worker
   process's own CLI transaction is dropped when the first request starts; between requests nothing is recorded and no
   header is propagated; connection attributes survive requests. Requests overlapping in one process (Swoole
   coroutines) are never mixed: while more than one is in progress, child spans, route names and the function tracer
