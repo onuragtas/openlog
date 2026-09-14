@@ -131,8 +131,11 @@ integrations:                    # metric integrations bound to discovered servi
 php_forwarder:                   # receives spans from the openlog PHP extension (docs/contracts/php-agent.md §6)
   # enabled: unset = on while discovery finds PHP (php-fpm, Apache mod_php, a php CLI binary); true/false wins
   socket: /run/openlog-infra-agent/php.sock   # unix datagram socket (systemd RuntimeDirectory); "" = UDP only
-  socket_group: auto             # auto = first existing of www-data, nginx, apache, php-fpm; the agent user must be a
-                                 # member of that group (e.g. SupplementaryGroups=www-data in a systemd drop-in)
+  socket_group: auto             # auto = openlog-php (created with the agent user as member on every service start);
+                                 # only if it does not exist: first existing of www-data, nginx, apache, php-fpm
+  grant_pool_users: true         # on service start/install, add PHP-FPM pool users (/etc/php/*/fpm/pool.d, cPanel,
+                                 # Plesk, RHEL) and the Apache/nginx user to openlog-php and reload those PHP-FPM
+                                 # services; false = only manual grants (also: touch /etc/openlog-infra-agent/no-php-access)
   socket_mode: "0660"            # "0666" lets any local user send spans
   udp_listen: ""                 # e.g. 127.0.0.1:18127 for containers that cannot share the socket file
   max_pending_traces: 10000      # split messages waiting for their remaining parts

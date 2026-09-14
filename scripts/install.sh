@@ -16,6 +16,12 @@
 #   --no-start            install and configure, but do not (re)start the service
 #   --no-docker-access    do not add openlog-agent to the docker group, now or on later upgrades
 #                         (creates /etc/openlog-infra-agent/no-docker-access) [OPENLOG_AGENT_DOCKER_ACCESS=0]
+#   --no-php-access       do not add PHP-FPM pool users to the openlog-php socket group, now or later
+#                         (creates /etc/openlog-infra-agent/no-php-access) [OPENLOG_AGENT_PHP_ACCESS=0]
+#
+# PHP: php.sock (PHP agent spans) is 0660 with group openlog-php. openlog-agent and every PHP-FPM pool user
+# (per-site users of HestiaCP, cPanel, Plesk, …) plus the Apache/nginx user are added to it and the affected PHP-FPM
+# services are reloaded; pools created later are granted at the next: systemctl restart openlog-infra-agent
 #
 # Docker: when a docker group exists, openlog-agent is added to it (container names, ports, IPs).
 # That membership is root-equivalent. Revert: gpasswd -d openlog-agent docker &&
@@ -53,6 +59,8 @@ start=1
 docker_access=${OPENLOG_AGENT_DOCKER_ACCESS:-1}
 docker_added=0
 DOCKER_OPT_OUT=$CONFIG_DIR/no-docker-access
+php_access=${OPENLOG_AGENT_PHP_ACCESS:-1}
+PHP_OPT_OUT=$CONFIG_DIR/no-php-access
 tmpdir=
 
 log() { printf 'openlog-install: %s\n' "$*" >&2; }
@@ -78,6 +86,11 @@ while [ $# -gt 0 ]; do
 		;;
 	--no-docker-access)
 		docker_access=0
+		shift
+		continue
+		;;
+	--no-php-access)
+		php_access=0
 		shift
 		continue
 		;;
@@ -148,6 +161,14 @@ if [ "$docker_access" = 0 ]; then
 	touch "$DOCKER_OPT_OUT"
 	OPENLOG_AGENT_DOCKER_ACCESS=0
 	export OPENLOG_AGENT_DOCKER_ACCESS
+fi
+case $php_access in 0 | false | no | off) php_access=0 ;; *) php_access=1 ;; esac
+if [ "$php_access" = 0 ]; then
+	# Same for PHP-FPM pool users (openlog-php socket group, php-agent.md §1).
+	mkdir -p "$CONFIG_DIR"
+	touch "$PHP_OPT_OUT"
+	OPENLOG_AGENT_PHP_ACCESS=0
+	export OPENLOG_AGENT_PHP_ACCESS
 fi
 
 # --- helpers ------------------------------------------------------------------------------------
@@ -468,8 +489,9 @@ install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
 has_license_key || log "warning: no license_key in $CONFIG; pass --license-key"
 
 # --- reconcile ----------------------------------------------------------------------------------
-# systemd unit, account, docker group (opt-out above), ownership: the same step the agent's privileged pre-start
-# step runs after every self-update. Package installs already ran it in their postinstall; then this is a no-op.
+# systemd unit, account, docker group and openlog-php group with the PHP-FPM pool users (opt-outs above), ownership: the
+# same step the agent's privileged pre-start step runs on every start. It logs what it changed to stderr. Package
+# installs already ran it in their postinstall; then this is a no-op.
 bin=$ROOT/current/openlog-infra-agent
 restart_needed=0
 if reconcile_supported "$bin"; then
@@ -490,7 +512,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
 	elif [ "$restart_needed" = 1 ] && [ "$start" = 1 ]; then
 		systemctl try-restart "$UNIT" || true
 	elif [ "$restart_needed" = 1 ]; then
-		log "the new unit or docker group applies after: systemctl restart $UNIT"
+		log "the new unit or groups apply after: systemctl restart $UNIT"
 	fi
 else
 	log "systemd is not running; start the agent with: /usr/bin/openlog-infra-agent -config $CONFIG"

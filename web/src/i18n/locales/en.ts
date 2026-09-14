@@ -1381,6 +1381,13 @@ export const en = {
     apmFleetDone: "PHP agent mode set to auto for this host. The infra agent installs it at its next sync.",
     apmActive: "APM active",
     apmActiveBody: "{{name}} is sending traces with {{product}}.",
+    phpAccessTitle_one: "{{count}} PHP-FPM pool cannot send traces",
+    phpAccessTitle_other: "{{count}} PHP-FPM pools cannot send traces",
+    phpAccessBody: "Their users are not in the {{group}} group, so the PHP agent cannot write the infra agent's socket and their spans are dropped.",
+    phpAccessMore: "and {{count}} more",
+    phpAccessRestart: "Restart the infra agent: its privileged start step adds the pool users and reloads PHP-FPM.",
+    phpAccessOptedOut: "Automatic grants are turned off on this host (no-php-access or grant_pool_users: false).",
+    phpAccessManual: "Or grant access manually:",
     apmOpen: "Open in APM",
     category: {
       database: "Database",

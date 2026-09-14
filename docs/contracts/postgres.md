@@ -325,7 +325,9 @@ host an update; soft reference, never cleared by later syncs), `integrations_con
 the remote integration config revision the agent reported in its last sync: `''` = none, `disabled` = remote config
 turned off on the host), `php_agent` (`0045_php_agent_fleet`, jsonb: the `php_agent` section of the last sync request —
 PHP runtimes, installed PHP agent version, `managed_by`, last operation — bounded by ingest; NULL when the agent does
-not report one).
+not report one), `php_access` (`0064_php_access`, jsonb: the `php_access` section of the last sync request — socket
+group, PHP-FPM pools and whether their users may write `php.sock`, php-agent.md §1 — at most 512 pools; NULL when the
+agent does not report one).
 
 Written **only by ingest, asynchronously**: sync requests are answered from memory; reports are queued per pod
 (coalesced per host, bounded by `OPENLOG_FLEET_REPORT_QUEUE_SIZE`, the oldest report is dropped when full:

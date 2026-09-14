@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { apmHostServicesQuery } from "@/api/apm";
-import { setHostPHPAgentMode } from "@/api/fleet";
+import { fleetHostQuery, setHostPHPAgentMode } from "@/api/fleet";
 import { onboardingQuery } from "@/api/onboarding";
 import { hostQuery } from "@/api/queries";
 import { can } from "@/api/roles";
@@ -13,6 +13,7 @@ import { FormError } from "@/components/settings/common";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { AGENT_PRODUCTS, apmTargetForLanguage } from "@/lib/install-commands";
+import { PHPAccessNotice } from "./PHPAccessNotice";
 
 export interface ApmHint {
   language?: string;
@@ -39,6 +40,11 @@ export function ApmHintFooter({ hint, hostId, serviceName, language }: { hint: A
   const services = useQuery({ ...apmHostServicesQuery(hostId), enabled: active });
   const fleet = useMutation({ mutationFn: () => setHostPHPAgentMode(hostId, "auto") });
   const canFleet = target === "apm/php" && !!onboarding.data?.features.fleet_php_install && can(me?.role, "fleet.manage") && me?.auth === "session";
+  // PHP-FPM pools whose users cannot write php.sock (reported by the infra agent in sync). Every role may read the fleet;
+  // without the fleet API (other auth modes) the query fails and nothing is shown.
+  const fleetHost = useQuery({ ...fleetHostQuery(hostId), enabled: target === "apm/php" && !!me });
+  const phpAccess = fleetHost.data?.php_access;
+  const accessNotice = phpAccess ? <PHPAccessNotice access={phpAccess} /> : null;
 
   if (active) {
     const first = services.data?.[0]?.service_name;
@@ -49,6 +55,7 @@ export function ApmHintFooter({ hint, hostId, serviceName, language }: { hint: A
           {t("services.apmActive")}
         </p>
         <p className="text-xs text-muted-foreground">{t("services.apmActiveBody", { name: serviceName, product })}</p>
+        {accessNotice}
         {first ? (
           <Link to="/apm/services/$service" params={{ service: first }} className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10" })}>
             <Activity aria-hidden="true" />
@@ -66,6 +73,7 @@ export function ApmHintFooter({ hint, hostId, serviceName, language }: { hint: A
 
   return (
     <CardFooter className="flex-col items-stretch gap-2 border-t pt-3" data-testid="apm-hint" data-status={hint.status ?? "unknown"}>
+      {accessNotice}
       <Button variant="outline" size="sm" aria-expanded={open} aria-controls={`${id}-apm`} onClick={() => setOpen((o) => !o)}>
         <Code2 aria-hidden="true" />
         {t("services.apmInstall", { product })}

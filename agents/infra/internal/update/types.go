@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
+	"github.com/onuragtas/openlog/agents/infra/internal/phpaccess"
 )
 
 // Update states reported in sync requests.
@@ -105,6 +106,8 @@ type SyncRequest struct {
 	Reconcile *ReconcileReport `json:"reconcile,omitempty"`
 	// PHPAgent is the PHP runtime inventory and PHP agent installation state (phpagent.Report, php-agent.md §7.3).
 	PHPAgent any `json:"php_agent,omitempty"`
+	// PHPAccess is which PHP-FPM pools may send to php.sock (absent without PHP-FPM pools, php-agent.md §1).
+	PHPAccess *phpaccess.Report `json:"php_access,omitempty"`
 }
 
 // AgentInfo describes the running agent.
@@ -128,7 +131,9 @@ type ReconcileReport struct {
 	At          string `json:"at"`
 	UnitChanged bool   `json:"unit_changed"`
 	Docker      string `json:"docker"`
-	Error       string `json:"error"`
+	// PHPAccess is the openlog-php step: added, member, opt_out or error ("" = not run by this release).
+	PHPAccess string `json:"php_access,omitempty"`
+	Error     string `json:"error"`
 }
 
 // Report is the update state reported to the backend.

@@ -7521,7 +7521,7 @@ components:
 
     FleetHost:
       type: object
-      required: [host_id, host_name, agent, update, first_seen_at, last_sync_at, rollout_id, override, outdated, supported, status, status_target, php_agent]
+      required: [host_id, host_name, agent, update, first_seen_at, last_sync_at, rollout_id, override, outdated, supported, status, status_target, php_agent, php_access]
       properties:
         host_id: { type: string }
         host_name: { type: string }
@@ -7559,6 +7559,32 @@ components:
             rollout_outdated, not_in_rollout, up_to_date, not_in_wave, target_unavailable, incompatible, already_failed, no_artifact, outside_window]
         status_target: { type: [string, "null"] }
         php_agent: { $ref: "#/components/schemas/FleetHostPHPAgent" }
+        php_access:
+          description: PHP-FPM pools and whether their users may send spans to php.sock (php-agent.md §1); null when not reported
+          anyOf: [{ $ref: "#/components/schemas/FleetPHPAccess" }, { type: "null" }]
+
+    FleetPHPAccess:
+      type: object
+      required: [socket_group, group, group_exists, agent_member, grants, pools]
+      properties:
+        socket_group: { type: string, description: 'Group applied to php.sock ("" when none)' }
+        group: { type: string, description: The dedicated socket group (openlog-php) }
+        group_exists: { type: boolean }
+        agent_member: { type: boolean }
+        grants: { type: string, description: "auto (the privileged step adds pool users) or opted_out" }
+        pools:
+          type: array
+          items: { $ref: "#/components/schemas/FleetPHPPoolAccess" }
+
+    FleetPHPPoolAccess:
+      type: object
+      required: [pool, php_version, user, unit, access]
+      properties:
+        pool: { type: string }
+        php_version: { type: string, description: '"" when the layout has no version (e.g. /etc/php-fpm.d)' }
+        user: { type: string }
+        unit: { type: string, description: systemd service of the PHP-FPM master (e.g. php8.2-fpm.service) }
+        access: { type: string, description: "ok, missing, opted_out or unsupported_user (root or not a local account); unknown values are passed through" }
 
     # ---- Alerting (docs/contracts/alerting.md) ----
     AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql] }

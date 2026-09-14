@@ -18,6 +18,8 @@ type reconcileFixture struct {
 	unit     string
 	ctx      string
 	inv      string
+
+	phpGrantsDisabled bool
 }
 
 func newReconcileFixture(t *testing.T) *reconcileFixture {
@@ -36,7 +38,7 @@ func (f *reconcileFixture) run() (*ReconcileStatus, error) {
 	return Reconcile(f.t.Context(), ReconcileOptions{
 		Sys: f.sys.Sys, Install: Install{Method: f.method, InstallRoot: f.root, VersionDir: "0.9.1"},
 		StateDir: f.stateDir, ConfigPath: f.config, Version: "0.9.1", Unit: []byte(f.unit),
-		Context: f.ctx, InvocationID: f.inv, Now: func() time.Time { return time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC) },
+		Context: f.ctx, InvocationID: f.inv, PHPGrantsDisabled: f.phpGrantsDisabled, Now: func() time.Time { return time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC) },
 	})
 }
 

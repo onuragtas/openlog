@@ -1382,6 +1382,13 @@ export const tr: Messages = {
     apmFleetDone: "Bu sunucu için PHP agent modu auto yapıldı. Infra agent bir sonraki senkronizasyonda kurar.",
     apmActive: "APM etkin",
     apmActiveBody: "{{name}}, {{product}} ile iz gönderiyor.",
+    phpAccessTitle_one: "{{count}} PHP-FPM pool'u iz gönderemiyor",
+    phpAccessTitle_other: "{{count}} PHP-FPM pool'u iz gönderemiyor",
+    phpAccessBody: "Kullanıcıları {{group}} grubunda değil; PHP agent infra agent soketine yazamıyor ve span'ları kayboluyor.",
+    phpAccessMore: "ve {{count}} tane daha",
+    phpAccessRestart: "Infra agent'ı yeniden başlatın: yetkili başlangıç adımı pool kullanıcılarını ekler ve PHP-FPM'i reload eder.",
+    phpAccessOptedOut: "Bu sunucuda otomatik izin kapalı (no-php-access veya grant_pool_users: false).",
+    phpAccessManual: "Veya izni elle verin:",
     apmOpen: "APM'de aç",
     category: {
       database: "Veritabanı",

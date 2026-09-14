@@ -20,6 +20,7 @@ import (
 
 	"github.com/onuragtas/openlog/agents/infra/internal/agent"
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
+	"github.com/onuragtas/openlog/agents/infra/internal/phpaccess"
 	"github.com/onuragtas/openlog/agents/infra/internal/release"
 	"github.com/onuragtas/openlog/agents/infra/internal/update"
 	"github.com/onuragtas/openlog/agents/infra/internal/version"
@@ -173,6 +174,7 @@ func run() int {
 				IntegrationsConfigRevision: a.IntegrationsConfigRevision(),
 				Reconcile:                  install.Reconcile.Report(),
 				PHPAgent:                   php.Report(),
+				PHPAccess:                  a.PHPAccess(update.AgentUser, filepath.Join(filepath.Dir(*configPath), phpaccess.OptOutFile)),
 			}
 		},
 	}

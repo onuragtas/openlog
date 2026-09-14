@@ -74,6 +74,8 @@ type HostReport struct {
 	IntegrationsConfigRevision string
 	// PHPAgent is the PHP runtime inventory and PHP agent state (nil: the agent does not report it).
 	PHPAgent *PHPAgentReport
+	// PHPAccess is which PHP-FPM pools may send to php.sock (nil: not reported, e.g. no PHP-FPM pools or an older agent).
+	PHPAccess *PHPAccessReport
 }
 
 // Override is a per-host exception to the policy.

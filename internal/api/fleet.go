@@ -214,6 +214,8 @@ type fleetHostJSON struct {
 	Status       string             `json:"status"`
 	StatusTarget *string            `json:"status_target"`
 	PHPAgent     fleetHostPHPJSON   `json:"php_agent"` // fleet_php.go
+	// PHPAccess: PHP-FPM pools and their access to php.sock (null when not reported).
+	PHPAccess *fleet.PHPAccessReport `json:"php_access"`
 }
 
 func hostResponse(h fleet.HostView) fleetHostJSON {
@@ -230,6 +232,7 @@ func hostResponse(h fleet.HostView) fleetHostJSON {
 	out.RolloutID, out.Override = optString(h.RolloutID), overrideResponse(h.Override)
 	out.Outdated, out.Supported, out.Status, out.StatusTarget = h.Outdated, h.Supported, string(h.Status), optString(h.Target)
 	out.PHPAgent = hostPHPResponse(h)
+	out.PHPAccess = h.PHPAccess
 	return out
 }
 

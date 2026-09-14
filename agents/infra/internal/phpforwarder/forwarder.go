@@ -22,7 +22,7 @@ const DefaultFlushInterval = time.Second
 // Options configures a Forwarder.
 type Options struct {
 	Socket            string      // unix datagram socket path; empty disables the unix listener
-	SocketGroup       string      // "" or "auto": first existing of AutoSocketGroups
+	SocketGroup       string      // "" or "auto": DefaultSocketGroup, else the first existing of AutoSocketGroups
 	SocketMode        fs.FileMode // 0660 by default
 	UDPListen         string      // host:port; empty disables UDP
 	MaxPendingTraces  int
@@ -58,11 +58,13 @@ type Forwarder struct {
 
 	runMu   sync.Mutex
 	running bool
-	unix    *net.UnixConn
-	sock    socketInfo
-	udp     *net.UDPConn
-	stop    chan struct{}
-	wg      sync.WaitGroup
+	// lastGroupWarn is the socket group problem of the last start (logged once).
+	lastGroupWarn string
+	unix          *net.UnixConn
+	sock          socketInfo
+	udp           *net.UDPConn
+	stop          chan struct{}
+	wg            sync.WaitGroup
 }
 
 // New returns a stopped forwarder.
@@ -115,9 +117,19 @@ func (f *Forwarder) Start() error {
 			errs = append(errs, err)
 		} else {
 			f.unix, f.sock = conn, info
-			if warn != nil {
+			var gw *groupWarning
+			switch {
+			case warn == nil:
+				f.lastGroupWarn = ""
+			case warn.Error() == f.lastGroupWarn:
+				// Same problem as at the previous start (the module is switched on and off with discovery): logged once.
+			case errors.As(warn, &gw) && gw.fallback:
+				f.lastGroupWarn = warn.Error()
+				f.o.Log.Info("php forwarder socket group not applied", "socket", f.o.Socket, "reason", warn)
+			default:
+				f.lastGroupWarn = warn.Error()
 				f.o.Stats.PermissionDenied("php_forwarder")
-				f.o.Log.Warn("php forwarder socket group", "socket", f.o.Socket, "warning", warn)
+				f.o.Log.Warn("php forwarder socket group not applied", "socket", f.o.Socket, "reason", warn)
 			}
 		}
 	}

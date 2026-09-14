@@ -131,6 +131,7 @@ type syncRequest struct {
 	ConfigHash                 string          `json:"config_hash"`
 	IntegrationsConfigRevision string          `json:"integrations_config_revision"`
 	PHPAgent                   json.RawMessage `json:"php_agent"`
+	PHPAccess                  json.RawMessage `json:"php_access"`
 }
 
 // SyncResponse is the sync answer.
@@ -233,6 +234,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 		UpdateState: StateIdle, ConfigHash: clip(req.ConfigHash, 128),
 		IntegrationsConfigRevision: clip(strings.TrimSpace(req.IntegrationsConfigRevision), 128),
 		PHPAgent:                   ParsePHPAgentReport(req.PHPAgent),
+		PHPAccess:                  ParsePHPAccessReport(req.PHPAccess),
 	}
 	if u := req.Update; u != nil {
 		if st := clip(strings.TrimSpace(u.State), 32); st != "" {

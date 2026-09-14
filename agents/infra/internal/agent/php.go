@@ -2,12 +2,15 @@ package agent
 
 import (
 	"log/slog"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
 	"github.com/onuragtas/openlog/agents/infra/internal/discovery"
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs"
+	"github.com/onuragtas/openlog/agents/infra/internal/phpaccess"
 	"github.com/onuragtas/openlog/agents/infra/internal/phpforwarder"
 )
 
@@ -24,6 +27,8 @@ type phpModule struct {
 	detected bool
 	reason   string
 	lastErr  string
+	// lastMissing is the last logged set of pools without socket access.
+	lastMissing string
 }
 
 func (p *phpModule) want() bool {
@@ -87,6 +92,37 @@ func (p *phpModule) active(now time.Time) bool {
 	}
 	last := p.fwd.LastReceived()
 	return !last.IsZero() && now.Sub(last) < phpforwarder.ActiveWindow
+}
+
+// PHPAccess reports which PHP-FPM pools can send to php.sock (php-agent.md §1). nil without PHP-FPM pools or without
+// the forwarder module (-once). optOutFile is <config dir>/no-php-access. The agent cannot change groups itself: pools
+// reported missing are granted by the privileged pre-start step at the next service start, so a change of the missing
+// set is logged with that fix.
+func (a *Agent) PHPAccess(agentUser, optOutFile string) *phpaccess.Report {
+	p := a.php
+	if p == nil {
+		return nil
+	}
+	_, err := os.Stat(optOutFile)
+	r := phpaccess.BuildReport(phpaccess.ReportInput{
+		Root: a.fs.Root(), AgentUser: agentUser, SocketGroup: p.fwd.SocketGroup(), SocketMode: p.cfg.Mode(),
+		OptedOut: err == nil || (p.cfg.GrantPoolUsers != nil && !*p.cfg.GrantPoolUsers),
+	})
+	var missing []string
+	for _, m := range r.Missing() {
+		missing = append(missing, m.Pool+" (user "+m.User+")")
+	}
+	key := strings.Join(missing, ", ")
+	p.mu.Lock()
+	changed := key != p.lastMissing
+	p.lastMissing = key
+	p.mu.Unlock()
+	if changed && key != "" {
+		p.log.Warn("PHP-FPM pools cannot send spans to the php forwarder socket: their users are not in the socket group",
+			"pools", key, "group", phpaccess.Group,
+			"fix", "systemctl restart openlog-infra-agent (the privileged pre-start step adds pool users and reloads PHP-FPM)")
+	}
+	return r
 }
 
 // annotateAPMHints sets apm_hint.status on services instrumented by the PHP extension. Hints are copied: the rule's

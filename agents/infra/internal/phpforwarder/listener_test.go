@@ -3,12 +3,14 @@ package phpforwarder
 import (
 	"errors"
 	"io/fs"
+	"log/slog"
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -138,6 +140,66 @@ func TestUnixSocketPermissionsAndRestart(t *testing.T) {
 	if err := f.Start(); err == nil {
 		f.Stop()
 		t.Error("start must fail when the socket path is a regular file")
+	}
+}
+
+func TestResolveGroupPrefersOpenlogPHP(t *testing.T) {
+	lookup := func(existing ...string) func(string) (*user.Group, error) {
+		return func(name string) (*user.Group, error) {
+			for i, e := range existing {
+				if e == name {
+					return &user.Group{Name: name, Gid: strconv.Itoa(5000 + i)}, nil
+				}
+			}
+			return nil, user.UnknownGroupError(name)
+		}
+	}
+	if name, gid, fallback, err := resolveGroup("auto", lookup("www-data", DefaultSocketGroup)); err != nil || name != DefaultSocketGroup || gid != 5001 || fallback {
+		t.Errorf("auto with openlog-php: %q %d %v %v", name, gid, fallback, err)
+	}
+	if name, _, fallback, err := resolveGroup("", lookup("nginx")); err != nil || name != "nginx" || !fallback {
+		t.Errorf("fallback: %q %v %v", name, fallback, err)
+	}
+	if name, _, fallback, err := resolveGroup("nginx", lookup("nginx", DefaultSocketGroup)); err != nil || name != "nginx" || fallback {
+		t.Errorf("explicit group wins: %q %v %v", name, fallback, err)
+	}
+	if _, _, _, err := resolveGroup("auto", lookup()); err == nil || !strings.Contains(err.Error(), DefaultSocketGroup) {
+		t.Errorf("no group: %v", err)
+	}
+}
+
+// A fallback group the agent cannot apply (not a member) is informational: logged once, no permission gap counted.
+func TestFallbackGroupNotAppliedIsQuiet(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root can chown to any group")
+	}
+	other := -1
+	for _, g := range []int{1, 2, 3, 4, 5, 20, 33, 65534} {
+		if g != os.Getgid() {
+			other = g
+			break
+		}
+	}
+	var logs strings.Builder
+	sock := filepath.Join(shortDir(t), "php.sock")
+	f := New(Options{Socket: sock, SocketGroup: "auto", Log: slog.New(slog.NewTextHandler(&logs, nil)),
+		LookupGroup: func(name string) (*user.Group, error) {
+			if name == "www-data" {
+				return &user.Group{Name: name, Gid: strconv.Itoa(other)}, nil
+			}
+			return nil, user.UnknownGroupError(name)
+		}})
+	for range 2 {
+		if err := f.Start(); err != nil {
+			t.Fatal(err)
+		}
+		f.Stop()
+	}
+	if n := f.o.Stats.Snapshot().PermissionDenied["php_forwarder"]; n != 0 {
+		t.Errorf("fallback counted as permission gap: %d", n)
+	}
+	if strings.Count(logs.String(), "socket group not applied") != 1 || strings.Contains(logs.String(), "level=WARN") {
+		t.Errorf("want one info line, got:\n%s", logs.String())
 	}
 }
 

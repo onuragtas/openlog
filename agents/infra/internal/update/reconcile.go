@@ -51,10 +51,12 @@ type ReconcileStatus struct {
 	UnitChanged  bool      `json:"unit_changed"`
 	// RestartRequired: the running service must restart to use the new unit (or new groups when the
 	// agent already runs). With context apply the agent exits once for it.
-	RestartRequired bool     `json:"restart_required"`
-	Docker          string   `json:"docker"`
-	Notes           []string `json:"notes,omitempty"`
-	Errors          []string `json:"errors,omitempty"`
+	RestartRequired bool   `json:"restart_required"`
+	Docker          string `json:"docker"`
+	// PHPAccess is the openlog-php group step (reconcile_php.go).
+	PHPAccess *PHPAccessStatus `json:"php_access,omitempty"`
+	Notes     []string         `json:"notes,omitempty"`
+	Errors    []string         `json:"errors,omitempty"`
 }
 
 // ReconcileOptions configures Reconcile.
@@ -69,14 +71,17 @@ type ReconcileOptions struct {
 	Unit         []byte
 	Context      string
 	InvocationID string
-	Log          *slog.Logger
-	Now          func() time.Time
+	// PHPGrantsDisabled is php_forwarder.grant_pool_users: false of the root-owned configuration.
+	PHPGrantsDisabled bool
+	Log               *slog.Logger
+	Now               func() time.Time
 }
 
 // Reconcile makes the installation match this release, like a fresh package install or install.sh
 // run would: the service account, root-owned install root and versions (legacy layouts migrated),
 // state directory (agent-owned 0750), configuration (root:openlog-agent 0640, never rewritten), the
-// systemd unit embedded in this binary, docker group membership and the /usr/bin symlink (tarball).
+// systemd unit embedded in this binary, docker group membership, the openlog-php group for the PHP agent socket
+// (reconcile_php.go) and the /usr/bin symlink (tarball).
 //
 // Unit path: deb/rpm manage the packaged /usr/lib/systemd/system unit (a package upgrade replaces it
 // and its postinstall reconciles again with the current, possibly newer, binary); a full override in
@@ -122,6 +127,7 @@ func Reconcile(ctx context.Context, o ReconcileOptions) (*ReconcileStatus, error
 	r.unit(ctx, &prev)
 	if uid >= 0 {
 		r.docker(ctx)
+		r.phpAccess(ctx)
 	}
 	r.binLink()
 
@@ -384,6 +390,6 @@ func (st *ReconcileStatus) Report() *ReconcileReport {
 	}
 	return &ReconcileReport{
 		Version: st.Version, At: st.At.UTC().Format(time.RFC3339), UnitChanged: st.UnitChanged,
-		Docker: st.Docker, Error: truncate(strings.Join(st.Errors, "; "), 1024),
+		Docker: st.Docker, PHPAccess: st.PHPAccess.summary(), Error: truncate(strings.Join(st.Errors, "; "), 1024),
 	}
 }

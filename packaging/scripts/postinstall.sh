@@ -98,7 +98,9 @@ has_license_key() {
 
 # Reconcile with the release that runs from now on (the newest logic when the agent is newer than the package).
 # Docker access opt-out (also respected on upgrades and self-updates): OPENLOG_AGENT_DOCKER_ACCESS=0 (recorded in
-# the file) or the file /etc/openlog-infra-agent/no-docker-access.
+# the file) or the file /etc/openlog-infra-agent/no-docker-access. PHP socket access (group openlog-php with the agent
+# user, PHP-FPM pool users and the Apache/nginx user; affected PHP-FPM services are reloaded): opt out with
+# OPENLOG_AGENT_PHP_ACCESS=0 (recorded) or /etc/openlog-infra-agent/no-php-access. The step logs its changes to stderr.
 bin=$ROOT/current/openlog-infra-agent
 "$bin" -help 2>&1 | grep -q -- -reconcile || bin=$ROOT/versions/$VERSION/openlog-infra-agent
 restart_needed=0

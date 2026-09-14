@@ -78,6 +78,19 @@ function seedHosts(now: number): FleetHost[] {
     const name = container ? `k8s-node-${i - 59}` : `web-${String(i + 1).padStart(2, "0")}`;
     hosts.push({
       php_agent: seedPHP(i, container, version, now),
+      php_access: container
+        ? null
+        : {
+            socket_group: "openlog-php",
+            group: "openlog-php",
+            group_exists: true,
+            agent_member: true,
+            grants: "auto",
+            pools: [
+              { pool: "www", php_version: "8.2", user: "www-data", unit: "php8.2-fpm.service", access: "ok" },
+              ...(i === 1 ? [{ pool: "shop.example.com", php_version: "7.2", user: "shop", unit: "php7.2-fpm.service", access: "missing" }] : []),
+            ],
+          },
       host_id: `h-${String(i).padStart(4, "0")}-5d1e0c9a7f3b`,
       host_name: name,
       agent: {

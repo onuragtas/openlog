@@ -5212,6 +5212,29 @@ export interface components {
             status: "offer" | "no_catalog" | "mode_off" | "notify_only" | "invalid_version" | "hold" | "not_capable" | "no_rollout" | "rollout_paused" | "rollout_halted" | "rollout_outdated" | "not_in_rollout" | "up_to_date" | "not_in_wave" | "target_unavailable" | "incompatible" | "already_failed" | "no_artifact" | "outside_window";
             status_target: string | null;
             php_agent: components["schemas"]["FleetHostPHPAgent"];
+            /** @description PHP-FPM pools and whether their users may send spans to php.sock (php-agent.md §1); null when not reported */
+            php_access: components["schemas"]["FleetPHPAccess"] | null;
+        };
+        FleetPHPAccess: {
+            /** @description Group applied to php.sock ("" when none) */
+            socket_group: string;
+            /** @description The dedicated socket group (openlog-php) */
+            group: string;
+            group_exists: boolean;
+            agent_member: boolean;
+            /** @description auto (the privileged step adds pool users) or opted_out */
+            grants: string;
+            pools: components["schemas"]["FleetPHPPoolAccess"][];
+        };
+        FleetPHPPoolAccess: {
+            pool: string;
+            /** @description "" when the layout has no version (e.g. /etc/php-fpm.d) */
+            php_version: string;
+            user: string;
+            /** @description systemd service of the PHP-FPM master (e.g. php8.2-fpm.service) */
+            unit: string;
+            /** @description ok, missing, opted_out or unsupported_user (root or not a local account); unknown values are passed through */
+            access: string;
         };
         /** @enum {string} */
         AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data" | "apm_error" | "oql";

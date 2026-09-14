@@ -241,7 +241,7 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 		changed                                                              = make([]*time.Time, n)
 		syncAt                                                               = make([]time.Time, n)
 		rollout                                                              = make([]*string, n)
-		php                                                                  = make([]*string, n)
+		php, phpAccess                                                       = make([]*string, n), make([]*string, n)
 	)
 	for i, r := range recs {
 		h := r.Report
@@ -249,6 +249,12 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 			if b, err := json.Marshal(h.PHPAgent); err == nil {
 				s := string(b)
 				php[i] = &s
+			}
+		}
+		if h.PHPAccess != nil {
+			if b, err := json.Marshal(h.PHPAccess); err == nil {
+				s := string(b)
+				phpAccess[i] = &s
 			}
 		}
 		tenant[i], hostID[i], name[i], agentName[i], version[i], commit[i] = r.TenantID, h.HostID, h.HostName, h.AgentName, h.Version, h.Commit
@@ -263,14 +269,14 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 	}
 	_, err := s.pool.Exec(ctx, `INSERT INTO agent_hosts (org_id, host_id, host_name, agent_name, agent_version, agent_commit,
 			agent_os, agent_arch, install_method, update_capable, update_state, update_from, update_to, update_error,
-			update_changed_at, config_hash, first_seen_at, last_sync_at, rollout_id, integrations_config_revision, php_agent)
+			update_changed_at, config_hash, first_seen_at, last_sync_at, rollout_id, integrations_config_revision, php_agent, php_access)
 		SELECT o.id, r.host_id, r.host_name, r.agent_name, r.version, r.commit, r.os, r.arch, r.method, r.capable, r.state,
-			r.from_v, r.to_v, r.err, r.changed, r.hash, r.sync_at, r.sync_at, r.rollout::uuid, r.int_rev, r.php::jsonb
+			r.from_v, r.to_v, r.err, r.changed, r.hash, r.sync_at, r.sync_at, r.rollout::uuid, r.int_rev, r.php::jsonb, r.php_access::jsonb
 		FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[],
 			$10::bool[], $11::text[], $12::text[], $13::text[], $14::text[], $15::timestamptz[], $16::text[], $17::timestamptz[], $18::text[],
-			$19::text[], $20::text[])
+			$19::text[], $20::text[], $21::text[])
 			AS r(tenant_id, host_id, host_name, agent_name, version, commit, os, arch, method, capable, state, from_v, to_v, err,
-			     changed, hash, sync_at, rollout, int_rev, php)
+			     changed, hash, sync_at, rollout, int_rev, php, php_access)
 		JOIN organizations o ON o.tenant_id = r.tenant_id
 		ON CONFLICT (org_id, host_id) DO UPDATE SET host_name = EXCLUDED.host_name, agent_name = EXCLUDED.agent_name,
 			agent_version = EXCLUDED.agent_version, agent_commit = EXCLUDED.agent_commit, agent_os = EXCLUDED.agent_os,
@@ -279,28 +285,31 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 			update_error = EXCLUDED.update_error, update_changed_at = EXCLUDED.update_changed_at, config_hash = EXCLUDED.config_hash,
 			last_sync_at = GREATEST(agent_hosts.last_sync_at, EXCLUDED.last_sync_at),
 			rollout_id = COALESCE(EXCLUDED.rollout_id, agent_hosts.rollout_id),
-			integrations_config_revision = EXCLUDED.integrations_config_revision, php_agent = EXCLUDED.php_agent`,
-		tenant, hostID, name, agentName, version, commit, goos, arch, method, capable, state, from, to, errMsg, changed, hash, syncAt, rollout, intRev, php)
+			integrations_config_revision = EXCLUDED.integrations_config_revision, php_agent = EXCLUDED.php_agent,
+			php_access = EXCLUDED.php_access`,
+		tenant, hostID, name, agentName, version, commit, goos, arch, method, capable, state, from, to, errMsg, changed, hash, syncAt, rollout, intRev, php,
+		phpAccess)
 	return err
 }
 
 const hostCols = `org_id::text, host_id, host_name, agent_name, agent_version, agent_commit, agent_os, agent_arch, install_method,
 	update_capable, update_state, update_from, update_to, update_error, update_changed_at, config_hash, first_seen_at, last_sync_at,
-	coalesce(rollout_id::text, ''), integrations_config_revision, coalesce(php_agent::text, '')`
+	coalesce(rollout_id::text, ''), integrations_config_revision, coalesce(php_agent::text, ''), coalesce(php_access::text, '')`
 
 func scanHost(row pgx.Row) (Host, error) {
 	var (
-		h       Host
-		changed *time.Time
-		php     string
+		h              Host
+		changed        *time.Time
+		php, phpAccess string
 	)
 	err := row.Scan(&h.OrgID, &h.HostID, &h.HostName, &h.AgentName, &h.Version, &h.Commit, &h.OS, &h.Arch, &h.InstallMethod,
 		&h.UpdateCapable, &h.UpdateState, &h.UpdateFrom, &h.UpdateTo, &h.UpdateError, &changed, &h.ConfigHash, &h.FirstSeenAt,
-		&h.LastSyncAt, &h.RolloutID, &h.IntegrationsConfigRevision, &php)
+		&h.LastSyncAt, &h.RolloutID, &h.IntegrationsConfigRevision, &php, &phpAccess)
 	if changed != nil {
 		h.UpdateChangedAt = *changed
 	}
 	h.PHPAgent = ParsePHPAgentReport([]byte(php))
+	h.PHPAccess = ParsePHPAccessReport([]byte(phpAccess))
 	return h, err
 }
 

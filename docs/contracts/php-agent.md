@@ -15,7 +15,38 @@ slow, the message is dropped and counted.
 
 - **Unix datagram socket** (`SOCK_DGRAM`), default path `/run/openlog-infra-agent/php.sock`.
   - Created by the forwarder (directory `0755`; socket mode `0660`, group from `php_forwarder.socket_group`, default
-    the first existing of `www-data`, `nginx`, `apache`, `php-fpm`; `0666` only if configured explicitly).
+    **`openlog-php`**; `0666` only if configured explicitly). Only when `openlog-php` does not exist (the privileged
+    step never ran: container, dev build) the forwarder falls back to the first existing of `www-data`, `nginx`,
+    `apache`, `php-fpm` and logs once, at info level, why a fallback group could not be applied.
+  - **Socket group `openlog-php` (D-103).** A dedicated system group whose only purpose is write access to `php.sock`.
+    It is deliberately **not** the `openlog-agent` group: `/etc/openlog-infra-agent/config.yaml` is
+    `root:openlog-agent 0640` and holds the license key, so PHP code must never get that group. The privileged
+    reconcile step (`openlog-infra-agent -reconcile`: unit pre-start step on every service start, deb/rpm postinstall,
+    `install.sh`; releases-updates.md §3) creates the group and adds `openlog-agent` to it (so the agent can `chown` the
+    socket; with the pre-start step the membership applies to the agent starting right after it).
+  - **Automatic grants.** Hosting panels run each site's PHP-FPM pool as its own user (HestiaCP, cPanel, Plesk,
+    ISPConfig), so the same step adds, unless opted out:
+    - every `user =` of a `[pool]` section (not `[global]`; `;`/`#` comments, quotes and `$pool` handled; `include`
+      directives are not followed; values with other variables are skipped) in the pool files of
+      `/etc/php/*/fpm/pool.d/*.conf` (Debian/Ubuntu, HestiaCP), `/etc/php-fpm.d/*.conf` (RHEL),
+      `/etc/opt/remi/php*/php-fpm.d/*.conf` (Remi), `/opt/cpanel/ea-php*/root/etc/php-fpm.d/*.conf` (cPanel),
+      `/opt/plesk/php/*/etc/php-fpm.d/*.conf` (Plesk) and `/etc/php*/php-fpm.d/*.conf` (Alpine);
+    - `www-data`, `apache` and `nginx` (mod_php) when an Apache or nginx unit or process exists.
+
+    Only existing local accounts (`/etc/passwd`) are added, never root or uid 0, never the agent user again; members
+    are never removed. Then only the PHP-FPM services whose pool users were newly added, and Apache when its user was
+    added, get a graceful `systemctl reload` if active (`php<v>-fpm`, `php-fpm`, `php<NN>-php-fpm`,
+    `ea-php<NN>-php-fpm`, `plesk-php<NN>-fpm`, `apache2`/`httpd`; derived from the pool directory; never a restart). A
+    reload is enough: the FPM master re-executes and forks new workers, which call `initgroups` for the pool user.
+  - **New sites** created later are granted on the next service start (`systemctl restart openlog-infra-agent`) or
+    manually: `usermod -aG openlog-php <user> && systemctl reload php<v>-fpm`. The unprivileged agent cannot change
+    groups; it reports every pool and its access in agent sync (`php_access`, releases-updates.md §3), logs a warning
+    when pools cannot send, and the host's Services tab shows those pools with both fixes.
+  - **Opt-out:** `php_forwarder.grant_pool_users: false` (honored only in a root-owned configuration), the file
+    `/etc/openlog-infra-agent/no-php-access`, or `OPENLOG_AGENT_PHP_ACCESS=0` / `install.sh --no-php-access` at install
+    (recorded in that file). The group and the agent's membership are still set up, so manual grants work.
+  - Security: members of `openlog-php` can send spans to the agent (they could inject APM data for the host), nothing
+    else; that is the same trust PHP workers of the host need anyway.
   - The extension sends with `sendto(..., MSG_DONTWAIT | MSG_NOSIGNAL)` on an unconnected socket, so a restarted forwarder
     (new inode) is picked up without reconnecting.
 - **Datagram size:** at most **60 000 bytes**. Larger messages are split (§2.3).
@@ -186,7 +217,8 @@ rest of the request (for a long-running worker: of the worker request) and logs 
 |---|---|
 | `php_forwarder.enabled` | `true` when discovery finds a PHP runtime (php-fpm, mod_php, php CLI binary), else `false`; explicit value wins |
 | `php_forwarder.socket` | `/run/openlog-infra-agent/php.sock` (empty = no unix listener; then `udp_listen` is required) |
-| `php_forwarder.socket_group` | auto (see §1); `auto`, a group name or a numeric gid |
+| `php_forwarder.socket_group` | auto = `openlog-php`, fallback groups when it does not exist (see §1); `auto`, a group name or a numeric gid |
+| `php_forwarder.grant_pool_users` | `true`: the privileged reconcile step adds PHP-FPM pool users and the Apache/nginx user to `openlog-php` (§1); `false` opts out (root-owned configuration only) |
 | `php_forwarder.socket_mode` | `"0660"`; `"0666"` is the explicit opt-in of §1 (any local user may send) |
 | `php_forwarder.udp_listen` | empty (disabled) |
 | `php_forwarder.max_pending_traces` | `10000` |

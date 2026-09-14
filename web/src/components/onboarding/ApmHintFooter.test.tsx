@@ -80,6 +80,42 @@ describe("ApmHintFooter", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("button", { name: /Install/ })).not.toBeInTheDocument();
   });
 
+  it("PHP-FPM pools without socket access: lists them with the restart and manual fixes", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    server.use(
+      http.get("*/api/v1/fleet/hosts", () =>
+        HttpResponse.json({
+          next_cursor: null,
+          hosts: [
+            {
+              host_id: HOST,
+              php_access: {
+                socket_group: "openlog-php",
+                group: "openlog-php",
+                group_exists: true,
+                agent_member: true,
+                grants: "auto",
+                pools: [
+                  { pool: "www", php_version: "8.2", user: "www-data", unit: "php8.2-fpm.service", access: "ok" },
+                  { pool: "example.com", php_version: "7.2", user: "admin", unit: "php7.2-fpm.service", access: "missing" },
+                  { pool: "shop", php_version: "7.2", user: "semihyurudu", unit: "php7.2-fpm.service", access: "missing" },
+                ],
+              },
+            },
+          ],
+        }),
+      ),
+    );
+    renderHint({ language: "php", agent: "openlog-agent-php", status: "not_installed" });
+    expect(await screen.findByText("2 PHP-FPM pools cannot send traces")).toBeInTheDocument();
+    expect(screen.getByText("example.com · admin · PHP 7.2")).toBeInTheDocument();
+    expect(screen.queryByText(/www · www-data/)).not.toBeInTheDocument();
+    expect(screen.getByText("sudo systemctl restart openlog-infra-agent")).toBeInTheDocument();
+    expect(screen.getByTestId("php-access-manual").textContent).toBe(
+      "sudo usermod -aG openlog-php admin && \\\n  sudo usermod -aG openlog-php semihyurudu && \\\n  sudo systemctl reload php7.2-fpm.service",
+    );
+  });
+
   it("maps every language hint to its agent and Add data card", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();

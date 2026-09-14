@@ -76,8 +76,12 @@ type PHPForwarder struct {
 	Enabled *bool `yaml:"enabled"`
 	// Socket is the unix datagram socket path; empty disables the unix listener (UDP only).
 	Socket string `yaml:"socket"`
-	// SocketGroup: "" or "auto" = first existing of www-data, nginx, apache, php-fpm; or a group name / numeric gid.
+	// SocketGroup: "" or "auto" = openlog-php (created by the privileged reconcile step), falling back to the first
+	// existing of www-data, nginx, apache, php-fpm; or a group name / numeric gid.
 	SocketGroup string `yaml:"socket_group"`
+	// GrantPoolUsers: nil/true = the privileged reconcile step adds PHP-FPM pool users (and the Apache/nginx user) to
+	// openlog-php; false = never (only honored from a root-owned configuration, like every privileged setting).
+	GrantPoolUsers *bool `yaml:"grant_pool_users"`
 	// SocketMode is "0660" (default) or "0666" (any local user may send).
 	SocketMode        string   `yaml:"socket_mode"`
 	UDPListen         string   `yaml:"udp_listen"`

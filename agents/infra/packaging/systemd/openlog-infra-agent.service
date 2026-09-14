@@ -16,7 +16,8 @@ Group=openlog-agent
 # Privileged pre-start step ("+": runs as root without User= and the sandbox below; "-": a failure never blocks the
 # start). It installs an update the agent staged in /var/lib/openlog-infra-agent/updates after re-verifying its signed
 # manifest with the keys compiled into this root-owned binary, rolls back an unconfirmed update, and reconciles the
-# installation with the release that starts (this unit, account, docker group, ownership). It exits 0 on errors.
+# installation with the release that starts (this unit, account, docker group, openlog-php group with the PHP-FPM pool
+# users, ownership). It exits 0 on errors.
 ExecStartPre=-+/opt/openlog/infra-agent/current/openlog-infra-agent -apply -config /etc/openlog-infra-agent/config.yaml
 ExecStart=/opt/openlog/infra-agent/current/openlog-infra-agent -config /etc/openlog-infra-agent/config.yaml
 Restart=always
@@ -33,10 +34,10 @@ StateDirectory=openlog-infra-agent
 StateDirectoryMode=0750
 ConfigurationDirectory=openlog-infra-agent
 # /run/openlog-infra-agent holds php.sock (php_forwarder). 0755 so PHP-FPM workers can reach the socket; the socket
-# itself is 0660 with the PHP group. For the chgrp the agent user must be in that group; the group cannot be listed
-# here because a missing group would stop the unit from starting. Add a drop-in instead:
-#   systemctl edit openlog-infra-agent   ->   [Service]
-#                                            SupplementaryGroups=www-data
+# itself is 0660 with group openlog-php. The pre-start step creates that group and adds openlog-agent and the PHP-FPM
+# pool users to it; systemd resolves User='s supplementary groups when it execs ExecStart (after the pre-start step), so
+# SupplementaryGroups= is not needed (and would stop the unit from starting while the group does not exist yet). Never
+# give PHP users the openlog-agent group: it can read config.yaml (license key).
 RuntimeDirectory=openlog-infra-agent
 RuntimeDirectoryMode=0755
 

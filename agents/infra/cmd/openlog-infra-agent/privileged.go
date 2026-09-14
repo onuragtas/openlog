@@ -69,6 +69,8 @@ func reconcileOptions(sys *update.Sys, cfg *config.Config, install update.Instal
 	return update.ReconcileOptions{
 		Sys: sys, Install: install, StateDir: cfg.StateDir, ConfigPath: configPath, Version: ver,
 		Unit: systemdUnit, Context: rctx, InvocationID: os.Getenv("INVOCATION_ID"), Log: log,
+		// cfg is the defaults unless only root can change the file (privilegedConfig).
+		PHPGrantsDisabled: cfg.PHPForwarder.GrantPoolUsers != nil && !*cfg.PHPForwarder.GrantPoolUsers,
 	}
 }
 

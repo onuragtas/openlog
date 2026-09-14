@@ -251,12 +251,26 @@ buffered and delivered later. Contract: `openlog/docs/contracts/php-agent.md` §
   `/usr/bin`, `/usr/local/bin`, `/bin`), re-evaluated with every inventory snapshot; `php_forwarder.enabled: true|false` wins.
   Automatic enabling needs `inventory.enabled` and `discovery.enabled`.
 - **Socket**: directory `0755` (systemd `RuntimeDirectory=openlog-infra-agent`), socket `0660` with group `socket_group`
-  (auto: first existing of `www-data`, `nginx`, `apache`, `php-fpm`). A stale socket from a previous run is replaced; the extension
-  sends unconnected datagrams, so restarts and self-updates need no PHP reload. `socket_mode: "0666"` lets any local user send.
-- **Group handling**: an unprivileged process can only give a file to a group it belongs to. Add the agent user to the PHP-FPM
-  group, either with `usermod -aG www-data openlog-agent` or with a drop-in (`systemctl edit openlog-infra-agent`):
-  `[Service]` / `SupplementaryGroups=www-data`. Without it the socket keeps the agent's group, a warning is logged and
-  `openlog.agent.permission_denied{collector="php_forwarder"}` counts it.
+  (auto: **`openlog-php`**; only when that group does not exist, the first existing of `www-data`, `nginx`, `apache`, `php-fpm`).
+  A stale socket from a previous run is replaced; the extension sends unconnected datagrams, so restarts and self-updates need no
+  PHP reload. `socket_mode: "0666"` lets any local user send.
+- **PHP socket access (`openlog-php`)**: on every service start (the unit's root pre-start step), package install/upgrade and
+  `install.sh` run, `-reconcile` creates the system group `openlog-php`, adds `openlog-agent` (so it can set the socket's group)
+  and adds every PHP-FPM pool user it finds (`user =` in `/etc/php/*/fpm/pool.d/*.conf`, `/etc/php-fpm.d/*.conf`, Remi, cPanel
+  `ea-php*`, Plesk; per-site users of HestiaCP, cPanel, Plesk, ISPConfig) plus `www-data`/`apache`/`nginx` when Apache or nginx is
+  installed. Root and non-local accounts are skipped; members are never removed. Only the PHP-FPM services (and Apache) whose users
+  were added are reloaded gracefully (`systemctl reload php8.2-fpm`, …; never restarted) so new workers get the group. The installers
+  print what changed. It is a separate group on purpose: the `openlog-agent` group can read `config.yaml` with the license key and
+  must never be given to PHP users.
+- **New sites** added later: the agent reports pools whose user cannot send (log warning, Fleet sync `php_access`, host → Services
+  PHP-FPM card with the fix). Apply with `sudo systemctl restart openlog-infra-agent`, or manually:
+  `sudo usermod -aG openlog-php <pool user> && sudo systemctl reload php<version>-fpm`.
+- **Opt out** of automatic grants (the group and the agent membership are still set up): `php_forwarder.grant_pool_users: false`,
+  `sudo touch /etc/openlog-infra-agent/no-php-access`, `install.sh --no-php-access` or `sudo env OPENLOG_AGENT_PHP_ACCESS=0 apt-get
+  install …` (both create the file). Revert a grant: `sudo gpasswd -d <user> openlog-php`.
+- **Group problems** are logged once: a missing agent membership of `openlog-php` (or of an explicit `socket_group`) as a warning
+  counted in `openlog.agent.permission_denied{collector="php_forwarder"}`; a fallback group (no `openlog-php`, e.g. in a container or a
+  dev build) at info level.
 - **Containers** that cannot share the socket file: `udp_listen: 127.0.0.1:18127` and `openlog.transport=udp://127.0.0.1:18127`.
 - **Input** is validated strictly (60 000-byte datagrams, lowercase hex IDs, ≤ 128 attributes, ≤ 4 KiB strings) and malformed
   messages are dropped. Split messages are reassembled per (pid, trace_id); after `reassembly_timeout` they are exported with

@@ -24,6 +24,8 @@ export type FleetHostPHPAgent = S["FleetHostPHPAgent"];
 export type FleetPHPRuntime = S["FleetPHPRuntime"];
 export type FleetPHPOverride = S["FleetPHPOverride"];
 export type FleetPHPStatus = FleetHostPHPAgent["status"];
+export type FleetPHPAccess = S["FleetPHPAccess"];
+export type FleetPHPPoolAccess = S["FleetPHPPoolAccess"];
 
 /** While a rollout is active the page follows it closely; otherwise it refreshes slowly. */
 export const ACTIVE_REFRESH_MS = 3_000;
@@ -78,6 +80,21 @@ export const fleetHostsQuery = (f: FleetHostFilter) =>
     initialPageParam: "",
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     refetchInterval: IDLE_REFRESH_MS,
+  });
+
+/**
+ * One host's fleet entry (agent sync report), or null when the host never synced. `q` matches host_id substrings, so the
+ * exact host is picked from the result. Callers without fleet access get an error and simply show nothing.
+ */
+export const fleetHostQuery = (hostId: string) =>
+  queryOptions({
+    queryKey: ["fleet", "host", hostId],
+    queryFn: async ({ signal }) => {
+      const page = unwrap(await api.GET("/api/v1/fleet/hosts", { params: { query: { q: hostId, limit: 50 } }, signal }));
+      return page.hosts.find((h) => h.host_id === hostId) ?? null;
+    },
+    refetchInterval: IDLE_REFRESH_MS,
+    retry: false,
   });
 
 export async function saveFleetPolicy(policy: FleetPolicyInput): Promise<FleetPolicy> {
