@@ -1,7 +1,7 @@
 --TEST--
 Lean mode (openlog.userland_hooks=0): internal instrumentation only, no framework hooks, uncaught exceptions still fail the transaction
 --SKIPIF--
-<?php require __DIR__ . '/inc/skipif.php'; if (!extension_loaded('pdo_sqlite')) die('skip pdo_sqlite'); ?>
+<?php require __DIR__ . '/inc/skipif.php'; if (!is_executable(dirname(PHP_BINARY) . '/php-cgi')) die('skip no php-cgi'); if (!extension_loaded('pdo_sqlite')) die('skip pdo_sqlite'); ?>
 --FILE--
 <?php
 require __DIR__ . '/inc/harness.php';

@@ -405,7 +405,7 @@ jobs:
           python -m pytest -q -p no:cacheprovider tests/unit tests/e2e
           rm -rf dist && python -m build --outdir dist .
           python -m twine check --strict dist/*
-          ls dist | grep -F "openlog_agent-$pyv"
+          ls -1 "dist/openlog_agent-$pyv"*
           echo "version=$pyv" >> "$GITHUB_OUTPUT"
           if curl -fsS -o /dev/null "https://pypi.org/pypi/openlog-agent/$pyv/json"; then
             echo "openlog-agent $pyv is already published"
