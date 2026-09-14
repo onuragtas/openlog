@@ -28,7 +28,7 @@ func TestPath(t *testing.T) {
 // Runs on every OS: on Windows filepath.Clean("/") is `\`, which once made NativeOS false and sent every
 // collector to procfs.
 func TestHostRootOnEveryOS(t *testing.T) {
-	for _, root := range []string{"", "/", "//", "/./"} {
+	for _, root := range []string{"", "/", "/./"} { // "//" starts a UNC path on Windows
 		if f := New(root); !f.IsHostRoot() || f.Root() != "/" || f.NativeOS() != (runtime.GOOS != "linux") {
 			t.Errorf("New(%q): root %q, IsHostRoot %v, NativeOS %v", root, f.Root(), f.IsHostRoot(), f.NativeOS())
 		}
