@@ -192,6 +192,8 @@ func JournalctlArgs(root, cursor, startAt string, units []string, priority strin
 type journalEntry struct {
 	rec    *logspb.LogRecord
 	cursor string
+	// cursorKey names a per-input cursor (Windows Event Log channel bookmarks); "" is the journald cursor.
+	cursorKey string
 }
 
 // tailBuffer keeps the last bytes written to it (journalctl stderr).

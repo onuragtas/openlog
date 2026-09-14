@@ -6,8 +6,9 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"syscall"
 	"time"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/osutil"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 )
@@ -126,12 +127,9 @@ func (m *Manager) rateLimit(t *tailer) int {
 	return m.cfg.RateLimitLines
 }
 
-func identity(fi os.FileInfo) (dev, ino uint64, ok bool) {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return 0, 0, false
-	}
-	return uint64(st.Dev), uint64(st.Ino), true //nolint:unconvert // Dev is int32 on darwin
+// identity returns the device and inode (Windows: volume serial and file index) of the file at path.
+func identity(path string, fi os.FileInfo) (dev, ino uint64, ok bool) {
+	return osutil.FileIdentity(path, fi)
 }
 
 // prefixHash hashes the first n bytes of f.

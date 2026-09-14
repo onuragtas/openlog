@@ -4,12 +4,13 @@ category: database
 match:
   - process: { exe_basename: ["postgres", "postmaster"] }
   - systemd_unit: { name_regex: "^postgresql(-[0-9.]+)?(@.*)?\\.service$" }
+  - service: { name_regex: "^(homebrew\\.mxcl\\.postgresql(@[0-9]+)?|postgresql-x64-[0-9.]+)$" }   # Homebrew (macOS); EDB installer (Windows)
   - listening_port: { port: 5432, process_exe_basename: ["postgres", "postmaster"] }
   - container: { image_regex: "(^|/)(postgres|postgis/postgis|timescale/timescaledb[a-z-]*)(:|@|$)" }
-  - package: { name_regex: "^(postgresql-[0-9]+|postgresql[0-9]*-server|postgresql[0-9]+)$" }
+  - package: { name_regex: "^(postgresql-[0-9]+|postgresql[0-9]*-server|postgresql[0-9]+|postgresql@[0-9]+)$" }
 version:
   - cmdline_regex: "/postgresql/([0-9.]+)/bin/postgres"
-  - package_regex: "^(postgresql-[0-9]+|postgresql[0-9]*-server|postgresql[0-9]+)$"
+  - package_regex: "^(postgresql-[0-9]+|postgresql[0-9]*-server|postgresql[0-9]+|postgresql@[0-9]+)$"
 endpoints:
   - from: listening_port
 integration:
@@ -19,3 +20,6 @@ logs:
   - path: "/var/log/postgresql/*.log"            # Debian/Ubuntu
   - path: "/var/lib/pgsql/data/log/*.log"          # RHEL family
   - path: "/var/lib/pgsql/*/data/log/*.log"        # PGDG packages
+  - { path: "/opt/homebrew/var/log/postgresql@*.log", os: [darwin] }  # Homebrew
+  - { path: "/usr/local/var/log/postgresql@*.log", os: [darwin] }
+  - path: "C:/Program Files/PostgreSQL/*/data/log/*.log"   # EDB installer (Windows)

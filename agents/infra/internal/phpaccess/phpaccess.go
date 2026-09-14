@@ -24,7 +24,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/osutil"
 )
 
 const (
@@ -158,7 +159,7 @@ func mustRel(root, p string) string {
 // readRegular reads a regular file (symlinks to regular files are followed: package managers link pool files) of at
 // most maxPoolFileBytes without blocking on a FIFO.
 func readRegular(p string) ([]byte, error) {
-	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(p, os.O_RDONLY|osutil.ONonblock, 0)
 	if err != nil {
 		return nil, err
 	}

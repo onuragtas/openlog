@@ -8,13 +8,13 @@ Binding contract between agents and the backend. Where an OpenTelemetry semantic
 
 | Attribute | Required | Source / value |
 |---|---|---|
-| `host.id` | yes | `/etc/machine-id` → `/var/lib/dbus/machine-id` → `/sys/class/dmi/id/product_uuid` → generated UUID persisted in the agent state dir. The running agent publishes the resolved id in `/run/openlog-infra-agent/host-id` (`<id>\n`, mode 0644, only when the directory exists, e.g. systemd `RuntimeDirectory`); APM agents read it first, also from containers that mount the directory read-only |
+| `host.id` | yes | `/etc/machine-id` → `/var/lib/dbus/machine-id` → `/sys/class/dmi/id/product_uuid` → generated UUID persisted in the agent state dir. The running agent publishes the resolved id in `/run/openlog-infra-agent/host-id` (`<id>\n`, mode 0644, only when the directory exists, e.g. systemd `RuntimeDirectory`); APM agents read it first, also from containers that mount the directory read-only. macOS: `IOPlatformUUID`; Windows: `MachineGuid` (`HKLM\SOFTWARE\Microsoft\Cryptography`; images cloned without sysprep share it); both fall back to the UUID persisted in the state dir; the published `host-id` file is Linux only (D-104) |
 | `host.name` | yes | kernel hostname |
 | `host.arch` | yes | `amd64`, `arm64`, … (OTel values) |
-| `os.type` | yes | `linux` |
-| `os.name` | no | `/etc/os-release` `ID` |
-| `os.version` | no | `/etc/os-release` `VERSION_ID` |
-| `os.description` | no | `/etc/os-release` `PRETTY_NAME` |
+| `os.type` | yes | `linux`, `darwin` (macOS), `windows` (D-104) |
+| `os.name` | no | `/etc/os-release` `ID`; `macos` / `windows` |
+| `os.version` | no | `/etc/os-release` `VERSION_ID`; macOS `sw_vers -productVersion`; Windows `<major>.<minor>.<build>` from the registry |
+| `os.description` | no | `/etc/os-release` `PRETTY_NAME`; e.g. `macOS 15.5 (24F74)`, `Windows Server 2022 Datacenter 21H2 (build 20348.2340)` |
 | `openlog.os.kernel_release` | no | `uname -r` equivalent (`/proc/sys/kernel/osrelease`) |
 | `openlog.entity.type` | yes | `host` |
 | `openlog.agent.name` | yes | `openlog-infra-agent` |
@@ -65,6 +65,24 @@ Filesystems with these types are excluded by default: `proc, sysfs, devtmpfs, de
 Mount points that are not directories are excluded (bind-mounted files such as Docker's `/etc/hosts`, `/etc/hostname`, `/etc/resolv.conf`).
 A mount on the agent's own `state_dir` or `buffer.dir` is excluded when another reported mount has the same device (`system.device` and major:minor); other volumes on the same device (e.g. `/data`) are kept.
 Disk devices excluded by default: `loop*`, `ram*`, and partitions are included. Network interfaces excluded by default: `lo`.
+
+### Platform notes (macOS and Windows, D-104)
+
+The same metric names, units and attributes are sent from every OS; values come from native APIs (gopsutil v4) when the agent runs on macOS or Windows with `host.root_path: /`. States a platform does not have are reported as 0 so that every host has the same series:
+
+| Metric | macOS | Windows |
+|---|---|---|
+| `system.cpu.time` / `utilization` | `host_statistics` modes; `iowait`, `softirq`, `steal` = 0 | `GetSystemTimes`; `nice`, `iowait`, `softirq`, `steal` = 0 |
+| `system.cpu.load_average.*` | `getloadavg` | not sent (no load average) |
+| `system.memory.usage` | `free` = free pages, `cached` = inactive, `used` = the rest (active + wired + compressed), `buffers` = 0 | `free` = available (includes the standby list), `used` = total − available, `cached` = `buffers` = 0 |
+| `system.filesystem.*` | mounted volumes; `devfs`/`autofs`/`nullfs` and the sealed system volume's helper mounts below `/System/Volumes` (except `/System/Volumes/Data`) are skipped; `system.device` = `/dev/diskNsM` | drive letters; `system.device` = `C:` |
+| `system.disk.*` | IOKit per whole disk | `IOCTL_DISK_PERFORMANCE` per volume (may be absent while disk performance counters are off) |
+| `system.network.*` | `lo0` skipped | loopback pseudo-interface skipped; `network.interface.name` is the adapter name |
+| `system.process.count` | kernel `p_stat` (macOS reports most processes as `running`) | every process as `running` (Windows has no run state) |
+| `process.*` | `process.owner` = user name | `process.owner` = `DOMAIN\user`; `process.open_file_descriptors` = handle count |
+
+Container metrics (cgroups) exist on Linux only.
+
 
 ### Process metrics (infra agent, `process_metrics`)
 
@@ -182,8 +200,11 @@ Unknown fields must be ignored by consumers; missing fields are allowed.
 | `hardware` | `memory` | `total_bytes`, `swap_total_bytes` |
 | `hardware` | `dmi` | `sys_vendor`, `product_name`, `product_version`, `bios_vendor`, `bios_version` (no serial numbers) |
 | `kernel_module` | module name | `name`, `size_bytes`, `state` |
-| `package` | `<manager>:<name>` | `manager` (`dpkg`,`rpm`,`apk`), `name`, `version`, `arch` |
+| `package` | `<manager>:<name>` | `manager` (`dpkg`,`rpm`,`apk`,`pkgutil`,`homebrew`,`app`,`windows`), `name`, `version`, `arch` |
 | `systemd_unit` | unit name | `name`, `type` (`service`,`socket`,`timer`,…), `path`, `enabled_state` (`enabled`,`disabled`,`static`,`masked`,`unknown`; `generated`,`transient` for units known only over D-Bus), `description`, `exec_start` (masked). Runtime state over D-Bus (`org.freedesktop.systemd1`, system bus socket `/run/dbus/system_bus_socket` under the host root; all omitted when the bus is unreachable or the unit is not loaded): `load_state`, `active_state` (`active`,`inactive`,`failed`,`activating`,…), `sub_state` (`running`,`dead`,`exited`,…), `active_since` (RFC3339, `ActiveEnterTimestamp`; not for `inactive`/`failed`), services only: `restarts` (`NRestarts`, may be 0), `memory_bytes` (`MemoryCurrent`), `cpu_usage_ns` (`CPUUsageNSec`; memory/CPU omitted when accounting is off). Loaded services without a unit file of their own (template instances `foo@bar.service` — `path`/`exec_start` from the template —, generated and transient services) are items too; devices, scopes and other file-less units are not. State is as of the snapshot (no extra snapshot on state changes) |
+| `launchd_service` | job label | macOS (D-104): `label`, `pid` (running jobs), `last_exit_status`, `program` (from the plist's `Program`/`ProgramArguments[0]`), `path` (plist), `domain` (`system` when the agent runs as root, else `user`). Loaded jobs from `launchctl list` plus not-loaded daemons in `/Library/LaunchDaemons`; per-launch `application.*` GUI jobs are skipped |
+| `windows_service` | service name | Windows (D-104): `name`, `display_name`, `state` (`running`,`stopped`,`start_pending`,`stop_pending`,`paused`,…), `start_type` (`automatic`,`automatic_delayed`,`manual`,`disabled`,`boot`,`system`), `pid`, `binary_path` (masked), `account` |
+
 | `listening_port` | `<proto>:<address>:<port>`; IPv6 addresses in brackets (`tcp:[::]:22`, `tcp:0.0.0.0:22`) | `protocol` (`tcp`,`udp`), `family` (4,6), `address`, `port`, `pid`, `process_name`, `process_exe` |
 | `process` | exe path (or `comm:<name>` if exe unreadable) | `exe`, `name`, `command` (argv0 basename of the first instance, e.g. `redis-server` when exe is `/usr/bin/redis-check-rdb`), `cmdline` (masked, ≤1024 chars, first instance), `count`, `pids` (≤20), `uids` (distinct), `start_time` (earliest, RFC3339), `systemd_unit`, `container_id` |
 | `user` | user name | `name`, `uid`, `gid`, `home`, `shell` |
@@ -191,6 +212,8 @@ Unknown fields must be ignored by consumers; missing fields are allowed.
 | `mount` | mount point | `mountpoint`, `device`, `fs_type`, `options` |
 | `container` | container id (64 hex) | `id`, `name`, `runtime` (`docker`; `containerd`, `cri-o` for containers listed through the CRI, where `name` is the Kubernetes container name, `ports` is empty and `restart_count` comes from the kubelet annotation `io.kubernetes.container.restartCount`), `image` (as reported, e.g. `nginx:1.25` or `sha256:…`), `image_id`, `state` (`running`,`exited`,`paused`,`created`,…), `health` (`healthy`,`unhealthy`,`starting`; omitted without healthcheck), `created` (RFC3339), `started_at` / `finished_at` (RFC3339; omitted until inspected or when never started/stopped), `restart_count`, `exit_code` (stopped containers, omitted when 0), `labels` (object; at most 100 keys, values truncated to 256 bytes), `ports` (array of `{ip, private_port, public_port, protocol}`) |
 | `discovered_service` | `<rule_id>:<instance>` | see 3.4 |
+
+Platform notes (D-104): macOS and Windows hosts send no `kernel_module`, `systemd_unit` or (Windows) `container` items. `package` managers there are `pkgutil` (installer receipts), `homebrew` (formulae and casks), `app` (bundles in `/Applications`) and `windows` (Programs and Features: the 64-bit and 32-bit Uninstall registry keys, system components and updates skipped; `arch` `amd64`/`arm64`/`386`). `os`: `id` `macos`/`windows`, `version_id` e.g. `15.5` / `10.0.20348`, `pretty_name` e.g. `macOS 15.5 (24F74)` / `Windows Server 2022 Datacenter 21H2 (build 20348.2340)`. `user` on Windows lists accounts with a profile (`uid` = relative identifier, `gid` 0, `home` = profile path); `process.uids` is empty on Windows. `discovered_service` bodies may carry `services` (launchd labels or Windows service names) and `matched_by` may contain `service`; discovery rules match a Windows process name without `.exe`.
 
 ### 3.4 `discovered_service` body
 
@@ -313,6 +336,20 @@ Examples: nginx `[error]`, Apache `[core:warn]`, PostgreSQL `FATAL:`, MySQL `[Wa
 Masking: log bodies are user data and are **not** masked by default. With `logs.mask_secrets: true` the §3.5 patterns (secret flags, secret `KEY=value` tokens, URL userinfo) are applied to bodies; the MySQL `-p<value>` rule is not (the program is unknown). JSON-style `"password": "x"` is not covered.
 
 Delivery is at-least-once: file offsets and the journal cursor are committed after the batch was sent or written to the disk buffer, so a crash can resend up to a few seconds of records.
+
+### 4.2 macOS unified log and Windows Event Log (D-104)
+
+| Field / attribute | `logs.unified_log` (macOS) | `logs.windows_event_log` (Windows) |
+|---|---|---|
+| source | `log stream --style ndjson --level <level> [--predicate <p>]`, restarted with backoff; live only (no backfill after downtime) | `EvtSubscribe` per channel with the XPath query from `event_ids`/`levels` (or `query`); resumes after the bookmark committed with the delivered batch, otherwise from `logs.start_at` (`end` = future events, `beginning` = oldest record) |
+| `time_unix_nano` | `timestamp` | `System/TimeCreated/@SystemTime` |
+| `severity_number` / `severity_text` | `messageType`: `Fault` → 21 FATAL, `Error` → 17 ERROR, `Default` → 10 INFO, `Info` → 9 INFO, `Debug` → 5 DEBUG | `Level`: 1 critical → 21 FATAL, 2 error → 17 ERROR, 3 warning → 13 WARN, 4 information and 0 → 9 INFO, 5 verbose → 5 DEBUG |
+| `body` | `eventMessage` (same limits and masking as journald) | rendered message (`EvtFormatMessage`); without publisher metadata the event data as `name=value` pairs |
+| `openlog.log.source` | `unified_log` | `windows_event_log` |
+| other attributes | `openlog.macos.subsystem`, `openlog.macos.category`, `process.pid`, `process.executable.path`, `process.command` | `openlog.windows.event_log.channel`, `openlog.windows.event.id` (int), `openlog.windows.event.provider`, `openlog.windows.event.record_id` (int), `process.pid` |
+
+Only `logEvent` entries of the unified log are sent (no activities or signposts). Reading the `Security` channel needs LocalSystem or the Event Log Readers group (the service runs as LocalSystem). Log files are tailed on every OS; on Windows they are opened with `FILE_SHARE_DELETE` so rotation still works, and file identity is the volume serial number plus the file index.
+
 
 ### 4.1 Container logs (`logs.containers`)
 

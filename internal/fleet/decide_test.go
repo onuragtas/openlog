@@ -7,7 +7,37 @@ import (
 
 	"github.com/onuragtas/openlog/internal/fleet/catalog"
 	"github.com/onuragtas/openlog/internal/fleet/testutil"
+	lib "github.com/onuragtas/openlog/libs/release"
 )
+
+func TestAgentArtifactFormat(t *testing.T) {
+	art := func(goos, arch, format string) lib.Artifact {
+		return lib.Artifact{Component: lib.ComponentInfraAgent, OS: goos, Arch: arch, Format: format,
+			Name: "openlog-infra-agent_0.4.0_" + goos + "_" + arch + "." + format}
+	}
+	r := &catalog.Release{Manifest: &lib.Manifest{Version: "0.4.0", Artifacts: []lib.Artifact{
+		art("linux", "amd64", lib.FormatTarGz),
+		art("darwin", "arm64", lib.FormatTarGz),
+		art("windows", "amd64", lib.FormatZip),
+		art("windows", "amd64", lib.FormatMSI),
+		art("windows", "arm64", lib.FormatTarGz), // not what Windows agents install
+	}}}
+	for _, tc := range []struct {
+		os, arch, want string
+	}{
+		{"linux", "amd64", "openlog-infra-agent_0.4.0_linux_amd64.tar.gz"},
+		{"darwin", "arm64", "openlog-infra-agent_0.4.0_darwin_arm64.tar.gz"},
+		{"windows", "amd64", "openlog-infra-agent_0.4.0_windows_amd64.zip"},
+		{"windows", "arm64", ""},
+	} {
+		h := host("0.3.0")
+		h.OS, h.Arch = tc.os, tc.arch
+		a, ok := agentArtifact(r, h)
+		if got := map[bool]string{true: a.Name, false: ""}[ok]; got != tc.want {
+			t.Errorf("%s/%s: artifact %q, want %q", tc.os, tc.arch, got, tc.want)
+		}
+	}
+}
 
 var testNow = time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC) // Monday
 

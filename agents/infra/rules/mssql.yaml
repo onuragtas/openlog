@@ -1,0 +1,17 @@
+id: mssql
+name: Microsoft SQL Server
+category: database
+match:
+  - service: { name_regex: "^(MSSQLSERVER|MSSQL\\$.+)$", manager: windows }   # default and named instances
+  - process: { exe_basename: ["sqlservr"] }
+  - listening_port: { port: 1433, process_exe_basename: ["sqlservr"] }
+  - container: { image_regex: "(^|/)mssql/server(:|@|$)" }
+  - package: { name_regex: "^mssql-server$" }                                 # SQL Server on Linux
+version:
+  - package: ["mssql-server"]
+endpoints:
+  - from: listening_port
+integration: null                                           # no SQL Server metric integration yet: not_available
+logs:
+  - path: "/var/opt/mssql/log/errorlog"                     # SQL Server on Linux
+  - path: "C:/Program Files/Microsoft SQL Server/MSSQL*/MSSQL/Log/ERRORLOG"

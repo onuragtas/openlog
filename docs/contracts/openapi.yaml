@@ -43,6 +43,12 @@ tags:
     description: Custom dashboards of OQL widgets
   - name: usage
     description: Usage metering, plans, quotas and billing (usage.md)
+  - name: operator
+    description: SaaS operator console, organization lifecycle and support access (api.md "SaaS operations")
+  - name: privacy
+    description: Data exports, account and organization deletion (api.md "Data export and deletion", D-107)
+  - name: status
+    description: Public status page and its incidents (api.md "Status page", D-108)
 
 paths:
   /api/v1/hosts:
@@ -4783,6 +4789,766 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ---- SaaS operations (api.md "SaaS operations", D-105, D-106) ----
+
+  /api/v1/operator/me:
+    get:
+      tags: [operator]
+      operationId: getOperatorMe
+      summary: Whether the caller is an openlog operator (superadmin)
+      responses:
+        "200":
+          description: Operator flag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorMe" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/v1/operator/orgs:
+    get:
+      tags: [operator]
+      operationId: listOperatorOrgs
+      summary: Organizations of the installation (superadmin)
+      parameters:
+        - { name: q, in: query, description: Name, tenant id, organization id or member e-mail substring, schema: { type: string } }
+        - { name: plan, in: query, description: Effective plan id, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string, enum: [active, suspended, trial, flagged] } }
+        - { name: sort, in: query, schema: { type: string, enum: [created, name, ingest, members, last_ingest] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Page of organizations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorOrgList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/operator/orgs/{org}:
+    parameters:
+      - { name: org, in: path, required: true, description: Organization id or tenant id, schema: { type: string } }
+    get:
+      tags: [operator]
+      operationId: getOperatorOrg
+      summary: Organization detail for operators (never secrets)
+      responses:
+        "200":
+          description: Organization detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorOrgDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/orgs/{org}/suspend:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: suspendOrg
+      summary: Suspend the organization (audit org.suspend)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorReason" }
+      responses:
+        "200":
+          description: Lifecycle state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgLifecycle" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/orgs/{org}/unsuspend:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: unsuspendOrg
+      summary: Lift a suspension (audit org.unsuspend; 409 when not suspended)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorReason" }
+      responses:
+        "200":
+          description: Lifecycle state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgLifecycle" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/operator/orgs/{org}/trial:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: startOrExtendTrial
+      summary: Start a trial of a plan, or move the end of the running trial (audit trial.start / trial.extend)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrialInput" }
+      responses:
+        "200":
+          description: Lifecycle state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgLifecycle" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/orgs/{org}/reset-quota-notifications:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: resetQuotaNotifications
+      summary: Forget this period's usage notifications (audit quota.notifications_reset)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorReason" }
+      responses:
+        "200":
+          description: Deleted notification claims
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, period]
+                properties:
+                  deleted: { type: integer }
+                  period: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/orgs/{org}/force-logout:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: forceLogoutOrg
+      summary: Revoke every active session of the organization's members (audit org.force_logout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorReason" }
+      responses:
+        "200":
+          description: Revoked sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions_revoked]
+                properties:
+                  sessions_revoked: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/orgs/{org}/resend-verification:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: resendOwnerVerification
+      summary: E-mail a new verification link to every unverified owner (audit org.owner_verification_resend)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorReason" }
+      responses:
+        "200":
+          description: Recipients
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent_to]
+                properties:
+                  sent_to: { type: array, items: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/operator/orgs/{org}/support-sessions:
+    parameters:
+      - { name: org, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: startSupportSession
+      summary: Open a read-only support view (requires support access granted by an owner; audit support.session_start)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorReason" }
+      responses:
+        "201":
+          description: Support session; send its id as X-Openlog-Support-Session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/support-sessions:
+    get:
+      tags: [operator]
+      operationId: listSupportSessions
+      summary: The operator's open support sessions
+      responses:
+        "200":
+          description: Open support sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [support_sessions]
+                properties:
+                  support_sessions: { type: array, items: { $ref: "#/components/schemas/SupportSession" } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/operator/support-sessions/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [operator]
+      operationId: endSupportSession
+      summary: End a support session (audit support.session_end)
+      responses:
+        "200":
+          description: Ended support session
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportSession" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/support-sessions/{id}/views:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [operator]
+      operationId: recordSupportView
+      summary: Audit a page view of the support UI (support.page_view)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string, maxLength: 2048 }
+      responses:
+        "204": { description: Recorded }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/operator/flags:
+    get:
+      tags: [operator]
+      operationId: listAbuseFlags
+      summary: Abuse detector flags
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, dismissed, actioned, all], default: open } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Flags
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [flags]
+                properties:
+                  flags: { type: array, items: { $ref: "#/components/schemas/AbuseFlag" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/operator/flags/{id}/resolve:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [operator]
+      operationId: resolveAbuseFlag
+      summary: Close an open flag (audit abuse_flag.resolve)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, note]
+              properties:
+                status: { type: string, enum: [dismissed, actioned] }
+                note: { type: string, minLength: 3, maxLength: 1000 }
+      responses:
+        "200":
+          description: Resolved flag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AbuseFlag" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/orgs/current/saas:
+    get:
+      tags: [operator]
+      operationId: getOrgSaaSState
+      summary: Suspension, trial and support access of the current organization
+      responses:
+        "200":
+          description: SaaS state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgSaaSState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/orgs/current/support-access:
+    put:
+      tags: [operator]
+      operationId: grantSupportAccess
+      summary: Allow openlog support to open read-only support views (owners; audit support_access.grant)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [duration]
+              properties:
+                duration: { type: string, enum: ["24h", "7d"] }
+      responses:
+        "200":
+          description: SaaS state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgSaaSState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [operator]
+      operationId: revokeSupportAccess
+      summary: Revoke support access and end open support sessions (owners; audit support_access.revoke)
+      responses:
+        "200":
+          description: SaaS state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgSaaSState" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/account/privacy:
+    get:
+      tags: [privacy]
+      operationId: getAccountPrivacy
+      summary: Re-authentication info, export flag and scheduled deletions of organizations the caller owns
+      responses:
+        "200":
+          description: Privacy settings of the caller
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountPrivacy" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/account/data-exports:
+    get:
+      tags: [privacy]
+      operationId: listPersonalExports
+      responses:
+        "200":
+          description: The caller's personal exports, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataExportList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [privacy]
+      operationId: requestPersonalExport
+      summary: Queue an export of the caller's personal data
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataExportEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/account/delete:
+    post:
+      tags: [privacy]
+      operationId: deleteAccount
+      summary: Delete the caller's account (re-authentication required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_email]
+              properties:
+                confirm_email: { type: string }
+                password: { type: string, description: Required for users with a password }
+      responses:
+        "204": { description: Deleted; the session cookie is cleared }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/data-exports:
+    get:
+      tags: [privacy]
+      operationId: listOrgExports
+      summary: Exports of the current organization (owner)
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataExportList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [privacy]
+      operationId: requestOrgExport
+      summary: Queue an export of the current organization (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrgExportRequest" }
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataExportEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/data-exports/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [privacy]
+      operationId: getExport
+      responses:
+        "200":
+          description: The export
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataExportEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/data-exports/{id}/download:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [privacy]
+      operationId: downloadExport
+      responses:
+        "200":
+          description: ZIP archive
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/data-exports/download:
+    get:
+      tags: [privacy]
+      operationId: downloadExportByToken
+      summary: Download an archive through the e-mailed, expiring link
+      security: []
+      parameters:
+        - { name: token, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: ZIP archive
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/orgs/current/deletion:
+    post:
+      tags: [privacy]
+      operationId: scheduleOrgDeletion
+      summary: Schedule the current organization's deletion (owner, re-authentication required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm_name]
+              properties:
+                confirm_name: { type: string, description: The organization name }
+                password: { type: string, description: Required for users with a password }
+      responses:
+        "202":
+          description: Scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgDeletionEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/org-deletions/{id}/cancel:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [privacy]
+      operationId: cancelOrgDeletion
+      summary: Cancel a scheduled deletion of an organization the caller owns
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgDeletionEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/admin/orgs/{org}/deletion:
+    parameters:
+      - { name: org, in: path, required: true, description: Organization id or tenant id, schema: { type: string } }
+    post:
+      tags: [privacy]
+      operationId: adminScheduleOrgDeletion
+      summary: Schedule an organization's deletion with a reason (superadmin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 1000 }
+                immediate: { type: boolean, default: false, description: Skip the grace period }
+      responses:
+        "202":
+          description: Scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgDeletionEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/admin/org-deletions:
+    get:
+      tags: [privacy]
+      operationId: adminListOrgDeletions
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Deletions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deletions]
+                properties:
+                  deletions: { type: array, items: { $ref: "#/components/schemas/OrgDeletion" } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/org-deletions/{id}/cancel:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [privacy]
+      operationId: adminCancelOrgDeletion
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgDeletionEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/admin/deletion-certificates:
+    get:
+      tags: [privacy]
+      operationId: adminListDeletionCertificates
+      parameters:
+        - { name: subject_hash, in: query, description: Hex sha256 of a tenant id or user id, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Certificates, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [certificates]
+                properties:
+                  certificates: { type: array, items: { $ref: "#/components/schemas/DeletionCertificate" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/status:
+    get:
+      tags: [status]
+      operationId: getStatusPage
+      summary: Public status page (OPENLOG_STATUS_PAGE_ENABLED; cacheable for 30 s)
+      security: []
+      responses:
+        "200":
+          description: Component health, uptime history, incidents and maintenance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/admin/status/incidents:
+    get:
+      tags: [status]
+      operationId: listStatusIncidents
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Incidents and maintenance windows, newest first (superadmin)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [incidents, components]
+                properties:
+                  incidents: { type: array, items: { $ref: "#/components/schemas/StatusIncident" } }
+                  components: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [status]
+      operationId: createStatusIncident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatusIncidentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusIncidentEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/admin/status/incidents/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [status]
+      operationId: updateStatusIncident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatusIncidentInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusIncidentEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [status]
+      operationId: deleteStatusIncident
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/admin/status/incidents/{id}/updates:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [status]
+      operationId: addStatusIncidentUpdate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, message]
+              properties:
+                status: { type: string }
+                message: { type: string, maxLength: 5000 }
+      responses:
+        "200":
+          description: Updated incident
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusIncidentEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 components:
   securitySchemes:
     scimToken:
@@ -5255,6 +6021,232 @@ components:
             customer_id: { type: string }
             subscription_id: { type: string }
         note: { type: string, maxLength: 1000 }
+
+    # ---- SaaS operations ----
+
+    OperatorMe:
+      type: object
+      required: [operator, saas_mode]
+      properties:
+        operator: { type: boolean }
+        saas_mode: { type: boolean }
+
+    OperatorReason:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000, description: Written to the organization's audit log }
+
+    TrialInput:
+      type: object
+      required: [reason]
+      properties:
+        plan_id: { type: string, description: Required to start a trial; must match the running trial's plan to extend it }
+        days: { type: integer, minimum: 1, maximum: 365, description: "Start: trial length (default the plan's trial_days). Extend: days added to the current end" }
+        ends_at: { type: string, description: Explicit end (RFC3339 or unix ms); exclusive with days }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+
+    OperatorOrg:
+      type: object
+      required: [id, tenant_id, name, created_at, plan_id, plan_assigned, state, suspended_at, suspend_reason, trial_plan_id, trial_ends_at,
+        support_access_until, members, active_hosts, ingest_bytes, quota_level, last_ingest_at, open_flags]
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        plan_id: { type: string, description: Effective plan id (the default plan when not assigned) }
+        plan_assigned: { type: boolean }
+        state: { type: string, enum: [active, suspended, trial] }
+        suspended_at: { type: string, format: date-time, nullable: true }
+        suspend_reason: { type: string }
+        trial_plan_id: { type: string }
+        trial_ends_at: { type: string, format: date-time, nullable: true }
+        support_access_until: { type: string, format: date-time, nullable: true }
+        members: { type: integer }
+        active_hosts: { type: integer }
+        ingest_bytes: { type: integer, description: Ingest of the current period at the last quota evaluation }
+        quota_level: { type: string, enum: [ok, warning, exceeded] }
+        last_ingest_at: { type: string, format: date-time, nullable: true, description: Latest license key use }
+        open_flags: { type: integer }
+
+    OperatorOrgList:
+      type: object
+      required: [organizations, total, saas_mode]
+      properties:
+        organizations: { type: array, items: { $ref: "#/components/schemas/OperatorOrg" } }
+        total: { type: integer }
+        saas_mode: { type: boolean }
+
+    OperatorMember:
+      type: object
+      required: [user_id, email, name, role, joined_at, last_login_at, email_verified, disabled]
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [owner, admin, member, viewer] }
+        joined_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time, nullable: true }
+        email_verified: { type: boolean }
+        disabled: { type: boolean }
+
+    OperatorSSOConnection:
+      type: object
+      required: [id, protocol, name, enabled, enforce, jit_enabled, last_test_ok]
+      properties:
+        id: { type: string }
+        protocol: { type: string, enum: [oidc, saml] }
+        name: { type: string }
+        enabled: { type: boolean }
+        enforce: { type: boolean }
+        jit_enabled: { type: boolean }
+        last_test_ok: { type: boolean }
+
+    OperatorAuditEntry:
+      type: object
+      required: [id, actor_email, action, target_type, target_id, details, created_at]
+      properties:
+        id: { type: integer }
+        actor_email: { type: string }
+        action: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        details: { type: object, additionalProperties: true, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    OrgLifecycle:
+      type: object
+      required: [org_id, tenant_id, suspended, suspended_at, suspend_reason, trial_plan_id, trial_started_at, trial_ends_at, trial_ended_at,
+        support_access_until, support_access_granted_at]
+      properties:
+        org_id: { type: string }
+        tenant_id: { type: string }
+        suspended: { type: boolean }
+        suspended_at: { type: string, format: date-time, nullable: true }
+        suspend_reason: { type: string }
+        trial_plan_id: { type: string }
+        trial_started_at: { type: string, format: date-time, nullable: true }
+        trial_ends_at: { type: string, format: date-time, nullable: true }
+        trial_ended_at: { type: string, format: date-time, nullable: true }
+        support_access_until: { type: string, format: date-time, nullable: true }
+        support_access_granted_at: { type: string, format: date-time, nullable: true }
+
+    SupportSession:
+      type: object
+      required: [id, org_id, org_name, tenant_id, operator_email, reason, started_at, expires_at, ended_at]
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        org_name: { type: string }
+        tenant_id: { type: string }
+        operator_email: { type: string }
+        reason: { type: string }
+        started_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+
+    AbuseFlag:
+      type: object
+      required: [id, org_id, org_name, tenant_id, kind, status, details, occurrences, first_seen_at, last_seen_at, auto_suspended,
+        resolved_by_email, resolved_at, resolution_note, org_suspended]
+      properties:
+        id: { type: integer }
+        org_id: { type: string }
+        org_name: { type: string }
+        tenant_id: { type: string }
+        kind: { type: string, enum: [ingest_spike, new_org_hosts, ingest_source_ips] }
+        status: { type: string, enum: [open, dismissed, actioned] }
+        details: { type: object, additionalProperties: true, nullable: true }
+        occurrences: { type: integer }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        auto_suspended: { type: boolean }
+        resolved_by_email: { type: string }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        resolution_note: { type: string }
+        org_suspended: { type: boolean }
+
+    OperatorOrgDetail:
+      type: object
+      required: [organization, lifecycle, audit, usage, saas_mode]
+      properties:
+        organization:
+          allOf:
+            - { $ref: "#/components/schemas/OperatorOrg" }
+            - type: object
+              required: [member_list, pending_invitations, keys, sso_connections, verified_domains, flags, support_sessions, support_access_granted_by]
+              properties:
+                member_list: { type: array, items: { $ref: "#/components/schemas/OperatorMember" }, description: "Members (at most 500); `members` is the count" }
+                pending_invitations: { type: integer }
+                keys:
+                  type: object
+                  required: [license_keys_active, license_keys_revoked, api_keys_active, scim_tokens_active, last_ingest_at]
+                  properties:
+                    license_keys_active: { type: integer }
+                    license_keys_revoked: { type: integer }
+                    api_keys_active: { type: integer }
+                    scim_tokens_active: { type: integer }
+                    last_ingest_at: { type: string, format: date-time, nullable: true }
+                sso_connections: { type: array, items: { $ref: "#/components/schemas/OperatorSSOConnection" } }
+                verified_domains: { type: integer }
+                flags: { type: array, items: { $ref: "#/components/schemas/AbuseFlag" } }
+                support_sessions: { type: array, items: { $ref: "#/components/schemas/SupportSession" } }
+                support_access_granted_by: { type: string }
+        plan: { $ref: "#/components/schemas/OrgPlan" }
+        quota:
+          type: object
+          nullable: true
+          required: [level, ingest_blocked, metrics, evaluated_at, period_start]
+          properties:
+            level: { type: string, enum: [ok, warning, exceeded] }
+            ingest_blocked: { type: boolean }
+            metrics: { type: array, items: { $ref: "#/components/schemas/QuotaMetric" } }
+            evaluated_at: { $ref: "#/components/schemas/Timestamp" }
+            period_start: { type: string, format: date }
+        lifecycle: { $ref: "#/components/schemas/OrgLifecycle" }
+        audit: { type: array, items: { $ref: "#/components/schemas/OperatorAuditEntry" } }
+        usage:
+          type: object
+          required: [period, days, available]
+          properties:
+            period: { $ref: "#/components/schemas/UsagePeriod" }
+            days: { type: array, items: { $ref: "#/components/schemas/UsageDay" } }
+            available: { type: boolean, description: false when ClickHouse could not be read }
+        saas_mode: { type: boolean }
+
+    OrgSaaSState:
+      type: object
+      required: [saas_mode, suspended, trial, support_access, support_session, can_manage_support_access]
+      properties:
+        saas_mode: { type: boolean }
+        suspended: { type: boolean }
+        trial:
+          type: object
+          nullable: true
+          required: [plan_id, plan_name, ends_at, fallback_plan_id]
+          properties:
+            plan_id: { type: string }
+            plan_name: { type: string }
+            ends_at: { $ref: "#/components/schemas/Timestamp" }
+            fallback_plan_id: { type: string }
+        support_access:
+          type: object
+          nullable: true
+          required: [until, granted_at]
+          properties:
+            until: { $ref: "#/components/schemas/Timestamp" }
+            granted_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        support_session:
+          type: object
+          nullable: true
+          required: [id, operator_email, expires_at, org_name]
+          properties:
+            id: { type: string }
+            operator_email: { type: string }
+            expires_at: { $ref: "#/components/schemas/Timestamp" }
+            org_name: { type: string }
+        can_manage_support_access: { type: boolean }
 
     Error:
       type: object
@@ -5815,6 +6807,11 @@ components:
               port: { type: integer }
         systemd_units:
           type: array
+          description: systemd units of the service (Linux); empty on macOS and Windows.
+          items: { type: string }
+        services:
+          type: array
+          description: launchd labels (macOS) or Windows service names of the service. Optional; Linux agents omit it.
           items: { type: string }
         packages:
           type: array
@@ -8828,3 +9825,162 @@ components:
             from: { type: [string, "null"] }
             to: { type: [string, "null"] }
         expires_at: { $ref: "#/components/schemas/Timestamp" }
+
+    # ---- Data export and deletion (api.md "Data export and deletion", D-107) ----
+    DataExport:
+      type: object
+      required: [id, kind, status, signals, from, to, requested_by, size_bytes, telemetry_rows, truncated, error, created_at, started_at, completed_at, expires_at, download_available]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [organization, user] }
+        status: { type: string, enum: [pending, running, completed, failed, expired] }
+        signals: { type: array, items: { type: string, enum: [logs, traces, metrics] } }
+        from: { type: [string, "null"] }
+        to: { type: [string, "null"] }
+        requested_by: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        telemetry_rows: { type: integer, format: int64 }
+        truncated: { type: boolean, description: A size or row limit stopped the telemetry part (see the archive's manifest.json) }
+        error: { type: string }
+        created_at: { type: string }
+        started_at: { type: [string, "null"] }
+        completed_at: { type: [string, "null"] }
+        expires_at: { type: [string, "null"] }
+        download_available: { type: boolean }
+    DataExportEnvelope:
+      type: object
+      required: [export]
+      properties:
+        export: { $ref: "#/components/schemas/DataExport" }
+    DataExportList:
+      type: object
+      required: [exports]
+      properties:
+        exports: { type: array, items: { $ref: "#/components/schemas/DataExport" } }
+    OrgExportRequest:
+      type: object
+      properties:
+        from: { type: string, description: RFC3339 or unix ms; required with signals }
+        to: { type: string, description: RFC3339 or unix ms; required with signals }
+        signals: { type: array, items: { type: string, enum: [logs, traces, metrics] }, description: Empty = PostgreSQL data only }
+    OrgDeletion:
+      type: object
+      required: [id, organization_id, organization_name, tenant_id, status, initiator, requested_at, purge_after, cancelled_at, started_at, completed_at, cancellable, certificate_id]
+      properties:
+        id: { type: string }
+        organization_id: { type: [string, "null"] }
+        organization_name: { type: string }
+        tenant_id: { type: string }
+        status: { type: string, enum: [scheduled, cancelled, deleting, completed] }
+        initiator: { type: string, enum: [owner, operator] }
+        reason: { type: string, description: Operator views only }
+        requested_by_email: { type: string, description: Operator views only }
+        requested_at: { type: string }
+        purge_after: { type: string }
+        cancelled_at: { type: [string, "null"] }
+        started_at: { type: [string, "null"] }
+        completed_at: { type: [string, "null"] }
+        cancellable: { type: boolean }
+        certificate_id: { type: [string, "null"] }
+        last_error: { type: string, description: Operator views only }
+    OrgDeletionEnvelope:
+      type: object
+      required: [deletion]
+      properties:
+        deletion: { $ref: "#/components/schemas/OrgDeletion" }
+    AccountPrivacy:
+      type: object
+      required: [has_password, data_export_enabled, org_deletion_grace_seconds, reauth_max_age_seconds, org_deletions]
+      properties:
+        has_password: { type: boolean, description: false = confirm destructive operations with a recent single sign-on session }
+        data_export_enabled: { type: boolean }
+        org_deletion_grace_seconds: { type: integer }
+        reauth_max_age_seconds: { type: integer }
+        org_deletions: { type: array, items: { $ref: "#/components/schemas/OrgDeletion" } }
+    DeletionCertificate:
+      type: object
+      required: [id, subject_type, subject_hash, initiator, requested_at, grace_ended_at, started_at, completed_at, postgres_rows, clickhouse_rows, verified]
+      properties:
+        id: { type: string }
+        subject_type: { type: string, enum: [organization, user] }
+        subject_hash: { type: string, description: Hex sha256 of the tenant id or user id }
+        initiator: { type: string, enum: [owner, operator, self] }
+        requested_at: { type: string }
+        grace_ended_at: { type: [string, "null"] }
+        started_at: { type: string }
+        completed_at: { type: string }
+        postgres_rows: { type: object, additionalProperties: { type: integer } }
+        clickhouse_rows: { type: object, additionalProperties: { type: integer } }
+        verified: { type: boolean }
+
+    # ---- Status page (api.md "Status page", D-108) ----
+    StatusValue:
+      type: string
+      enum: [operational, degraded, partial_outage, major_outage, maintenance, unknown]
+    StatusPage:
+      type: object
+      required: [status, checked_at, components, incidents, maintenance, history]
+      properties:
+        status: { $ref: "#/components/schemas/StatusValue" }
+        checked_at: { type: [string, "null"] }
+        components:
+          type: array
+          items:
+            type: object
+            required: [id, status, uptime_90d, days]
+            properties:
+              id: { type: string, enum: [ingest, query_api, alerting, processing] }
+              status: { $ref: "#/components/schemas/StatusValue" }
+              uptime_90d: { type: [number, "null"] }
+              days:
+                type: array
+                items:
+                  type: object
+                  required: [date, status, uptime]
+                  properties:
+                    date: { type: string }
+                    status: { type: string, enum: [operational, degraded, outage, no_data] }
+                    uptime: { type: [number, "null"] }
+        incidents: { type: array, items: { $ref: "#/components/schemas/StatusIncident" } }
+        maintenance: { type: array, items: { $ref: "#/components/schemas/StatusIncident" } }
+        history: { type: array, items: { $ref: "#/components/schemas/StatusIncident" } }
+    StatusIncident:
+      type: object
+      required: [id, kind, title, status, impact, components, starts_at, ends_at, created_at, updated_at, updates]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [incident, maintenance] }
+        title: { type: string }
+        status: { type: string, enum: [investigating, identified, monitoring, resolved, scheduled, in_progress, completed] }
+        impact: { type: string, enum: [none, minor, major, critical] }
+        components: { type: array, items: { type: string } }
+        starts_at: { type: string }
+        ends_at: { type: [string, "null"] }
+        created_at: { type: string }
+        updated_at: { type: string }
+        updates:
+          type: array
+          items:
+            type: object
+            required: [id, status, message, created_at]
+            properties:
+              id: { type: integer }
+              status: { type: string }
+              message: { type: string }
+              created_at: { type: string }
+    StatusIncidentInput:
+      type: object
+      properties:
+        kind: { type: string, enum: [incident, maintenance], description: Create only }
+        title: { type: string, maxLength: 200 }
+        status: { type: string }
+        impact: { type: string, enum: [none, minor, major, critical] }
+        components: { type: array, items: { type: string, enum: [ingest, query_api, alerting, processing] } }
+        starts_at: { type: string }
+        ends_at: { type: string, description: '"" clears' }
+        message: { type: string, description: First timeline entry (create only) }
+    StatusIncidentEnvelope:
+      type: object
+      required: [incident]
+      properties:
+        incident: { $ref: "#/components/schemas/StatusIncident" }

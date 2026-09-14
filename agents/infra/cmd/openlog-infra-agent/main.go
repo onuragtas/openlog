@@ -34,6 +34,9 @@ const selfTestBudget = 25 * time.Second
 var beforeRun func()
 
 func main() {
+	if code, ok := runWindowsService(); ok { // service_windows.go
+		os.Exit(code)
+	}
 	os.Exit(run())
 }
 
@@ -46,15 +49,31 @@ func run() int {
 	apply := flag.Bool("apply", false, "privileged pre-start step run as root by the systemd unit (ExecStartPre=+): install a staged update after verifying it again, roll back an unconfirmed one, reconcile the installation; always exits 0")
 	reconcile := flag.Bool("reconcile", false, "as root: make the installation match this release (systemd unit, service account, docker group, ownership); prints restart-required when the service must restart")
 	reconcileContext := flag.String("reconcile-context", update.ReconcileManual, "who runs -reconcile: apply, package, install or manual")
+	configure := flag.Bool("configure", false, "create the configuration file if missing (restricted permissions) and set -license-key and -endpoint in it, keeping everything else; then exit")
+	licenseKey := flag.String("license-key", "", "license key for -configure")
+	endpointFlag := flag.String("endpoint", "", "OTLP/HTTP endpoint for -configure")
+	verifyRelease := flag.String("verify-release", "", "verify the Ed25519 signature (<manifest>.sig) of a release manifest with this binary's trusted keys, then exit")
+	artifact := flag.String("artifact", "", "with -verify-release: also check this file's size and sha256 against the manifest artifact of the same name")
+	uninstallService := flag.Bool("uninstall-service", false, "macOS: boot out and remove the LaunchDaemon; Windows: stop and delete the service; then exit")
 	flag.Parse()
 
 	explicit := false
+	set := map[string]bool{}
 	flag.Visit(func(f *flag.Flag) {
+		set[f.Name] = true
 		if f.Name == "config" {
 			explicit = true
 		}
 	})
 	ver := version.Current()
+	switch {
+	case *uninstallService:
+		return runUninstallService() // native_service.go
+	case *verifyRelease != "":
+		return runVerifyRelease(*configPath, explicit, *verifyRelease, *artifact) // verifyrelease.go
+	case *configure:
+		return runConfigure(*configPath, *licenseKey, *endpointFlag, set["license-key"], set["endpoint"]) // configure.go
+	}
 	if *apply {
 		return runApply(*configPath, explicit, ver)
 	}
@@ -105,6 +124,9 @@ func run() int {
 	var mgr *update.Manager
 	var install update.Install
 	if !*once {
+		if nativeServiceMode() && runNativeStartApply(*configPath, explicit, ver) { // native_service.go: launchd, Windows SCM
+			return 0
+		}
 		// Update startup check first: a candidate that cannot even load its configuration must
 		// still count its start attempts and roll back.
 		cfgPath := ""
@@ -137,7 +159,7 @@ func run() int {
 		return 2
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(baseContext(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	a, err := agent.New(cfg, ver, log, !*once)

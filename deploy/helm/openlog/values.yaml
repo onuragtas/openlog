@@ -159,6 +159,9 @@ auth:
   # OPENLOG_SIGNUP_CAPTCHA_SECRET of the api (provider and site key: api.config).
   captchaSecret: ""
   captchaSecretKey: signup-captcha-secret
+  # OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY of data export archives (api.config OPENLOG_DATA_EXPORT_*; D-107).
+  dataExportS3SecretAccessKey: ""
+  dataExportS3SecretAccessKeyKey: data-export-s3-secret-access-key
 
 # -----------------------------------------------------------------------------
 # PostgreSQL (auth.mode=postgres; docs/contracts/postgres.md)
@@ -781,6 +784,36 @@ api:
     # none | noop
     OPENLOG_BILLING_PROVIDER: none
     OPENLOG_BILLING_PUSH_AT: "02:00"
+    # SaaS operations (docs/operations/saas.md §8-§11; enforcement and jobs only with OPENLOG_SAAS_MODE=true).
+    OPENLOG_SAAS_HOST_SYNC_INTERVAL: "1m"
+    # Plan with trial_days whose trial new sign-ups get ("" = none).
+    OPENLOG_SAAS_SIGNUP_TRIAL_PLAN: ""
+    OPENLOG_SAAS_TRIAL_NOTIFY_DAYS: "7,3,1"
+    OPENLOG_SAAS_LIFECYCLE_INTERVAL: "5m"
+    OPENLOG_SAAS_SUPPORT_SESSION_TTL: "2h"
+    OPENLOG_SAAS_AUTO_SUSPEND: "false"
+    OPENLOG_SAAS_ABUSE_INTERVAL: "10m"
+    OPENLOG_SAAS_ABUSE_INGEST_MULTIPLIER: "10"
+    OPENLOG_SAAS_ABUSE_NEW_ORG_DAYS: "7"
+    OPENLOG_SAAS_ABUSE_NEW_ORG_HOSTS: "50"
+    OPENLOG_SAAS_ABUSE_SOURCE_IPS: "200"
+    # Data subject requests (docs/operations/saas.md §12, D-107). Use S3 with more than one api replica: the leader
+    # writes the archive and any pod serves the download. Secret key: auth.dataExportS3SecretAccessKey.
+    OPENLOG_ORG_DELETION_GRACE: "168h"
+    OPENLOG_DATA_EXPORT_ENABLED: "true"
+    # auto | local | s3
+    OPENLOG_DATA_EXPORT_STORAGE: auto
+    OPENLOG_DATA_EXPORT_LOCAL_PATH: /tmp/openlog-exports
+    OPENLOG_DATA_EXPORT_S3_URL: ""
+    OPENLOG_DATA_EXPORT_S3_REGION: ""
+    OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID: ""
+    OPENLOG_DATA_EXPORT_TTL: "168h"
+    OPENLOG_DATA_EXPORT_MAX_BYTES: "4294967296"
+    OPENLOG_DATA_EXPORT_MAX_ROWS: "50000000"
+    OPENLOG_DATA_EXPORT_MAX_RANGE: "744h"
+    OPENLOG_DATA_EXPORT_ROWS_PER_SECOND: "200000"
+    # Public status page (/status; saas.md §13, D-108). "" = OPENLOG_SAAS_MODE.
+    OPENLOG_STATUS_PAGE_ENABLED: ""
   extraEnv: []
   resources:
     requests: {cpu: 500m, memory: 512Mi}

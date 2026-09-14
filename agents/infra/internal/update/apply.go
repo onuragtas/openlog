@@ -16,9 +16,9 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"time"
 
+	"github.com/onuragtas/openlog/agents/infra/internal/osutil"
 	lib "github.com/onuragtas/openlog/libs/release"
 )
 
@@ -68,6 +68,8 @@ type ApplyStatus struct {
 	ToVersion   string   `json:"to_version,omitempty"`
 	Error       string   `json:"error,omitempty"`
 	Notes       []string `json:"notes,omitempty"`
+	// Carried marks a result taken over from the previous start (DeferAttemptCount); it is carried only once.
+	Carried bool `json:"carried,omitempty"`
 }
 
 // ApplyOptions configures Apply.
@@ -87,6 +89,10 @@ type ApplyOptions struct {
 	ConfirmWindow  time.Duration
 	// SelfTest runs "<binary> -self-test" as uid:gid.
 	SelfTest func(ctx context.Context, binary string, uid, gid int) error
+	// DeferAttemptCount is set by the in-process apply of macOS and Windows services: the process that switched
+	// exits and the service manager starts the new binary, whose own Apply counts the first attempt; the result
+	// of the switching start is carried over to that start once.
+	DeferAttemptCount bool
 	// Reconcile runs the reconcile step of versions/<dir>/openlog-infra-agent after a switch, or of
 	// this binary when dir is "".
 	Reconcile func(ctx context.Context, dir string) error
@@ -178,6 +184,16 @@ func Apply(ctx context.Context, o ApplyOptions) *ApplyStatus {
 			log.Info("staged update installed; starting it", "from", o.Version, "to", v)
 		}
 	}
+	if o.DeferAttemptCount && a.st.Result == "" && !prev.Carried && prev.InvocationID != o.InvocationID {
+		switch prev.Result {
+		case ApplySwitched, ApplyRolledBack, ApplyRollbackFailed:
+			// The start that switched exited; this start runs the version it switched to and reports its result.
+			if cur, _ := CurrentDir(root); cur == prev.Current {
+				a.st.Result, a.st.FromVersion, a.st.ToVersion, a.st.Error = prev.Result, prev.FromVersion, prev.ToVersion, prev.Error
+				a.st.Carried = true
+			}
+		}
+	}
 	a.save()
 
 	if o.Reconcile != nil {
@@ -228,7 +244,7 @@ func loadAgentState(stateDir string) (State, error) {
 }
 
 func readRootFile(r *os.Root, name string, limit int64) ([]byte, error) {
-	f, err := r.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	f, err := r.OpenFile(name, os.O_RDONLY|osutil.ONonblock, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +378,7 @@ func (a *applier) applyStaged(ctx context.Context, agent State) (string, error) 
 	if err := copyVerified(sr, path.Join(rel, ArchiveFile), partial, v.Artifact.Size, v.Artifact.SHA256); err != nil {
 		return "", err
 	}
-	if err := ExtractTarGz(partial, extract, TopDir(ver, o.OS, o.Arch), MaxExtractBytes); err != nil {
+	if err := ExtractArchive(ArtifactFormat(o.OS), partial, extract, TopDir(ver, o.OS, o.Arch), MaxExtractBytes); err != nil {
 		return "", err
 	}
 	ok := false
@@ -387,9 +403,12 @@ func (a *applier) applyStaged(ctx context.Context, agent State) (string, error) 
 	if !o.Sys.trustedTree(extract) {
 		return "", fmt.Errorf("extracted release %s is not a root-owned tree", ver)
 	}
-	uid, gid, err := o.Sys.lookupUser(o.AgentUser)
-	if err != nil {
-		return "", fmt.Errorf("self-test user: %w", err)
+	uid, gid := -1, -1
+	if !o.Sys.SelfTestAsCurrent {
+		var lerr error
+		if uid, gid, lerr = o.Sys.lookupUser(o.AgentUser); lerr != nil {
+			return "", fmt.Errorf("self-test user: %w", lerr)
+		}
 	}
 	if o.SelfTest != nil {
 		if err := o.SelfTest(ctx, bin, uid, gid); err != nil {
@@ -415,7 +434,11 @@ func (a *applier) applyStaged(ctx context.Context, agent State) (string, error) 
 	syncDir(versions)
 
 	// Recorded before the switch: a crash in between leaves a candidate that is not current, which is forgotten.
-	a.st.Candidate = &RootCandidate{Version: ver, Previous: cur, SwitchedAt: o.Now().UTC(), Attempts: 1}
+	attempts := 1
+	if o.DeferAttemptCount {
+		attempts = 0 // the next start (of the new binary) is its first attempt
+	}
+	a.st.Candidate = &RootCandidate{Version: ver, Previous: cur, SwitchedAt: o.Now().UTC(), Attempts: attempts}
 	a.save()
 	if err := SwitchCurrent(a.root, ver); err != nil {
 		a.st.Candidate = nil
@@ -430,7 +453,7 @@ func copyVerified(r *os.Root, name, dest string, size int64, sha string) (err er
 	if size <= 0 || size > MaxArchiveBytes {
 		return ruleErr(6, "archive size %d outside (0, %d]", size, MaxArchiveBytes)
 	}
-	in, err := r.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	in, err := r.OpenFile(name, os.O_RDONLY|osutil.ONonblock, 0)
 	if err != nil {
 		return fmt.Errorf("staged archive: %w", err)
 	}

@@ -30,7 +30,14 @@ func embedded(t *testing.T) []*Rule {
 
 // caseFile is a fixture describing inventory data and the expected services.
 type caseFile struct {
-	Name      string `yaml:"name"`
+	Name string `yaml:"name"`
+	// Platform is inventory.Data.Platform ("" Linux, darwin, windows).
+	Platform string `yaml:"platform"`
+	Services []struct {
+		Manager string `yaml:"manager"`
+		Name    string `yaml:"name"`
+		PID     int    `yaml:"pid"`
+	} `yaml:"services"`
 	Processes []struct {
 		PID       int    `yaml:"pid"`
 		PPID      int    `yaml:"ppid"`
@@ -66,6 +73,8 @@ type caseFile struct {
 		PIDs      []int    `yaml:"pids"`
 		Ports     []int    `yaml:"ports"`
 		Units     []string `yaml:"units"`
+		Services  []string `yaml:"services"`
+		LogPaths  []string `yaml:"log_paths"`
 		Packages  []string `yaml:"packages"`
 		Status    string   `yaml:"status"`
 	} `yaml:"expect"`
@@ -74,7 +83,10 @@ type caseFile struct {
 }
 
 func (c *caseFile) data() *inventory.Data {
-	d := &inventory.Data{Containers: c.Containers}
+	d := &inventory.Data{Containers: c.Containers, Platform: c.Platform}
+	for _, s := range c.Services {
+		d.Services = append(d.Services, inventory.SystemService{Manager: s.Manager, Name: s.Name, PID: s.PID})
+	}
 	for _, p := range c.Processes {
 		comm := p.Comm
 		if comm == "" {
@@ -172,6 +184,12 @@ func TestRuleCases(t *testing.T) {
 				}
 				if e.Units != nil && !slices.Equal(s.SystemdUnits, e.Units) {
 					t.Errorf("%s: units = %v, want %v", s.Key(), s.SystemdUnits, e.Units)
+				}
+				if e.Services != nil && !slices.Equal(s.Services, e.Services) {
+					t.Errorf("%s: services = %v, want %v", s.Key(), s.Services, e.Services)
+				}
+				if e.LogPaths != nil && !slices.Equal(s.LogPaths, e.LogPaths) {
+					t.Errorf("%s: log_paths = %v, want %v", s.Key(), s.LogPaths, e.LogPaths)
 				}
 				if e.Packages != nil && !slices.Equal(s.Packages, e.Packages) {
 					t.Errorf("%s: packages = %v, want %v", s.Key(), s.Packages, e.Packages)

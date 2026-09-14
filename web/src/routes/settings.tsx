@@ -8,5 +8,6 @@ export { ProfileSettings as ProfileSettingsPage } from "@/components/settings/Pr
 export { SecuritySettings as SecuritySettingsPage } from "@/components/settings/SecuritySettings";
 export { SettingsLayout } from "@/components/settings/SettingsLayout";
 export { SsoSettings as SsoSettingsPage } from "@/components/settings/SsoSettings";
+export { StatusPageSettings as StatusPageSettingsPage } from "@/components/settings/StatusPageSettings";
 export { TailSamplingSettings as TailSamplingSettingsPage } from "@/components/settings/TailSamplingSettings";
 export { UsageSettings as UsageSettingsPage } from "@/components/settings/UsageSettings";

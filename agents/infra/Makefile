@@ -18,7 +18,7 @@ DIST := dist
 # The module replaces libs/release with ../../libs/release: Docker builds need the repo root.
 REPO_ROOT := $(abspath $(CURDIR)/../..)
 
-.PHONY: all build build-linux test vet fmt validate-rules test-linux test-update-e2e docker clean
+.PHONY: all build build-linux build-darwin build-windows test vet fmt validate-rules test-linux test-update-e2e docker clean
 
 all: vet test build-linux
 
@@ -29,12 +29,22 @@ build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/openlog-infra-agent-linux-amd64 $(PKG)
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/openlog-infra-agent-linux-arm64 $(PKG)
 
+build-darwin:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/openlog-infra-agent-darwin-amd64 $(PKG)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/openlog-infra-agent-darwin-arm64 $(PKG)
+
+build-windows:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/openlog-infra-agent-windows-amd64.exe $(PKG)
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/openlog-infra-agent-windows-arm64.exe $(PKG)
+
 test:
 	go test ./...
 
 vet:
 	go vet ./...
 	GOOS=linux go vet ./...
+	GOOS=darwin go vet ./...
+	GOOS=windows go vet ./...
 
 fmt:
 	gofmt -w cmd internal rules test

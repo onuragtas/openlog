@@ -9,7 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/osutil"
 )
 
 // secureLayout makes the install root and versions/ root-owned (0755) and ensures every version
@@ -65,7 +66,7 @@ func (s *Sys) secureLayout(root string, log *slog.Logger) (notes []string, err e
 	// Status files another user could have written are dropped; the privileged steps write new ones.
 	for _, name := range []string{ApplyStatusFile, ReconcileStatusFile} {
 		p := filepath.Join(root, name)
-		if fi, err := os.Lstat(p); err == nil && (!fi.Mode().IsRegular() || !s.trustedInfo(fi)) {
+		if fi, err := os.Lstat(p); err == nil && (!fi.Mode().IsRegular() || !s.trustedInfo(p, fi)) {
 			if err := os.Remove(p); err != nil {
 				errs = append(errs, err)
 			}
@@ -134,7 +135,7 @@ func (s *Sys) copyTree(src, dst string, maxTotal int64) error {
 		case !d.Type().IsRegular():
 			return nil
 		}
-		in, err := r.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+		in, err := r.OpenFile(p, os.O_RDONLY|osutil.ONofollow|osutil.ONonblock, 0)
 		if err != nil {
 			return err
 		}

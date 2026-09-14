@@ -44,6 +44,8 @@ const (
 	ErrCodeDeprovisioned     = "deprovisioned"
 	ErrCodeAccountDisabled   = "account_disabled"
 	ErrCodeUnavailable       = "unavailable"
+	// ErrCodeUserLimit: just-in-time provisioning would exceed the plan's users limit (SaaS mode, D-105).
+	ErrCodeUserLimit = "user_limit"
 )
 
 // BindingCookiePrefix is the prefix of the per-sign-in browser binding cookie (SameSite=Lax, Path=/api/v1/sso).
@@ -546,6 +548,12 @@ func (s *Service) provision(ctx context.Context, c Connection, id Identity, meta
 		role := c.DefaultRole
 		if r, ok := roleFor(mappings, id.Groups); ok {
 			role = r
+		}
+		if err := s.auth.CheckMemberLimit(ctx, c.OrgID, false); err != nil { // plan users limit (SaaS mode)
+			if errors.Is(err, &auth.Error{Code: auth.CodeQuotaExceeded}) {
+				return auth.User{}, false, ErrCodeUserLimit, err
+			}
+			return auth.User{}, false, ErrCodeUnavailable, err
 		}
 		if err := s.users.AddMember(ctx, c.OrgID, u.ID, role); err != nil && !errors.Is(err, auth.ErrAlreadyExists) {
 			return auth.User{}, false, ErrCodeUnavailable, err

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -52,8 +53,16 @@ func (f *FS) Root() string { return f.root }
 // IsHostRoot reports whether the root is "/" (the agent sees the host directly).
 func (f *FS) IsHostRoot() bool { return f.root == "/" }
 
+// NativeOS reports whether collectors must use the native APIs of a non-Linux host (macOS, Windows;
+// D-104) instead of procfs/sysfs: the agent runs on such an OS and looks at the host directly. A
+// host.root_path other than "/" always means a mounted Linux file system (containers, test fixtures).
+func (f *FS) NativeOS() bool { return runtime.GOOS != "linux" && f.IsHostRoot() }
+
 // Path maps an absolute host path to the local path under the root.
 func (f *FS) Path(p string) string {
+	if f.root == "/" && filepath.VolumeName(p) != "" {
+		return filepath.Clean(p) // Windows drive or UNC path
+	}
 	if f.root == "/" {
 		return filepath.Clean("/" + p)
 	}

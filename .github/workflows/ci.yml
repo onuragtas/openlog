@@ -77,7 +77,95 @@ jobs:
         run: |
           go vet ./...
           GOOS=linux GOARCH=arm64 go vet ./...
+          GOOS=darwin go vet ./...
+          GOOS=windows go vet ./...
           go test ./...
+
+  infra-agent-macos:
+    name: infra-agent (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: agents/infra
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agents/infra/go.mod
+          cache-dependency-path: agents/infra/go.sum
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...
+      - name: build and smoke test (-version, -once, -validate-rules)
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/openlog-infra-agent" ./cmd/openlog-infra-agent
+          "$RUNNER_TEMP/openlog-infra-agent" -version
+          "$RUNNER_TEMP/openlog-infra-agent" -once > "$RUNNER_TEMP/once.json"
+          python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); assert "metrics" in d, "no metrics key"' "$RUNNER_TEMP/once.json"
+          "$RUNNER_TEMP/openlog-infra-agent" -validate-rules
+
+  infra-agent-windows:
+    name: infra-agent (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: agents/infra
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agents/infra/go.mod
+          cache-dependency-path: agents/infra/go.sum
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test ./...
+      - name: build and smoke test (-version, -once, -validate-rules)
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe'
+          go build -trimpath -o $exe ./cmd/openlog-infra-agent
+          if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+          & $exe -version
+          if ($LASTEXITCODE -ne 0) { throw "-version failed" }
+          $once = & $exe -once
+          if ($LASTEXITCODE -ne 0) { throw "-once failed" }
+          $snapshot = ($once -join "`n") | ConvertFrom-Json
+          if ($null -eq $snapshot.metrics) { throw "-once output has no metrics key" }
+          & $exe -validate-rules
+          if ($LASTEXITCODE -ne 0) { throw "-validate-rules failed" }
+      - name: zip archive (openlog-release archive)
+        if: hashFiles('agents/infra/packaging/windows/build-msi.ps1') != ''
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = '0.0.${{ github.run_number }}'
+          $name = "openlog-infra-agent_${v}_windows_amd64"
+          $stage = Join-Path $env:RUNNER_TEMP "stage/$name"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe') $stage
+          Copy-Item agents/infra/LICENSE, agents/infra/README.md $stage
+          Copy-Item -Recurse agents/infra/packaging (Join-Path $stage 'packaging')
+          go run ./cmd/openlog-release archive --out (Join-Path $env:RUNNER_TEMP "$name.zip") --prefix $name $stage
+          if ($LASTEXITCODE -ne 0) { throw "archive failed" }
+      - name: MSI build and install test
+        if: hashFiles('agents/infra/packaging/windows/build-msi.ps1') != ''
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = '0.0.${{ github.run_number }}'
+          $name = "openlog-infra-agent_${v}_windows_amd64"
+          $msi = Join-Path $env:RUNNER_TEMP "$name.msi"
+          ./agents/infra/packaging/windows/build-msi.ps1 -Version $v -Arch amd64 `
+            -Exe (Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe') -SourceDir (Join-Path $env:RUNNER_TEMP "stage/$name") -Out $msi
+          ./agents/infra/packaging/windows/test-install.ps1 -Msi $msi -Zip (Join-Path $env:RUNNER_TEMP "$name.zip") -Version $v
 
   go-agent:
     name: go (agents/go + instrumentation modules)
@@ -450,6 +538,9 @@ jobs:
           grep -q '"name": "openlog-javaagent-'"$DRYRUN_VERSION"'.jar"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "java-agent jar missing from the manifest"; exit 1; }
           for c in node-agent python-agent dotnet-agent; do
             grep -q '"component": "'"$c"'"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "$c package missing from the manifest"; exit 1; }
+          done
+          for a in darwin_amd64.tar.gz darwin_arm64.tar.gz windows_amd64.zip windows_arm64.zip; do
+            grep -q '"name": "openlog-infra-agent_'"${DRYRUN_VERSION}_$a"'"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "infra agent $a missing from the manifest"; exit 1; }
           done
       - name: PHP agent deb/apk install
         run: agents/php/packaging/test.sh "dist/v$DRYRUN_VERSION" "$DRYRUN_VERSION" deb apk

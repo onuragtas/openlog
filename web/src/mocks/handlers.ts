@@ -12,8 +12,10 @@ import { dashboardHandlers } from "./dashboards";
 import { dashboardSharingHandlers } from "./dashboardSharing";
 import { oqlHandlers } from "./oql";
 import { usageHandlers } from "./usage";
+import { operatorHandlers } from "./operator";
 import { ssoHandlers } from "./sso";
 import { onboardingHandlers, onboardingHosts } from "./onboarding";
+import { privacyHandlers } from "./privacy";
 import * as fx from "./fixtures";
 
 type ErrorCode = "invalid_argument" | "unauthenticated" | "not_found" | "internal" | "timeout";
@@ -295,8 +297,10 @@ export const handlers = [
   ...dashboardSharingHandlers, // before dashboardHandlers: /dashboards/settings is not /dashboards/:id
   ...dashboardHandlers,
   ...usageHandlers,
+  ...operatorHandlers, // mocks/operator.ts: operator console, SaaS state, support access
   ...ssoHandlers,
   ...onboardingHandlers,
+  ...privacyHandlers, // mocks/privacy.ts: data exports, deletion, status page (D-107, D-108)
 
   http.all(`${API}/*`, () => apiError("not_found", "no such endpoint")),
 ];

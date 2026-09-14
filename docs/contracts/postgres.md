@@ -545,6 +545,116 @@ PK `(table_name, partition_id, tenants_hash)`: ClickHouse `ALTER … DELETE IN P
 per-tenant retention job (`retention_days`, `tenants`, `submitted_at`); not re-submitted for the same tenant set within
 24 h; rows older than 30 days are pruned.
 
+## SaaS operations (`0065_saas_operator`)
+
+Operator console, organization lifecycle, support access, abuse flags and hard host limits (D-105, D-106,
+[saas.md](../operations/saas.md) §8–§11). All tables cascade with their organization. Older binaries ignore them.
+
+### `org_saas_state`
+PK `org_id`; no row = active, no trial, no support access. Suspension: `suspended_at`, `suspended_by`, `suspend_reason`
+(read by every ingest pod every `OPENLOG_QUOTA_REFRESH_INTERVAL` and every api pod every 15 s). Trial: `trial_plan_id`,
+`trial_started_at`, `trial_ends_at`, `trial_ended_at` (set by the leader when it assigns the fallback plan; partial index
+on running trials). Support access granted by an owner: `support_access_until`, `support_access_granted_by`,
+`support_access_granted_at`. `updated_at`.
+
+### `trial_notifications`
+PK `(org_id, trial_ends_at, days_left)`: claim of one trial e-mail per step (`days_left` 7/3/1, `0` = ended); released
+when no e-mail could be sent. Extending a trial changes `trial_ends_at`, so reminders are sent again for the new end.
+
+### `support_sessions`
+`id`, `org_id`, `operator_user_id`, `operator_email`, `auth_session_id` (the operator's `sessions` row, cascade: signing
+out ends the support view), `reason`, `started_at`, `expires_at`, `ended_at`. Index `(org_id, started_at DESC)`.
+
+### `abuse_flags`
+`id` identity, `org_id`, `kind` (`ingest_spike`, `new_org_hosts`, `ingest_source_ips`), `status`
+(`open`/`dismissed`/`actioned`), `details` jsonb, `occurrences`, `first_seen_at`, `last_seen_at`, `auto_suspended`,
+`resolved_by`, `resolved_by_email`, `resolved_at`, `resolution_note`. Unique partial index: one open flag per
+`(org_id, kind)` — the detector refreshes it instead of adding rows.
+
+### `tenant_host_limits`, `tenant_known_hosts`
+Written by the api leader (`OPENLOG_SAAS_HOST_SYNC_INTERVAL`) for tenants whose effective plan limits hosts:
+`tenant_host_limits` (PK `tenant_id` → `organizations.tenant_id`): `host_limit`, `active_hosts`, `evaluated_at` (rows older
+than an hour are not enforced); `tenant_known_hosts` (PK `(tenant_id, host_id)`): `last_seen` date of hosts active
+today or yesterday (older rows deleted). Ingest pods load both.
+
+### `ingest_source_counts`
+PK `(tenant_id, hour, instance)`: `distinct_ips` — the number of distinct client addresses of authenticated OTLP requests
+per ingest instance and hour (addresses themselves are never stored), `updated_at`. Read by the abuse detector (max over
+instances); rows older than 48 hours are deleted.
+
+## Data subject requests (`0070_data_subject_requests`)
+
+Data exports, organization soft deletion and hard deletion bookkeeping, deletion certificates (D-107,
+[saas.md](../operations/saas.md) §12).
+
+### `organizations.deleted_at`
+Set when an owner or operator schedules the organization's deletion, cleared by a cancellation. While set, the store
+hides the organization from memberships (sessions lose access on the next request), API keys of the organization do not
+authenticate, license keys are not found by ingest, alert rules are not claimed for evaluation and scheduled reports
+are not sent. Partial index on non-null values.
+
+### `data_exports`
+Export jobs. `kind` `organization` (owners; `org_id` cascade, `user_id` = requester, SET NULL) or `user` (personal;
+`user_id` = subject). `status` `pending` → `running` → `completed` | `failed`; `completed` → `expired` when `expires_at`
+passes (the archive is deleted, `object_key` and `download_token_hash` cleared). `signals` (`logs`, `traces`,
+`metrics`), `range_from`/`range_to`, `locale` (e-mail), `storage` (`local`/`s3`), `object_key`
+(`exports/<kind>/<org or user id>/<id>.zip`), `size_bytes`, `telemetry_rows`, `truncated`, `manifest` jsonb (the
+archive's manifest.json), `download_token_hash` (sha256 of the e-mailed link token, unique), `attempts`, `error`
+(safe for the requester), `created_at`, `started_at`, `heartbeat_at`, `completed_at`, `expires_at`. The api leader
+claims the oldest pending row with `FOR UPDATE SKIP LOCKED`; a running row without a heartbeat for 5 minutes is retried
+(3 attempts). Creation is serialized per organization/user with `pg_advisory_xact_lock(hashtext('data_export:…'))`:
+one pending or running export at a time and at most 5 per 24 hours. Failed and expired rows are pruned after 90 days.
+
+### `org_deletions`
+One row per scheduling: `org_id` (SET NULL once the organization is gone), `tenant_id`, `status` `scheduled` →
+`cancelled` | `deleting` → `completed`, `initiator` (`owner`/`operator`), `reason` (operators), `requested_by`,
+`requested_by_email`, `notify` jsonb (organization name and owner addresses for the completion e-mail),
+`revoked_license_key_ids` / `revoked_scim_token_ids` (keys revoked by the scheduling and restored by a cancellation),
+`requested_at`, `purge_after` (= requested_at + grace), `cancelled_at`, `started_at`, `completed_at`, `progress` jsonb
+(ClickHouse row counts before, submitted mutations per table and partition, remaining rows, `verified`), `attempts`,
+`last_error`, `certificate_id`. Unique partial index: one `scheduled`/`deleting` row per organization. When a deletion
+completes, `requested_by`, `requested_by_email`, `reason` and `notify` are cleared. A deletion becomes `deleting` (no
+longer cancellable) when the leader starts it after `purge_after`.
+
+### `deletion_certificates`
+Proof of a completed hard deletion without personal data, kept indefinitely: `subject_type` (`organization`/`user`),
+`subject_hash` (hex sha256 of the tenant id or user id), `initiator` (`owner`/`operator`/`self`), `requested_at`,
+`grace_ended_at`, `started_at`, `completed_at`, `postgres_rows` jsonb (rows deleted or pseudonymized per table; for
+organizations also `users_deleted`: accounts left without any organization), `clickhouse_rows` jsonb (the tenant's rows
+per ClickHouse table before deletion), `verified` (every ClickHouse table re-counted with zero rows). Listed by
+superadmins (`GET /api/v1/admin/deletion-certificates`).
+
+### Account deletion
+`DELETE`s the `users` row in one transaction (cascade: memberships, sessions, `sso_sessions`, `sso_login_states`,
+`email_verifications`, `scim_users`, `scim_group_members`), deletes `invitations` to the address, API keys the user
+created and personal `data_exports`, removes the address from `dashboard_reports.recipients` (reports left without
+recipients are disabled) and `sso_domains.email_address`, and replaces the user in retained records with a random
+stable pseudonym `deleted-user-<10 hex>`: `audit_log` (`actor_email`, `actor_user_id` NULL, `ip` cleared, `target_id`
+of `user` targets, occurrences of the address and id inside `details`), `alert_incident_events.actor_email`,
+`apm_error_group_comments.author_email`, `update_requests.requested_by_email`, `org_deletions.requested_by_email`.
+Refused while the user is the only owner of an organization that is not scheduled for deletion.
+
+## Status page (`0071_status_page`)
+
+Public status page data (D-108); no tenant data.
+
+### `status_incidents`
+`kind` (`incident`/`maintenance`), `title`, `status` (incident: `investigating`, `identified`, `monitoring`,
+`resolved`; maintenance: `scheduled`, `in_progress`, `completed`), `impact` (`none`, `minor`, `major`, `critical`),
+`components` text[] (`ingest`, `query_api`, `alerting`, `processing`), `starts_at`, `ends_at` (maintenance end or
+resolution time, set on `resolved`/`completed`), `created_by` (SET NULL), `created_at`, `updated_at`. Written by
+superadmins (audit actions `status.incident_create`, `status.incident_update`, `status.incident_delete` with
+`org_id NULL`).
+
+### `status_incident_updates`
+Timeline entries: `incident_id` (cascade), `status`, `message` (1–5000 characters), `created_at`.
+
+### `status_checks_daily`
+PK `(component, day)`: `checks`, `operational` (operational or under maintenance), `degraded`, `outage` (partial or
+major outage). The api leader adds one check per component per minute; uptime = `(checks - outage) / checks`. Rows
+older than 400 days are pruned. The latest snapshot is the `system_state` document `status_page`
+(`checked_at`, `components`, `processing_lag_seconds`).
+
 ## Sizing and operations
 
 - Connections: every ingest and api pod opens a pool of at most `OPENLOG_POSTGRES_MAX_CONNS` (default 10).

@@ -38,7 +38,7 @@ const (
 	NameUsage              = "usage"
 )
 
-var names = []string{NameInvitation, NameVerification, NameDomainVerification, NameUsage}
+var names = []string{NameInvitation, NameVerification, NameDomainVerification, NameUsage, NameTrial}
 
 // Normalize maps a stored or requested locale ("tr", "tr-TR", "EN") to a supported language, English otherwise.
 func Normalize(locale string) string {

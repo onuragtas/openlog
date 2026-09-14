@@ -231,7 +231,7 @@ func (s *Store) GetMembership(ctx context.Context, orgID, userID string) (auth.M
 	var role string
 	err := s.pool.QueryRow(ctx, `SELECT o.id::text, o.tenant_id, o.name, o.created_at, m.role, m.created_at
 		FROM memberships m JOIN organizations o ON o.id = m.org_id
-		WHERE m.org_id = $1 AND m.user_id = $2`, orgID, userID).
+		WHERE m.org_id = $1 AND m.user_id = $2 AND o.deleted_at IS NULL`, orgID, userID). // scheduled for deletion: no access (0070, D-107)
 		Scan(&m.Org.ID, &m.Org.TenantID, &m.Org.Name, &m.Org.CreatedAt, &role, &m.CreatedAt)
 	m.Role = auth.Role(role)
 	return m, mapErr(err)
@@ -243,7 +243,7 @@ func (s *Store) ListMemberships(ctx context.Context, userID string) ([]auth.Memb
 	}
 	rows, err := s.pool.Query(ctx, `SELECT o.id::text, o.tenant_id, o.name, o.created_at, m.role, m.created_at
 		FROM memberships m JOIN organizations o ON o.id = m.org_id
-		WHERE m.user_id = $1 ORDER BY m.created_at, o.name`, userID)
+		WHERE m.user_id = $1 AND o.deleted_at IS NULL ORDER BY m.created_at, o.name`, userID) // D-107
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +508,7 @@ func (s *Store) LookupLicenseKey(ctx context.Context, hashes [][]byte) (tenant.K
 	}
 	err := s.pool.QueryRow(ctx, `WITH hit AS (
 			SELECT k.id, k.key_hash, o.tenant_id FROM license_keys k JOIN organizations o ON o.id = k.org_id
-			WHERE k.key_hash = ANY($1::bytea[]) AND k.revoked_at IS NULL
+			WHERE k.key_hash = ANY($1::bytea[]) AND k.revoked_at IS NULL AND o.deleted_at IS NULL
 			ORDER BY array_position($1::bytea[], k.key_hash) LIMIT 1
 		), rehash AS (
 			UPDATE license_keys l SET key_hash = $2 FROM hit
@@ -613,7 +613,7 @@ func (s *Store) LookupAPIKey(ctx context.Context, hashes [][]byte) (auth.APIKey,
 			  AND NOT EXISTS (SELECT 1 FROM api_keys x WHERE x.key_hash = $2)
 		)
 		SELECT `+apiKeyCols+`, o.id::text, o.tenant_id, o.name, o.created_at
-		FROM api_keys k JOIN hit ON hit.id = k.id JOIN organizations o ON o.id = k.org_id`, hashes, hashes[0]),
+		FROM api_keys k JOIN hit ON hit.id = k.id JOIN organizations o ON o.id = k.org_id AND o.deleted_at IS NULL`, hashes, hashes[0]),
 		&o.ID, &o.TenantID, &o.Name, &o.CreatedAt)
 	return k, o, mapErr(err)
 }

@@ -181,7 +181,8 @@ func (s *PGStore) MemberEmails(ctx context.Context, orgID string) ([]string, err
 func (s *PGStore) EnabledReports(ctx context.Context, limit int) ([]ScheduledReport, error) {
 	rows, err := s.pool.Query(ctx, reportSelect+`, o.tenant_id`+reportFrom+`
 		JOIN organizations o ON o.id = r.org_id
-		WHERE r.enabled ORDER BY r.id LIMIT $1`, limit)
+		WHERE r.enabled AND NOT EXISTS (SELECT 1 FROM organizations o WHERE o.id = r.org_id AND o.deleted_at IS NOT NULL) -- D-107
+		ORDER BY r.id LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}

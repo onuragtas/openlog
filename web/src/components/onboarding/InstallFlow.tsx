@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, BookOpen, Check, Eye, EyeOff } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { baselineQuery, type Onboarding } from "@/api/onboarding";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ export function InstallFlow({
   intervalMs?: number;
   timeoutMs?: number;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState(0);
   const [startedAt] = useState(() => Date.now());
   const [keyChoice, setKeyChoice] = useState<KeyChoice>(() => initialKeyChoice(onboarding.features.can_create_license_keys));
@@ -48,7 +48,10 @@ export function InstallFlow({
   useQuery({ ...baselineQuery(baselineKind ?? "host", startedAt), enabled: baselineKind !== null });
 
   const commands = useMemo(() => buildInstallCommands(target.id, { ...options, licenseKey }, onboarding), [target.id, options, licenseKey, onboarding]);
-  const required = target.requires ? findTarget(target.requires) : undefined;
+  const required = (target.requires ?? []).map((r) => findTarget(r)).filter((r): r is InstallTarget => !!r);
+  const requiredNames = new Intl.ListFormat(i18n.resolvedLanguage ?? "en", { type: "disjunction" }).format(
+    required.map((r) => tDynamic(t, `addData.targets.${r.id}.title`)),
+  );
   const stepTitle = (i: number) => tDynamic(t, `addData.steps.${STEPS[i]}`);
   const reachable = (i: number) => i === 0 || ready;
   const endpoints = [
@@ -100,12 +103,17 @@ export function InstallFlow({
 
         {step === 2 && (
           <>
-            {required && (
+            {required.length > 0 && (
               <p className="rounded-lg border bg-muted/40 p-3 text-sm">
-                {t("addData.install.requires", { name: tDynamic(t, `addData.targets.${required.id}.title`) })}{" "}
-                <Link to="/add-data/$" params={{ _splat: required.id }} className="text-primary hover:underline">
-                  {tDynamic(t, `addData.targets.${required.id}.title`)}
-                </Link>
+                {t("addData.install.requires", { name: requiredNames })}{" "}
+                {required.map((r, i) => (
+                  <Fragment key={r.id}>
+                    {i > 0 && " · "}
+                    <Link to="/add-data/$" params={{ _splat: r.id }} className="text-primary hover:underline">
+                      {tDynamic(t, `addData.targets.${r.id}.title`)}
+                    </Link>
+                  </Fragment>
+                ))}
               </p>
             )}
             {needsKey && (

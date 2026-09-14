@@ -1,0 +1,32 @@
+name: macOS host with Homebrew services (D-104)
+platform: darwin
+processes:
+  - { pid: 501, exe: /opt/homebrew/Cellar/nginx/1.27.4/bin/nginx, cmdline: "nginx: master process /opt/homebrew/opt/nginx/bin/nginx -g daemon off;" }
+  - { pid: 502, ppid: 501, exe: /opt/homebrew/Cellar/nginx/1.27.4/bin/nginx, cmdline: "nginx: worker process" }
+  - { pid: 610, exe: /opt/homebrew/Cellar/redis/7.2.7/bin/redis-server, cmdline: "/opt/homebrew/opt/redis/bin/redis-server 127.0.0.1:6379" }
+  - { pid: 700, exe: /opt/homebrew/Cellar/postgresql@16/16.8/bin/postgres, cmdline: "/opt/homebrew/opt/postgresql@16/bin/postgres -D /opt/homebrew/var/postgresql@16" }
+services:
+  - { manager: launchd, name: homebrew.mxcl.nginx, pid: 501 }
+  - { manager: launchd, name: homebrew.mxcl.redis, pid: 610 }
+  - { manager: launchd, name: homebrew.mxcl.postgresql@16, pid: 700 }
+  - { manager: launchd, name: com.apple.sshd }
+ports:
+  - { address: 0.0.0.0, port: 8080, pid: 501 }
+  - { address: 127.0.0.1, port: 6379, pid: 610 }
+  - { address: 127.0.0.1, port: 5432, pid: 700 }
+packages:
+  - { manager: homebrew, name: nginx, version: 1.27.4 }
+  - { manager: homebrew, name: redis, version: 7.2.7 }
+  - { manager: homebrew, name: postgresql@16, version: "16.8" }
+expect:
+  - rule_id: nginx
+    instance: /opt/homebrew/Cellar/nginx/1.27.4/bin/nginx
+    version: 1.27.4
+    pids: [501, 502]
+    ports: [8080]
+    services: [homebrew.mxcl.nginx]
+    matched_by: [process, service, package]
+    log_paths: ["/var/log/nginx/*.log", "/opt/homebrew/var/log/nginx/*.log", "/usr/local/var/log/nginx/*.log"]
+  - { rule_id: redis, instance: /opt/homebrew/Cellar/redis/7.2.7/bin/redis-server, version: 7.2.7, ports: [6379], services: [homebrew.mxcl.redis] }
+  - { rule_id: postgresql, instance: /opt/homebrew/Cellar/postgresql@16/16.8/bin/postgres, services: [homebrew.mxcl.postgresql@16], ports: [5432] }
+forbid: [mysql, mariadb, iis, mssql, sshd]

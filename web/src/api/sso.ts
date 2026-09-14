@@ -313,5 +313,6 @@ export const SSO_ERROR_CODES = [
   "deprovisioned",
   "account_disabled",
   "unavailable",
+  "user_limit",
 ] as const;
 export type SsoErrorCode = (typeof SSO_ERROR_CODES)[number];

@@ -1,3 +1,7 @@
+// POSIX ownership, modes, FIFOs and unix sockets; Windows has its own trust model (D-104).
+
+//go:build !windows
+
 package update
 
 import (

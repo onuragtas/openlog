@@ -7,13 +7,13 @@ import (
 )
 
 func TestPHPForwarderConfig(t *testing.T) {
-	d := Default().PHPForwarder
+	d := DefaultFor("linux").PHPForwarder
 	if d.Enabled != nil || d.Socket != DefaultPHPSocket || d.SocketGroup != "auto" || d.Mode() != 0o660 ||
 		d.MaxPendingTraces != 10000 || d.ReassemblyTimeout.D() != 5*time.Second || d.UDPListen != "" {
 		t.Errorf("defaults = %+v", d)
 	}
 
-	cfg := Default()
+	cfg := DefaultFor("linux")
 	if err := Parse([]byte("php_forwarder:\n  enabled: false\n  socket_mode: \"0666\"\n  udp_listen: 127.0.0.1:18127\n"), cfg); err != nil {
 		t.Fatal(err)
 	}

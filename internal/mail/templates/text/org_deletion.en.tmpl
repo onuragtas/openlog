@@ -1,0 +1,10 @@
+{{define "subject"}}[openlog] {{if eq .Stage "scheduled"}}Organization {{.OrgName}} is scheduled for deletion{{else if eq .Stage "cancelled"}}Deletion of {{.OrgName}} was cancelled{{else}}Organization {{.OrgName}} has been deleted{{end}}{{end}}
+
+{{define "text"}}
+{{if eq .Stage "scheduled"}}{{if .Operator}}An openlog operator scheduled organization "{{.OrgName}}" for deletion.{{else}}An owner scheduled organization "{{.OrgName}}" for deletion.{{end}} Members can no longer sign in to it and its license and API keys stop working now.
+
+All of its data (members, dashboards, alerts, keys, audit log and telemetry) will be deleted permanently after {{date .PurgeAt}}.{{if not .Operator}} Until then an owner can cancel the deletion under Settings → Profile.{{end}}{{else if eq .Stage "cancelled"}}The deletion of organization "{{.OrgName}}" was cancelled. Members can sign in again and its license keys work again.{{else}}Organization "{{.OrgName}}" and all of its data have been deleted permanently. A deletion certificate without personal data is kept as proof.{{end}}
+{{with .Link}}
+{{.}}
+{{end}}
+{{end}}

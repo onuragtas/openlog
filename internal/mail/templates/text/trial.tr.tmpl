@@ -1,0 +1,10 @@
+{{define "subject"}}[openlog] {{.OrgName}}: {{if .Ended}}{{.PlanName}} deneme süreniz sona erdi{{else}}{{.PlanName}} deneme sürenizin bitmesine {{.DaysLeft}} gün kaldı{{end}}{{end}}
+
+{{define "text"}}
+{{if .Ended}}"{{.OrgName}}" ({{.TenantID}}) organizasyonunun {{.PlanName}} deneme süresi {{date .EndsAt}} tarihinde sona erdi. Organizasyon artık {{.FallbackPlanName}} planını kullanıyor ve bu planın limitleri geçerli.{{else}}"{{.OrgName}}" ({{.TenantID}}) organizasyonunun {{.PlanName}} deneme süresi {{date .EndsAt}} tarihinde bitiyor. Ardından organizasyon {{.FallbackPlanName}} planına geçer ve bu planın limitleri uygulanır.{{end}}
+
+{{.PlanName}} planında kalmak için openlog destek ekibiyle iletişime geçin veya planınızı yükseltin.
+{{with .Link}}
+Plan ve kullanım: {{.}}
+{{end}}
+{{end}}

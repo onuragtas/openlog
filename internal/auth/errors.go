@@ -15,6 +15,8 @@ const (
 	CodeFailedPrecondition Code = "failed_precondition"
 	CodeResourceExhausted  Code = "resource_exhausted"
 	CodeUnavailable        Code = "unavailable"
+	// CodeQuotaExceeded: a plan limit (e.g. users in SaaS mode) forbids the operation (HTTP 403).
+	CodeQuotaExceeded Code = "quota_exceeded"
 )
 
 // Error is an auth error with a code and a message that is safe to show to

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -283,6 +284,7 @@ func (c *IntegrationsConfig) validate() []error {
 // Warnings returns non-fatal configuration findings (e.g. literal passwords).
 func (c *Config) Warnings() []string {
 	var out []string
+	out = append(out, c.platformWarnings(runtime.GOOS)...)
 	for _, id := range IntegrationIDs {
 		ic := c.Integrations.Integration(id)
 		if ic.Password.IsLiteral() {

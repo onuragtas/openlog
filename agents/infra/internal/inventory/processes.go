@@ -1,7 +1,6 @@
 package inventory
 
 import (
-	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -44,10 +43,10 @@ func (p ProcessInstance) Key() string {
 // and comm when the exe link is unreadable.
 func (p ProcessInstance) ExeBasename() string {
 	if p.Exe != "" {
-		return path.Base(p.Exe)
+		return baseName(p.Exe)
 	}
 	if argv0, _, _ := strings.Cut(p.Cmdline, " "); argv0 != "" && !strings.HasSuffix(argv0, ":") {
-		return path.Base(argv0)
+		return baseName(argv0)
 	}
 	return p.Comm
 }
@@ -63,10 +62,10 @@ func (p ProcessInstance) Names() []string {
 		}
 	}
 	if p.Exe != "" {
-		add(path.Base(p.Exe))
+		add(baseName(p.Exe))
 	}
 	if argv0, _, _ := strings.Cut(p.Cmdline, " "); argv0 != "" && !strings.HasSuffix(argv0, ":") {
-		add(path.Base(argv0))
+		add(baseName(argv0))
 	}
 	add(p.Comm)
 	return names
@@ -79,7 +78,7 @@ func (p ProcessInstance) Names() []string {
 func (p ProcessInstance) Command() string {
 	argv0, _, _ := strings.Cut(strings.TrimSpace(p.Cmdline), " ")
 	argv0 = strings.TrimLeft(strings.TrimSuffix(argv0, ":"), "-")
-	if b := path.Base(argv0); argv0 != "" && b != "." && b != "/" {
+	if b := baseName(argv0); argv0 != "" && b != "." && b != "/" {
 		return b
 	}
 	return p.Comm

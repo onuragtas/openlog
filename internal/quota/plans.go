@@ -65,6 +65,18 @@ type Plan struct {
 	Enforcement Enforcement `json:"enforcement"`
 	// Billing holds provider-specific identifiers, e.g. {"price_id": "..."}; opaque to openlog.
 	Billing map[string]string `json:"billing,omitempty"`
+	// TrialDays > 0 allows trials of this plan (SaaS mode, D-106); TrialFallbackPlan is the plan an organization
+	// moves to when the trial ends (empty = the catalog default).
+	TrialDays         int    `json:"trial_days,omitempty"`
+	TrialFallbackPlan string `json:"trial_fallback_plan,omitempty"`
+}
+
+// TrialFallback returns the plan an organization on a trial of p moves to afterwards.
+func (c *Catalog) TrialFallback(p Plan) string {
+	if p.TrialFallbackPlan != "" {
+		return p.TrialFallbackPlan
+	}
+	return c.Default
 }
 
 // Catalog is the parsed plan configuration.
@@ -129,6 +141,19 @@ func ParseCatalog(doc, defaultPlan string) (*Catalog, error) {
 	}
 	if _, ok := c.byID[c.Default]; !ok {
 		return nil, fmt.Errorf("plan catalog: default plan %q is not defined", c.Default)
+	}
+	for _, p := range c.Plans {
+		if p.TrialDays < 0 || p.TrialDays > 365 {
+			return nil, fmt.Errorf("plan catalog: plan %s: trial_days must be between 0 and 365", p.ID)
+		}
+		if fb := c.TrialFallback(p); p.TrialDays > 0 || p.TrialFallbackPlan != "" {
+			if _, ok := c.byID[fb]; !ok {
+				return nil, fmt.Errorf("plan catalog: plan %s: trial_fallback_plan %q is not defined", p.ID, fb)
+			}
+			if fb == p.ID {
+				return nil, fmt.Errorf("plan catalog: plan %s: the trial fallback must be another plan (set trial_fallback_plan)", p.ID)
+			}
+		}
 	}
 	return c, nil
 }

@@ -14,6 +14,31 @@ Decisions: D-079 (metering), D-080 (plans and quotas), D-081 (per-tenant retenti
 | Ingest 429 over the monthly quota, ingest rate limits (§4.4) | **off** | on (plans with `hard_ingest_limit`, `ingest_bytes_per_second`) |
 | Per-tenant retention (§5) | off (`OPENLOG_QUOTA_RETENTION_ENABLED` can enable it) | on by default |
 | Billing provider push/webhooks (§8) | `OPENLOG_BILLING_PROVIDER` | `OPENLOG_BILLING_PROVIDER` |
+| Hard host limit (new hosts beyond `limits.hosts` rejected, §4.6) | **off** (warning only) | on |
+| Users limit on invitations, SSO JIT and SCIM (§4.6) | **off** (warning only) | on |
+| Suspension, trials, abuse flags (§4.7) | **off** (operator console read-only views work) | on |
+
+### 4.6 Hard host and user limits (D-105)
+
+In SaaS mode the hosts and users metrics of §4 are enforced, not only warned about:
+
+- **Hosts**: the window is the one of the hosts metric — hosts that reported today or yesterday (`usage_entities_1d`).
+  Hosts in that window keep reporting even above the limit (after a downgrade). A `host.id` not seen yet is admitted
+  while the known hosts plus the hosts newly admitted by the ingest pod are below the limit, otherwise its resources are
+  rejected (`429 quota_exceeded`, or OTLP partial success when the request also carries admitted hosts; api.md "Ingest:
+  suspended organization and host limit"). Data without `host.id` (APM services without a host) is not limited. The
+  known host list is refreshed by the api leader every `OPENLOG_SAAS_HOST_SYNC_INTERVAL`; between refreshes several
+  ingest pods can each admit up to the remaining room, so the limit can be exceeded by at most (pods − 1) × room for one
+  interval. Fail open like §4.4 when PostgreSQL is unreachable for more than 15 minutes.
+- **Users**: members (enabled users) plus pending, unexpired invitations may not exceed `limits.users` when an invitation
+  is created; accepting an invitation, SSO just-in-time provisioning and SCIM need members < limit. Rejections are
+  `403 quota_exceeded`.
+
+### 4.7 Lifecycle (D-106)
+
+Plans may define `trial_days` and `trial_fallback_plan` (§4.1 catalog fields; the fallback defaults to the catalog
+default and must differ from the plan). Trials, suspension, support access and abuse flags are described in
+[saas.md](../operations/saas.md) §8–§11.
 
 SaaS mode requires `OPENLOG_AUTH_MODE=postgres`. In static auth mode only the usage read endpoints work (no plans in
 PostgreSQL, no leader jobs except query collection).

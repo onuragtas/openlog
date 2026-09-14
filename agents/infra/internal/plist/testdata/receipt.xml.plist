@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PackageIdentifier</key>
+	<string>org.openlog.infra-agent</string>
+	<key>PackageVersion</key>
+	<string>1.2.3</string>
+	<key>InstallDate</key>
+	<date>2026-09-14T10:00:00Z</date>
+	<key>InstallPrefixPath</key>
+	<string>/</string>
+	<key>Size</key>
+	<integer>123456789</integer>
+	<key>Ratio</key>
+	<real>0.25</real>
+	<key>Signed</key>
+	<true/>
+	<key>Beta</key>
+	<false/>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/openlog/infra-agent/current/openlog-infra-agent</string>
+		<string>-config</string>
+	</array>
+	<key>Blob</key>
+	<data>aGVsbG8=</data>
+	<key>Unicode</key>
+	<string>Grüße 👋</string>
+</dict>
+</plist>

@@ -400,5 +400,10 @@ func upgradableFrom(r *catalog.Release, cur lib.Version) bool {
 }
 
 func agentArtifact(r *catalog.Release, h HostReport) (lib.Artifact, bool) {
-	return r.Manifest.Artifact(lib.ComponentInfraAgent, h.OS, h.Arch, lib.FormatTarGz)
+	// Windows agents update from the zip archive; Linux and macOS from the tar.gz.
+	format := lib.FormatTarGz
+	if h.OS == "windows" {
+		format = lib.FormatZip
+	}
+	return r.Manifest.Artifact(lib.ComponentInfraAgent, h.OS, h.Arch, format)
 }

@@ -49,7 +49,7 @@ func newApplyEnv(t *testing.T) *applyEnv {
 		*p = path
 	}
 	e.host = newFakeHost(e.root, e.fpm, e.cli)
-	e.cfg = config.Default().PHPAgent
+	e.cfg = config.DefaultFor("linux").PHPAgent // the PHP agent installer is Linux-only
 	e.cfg.InstallRoot = e.root
 	return e
 }

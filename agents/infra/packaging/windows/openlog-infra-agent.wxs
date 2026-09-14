@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  openlog infrastructure agent MSI (WiX Toolset v5, per-machine, x64). Build with build-msi.ps1:
+
+    wix build -arch x64 -ext WixToolset.Util.wixext/5.0.2 openlog-infra-agent.wxs -o openlog-infra-agent_<v>_windows_amd64.msi
+      -d Version=<semver>        release version, names versions\<Version>\ (e.g. 0.5.0-beta.1)
+      -d MsiVersion=<x.y.z>      numeric ProductVersion; defaults to Version, which then must be numeric.
+                                 Windows Installer only accepts major.minor.build (255.255.65535), so a
+                                 pre-release suffix is stripped (0.5.0-beta.1 -> 0.5.0). Same-version
+                                 upgrades are allowed, so 0.5.0 replaces 0.5.0-beta.1.
+      -d Exe=<path>              openlog-infra-agent.exe
+      -d SourceDir=<dir>         extracted release top dir (LICENSE, README.md, packaging\config.example.yaml)
+
+  Properties: LICENSE_KEY (hidden from the log), ENDPOINT. msiexec /i openlog.msi /qn LICENSE_KEY=... ENDPOINT=https://...
+
+  Layout (same as scripts/install.ps1): [ProgramFiles64Folder]openlog\infra-agent\versions\<Version>\ holds the
+  files; the agent itself points current -> versions\<v> (-reconcile -reconcile-context package, which keeps a newer
+  self-updated version), registers the service openlog-infra-agent and secures [CommonAppDataFolder]openlog\infra-agent.
+  The MSI cannot contain the release manifest.json (the manifest lists the MSI's own sha256).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?ifndef Version?>
+    <?error Pass -d Version=<semver>?>
+  <?endif?>
+  <?ifndef MsiVersion?>
+    <?define MsiVersion = $(var.Version)?>
+  <?endif?>
+  <?ifndef Exe?>
+    <?error Pass -d Exe=<path to openlog-infra-agent.exe>?>
+  <?endif?>
+  <?ifndef SourceDir?>
+    <?error Pass -d SourceDir=<extracted release directory>?>
+  <?endif?>
+
+  <?define ConfigPath = "[CommonAppDataFolder]openlog\infra-agent\config.yaml"?>
+  <?define UtilCA = "Wix4UtilCA_$(sys.BUILDARCHSHORTNAME)"?>
+
+  <Package Name="openlog infrastructure agent"
+           Manufacturer="openlog"
+           Version="$(var.MsiVersion)"
+           UpgradeCode="9459F040-8C6D-4673-B156-2D59DFF8057C"
+           Scope="perMachine"
+           Compressed="yes"
+           InstallerVersion="500"
+           Language="1033">
+
+    <SummaryInformation Description="openlog infrastructure agent $(var.Version)" Manufacturer="openlog" />
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer version of [ProductName] is already installed. Uninstall it first to install an older version." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/onuragtas/openlog" />
+
+    <!-- Public properties. LICENSE_KEY is hidden: Windows Installer masks it in logs. -->
+    <Property Id="LICENSE_KEY" Secure="yes" Hidden="yes" />
+    <Property Id="ENDPOINT" Secure="yes" />
+
+    <!-- Install root recorded by a previous install; used to remove self-updated versions and the current link. -->
+    <Property Id="OPENLOG_INSTALLROOT_REG">
+      <RegistrySearch Id="InstallRootSearch" Root="HKLM" Key="SOFTWARE\openlog\infra-agent" Name="InstallRoot" Type="raw" Bitness="always64" />
+    </Property>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="OPENLOGDIR" Name="openlog">
+        <Directory Id="INSTALLROOT" Name="infra-agent">
+          <Directory Id="VERSIONSDIR" Name="versions">
+            <Directory Id="VERSIONDIR" Name="$(var.Version)">
+              <Directory Id="PACKAGINGDIR" Name="packaging" />
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Agent" Title="openlog infrastructure agent" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="AgentComponents" />
+    </Feature>
+
+    <ComponentGroup Id="AgentComponents">
+      <Component Id="AgentExe" Directory="VERSIONDIR" Bitness="always64">
+        <File Id="AgentExe" Name="openlog-infra-agent.exe" Source="$(var.Exe)" KeyPath="yes" />
+        <!-- The service is created by the agent; Windows Installer only stops it before files are replaced or removed. -->
+        <ServiceControl Id="StopAgentService" Name="openlog-infra-agent" Stop="both" Wait="yes" />
+      </Component>
+      <Component Id="AgentLicense" Directory="VERSIONDIR" Bitness="always64">
+        <File Id="AgentLicense" Name="LICENSE" Source="$(var.SourceDir)\LICENSE" KeyPath="yes" />
+      </Component>
+      <Component Id="AgentReadme" Directory="VERSIONDIR" Bitness="always64">
+        <File Id="AgentReadme" Name="README.md" Source="$(var.SourceDir)\README.md" KeyPath="yes" />
+      </Component>
+      <Component Id="AgentConfigExample" Directory="PACKAGINGDIR" Bitness="always64">
+        <File Id="AgentConfigExample" Name="config.example.yaml" Source="$(var.SourceDir)\packaging\config.example.yaml" KeyPath="yes" />
+      </Component>
+      <Component Id="AgentRegistry" Directory="INSTALLROOT" Bitness="always64">
+        <RegistryKey Root="HKLM" Key="SOFTWARE\openlog\infra-agent">
+          <RegistryValue Name="InstallMethod" Type="string" Value="msi" KeyPath="yes" />
+          <RegistryValue Name="InstallRoot" Type="string" Value="[INSTALLROOT]" />
+        </RegistryKey>
+        <!-- Real uninstall only (the property is set below): removes current, current.* links and self-updated versions. -->
+        <util:RemoveFolderEx On="uninstall" Property="OPENLOG_REMOVE_ROOT" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- OPENLOG_REMOVE_ROOT is only set on a real uninstall, never while a major upgrade removes the old product. -->
+    <SetProperty Id="OPENLOG_REMOVE_ROOT" Value="[OPENLOG_INSTALLROOT_REG]" After="AppSearch" Sequence="execute"
+                 Condition="OPENLOG_INSTALLROOT_REG AND REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+
+    <!-- Deferred, non-impersonated (LocalSystem) actions. WixQuietExec logs the command's output. -->
+    <SetProperty Id="OpenlogConfigure" Sequence="execute" Before="OpenlogConfigure"
+                 Value="&quot;[#AgentExe]&quot; -configure -config &quot;$(var.ConfigPath)&quot;" />
+    <CustomAction Id="OpenlogConfigure" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="check" />
+
+    <!-- The license key never goes through a property that could be logged: a type 18 action with a hidden target. -->
+    <CustomAction Id="OpenlogConfigureLicenseKey" FileRef="AgentExe"
+                  ExeCommand="-configure -config &quot;$(var.ConfigPath)&quot; -license-key &quot;[LICENSE_KEY]&quot;"
+                  Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
+
+    <SetProperty Id="OpenlogConfigureEndpoint" Sequence="execute" Before="OpenlogConfigureEndpoint"
+                 Value="&quot;[#AgentExe]&quot; -configure -config &quot;$(var.ConfigPath)&quot; -endpoint &quot;[ENDPOINT]&quot;" />
+    <CustomAction Id="OpenlogConfigureEndpoint" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="check" />
+
+    <SetProperty Id="OpenlogReconcile" Sequence="execute" Before="OpenlogReconcile"
+                 Value="&quot;[#AgentExe]&quot; -reconcile -reconcile-context package -config &quot;$(var.ConfigPath)&quot;" />
+    <CustomAction Id="OpenlogReconcile" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="check" />
+
+    <!-- Start the service when the configuration has a license key (given now or kept from an earlier install).
+         No double quotes or brackets inside the PowerShell command: \x22 is a double quote in the regex. -->
+    <SetProperty Id="OpenlogStartService" Sequence="execute" Before="OpenlogStartService"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;$c = '[CommonAppDataFolder]openlog\infra-agent\config.yaml'; if ((Test-Path -LiteralPath $c) -and ((Get-Content -Raw -LiteralPath $c) -match '(?m)^license_key:\s*\x22?(?!\x22|#)\S')) { Start-Service -Name openlog-infra-agent; 'service openlog-infra-agent started' } else { 'no license_key configured; service openlog-infra-agent not started' }&quot;" />
+    <CustomAction Id="OpenlogStartService" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <SetProperty Id="OpenlogUninstallService" Sequence="execute" Before="OpenlogUninstallService"
+                 Value="&quot;[#AgentExe]&quot; -uninstall-service" />
+    <CustomAction Id="OpenlogUninstallService" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <!-- Fallback when -uninstall-service failed; a no-op error when the service is already gone. -->
+    <SetProperty Id="OpenlogDeleteService" Sequence="execute" Before="OpenlogDeleteService"
+                 Value="&quot;[System64Folder]sc.exe&quot; delete openlog-infra-agent" />
+    <CustomAction Id="OpenlogDeleteService" BinaryRef="$(var.UtilCA)" DllEntry="WixQuietExec"
+                  Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="OpenlogUninstallService" Before="RemoveFiles"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="OpenlogDeleteService" After="OpenlogUninstallService"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+
+      <Custom Action="OpenlogConfigure" After="WriteRegistryValues" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="OpenlogConfigureLicenseKey" After="OpenlogConfigure" Condition="NOT REMOVE~=&quot;ALL&quot; AND LICENSE_KEY" />
+      <Custom Action="OpenlogConfigureEndpoint" After="OpenlogConfigureLicenseKey" Condition="NOT REMOVE~=&quot;ALL&quot; AND ENDPOINT" />
+      <Custom Action="OpenlogReconcile" After="OpenlogConfigureEndpoint" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="OpenlogStartService" After="OpenlogReconcile" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

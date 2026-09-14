@@ -54,6 +54,8 @@ type Item struct {
 
 // Data is the typed result of an inventory collection. Discovery consumes it.
 type Data struct {
+	// Platform is the GOOS the data was collected on: "" (Linux, also containers and fixtures), "darwin" or "windows".
+	Platform   string
 	OS         *OSInfo
 	CPU        *CPUInfo
 	Memory     *MemoryInfo
@@ -66,6 +68,8 @@ type Data struct {
 	Instances  []ProcessInstance // per-PID view used by discovery; not emitted
 	Containers []Container       // Docker Engine API; empty without a runtime socket
 	Users      []User
+	// Services are launchd jobs (macOS) or Windows services; empty on Linux (systemd units are Units).
+	Services   []SystemService
 	Interfaces []NetworkInterface
 	Mounts     []Mount
 }
@@ -107,6 +111,9 @@ func (c *Collector) timed(name string, fn func(fs *hostfs.FS) error) {
 // Collect runs all inventory collectors. Individual failures only leave
 // the affected category empty.
 func (c *Collector) Collect() *Data {
+	if c.FS.NativeOS() {
+		return c.collectNative() // macOS, Windows (D-104)
+	}
 	d := &Data{}
 	c.timed(CategoryOS, func(fs *hostfs.FS) error { d.OS = collectOS(fs); return nil })
 	c.timed(CategoryHardware, func(fs *hostfs.FS) error {
@@ -185,6 +192,9 @@ func (d *Data) Items() []Item {
 	}
 	for _, c := range d.Containers {
 		add(CategoryContainer, c.ID, c)
+	}
+	for _, s := range d.Services {
+		add(s.Category(), s.Name, s.Body)
 	}
 	return items
 }

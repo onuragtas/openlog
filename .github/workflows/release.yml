@@ -337,8 +337,268 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Windows infra agent (amd64): openlog-infra-agent_<v>_windows_amd64.zip and .msi, built and install-tested on a
+  # native runner. Authenticode signing only with the WINDOWS_SIGNING_CERT_* secrets. windows/arm64 (zip only) is
+  # cross-compiled by the release job.
+  infra-agent-windows:
+    name: infra agent Windows (zip, MSI)
+    needs: [prepare]
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      COMMIT: ${{ needs.prepare.outputs.commit }}
+      DATE: ${{ needs.prepare.outputs.date }}
+      PUBLIC_KEYS: ${{ vars.OPENLOG_RELEASE_PUBLIC_KEYS }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            agents/infra/go.sum
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+      - id: build
+        name: build openlog-infra-agent.exe (ldflags as AGENT_LDFLAGS in the Makefile)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mod = 'github.com/onuragtas/openlog/agents/infra'
+          $ldflags = "-s -w -X $mod/internal/version.Version=$env:VERSION -X $mod/internal/version.Commit=$env:COMMIT " +
+            "-X $mod/internal/version.Date=$env:DATE -X $mod/internal/release.trustedKeys=$env:PUBLIC_KEYS"
+          $name = "openlog-infra-agent_$($env:VERSION)_windows_amd64"
+          $stage = Join-Path $env:RUNNER_TEMP "stage/$name"
+          New-Item -ItemType Directory -Force -Path $stage, dist/windows | Out-Null
+          Push-Location agents/infra
+          go build -trimpath -ldflags $ldflags -o (Join-Path $stage 'openlog-infra-agent.exe') ./cmd/openlog-infra-agent
+          if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+          Pop-Location
+          Copy-Item agents/infra/LICENSE, agents/infra/README.md $stage
+          Copy-Item -Recurse agents/infra/packaging (Join-Path $stage 'packaging')
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "stage=$stage" >> $env:GITHUB_OUTPUT
+      - id: signing
+        name: Authenticode certificate configured
+        env:
+          CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ($env:CERT -and $env:CERT_PASSWORD) {
+            "present=true" >> $env:GITHUB_OUTPUT
+            $pfx = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+              Sort-Object FullName -Descending | Select-Object -First 1
+            if (-not $signtool) { throw "signtool.exe not found" }
+            "signtool=$($signtool.FullName)" >> $env:GITHUB_OUTPUT
+          } else {
+            "present=false" >> $env:GITHUB_OUTPUT
+            Write-Output "::warning::secrets WINDOWS_SIGNING_CERT_PFX_BASE64 / WINDOWS_SIGNING_CERT_PASSWORD are not set; the Windows agent $env:VERSION (exe, MSI) is unsigned"
+          }
+      - name: sign openlog-infra-agent.exe
+        if: steps.signing.outputs.present == 'true'
+        env:
+          CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+          SIGNTOOL: ${{ steps.signing.outputs.signtool }}
+          STAGE: ${{ steps.build.outputs.stage }}
+        run: |
+          & $env:SIGNTOOL sign /f (Join-Path $env:RUNNER_TEMP 'signing.pfx') /p $env:CERT_PASSWORD /fd sha256 `
+            /tr http://timestamp.digicert.com /td sha256 (Join-Path $env:STAGE 'openlog-infra-agent.exe')
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+      - name: smoke test (-version, -once)
+        env:
+          STAGE: ${{ steps.build.outputs.stage }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $env:STAGE 'openlog-infra-agent.exe'
+          $v = & $exe -version
+          if ($LASTEXITCODE -ne 0 -or -not ("$v" -match [regex]::Escape($env:VERSION))) { throw "-version: $v" }
+          $once = & $exe -once
+          if ($LASTEXITCODE -ne 0) { throw "-once failed" }
+          if ($null -eq (($once -join "`n") | ConvertFrom-Json).metrics) { throw "-once output has no metrics key" }
+      - name: zip archive
+        env:
+          NAME: ${{ steps.build.outputs.name }}
+          STAGE: ${{ steps.build.outputs.stage }}
+        run: |
+          $env:SOURCE_DATE_EPOCH = git log -1 --format=%ct
+          go run ./cmd/openlog-release archive --out "dist/windows/$env:NAME.zip" --prefix $env:NAME $env:STAGE
+          if ($LASTEXITCODE -ne 0) { throw "archive failed" }
+      - name: MSI
+        env:
+          NAME: ${{ steps.build.outputs.name }}
+          STAGE: ${{ steps.build.outputs.stage }}
+        run: |
+          ./agents/infra/packaging/windows/build-msi.ps1 -Version $env:VERSION -Arch amd64 `
+            -Exe (Join-Path $env:STAGE 'openlog-infra-agent.exe') -SourceDir $env:STAGE -Out "dist/windows/$env:NAME.msi"
+      - name: sign MSI
+        if: steps.signing.outputs.present == 'true'
+        env:
+          CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+          SIGNTOOL: ${{ steps.signing.outputs.signtool }}
+          NAME: ${{ steps.build.outputs.name }}
+        run: |
+          & $env:SIGNTOOL sign /f (Join-Path $env:RUNNER_TEMP 'signing.pfx') /p $env:CERT_PASSWORD /fd sha256 `
+            /tr http://timestamp.digicert.com /td sha256 "dist/windows/$env:NAME.msi"
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+      - name: MSI and zip install test
+        env:
+          NAME: ${{ steps.build.outputs.name }}
+        run: |
+          ./agents/infra/packaging/windows/test-install.ps1 -Msi "dist/windows/$env:NAME.msi" -Zip "dist/windows/$env:NAME.zip" -Version $env:VERSION
+          Get-ChildItem dist/windows
+      - name: remove the signing certificate
+        if: always()
+        run: Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP 'signing.pfx')
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: infra-agent-windows
+          path: |
+            dist/windows/openlog-infra-agent_*.zip
+            dist/windows/openlog-infra-agent_*.msi
+          if-no-files-found: error
+          retention-days: 7
+
+  # macOS infra agent: openlog-infra-agent_<v>_darwin_{arm64,amd64}.tar.gz (arm64 native, amd64 cross-compiled).
+  # Developer ID signing only with the APPLE_DEVELOPER_ID_CERT_* secrets; notarization additionally needs the
+  # APPLE_NOTARY_* secrets (a bare Mach-O cannot be stapled: Gatekeeper checks the notarization online).
+  infra-agent-macos:
+    name: infra agent macOS (tar.gz)
+    needs: [prepare]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      COMMIT: ${{ needs.prepare.outputs.commit }}
+      DATE: ${{ needs.prepare.outputs.date }}
+      PUBLIC_KEYS: ${{ vars.OPENLOG_RELEASE_PUBLIC_KEYS }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            agents/infra/go.sum
+      - name: build darwin arm64 and amd64 (ldflags as AGENT_LDFLAGS in the Makefile)
+        run: |
+          set -euo pipefail
+          mod=github.com/onuragtas/openlog/agents/infra
+          ldflags="-s -w -X $mod/internal/version.Version=$VERSION -X $mod/internal/version.Commit=$COMMIT -X $mod/internal/version.Date=$DATE -X $mod/internal/release.trustedKeys=$PUBLIC_KEYS"
+          for arch in arm64 amd64; do
+            name="openlog-infra-agent_${VERSION}_darwin_$arch"
+            stage="$RUNNER_TEMP/stage/$name"
+            mkdir -p "$stage"
+            (cd agents/infra && CGO_ENABLED=0 GOOS=darwin GOARCH=$arch go build -trimpath -ldflags "$ldflags" \
+              -o "$stage/openlog-infra-agent" ./cmd/openlog-infra-agent)
+            cp agents/infra/LICENSE agents/infra/README.md "$stage/"
+            cp -R agents/infra/packaging "$stage/packaging"
+          done
+      - id: signing
+        name: Developer ID certificate and notary key configured
+        env:
+          CERT: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: |
+          sign=false notarize=false
+          if [ -n "$CERT" ] && [ -n "$CERT_PASSWORD" ]; then
+            sign=true
+            if [ -n "$NOTARY_KEY_ID" ] && [ -n "$NOTARY_ISSUER" ] && [ -n "$NOTARY_KEY" ]; then
+              notarize=true
+            else
+              echo "::warning::APPLE_NOTARY_KEY_ID / APPLE_NOTARY_ISSUER / APPLE_NOTARY_KEY_P8_BASE64 are not set; the macOS agent $VERSION is signed but not notarized"
+            fi
+          else
+            echo "::warning::APPLE_DEVELOPER_ID_CERT_P12_BASE64 / APPLE_DEVELOPER_ID_CERT_PASSWORD are not set; the macOS agent $VERSION is unsigned"
+          fi
+          echo "sign=$sign" >> "$GITHUB_OUTPUT"
+          echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
+      - name: codesign (Developer ID, hardened runtime)
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          CERT: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          kcpass="$(uuidgen)"
+          printf '%s' "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kcpass" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$kcpass" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpass" "$keychain" >/dev/null
+          keychains=("$keychain")
+          while read -r k; do keychains+=("$k"); done < <(security list-keychains -d user | tr -d '"')
+          security list-keychains -d user -s "${keychains[@]}"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ {print $2; exit}')"
+          [ -n "$identity" ] || { echo "::error::no Developer ID Application identity in the certificate"; exit 1; }
+          for arch in arm64 amd64; do
+            bin="$RUNNER_TEMP/stage/openlog-infra-agent_${VERSION}_darwin_$arch/openlog-infra-agent"
+            codesign --force --options runtime --timestamp --identifier org.openlog.infra-agent --sign "$identity" --keychain "$keychain" "$bin"
+            codesign --verify --strict --verbose=2 "$bin"
+          done
+      - name: notarize (notarytool, zip of each binary)
+        if: steps.signing.outputs.notarize == 'true'
+        env:
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/notary.p8"
+          printf '%s' "$NOTARY_KEY" | base64 --decode > "$key"
+          trap 'rm -f "$key"' EXIT
+          for arch in arm64 amd64; do
+            bin="$RUNNER_TEMP/stage/openlog-infra-agent_${VERSION}_darwin_$arch/openlog-infra-agent"
+            ditto -c -k --keepParent "$bin" "$RUNNER_TEMP/notarize-$arch.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/notarize-$arch.zip" --key "$key" --key-id "$NOTARY_KEY_ID" \
+              --issuer "$NOTARY_ISSUER" --wait
+          done
+      - name: smoke test (-version, -once; native arm64)
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/stage/openlog-infra-agent_${VERSION}_darwin_$(uname -m | sed 's/x86_64/amd64/')/openlog-infra-agent"
+          "$bin" -version | grep -F "$VERSION"
+          "$bin" -once > "$RUNNER_TEMP/once.json"
+          python3 -c 'import json, sys; assert "metrics" in json.load(open(sys.argv[1])), "no metrics key"' "$RUNNER_TEMP/once.json"
+      - name: tar.gz archives
+        run: |
+          set -euo pipefail
+          mkdir -p dist/macos
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          for arch in arm64 amd64; do
+            name="openlog-infra-agent_${VERSION}_darwin_$arch"
+            go run ./cmd/openlog-release archive --out "dist/macos/$name.tar.gz" --prefix "$name" "$RUNNER_TEMP/stage/$name"
+          done
+      - name: remove the signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: infra-agent-macos
+          path: dist/macos/openlog-infra-agent_*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
   release:
-    needs: [prepare, image, infra-agent-image, php-agent-artifacts, java-agent-jar, node-agent-package, python-agent-package, dotnet-agent-package]
+    needs: [prepare, image, infra-agent-image, infra-agent-windows, infra-agent-macos, php-agent-artifacts, java-agent-jar, node-agent-package, python-agent-package, dotnet-agent-package]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -412,6 +672,18 @@ jobs:
           name: dotnet-agent
           path: dist/v${{ needs.prepare.outputs.version }}
 
+      - name: Windows infra agent (zip, MSI) into the release directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: infra-agent-windows
+          path: dist/v${{ needs.prepare.outputs.version }}
+
+      - name: macOS infra agent archives into the release directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: infra-agent-macos
+          path: dist/v${{ needs.prepare.outputs.version }}
+
       - name: build, sign and verify
         env:
           OPENLOG_RELEASE_SIGNING_KEY: ${{ secrets.OPENLOG_RELEASE_SIGNING_KEY }}
@@ -421,8 +693,13 @@ jobs:
           COMMIT: ${{ needs.prepare.outputs.commit }}
           DATE: ${{ needs.prepare.outputs.date }}
         run: |
+          # darwin and windows/amd64 come prebuilt (signed where configured) from the jobs above; release-agent keeps them.
           make release-local VERSION="$VERSION" RELEASE_CHANNEL="$CHANNEL" RELEASE_REQUIRE_HELM=1 \
+            RELEASE_AGENT_PLATFORMS="linux/amd64 linux/arm64 windows/arm64" \
             RELEASE_BASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/download"
+          for a in darwin_amd64.tar.gz darwin_arm64.tar.gz windows_amd64.zip windows_amd64.msi windows_arm64.zip; do
+            grep -q "\"name\": \"openlog-infra-agent_${VERSION}_$a\"" "dist/v$VERSION/manifest.json" || { echo "::error::infra agent $a missing from the manifest"; exit 1; }
+          done
           head -c 1500 "dist/v$VERSION/manifest.json"
 
       - name: deb/rpm install test (amd64)

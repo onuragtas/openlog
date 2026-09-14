@@ -142,6 +142,7 @@ func (s *PGStore) CountEnabled(ctx context.Context) (int, error) {
 func (s *PGStore) Claim(ctx context.Context, instance string, n int, ttl time.Duration) ([]Lease, error) {
 	rows, err := s.pool.Query(ctx, `WITH c AS (
 			SELECT l.rule_id FROM alert_rule_leases l JOIN alert_rules r ON r.id = l.rule_id
+			JOIN organizations o ON o.id = r.org_id AND o.deleted_at IS NULL -- scheduled for deletion: not evaluated (D-107)
 			WHERE r.enabled AND l.lease_until < now()
 			ORDER BY l.next_eval_at LIMIT $2
 			FOR UPDATE OF l SKIP LOCKED)

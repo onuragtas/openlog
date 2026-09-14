@@ -1,0 +1,7 @@
+{{define "subject"}}[openlog] Your account has been deleted{{end}}
+
+{{define "text"}}
+Your openlog account was deleted on {{date .DeletedAt}} as you requested. Your profile, sessions, API keys and single sign-on identities were removed, you were removed from every organization, and audit log entries about you now show a pseudonym instead of your name and e-mail address.
+
+If you did not request this, contact the operator of this openlog installation.
+{{end}}

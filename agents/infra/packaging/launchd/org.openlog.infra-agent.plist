@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- openlog infrastructure agent (macOS LaunchDaemon, D-104). Installed and kept up to date by
+     "openlog-infra-agent -reconcile" (install.sh). The agent runs as root: launchd has no privileged
+     pre-start hook, so the root process verifies and installs staged updates itself before it starts. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.openlog.infra-agent</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/openlog/infra-agent/current/openlog-infra-agent</string>
+		<string>-config</string>
+		<string>/etc/openlog-infra-agent/config.yaml</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>OPENLOG_SERVICE_MANAGER</key>
+		<string>launchd</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ExitTimeOut</key>
+	<integer>30</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>Nice</key>
+	<integer>10</integer>
+	<key>WorkingDirectory</key>
+	<string>/</string>
+	<key>StandardOutPath</key>
+	<string>/var/log/openlog-infra-agent.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/openlog-infra-agent.log</string>
+</dict>
+</plist>

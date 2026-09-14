@@ -132,6 +132,9 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 		shutdownTimeout: shutdownTimeout,
 	}
 	hostID, persisted, err := resource.HostID(a.fs, cfg.StateDir)
+	if a.fs.NativeOS() {
+		hostID, persisted, err = resource.NativeHostID(cfg.StateDir) // macOS, Windows (D-104)
+	}
 	if err != nil || !persisted {
 		log.Warn("host.id could not be persisted; a new id will be generated on restart", "error", err)
 	}
@@ -141,7 +144,11 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 			log.Debug("host.id not published for APM agents", "error", err)
 		}
 	}
-	a.res = resource.Detect(a.fs, hostID, version, hostAttributes(cfg)).Proto() // php_agent.go
+	if a.fs.NativeOS() {
+		a.res = resource.DetectNative(hostID, version, hostAttributes(cfg)).Proto()
+	} else {
+		a.res = resource.Detect(a.fs, hostID, version, hostAttributes(cfg)).Proto() // php_agent.go
+	}
 	a.stats.SetCollectionInterval(a.interval)
 	if cfg.Containers.Enabled {
 		a.ctr = containers.NewSource(a.fs, cfg.Containers.DockerSocket)
@@ -197,7 +204,7 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 		lc := cfg.Logs
 		// Container logs need container support (containers.enabled).
 		lc.Containers.Enabled = lc.Containers.Enabled && cfg.Containers.Enabled
-		if lc.Enabled && (len(lc.Files) > 0 || lc.Journald.Enabled || (lc.AutoFromDiscovery && cfg.Discovery.Enabled) || lc.Containers.Enabled) {
+		if lc.Enabled && (len(lc.Files) > 0 || lc.Journald.Enabled || lc.UnifiedLog.Enabled || lc.WindowsEventLog.Enabled || (lc.AutoFromDiscovery && cfg.Discovery.Enabled) || lc.Containers.Enabled) {
 			var ctrSrc logs.ContainerSource
 			if a.ctr != nil {
 				ctrSrc = a.ctr
@@ -511,6 +518,9 @@ func (a *Agent) collectRound() {
 		// the moment the snapshot describes, not when the round started.
 		now = a.Now()
 		fp := Fingerprint(a.fs)
+		if a.fs.NativeOS() {
+			fp = inventory.NativeFingerprint()
+		}
 		if a.ctr != nil {
 			fp ^= a.ctr.Fingerprint() * 1099511628211
 		}

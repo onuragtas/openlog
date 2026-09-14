@@ -18,9 +18,10 @@ const GROUP_ICONS: Record<TargetGroup, LucideIcon> = {
 
 /** Cards of every data source, grouped like New Relic's "Add data" catalog. */
 export function AddDataCatalog() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const id = useId();
   const [q, setQ] = useState("");
+  const requiredList = new Intl.ListFormat(i18n.resolvedLanguage ?? "en", { type: "disjunction" });
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
   const items = INSTALL_TARGETS.map((target) => ({
     target,
@@ -65,9 +66,9 @@ export function AddDataCatalog() {
                   >
                     <span className="font-medium">{title}</span>
                     <span className="text-sm text-muted-foreground">{description}</span>
-                    {target.requires && (
+                    {target.requires && target.requires.length > 0 && (
                       <Badge variant="muted" className="mt-2 max-w-full whitespace-normal">
-                        {t("addData.requires", { name: tDynamic(t, `addData.targets.${target.requires}.title`) })}
+                        {t("addData.requires", { name: requiredList.format(target.requires.map((r) => tDynamic(t, `addData.targets.${r}.title`))) })}
                       </Badge>
                     )}
                   </Link>

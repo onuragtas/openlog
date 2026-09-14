@@ -2,6 +2,7 @@ import createClient, { type Middleware } from "openapi-fetch";
 import { observeServerVersion, VERSION_HEADER } from "@/lib/server-version";
 import { clearAuthState, CSRF_HEADER, getCsrfToken, getSelectedOrg, ORG_HEADER } from "./auth";
 import type { paths } from "./schema.gen";
+import { getSupportSession, setSupportSession, SUPPORT_HEADER } from "./supportSession";
 import type { ApiErrorBody } from "./types";
 
 /** Error thrown by query functions for non-2xx API responses. */
@@ -28,6 +29,14 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 const PUBLIC_PATHS = new Set(["/api/v1/auth/login", "/api/v1/auth/signup", "/api/v1/auth/config", "/api/v1/auth/verify-email", "/api/v1/invitations/lookup", "/api/v1/invitations/accept"]);
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
 function isPublic(url: string): boolean {
   try {
     return PUBLIC_PATHS.has(new URL(url).pathname);
@@ -43,6 +52,12 @@ export const authMiddleware: Middleware = {
     if (csrf && !SAFE_METHODS.has(request.method.toUpperCase()) && !request.headers.has(CSRF_HEADER)) {
       request.headers.set(CSRF_HEADER, csrf);
     }
+    // Operator support view (api/supportSession.ts): the support session selects the organization server-side.
+    const support = getSupportSession();
+    if (support && !pathOf(request.url).startsWith("/api/v1/operator/")) {
+      request.headers.set(SUPPORT_HEADER, support.id);
+      return request;
+    }
     const org = getSelectedOrg();
     if (org && !request.headers.has(ORG_HEADER)) {
       request.headers.set(ORG_HEADER, org);
@@ -51,6 +66,16 @@ export const authMiddleware: Middleware = {
   },
   onResponse({ request, response }) {
     observeServerVersion(response.headers.get(VERSION_HEADER));
+    if (response.status === 403 && request.headers.has(SUPPORT_HEADER)) {
+      void response
+        .clone()
+        .json()
+        .then((b: Partial<ApiErrorBody>) => {
+          // Operator-only error code (api.md "Support sessions"), not part of the generic ApiErrorBody union.
+          if ((b?.error?.code as string | undefined) === "support_session_ended") setSupportSession(null);
+        })
+        .catch(() => undefined);
+    }
     if (response.status === 401 && !isPublic(request.url)) {
       // Only a session we knew about "expires"; a signed-out visitor's first
       // /auth/me simply leads to the login page (router beforeLoad).

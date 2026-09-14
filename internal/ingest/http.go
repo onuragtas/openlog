@@ -63,6 +63,13 @@ func (s *Service) httpExport(sig queue.Signal) http.Handler {
 			s.httpError(w, sig, isJSON, http.StatusUnauthorized, codes.Unauthenticated, "invalid or missing license key")
 			return
 		}
+		if s.gate != nil { // SaaS organization state (gate.go, D-105)
+			s.gate.ObserveSource(tenantID, r.RemoteAddr)
+			if _, suspended := s.gate.Suspended(tenantID); suspended {
+				s.httpErrorInfo(w, sig, isJSON, http.StatusForbidden, codes.PermissionDenied, suspendedMessage, ReasonOrgSuspended, 0)
+				return
+			}
+		}
 
 		body, err := s.readBody(r)
 		if err != nil {
@@ -94,7 +101,13 @@ func (s *Service) httpExport(sig queue.Signal) http.Handler {
 			return
 		}
 
+		gd := s.gateHosts(tenantID, sig, msg) // plan host limit (gate.go, D-105)
+		if gd.all {
+			s.httpErrorInfo(w, sig, isJSON, http.StatusTooManyRequests, codes.ResourceExhausted, gd.message, ReasonQuotaExceeded, hostRetryAfter)
+			return
+		}
 		p := prepare(sig, tenantID, msg)
+		applyGateToPrepared(&p, gd)
 		raw := body
 		if isJSON {
 			raw = nil

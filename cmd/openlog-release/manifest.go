@@ -20,7 +20,9 @@ import (
 
 // Artifact naming convention inside a release directory (docs/operations/releasing.md):
 //
-//	openlog-infra-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm      component infra-agent
+//	openlog-infra-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm      component infra-agent (linux, darwin tar.gz)
+//	openlog-infra-agent_<v>_windows_<arch>.zip|.msi            component infra-agent (windows)
+//	openlog-infra-agent_<v>_darwin_<arch>.pkg                  component infra-agent (macOS installer, optional)
 //	openlog-php-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm|.apk   component php-agent (agents/php/packaging/build-artifacts.sh)
 //	openlog_<v>_<os>_<arch>.tar.gz                            component backend (all backend binaries)
 //	openlog-<v>.tgz                                           Helm chart (manifest.helm_chart and helm_charts.openlog)
@@ -38,7 +40,14 @@ var componentPrefixes = map[string]string{
 	"openlog":             "backend",
 }
 
-var artifactFormats = []string{lib.FormatTarGz, lib.FormatDeb, lib.FormatRPM, lib.FormatAPK}
+var artifactFormats = []string{lib.FormatTarGz, lib.FormatDeb, lib.FormatRPM, lib.FormatAPK, lib.FormatZip, lib.FormatMSI, lib.FormatPkg}
+
+// prefixOnlyFormats restricts formats to the components that publish them (Windows and macOS infra agent).
+var prefixOnlyFormats = map[string]string{
+	lib.FormatZip: "openlog-infra-agent",
+	lib.FormatMSI: "openlog-infra-agent",
+	lib.FormatPkg: "openlog-infra-agent",
+}
 
 // helmCharts are the charts `make release-helm` packages (deploy/helm/<chart>) as <chart>-<v>.tgz.
 var helmCharts = []string{"openlog", "openlog-agent"}
@@ -75,6 +84,9 @@ func classify(name, version string) (a lib.Artifact, ok bool) {
 			continue
 		}
 		for prefix, component := range componentPrefixes {
+			if only, restricted := prefixOnlyFormats[format]; restricted && only != prefix {
+				continue
+			}
 			rest, found := strings.CutPrefix(base, prefix+"_"+version+"_")
 			if !found {
 				continue

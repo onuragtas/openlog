@@ -1,5 +1,5 @@
 #!/bin/sh
-# openlog infrastructure agent installer.
+# openlog infrastructure agent installer (Linux and macOS; Windows: install.ps1 or the .msi of the release).
 #
 #   curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install.sh |
 #     sudo sh -s -- --license-key KEY --endpoint https://ingest.example.com:4318
@@ -9,7 +9,7 @@
 #   --endpoint URL        OTLP/HTTP endpoint of openlog-ingest     [OPENLOG_ENDPOINT]
 #   --version V           version to install (default: latest on the channel) [OPENLOG_VERSION]
 #   --channel C           stable (default) or beta                 [OPENLOG_CHANNEL]
-#   --method M            auto (default), deb, rpm or tarball      [OPENLOG_INSTALL_METHOD]
+#   --method M            auto (default), deb, rpm or tarball (macOS: tarball only) [OPENLOG_INSTALL_METHOD]
 #   --base-url URL        releases root or mirror; files are fetched from URL/v<version>/
 #                         and the index from URL/index.json      [OPENLOG_RELEASE_BASE_URL]
 #   --index-url URL       release index                            [OPENLOG_RELEASE_INDEX_URL]
@@ -18,6 +18,12 @@
 #                         (creates /etc/openlog-infra-agent/no-docker-access) [OPENLOG_AGENT_DOCKER_ACCESS=0]
 #   --no-php-access       do not add PHP-FPM pool users to the openlog-php socket group, now or later
 #                         (creates /etc/openlog-infra-agent/no-php-access) [OPENLOG_AGENT_PHP_ACCESS=0]
+#
+# macOS (darwin amd64/arm64): the agent runs as root under launchd (label org.openlog.infra-agent,
+# /Library/LaunchDaemons/org.openlog.infra-agent.plist), CLI /usr/local/bin/openlog-infra-agent, config root:wheel 0600,
+# log /var/log/openlog-infra-agent.log. --no-docker-access and --no-php-access have no effect. Uninstall:
+#   sudo openlog-infra-agent -uninstall-service && sudo rm -rf /opt/openlog/infra-agent /usr/local/bin/openlog-infra-agent
+#   (add /etc/openlog-infra-agent /var/lib/openlog-infra-agent to remove configuration and state)
 #
 # PHP: php.sock (PHP agent spans) is 0660 with group openlog-php. openlog-agent and every PHP-FPM pool user
 # (per-site users of HestiaCP, cPanel, Plesk, …) plus the Apache/nginx user are added to it and the affected PHP-FPM
@@ -30,7 +36,9 @@
 # Trust model: this bootstrap download relies on HTTPS. The installer fetches manifest.json from
 # the release source and checks the size and SHA-256 of the downloaded package against it. Every
 # later update is applied by the agent itself, which verifies the Ed25519 signature of the release
-# manifest against the public keys compiled into it (docs/contracts/releases-updates.md).
+# manifest against the public keys compiled into it (docs/contracts/releases-updates.md). When a root-owned agent that
+# supports `-verify-release` is already installed, it also verifies the signature of the new release manifest and the
+# downloaded artifact before anything is installed.
 #
 # Re-running the installer is safe: it upgrades to the requested/latest version, keeps an agent
 # that already updated itself to a newer version, and updates license key and endpoint when given.
@@ -47,6 +55,8 @@ STATE_DIR=/var/lib/openlog-infra-agent
 UNIT=openlog-infra-agent.service
 USER_NAME=openlog-agent
 PKG=openlog-infra-agent
+LAUNCHD_LABEL=org.openlog.infra-agent
+PLIST=/Library/LaunchDaemons/$LAUNCHD_LABEL.plist
 
 license_key=${OPENLOG_LICENSE_KEY:-}
 endpoint=${OPENLOG_ENDPOINT:-}
@@ -68,7 +78,7 @@ die() {
 	log "error: $*"
 	exit 1
 }
-usage() { sed -n '2,30s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
+usage() { sed -n '2,36s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
 
 cleanup() { [ -z "$tmpdir" ] || rm -rf "$tmpdir"; }
 trap cleanup EXIT INT TERM
@@ -145,7 +155,24 @@ for u in "$base_url" "$index_url"; do
 	esac
 done
 
-[ "$(uname -s)" = Linux ] || die "only Linux is supported"
+# Platform: owner group of root-owned files, account and CLI link differ between Linux and macOS.
+case $(uname -s) in
+Linux)
+	goos=linux
+	ROOT_GROUP=root
+	CLI_LINK=/usr/bin/openlog-infra-agent
+	;;
+Darwin)
+	goos=darwin
+	ROOT_GROUP=wheel
+	CLI_LINK=/usr/local/bin/openlog-infra-agent
+	case $method in
+	auto | tarball) method=tarball ;;
+	*) die "--method $method is not supported on macOS (tarball only)" ;;
+	esac
+	;;
+*) die "only Linux and macOS are supported (Windows: install.ps1 or the .msi of the release)" ;;
+esac
 [ "$(id -u)" = 0 ] || die "run as root, e.g. curl -fsSL …/install.sh | sudo sh -s -- --license-key KEY --endpoint URL"
 
 case $(uname -m) in
@@ -155,7 +182,7 @@ aarch64 | arm64) arch=arm64 ;;
 esac
 
 case $docker_access in 0 | false | no | off) docker_access=0 ;; *) docker_access=1 ;; esac
-if [ "$docker_access" = 0 ]; then
+if [ "$docker_access" = 0 ] && [ "$goos" = linux ]; then
 	# Persist the opt-out before a package is installed, so its postinstall (and later upgrades) skip it too.
 	mkdir -p "$CONFIG_DIR"
 	touch "$DOCKER_OPT_OUT"
@@ -163,7 +190,7 @@ if [ "$docker_access" = 0 ]; then
 	export OPENLOG_AGENT_DOCKER_ACCESS
 fi
 case $php_access in 0 | false | no | off) php_access=0 ;; *) php_access=1 ;; esac
-if [ "$php_access" = 0 ]; then
+if [ "$php_access" = 0 ] && [ "$goos" = linux ]; then
 	# Same for PHP-FPM pool users (openlog-php socket group, php-agent.md §1).
 	mkdir -p "$CONFIG_DIR"
 	touch "$PHP_OPT_OUT"
@@ -264,7 +291,7 @@ switch_current() { # version
 	tmp="$ROOT/.current.$$"
 	rm -f "$tmp"
 	ln -s "versions/$1" "$tmp"
-	chown -h root:root "$tmp" 2>/dev/null || true
+	chown -h "root:$ROOT_GROUP" "$tmp" 2>/dev/null || true
 	if ! mv -Tf "$tmp" "$ROOT/current" 2>/dev/null; then
 		rm -f "$ROOT/current" && mv -f "$tmp" "$ROOT/current"
 	fi
@@ -296,6 +323,24 @@ trusted_dir() {
 
 # reconcile_supported BINARY: the release has `-reconcile` (unit, account, docker group, ownership).
 reconcile_supported() { [ -x "$1" ] && "$1" -help 2>&1 | grep -q -- -reconcile; }
+
+# flag_supported BINARY FLAG: the release's -help lists FLAG (e.g. -configure, -verify-release).
+flag_supported() { [ -x "$1" ] && "$1" -help 2>&1 | grep -q -- "$2"; }
+
+# create_config SOURCE: a new config file from SOURCE (or empty keys), readable by the agent only.
+create_config() {
+	mkdir -p "$CONFIG_DIR"
+	if [ -n "$1" ] && [ -f "$1" ]; then cp "$1" "$CONFIG"; else printf 'license_key: ""\nendpoint: ""\n' >"$CONFIG"; fi
+	if [ "$goos" = darwin ]; then
+		chown root:wheel "$CONFIG"
+		chmod 0600 "$CONFIG"
+	else
+		chown "root:$USER_NAME" "$CONFIG"
+		chmod 0640 "$CONFIG"
+	fi
+}
+
+launchd_loaded() { launchctl print "system/$LAUNCHD_LABEL" >/dev/null 2>&1; }
 
 # Legacy steps for releases without `-reconcile`: add the agent user to an existing docker group (Docker Engine API:
 # container names, ports, IPs), unless opted out. Idempotent; sets docker_added=1 when the membership is new. Newer
@@ -381,7 +426,7 @@ tarball)
 	fi
 	;;
 esac
-log "installing openlog-infra-agent $version ($channel, linux/$arch, method $method)"
+log "installing openlog-infra-agent $version ($channel, $goos/$arch, method $method)"
 
 # --- decide whether to install ------------------------------------------------------------------
 running=$(running_version)
@@ -410,8 +455,8 @@ if [ "$install" = 1 ]; then
 	[ "$(json_str "$manifest" product)" = openlog ] || die "$manifest_url is not an openlog manifest"
 	[ "$(json_str "$manifest" version)" = "$version" ] || die "$manifest_url is for version $(json_str "$manifest" version), not $version"
 
-	name=openlog-infra-agent_${version}_linux_${arch}.$method
-	[ "$method" != tarball ] || name=openlog-infra-agent_${version}_linux_${arch}.tar.gz
+	name=openlog-infra-agent_${version}_${goos}_${arch}.$method
+	[ "$method" != tarball ] || name=openlog-infra-agent_${version}_${goos}_${arch}.tar.gz
 	# shellcheck disable=SC2020 # split the flat JSON into one line per object
 	artifact=$(printf '%s' "$manifest" | tr '{}' '\n\n' | grep -F "\"name\":\"$name\"" | head -n 1 || true)
 	[ -n "$artifact" ] || die "release $version has no artifact $name"
@@ -428,6 +473,14 @@ if [ "$install" = 1 ]; then
 	[ "$got_size" = "$want_size" ] || die "$name: size $got_size does not match the manifest ($want_size)"
 	[ "$got_sha" = "$want_sha" ] || die "$name: sha256 $got_sha does not match the manifest ($want_sha)"
 	log "sha256 verified: $got_sha"
+	# A root-owned installed agent that can verify releases checks the manifest signature against its compiled-in keys.
+	trusted_bin=$ROOT/current/openlog-infra-agent
+	if [ -n "$running" ] && trusted_dir "$ROOT/versions/$running" && flag_supported "$trusted_bin" -verify-release; then
+		fetch "$manifest_url.sig" "$tmpdir/manifest.json.sig"
+		"$trusted_bin" -verify-release "$tmpdir/manifest.json" -artifact "$tmpdir/$name" >&2 ||
+			die "$name: the signature of the release manifest or the artifact does not verify ($trusted_bin -verify-release)"
+		log "release signature verified by the installed agent $running"
+	fi
 
 	case $method in
 	deb)
@@ -439,33 +492,37 @@ if [ "$install" = 1 ]; then
 	tarball)
 		mkdir "$tmpdir/x"
 		tar -xzf "$tmpdir/$name" -C "$tmpdir/x"
-		top=$tmpdir/x/openlog-infra-agent_${version}_linux_${arch}
+		top=$tmpdir/x/openlog-infra-agent_${version}_${goos}_${arch}
 		[ -x "$top/openlog-infra-agent" ] || die "unexpected archive layout in $name"
-		ensure_user
+		[ "$goos" = darwin ] || ensure_user
 		# Root-owned: root executes the current binary in the unit's privileged pre-start step.
-		install -d -m 0755 -o root -g root "$ROOT" "$ROOT/versions"
+		install -d -m 0755 -o root -g "$ROOT_GROUP" "$ROOT" "$ROOT/versions"
 		dest=$ROOT/versions/$version
 		rm -rf "$dest.new"
 		cp -R "$top" "$dest.new"
 		# The signed manifest of the installed version; the agent needs it for rollback_floor.
-		fetch "$manifest_url.sig" "$dest.new/manifest.json.sig"
+		if [ -f "$tmpdir/manifest.json.sig" ]; then
+			cp "$tmpdir/manifest.json.sig" "$dest.new/manifest.json.sig"
+		else
+			fetch "$manifest_url.sig" "$dest.new/manifest.json.sig"
+		fi
 		cp "$tmpdir/manifest.json" "$dest.new/manifest.json"
-		chown -R root:root "$dest.new"
+		chown -R "root:$ROOT_GROUP" "$dest.new"
 		chmod -R go-w "$dest.new"
 		rm -rf "$dest"
 		mv "$dest.new" "$dest"
 		mkdir -p "$CONFIG_DIR/discovery.d"
-		if [ ! -f "$CONFIG" ]; then
-			cp "$dest/packaging/config.example.yaml" "$CONFIG"
-			chown "root:$USER_NAME" "$CONFIG"
-			chmod 0640 "$CONFIG"
+		# macOS: -configure below creates the file from the release's embedded example.
+		if [ ! -f "$CONFIG" ] && { [ "$goos" = linux ] || ! flag_supported "$dest/openlog-infra-agent" -configure; }; then
+			create_config "$dest/packaging/config.example.yaml"
 		fi
 		if ! reconcile_supported "$dest/openlog-infra-agent" && [ -d /etc/systemd/system ]; then
 			# Older release: -reconcile below installs the unit otherwise.
 			cp "$dest/packaging/systemd/$UNIT" "/etc/systemd/system/$UNIT"
 			chmod 0644 "/etc/systemd/system/$UNIT"
 		fi
-		ln -sfn "$ROOT/current/openlog-infra-agent" /usr/bin/openlog-infra-agent
+		mkdir -p "${CLI_LINK%/*}"
+		ln -sfn "$ROOT/current/openlog-infra-agent" "$CLI_LINK"
 		switch_current "$version"
 		;;
 	esac
@@ -475,35 +532,64 @@ if [ "$install" = 1 ]; then
 	fi
 fi
 
-install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
+bin=$ROOT/current/openlog-infra-agent
+if [ "$goos" = darwin ]; then
+	install -d -m 0750 -o root -g wheel "$STATE_DIR"
+else
+	install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$STATE_DIR"
+fi
 
 # --- configuration ------------------------------------------------------------------------------
-[ -f "$CONFIG" ] || {
-	mkdir -p "$CONFIG_DIR"
-	printf 'license_key: ""\nendpoint: ""\n' >"$CONFIG"
-	chown "root:$USER_NAME" "$CONFIG"
-	chmod 0640 "$CONFIG"
-}
-[ -z "$license_key" ] || set_config_value license_key "$license_key"
-[ -z "$endpoint" ] || set_config_value endpoint "$endpoint"
+if [ "$goos" = darwin ] && flag_supported "$bin" -configure; then
+	# Creates the config from the embedded example (root:wheel 0600) if missing and sets only the given keys.
+	set -- -configure -config "$CONFIG"
+	[ -z "$license_key" ] || set -- "$@" -license-key "$license_key"
+	[ -z "$endpoint" ] || set -- "$@" -endpoint "$endpoint"
+	"$bin" "$@" >&2 || die "$bin -configure failed"
+else
+	[ -f "$CONFIG" ] || create_config ""
+	[ -z "$license_key" ] || set_config_value license_key "$license_key"
+	[ -z "$endpoint" ] || set_config_value endpoint "$endpoint"
+fi
 has_license_key || log "warning: no license_key in $CONFIG; pass --license-key"
 
 # --- reconcile ----------------------------------------------------------------------------------
 # systemd unit, account, docker group and openlog-php group with the PHP-FPM pool users (opt-outs above), ownership: the
 # same step the agent's privileged pre-start step runs on every start. It logs what it changed to stderr. Package
 # installs already ran it in their postinstall; then this is a no-op.
-bin=$ROOT/current/openlog-infra-agent
 restart_needed=0
 if reconcile_supported "$bin"; then
 	out=$("$bin" -reconcile -reconcile-context install -config "$CONFIG") || log "warning: reconcile reported errors (see above)"
 	case $out in *restart-required*) restart_needed=1 ;; esac
-else
+elif [ "$goos" = linux ]; then
 	grant_docker_access
 	restart_needed=$docker_added
 fi
 
 # --- service ------------------------------------------------------------------------------------
-if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+if [ "$goos" = darwin ]; then
+	# launchd reads the plist at bootstrap only: a changed plist (restart-required) needs bootout + bootstrap.
+	if [ ! -f "$PLIST" ]; then
+		log "warning: $PLIST is missing (the release has no -reconcile); start the agent with: $CLI_LINK -config $CONFIG"
+	elif [ "$start" = 1 ] && { has_license_key || { [ "$restart_needed" = 1 ] && launchd_loaded; }; }; then
+		if launchd_loaded && [ "$restart_needed" = 1 ]; then
+			launchctl bootout "system/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
+			i=0
+			while launchd_loaded && [ "$i" -lt 20 ]; do
+				sleep 1
+				i=$((i + 1))
+			done
+		fi
+		if launchd_loaded; then
+			launchctl kickstart -k "system/$LAUNCHD_LABEL"
+		else
+			launchctl bootstrap system "$PLIST"
+		fi
+		log "service $LAUNCHD_LABEL (re)started"
+	elif [ "$restart_needed" = 1 ]; then
+		log "the new launchd job applies after: launchctl bootout system/$LAUNCHD_LABEL; launchctl bootstrap system $PLIST"
+	fi
+elif command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
 	systemctl daemon-reload
 	systemctl enable "$UNIT" >/dev/null 2>&1
 	if [ "$start" = 1 ] && has_license_key; then

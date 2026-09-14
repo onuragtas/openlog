@@ -4,6 +4,7 @@ category: web
 match:
   - process: { exe_basename: ["nginx"] }
   - systemd_unit: { name_regex: "^nginx\\.service$" }
+  - service: { name_regex: "^(homebrew\\.mxcl\\.nginx(-full)?|nginx)$" }   # Homebrew launchd job (macOS), Windows service wrappers (NSSM, WinSW)
   - container: { image_regex: "(^|/)nginx(:|@|$)" }
   - package: { name: ["nginx", "nginx-core", "nginx-full", "nginx-light", "nginx-extras"] }
 version:
@@ -17,3 +18,5 @@ integration:
 apm_hint: null
 logs:
   - path: "/var/log/nginx/*.log"
+  - { path: "/opt/homebrew/var/log/nginx/*.log", os: [darwin] }   # Homebrew, Apple silicon
+  - { path: "/usr/local/var/log/nginx/*.log", os: [darwin] }      # Homebrew, Intel

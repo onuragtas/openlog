@@ -5,6 +5,8 @@
 
 export const TARGET_IDS = [
   "linux",
+  "macos",
+  "windows",
   "docker",
   "kubernetes",
   "apm/go",
@@ -63,9 +65,12 @@ export interface InstallTarget {
   integration?: "nginx" | "redis" | "mysql" | "postgresql";
   /** Documentation in the repository. */
   docs: string;
-  /** Other card to set up first (e.g. the infra agent for PHP and host logs). */
-  requires?: TargetId;
+  /** Cards of which one must be set up first (e.g. the infra agent for PHP and host logs); several = any of them. */
+  requires?: readonly TargetId[];
 }
+
+/** The infra agent host cards: features that work on every host OS require one of them. */
+const INFRA_HOSTS: readonly TargetId[] = ["linux", "macos", "windows"];
 
 const REPO = "https://github.com/onuragtas/openlog";
 const RELEASES = `${REPO}/releases`;
@@ -73,6 +78,8 @@ const blob = (path: string) => `${REPO}/blob/master/${path}`;
 
 export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "linux", group: "infrastructure", verify: "host", options: ["distro", "channel", "dockerAccess", "hostName"], docs: blob("agents/infra/README.md") },
+  { id: "macos", group: "infrastructure", verify: "host", options: ["channel", "hostName"], docs: blob("agents/infra/README.md") },
+  { id: "windows", group: "infrastructure", verify: "host", options: ["channel", "hostName"], docs: blob("agents/infra/README.md") },
   { id: "docker", group: "infrastructure", verify: "host", options: ["hostName"], docs: blob("agents/infra/README.md") },
   { id: "kubernetes", group: "infrastructure", verify: "kubernetes", options: ["clusterName", "environment"], docs: blob("docs/operations/kubernetes.md") },
   { id: "apm/go", group: "apm", verify: "apm", options: ["serviceName", "environment"], docs: blob("agents/go/README.md") },
@@ -80,17 +87,17 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "apm/python", group: "apm", verify: "apm", options: ["serviceName", "environment", "pythonLauncher"], docs: blob("agents/python/README.md") },
   { id: "apm/java", group: "apm", verify: "apm", options: ["serviceName", "environment", "javaMode"], docs: blob("agents/java/README.md") },
   { id: "apm/dotnet", group: "apm", verify: "apm", options: ["serviceName", "environment", "dotnetApp"], docs: blob("agents/dotnet/README.md") },
-  { id: "apm/php", group: "apm", verify: "apm", options: ["serviceName", "environment", "phpMode", "phpPackage", "arch"], docs: blob("docs/contracts/php-agent.md"), requires: "linux" },
-  { id: "logs/host", group: "logs", verify: "logs", options: ["logPath", "journald"], docs: blob("agents/infra/README.md#logs"), requires: "linux" },
-  { id: "logs/containers", group: "logs", verify: "logs", options: [], docs: blob("agents/infra/README.md#logs"), requires: "linux" },
+  { id: "apm/php", group: "apm", verify: "apm", options: ["serviceName", "environment", "phpMode", "phpPackage", "arch"], docs: blob("docs/contracts/php-agent.md"), requires: ["linux"] },
+  { id: "logs/host", group: "logs", verify: "logs", options: ["logPath", "journald"], docs: blob("agents/infra/README.md#logs"), requires: INFRA_HOSTS },
+  { id: "logs/containers", group: "logs", verify: "logs", options: [], docs: blob("agents/infra/README.md#logs"), requires: ["linux"] },
   { id: "logs/browser", group: "logs", verify: "logs", options: ["serviceName", "environment", "browserOrigin"], docs: blob("docs/contracts/config.md") },
   { id: "logs/otel", group: "logs", verify: "logs", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
   { id: "otel/sdk", group: "opentelemetry", verify: "apm", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
   { id: "otel/collector", group: "opentelemetry", verify: "apm", options: ["protocol"], docs: blob("README.md") },
-  { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
-  { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
-  { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
-  { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
+  { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
 ];
 
 export function findTarget(id: string | undefined): InstallTarget | undefined {
@@ -202,10 +209,11 @@ export interface AgentPackageInfo {
   release_asset_sha256_url: string;
 }
 
-export type BlockLang = "sh" | "yaml" | "go" | "js" | "csharp" | "dockerfile" | "sql" | "nginx" | "ini";
+export type BlockLang = "sh" | "powershell" | "yaml" | "go" | "js" | "csharp" | "dockerfile" | "sql" | "nginx" | "ini";
 
 export type BlockLabel =
   | "install"
+  | "msiInstall"
   | "download"
   | "packageInstall"
   | "enablePhp"
@@ -253,6 +261,10 @@ export type NoteKey =
   | "dotnetLocalSource"
   | "distroAuto"
   | "archAuto"
+  | "macosService"
+  | "windowsService"
+  | "windowsMsi"
+  | "otherHostOs"
   | "dockerGroup"
   | "dockerImageTag"
   | "helmChartSource"
@@ -293,6 +305,8 @@ const DEFAULT_SERVICE = "my-service";
 const DEFAULT_CLUSTER = "my-cluster";
 const INFRA_IMAGE = "ghcr.io/onuragtas/openlog-infra-agent";
 const INSTALL_SH = `${RELEASES}/latest/download/install.sh`;
+/** Published next to install.sh in every release (scripts/install.ps1). */
+const INSTALL_PS1 = `${RELEASES}/latest/download/install.ps1`;
 const CONT = " \\\n  ";
 
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
@@ -301,6 +315,19 @@ const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
 export function shQuote(value: string): string {
   if (value === "") return "''";
   return SHELL_SAFE.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * PowerShell verbatim string: always single-quoted, quotes doubled. PowerShell also treats the typographic single
+ * quotes (U+2018..U+201B) as quote characters, so those are doubled as well.
+ */
+export function psQuote(value: string): string {
+  return `'${value.replace(/['‘’‚‛]/g, "$&$&")}'`;
+}
+
+/** Value of an msiexec PROPERTY="value" argument typed in PowerShell: backtick-escapes what a double-quoted string expands. */
+function msiValue(value: string): string {
+  return `"${value.replace(/[`$"“”„]/g, "`$&")}"`;
 }
 
 /** YAML double-quoted scalar (a JSON string is one). */
@@ -378,6 +405,39 @@ function linux(c: Ctx) {
   add(c, "verify", "sh", "systemctl status openlog-infra-agent --no-pager\njournalctl -u openlog-infra-agent -f");
   note(c, c.o.distro === "auto" ? "distroAuto" : "archAuto");
   if (c.o.dockerAccess) note(c, "dockerGroup");
+}
+
+/** macOS: the same install.sh as Linux installs the launchd service org.openlog.infra-agent. */
+function macos(c: Ctx) {
+  const args = [`--license-key ${shQuote(c.key)}`, `--endpoint ${shQuote(c.http)}`];
+  if (c.o.channel === "beta") args.push("--channel beta");
+  add(c, "install", "sh", `curl -fsSL ${INSTALL_SH} | sudo sh -s --${CONT}${args.join(CONT)}`);
+  add(c, "verify", "sh", "sudo launchctl print system/org.openlog.infra-agent\ntail -f /var/log/openlog-infra-agent.log");
+  note(c, "archAuto");
+  note(c, "macosService");
+}
+
+/** Windows (PowerShell as Administrator): install.ps1, or the amd64 MSI package. */
+function windows(c: Ctx) {
+  const args = [`-LicenseKey ${psQuote(c.key)}`, `-Endpoint ${psQuote(c.http)}`];
+  if (c.o.channel === "beta") args.push("-Channel beta");
+  add(c, "install", "powershell", `& ([scriptblock]::Create((Invoke-RestMethod ${psQuote(INSTALL_PS1)}))) ${args.join(" ")}`);
+  const file = `openlog-infra-agent_${c.version ?? "X.Y.Z"}_windows_amd64.msi`;
+  const url = releaseAsset(c, (v) => `openlog-infra-agent_${v}_windows_amd64.msi`);
+  add(
+    c,
+    "msiInstall",
+    "powershell",
+    [
+      "# Alternative to the script: the MSI package (amd64 only)",
+      `Invoke-WebRequest -Uri ${psQuote(url)} -OutFile ${psQuote(file)}`,
+      `msiexec /i ${file} LICENSE_KEY=${msiValue(c.key)} ENDPOINT=${msiValue(c.http)} /qn`,
+    ].join("\n"),
+  );
+  add(c, "verify", "powershell", "Get-Service openlog-infra-agent");
+  note(c, "windowsService");
+  note(c, "windowsMsi");
+  if (!c.version) note(c, "versionUnknown");
 }
 
 function docker(c: Ctx) {
@@ -613,6 +673,7 @@ function logsHost(c: Ctx) {
   }
   add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
   note(c, "mergeConfig");
+  note(c, "otherHostOs");
 }
 
 function logsContainers(c: Ctx) {
@@ -852,6 +913,7 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
       break;
   }
   note(c, "mergeConfig");
+  note(c, "otherHostOs");
 }
 
 /**
@@ -878,6 +940,12 @@ export function buildInstallCommands(target: TargetId, options: InstallOptions, 
   switch (target) {
     case "linux":
       linux(c);
+      break;
+    case "macos":
+      macos(c);
+      break;
+    case "windows":
+      windows(c);
       break;
     case "docker":
       docker(c);

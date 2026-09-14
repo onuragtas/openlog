@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/inventory"
@@ -103,6 +104,11 @@ func Detect(env Env) Install {
 		}
 	}
 
+	if runtime.GOOS != "linux" {
+		if m := platformInstallMethod(); m != "" && in.Method == MethodTarball {
+			in.Method = m // Windows: msi or zip (privilege_windows.go)
+		}
+	}
 	if env.Privileged {
 		return in
 	}

@@ -168,10 +168,16 @@ type Config struct {
 	TailSampling TailSampling
 	// Usage configures usage metering, plans, quotas and billing (usage.go, D-079..D-081).
 	Usage Usage
+	// SaaS configures the operator console, lifecycle, hard limits and abuse detection (saas.go, D-105, D-106).
+	SaaS SaaS
 	// Onboarding holds the public ingest URLs shown in the UI's install commands (onboarding.go).
 	Onboarding Onboarding
 	// Renderer configures PNG widget images in report e-mails and openlog-renderer (renderer.go, D-097).
 	Renderer Renderer
+	// Privacy configures data exports and account/organization deletion (privacy.go, D-107).
+	Privacy Privacy
+	// StatusPage configures the public status page (privacy.go, D-108).
+	StatusPage StatusPage
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -310,8 +316,11 @@ func Load(getenv func(string) string) (Config, error) {
 		Storage:      loadStorage(&p),
 		TailSampling: loadTailSampling(&p),
 		Usage:        loadUsage(&p),
+		SaaS:         loadSaaS(&p),       // saas.go
 		Onboarding:   loadOnboarding(&p), // onboarding.go
 		Renderer:     loadRenderer(&p),   // renderer.go
+		Privacy:      loadPrivacy(&p),    // privacy.go
+		StatusPage:   loadStatusPage(&p), // privacy.go
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
@@ -369,8 +378,10 @@ func (c Config) validate(getenv func(string) string) error {
 	errs = append(errs, c.validateStorage()...)
 	errs = append(errs, c.TailSampling.validate()...)
 	errs = append(errs, c.validateUsage()...)
+	errs = append(errs, c.validateSaaS()...)        // saas.go
 	errs = append(errs, c.Onboarding.validate()...) // onboarding.go
 	errs = append(errs, c.validateRenderer()...)    // renderer.go
+	errs = append(errs, c.validatePrivacy()...)     // privacy.go
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))
 	}

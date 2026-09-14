@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
@@ -57,35 +58,43 @@ func writeFile(t *testing.T, path, content string) {
 
 func TestClassify(t *testing.T) {
 	cases := map[string]*lib.Artifact{
-		"openlog-infra-agent_0.4.0_linux_amd64.tar.gz": {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "tar.gz"},
-		"openlog-infra-agent_0.4.0_linux_arm64.deb":    {Component: "infra-agent", OS: "linux", Arch: "arm64", Format: "deb"},
-		"openlog-infra-agent_0.4.0_linux_amd64.rpm":    {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "rpm"},
-		"openlog_0.4.0_linux_arm64.tar.gz":             {Component: "backend", OS: "linux", Arch: "arm64", Format: "tar.gz"},
-		"openlog-php-agent_0.4.0_linux_amd64.tar.gz":   {Component: "php-agent", OS: "linux", Arch: "amd64", Format: "tar.gz"},
-		"openlog-php-agent_0.4.0_linux_arm64.deb":      {Component: "php-agent", OS: "linux", Arch: "arm64", Format: "deb"},
-		"openlog-php-agent_0.4.0_linux_amd64.rpm":      {Component: "php-agent", OS: "linux", Arch: "amd64", Format: "rpm"},
-		"openlog-php-agent_0.4.0_linux_arm64.apk":      {Component: "php-agent", OS: "linux", Arch: "arm64", Format: "apk"},
-		"openlog-php-agent_0.3.0_linux_amd64.apk":      nil,
-		"openlog-infra-agent_0.4.0_linux_amd64.apk":    {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "apk"},
-		"openlog_0.4.0_linux_amd64.zip":                nil,
-		"openlog-infra-agent_0.3.0_linux_amd64.tar.gz": nil, // other version
-		"openlog-0.4.0.tgz":                            nil,
-		"manifest.json":                                nil,
-		"install.sh":                                   nil,
-		"openlog-infra-agent_0.4.0_linux.tar.gz":       nil,
-		"openlog-javaagent-0.4.0.jar":                  {Component: "java-agent", OS: "any", Arch: "any", Format: "jar"},
-		"openlog-javaagent-0.3.0.jar":                  nil,
-		"openlog-javaagent-0.4.0.jar.sha256":           nil,
-		"openlog-node-0.4.0.tgz":                       {Component: "node-agent", OS: "any", Arch: "any", Format: "tgz"},
-		"openlog-node-0.3.0.tgz":                       nil,
-		"openlog-node-0.4.0.tgz.sha256":                nil,
-		"openlog-agent-0.4.0.tgz":                      nil, // Helm chart, not the Node.js agent
-		"openlog_agent-0.4.0-py3-none-any.whl":         {Component: "python-agent", OS: "any", Arch: "any", Format: "whl"},
-		"openlog_agent-0.4.0.tar.gz":                   nil, // sdist: release asset only
-		"openlog_agent-0.3.0-py3-none-any.whl":         nil,
-		"OpenLog.Agent.0.4.0.nupkg":                    {Component: "dotnet-agent", OS: "any", Arch: "any", Format: "nupkg"},
-		"OpenLog.Agent.0.4.0.snupkg":                   nil,
-		"OpenLog.Agent.0.3.0.nupkg":                    nil,
+		"openlog-infra-agent_0.4.0_linux_amd64.tar.gz":  {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "tar.gz"},
+		"openlog-infra-agent_0.4.0_linux_arm64.deb":     {Component: "infra-agent", OS: "linux", Arch: "arm64", Format: "deb"},
+		"openlog-infra-agent_0.4.0_linux_amd64.rpm":     {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "rpm"},
+		"openlog_0.4.0_linux_arm64.tar.gz":              {Component: "backend", OS: "linux", Arch: "arm64", Format: "tar.gz"},
+		"openlog-php-agent_0.4.0_linux_amd64.tar.gz":    {Component: "php-agent", OS: "linux", Arch: "amd64", Format: "tar.gz"},
+		"openlog-php-agent_0.4.0_linux_arm64.deb":       {Component: "php-agent", OS: "linux", Arch: "arm64", Format: "deb"},
+		"openlog-php-agent_0.4.0_linux_amd64.rpm":       {Component: "php-agent", OS: "linux", Arch: "amd64", Format: "rpm"},
+		"openlog-php-agent_0.4.0_linux_arm64.apk":       {Component: "php-agent", OS: "linux", Arch: "arm64", Format: "apk"},
+		"openlog-php-agent_0.3.0_linux_amd64.apk":       nil,
+		"openlog-infra-agent_0.4.0_linux_amd64.apk":     {Component: "infra-agent", OS: "linux", Arch: "amd64", Format: "apk"},
+		"openlog_0.4.0_linux_amd64.zip":                 nil,
+		"openlog-infra-agent_0.4.0_darwin_arm64.tar.gz": {Component: "infra-agent", OS: "darwin", Arch: "arm64", Format: "tar.gz"},
+		"openlog-infra-agent_0.4.0_darwin_amd64.pkg":    {Component: "infra-agent", OS: "darwin", Arch: "amd64", Format: "pkg"},
+		"openlog-infra-agent_0.4.0_windows_amd64.zip":   {Component: "infra-agent", OS: "windows", Arch: "amd64", Format: "zip"},
+		"openlog-infra-agent_0.4.0_windows_arm64.zip":   {Component: "infra-agent", OS: "windows", Arch: "arm64", Format: "zip"},
+		"openlog-infra-agent_0.4.0_windows_amd64.msi":   {Component: "infra-agent", OS: "windows", Arch: "amd64", Format: "msi"},
+		"openlog-infra-agent_0.3.0_windows_amd64.msi":   nil,
+		"openlog-php-agent_0.4.0_windows_amd64.zip":     nil,
+		"openlog_0.4.0_windows_amd64.msi":               nil,
+		"openlog-infra-agent_0.3.0_linux_amd64.tar.gz":  nil, // other version
+		"openlog-0.4.0.tgz":                             nil,
+		"manifest.json":                                 nil,
+		"install.sh":                                    nil,
+		"openlog-infra-agent_0.4.0_linux.tar.gz":        nil,
+		"openlog-javaagent-0.4.0.jar":                   {Component: "java-agent", OS: "any", Arch: "any", Format: "jar"},
+		"openlog-javaagent-0.3.0.jar":                   nil,
+		"openlog-javaagent-0.4.0.jar.sha256":            nil,
+		"openlog-node-0.4.0.tgz":                        {Component: "node-agent", OS: "any", Arch: "any", Format: "tgz"},
+		"openlog-node-0.3.0.tgz":                        nil,
+		"openlog-node-0.4.0.tgz.sha256":                 nil,
+		"openlog-agent-0.4.0.tgz":                       nil, // Helm chart, not the Node.js agent
+		"openlog_agent-0.4.0-py3-none-any.whl":          {Component: "python-agent", OS: "any", Arch: "any", Format: "whl"},
+		"openlog_agent-0.4.0.tar.gz":                    nil, // sdist: release asset only
+		"openlog_agent-0.3.0-py3-none-any.whl":          nil,
+		"OpenLog.Agent.0.4.0.nupkg":                     {Component: "dotnet-agent", OS: "any", Arch: "any", Format: "nupkg"},
+		"OpenLog.Agent.0.4.0.snupkg":                    nil,
+		"OpenLog.Agent.0.3.0.nupkg":                     nil,
 	}
 	for name, want := range cases {
 		got, ok := classify(name, "0.4.0")
@@ -336,6 +345,65 @@ func TestArchive(t *testing.T) {
 	}
 	if _, code := runCmd(t, "archive", "--out", out, "--prefix", "top", src); code != 1 {
 		t.Error("symlink accepted")
+	}
+}
+
+func TestArchiveZip(t *testing.T) {
+	src := t.TempDir()
+	writeFile(t, filepath.Join(src, "openlog-infra-agent.exe"), "bin")
+	if err := os.Chmod(filepath.Join(src, "openlog-infra-agent.exe"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(src, "README.md"), "r")
+	writeFile(t, filepath.Join(src, "packaging", "config.example.yaml"), "c")
+	writeFile(t, filepath.Join(src, ".DS_Store"), "x")
+	t.Setenv("SOURCE_DATE_EPOCH", "1700000000")
+	dir := t.TempDir()
+	outA, outB := filepath.Join(dir, "a.zip"), filepath.Join(dir, "b.bin")
+	if o, code := runCmd(t, "archive", "--out", outA, "--prefix", "top", src); code != 0 {
+		t.Fatal(o)
+	}
+	if o, code := runCmd(t, "archive", "--format", "zip", "--out", outB, "--prefix", "top", src); code != 0 {
+		t.Fatal(o)
+	}
+	a, _ := os.ReadFile(outA)
+	b, _ := os.ReadFile(outB)
+	if !bytes.Equal(a, b) {
+		t.Error("zip output is not reproducible")
+	}
+	zr, err := zip.NewReader(bytes.NewReader(a), int64(len(a)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+		if f.Modified.Unix() != 1700000000 {
+			t.Errorf("%s mtime %v", f.Name, f.Modified)
+		}
+		switch f.Name {
+		case "top/openlog-infra-agent.exe":
+			if f.Mode().Perm() != 0o755 {
+				t.Errorf("exe mode %v", f.Mode())
+			}
+			rc, _ := f.Open()
+			data, _ := io.ReadAll(rc)
+			rc.Close()
+			if string(data) != "bin" {
+				t.Errorf("exe content %q", data)
+			}
+		case "top/README.md":
+			if f.Mode().Perm() != 0o644 {
+				t.Errorf("readme mode %v", f.Mode())
+			}
+		}
+	}
+	want := "top/,top/README.md,top/openlog-infra-agent.exe,top/packaging/,top/packaging/config.example.yaml"
+	if strings.Join(names, ",") != want {
+		t.Errorf("entries = %v", names)
+	}
+	if _, code := runCmd(t, "archive", "--format", "7z", "--out", outB, "--prefix", "top", src); code != 2 {
+		t.Error("unknown format accepted")
 	}
 }
 

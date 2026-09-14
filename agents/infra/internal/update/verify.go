@@ -97,9 +97,10 @@ func VerifyInstruction(in VerifyInput) (*Verified, error) {
 	}
 
 	// Rule 3: an artifact for this platform.
-	art, ok := m.Artifact(lib.ComponentInfraAgent, in.OS, in.Arch, lib.FormatTarGz)
+	format := ArtifactFormat(in.OS)
+	art, ok := m.Artifact(lib.ComponentInfraAgent, in.OS, in.Arch, format)
 	if !ok {
-		return nil, ruleErr(3, "manifest %s has no %s %s/%s %s artifact", m.Version, lib.ComponentInfraAgent, in.OS, in.Arch, lib.FormatTarGz)
+		return nil, ruleErr(3, "manifest %s has no %s %s/%s %s artifact", m.Version, lib.ComponentInfraAgent, in.OS, in.Arch, format)
 	}
 
 	running, err := lib.ParseVersion(in.Running)

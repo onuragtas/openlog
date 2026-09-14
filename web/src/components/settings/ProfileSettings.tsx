@@ -7,6 +7,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { SUPPORTED_LANGUAGES } from "@/i18n";
 import { applyUserLanguage } from "@/lib/user-language";
 import { FormError, SettingsSection } from "./common";
+import { PersonalDataSection } from "./PersonalDataSection";
 
 /** Settings → Profile: the signed-in user's own preferences (language, D-095). */
 export function ProfileSettings() {
@@ -30,6 +31,7 @@ export function ProfileSettings() {
   if (!user) return null;
 
   return (
+    <div className="flex flex-col gap-4">
     <SettingsSection title={t("settings.profile.title")} description={t("settings.profile.description")}>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
         <dt className="text-muted-foreground">{t("settings.profile.name")}</dt>
@@ -67,5 +69,7 @@ export function ProfileSettings() {
         </dd>
       </dl>
     </SettingsSection>
+    <PersonalDataSection />
+    </div>
   );
 }

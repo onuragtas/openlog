@@ -9,6 +9,8 @@ export const KNOWN_CATEGORIES = [
   "process",
   "listening_port",
   "systemd_unit",
+  "launchd_service",
+  "windows_service",
   "kernel_module",
   "network_interface",
   "mount",

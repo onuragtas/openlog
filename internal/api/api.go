@@ -61,6 +61,12 @@ type Server struct {
 	onboarding *OnboardingConfig
 	// render token signing key of the internal report render endpoints (dashboard_render.go, D-097); nil: none
 	renderKey []byte
+	// SaaS operator console, suspension read-only mode and support sessions (operator.go, D-105, D-106); nil: none
+	saas *saasState
+	// data exports, account and organization deletion (privacy.go, D-107); nil: none
+	privacy *PrivacyDeps
+	// public status page and its incidents (statuspage.go, D-108); nil: none
+	statusPage *StatusPageDeps
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -129,6 +135,9 @@ func (s *Server) Handler() http.Handler {
 	s.usageRoutes(mux)        // usage.go (D-079..D-081)
 	s.ssoRoutes(mux)          // sso.go: single sign-on, domains, SCIM (D-077, D-078)
 	s.onboardingRoutes(mux)   // onboarding.go: "Add data" install command inputs
+	s.operatorRoutes(mux)     // operator.go: SaaS operator console, lifecycle, support access (D-105, D-106)
+	s.privacyRoutes(mux)      // privacy.go: data exports, account and organization deletion (D-107)
+	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})
@@ -162,6 +171,12 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (*auth.Pri
 	if err != nil {
 		writeError(w, s.toAPIError(err))
 		return nil, r
+	}
+	if s.saas != nil { // support sessions and suspended organizations (operator_access.go, D-105)
+		if p, r, err = s.saasGate(r, p); err != nil {
+			writeError(w, s.toAPIError(err))
+			return nil, r
+		}
 	}
 	return p, r.WithContext(auth.WithPrincipal(r.Context(), p))
 }
@@ -234,6 +249,7 @@ var authStatus = map[auth.Code]int{
 	auth.CodeFailedPrecondition: http.StatusConflict,
 	auth.CodeResourceExhausted:  http.StatusTooManyRequests,
 	auth.CodeUnavailable:        http.StatusServiceUnavailable,
+	auth.CodeQuotaExceeded:      http.StatusForbidden, // plan users limit (SaaS mode, D-105)
 }
 
 func (s *Server) toAPIError(err error) *apiError {

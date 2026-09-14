@@ -6,7 +6,7 @@ import (
 )
 
 func TestContainersCRIAndMultilineConfig(t *testing.T) {
-	cfg := Default()
+	cfg := DefaultFor("linux")
 	if len(cfg.Containers.CRISockets) != 3 || cfg.Containers.CRISockets[0] != "/run/containerd/containerd.sock" {
 		t.Errorf("cri_sockets default = %v", cfg.Containers.CRISockets)
 	}

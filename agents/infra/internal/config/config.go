@@ -13,17 +13,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
+	"runtime"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// DefaultPath is the configuration file used when -config is not given.
-const DefaultPath = "/etc/openlog-infra-agent/config.yaml"
-
-// DefaultInstallRoot is the default update.install_root.
-const DefaultInstallRoot = "/opt/openlog/infra-agent"
+// DefaultPath, DefaultInstallRoot and the other default paths are defined per OS in paths_unix.go and paths_windows.go.
 
 // Duration is a time.Duration that unmarshals from Go duration strings.
 type Duration time.Duration
@@ -89,9 +85,6 @@ type PHPForwarder struct {
 	ReassemblyTimeout Duration `yaml:"reassembly_timeout"`
 }
 
-// DefaultPHPSocket is the default php_forwarder.socket.
-const DefaultPHPSocket = "/run/openlog-infra-agent/php.sock"
-
 // Mode returns the socket file mode.
 func (p PHPForwarder) Mode() os.FileMode {
 	if p.SocketMode == "0666" {
@@ -111,7 +104,7 @@ func (p *PHPForwarder) validate() []error {
 			add("php_forwarder.socket must be at most 107 bytes (unix socket path limit)")
 		}
 	}
-	if p.Socket == "" && p.UDPListen == "" {
+	if p.Socket == "" && p.UDPListen == "" && (p.Enabled == nil || *p.Enabled) {
 		add("php_forwarder: socket or udp_listen must be set")
 	}
 	if p.SocketMode != "0660" && p.SocketMode != "0666" {
@@ -163,17 +156,19 @@ type Containers struct {
 
 // LogsConfig configures log collection from files and journald.
 type LogsConfig struct {
-	Enabled           bool          `yaml:"enabled"`
-	AutoFromDiscovery bool          `yaml:"auto_from_discovery"`
-	MaskSecrets       bool          `yaml:"mask_secrets"`
-	ParseSeverity     bool          `yaml:"parse_severity"`
-	PollInterval      Duration      `yaml:"poll_interval"`
-	StartAt           string        `yaml:"start_at"`
-	MaxLineBytes      int           `yaml:"max_line_bytes"`
-	RateLimitLines    int           `yaml:"rate_limit_lines"`
-	Files             []LogFile     `yaml:"files"`
-	Journald          JournaldInput `yaml:"journald"`
-	Containers        ContainerLogs `yaml:"containers"`
+	Enabled           bool            `yaml:"enabled"`
+	AutoFromDiscovery bool            `yaml:"auto_from_discovery"`
+	MaskSecrets       bool            `yaml:"mask_secrets"`
+	ParseSeverity     bool            `yaml:"parse_severity"`
+	PollInterval      Duration        `yaml:"poll_interval"`
+	StartAt           string          `yaml:"start_at"`
+	MaxLineBytes      int             `yaml:"max_line_bytes"`
+	RateLimitLines    int             `yaml:"rate_limit_lines"`
+	Files             []LogFile       `yaml:"files"`
+	Journald          JournaldInput   `yaml:"journald"`
+	UnifiedLog        UnifiedLogInput `yaml:"unified_log"`       // macOS (platform.go)
+	WindowsEventLog   EventLogInput   `yaml:"windows_event_log"` // Windows (platform.go)
+	Containers        ContainerLogs   `yaml:"containers"`
 }
 
 // Container log sources (logs.containers.source).
@@ -272,11 +267,14 @@ type ExportConfig struct {
 }
 
 // Default returns a configuration with all defaults applied.
-func Default() *Config {
-	return &Config{
+func Default() *Config { return DefaultFor(runtime.GOOS) }
+
+// DefaultFor returns the defaults of an agent running on goos (linux, darwin, windows; D-104).
+func DefaultFor(goos string) *Config {
+	c := &Config{
 		Interval:          Duration(10 * time.Second),
 		InventoryInterval: Duration(time.Hour),
-		StateDir:          "/var/lib/openlog-infra-agent",
+		StateDir:          DefaultStateDir,
 		LogLevel:          "info",
 		Host:              HostConfig{RootPath: "/"},
 		Collectors: Collectors{
@@ -284,8 +282,8 @@ func Default() *Config {
 			Disk: true, Network: true, Uptime: true, Processes: true,
 		},
 		Inventory: InventoryConfig{Enabled: true},
-		Discovery: DiscoveryConfig{Enabled: true, RulesDir: "/etc/openlog-infra-agent/discovery.d"},
-		Buffer:    BufferConfig{Dir: "/var/lib/openlog-infra-agent/buffer", MaxBytes: 256 << 20},
+		Discovery: DiscoveryConfig{Enabled: true, RulesDir: DefaultRulesDir},
+		Buffer:    BufferConfig{Dir: DefaultBufferDir, MaxBytes: 256 << 20},
 		Export:    ExportConfig{Timeout: Duration(15 * time.Second), MaxRequestBytes: 4 << 20},
 
 		ProcessMetrics: ProcessMetrics{Enabled: true, TopNCPU: 20, TopNMemory: 20},
@@ -309,6 +307,8 @@ func Default() *Config {
 		PHPAgent:   defaultPHPAgent(),
 		Kubernetes: defaultKubernetes(),
 	}
+	applyPlatformDefaults(c, goos)
+	return c
 }
 
 // Load reads path (if it exists or !allowMissing), applies environment
@@ -376,7 +376,7 @@ func (c *Config) Validate(requireExport bool) error {
 	if c.InventoryInterval.D() < c.Interval.D() {
 		add("inventory_interval (%s) must not be shorter than interval (%s)", c.InventoryInterval.D(), c.Interval.D())
 	}
-	if c.Host.RootPath == "" || !strings.HasPrefix(c.Host.RootPath, "/") {
+	if c.Host.RootPath == "" || !isAbsPath(c.Host.RootPath) {
 		add("host.root_path must be an absolute path")
 	}
 	if c.StateDir == "" {
@@ -402,11 +402,11 @@ func (c *Config) Validate(requireExport bool) error {
 	if c.ProcessMetrics.TopNCPU < 0 || c.ProcessMetrics.TopNMemory < 0 {
 		add("process_metrics.top_n_cpu and top_n_memory must be >= 0")
 	}
-	if c.Containers.Enabled && !strings.HasPrefix(c.Containers.DockerSocket, "/") {
+	if c.Containers.Enabled && !isAbsPath(c.Containers.DockerSocket) {
 		add("containers.docker_socket must be an absolute path")
 	}
 	for i, s := range c.Containers.CRISockets {
-		if c.Containers.Enabled && !strings.HasPrefix(s, "/") {
+		if c.Containers.Enabled && !isAbsPath(s) {
 			add("containers.cri_sockets[%d] must be an absolute path", i)
 		}
 	}
@@ -450,7 +450,7 @@ func (l *LogsConfig) validate() []error {
 		add("logs.rate_limit_lines must be >= 0 (0 = unlimited)")
 	}
 	for i, f := range l.Files {
-		if !strings.HasPrefix(f.Path, "/") {
+		if !isAbsPath(f.Path) {
 			add("logs.files[%d].path must be an absolute path or glob", i)
 		} else if _, err := filepath.Match(f.Path, ""); err != nil {
 			add("logs.files[%d].path: invalid glob %q", i, f.Path)
@@ -478,7 +478,7 @@ func (l *LogsConfig) validate() []error {
 		if c.RateLimitLines < 0 {
 			add("logs.containers.rate_limit_lines must be >= 0 (0 = unlimited)")
 		}
-		if !strings.HasPrefix(c.DockerDir, "/") {
+		if !isAbsPath(c.DockerDir) {
 			add("logs.containers.docker_containers_dir must be an absolute path")
 		}
 		for name, list := range map[string][]ContainerMatch{"include": c.Include, "exclude": c.Exclude} {
@@ -501,6 +501,7 @@ func (l *LogsConfig) validate() []error {
 			}
 		}
 	}
+	errs = append(errs, l.validatePlatformInputs()...)
 	if l.Journald.Enabled {
 		if l.Journald.JournalctlPath == "" {
 			add("logs.journald.journalctl_path must not be empty")

@@ -1,0 +1,10 @@
+{{define "subject"}}[openlog] {{if eq .Stage "scheduled"}}{{.OrgName}} organizasyonu silinmek üzere planlandı{{else if eq .Stage "cancelled"}}{{.OrgName}} organizasyonunun silinmesi iptal edildi{{else}}{{.OrgName}} organizasyonu silindi{{end}}{{end}}
+
+{{define "text"}}
+{{if eq .Stage "scheduled"}}{{if .Operator}}Bir openlog operatörü "{{.OrgName}}" organizasyonunu silinmek üzere planladı.{{else}}Bir sahip "{{.OrgName}}" organizasyonunu silinmek üzere planladı.{{end}} Üyeler artık bu organizasyona giriş yapamaz; lisans ve API anahtarları şu andan itibaren çalışmaz.
+
+Tüm verileri (üyeler, dashboard'lar, alarmlar, anahtarlar, denetim kaydı ve telemetri) {{date .PurgeAt}} tarihinden sonra kalıcı olarak silinecek.{{if not .Operator}} O zamana kadar bir sahip silme işlemini Ayarlar → Profil altında iptal edebilir.{{end}}{{else if eq .Stage "cancelled"}}"{{.OrgName}}" organizasyonunun silinmesi iptal edildi. Üyeler yeniden giriş yapabilir ve lisans anahtarları yeniden çalışır.{{else}}"{{.OrgName}}" organizasyonu ve tüm verileri kalıcı olarak silindi. Kanıt olarak kişisel veri içermeyen bir silme sertifikası saklanır.{{end}}
+{{with .Link}}
+{{.}}
+{{end}}
+{{end}}

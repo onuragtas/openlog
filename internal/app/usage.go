@@ -55,6 +55,7 @@ func startIngestQuota(ctx context.Context, cfg config.Config, pool *pgxpool.Pool
 	})
 	go lim.Run(ctx)
 	svc.SetLimiter(ingestLimiter{lim})
+	startIngestGate(ctx, cfg, pool, svc, reg, log) // saas.go: suspension and host limits (D-105)
 	log.Info("SaaS mode: ingest quota enforcement enabled", "refresh", u.QuotaRefreshInterval, "pods", u.QuotaIngestPods)
 }
 

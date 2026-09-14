@@ -24,12 +24,18 @@ type Collector interface {
 	Collect(now time.Time) ([]*metricspb.Metric, error)
 }
 
+// serviceLookupCollector is a process metrics collector that tags processes with their discovered service.
+type serviceLookupCollector interface {
+	Collector
+	SetServiceLookup(ServiceLookup)
+}
+
 // Set runs a list of collectors and records their durations.
 type Set struct {
 	collectors []Collector
 	stats      *selfmon.Stats
 	log        *slog.Logger
-	procTop    *ProcessTop
+	procTop    serviceLookupCollector
 
 	mu       sync.Mutex
 	lastErrs map[string]string
@@ -39,6 +45,11 @@ type Set struct {
 // included and runs last so that it reports this round's durations. ctr may be
 // nil (no Docker metadata; container metrics then only carry container.id).
 func NewSet(fs *hostfs.FS, cfg *config.Config, stats *selfmon.Stats, log *slog.Logger, ctr *containers.Source) *Set {
+	if fs.NativeOS() {
+		// macOS and Windows (D-104): native APIs; no cgroup container metrics.
+		cs, top := nativeCollectors(cfg)
+		return &Set{collectors: cs, procTop: top, stats: stats, log: log, lastErrs: map[string]string{}}
+	}
 	fs = fs.WithRecorder(stats)
 	boot := func() time.Time { return bootTime(fs) }
 	c := cfg.Collectors

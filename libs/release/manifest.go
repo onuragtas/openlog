@@ -41,6 +41,9 @@ const (
 	FormatTgz   = "tgz"   // npm package tarball
 	FormatWheel = "whl"   // Python wheel
 	FormatNupkg = "nupkg" // NuGet package
+	FormatZip   = "zip"   // Windows infra agent archive
+	FormatMSI   = "msi"   // Windows infra agent installer
+	FormatPkg   = "pkg"   // macOS infra agent installer package
 
 	// PlatformAny is the os and arch of platform-independent artifacts (the Java agent jar, language agent packages).
 	PlatformAny = "any"

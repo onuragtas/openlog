@@ -1,0 +1,11 @@
+{{define "subject"}}[openlog] {{if eq .Kind "organization"}}Data export of {{.OrgName}} is ready{{else}}Your personal data export is ready{{end}}{{end}}
+
+{{define "text"}}
+{{if eq .Kind "organization"}}The data export of organization "{{.OrgName}}" you requested is ready ({{.Size}}).{{else}}The export of your personal openlog data you requested is ready ({{.Size}}).{{end}}
+{{if .Truncated}}
+The telemetry part reached the export size or row limit and is incomplete; the archive's manifest.json shows where it stopped. Request a shorter time range for the rest.
+{{end}}
+Download it before {{date .ExpiresAt}}. Anyone with the link can download the archive until then, so do not forward this e-mail.
+
+{{.Link}}
+{{end}}

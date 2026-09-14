@@ -12,10 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	"github.com/onuragtas/openlog/agents/infra/internal/osutil"
 )
 
 // maxStatusBytes bounds JSON files read by the privileged steps (state and status files).
@@ -34,13 +36,17 @@ type Sys struct {
 	Run      func(ctx context.Context, name string, args ...string) error
 	LookPath func(string) (string, error)
 	Getenv   func(string) string
+	// SelfTestAsCurrent runs candidate self-tests with the identity of the privileged process instead of the agent
+	// user: macOS and Windows services run as root / LocalSystem (D-104).
+	SelfTestAsCurrent bool
 }
 
 // HostSys is the real host.
 func HostSys() *Sys {
 	return &Sys{
-		Root: "/", IsRoot: func() bool { return os.Geteuid() == 0 }, Lchown: os.Lchown,
+		Root: "/", IsRoot: isPrivileged, Lchown: os.Lchown,
 		Run: runCommand, LookPath: exec.LookPath, Getenv: os.Getenv,
+		SelfTestAsCurrent: runtime.GOOS != "linux",
 	}
 }
 
@@ -56,17 +62,10 @@ func runCommand(ctx context.Context, name string, args ...string) error {
 
 func (s *Sys) path(p string) string { return filepath.Join(s.Root, p) }
 
-func owner(fi fs.FileInfo) (uid, gid int) {
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return int(st.Uid), int(st.Gid)
-	}
-	return -1, -1
-}
-
-// trustedInfo reports whether fi belongs to the trusted owner and is not writable by group or others.
-func (s *Sys) trustedInfo(fi fs.FileInfo) bool {
-	uid, _ := owner(fi)
-	return uid == s.RootUID && fi.Mode().Perm()&0o022 == 0
+// trustedInfo reports whether the file at path (described by fi) belongs to the trusted owner and cannot be
+// modified by anyone else (POSIX: not writable by group or others; Windows: ACL, see platform_windows.go).
+func (s *Sys) trustedInfo(path string, fi fs.FileInfo) bool {
+	return s.trustedOwnerAndMode(path, fi)
 }
 
 // trustedTree reports whether dir and everything below it are trusted directories and regular files
@@ -81,7 +80,7 @@ func (s *Sys) trustedTree(dir string) bool {
 		if err != nil {
 			return err
 		}
-		if !(fi.IsDir() || fi.Mode().IsRegular()) || !s.trustedInfo(fi) {
+		if !(fi.IsDir() || fi.Mode().IsRegular()) || !s.trustedInfo(p, fi) {
 			ok = false
 			return filepath.SkipAll
 		}
@@ -101,7 +100,7 @@ func (s *Sys) TrustedFile(path string) error {
 	if err != nil {
 		return err
 	}
-	if !fi.Mode().IsRegular() || !s.trustedInfo(fi) {
+	if !fi.Mode().IsRegular() || !s.trustedInfo(real, fi) {
 		return fmt.Errorf("%s is not a regular file owned by root and writable only by its owner", real)
 	}
 	for d := filepath.Dir(real); ; d = filepath.Dir(d) {
@@ -109,8 +108,7 @@ func (s *Sys) TrustedFile(path string) error {
 		if err != nil {
 			return err
 		}
-		uid, _ := owner(fi)
-		if (uid != s.RootUID && uid != 0) || (fi.Mode().Perm()&0o022 != 0 && fi.Mode()&os.ModeSticky == 0) {
+		if !s.trustedAncestor(d, fi) {
 			return fmt.Errorf("directory %s of %s is writable by a non-root user", d, real)
 		}
 		if filepath.Dir(d) == d {
@@ -196,7 +194,7 @@ func (s *Sys) loadTrustedJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	if !fi.Mode().IsRegular() || !s.trustedInfo(fi) {
+	if !fi.Mode().IsRegular() || !s.trustedInfo(path, fi) {
 		return fmt.Errorf("%s is not a root-owned regular file", path)
 	}
 	b, err := readLimited(path, maxStatusBytes)
@@ -209,7 +207,7 @@ func (s *Sys) loadTrustedJSON(path string, v any) error {
 // readLimited reads a regular file of at most limit bytes without following a final symlink or
 // blocking on a FIFO.
 func readLimited(path string, limit int64) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|osutil.ONofollow|osutil.ONonblock, 0)
 	if err != nil {
 		return nil, err
 	}

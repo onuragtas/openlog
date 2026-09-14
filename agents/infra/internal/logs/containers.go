@@ -747,7 +747,7 @@ func (m *Manager) resumeRotated(s *source, local, host string, wanted map[string
 	if err != nil || !fi.Mode().IsRegular() {
 		return
 	}
-	dev, ino, ok := identity(fi)
+	dev, ino, ok := identity(local+".1", fi)
 	if !ok {
 		return
 	}

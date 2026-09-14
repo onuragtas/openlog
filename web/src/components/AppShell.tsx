@@ -10,6 +10,8 @@ import { AccountLanguageSwitch } from "@/components/LanguageSwitch";
 import { UserLanguageSync } from "@/components/UserLanguageSync";
 import { OrgSwitcher } from "@/components/settings/OrgSwitcher";
 import { UsageBanner } from "@/components/settings/UsageBanner";
+import { OperatorNavLink } from "@/components/operator/OperatorNavLink";
+import { SaaSBanner } from "@/components/operator/SaaSBanner";
 import { SsoSignOutButton } from "@/components/SsoSignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TimeRangePicker } from "@/components/TimeRangePicker";
@@ -82,6 +84,7 @@ function SidebarContent({ onNavigate, closeButton }: { onNavigate?: () => void; 
             <span>{t(label)}</span>
           </Link>
         ))}
+        <OperatorNavLink className={itemClass} onNavigate={onNavigate} />
       </nav>
       <div className="border-t p-2">
         <button
@@ -200,6 +203,7 @@ export function AppShell() {
         <UpdateBanner />
         <EmailVerificationBanner />
         <UsageBanner />
+        <SaaSBanner />
         <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>

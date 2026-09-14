@@ -28,7 +28,10 @@ export function HostDetailPage() {
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
   const host = useQuery(hostQuery(hostId));
-  const tab: HostTab = search.tab ?? "overview";
+  // Containers are collected on Linux only (D-104): hide the tab when the host reports another os.type.
+  const osType = host.data?.resource_attributes?.["os.type"];
+  const tabs = HOST_TABS.filter((k) => k !== "containers" || !osType || osType === "linux");
+  const tab: HostTab = search.tab && tabs.includes(search.tab) ? search.tab : "overview";
 
   if (host.isPending) return <LoadingState />;
   if (host.isError) {
@@ -89,7 +92,7 @@ export function HostDetailPage() {
 
       <Tabs value={tab} onValueChange={(v) => void navigate({ search: (prev) => ({ ...prev, tab: v === "overview" ? undefined : (v as HostTab) }) })}>
         <TabsList aria-label={t("host.tabs.label")}>
-          {HOST_TABS.map((k) => (
+          {tabs.map((k) => (
             <TabsTrigger key={k} value={k}>
               {t(`host.tabs.${k}`)}
             </TabsTrigger>

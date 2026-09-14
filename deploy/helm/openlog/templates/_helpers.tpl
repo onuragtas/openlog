@@ -562,7 +562,7 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 - name: OPENLOG_API_TRUSTED_PROXIES
   value: {{ join "," $a.trustedProxies | quote }}
 {{- /* Single sign-on secret key and sign-up CAPTCHA secret (chart Secret or auth.existingSecret; absent keys = unset). */}}
-{{- range $env := list (list "OPENLOG_SSO_SECRET_KEY" $a.ssoSecretKeyKey "sso-secret-key") (list "OPENLOG_SSO_SECRET_KEY_PREVIOUS" $a.ssoSecretKeyPreviousKey "sso-secret-key-previous") (list "OPENLOG_SIGNUP_CAPTCHA_SECRET" $a.captchaSecretKey "signup-captcha-secret") }}
+{{- range $env := list (list "OPENLOG_SSO_SECRET_KEY" $a.ssoSecretKeyKey "sso-secret-key") (list "OPENLOG_SSO_SECRET_KEY_PREVIOUS" $a.ssoSecretKeyPreviousKey "sso-secret-key-previous") (list "OPENLOG_SIGNUP_CAPTCHA_SECRET" $a.captchaSecretKey "signup-captcha-secret") (list "OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY" $a.dataExportS3SecretAccessKeyKey "data-export-s3-secret-access-key") }}
 - name: {{ index $env 0 }}
   valueFrom:
     secretKeyRef:

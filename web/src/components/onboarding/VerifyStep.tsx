@@ -25,6 +25,9 @@ function tipsFor(target: InstallTarget): TipKey[] {
   switch (target.id) {
     case "linux":
       return ["firewall", "endpoint", "key", "journal"];
+    case "macos":
+    case "windows":
+      return ["firewall", "endpoint", "key"];
     case "docker":
       return ["firewall", "endpoint", "key", "dockerLogs"];
     case "kubernetes":

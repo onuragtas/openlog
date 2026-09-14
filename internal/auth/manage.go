@@ -160,6 +160,9 @@ func (s *Service) CreateInvitation(ctx context.Context, p *Principal, email stri
 	} else if !errors.Is(err, ErrNotFound) {
 		return Invitation{}, "", s.fail(err)
 	}
+	if err := s.CheckMemberLimit(ctx, p.OrgID, true); err != nil { // plan users limit (saas.go, SaaS mode)
+		return Invitation{}, "", err
+	}
 	token, err := NewSecret(PrefixInvitation)
 	if err != nil {
 		return Invitation{}, "", err
@@ -328,6 +331,9 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, password, name st
 		}
 		// The inviting admin vouches for the address (or it received the invitation e-mail).
 		u = User{Email: inv.Email, Name: clean, PasswordHash: hash, CreatedAt: now, EmailVerifiedAt: &now, Locale: meta.Locale}
+	}
+	if err := s.CheckMemberLimit(ctx, inv.OrgID, false); err != nil { // plan users limit (saas.go, SaaS mode)
+		return LoginResult{}, Organization{}, err
 	}
 	if err := s.store.AcceptInvitation(ctx, inv.ID, &u, now); err != nil {
 		if errors.Is(err, ErrAlreadyExists) {

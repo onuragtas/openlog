@@ -222,17 +222,22 @@ release-check:
 	@[ -n "$(OPENLOG_RELEASE_PUBLIC_KEYS)" ] || { echo "OPENLOG_RELEASE_PUBLIC_KEYS is empty: binaries without trusted keys cannot update themselves"; exit 1; }
 	@mkdir -p $(RELEASE_DIR) $(RELEASE_STAGE)
 
-# Agent tarballs: openlog-infra-agent_<v>_linux_<arch>/{openlog-infra-agent,LICENSE,README.md,packaging/}
+# Agent archives: openlog-infra-agent_<v>_<os>_<arch>/{openlog-infra-agent[.exe],LICENSE,README.md,packaging/} as .tar.gz
+# (linux, darwin) or .zip (windows). release-packages needs the linux ones of $(RELEASE_ARCHES). release.yml builds
+# darwin and windows/amd64 (MSI) on native runners and narrows this list; archives already in $(RELEASE_DIR) are kept.
+RELEASE_AGENT_PLATFORMS ?= $(addprefix linux/,$(RELEASE_ARCHES)) darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 release-agent: release-tool
-	@set -euo pipefail; mkdir -p $(RELEASE_DIR); for arch in $(RELEASE_ARCHES); do \
-		name=openlog-infra-agent_$(VERSION)_linux_$$arch; stage="$(RELEASE_STAGE)/$$name"; \
+	@set -euo pipefail; mkdir -p $(RELEASE_DIR); for platform in $(RELEASE_AGENT_PLATFORMS); do \
+		os=$${platform%/*}; arch=$${platform#*/}; exe=openlog-infra-agent; ext=tar.gz; \
+		if [ "$$os" = windows ]; then exe=openlog-infra-agent.exe; ext=zip; fi; \
+		name=openlog-infra-agent_$(VERSION)_$${os}_$$arch; stage="$(RELEASE_STAGE)/$$name"; \
 		rm -rf "$$stage"; mkdir -p "$$stage"; \
 		echo "building $$name"; \
-		( cd agents/infra && CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath \
-			-ldflags "$(AGENT_LDFLAGS)" -o "$(CURDIR)/$$stage/openlog-infra-agent" ./cmd/openlog-infra-agent ); \
+		( cd agents/infra && CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath \
+			-ldflags "$(AGENT_LDFLAGS)" -o "$(CURDIR)/$$stage/$$exe" ./cmd/openlog-infra-agent ); \
 		cp agents/infra/LICENSE agents/infra/README.md "$$stage/"; \
 		cp -R agents/infra/packaging "$$stage/packaging"; \
-		$(RELEASE_TOOL) archive --out "$(RELEASE_DIR)/$$name.tar.gz" --prefix "$$name" "$$stage"; \
+		$(RELEASE_TOOL) archive --out "$(RELEASE_DIR)/$$name.$$ext" --prefix "$$name" "$$stage"; \
 	done
 
 # .deb/.rpm from the staged agent directories (needs release-agent and the signing key).

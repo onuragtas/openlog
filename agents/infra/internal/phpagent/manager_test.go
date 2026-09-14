@@ -85,7 +85,7 @@ func (e *mgrEnv) run(ctx context.Context, name string, args ...string) ([]byte, 
 }
 
 func (e *mgrEnv) manager(mutate ...func(*Options)) *Manager {
-	cfg := config.Default().PHPAgent
+	cfg := config.DefaultFor("linux").PHPAgent // the PHP agent installer is Linux-only
 	cfg.InstallRoot = e.root
 	o := Options{Config: cfg, StateDir: e.stateDir, StatusDir: e.status, AgentVersion: "0.9.1", OS: "linux", Arch: testArch,
 		Trusted: []ed25519.PublicKey{e.key.pub}, Capable: true, ExtraBins: func() []string { return []string{e.bin} },

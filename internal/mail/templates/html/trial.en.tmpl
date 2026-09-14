@@ -1,0 +1,2 @@
+{{define "content"}}<p>{{if .Ended}}The {{.PlanName}} trial of organization "{{.OrgName}}" ({{.TenantID}}) ended on {{date .EndsAt}}. The organization now uses the <strong>{{.FallbackPlanName}}</strong> plan and its limits apply.{{else}}The {{.PlanName}} trial of organization "{{.OrgName}}" ({{.TenantID}}) ends on <strong>{{date .EndsAt}}</strong>. Afterwards the organization moves to the {{.FallbackPlanName}} plan and its limits apply.{{end}}</p><p>To keep the {{.PlanName}} plan, contact openlog support or upgrade.</p>{{end}}
+{{define "linkLabel"}}View plan and usage{{end}}

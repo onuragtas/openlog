@@ -45,8 +45,8 @@ const (
 const (
 	// AgentName is agent.name in sync requests and the deb/rpm package name.
 	AgentName = "openlog-infra-agent"
-	// BinaryName is the executable inside versions/<v>/.
-	BinaryName = "openlog-infra-agent"
+	// BinaryName is the executable inside versions/<v>/ (".exe" on Windows).
+	BinaryName = "openlog-infra-agent" + exeSuffix
 	// ManifestFile and SignatureFile are kept next to each installed binary.
 	ManifestFile  = "manifest.json"
 	SignatureFile = "manifest.json.sig"

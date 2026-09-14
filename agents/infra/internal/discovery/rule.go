@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -41,6 +42,7 @@ type Matcher struct {
 	ListeningPort *PortMatcher      `yaml:"listening_port"`
 	Package       *PackageMatcher   `yaml:"package"`
 	Container     *ContainerMatcher `yaml:"container"`
+	Service       *ServiceMatcher   `yaml:"service"`
 }
 
 // ProcessMatcher matches a process; all given fields must match.
@@ -55,6 +57,15 @@ type ProcessMatcher struct {
 // UnitMatcher matches a systemd unit by name.
 type UnitMatcher struct {
 	NameRegex string `yaml:"name_regex"`
+
+	re *regexp.Regexp
+}
+
+// ServiceMatcher matches a launchd job label (macOS) or a Windows service name (D-104).
+type ServiceMatcher struct {
+	NameRegex string `yaml:"name_regex"`
+	// Manager restricts the match to "launchd" or "windows"; empty matches both.
+	Manager string `yaml:"manager"`
 
 	re *regexp.Regexp
 }
@@ -95,6 +106,20 @@ type VersionSource struct {
 // report it as log_paths; with logs.auto_from_discovery the files are tailed.
 type LogPath struct {
 	Path string `yaml:"path"`
+	// OS restricts the path to hosts of these GOOS values (linux, darwin, windows). Without it a Windows path
+	// (C:/…) applies to Windows hosts only and any other path to Linux and macOS hosts.
+	OS []string `yaml:"os"`
+}
+
+// AppliesTo reports whether the log path is used on hosts of platform (GOOS; "" means linux).
+func (l LogPath) AppliesTo(platform string) bool {
+	if platform == "" {
+		platform = "linux"
+	}
+	if len(l.OS) > 0 {
+		return slices.Contains(l.OS, platform)
+	}
+	return windowsAbs.MatchString(l.Path) == (platform == "windows")
 }
 
 // Endpoint declares where service endpoints come from.
@@ -117,6 +142,8 @@ type APMHint struct {
 	// spans in the last 10 minutes, else "not_installed" (semantic-conventions §3.4).
 	Status string `yaml:"-" json:"status,omitempty"`
 }
+
+var windowsAbs = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
 
 var (
 	idRe       = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
@@ -198,8 +225,18 @@ func (r *Rule) Validate() error {
 			}
 			m.Container.re = compile(p+".container.image_regex", m.Container.ImageRegex)
 		}
+		if m.Service != nil {
+			n++
+			if m.Service.NameRegex == "" {
+				add("%s.service.name_regex: required", p)
+			}
+			if mg := m.Service.Manager; mg != "" && mg != "launchd" && mg != "windows" {
+				add("%s.service.manager: must be launchd or windows (got %q)", p, mg)
+			}
+			m.Service.re = compile(p+".service.name_regex", m.Service.NameRegex)
+		}
 		if n != 1 {
-			add("%s: exactly one of process, systemd_unit, listening_port, package, container is required (got %d)", p, n)
+			add("%s: exactly one of process, systemd_unit, service, listening_port, package, container is required (got %d)", p, n)
 		}
 	}
 	for i := range r.Version {
@@ -237,10 +274,15 @@ func (r *Rule) Validate() error {
 		}
 	}
 	for i, l := range r.Logs {
-		if !strings.HasPrefix(l.Path, "/") {
+		if !strings.HasPrefix(l.Path, "/") && !windowsAbs.MatchString(l.Path) {
 			add("logs[%d].path: must be an absolute path or glob (got %q)", i, l.Path)
 		} else if _, err := filepath.Match(l.Path, ""); err != nil {
 			add("logs[%d].path: invalid glob %q", i, l.Path)
+		}
+		for _, o := range l.OS {
+			if o != "linux" && o != "darwin" && o != "windows" {
+				add("logs[%d].os: must be linux, darwin or windows (got %q)", i, o)
+			}
 		}
 	}
 	if r.APMHint != nil && (r.APMHint.Language == "" || r.APMHint.Agent == "") {

@@ -94,6 +94,8 @@ type Service struct {
 	log    *slog.Logger
 	now    func() time.Time
 	policy SessionPolicy // single sign-on restrictions (external.go); nil = none
+	// memberLimit enforces the plan's users limit (saas.go); nil = unlimited
+	memberLimit MemberLimitFunc
 }
 
 // NewService creates a Service.

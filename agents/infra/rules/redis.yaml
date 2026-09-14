@@ -4,6 +4,7 @@ category: database
 match:
   - process: { exe_basename: ["redis-server"] }
   - systemd_unit: { name_regex: "^redis(-server)?(@.*)?\\.service$" }
+  - service: { name_regex: "^(homebrew\\.mxcl\\.redis|Redis|Memurai)$" }   # Homebrew (macOS); Redis for Windows / Memurai
   - container: { image_regex: "(^|/)redis(-stack(-server)?)?(:|@|$)" }
   - listening_port: { port: 6379, process_exe_basename: ["redis-server"] }
   - package: { name: ["redis-server", "redis"] }
@@ -19,3 +20,5 @@ integration:
 apm_hint: null
 logs:
   - path: "/var/log/redis/*.log"
+  - { path: "/opt/homebrew/var/log/redis.log", os: [darwin] }      # Homebrew (logfile in redis.conf)
+  - { path: "/usr/local/var/log/redis.log", os: [darwin] }

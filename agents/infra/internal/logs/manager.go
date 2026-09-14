@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
 	"github.com/onuragtas/openlog/agents/infra/internal/hostfs"
+	"github.com/onuragtas/openlog/agents/infra/internal/osutil"
 	"github.com/onuragtas/openlog/agents/infra/internal/otlputil"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -96,6 +98,8 @@ type stateDoc struct {
 	} `json:"journald"`
 	// Containers: container id -> Docker time (unix ns) of the last delivered API stream record.
 	Containers map[string]int64 `json:"containers,omitempty"`
+	// Cursors: per-input positions, e.g. "event_log:system" -> Windows Event Log bookmark XML.
+	Cursors map[string]string `json:"cursors,omitempty"`
 }
 
 type fileCheckpoint struct {
@@ -111,6 +115,7 @@ type batch struct {
 	cursor  string
 	seq     uint64
 	streams map[string]time.Time // container API stream positions
+	cursors map[string]string    // per-input cursors (journalEntry.cursorKey)
 }
 
 // recordGroup holds the records of one resource (host, or host + container) in a batch.
@@ -120,7 +125,7 @@ type recordGroup struct {
 }
 
 func newBatch() batch {
-	return batch{files: map[string]fileCheckpoint{}, streams: map[string]time.Time{}}
+	return batch{files: map[string]fileCheckpoint{}, streams: map[string]time.Time{}, cursors: map[string]string{}}
 }
 
 // Manager runs all log inputs.
@@ -169,6 +174,7 @@ type Manager struct {
 	cursor    string
 	cursorSeq uint64
 	ctrSince  map[string]time.Time
+	cursors   map[string]string
 	dirty     bool
 	saved     stateDoc
 	lastSave  time.Time
@@ -181,7 +187,7 @@ func New(o Options) *Manager {
 		paused: o.Paused, log: o.Log, maxBytes: o.MaxBatchBytes, now: o.Now,
 		chunk: make([]byte, readChunk), tailers: map[string]*tailer{}, seenGlobs: map[string]bool{},
 		committed: map[string]*fileState{},
-		ctrLogs:   map[string]*ctrLog{}, streams: map[string]*apiStream{}, ctrDrained: map[string]string{}, ctrSince: map[string]time.Time{},
+		ctrLogs:   map[string]*ctrLog{}, streams: map[string]*apiStream{}, ctrDrained: map[string]string{}, ctrSince: map[string]time.Time{}, cursors: map[string]string{},
 	}
 	if o.Containers != nil {
 		m.ctrSrc = o.Containers
@@ -239,11 +245,22 @@ func (m *Manager) Run(ctx context.Context) {
 	m.runCtx = ctx
 	m.loadState()
 	var journal chan journalEntry
-	if m.cfg.Journald.Enabled {
-		journal = make(chan journalEntry, 512)
-		jctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		go m.runJournald(jctx, journal)
+	jctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	systemLog := func(run func(context.Context, chan<- journalEntry)) {
+		if journal == nil {
+			journal = make(chan journalEntry, 512)
+		}
+		go run(jctx, journal)
+	}
+	if m.cfg.Journald.Enabled && runtime.GOOS != "windows" { // journalctl: Linux (on macOS it is not found and the input stops)
+		systemLog(m.runJournald)
+	}
+	if m.cfg.UnifiedLog.Enabled && runtime.GOOS == "darwin" {
+		systemLog(m.runUnifiedLog) // unifiedlog.go
+	}
+	if m.cfg.WindowsEventLog.Enabled && runtime.GOOS == "windows" {
+		systemLog(m.runEventLog) // eventlog_windows.go
 	}
 	ticker := time.NewTicker(m.cfg.PollInterval.D())
 	defer ticker.Stop()
@@ -357,7 +374,7 @@ func (m *Manager) scan(now time.Time) {
 			if err != nil || !fi.Mode().IsRegular() {
 				continue
 			}
-			dev, ino, ok := identity(fi)
+			dev, ino, ok := identity(local, fi)
 			if !ok {
 				continue
 			}
@@ -392,7 +409,7 @@ func (m *Manager) scan(now time.Time) {
 		if !wanted[key] && t.goneAt.IsZero() && !t.drain {
 			// Still at its path but no source matches any more: stop tailing.
 			if fi, err := os.Stat(t.local); err == nil {
-				if dev, ino, _ := identity(fi); dev == t.dev && ino == t.ino {
+				if dev, ino, _ := identity(t.local, fi); dev == t.dev && ino == t.ino {
 					m.closeTailer(t, now)
 					continue
 				}
@@ -443,7 +460,7 @@ func fileAttrs(t *tailer, ds []DiscoveredLog) []*commonpb.KeyValue {
 }
 
 func (m *Manager) open(s *source, local, host string, fi os.FileInfo, dev, ino uint64, key string, initial bool, now time.Time) {
-	f, err := os.Open(local)
+	f, err := osutil.OpenShared(local)
 	if err != nil {
 		m.log.Debug("cannot open log file", "path", host, "error", err)
 		return
@@ -505,7 +522,7 @@ func (m *Manager) checkRotation(t *tailer, now time.Time) {
 	fi, err := os.Stat(t.local)
 	same := false
 	if err == nil {
-		dev, ino, _ := identity(fi)
+		dev, ino, _ := identity(t.local, fi)
 		same = dev == t.dev && ino == t.ino
 	}
 	if same {
@@ -588,7 +605,9 @@ func (m *Manager) emitFileRecord(t *tailer, line []byte, truncated bool) {
 
 func (m *Manager) addJournal(e journalEntry) {
 	m.add(nil, e.rec, len(e.rec.GetBody().GetStringValue()))
-	if e.cursor != "" {
+	if e.cursorKey != "" {
+		m.batch.cursors[e.cursorKey] = e.cursor
+	} else if e.cursor != "" {
 		m.jseq++
 		m.batch.cursor, m.batch.seq = e.cursor, m.jseq
 	}
@@ -666,6 +685,19 @@ func (m *Manager) ack(b batch) {
 			m.dirty = true
 		}
 	}
+	for k, c := range b.cursors {
+		if m.cursors[k] != c {
+			m.cursors[k] = c
+			m.dirty = true
+		}
+	}
+}
+
+// persistedEventCursor returns the committed cursor of a per-input key.
+func (m *Manager) persistedEventCursor(key string) string {
+	m.stMu.Lock()
+	defer m.stMu.Unlock()
+	return m.cursors[key]
 }
 
 func (m *Manager) persistedCursor() string {
@@ -690,6 +722,9 @@ func (m *Manager) loadState() {
 	defer m.stMu.Unlock()
 	m.saved = doc
 	m.cursor = doc.Journald.Cursor
+	for k, c := range doc.Cursors {
+		m.cursors[k] = c
+	}
 	for id, ns := range doc.Containers {
 		m.ctrSince[id] = time.Unix(0, ns).UTC()
 	}
@@ -715,6 +750,12 @@ func (m *Manager) SaveState() error {
 		doc.Files[k] = &c
 	}
 	doc.Journald.Cursor = m.cursor
+	if len(m.cursors) > 0 {
+		doc.Cursors = make(map[string]string, len(m.cursors))
+		for k, c := range m.cursors {
+			doc.Cursors[k] = c
+		}
+	}
 	if len(m.ctrSince) > 0 {
 		doc.Containers = make(map[string]int64, len(m.ctrSince))
 		for id, ts := range m.ctrSince {

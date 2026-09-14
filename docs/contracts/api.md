@@ -1430,6 +1430,192 @@ In SaaS mode OTLP ingest answers `429` + `Retry-After` (gRPC `RESOURCE_EXHAUSTED
 `google.rpc.Status` message when the organization's monthly ingest quota is used up or its ingest rate limit is exceeded
 (usage.md §4.4).
 
+### Ingest: suspended organization (`403`) and host limit (`429`)
+In SaaS mode (D-105) the `google.rpc.Status` body carries a `google.rpc.ErrorInfo` detail (`domain` `openlog`):
+
+- Suspended organization: HTTP `403` / gRPC `PERMISSION_DENIED`, reason `org_suspended`, message
+  `organization suspended: ingest is disabled …`. Not retryable by design (no `Retry-After`).
+- Plan host limit (`limits.hosts`): a request whose resources all carry `host.id` values beyond the limit gets HTTP
+  `429` + `Retry-After: 300` / gRPC `RESOURCE_EXHAUSTED` + `RetryInfo`, reason `quota_exceeded`, message
+  `quota_exceeded: host limit of N hosts …`. When the request also carries admitted hosts, only the resources of the
+  rejected hosts are dropped and the response is `200` with OTLP partial success (`rejected_*` counts and the same
+  message). Hosts active today or yesterday always keep reporting; resources without `host.id` are not limited.
+
+## SaaS operations
+
+Operator console, organization lifecycle and support access (D-105, D-106; operator guide
+[saas.md](../operations/saas.md) §8–§11). Operators are superadmins (`OPENLOG_SUPERADMIN_EMAILS`, session users with a
+verified address); every other caller gets `403 permission_denied` on `/api/v1/operator/*` except `GET /operator/me`.
+Every operator action needs a `reason` (3–1000 characters) and writes an audit event with the operator as actor into the
+**organization's** audit log. `{org}` is the organization id or tenant id. Available with `OPENLOG_AUTH_MODE=postgres`;
+enforcement (suspension, limits, trials, flags) additionally needs `OPENLOG_SAAS_MODE=true`.
+
+### `GET /api/v1/operator/me`
+Any session. `{"operator": bool, "saas_mode": bool}` (the UI shows the console only for operators).
+
+### `GET /api/v1/operator/orgs?q=&plan=&state=&sort=&limit=&offset=`
+`q`: name, tenant id, organization id or member e-mail substring. `plan`: effective plan id. `state`: `active`,
+`suspended`, `trial`, `flagged`. `sort`: `created` (default, newest first), `name`, `ingest`, `members`, `last_ingest`.
+`limit` 1–200 (50). Response `{"organizations": [OperatorOrg], "total", "saas_mode"}` with `id`, `tenant_id`, `name`,
+`created_at`, `plan_id`, `plan_assigned`, `state`, `suspended_at`, `suspend_reason`, `trial_plan_id`, `trial_ends_at`,
+`support_access_until`, `members`, `active_hosts` and `ingest_bytes` / `quota_level` (latest quota evaluation of the
+current period), `last_ingest_at` (latest license key use), `open_flags`.
+
+### `GET /api/v1/operator/orgs/{org}`
+`{"organization": OperatorOrg + {"member_list": [{user_id,email,name,role,joined_at,last_login_at,email_verified,disabled}] (≤ 500),
+"pending_invitations", "keys": {license_keys_active, license_keys_revoked, api_keys_active, scim_tokens_active,
+last_ingest_at}, "sso_connections": [{id,protocol,name,enabled,enforce,jit_enabled,last_test_ok}], "verified_domains",
+"flags", "support_sessions", "support_access_granted_by"}, "plan": OrgPlan, "quota": UsageStatus|null, "lifecycle",
+"audit": [50 newest events, without IP addresses], "usage": {"period", "days", "available"}, "saas_mode"}`. Never secrets,
+key values, SSO configuration or IdP metadata. `usage.available=false` when ClickHouse cannot be read.
+
+### Actions
+All `POST` with `{"reason"}` (trial: see below):
+
+| Path | Effect | Audit |
+|---|---|---|
+| `/operator/orgs/{org}/suspend` | Suspend (idempotent). Ingest `403 org_suspended`; members' mutating API requests `403 org_suspended` except sign-in/out, profile, sessions, support access and data export/deletion; queries keep working | `org.suspend` |
+| `/operator/orgs/{org}/unsuspend` | Lift the suspension; `409` when not suspended | `org.unsuspend` |
+| `/operator/orgs/{org}/trial` | Body `{"plan_id"?, "days"? (1–365) \| "ends_at"?, "reason"}`. Without a running trial: assigns `plan_id` and starts its trial (`days`/`ends_at`, default the plan's `trial_days`). With one: moves its end (`days` are added to the current end) | `plan.update`, `trial.start` / `trial.extend` |
+| `/operator/orgs/{org}/reset-quota-notifications` | Deletes the current period's `usage_notifications` so threshold e-mails can be sent again; `{"deleted","period"}` | `quota.notifications_reset` |
+| `/operator/orgs/{org}/force-logout` | Revokes every active session of the members (all their organizations), not the operator's; `{"sessions_revoked"}` | `org.force_logout` |
+| `/operator/orgs/{org}/resend-verification` | New verification e-mail to every unverified owner; `409` when none; `{"sent_to"}` | `org.owner_verification_resend` |
+
+### Support sessions
+- `POST /api/v1/operator/orgs/{org}/support-sessions` `{"reason"}` → `201 SupportSession` `{id, org_id, org_name,
+  tenant_id, operator_email, reason, started_at, expires_at, ended_at}`. Requires support access granted by an owner
+  (`403 support_access_required`); lasts `OPENLOG_SAAS_SUPPORT_SESSION_TTL`, never beyond the grant. Audit
+  `support.session_start`.
+- While open, the operator's UI sends `X-Openlog-Support-Session: <id>` on its API requests: the request acts as a
+  **viewer** of that organization. Only for the operator's own session (the id is bound to user and session);
+  mutating requests other than queries/previews → `403 support_read_only`; an ended/expired session or revoked access
+  → `403 support_session_ended`. Every distinct request is audited as `support.request` (`method`, `path`; at most once a
+  minute per path per api pod). `/api/v1/operator/*` ignores the header.
+- `POST /api/v1/operator/support-sessions/{id}/views` `{"path"}` → `204`, audit `support.page_view` (UI navigation).
+- `GET /api/v1/operator/support-sessions` → the operator's open sessions; `DELETE …/{id}` ends one (`support.session_end`).
+
+### Abuse flags
+`GET /api/v1/operator/flags?status=open|dismissed|actioned|all&limit=` → `{"flags": [{id, org_id, org_name, tenant_id,
+kind (ingest_spike|new_org_hosts|ingest_source_ips), status, details, occurrences, first_seen_at, last_seen_at,
+auto_suspended, resolved_by_email, resolved_at, resolution_note, org_suspended}]}`.
+`POST /api/v1/operator/flags/{id}/resolve` `{"status": "dismissed"|"actioned", "note"}` → the flag; `404` when not open.
+Audit `abuse_flag.resolve`.
+
+### Organization side
+- `GET /api/v1/orgs/current/saas` (any member, session) → `{"saas_mode", "suspended", "trial": {plan_id, plan_name,
+  ends_at, fallback_plan_id}|null, "support_access": {until, granted_at}|null, "support_session": {id, operator_email,
+  expires_at, org_name}|null (only inside a support view), "can_manage_support_access"}`.
+- `PUT /api/v1/orgs/current/support-access` `{"duration": "24h"|"7d"}` (owners, own session, not in a support view) →
+  the state above; audit `support_access.grant`. `DELETE` revokes it and ends open support sessions
+  (`support_access.revoke`).
+
+### Plan users limit
+In SaaS mode creating an invitation (members + pending invitations), accepting one, SSO just-in-time provisioning and
+SCIM provisioning beyond the effective `limits.users` fail: API `403 quota_exceeded` with the plan, limit and count;
+SSO sign-in redirects with `?sso_error=user_limit`; SCIM answers `403`.
+
+## Data export and deletion
+
+Data subject requests (KVKK/GDPR; D-107, [saas.md](../operations/saas.md) §12). Postgres auth mode; every endpoint
+except the download link needs a signed-in user (API keys are refused with `403`).
+
+Destructive operations re-authenticate: `password` must be the user's current password (5 wrong attempts per
+15 minutes, then `429`); users without a password (single sign-on) must use a session created within the last
+10 minutes, otherwise `403` ("sign in again with single sign-on, then confirm within 10 minutes").
+
+### `GET /api/v1/account/privacy`
+`{"has_password", "data_export_enabled", "org_deletion_grace_seconds", "reauth_max_age_seconds", "org_deletions": [OrgDeletion]}`
+— `org_deletions` are the scheduled or running deletions of organizations where the caller is an owner (those
+organizations are no longer selectable, so this is where owners see and cancel them).
+
+### `GET /api/v1/account/data-exports` · `POST /api/v1/account/data-exports`
+Personal exports of the caller (newest 20) / request one (`202 {"export": DataExport}`; `409 failed_precondition` while
+one is pending or running, `429` after 5 within 24 hours).
+
+### `POST /api/v1/account/delete` `{"confirm_email", "password"?}`
+Deletes the caller's account (`204`, session cookie cleared). `400` when `confirm_email` is not the caller's address;
+`409 failed_precondition` when the caller is the only owner of an organization (message names them). Confirmation
+e-mail to the old address; installation-level audit `user.delete` with the pseudonym.
+
+### `GET /api/v1/data-exports` · `POST /api/v1/data-exports` `{"from"?, "to"?, "signals"?: ["logs", "traces", "metrics"]}` (owner)
+Organization exports (newest 50) / request one: without `signals` only PostgreSQL data; with signals `from`/`to` are
+required and the range must not exceed `OPENLOG_DATA_EXPORT_MAX_RANGE` (`400`). `202 {"export": DataExport}`, same
+`409`/`429` as personal exports. Audit `data_export.request`.
+
+`DataExport`: `id`, `kind` (`organization`/`user`), `status` (`pending`, `running`, `completed`, `failed`, `expired`),
+`signals`, `from`, `to`, `requested_by`, `size_bytes`, `telemetry_rows`, `truncated`, `error`, `created_at`,
+`started_at`, `completed_at`, `expires_at`, `download_available`.
+
+### `GET /api/v1/data-exports/{id}` · `GET /api/v1/data-exports/{id}/download`
+One export / its ZIP archive (`application/zip`, `Content-Disposition: attachment`). Visible to owners of the export's
+organization (current organization) and to the subject of a personal export; anything else is `404`. Audit
+`data_export.download` for organization exports.
+
+### `GET /api/v1/data-exports/download?token=` (public)
+The archive through the e-mailed link until `expires_at` (`404` for unknown, expired or deleted archives). Responses
+carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+
+### `POST /api/v1/orgs/current/deletion` `{"confirm_name", "password"?}` (owner)
+Schedules the current organization's deletion (`202 {"deletion": OrgDeletion}`): `confirm_name` must equal the
+organization name (`400`), `409 already_exists` when already scheduled. Members lose access immediately, license and
+SCIM keys are revoked; hard deletion after `OPENLOG_ORG_DELETION_GRACE`. Audit `org.deletion_schedule`; owners are
+e-mailed.
+
+`OrgDeletion`: `id`, `organization_id` (null once deleted), `organization_name`, `tenant_id`, `status` (`scheduled`,
+`cancelled`, `deleting`, `completed`), `initiator` (`owner`/`operator`), `requested_at`, `purge_after`, `cancelled_at`,
+`started_at`, `completed_at`, `cancellable`, `certificate_id`; operator views add `reason`, `requested_by_email`,
+`last_error`.
+
+### `POST /api/v1/org-deletions/{id}/cancel` (owner)
+Cancels a `scheduled` deletion of an organization the caller owns (`200 {"deletion"}`); `404` for other ids, `403` when
+an operator scheduled it, `409` once it is `deleting`. Keys revoked by the scheduling work again. Audit
+`org.deletion_cancel`.
+
+### `POST /api/v1/admin/orgs/{org}/deletion` `{"reason", "immediate"?: false}` (superadmin)
+`{org}` is an organization id or tenant id. Schedules a deletion with a reason (1–1000 characters); `immediate` sets
+`purge_after` to now. Owners are informed and cannot cancel. Installation-level audit `admin.org_deletion_schedule`.
+
+### `GET /api/v1/admin/org-deletions?limit=` · `POST /api/v1/admin/org-deletions/{id}/cancel` (superadmin)
+All deletions, newest first (default 100, max 500) / cancel a scheduled one (audit `admin.org_deletion_cancel`).
+
+### `GET /api/v1/admin/deletion-certificates?subject_hash=&limit=` (superadmin)
+`{"certificates": [{"id", "subject_type", "subject_hash", "initiator", "requested_at", "grace_ended_at", "started_at",
+"completed_at", "postgres_rows", "clickhouse_rows", "verified"}]}`; `subject_hash` = hex sha256 of a tenant id or user id.
+
+## Status page
+
+Public status page (D-108, [saas.md](../operations/saas.md) §13); only with `OPENLOG_STATUS_PAGE_ENABLED` (else `404`).
+
+### `GET /api/v1/status` (public)
+`Cache-Control: public, max-age=30`, `Access-Control-Allow-Origin: *`. `503 unavailable` when PostgreSQL cannot be read.
+
+```json
+{"status": "operational", "checked_at": "…",
+ "components": [{"id": "ingest", "status": "operational", "uptime_90d": 99.98,
+                 "days": [{"date": "2026-06-17", "status": "no_data", "uptime": null}, …]}],
+ "incidents": [StatusIncident], "maintenance": [StatusIncident], "history": [StatusIncident]}
+```
+
+Statuses: `operational`, `degraded`, `partial_outage`, `major_outage`, `maintenance`, `unknown` (no self-check within
+5 minutes). Components `ingest`, `query_api`, `alerting`, `processing`; `days` has 90 entries (oldest first, status
+`operational`/`degraded`/`outage`/`no_data`). `incidents`: open incidents; `maintenance`: scheduled or running windows;
+`history`: resolved/completed within 14 days.
+
+`StatusIncident`: `id`, `kind` (`incident`/`maintenance`), `title`, `status` (incident: `investigating`, `identified`,
+`monitoring`, `resolved`; maintenance: `scheduled`, `in_progress`, `completed`), `impact` (`none`, `minor`, `major`,
+`critical`), `components`, `starts_at`, `ends_at`, `created_at`, `updated_at`, `updates` (newest first: `id`, `status`,
+`message`, `created_at`).
+
+### `GET /api/v1/admin/status/incidents?limit=` · `POST /api/v1/admin/status/incidents` (superadmin)
+List (`{"incidents", "components"}`) / create `{"kind", "title", "status", "impact"?, "components"?, "starts_at"?,
+"ends_at"?, "message"?}` (`201 {"incident"}`; `400` for an invalid kind/status combination, unknown component, empty
+title or `ends_at` before `starts_at`). Audit `status.incident_create` (installation level).
+
+### `PATCH /api/v1/admin/status/incidents/{id}` · `POST …/{id}/updates` `{"status", "message"}` · `DELETE …/{id}` (superadmin)
+Edit title, status, impact, components, `starts_at`, `ends_at` (`""` clears; `kind` is immutable) / append a timeline
+entry and move to its status (`resolved`/`completed` set `ends_at`) / delete (`204`). Audit `status.incident_update`,
+`status.incident_delete`.
+
 ## Edge cases (machine-readable spec: [openapi.yaml](openapi.yaml))
 
 - Inventory without a complete snapshot: `snapshot_id: ""`, `snapshot_time: null`, empty `items`.

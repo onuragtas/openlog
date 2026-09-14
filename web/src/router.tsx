@@ -699,6 +699,18 @@ const addDataTargetRoute = createRoute({
   component: AddDataTargetPage,
 });
 
+// ---- SaaS operator console (routes/operator.tsx; superadmins only, D-105) ----
+const operatorRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/operator",
+  component: lazyRouteComponent(() => import("@/routes/operator"), "OperatorPage"),
+});
+const operatorOrgRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/operator/orgs/$orgId",
+  component: lazyRouteComponent(() => import("@/routes/operator"), "OperatorOrgPage"),
+});
+
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/settings", component: SettingsLayout });
 const settingsIndexRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -731,6 +743,18 @@ const ssoVerifyDomainRoute = createRoute({
   component: lazyRouteComponent(() => import("@/components/settings/SsoVerifyDomain"), "SsoVerifyDomainPage"),
 });
 // Public read-only dashboard share links: no session and no app navigation (routes/shared-dashboard.tsx, D-087).
+// Public status page: no session and no app navigation (routes/status.tsx, D-108).
+const statusRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/status",
+  component: lazyRouteComponent(() => import("@/routes/status"), "StatusPage"),
+});
+// Incidents and maintenance of the status page (superadmins; components/settings/StatusPageSettings.tsx).
+const settingsStatusPageRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "/status-page",
+  component: lazyRouteComponent(() => import("@/routes/settings"), "StatusPageSettingsPage"),
+});
 const sharedDashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/shared/dashboards/$token",
@@ -751,6 +775,7 @@ export const routeTree = rootRoute.addChildren([
   ssoVerifyDomainRoute,
   sharedDashboardRoute,
   printDashboardRoute,
+  statusRoute,
   appRoute.addChildren([
     indexRoute,
     hostsRoute,
@@ -778,6 +803,8 @@ export const routeTree = rootRoute.addChildren([
     dashboardRoute,
     addDataRoute,
     addDataTargetRoute,
+    operatorRoute,
+    operatorOrgRoute,
     alertsRoute.addChildren([
       alertsIndexRoute,
       alertsIncidentsRoute,
@@ -801,6 +828,7 @@ export const routeTree = rootRoute.addChildren([
       settingsTailSamplingRoute,
       settingsUsageRoute,
       settingsSsoRoute,
+      settingsStatusPageRoute,
     ]),
   ]),
 ]);

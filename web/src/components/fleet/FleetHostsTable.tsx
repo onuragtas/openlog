@@ -290,7 +290,7 @@ function HostCells({
           {name}
         </span>
         <span className="max-w-full truncate font-mono text-[11px] text-muted-foreground" title={h.host_id}>
-          {h.agent.os}/{h.agent.arch}
+          {h.agent.os ? translateOptional(`fleet.osNames.${h.agent.os}`, h.agent.os) : ""}/{h.agent.arch}
         </span>
       </div>
       <div role="cell" className={cell}>

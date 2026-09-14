@@ -15,12 +15,13 @@ import (
 const (
 	SourceProcess       = "process"
 	SourceSystemdUnit   = "systemd_unit"
+	SourceService       = "service"
 	SourceListeningPort = "listening_port"
 	SourceContainer     = "container"
 	SourcePackage       = "package"
 )
 
-var sourceOrder = []string{SourceProcess, SourceSystemdUnit, SourceListeningPort, SourceContainer, SourcePackage}
+var sourceOrder = []string{SourceProcess, SourceSystemdUnit, SourceService, SourceListeningPort, SourceContainer, SourcePackage}
 
 // Integration status values (semantic-conventions §3.4).
 const (
@@ -61,17 +62,19 @@ type Service struct {
 	// DisplayInstance is the invoked path of a multi-call or symlinked
 	// executable (/usr/bin/redis-server when Instance is /usr/bin/redis-check-rdb);
 	// display only, Instance stays the grouping key.
-	DisplayInstance string            `json:"display_instance,omitempty"`
-	Version         string            `json:"version"`
-	MatchedBy       []string          `json:"matched_by"`
-	PIDs            []int             `json:"pids"`
-	Ports           []PortRef         `json:"ports"`
-	SystemdUnits    []string          `json:"systemd_units"`
-	Packages        []string          `json:"packages"`
-	ContainerIDs    []string          `json:"container_ids"`
-	Integration     IntegrationStatus `json:"integration"`
-	APMHint         *APMHint          `json:"apm_hint"`
-	LogPaths        []string          `json:"log_paths"`
+	DisplayInstance string    `json:"display_instance,omitempty"`
+	Version         string    `json:"version"`
+	MatchedBy       []string  `json:"matched_by"`
+	PIDs            []int     `json:"pids"`
+	Ports           []PortRef `json:"ports"`
+	SystemdUnits    []string  `json:"systemd_units"`
+	// Services are launchd job labels or Windows service names (macOS, Windows; D-104).
+	Services     []string          `json:"services,omitempty"`
+	Packages     []string          `json:"packages"`
+	ContainerIDs []string          `json:"container_ids"`
+	Integration  IntegrationStatus `json:"integration"`
+	APMHint      *APMHint          `json:"apm_hint"`
+	LogPaths     []string          `json:"log_paths"`
 }
 
 // ServiceIndex maps processes to the rule id of their discovered service.
@@ -242,6 +245,7 @@ type candidate struct {
 	instance   string
 	pids       map[int]bool
 	units      map[string]bool
+	services   map[string]bool
 	containers map[string]bool
 	ports      map[string]PortRef
 	matchedBy  map[string]bool
@@ -249,7 +253,7 @@ type candidate struct {
 
 func newCandidate(instance string) *candidate {
 	return &candidate{
-		instance: instance, pids: map[int]bool{}, units: map[string]bool{}, containers: map[string]bool{},
+		instance: instance, pids: map[int]bool{}, units: map[string]bool{}, services: map[string]bool{}, containers: map[string]bool{},
 		ports: map[string]PortRef{}, matchedBy: map[string]bool{},
 	}
 }
@@ -436,6 +440,33 @@ func evaluate(r *Rule, ix *index) []Service {
 		}
 	}
 
+	// 3b. launchd jobs and Windows services: merge into the instance of their process, like systemd units.
+	for _, sv := range ix.d.Services {
+		for _, m := range r.Match {
+			if m.Service == nil || (m.Service.Manager != "" && m.Service.Manager != sv.Manager) || !m.Service.re.MatchString(sv.Name) {
+				continue
+			}
+			owners := cs.find(func(c *candidate) bool { return c.services[sv.Name] || (sv.PID != 0 && c.pids[sv.PID]) })
+			if len(owners) == 0 && len(cs.order) > 0 {
+				// Not running, or running in a process no matcher claims (e.g. IIS's W3SVC inside a shared
+				// svchost.exe while the w3wp.exe workers matched): it belongs to the discovered instances.
+				owners = cs.find(func(*candidate) bool { return true })
+			}
+			if len(owners) == 0 {
+				c := cs.get("service\x00"+sv.Name, sv.Name)
+				if in, ok := ix.byPID[sv.PID]; ok && sv.PID != 0 && !strings.EqualFold(in.Comm, "svchost") {
+					c.addProcess(in) // a shared service host process is not the service's own process
+				}
+				owners = []*candidate{c}
+			}
+			for _, c := range owners {
+				c.services[sv.Name] = true
+				c.matchedBy[SourceService] = true
+			}
+			break
+		}
+	}
+
 	// 4. Containers (inventory arrives in M1).
 	for _, ct := range ix.d.Containers {
 		for _, m := range r.Match {
@@ -518,6 +549,7 @@ func evaluate(r *Rule, ix *index) []Service {
 			RuleID: r.ID, Name: r.Name, Category: r.Category, Instance: c.instance,
 			MatchedBy: []string{}, PIDs: sortedInts(c.pids), Ports: sortedPorts(c.ports),
 			SystemdUnits: sortedStrings(c.units), Packages: append([]string{}, linkedPkgs...),
+			Services:     sortedStringsOmitEmpty(c.services),
 			ContainerIDs: sortedStrings(c.containers), APMHint: r.APMHint, LogPaths: []string{},
 		}
 		if main, ok := mainProcess(s.PIDs, ix); ok {
@@ -525,7 +557,9 @@ func evaluate(r *Rule, ix *index) []Service {
 			s.DisplayInstance = displayInstance(s.Instance, main)
 		}
 		for _, l := range r.Logs {
-			s.LogPaths = append(s.LogPaths, l.Path)
+			if l.AppliesTo(ix.d.Platform) {
+				s.LogPaths = append(s.LogPaths, l.Path)
+			}
 		}
 		for _, src := range sourceOrder {
 			if c.matchedBy[src] {
@@ -609,6 +643,14 @@ func sortedInts(m map[int]bool) []int {
 	}
 	sort.Ints(out)
 	return out
+}
+
+// sortedStringsOmitEmpty is sortedStrings, but nil for an empty set (omitted from JSON).
+func sortedStringsOmitEmpty(m map[string]bool) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	return sortedStrings(m)
 }
 
 func sortedStrings(m map[string]bool) []string {

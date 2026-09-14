@@ -1,11 +1,11 @@
 # openlog-infra-agent
 
-The Linux host agent of [openlog](https://github.com/onuragtas/openlog), an open-source observability platform.
+The host agent of [openlog](https://github.com/onuragtas/openlog), an open-source observability platform.
 It finds out **what is on the machine it runs on**, monitors it and sends everything over OTLP/HTTP.
 It contains no environment-specific code. Everything is recognised by generic collectors plus a
 **data-driven YAML discovery rule catalog**.
 
-Platforms: Linux amd64 and arm64. License: Apache-2.0.
+Platforms: Linux, macOS and Windows (amd64 and arm64; see [macOS and Windows](#macos-and-windows)). License: Apache-2.0.
 
 ## What it collects
 
@@ -317,6 +317,116 @@ The systemd unit runs as `openlog-agent` with `CAP_DAC_READ_SEARCH` and `CAP_SYS
 It uses `Restart=always` (the agent exits with status 0 to restart into an update). The agent can write only
 `/var/lib/openlog-infra-agent`; the unit's privileged pre-start step (`ExecStartPre=-+… -apply`, root) installs updates.
 
+## macOS and Windows
+
+Since D-104 the agent also runs on macOS (amd64, arm64) and Windows (amd64, arm64). The same binary layout, configuration schema,
+metric names and inventory bodies are used; collectors read native APIs instead of procfs. Contracts: `semantic-conventions.md`
+(platform notes in §1–§4) and `releases-updates.md` §3 "macOS and Windows services".
+
+| Feature | Linux | macOS | Windows |
+|---|---|---|---|
+| Host metrics (CPU, memory, paging, filesystem, disk, network, uptime, process counts) | ✅ procfs/sysfs | ✅ gopsutil | ✅ gopsutil (no load average) |
+| Process metrics (top N) | ✅ | ✅ | ✅ (`open_file_descriptors` = handles) |
+| Inventory: OS, hardware, packages, processes, users, interfaces, mounts, listening ports | ✅ | ✅ `sw_vers`/sysctl, pkgutil receipts + Homebrew + `/Applications`, `dscacheutil`, `lsof` | ✅ registry, Programs and Features, ProfileList, GetExtendedTcpTable |
+| Service manager inventory | `systemd_unit` | `launchd_service` | `windows_service` |
+| Kernel modules | ✅ | not available | not available |
+| Discovery + integrations (nginx, Redis, MySQL/MariaDB, PostgreSQL) | ✅ | ✅ (Homebrew services and log paths) | ✅ (process/service names; IIS and SQL Server are discovered, no metric integration: `not_available`) |
+| Containers | ✅ Docker/CRI inventory + cgroup metrics + logs | Docker inventory over `docker.sock` only | not available |
+| Logs: files | ✅ | ✅ | ✅ (opened with `FILE_SHARE_DELETE`) |
+| Logs: system | journald | unified log (`logs.unified_log`) | Event Log (`logs.windows_event_log`) |
+| PHP forwarder / PHP agent installation | ✅ | forwarder ✅ (`/var/run/openlog-infra-agent/php.sock`, group `_www`), installation not available | not available (disabled) |
+| Kubernetes | ✅ | not available | not available |
+| Service | systemd, `openlog-agent` user | LaunchDaemon, root | Windows service, LocalSystem |
+| Self-update (signed manifests, self-test, rollback) | ✅ `ExecStartPre=+ -apply` | ✅ in the service process | ✅ in the service process |
+| Packages | tar.gz, deb, rpm | tar.gz (`install.sh`) | zip (`install.ps1`), MSI (amd64) |
+
+### Permissions
+
+- **macOS runs as root.** launchd has no privileged pre-start hook: the root process verifies and installs staged updates itself,
+  and reading every process's executable/arguments, listening port owners (`lsof`) and the system launchd domain needs root anyway.
+  The configuration is root 0600, the state directory root 0700. A dedicated `_openlog` account would need a second root helper daemon;
+  it is not implemented.
+- **Windows runs as LocalSystem.** Needed for the Security event log, full process and port information, the SCM and for installing
+  updates under `C:\Program Files`. `LocalService` is not supported (updates and part of the inventory would fail). The service SID type is
+  `unrestricted`; `C:\ProgramData\openlog\infra-agent` (configuration with the license key, state, logs) is restricted to SYSTEM and
+  Administrators by `-configure`/`-reconcile`, the installers and the MSI.
+
+### Install on macOS
+
+```sh
+curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install.sh |
+  sudo sh -s -- --license-key KEY --endpoint https://ingest.example.com:4318
+
+sudo launchctl print system/org.openlog.infra-agent     # status
+tail -f /var/log/openlog-infra-agent.log                 # JSON log (rotated by newsyslog)
+sudo openlog-infra-agent -once | jq '.discovered_services'
+```
+
+Paths: `/opt/openlog/infra-agent/{versions/<v>,current}`, `/etc/openlog-infra-agent/config.yaml`, `/var/lib/openlog-infra-agent`,
+`/Library/LaunchDaemons/org.openlog.infra-agent.plist`, `/usr/local/bin/openlog-infra-agent`.
+Downloads by `curl` carry no quarantine attribute, so the unsigned binary runs; releases signed and notarized in CI need the Apple secrets
+listed in `.github/workflows/release.yml`.
+
+Uninstall:
+
+```sh
+sudo /opt/openlog/infra-agent/current/openlog-infra-agent -uninstall-service
+sudo rm -rf /opt/openlog/infra-agent /usr/local/bin/openlog-infra-agent /etc/newsyslog.d/openlog-infra-agent.conf
+sudo rm -rf /etc/openlog-infra-agent /var/lib/openlog-infra-agent /var/log/openlog-infra-agent.log*   # configuration and state
+```
+
+### Install on Windows
+
+PowerShell as Administrator:
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod https://github.com/onuragtas/openlog/releases/latest/download/install.ps1))) `
+  -LicenseKey KEY -Endpoint https://ingest.example.com:4318
+
+# or the MSI (amd64)
+msiexec /i openlog-infra-agent_<v>_windows_amd64.msi LICENSE_KEY="KEY" ENDPOINT="https://ingest.example.com:4318" /qn
+
+Get-Service openlog-infra-agent
+Get-Content C:\ProgramData\openlog\infra-agent\logs\openlog-infra-agent.log -Tail 20 -Wait
+& 'C:\Program Files\openlog\infra-agent\current\openlog-infra-agent.exe' -once
+```
+
+Paths: `C:\Program Files\openlog\infra-agent\{versions\<v>,current}`, `C:\ProgramData\openlog\infra-agent\{config.yaml,state\,logs\,discovery.d\}`.
+Uninstall: `install.ps1 -Uninstall` (add `-Purge` to remove configuration and state) or `msiexec /x` / Apps & features for MSI installs.
+The MSI is unsigned unless the release workflow has the Authenticode secrets; SmartScreen may warn.
+
+### Configuration differences
+
+Defaults follow the OS (`config.DefaultFor`): Windows disables `containers`, `logs.containers` and `php_forwarder` and preconfigures
+`logs.windows_event_log.channels` (System and Application, critical/error/warning; `enabled: false`); macOS uses no CRI sockets and puts
+`php.sock` under `/var/run`. `-configure` writes a minimal file on macOS and Windows (only `license_key` and `endpoint`) so that the OS
+defaults apply; `packaging/config.example.yaml` documents every key with Linux paths. Paths in the configuration may be POSIX or
+Windows paths (`C:\logs\*.log`). Inputs that do not exist on an OS (`logs.journald` outside Linux, `logs.unified_log` outside macOS,
+`logs.windows_event_log` outside Windows) are reported as configuration warnings.
+
+```yaml
+logs:
+  unified_log:                 # macOS
+    enabled: true
+    level: default             # default | info | debug
+    predicate: 'subsystem == "com.example.app" OR process == "nginx"'
+  windows_event_log:           # Windows
+    enabled: true
+    channels:
+      - { name: System, levels: [critical, error, warning] }
+      - { name: Application, levels: [critical, error, warning] }
+      - { name: Security, event_ids: [4624, 4625, 4740] }
+      - { name: Microsoft-Windows-PowerShell/Operational, query: "*[System[Level<=3]]" }
+```
+
+### Self-update on macOS and Windows
+
+The service process runs the privileged apply step itself before collecting (see `releases-updates.md` §3): it re-verifies the staged
+release's signature with its compiled-in keys, copies and checks the archive (`tar.gz` on macOS, `zip` on Windows), self-tests the candidate,
+switches `current` and exits once so launchd (`KeepAlive`) or the SCM (recovery actions, exit code 3) starts the new binary. An unconfirmed
+candidate is rolled back after 3 starts or 5 minutes, like on Linux.
+
+
 ## Kubernetes
 
 Install with the `deploy/helm/openlog-agent` chart ([docs/operations/kubernetes.md](../../docs/operations/kubernetes.md)). Inside a pod
@@ -513,12 +623,17 @@ Gunicorn, uWSGI, Uvicorn, .NET, sshd, cron, chrony, ntpd.
 
 ```
 cmd/openlog-infra-agent   flags: -config -version -once -validate-rules -self-test -apply -reconcile [-reconcile-context]
+                          -configure [-license-key -endpoint] -verify-release <manifest> [-artifact] -uninstall-service
+                          (Windows: runs as a service when started by the SCM)
 internal/config        YAML config, env overrides, validation
 internal/version       build version, commit, date (ldflags)
 internal/release       trusted release keys (ldflags + release.trusted_keys_file)
 internal/update        sync client, install detection, manifest verification, download/extract, stage/confirm/rollback,
                        privileged apply (-apply) and reconcile (-reconcile)
 internal/hostfs        root-path aware file access (+ statfs, linux only)
+internal/osutil        open flags, file identity, delete-sharing opens (Windows)
+internal/osinfo        macOS/Windows OS version (sw_vers, sysctl, registry)
+internal/plist         binary and XML property list decoder (macOS receipts, bundles, launchd)
 internal/procfs        pure procfs parsers
 internal/resource      host.id chain and resource attributes
 internal/metrics       host metric collectors + self-telemetry
@@ -532,6 +647,6 @@ internal/exporter      OTLP/HTTP client, retry, request splitting
 internal/buffer        on-disk FIFO retry buffer
 internal/agent         scheduler, change fingerprint, resource budget
 rules/                 embedded discovery catalog
-packaging/             systemd unit (embedded by packaging.go; the packages and install.sh use the same file), example configs
+packaging/             systemd unit and launchd plist (embedded by packaging.go), example config, windows/ (WiX MSI, build and install test scripts)
 test/update            self-update end-to-end scenario (Debian 12 container)
 ```

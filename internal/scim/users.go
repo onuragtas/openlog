@@ -278,6 +278,13 @@ func (h *Handler) ensureMember(ctx context.Context, q *request, userID string) (
 	if err != nil {
 		return "", false, err
 	}
+	if err := h.sso.Auth().CheckMemberLimit(ctx, q.org.ID, false); err != nil { // plan users limit (SaaS mode, D-105)
+		var ae *auth.Error
+		if errors.As(err, &ae) && ae.Code == auth.CodeQuotaExceeded {
+			return "", false, &scimError{http.StatusForbidden, "", ae.Message}
+		}
+		return "", false, err
+	}
 	if err := users.AddMember(ctx, q.org.ID, userID, role); err != nil && !errors.Is(err, auth.ErrAlreadyExists) {
 		return "", false, err
 	}

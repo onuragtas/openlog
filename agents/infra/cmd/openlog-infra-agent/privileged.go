@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
@@ -137,7 +138,13 @@ func runReconcile(configPath string, explicit bool, ver, rctx string) int {
 	install := privilegedInstall(cfg, keys)
 	ctx, cancel := context.WithTimeout(context.Background(), reconcileBudget)
 	defer cancel()
-	st, err := update.Reconcile(ctx, reconcileOptions(sys, cfg, install, configPath, ver, rctx, log))
+	var st *update.ReconcileStatus
+	var err error
+	if runtime.GOOS == "linux" {
+		st, err = update.Reconcile(ctx, reconcileOptions(sys, cfg, install, configPath, ver, rctx, log))
+	} else {
+		st, err = update.ReconcileNative(ctx, nativeReconcileOptions(sys, cfg, install, configPath, ver, rctx, log)) // macOS, Windows
+	}
 	if st != nil && st.RestartRequired && rctx != update.ReconcileApply {
 		fmt.Println("restart-required")
 	}

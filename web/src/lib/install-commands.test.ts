@@ -7,6 +7,7 @@ import {
   INSTALL_TARGETS,
   LICENSE_KEY_PLACEHOLDER,
   maskKey,
+  psQuote,
   shQuote,
   targetNeedsKey,
   yamlQuote,
@@ -143,6 +144,65 @@ describe("infrastructure", () => {
     expect(r.blocks[2]!.containsKey).toBe(false);
     expect(block("kubernetes", "helmInstall", { clusterName: "" }).code).toContain("--set clusterName=my-cluster");
     expect(block("kubernetes", "download", {}, { agent_version: null }).code).toContain("--branch master");
+  });
+});
+
+describe("macOS and Windows hosts", () => {
+  it("PowerShell quoting: always single-quoted, quotes doubled", () => {
+    expect(psQuote("olk_abc")).toBe("'olk_abc'");
+    expect(psQuote("")).toBe("''");
+    expect(psQuote("it's")).toBe("'it''s'");
+    expect(psQuote("$(whoami) `x` \"y\"")).toBe("'$(whoami) `x` \"y\"'");
+    expect(psQuote("a’b")).toBe("'a’’b'");
+  });
+
+  it("macOS: install.sh with sudo, launchd status", () => {
+    const r = build("macos");
+    expect(r.blocks.map((b) => b.id)).toEqual(["install", "verify"]);
+    expect(r.blocks[0]!.code).toBe(
+      "curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install.sh | sudo sh -s -- \\\n" +
+        `  --license-key ${KEY} \\\n` +
+        "  --endpoint https://ingest.example.com:4318",
+    );
+    expect(r.blocks[0]!.containsKey).toBe(true);
+    expect(r.blocks[1]!.code).toBe("sudo launchctl print system/org.openlog.infra-agent\ntail -f /var/log/openlog-infra-agent.log");
+    expect(r.notes).toEqual(["archAuto", "macosService"]);
+    expect(block("macos", "install", { channel: "beta", distro: "rpm", dockerAccess: false }).code).toMatch(/ \\\n {2}--channel beta$/);
+  });
+
+  it("Windows: install.ps1 script block and the amd64 MSI", () => {
+    const r = build("windows", { channel: "beta" });
+    expect(r.blocks.map((b) => b.id)).toEqual(["install", "msiInstall", "verify"]);
+    expect(r.blocks[0]!.lang).toBe("powershell");
+    expect(r.blocks[0]!.code).toBe(
+      "& ([scriptblock]::Create((Invoke-RestMethod 'https://github.com/onuragtas/openlog/releases/latest/download/install.ps1'))) " +
+        `-LicenseKey '${KEY}' -Endpoint 'https://ingest.example.com:4318' -Channel beta`,
+    );
+    expect(r.blocks[1]!.code).toBe(
+      "# Alternative to the script: the MSI package (amd64 only)\n" +
+        "Invoke-WebRequest -Uri 'https://github.com/onuragtas/openlog/releases/download/v0.9.1/openlog-infra-agent_0.9.1_windows_amd64.msi' -OutFile 'openlog-infra-agent_0.9.1_windows_amd64.msi'\n" +
+        `msiexec /i openlog-infra-agent_0.9.1_windows_amd64.msi LICENSE_KEY="${KEY}" ENDPOINT="https://ingest.example.com:4318" /qn`,
+    );
+    expect(r.blocks[1]!.containsKey).toBe(true);
+    expect(r.blocks[2]!.code).toBe("Get-Service openlog-infra-agent");
+    expect(r.notes).toEqual(["windowsService", "windowsMsi"]);
+
+    const quoted = build("windows", { licenseKey: "k'y$x-0123456789" }, { agent_version: null });
+    expect(quoted.blocks[0]!.code).toContain("-LicenseKey 'k''y$x-0123456789' -Endpoint");
+    expect(quoted.blocks[0]!.code).not.toContain("-Channel");
+    expect(quoted.blocks[1]!.code).toContain('/download/vX.Y.Z/openlog-infra-agent_X.Y.Z_windows_amd64.msi');
+    expect(quoted.blocks[1]!.code).toContain('LICENSE_KEY="k\'y`$x-0123456789"');
+    expect(quoted.notes).toContain("versionUnknown");
+  });
+
+  it("host OS requirements: integrations and host logs on any infra host, containers and PHP on Linux", () => {
+    expect(findTarget("windows")?.verify).toBe("host");
+    expect(findTarget("macos")?.docs).toBe("https://github.com/onuragtas/openlog/blob/master/agents/infra/README.md");
+    for (const id of ["integrations/nginx", "integrations/redis", "integrations/mysql", "integrations/postgresql", "logs/host"] as const) {
+      expect(findTarget(id)?.requires, id).toEqual(["linux", "macos", "windows"]);
+    }
+    for (const id of ["logs/containers", "apm/php"] as const) expect(findTarget(id)?.requires, id).toEqual(["linux"]);
+    expect(build("integrations/redis").notes).toContain("otherHostOs");
   });
 });
 

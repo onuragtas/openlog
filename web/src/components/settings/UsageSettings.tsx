@@ -285,7 +285,7 @@ export function UsageSettings() {
 }
 
 /** Operator form (OPENLOG_SUPERADMIN_EMAILS): assign a plan and overrides to this organization. */
-function PlanOverride({ orgId }: { orgId: string }) {
+export function PlanOverride({ orgId }: { orgId: string }) {
   const plans = useQuery(plansQuery());
   const current = useQuery(orgPlanQuery(orgId));
   if (current.isLoading || plans.isLoading) return <LoadingState />;

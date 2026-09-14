@@ -477,6 +477,51 @@ operator guide [docs/operations/saas.md](../operations/saas.md), D-079–D-081. 
 
 Owner e-mails use `OPENLOG_SMTP_*` and link to `OPENLOG_PUBLIC_URL`.
 
+### SaaS operations (operator console, lifecycle, hard limits, abuse detection; D-105, D-106)
+
+The operator console (`/operator`, `OPENLOG_SUPERADMIN_EMAILS`) works in every postgres-mode installation. Suspension
+enforcement, hard host/user limits, trials and abuse detection only run with `OPENLOG_SAAS_MODE=true`
+([saas.md](../operations/saas.md) §8–§11). Ingest reuses `OPENLOG_QUOTA_REFRESH_INTERVAL` for suspension and host limits.
+
+| Variable | Default | Services | Description |
+|---|---|---|---|
+| `OPENLOG_SAAS_HOST_SYNC_INTERVAL` | `1m` | api | How often the leader writes host limits and active host ids for ingest (10s–1h) |
+| `OPENLOG_SAAS_SIGNUP_TRIAL_PLAN` | empty | api | Plan (with `trial_days`) whose trial new sign-up organizations get; empty = no automatic trial |
+| `OPENLOG_SAAS_TRIAL_NOTIFY_DAYS` | `7,3,1` | api | Days before a trial ends that e-mail the owners (1–90 each) |
+| `OPENLOG_SAAS_LIFECYCLE_INTERVAL` | `5m` | api | Trial job interval: sign-up trials, reminder e-mails, fallback plan at the end (10s–1h) |
+| `OPENLOG_SAAS_SUPPORT_SESSION_TTL` | `2h` | api | Maximum length of one operator support view (5m–24h; never beyond the owner's grant) |
+| `OPENLOG_SAAS_AUTO_SUSPEND` | `false` | api | Suspend an organization automatically when the abuse detector raises a new flag |
+| `OPENLOG_SAAS_ABUSE_INTERVAL` | `10m` | api | Abuse detector interval (1m–24h) |
+| `OPENLOG_SAAS_ABUSE_INGEST_MULTIPLIER` | `10` | api | Flag ingest of one hour above this multiple of the plan's hourly share (`ingest_gb_month / 730`); `0` disables |
+| `OPENLOG_SAAS_ABUSE_NEW_ORG_DAYS` | `7` | api | Age below which an organization counts as new (1–365) |
+| `OPENLOG_SAAS_ABUSE_NEW_ORG_HOSTS` | `50` | api | Flag new organizations with more active hosts; `0` disables |
+| `OPENLOG_SAAS_ABUSE_SOURCE_IPS` | `200` | api | Flag tenants whose license keys were used from more distinct client addresses within an hour (per ingest instance); `0` disables |
+
+### Data subject requests and status page (api, allinone; D-107, D-108)
+
+Exports, account deletion and organization deletion ([saas.md](../operations/saas.md) §12) exist in every postgres-mode
+installation; the api leader runs the export queue and the hard deletion job. E-mails use `OPENLOG_SMTP_*` and links
+`OPENLOG_PUBLIC_URL`. With tiered storage enabled (`OPENLOG_STORAGE_TIERING_ENABLED=true`) and no
+`OPENLOG_DATA_EXPORT_S3_URL`, the export reuses the bucket of `OPENLOG_S3_ENDPOINT` (prefix `openlog-exports/`) and,
+when the export has no keys of its own, `OPENLOG_S3_REGION`, `OPENLOG_S3_ACCESS_KEY_ID` and
+`OPENLOG_S3_SECRET_ACCESS_KEY` (static keys only; IAM credentials are not supported by the export client).
+
+| Variable | Default | Services | Description |
+|---|---|---|---|
+| `OPENLOG_ORG_DELETION_GRACE` | `168h` | api | Grace period of an organization deletion in which an owner can cancel it (0–2160h); operators may delete immediately |
+| `OPENLOG_DATA_EXPORT_ENABLED` | `true` | api | Offer organization and personal data exports |
+| `OPENLOG_DATA_EXPORT_STORAGE` | `auto` | api | `auto` (S3 when an S3 URL is known, else local), `local` or `s3`. Use S3 with more than one api pod: the leader writes the archive, any pod serves the download |
+| `OPENLOG_DATA_EXPORT_LOCAL_PATH` | `/tmp/openlog-exports` | api | Absolute directory of local archives and of the temporary archive file while an export is built (also with S3) |
+| `OPENLOG_DATA_EXPORT_S3_URL` | empty | api | Object base URL with bucket and prefix, ending with `/` (path-style `https://s3.example.com/bucket/exports/` or virtual-hosted `https://bucket.s3.eu-west-1.amazonaws.com/exports/`) |
+| `OPENLOG_DATA_EXPORT_S3_REGION` | `OPENLOG_S3_REGION`, else `us-east-1` | api | Signing region (AWS Signature Version 4) |
+| `OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID` / `OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY` | `OPENLOG_S3_ACCESS_KEY_ID` / `OPENLOG_S3_SECRET_ACCESS_KEY` | api | Static credentials (set together); empty = unsigned requests |
+| `OPENLOG_DATA_EXPORT_TTL` | `168h` | api | How long an archive and its e-mailed download link stay available (1h–720h); expired archives are deleted |
+| `OPENLOG_DATA_EXPORT_MAX_BYTES` | `4294967296` | api | Archive size limit (1 MiB–5 GiB, one S3 PUT); telemetry stops (`truncated`) before it is reached |
+| `OPENLOG_DATA_EXPORT_MAX_ROWS` | `50000000` | api | Telemetry rows per export (≥ 1000) |
+| `OPENLOG_DATA_EXPORT_MAX_RANGE` | `744h` | api | Longest telemetry time range of one export (1h–9600h) |
+| `OPENLOG_DATA_EXPORT_ROWS_PER_SECOND` | `200000` | api | Throttle of telemetry reads from ClickHouse; `0` = unthrottled (queries also run with `max_threads=2`) |
+| `OPENLOG_STATUS_PAGE_ENABLED` | `OPENLOG_SAAS_MODE` | api | Public status page: `/status`, `GET /api/v1/status` and the leader's one-minute self-checks |
+
 ## Report chart images (`openlog-renderer`, api, allinone; D-097)
 
 Optional PNG widget images in scheduled report e-mails ([operations/reports.md](../operations/reports.md)). Without

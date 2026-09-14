@@ -7,7 +7,7 @@ import (
 )
 
 func TestPHPAgentDefaultsAndParse(t *testing.T) {
-	c := Default()
+	c := DefaultFor("linux")
 	if p := c.PHPAgent; p.Mode != PHPAgentModeManual || p.Version != PHPAgentVersionAgent || p.Reload != PHPAgentReloadNone ||
 		!p.RemoteConfig || p.HealthCheckAfter.D() != 5*time.Minute || p.InstallRoot != DefaultPHPAgentRoot {
 		t.Fatalf("defaults = %+v", p)

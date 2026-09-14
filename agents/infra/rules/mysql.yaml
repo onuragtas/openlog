@@ -4,6 +4,7 @@ category: database
 match:
   - process: { exe_basename: ["mysqld"] }
   - systemd_unit: { name_regex: "^mysqld?(@.*)?\\.service$" }
+  - service: { name_regex: "^(homebrew\\.mxcl\\.mysql(@[0-9.]+)?|MySQL[0-9]*)$" }   # Homebrew (macOS); MySQL Installer service MySQL80 (Windows)
   - listening_port: { port: 3306, process_exe_basename: ["mysqld"] }
   - container: { image_regex: "(^|/)(mysql|percona)(-server)?(:|@|$)" }
   - package: { name_regex: "^(mysql-server(-core)?(-[0-9.]+)?|mysql-community-server|percona-server-server(-[0-9.]+)?)$" }

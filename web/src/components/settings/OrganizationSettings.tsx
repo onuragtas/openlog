@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { SUPPORTED_LANGUAGES } from "@/i18n";
 import { DateTimeText, FormError, SettingsSection } from "./common";
+import { DataExportSection } from "./DataExportSection";
+import { DeleteOrganizationSection } from "./DeleteOrganizationSection";
+import { SupportAccessSettings } from "./SupportAccessSettings";
 import { VersionSettings } from "./VersionSettings";
 
 export function OrganizationSettings() {
@@ -130,7 +133,10 @@ export function OrganizationSettings() {
         </dd>
       </dl>
     </SettingsSection>
+    <SupportAccessSettings />
+    <DataExportSection />
     <VersionSettings />
+    <DeleteOrganizationSection orgName={o.name} />
     </div>
   );
 }

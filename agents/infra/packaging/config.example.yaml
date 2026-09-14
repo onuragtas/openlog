@@ -68,6 +68,18 @@ logs:
     journalctl_path: journalctl
     units: []                    # e.g. [nginx.service]; empty = all
     priority: ""                 # e.g. warning (emerg..debug or 0..7); empty = all
+  unified_log:                   # macOS only (logs.unified_log, D-104): "log stream --style ndjson"; live, no backfill
+    enabled: false
+    log_path: /usr/bin/log
+    level: default               # default | info | debug
+    predicate: ""                # log(1) predicate, e.g. 'subsystem == "com.example.app"'; empty = everything (a lot)
+  windows_event_log:             # Windows only (D-104); resumes after the last delivered event (bookmark per channel)
+    enabled: false
+    channels: []                 # Windows default: System and Application with levels [critical, error, warning]
+    # channels:
+    #   - { name: System, levels: [critical, error, warning] }    # critical, error, warning, information, verbose
+    #   - { name: Security, event_ids: [4624, 4625] }
+    #   - { name: Microsoft-Windows-PowerShell/Operational, query: "*[System[Level<=3]]" }   # raw XPath
   containers:                    # stdout/stderr of Docker containers (needs containers.enabled)
     enabled: true
     source: auto                 # auto: json-file log when readable (CAP_DAC_READ_SEARCH, set by the systemd unit),

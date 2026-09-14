@@ -1,0 +1,10 @@
+{{define "subject"}}[openlog] {{.OrgName}}: {{if .Ended}}your {{.PlanName}} trial has ended{{else}}your {{.PlanName}} trial ends in {{.DaysLeft}} {{if eq .DaysLeft 1}}day{{else}}days{{end}}{{end}}{{end}}
+
+{{define "text"}}
+{{if .Ended}}The {{.PlanName}} trial of organization "{{.OrgName}}" ({{.TenantID}}) ended on {{date .EndsAt}}. The organization now uses the {{.FallbackPlanName}} plan and its limits apply.{{else}}The {{.PlanName}} trial of organization "{{.OrgName}}" ({{.TenantID}}) ends on {{date .EndsAt}}. Afterwards the organization moves to the {{.FallbackPlanName}} plan and its limits apply.{{end}}
+
+To keep the {{.PlanName}} plan, contact openlog support or upgrade.
+{{with .Link}}
+Plan and usage: {{.}}
+{{end}}
+{{end}}

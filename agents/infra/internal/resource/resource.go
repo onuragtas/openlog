@@ -3,6 +3,7 @@
 package resource
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -38,6 +39,11 @@ func HostID(fs *hostfs.FS, stateDir string) (string, bool, error) {
 			return strings.ToLower(v), true, nil
 		}
 	}
+	return persistedHostID(stateDir)
+}
+
+// persistedHostID reads the UUID persisted in stateDir, generating and persisting one when missing.
+func persistedHostID(stateDir string) (string, bool, error) {
 	file := filepath.Join(stateDir, HostIDFile)
 	if b, err := os.ReadFile(file); err == nil {
 		if v := strings.TrimSpace(string(b)); validID.MatchString(v) {
@@ -96,7 +102,9 @@ type Info struct {
 	OSDescription string
 	KernelRelease string
 	AgentVersion  string
-	Extra         map[string]string
+	// OSType is os.type: "linux" (default when empty), "darwin" or "windows".
+	OSType string
+	Extra  map[string]string
 }
 
 // Detect gathers resource information from the host file system.
@@ -168,7 +176,7 @@ func (i Info) Proto() *resourcepb.Resource {
 		otlputil.Str("host.id", i.HostID),
 		otlputil.Str("host.name", i.HostName),
 		otlputil.Str("host.arch", i.Arch),
-		otlputil.Str("os.type", "linux"),
+		otlputil.Str("os.type", cmp.Or(i.OSType, "linux")),
 	}
 	opt := func(k, v string) {
 		if v != "" {

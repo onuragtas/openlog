@@ -1,0 +1,11 @@
+{{define "subject"}}[openlog] {{if eq .Kind "organization"}}{{.OrgName}} veri dışa aktarımı hazır{{else}}Kişisel veri dışa aktarımınız hazır{{end}}{{end}}
+
+{{define "text"}}
+{{if eq .Kind "organization"}}"{{.OrgName}}" organizasyonu için istediğiniz veri dışa aktarımı hazır ({{.Size}}).{{else}}openlog'daki kişisel verileriniz için istediğiniz dışa aktarım hazır ({{.Size}}).{{end}}
+{{if .Truncated}}
+Telemetri bölümü dışa aktarım boyut veya satır sınırına ulaştığı için eksik; nerede durduğu arşivdeki manifest.json dosyasında yazar. Kalanı için daha kısa bir zaman aralığı isteyin.
+{{end}}
+Arşivi {{date .ExpiresAt}} tarihinden önce indirin. Bu tarihe kadar bağlantıya sahip herkes arşivi indirebilir; bu e-postayı başkasına iletmeyin.
+
+{{.Link}}
+{{end}}

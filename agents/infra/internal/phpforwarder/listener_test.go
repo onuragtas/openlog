@@ -1,3 +1,7 @@
+// POSIX ownership, modes, FIFOs and unix sockets; Windows has its own trust model (D-104).
+
+//go:build !windows
+
 package phpforwarder
 
 import (
@@ -16,12 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onuragtas/openlog/agents/infra/internal/discovery"
-
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 )
-
-type discoveryService = discovery.Service
 
 // shortDir returns a directory short enough for unix socket paths (t.TempDir is too long on macOS).
 func shortDir(t *testing.T) string {

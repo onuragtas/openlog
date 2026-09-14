@@ -508,7 +508,7 @@ func (m *Manager) stage(ctx context.Context, ins *Instruction, deadline time.Tim
 	m.mu.Lock()
 	m.setLocked(StateVerifying, "")
 	m.mu.Unlock()
-	if err := ExtractTarGz(partial, extract, TopDir(ver, m.o.OS, m.o.Arch), MaxExtractBytes); err != nil {
+	if err := ExtractArchive(ArtifactFormat(m.o.OS), partial, extract, TopDir(ver, m.o.OS, m.o.Arch), MaxExtractBytes); err != nil {
 		return err
 	}
 	ok := false
@@ -598,7 +598,7 @@ func (m *Manager) stageForApply(ctx context.Context, v *Verified, deadline time.
 	m.setLocked(StateVerifying, "")
 	m.mu.Unlock()
 	extract := filepath.Join(partial, "extract")
-	if err := ExtractTarGz(archive, extract, TopDir(ver, m.o.OS, m.o.Arch), MaxExtractBytes); err != nil {
+	if err := ExtractArchive(ArtifactFormat(m.o.OS), archive, extract, TopDir(ver, m.o.OS, m.o.Arch), MaxExtractBytes); err != nil {
 		return err
 	}
 	bin := filepath.Join(extract, BinaryName)

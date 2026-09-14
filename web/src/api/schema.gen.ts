@@ -3082,6 +3082,616 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operator/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the caller is an openlog operator (superadmin) */
+        get: operations["getOperatorMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Organizations of the installation (superadmin) */
+        get: operations["listOperatorOrgs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        /** Organization detail for operators (never secrets) */
+        get: operations["getOperatorOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend the organization (audit org.suspend) */
+        post: operations["suspendOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/unsuspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lift a suspension (audit org.unsuspend; 409 when not suspended) */
+        post: operations["unsuspendOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/trial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a trial of a plan, or move the end of the running trial (audit trial.start / trial.extend) */
+        post: operations["startOrExtendTrial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/reset-quota-notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forget this period's usage notifications (audit quota.notifications_reset) */
+        post: operations["resetQuotaNotifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/force-logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke every active session of the organization's members (audit org.force_logout) */
+        post: operations["forceLogoutOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/resend-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** E-mail a new verification link to every unverified owner (audit org.owner_verification_resend) */
+        post: operations["resendOwnerVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/orgs/{org}/support-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a read-only support view (requires support access granted by an owner; audit support.session_start) */
+        post: operations["startSupportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/support-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The operator's open support sessions */
+        get: operations["listSupportSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/support-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** End a support session (audit support.session_end) */
+        delete: operations["endSupportSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/support-sessions/{id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Audit a page view of the support UI (support.page_view) */
+        post: operations["recordSupportView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Abuse detector flags */
+        get: operations["listAbuseFlags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operator/flags/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an open flag (audit abuse_flag.resolve) */
+        post: operations["resolveAbuseFlag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/current/saas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suspension, trial and support access of the current organization */
+        get: operations["getOrgSaaSState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/current/support-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Allow openlog support to open read-only support views (owners; audit support_access.grant) */
+        put: operations["grantSupportAccess"];
+        post?: never;
+        /** Revoke support access and end open support sessions (owners; audit support_access.revoke) */
+        delete: operations["revokeSupportAccess"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/privacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Re-authentication info, export flag and scheduled deletions of organizations the caller owns */
+        get: operations["getAccountPrivacy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/data-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPersonalExports"];
+        put?: never;
+        /** Queue an export of the caller's personal data */
+        post: operations["requestPersonalExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete the caller's account (re-authentication required) */
+        post: operations["deleteAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exports of the current organization (owner) */
+        get: operations["listOrgExports"];
+        put?: never;
+        /** Queue an export of the current organization (owner) */
+        post: operations["requestOrgExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-exports/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["downloadExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-exports/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download an archive through the e-mailed, expiring link */
+        get: operations["downloadExportByToken"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/current/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schedule the current organization's deletion (owner, re-authentication required) */
+        post: operations["scheduleOrgDeletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org-deletions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a scheduled deletion of an organization the caller owns */
+        post: operations["cancelOrgDeletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orgs/{org}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Schedule an organization's deletion with a reason (superadmin) */
+        post: operations["adminScheduleOrgDeletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/org-deletions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminListOrgDeletions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/org-deletions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["adminCancelOrgDeletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/deletion-certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminListDeletionCertificates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public status page (OPENLOG_STATUS_PAGE_ENABLED; cacheable for 30 s) */
+        get: operations["getStatusPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/status/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listStatusIncidents"];
+        put?: never;
+        post: operations["createStatusIncident"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/status/incidents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteStatusIncident"];
+        options?: never;
+        head?: never;
+        patch: operations["updateStatusIncident"];
+        trace?: never;
+    };
+    "/api/v1/admin/status/incidents/{id}/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addStatusIncidentUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3338,6 +3948,212 @@ export interface components {
                 subscription_id?: string;
             };
             note?: string;
+        };
+        OperatorMe: {
+            operator: boolean;
+            saas_mode: boolean;
+        };
+        OperatorReason: {
+            /** @description Written to the organization's audit log */
+            reason: string;
+        };
+        TrialInput: {
+            /** @description Required to start a trial; must match the running trial's plan to extend it */
+            plan_id?: string;
+            /** @description Start: trial length (default the plan's trial_days). Extend: days added to the current end */
+            days?: number;
+            /** @description Explicit end (RFC3339 or unix ms); exclusive with days */
+            ends_at?: string;
+            reason: string;
+        };
+        OperatorOrg: {
+            id: string;
+            tenant_id: string;
+            name: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Effective plan id (the default plan when not assigned) */
+            plan_id: string;
+            plan_assigned: boolean;
+            /** @enum {string} */
+            state: "active" | "suspended" | "trial";
+            /** Format: date-time */
+            suspended_at: string | null;
+            suspend_reason: string;
+            trial_plan_id: string;
+            /** Format: date-time */
+            trial_ends_at: string | null;
+            /** Format: date-time */
+            support_access_until: string | null;
+            members: number;
+            active_hosts: number;
+            /** @description Ingest of the current period at the last quota evaluation */
+            ingest_bytes: number;
+            /** @enum {string} */
+            quota_level: "ok" | "warning" | "exceeded";
+            /**
+             * Format: date-time
+             * @description Latest license key use
+             */
+            last_ingest_at: string | null;
+            open_flags: number;
+        };
+        OperatorOrgList: {
+            organizations: components["schemas"]["OperatorOrg"][];
+            total: number;
+            saas_mode: boolean;
+        };
+        OperatorMember: {
+            user_id: string;
+            email: string;
+            name: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member" | "viewer";
+            /** Format: date-time */
+            joined_at: string;
+            /** Format: date-time */
+            last_login_at: string | null;
+            email_verified: boolean;
+            disabled: boolean;
+        };
+        OperatorSSOConnection: {
+            id: string;
+            /** @enum {string} */
+            protocol: "oidc" | "saml";
+            name: string;
+            enabled: boolean;
+            enforce: boolean;
+            jit_enabled: boolean;
+            last_test_ok: boolean;
+        };
+        OperatorAuditEntry: {
+            id: number;
+            actor_email: string;
+            action: string;
+            target_type: string;
+            target_id: string;
+            details: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        OrgLifecycle: {
+            org_id: string;
+            tenant_id: string;
+            suspended: boolean;
+            /** Format: date-time */
+            suspended_at: string | null;
+            suspend_reason: string;
+            trial_plan_id: string;
+            /** Format: date-time */
+            trial_started_at: string | null;
+            /** Format: date-time */
+            trial_ends_at: string | null;
+            /** Format: date-time */
+            trial_ended_at: string | null;
+            /** Format: date-time */
+            support_access_until: string | null;
+            /** Format: date-time */
+            support_access_granted_at: string | null;
+        };
+        SupportSession: {
+            id: string;
+            org_id: string;
+            org_name: string;
+            tenant_id: string;
+            operator_email: string;
+            reason: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            ended_at: string | null;
+        };
+        AbuseFlag: {
+            id: number;
+            org_id: string;
+            org_name: string;
+            tenant_id: string;
+            /** @enum {string} */
+            kind: "ingest_spike" | "new_org_hosts" | "ingest_source_ips";
+            /** @enum {string} */
+            status: "open" | "dismissed" | "actioned";
+            details: {
+                [key: string]: unknown;
+            } | null;
+            occurrences: number;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            auto_suspended: boolean;
+            resolved_by_email: string;
+            /** Format: date-time */
+            resolved_at: string | null;
+            resolution_note: string;
+            org_suspended: boolean;
+        };
+        OperatorOrgDetail: {
+            organization: components["schemas"]["OperatorOrg"] & {
+                /** @description Members (at most 500); `members` is the count */
+                member_list: components["schemas"]["OperatorMember"][];
+                pending_invitations: number;
+                keys: {
+                    license_keys_active: number;
+                    license_keys_revoked: number;
+                    api_keys_active: number;
+                    scim_tokens_active: number;
+                    /** Format: date-time */
+                    last_ingest_at: string | null;
+                };
+                sso_connections: components["schemas"]["OperatorSSOConnection"][];
+                verified_domains: number;
+                flags: components["schemas"]["AbuseFlag"][];
+                support_sessions: components["schemas"]["SupportSession"][];
+                support_access_granted_by: string;
+            };
+            plan?: components["schemas"]["OrgPlan"];
+            quota?: {
+                /** @enum {string} */
+                level: "ok" | "warning" | "exceeded";
+                ingest_blocked: boolean;
+                metrics: components["schemas"]["QuotaMetric"][];
+                evaluated_at: components["schemas"]["Timestamp"];
+                /** Format: date */
+                period_start: string;
+            } | null;
+            lifecycle: components["schemas"]["OrgLifecycle"];
+            audit: components["schemas"]["OperatorAuditEntry"][];
+            usage: {
+                period: components["schemas"]["UsagePeriod"];
+                days: components["schemas"]["UsageDay"][];
+                /** @description false when ClickHouse could not be read */
+                available: boolean;
+            };
+            saas_mode: boolean;
+        };
+        OrgSaaSState: {
+            saas_mode: boolean;
+            suspended: boolean;
+            trial: {
+                plan_id: string;
+                plan_name: string;
+                ends_at: components["schemas"]["Timestamp"];
+                fallback_plan_id: string;
+            } | null;
+            support_access: {
+                until: components["schemas"]["Timestamp"];
+                granted_at: components["schemas"]["NullableTimestamp"];
+            } | null;
+            support_session: {
+                id: string;
+                operator_email: string;
+                expires_at: components["schemas"]["Timestamp"];
+                org_name: string;
+            } | null;
+            can_manage_support_access: boolean;
         };
         Error: {
             error: {
@@ -3798,7 +4614,10 @@ export interface components {
                 address?: string;
                 port?: number;
             }[];
+            /** @description systemd units of the service (Linux); empty on macOS and Windows. */
             systemd_units?: string[];
+            /** @description launchd labels (macOS) or Windows service names of the service. Optional; Linux agents omit it. */
+            services?: string[];
             packages?: string[];
             container_ids?: string[];
             /** @description Running integration of the service (semantic-conventions §3.4, §6). */
@@ -6180,6 +6999,159 @@ export interface components {
                 to: string | null;
             };
             expires_at: components["schemas"]["Timestamp"];
+        };
+        DataExport: {
+            id: string;
+            /** @enum {string} */
+            kind: "organization" | "user";
+            /** @enum {string} */
+            status: "pending" | "running" | "completed" | "failed" | "expired";
+            signals: ("logs" | "traces" | "metrics")[];
+            from: string | null;
+            to: string | null;
+            requested_by: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: int64 */
+            telemetry_rows: number;
+            /** @description A size or row limit stopped the telemetry part (see the archive's manifest.json) */
+            truncated: boolean;
+            error: string;
+            created_at: string;
+            started_at: string | null;
+            completed_at: string | null;
+            expires_at: string | null;
+            download_available: boolean;
+        };
+        DataExportEnvelope: {
+            export: components["schemas"]["DataExport"];
+        };
+        DataExportList: {
+            exports: components["schemas"]["DataExport"][];
+        };
+        OrgExportRequest: {
+            /** @description RFC3339 or unix ms; required with signals */
+            from?: string;
+            /** @description RFC3339 or unix ms; required with signals */
+            to?: string;
+            /** @description Empty = PostgreSQL data only */
+            signals?: ("logs" | "traces" | "metrics")[];
+        };
+        OrgDeletion: {
+            id: string;
+            organization_id: string | null;
+            organization_name: string;
+            tenant_id: string;
+            /** @enum {string} */
+            status: "scheduled" | "cancelled" | "deleting" | "completed";
+            /** @enum {string} */
+            initiator: "owner" | "operator";
+            /** @description Operator views only */
+            reason?: string;
+            /** @description Operator views only */
+            requested_by_email?: string;
+            requested_at: string;
+            purge_after: string;
+            cancelled_at: string | null;
+            started_at: string | null;
+            completed_at: string | null;
+            cancellable: boolean;
+            certificate_id: string | null;
+            /** @description Operator views only */
+            last_error?: string;
+        };
+        OrgDeletionEnvelope: {
+            deletion: components["schemas"]["OrgDeletion"];
+        };
+        AccountPrivacy: {
+            /** @description false = confirm destructive operations with a recent single sign-on session */
+            has_password: boolean;
+            data_export_enabled: boolean;
+            org_deletion_grace_seconds: number;
+            reauth_max_age_seconds: number;
+            org_deletions: components["schemas"]["OrgDeletion"][];
+        };
+        DeletionCertificate: {
+            id: string;
+            /** @enum {string} */
+            subject_type: "organization" | "user";
+            /** @description Hex sha256 of the tenant id or user id */
+            subject_hash: string;
+            /** @enum {string} */
+            initiator: "owner" | "operator" | "self";
+            requested_at: string;
+            grace_ended_at: string | null;
+            started_at: string;
+            completed_at: string;
+            postgres_rows: {
+                [key: string]: number;
+            };
+            clickhouse_rows: {
+                [key: string]: number;
+            };
+            verified: boolean;
+        };
+        /** @enum {string} */
+        StatusValue: "operational" | "degraded" | "partial_outage" | "major_outage" | "maintenance" | "unknown";
+        StatusPage: {
+            status: components["schemas"]["StatusValue"];
+            checked_at: string | null;
+            components: {
+                /** @enum {string} */
+                id: "ingest" | "query_api" | "alerting" | "processing";
+                status: components["schemas"]["StatusValue"];
+                uptime_90d: number | null;
+                days: {
+                    date: string;
+                    /** @enum {string} */
+                    status: "operational" | "degraded" | "outage" | "no_data";
+                    uptime: number | null;
+                }[];
+            }[];
+            incidents: components["schemas"]["StatusIncident"][];
+            maintenance: components["schemas"]["StatusIncident"][];
+            history: components["schemas"]["StatusIncident"][];
+        };
+        StatusIncident: {
+            id: string;
+            /** @enum {string} */
+            kind: "incident" | "maintenance";
+            title: string;
+            /** @enum {string} */
+            status: "investigating" | "identified" | "monitoring" | "resolved" | "scheduled" | "in_progress" | "completed";
+            /** @enum {string} */
+            impact: "none" | "minor" | "major" | "critical";
+            components: string[];
+            starts_at: string;
+            ends_at: string | null;
+            created_at: string;
+            updated_at: string;
+            updates: {
+                id: number;
+                status: string;
+                message: string;
+                created_at: string;
+            }[];
+        };
+        StatusIncidentInput: {
+            /**
+             * @description Create only
+             * @enum {string}
+             */
+            kind?: "incident" | "maintenance";
+            title?: string;
+            status?: string;
+            /** @enum {string} */
+            impact?: "none" | "minor" | "major" | "critical";
+            components?: ("ingest" | "query_api" | "alerting" | "processing")[];
+            starts_at?: string;
+            /** @description "" clears */
+            ends_at?: string;
+            /** @description First timeline entry (create only) */
+            message?: string;
+        };
+        StatusIncidentEnvelope: {
+            incident: components["schemas"]["StatusIncident"];
         };
     };
     responses: {
@@ -12790,6 +13762,1070 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOperatorMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operator flag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorMe"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listOperatorOrgs: {
+        parameters: {
+            query?: {
+                /** @description Name */
+                q?: string;
+                /** @description Effective plan id */
+                plan?: string;
+                state?: "active" | "suspended" | "trial" | "flagged";
+                sort?: "created" | "name" | "ingest" | "members" | "last_ingest";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of organizations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorOrgList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOperatorOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organization detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorOrgDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    suspendOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReason"];
+            };
+        };
+        responses: {
+            /** @description Lifecycle state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgLifecycle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unsuspendOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReason"];
+            };
+        };
+        responses: {
+            /** @description Lifecycle state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgLifecycle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    startOrExtendTrial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrialInput"];
+            };
+        };
+        responses: {
+            /** @description Lifecycle state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgLifecycle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resetQuotaNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReason"];
+            };
+        };
+        responses: {
+            /** @description Deleted notification claims */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted: number;
+                        period: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    forceLogoutOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReason"];
+            };
+        };
+        responses: {
+            /** @description Revoked sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sessions_revoked: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resendOwnerVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReason"];
+            };
+        };
+        responses: {
+            /** @description Recipients */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sent_to: string[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    startSupportSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorReason"];
+            };
+        };
+        responses: {
+            /** @description Support session; send its id as X-Openlog-Support-Session */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listSupportSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open support sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        support_sessions: components["schemas"]["SupportSession"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    endSupportSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended support session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportSession"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    recordSupportView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    path: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAbuseFlags: {
+        parameters: {
+            query?: {
+                status?: "open" | "dismissed" | "actioned" | "all";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        flags: components["schemas"]["AbuseFlag"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    resolveAbuseFlag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "dismissed" | "actioned";
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Resolved flag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbuseFlag"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOrgSaaSState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SaaS state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgSaaSState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    grantSupportAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    duration: "24h" | "7d";
+                };
+            };
+        };
+        responses: {
+            /** @description SaaS state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgSaaSState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokeSupportAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SaaS state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgSaaSState"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAccountPrivacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy settings of the caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPrivacy"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listPersonalExports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's personal exports, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    requestPersonalExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    confirm_email: string;
+                    /** @description Required for users with a password */
+                    password?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deleted; the session cookie is cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listOrgExports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    requestOrgExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    downloadExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ZIP archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    downloadExportByToken: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ZIP archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    scheduleOrgDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The organization name */
+                    confirm_name: string;
+                    /** @description Required for users with a password */
+                    password?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgDeletionEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelOrgDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgDeletionEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    adminScheduleOrgDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id or tenant id */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    /**
+                     * @description Skip the grace period
+                     * @default false
+                     */
+                    immediate?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgDeletionEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    adminListOrgDeletions: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletions, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deletions: components["schemas"]["OrgDeletion"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    adminCancelOrgDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgDeletionEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    adminListDeletionCertificates: {
+        parameters: {
+            query?: {
+                /** @description Hex sha256 of a tenant id or user id */
+                subject_hash?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Certificates, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        certificates: components["schemas"]["DeletionCertificate"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getStatusPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Component health, uptime history, incidents and maintenance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listStatusIncidents: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incidents and maintenance windows, newest first (superadmin) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        incidents: components["schemas"]["StatusIncident"][];
+                        components: string[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createStatusIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusIncidentInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusIncidentEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteStatusIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateStatusIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusIncidentInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusIncidentEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addStatusIncidentUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    status: string;
+                    message: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated incident */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusIncidentEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { LineChart } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { hostQuery, servicesQuery } from "@/api/queries";
+import { hostQuery, inventoryQuery, servicesQuery } from "@/api/queries";
 import type { DiscoveredService, InventoryItem } from "@/api/types";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
 import { ApmHintFooter } from "@/components/onboarding/ApmHintFooter";
@@ -10,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { translateOptional } from "@/i18n/dynamic";
 import { formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
@@ -101,6 +103,12 @@ function ServiceCard({ item, hostId }: { item: InventoryItem; hostId: string }) 
               <dd className="font-mono">{s.systemd_units.join(", ")}</dd>
             </>
           )}
+          {s.services && s.services.length > 0 && (
+            <>
+              <dt className="text-muted-foreground">{t("services.serviceNames")}</dt>
+              <dd className="font-mono">{s.services.join(", ")}</dd>
+            </>
+          )}
           {s.pids && s.pids.length > 0 && (
             <>
               <dt className="text-muted-foreground">{t("services.pids")}</dt>
@@ -124,6 +132,88 @@ function ServiceCard({ item, hostId }: { item: InventoryItem; hostId: string }) 
       )}
       {hint && <ApmHintFooter hint={hint} hostId={hostId} serviceName={name} language={language} />}
     </Card>
+  );
+}
+
+/** Service manager inventory of macOS (launchd_service) and Windows (windows_service) hosts (semantic-conventions §3.3). */
+const SYSTEM_SERVICE_CATEGORIES: readonly string[] = ["launchd_service", "windows_service"];
+
+interface SystemService {
+  label?: string;
+  name?: string;
+  display_name?: string;
+  state?: string;
+  start_type?: string;
+  pid?: number | null;
+  last_exit_status?: number | null;
+  program?: string;
+  binary_path?: string;
+  path?: string;
+}
+
+function SystemServices({ hostId }: { hostId: string }) {
+  const { t } = useTranslation();
+  const query = useQuery(inventoryQuery(hostId));
+  const items = useMemo(() => (query.data?.items ?? []).filter((it) => SYSTEM_SERVICE_CATEGORIES.includes(it.category)), [query.data]);
+  if (items.length === 0) return null;
+  return (
+    <section aria-labelledby="system-services-title" className="mt-6" data-testid="system-services">
+      <h2 id="system-services-title" className="mb-3 text-base font-semibold">
+        {t("services.systemServices")}
+      </h2>
+      <div className="rounded-xl border bg-card">
+        <Table mobile="stack">
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("services.systemColumns.name")}</TableHead>
+              <TableHead>{t("services.systemColumns.state")}</TableHead>
+              <TableHead>{t("services.systemColumns.startType")}</TableHead>
+              <TableHead>{t("services.systemColumns.pid")}</TableHead>
+              <TableHead>{t("services.systemColumns.program")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((it) => {
+              const d = (it.data && typeof it.data === "object" ? it.data : {}) as SystemService;
+              const name = d.label || d.name || it.key;
+              const pid = typeof d.pid === "number" && d.pid > 0 ? d.pid : null;
+              const state = d.state
+                ? translateOptional(`services.states.${d.state}`, d.state.replace(/_/g, " "))
+                : pid !== null
+                  ? t("services.states.running")
+                  : typeof d.last_exit_status === "number"
+                    ? t("services.lastExit", { code: d.last_exit_status })
+                    : t("services.loaded");
+              const program = d.binary_path || d.program || d.path || "";
+              return (
+                <TableRow key={`${it.category}|${it.key}`}>
+                  <TableCell className="max-w-72">
+                    <span className="block truncate font-mono text-xs" title={name}>
+                      {name}
+                    </span>
+                    {d.display_name && d.display_name !== name && <span className="block truncate text-xs text-muted-foreground">{d.display_name}</span>}
+                  </TableCell>
+                  <TableCell label={t("services.systemColumns.state")} className="text-xs">
+                    {state}
+                  </TableCell>
+                  <TableCell label={t("services.systemColumns.startType")} className="text-xs">
+                    {d.start_type ? translateOptional(`services.startTypes.${d.start_type}`, d.start_type) : "–"}
+                  </TableCell>
+                  <TableCell label={t("services.systemColumns.pid")} className="font-mono text-xs">
+                    {pid ?? "–"}
+                  </TableCell>
+                  <TableCell label={t("services.systemColumns.program")} className="max-w-96">
+                    <span className="block truncate font-mono text-xs text-muted-foreground" title={program}>
+                      {program || "–"}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
   );
 }
 
@@ -162,6 +252,7 @@ export function HostServicesTab({ hostId }: { hostId: string }) {
           ))}
         </div>
       )}
+      <SystemServices hostId={hostId} />
     </section>
   );
 }

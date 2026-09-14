@@ -1,0 +1,11 @@
+id: iis
+name: IIS
+category: web
+match:
+  - service: { name_regex: "^W3SVC$", manager: windows }   # World Wide Web Publishing Service
+  - process: { exe_basename: ["w3wp"] }                    # application pool worker (w3wp.exe)
+endpoints:
+  - from: listening_port
+integration: null                                          # no IIS metric integration yet: not_available
+logs:
+  - path: "C:/inetpub/logs/LogFiles/W3SVC*/*.log"          # default site log directory (W3C format)

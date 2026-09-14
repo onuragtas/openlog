@@ -316,6 +316,17 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	if err != nil {
 		return err
 	}
+	saasTasks, err := startSaaS(ctx, cfg, pgPool, conn, svc, srv, log) // saas.go: operator console, lifecycle, limits (D-105, D-106)
+	if err != nil {
+		return err
+	}
+	usageTasks = append(usageTasks, saasTasks...)
+	privacyTasks, err := startPrivacyAPI(cfg, pgPool, conn, srv, log) // privacy.go: data exports, account/org deletion (D-107)
+	if err != nil {
+		return err
+	}
+	usageTasks = append(usageTasks, privacyTasks...)
+	usageTasks = append(usageTasks, startStatusPage(cfg, pgPool, conn, srv, log)...) // privacy.go: public status page (D-108)
 	var apmLinker func(ctx context.Context)
 	if cfg.APM.LinkEnabled {
 		apmLinker = apm.NewLinker(conn, apm.LinkerOptions{

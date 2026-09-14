@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -78,10 +79,23 @@ func (s *Service) grpcExport(ctx context.Context, sig queue.Signal, msg proto.Me
 	if err != nil {
 		return prepared{}, status.Error(codes.Unauthenticated, "invalid or missing license key")
 	}
+	if s.gate != nil { // SaaS organization state (gate.go, D-105)
+		if pr, ok := peer.FromContext(ctx); ok && pr.Addr != nil {
+			s.gate.ObserveSource(tenantID, pr.Addr.String())
+		}
+		if _, suspended := s.gate.Suspended(tenantID); suspended {
+			return prepared{}, grpcErrorInfo(codes.PermissionDenied, suspendedMessage, ReasonOrgSuspended, 0)
+		}
+	}
 	if d, ok := s.checkLimit(tenantID, sig, proto.Size(msg)); !ok { // tenant quota (limit.go)
 		return prepared{}, resourceExhaustedError(d)
 	}
+	gd := s.gateHosts(tenantID, sig, msg) // plan host limit (gate.go)
+	if gd.all {
+		return prepared{}, grpcErrorInfo(codes.ResourceExhausted, gd.message, ReasonQuotaExceeded, hostRetryAfter)
+	}
 	p := prepare(sig, tenantID, msg)
+	applyGateToPrepared(&p, gd)
 	if err := s.export(ctx, sig, tenantID, p, nil); err != nil {
 		return prepared{}, unavailableError()
 	}

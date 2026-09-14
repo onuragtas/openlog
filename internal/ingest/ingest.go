@@ -53,6 +53,8 @@ type Service struct {
 	splitTraces bool
 	// limiter enforces tenant quotas (SaaS mode, limit.go); nil: none.
 	limiter Limiter
+	// gate enforces suspension and host limits (SaaS mode, gate.go); nil: none.
+	gate Gate
 }
 
 // SetHTTPRoutes adds routes to the OTLP/HTTP listener (e.g. /v1/openlog/agent/sync). Must be
