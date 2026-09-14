@@ -1,7 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// uPlot reads window.matchMedia when it loads; jsdom has none.
+vi.hoisted(() => {
+  if (typeof window !== "undefined" && !window.matchMedia) {
+    Object.defineProperty(window, "matchMedia", {
+      value: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
+    });
+  }
+});
 import { takeRenderToken } from "@/api/dashboardRender";
 import { server } from "@/mocks/server";
 import { PrintDashboardView } from "./PrintDashboardView";
@@ -72,8 +81,8 @@ describe("PrintDashboardView", () => {
     expect(auth[0]).toBe("Bearer " + TOKEN);
     const blocks = container.querySelectorAll("[data-render-id]");
     expect([...blocks].map((b) => b.getAttribute("data-render-id"))).toEqual(["w1", "w3"]);
-    expect(blocks[0].getAttribute("data-render-error")).toBeNull();
-    expect(blocks[1].getAttribute("data-render-error")).toBe("1");
+    expect(blocks[0]?.getAttribute("data-render-error")).toBeNull();
+    expect(blocks[1]?.getAttribute("data-render-error")).toBe("1");
     expect(screen.getByTestId("print-dashboard")).toHaveTextContent("42");
   });
 

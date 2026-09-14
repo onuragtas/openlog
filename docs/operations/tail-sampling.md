@@ -118,6 +118,17 @@ traces topic partition count) or shorten the wait.
 ## Horizontal scaling and rebalances
 
 - Scale by consumer lag of the raw traces topic (`openlog_tailsampling_consumer_lag_records`); replicas ≤ partitions.
+  Helm: the sampler HPA scales on CPU out of the box (needs the resource metrics API, e.g. metrics-server).
+  `sampler.autoscaling.lag.enabled` adds an `External` metric that Kubernetes cannot serve by itself: install an
+  external metrics adapter (prometheus-adapter, KEDA's Prometheus scaler) that exposes
+  `openlog_tailsampling_consumer_lag_records` summed per sampler pod; without one the HPA reports
+  `FailedGetExternalMetric` and keeps scaling on CPU only.
+- Validated on kind (2026-09-14, `deploy/helm/test/kind-validate.sh` step `sampling`, operators mode, 3 partitions): sampler
+  Deployment 2/2, PDB `maxUnavailable: 1`, CPU HPA reading `cpu: 3%/70%` (metrics-server 3.13.1). loadgen 100 spans/s for
+  2 min (5 spans per trace, 2 % error traces) with the default policy `baseline_ratio: 0.1` + an `error` rule: 12 000 spans
+  decided (1 355 kept + 10 645 dropped, all in ClickHouse), baseline kept 223 of 2 352 traces (9.5 %), `errors` kept all
+  48 error traces; weights 10 for baseline traces and 1 for error traces (`sum(sample_weight)` 11 390 vs 12 000 sent).
+  The lag HPA was not tried (no adapter).
 - **Revoked partitions are decided immediately**: in the revoke callback the sampler decides every trace with spans
   from those partitions, produces the kept spans and commits, then gives the partitions up. Spans of such a trace
   that arrive later are handled by the new owner as a new trace (late-span case). A rebalance therefore cuts

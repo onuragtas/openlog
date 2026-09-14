@@ -131,6 +131,55 @@ func TestMetadataTrustOnSave(t *testing.T) {
 	invalid("tampered", err, "signature")
 }
 
+// A SAML connection saved before metadata trust (no pinned certificate, no "allow unsigned" decision) can still be
+// enabled/disabled without a trust decision, keeping its stored metadata; changing the URL needs a decision.
+func TestLegacyMetadataConnectionSave(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	idp := newTestIdP(t, idpEntityID)
+	unsigned := idp.metadataXML(t)
+	md := newMetadataServer(t, unsigned)
+	c, err := env.sso.SaveConnection(ctx, env.ownerPrincipal(), sso.ConnectionInput{Protocol: sso.ProtocolSAML, Enabled: true,
+		IdPMetadataURL: md.url(), DefaultRole: auth.RoleMember, AllowUnsignedMetadata: true}, auth.ClientMeta{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a connection from before D-098.
+	stored, err := env.store.GetConnection(ctx, env.org.ID, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.SAML.AllowUnsignedMetadata = false
+	if err := env.store.UpdateConnection(ctx, &stored); err != nil {
+		t.Fatal(err)
+	}
+	// The IdP now serves different metadata: a toggle must not fetch it.
+	md.set(strings.Replace(unsigned, "https://idp.example/sso", "https://changed.example/sso", 1))
+
+	toggled, err := env.sso.SaveConnection(ctx, env.ownerPrincipal(), sso.ConnectionInput{Protocol: sso.ProtocolSAML, Enabled: false,
+		IdPMetadataURL: md.url(), DefaultRole: auth.RoleMember}, auth.ClientMeta{})
+	if err != nil {
+		t.Fatalf("disabling a legacy connection: %v", err)
+	}
+	if toggled.Enabled || toggled.SAML.IdPMetadataXML != stored.SAML.IdPMetadataXML || toggled.SAML.AllowUnsignedMetadata ||
+		len(toggled.SAML.MetadataSigningCerts) != 0 {
+		t.Fatalf("legacy toggle changed metadata or trust: enabled=%v allowUnsigned=%v pins=%d sameXML=%v", toggled.Enabled,
+			toggled.SAML.AllowUnsignedMetadata, len(toggled.SAML.MetadataSigningCerts), toggled.SAML.IdPMetadataXML == stored.SAML.IdPMetadataXML)
+	}
+
+	other := newMetadataServer(t, unsigned)
+	_, err = env.sso.SaveConnection(ctx, env.ownerPrincipal(), sso.ConnectionInput{Protocol: sso.ProtocolSAML, Enabled: true,
+		IdPMetadataURL: other.url(), DefaultRole: auth.RoleMember}, auth.ClientMeta{})
+	if !errors.Is(err, auth.ErrInvalidArgument) || !strings.Contains(err.Error(), "not signed") {
+		t.Fatalf("changed metadata URL without a trust decision: %v", err)
+	}
+	decided, err := env.sso.SaveConnection(ctx, env.ownerPrincipal(), sso.ConnectionInput{Protocol: sso.ProtocolSAML, Enabled: true,
+		IdPMetadataURL: md.url(), DefaultRole: auth.RoleMember, AllowUnsignedMetadata: true}, auth.ClientMeta{})
+	if err != nil || !decided.SAML.AllowUnsignedMetadata || !strings.Contains(decided.SAML.IdPMetadataXML, "https://changed.example/sso") {
+		t.Fatalf("explicit decision refetches: %v", err)
+	}
+}
+
 func TestRefreshSignedMetadata(t *testing.T) {
 	env := newTestEnv(t)
 	ctx := context.Background()

@@ -314,7 +314,16 @@ func (s *Service) applyOIDC(c *Connection, existing Connection, isNew bool, in C
 func (s *Service) applySAML(ctx context.Context, c *Connection, existing Connection, isNew bool, in ConnectionInput, now time.Time) error {
 	xmlData := strings.TrimSpace(in.IdPMetadataXML)
 	metaURL := strings.TrimSpace(in.IdPMetadataURL)
-	if metaURL != "" {
+	// A connection saved before metadata trust (D-098) has neither pinned signing certificates nor an explicit
+	// "allow unsigned" decision. Saving it without touching its metadata URL or trust settings (e.g. enable/disable)
+	// keeps its stored metadata instead of requiring a trust decision; the refresh job still reports the missing
+	// decision in health, and any change of URL or trust settings goes through metadataTrustOnSave.
+	legacyTrust := metaURL != "" && !isNew && existing.SAML != nil && existing.SAML.IdPMetadataURL == metaURL &&
+		in.MetadataSigningCertificatePEM == nil && !in.AllowUnsignedMetadata && strings.TrimSpace(in.IdPMetadataXML) == "" &&
+		len(existing.SAML.MetadataSigningCerts) == 0 && !existing.SAML.AllowUnsignedMetadata && existing.SAML.IdPMetadataXML != ""
+	if legacyTrust {
+		xmlData = existing.SAML.IdPMetadataXML
+	} else if metaURL != "" {
 		u, err := ParseIdPURL(metaURL, s.cfg.AllowPrivateNetworks)
 		if err != nil {
 			return invalid("idp_metadata_url: %v", err)
@@ -337,7 +346,7 @@ func (s *Service) applySAML(ctx context.Context, c *Connection, existing Connect
 		return invalid("%v", err)
 	}
 	var pins []*x509.Certificate
-	if metaURL != "" {
+	if metaURL != "" && !legacyTrust {
 		switch pemIn := in.MetadataSigningCertificatePEM; {
 		case pemIn != nil && strings.TrimSpace(*pemIn) != "":
 			if pins, err = parseCertificatesPEM(*pemIn); err != nil {

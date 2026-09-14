@@ -346,7 +346,7 @@ EOF
   ch "ALTER TABLE openlog.logs_local ON CLUSTER openlog MATERIALIZE TTL SETTINGS mutations_sync = 2"
   ch "ALTER TABLE openlog.spans_local ON CLUSTER openlog MATERIALIZE TTL SETTINGS mutations_sync = 2"
   cold_parts() {
-    [[ $(ch "SELECT count() FROM clusterAllReplicas('openlog', system.parts) WHERE database='openlog' AND table IN ('logs_local','spans_local') AND active AND disk_name='s3' AND max_time < now() - INTERVAL 4 DAY") -ge 4 ]]
+    [[ $(ch "SELECT count() FROM clusterAllReplicas('openlog', system.parts) WHERE database='openlog' AND table IN ('logs_local','spans_local') AND active AND disk_name='openlog_s3' AND max_time < now() - INTERVAL 4 DAY") -ge 4 ]]
   }
   wait_for 600 "old parts on the s3 disk of both replicas" cold_parts
   ch "SELECT hostName(), table, disk_name, count(), sum(rows) FROM clusterAllReplicas('openlog', system.parts) WHERE database='openlog' AND table IN ('logs_local','spans_local') AND active GROUP BY ALL ORDER BY ALL"
