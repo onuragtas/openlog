@@ -129,7 +129,8 @@ Releases are continuous: every push to `master` whose `ci.yml` run is green is r
 3. When the Go agent modules are not prepared for that version, it runs `scripts/go-agent-release.sh prepare` and
    pushes the commit `release: prepare X.Y.Z (Go agent modules)` to `master` as `github-actions[bot]`. A push with
    `GITHUB_TOKEN` starts no new `ci.yml` run, so this does not loop.
-4. It pushes the annotated tag `vX.Y.Z` and starts `release.yml` on it with `workflow_dispatch` (a tag pushed with
+4. It pushes the annotated tag `vX.Y.Z` together with the Go module tags (one atomic push, while `master` still is
+   that commit) and starts `release.yml` on it with `workflow_dispatch` (a tag pushed with
    `GITHUB_TOKEN` starts no workflow by itself) and the input `ci_tested=true`.
 
 With `ci_tested=true` (`RUN_TESTS=0`) `release.yml` only builds, signs and publishes: the Java, Node.js, Python and .NET
@@ -170,7 +171,8 @@ Commit with `[skip release]` in the message so the preparation push is not relea
    default index URL) serves the latest *stable* release.
 
 5. `go-agent-tags` – after the GitHub release is published, pushes the Go module tags on the tagged
-   commit (atomic push; see below), then asks `proxy.golang.org` for them (best effort).
+   commit (atomic push; see below) unless `release-tag` already pushed them, then asks `proxy.golang.org` for
+   them (best effort).
 
 6. `node-agent-npm` – after the GitHub release is published, publishes the `openlog-node-<v>.tgz` built by
    `node-agent-package` (the release asset) as `@openlog/node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
@@ -231,8 +233,10 @@ ci.yml job also covers master between releases.
 
 Tags (`release.yml` `go-agent-tags`, list from `scripts/go-agent-release.sh tags X.Y.Z`):
 `agents/go/vX.Y.Z` and `agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z` on `$GITHUB_SHA`. `examples`
-is not tagged. They are pushed only after the release is published, because the Go module proxy caches
-a version forever and a module tag must never move. A tag that already exists on another commit fails
+is not tagged. Continuous releases push them with the product tag (`ci.yml` `release-tag`): pushed later with
+`GITHUB_TOKEN`, GitHub refuses a tag whose commit lacks workflow changes that `master` already has ("refusing to
+allow a GitHub App to create or update workflow"). For a tag pushed by hand they are pushed only after the release is
+published, because the Go module proxy caches a version forever and a module tag must never move. A tag that already exists on another commit fails
 the job and is never moved. Pre-releases get tags too (`agents/go/v0.5.0-beta.1`). Go treats them as
 pre-release versions, and `@latest` ignores them. Tags pushed with `GITHUB_TOKEN` trigger no workflow. If
 tag rulesets cover `agents/**`, allow GitHub Actions to create those tags.

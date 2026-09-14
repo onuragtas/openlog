@@ -802,8 +802,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Go module tags on the product tag's commit (agents/go/vX.Y.Z, agents/go/instrumentation/<name>/vX.Y.Z).
-  # Pushed only after the release is published: the Go module proxy caches a version forever, so a
-  # module tag must never be moved. Pre-releases (vX.Y.Z-beta.N) are tagged too; Go treats them as
+  # ci.yml release-tag already pushes them with the product tag (this job then only reports them and asks the
+  # proxy); for a tag pushed by hand they are pushed here, after the release is published: the Go module proxy
+  # caches a version forever, so a module tag must never be moved. Pre-releases (vX.Y.Z-beta.N) are tagged too; Go treats them as
   # pre-release versions that `go get …@latest` skips. Tags pushed with GITHUB_TOKEN trigger no workflow.
   go-agent-tags:
     needs: [prepare, go-agent-modules, release]

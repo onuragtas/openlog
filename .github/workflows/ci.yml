@@ -631,8 +631,18 @@ jobs:
             fi
           fi
 
+          # The Go module tags go with the product tag in one atomic push while master still is this commit: a later push
+          # (release.yml go-agent-tags) is refused once master has newer workflow changes ("refusing to allow a GitHub
+          # App to create or update workflow … without workflows permission").
           git tag -a "v$version" -m "openlog $version"
-          git push origin "refs/tags/v$version"
+          refs=("refs/tags/v$version")
+          if scripts/go-agent-release.sh check "$version" >/dev/null 2>&1; then
+            while read -r tag; do
+              git tag "$tag"
+              refs+=("refs/tags/$tag")
+            done < <(scripts/go-agent-release.sh tags "$version")
+          fi
+          git push --atomic origin "${refs[@]}"
           # ci_tested: release.yml skips the tests this run already passed (agent tests, package and MSI install tests).
           gh workflow run release.yml --ref "v$version" -f ci_tested=true
           echo "### v$version tagged, release started" >> "$GITHUB_STEP_SUMMARY"
