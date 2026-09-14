@@ -633,5 +633,6 @@ jobs:
 
           git tag -a "v$version" -m "openlog $version"
           git push origin "refs/tags/v$version"
-          gh workflow run release.yml --ref "v$version"
+          # ci_tested: release.yml skips the tests this run already passed (agent tests, package and MSI install tests).
+          gh workflow run release.yml --ref "v$version" -f ci_tested=true
           echo "### v$version tagged, release started" >> "$GITHUB_STEP_SUMMARY"

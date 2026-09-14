@@ -130,7 +130,14 @@ Releases are continuous: every push to `master` whose `ci.yml` run is green is r
    pushes the commit `release: prepare X.Y.Z (Go agent modules)` to `master` as `github-actions[bot]`. A push with
    `GITHUB_TOKEN` starts no new `ci.yml` run, so this does not loop.
 4. It pushes the annotated tag `vX.Y.Z` and starts `release.yml` on it with `workflow_dispatch` (a tag pushed with
-   `GITHUB_TOKEN` starts no workflow by itself).
+   `GITHUB_TOKEN` starts no workflow by itself) and the input `ci_tested=true`.
+
+With `ci_tested=true` (`RUN_TESTS=0`) `release.yml` only builds, signs and publishes: the Java, Node.js, Python and .NET
+unit tests, the deb/rpm/apk install test, the PHP deb/apk install test and the Windows MSI install test already passed
+in the same commit's `ci.yml` run ("release dry run", "infra-agent (Windows)"). The PHP rpm install test and the
+`-version`/`-once` smoke tests of the Windows and macOS release binaries still run. A tag pushed by hand runs every
+test. `node-agent-npm` publishes the tarball built by `node-agent-package` (the release asset) instead of packing
+again.
 
 Requirements: *Settings → Actions → General → Workflow permissions* allows *Read and write*; branch protection or tag
 rulesets on `master` / `v*` must let GitHub Actions push. Nothing else is needed on your side.

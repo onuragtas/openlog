@@ -4,12 +4,15 @@
 #
 #   agents/java/scripts/release-jar.sh 0.9.0 dist/v0.9.0            # Gradle in eclipse-temurin:21-jdk (Docker)
 #   JAVA_BUILD=local agents/java/scripts/release-jar.sh 0.9.0 DIR   # Gradle wrapper on the host (CI with setup-java)
+#   RUN_TESTS=0 …                                                   # skip :extension:test (jar only)
 set -euo pipefail
 version="${1:?version}"
 out="${2:?release directory}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 jar="openlog-javaagent-$version.jar"
-tasks=(--no-daemon --console=plain "-Pversion=$version" :extension:test :agentJar :agentJarChecksum)
+tasks=(--no-daemon --console=plain "-Pversion=$version")
+if [ "${RUN_TESTS:-1}" = 1 ]; then tasks+=(:extension:test); fi
+tasks+=(:agentJar :agentJarChecksum)
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 
