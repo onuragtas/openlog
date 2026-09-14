@@ -1075,7 +1075,7 @@ export const tr: Messages = {
       docker: { title: "Docker konteyner agent'ı", description: "Infra agent'ı, sunucu kök dizini salt okunur bağlı bir konteyner olarak çalıştırın." },
       kubernetes: { title: "Kubernetes", description: "Helm chart: node, workload, pod ve olaylar için node DaemonSet'i ve küme toplayıcısı." },
       "apm/go": { title: "Go", description: "github.com/onuragtas/openlog/agents/go: izler, runtime metrikleri ve loglar." },
-      "apm/node": { title: "Node.js", description: "--require veya --import ile @openlog/node, kod değişikliği yok." },
+      "apm/node": { title: "Node.js", description: "--require veya --import ile openlog-node, kod değişikliği yok." },
       "apm/python": { title: "Python", description: "openlog-instrument ile openlog-agent, kod değişikliği yok." },
       "apm/java": { title: "Java", description: "openlog-javaagent jar'ı: tek bir JVM parametresi." },
       "apm/dotnet": { title: ".NET", description: "AddOpenLog() ile OpenLog.Agent NuGet paketi." },

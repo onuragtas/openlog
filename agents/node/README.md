@@ -1,6 +1,6 @@
 # openlog Node.js agent
 
-Apache-2.0 · package `@openlog/node` · Node.js 18.19+, 20, 22, 24
+Apache-2.0 · package `openlog-node` · Node.js 18.19+, 20, 22, 24
 
 This is a thin distribution of the OpenTelemetry JavaScript SDK (D-060), built like the [Go agent](../go/README.md).
 One line sends traces, metrics (including Node.js runtime metrics) and logs to openlog over OTLP. The resource carries
@@ -10,7 +10,7 @@ interoperate with the Go agent through W3C `tracestate`.
 ## Quick start
 
 ```sh
-npm install @openlog/node
+npm install openlog-node
 ```
 
 When a release is not on npm (registry publishing is optional for openlog releases), install the package file attached
@@ -27,16 +27,16 @@ Zero code changes:
 
 ```sh
 export OPENLOG_LICENSE_KEY=dev-license-key OPENLOG_ENDPOINT=http://localhost:4318 OPENLOG_SERVICE_NAME=checkout
-node --require @openlog/node/register server.js     # CommonJS applications
-node --import @openlog/node/register server.mjs     # ES module applications (also works for CommonJS)
-# or: NODE_OPTIONS="--require @openlog/node/register"
+node --require openlog-node/register server.js     # CommonJS applications
+node --import openlog-node/register server.mjs     # ES module applications (also works for CommonJS)
+# or: NODE_OPTIONS="--require openlog-node/register"
 ```
 
 Or from code, before the application loads the libraries to instrument:
 
 ```js
 // instrumentation.js — first line of the entry point, or node --require ./instrumentation.js
-const openlog = require('@openlog/node');            // import * as openlog from '@openlog/node'
+const openlog = require('openlog-node');            // import * as openlog from 'openlog-node'
 
 const agent = openlog.start({ serviceName: 'checkout', serviceVersion: '1.4.0', environment: 'production' });
 process.on('SIGTERM', () => agent.shutdown().finally(() => process.exit(0)));  // flushes buffered telemetry (5 s max)
@@ -53,7 +53,7 @@ the agent. It flushes on `beforeExit`, `SIGTERM` and `SIGINT`; when the applicat
 signal, the signal is re-raised after the flush, so the process ends as it would without the agent
 (`OPENLOG_SHUTDOWN_ON_SIGNAL=false` turns this off).
 
-ES modules: instrumenting `import`ed libraries needs the loader hook that `--import @openlog/node/register` registers
+ES modules: instrumenting `import`ed libraries needs the loader hook that `--import openlog-node/register` registers
 (`import-in-the-middle`). With `--require` or `start()`, only `require`d modules are instrumented.
 
 ## Configuration
@@ -136,7 +136,7 @@ normalization.
 
 NestJS 12 is ESM-only and outside the range of `@opentelemetry/instrumentation-nestjs-core` (`< 12`), so there are no
 Nest request-context/handler spans. Transactions are still route-named with no code change: start the application with
-`node --import @openlog/node/register main.js`. The express and fastify instrumentations then patch the platform
+`node --import openlog-node/register main.js`. The express and fastify instrumentations then patch the platform
 Nest 12 loads, and the SERVER span is `GET /users/:id` with `http.route` equal to the full registered path
 (URI version included, e.g. `/v2/orders/:orderId`). Verified with `@nestjs/*` 12.0.1 on express 5
 and fastify 5 (`test/e2e/nest12.test.ts`). With `--require`, ES module imports are not patched and routes stay unnamed.
@@ -144,7 +144,7 @@ and fastify 5 (`test/e2e/nest12.test.ts`). With `--require`, ES module imports a
 Optionally, register the openlog interceptor (no dependency on `@nestjs/*`; works on NestJS 8–12):
 
 ```js
-import { OpenLogNestInterceptor } from '@openlog/node/nest';   // require('@openlog/node/nest')
+import { OpenLogNestInterceptor } from 'openlog-node/nest';   // require('openlog-node/nest')
 
 app.useGlobalInterceptors(new OpenLogNestInterceptor());
 // or in a module: providers: [{ provide: APP_INTERCEPTOR, useClass: OpenLogNestInterceptor }]
@@ -250,12 +250,12 @@ checks. These are micro-benchmark numbers from a shared development machine, not
 ## Versioning and upgrading
 
 The package is versioned with the openlog product (D-025): every product release `vX.Y.Z` publishes
-`@openlog/node@X.Y.Z` to npm (pre-releases `vX.Y.Z-beta.N` under the dist-tag `beta`). The backend accepts agents from
+`openlog-node@X.Y.Z` to npm (pre-releases `vX.Y.Z-beta.N` under the dist-tag `beta`). The backend accepts agents from
 its last three minor versions. OpenTelemetry dependencies are pinned exactly per release; if the application also
 depends on `@opentelemetry/api`, keep it on `^1.9` (one global API instance is shared).
 
 ```sh
-npm install @openlog/node@X.Y.Z
+npm install openlog-node@X.Y.Z
 ```
 
 ## Development

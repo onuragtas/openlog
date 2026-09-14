@@ -44,7 +44,7 @@ Plan and rationale: [../plan/09-releases-updates.md](../plan/09-releases-updates
 - `component` values: `infra-agent`, `backend`, `php-agent` (php-agent.md §7.1: `openlog-php-agent_<v>_linux_<arch>.tar.gz`
   with the modules of every PHP ABI and `openlog-php-install`, plus `.deb`/`.rpm`/`.apk`), `java-agent`
   (`openlog-javaagent-<v>.jar`, platform independent: `os` and `arch` are `any`), `node-agent`
-  (`openlog-node-<v>.tgz`, `npm pack` of `@openlog/node`), `python-agent` (`openlog_agent-<pep440 v>-py3-none-any.whl`)
+  (`openlog-node-<v>.tgz`, `npm pack` of `openlog-node`), `python-agent` (`openlog_agent-<pep440 v>-py3-none-any.whl`)
   and `dotnet-agent` (`OpenLog.Agent.<v>.nupkg`), all three with `os`/`arch` `any`. `format`: `tar.gz`, `deb`, `rpm`,
   `apk`, `jar`, `tgz`, `whl`, `nupkg`. Consumers ignore components and formats they do not know, so new ones do not
   change `schema`.

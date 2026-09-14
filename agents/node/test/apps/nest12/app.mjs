@@ -1,7 +1,7 @@
 // NestJS 12 (ESM-only) e2e app: `node --import <dist/esm/register.js> nest12/app.mjs [interceptor]`; prints "READY <port>".
 // Dependencies: `npm ci --prefix test/apps/nest12`. Plain JavaScript, so decorators are applied as functions.
 // Routes: GET /users/:id, GET /v2/orders/:orderId (URI versioning), GET /boom (500 with exception).
-// With the `interceptor` argument the openlog Nest interceptor is registered globally (@openlog/node/nest).
+// With the `interceptor` argument the openlog Nest interceptor is registered globally (openlog-node/nest).
 import 'reflect-metadata';
 import { Controller, Get, Module, Param, Version, VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';

@@ -5538,7 +5538,7 @@ export interface components {
             } | null;
         };
         OnboardingAgentPackage: {
-            /** @example @openlog/node */
+            /** @example openlog-node */
             name: string;
             /**
              * @description agent_version (PEP 440 form for Python)

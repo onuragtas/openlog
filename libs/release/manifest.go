@@ -26,7 +26,7 @@ const (
 	// ComponentJavaAgent is openlog-javaagent-<v>.jar (agents/java, D-072). The jar runs on every platform, so its
 	// os and arch are PlatformAny.
 	ComponentJavaAgent = "java-agent"
-	// ComponentNodeAgent is the npm package tarball openlog-node-<v>.tgz of @openlog/node (agents/node, `npm pack`).
+	// ComponentNodeAgent is the npm package tarball openlog-node-<v>.tgz of openlog-node (agents/node, `npm pack`).
 	ComponentNodeAgent = "node-agent"
 	// ComponentPythonAgent is the wheel openlog_agent-<pep440 v>-py3-none-any.whl of openlog-agent (agents/python).
 	ComponentPythonAgent = "python-agent"

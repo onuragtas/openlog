@@ -1074,7 +1074,7 @@ export const en = {
       docker: { title: "Docker container agent", description: "Run the infra agent as a container with the host root mounted read-only." },
       kubernetes: { title: "Kubernetes", description: "Helm chart: node DaemonSet and cluster collector for nodes, workloads, pods and events." },
       "apm/go": { title: "Go", description: "github.com/onuragtas/openlog/agents/go: traces, runtime metrics and logs." },
-      "apm/node": { title: "Node.js", description: "@openlog/node with --require or --import, no code changes." },
+      "apm/node": { title: "Node.js", description: "openlog-node with --require or --import, no code changes." },
       "apm/python": { title: "Python", description: "openlog-agent with openlog-instrument, no code changes." },
       "apm/java": { title: "Java", description: "openlog-javaagent jar: one JVM flag." },
       "apm/dotnet": { title: ".NET", description: "OpenLog.Agent NuGet package with AddOpenLog()." },

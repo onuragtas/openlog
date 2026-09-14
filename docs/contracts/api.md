@@ -474,8 +474,8 @@ are only returned once by `POST /api/v1/license-keys`, and a key the user pastes
  "features": {"license_keys": true, "can_create_license_keys": true, "can_list_license_keys": true,
               "fleet_php_install": true, "tail_sampling": false},
  "agent_packages": {
-   "node": {"name": "@openlog/node", "version": "0.9.2", "registry": "missing",
-            "registry_url": "https://www.npmjs.com/package/@openlog/node/v/0.9.2",
+   "node": {"name": "openlog-node", "version": "0.9.2", "registry": "missing",
+            "registry_url": "https://www.npmjs.com/package/openlog-node/v/0.9.2",
             "release_asset_url": "https://github.com/onuragtas/openlog/releases/download/v0.9.2/openlog-node-0.9.2.tgz",
             "release_asset_sha256_url": "https://github.com/onuragtas/openlog/releases/download/v0.9.2/openlog-node-0.9.2.tgz.sha256"},
    "python": {"name": "openlog-agent", "version": "0.9.2", "registry": "unknown", …},

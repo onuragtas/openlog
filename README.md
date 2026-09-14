@@ -210,7 +210,7 @@ More options: [deploy/compose/README.md](deploy/compose/README.md).
 | `deploy/compose`, `deploy/helm/openlog` | `single` and `cluster` deployment profiles |
 | [`agents/infra`](agents/infra) | Linux host agent: metrics, inventory, discovery, logs, integrations, PHP forwarder (Apache-2.0) |
 | [`agents/go`](agents/go) | Go APM agent (OpenTelemetry distribution, Apache-2.0) |
-| [`agents/node`](agents/node) | Node.js APM agent `@openlog/node` (OpenTelemetry distribution, Apache-2.0) |
+| [`agents/node`](agents/node) | Node.js APM agent `openlog-node` (OpenTelemetry distribution, Apache-2.0) |
 | [`agents/java`](agents/java) | Java APM agent `openlog-javaagent.jar` (OpenTelemetry Java agent distribution, Apache-2.0) |
 | [`agents/dotnet`](agents/dotnet) | .NET APM agent, NuGet `OpenLog.Agent` (OpenTelemetry .NET distribution, Apache-2.0) |
 | [`agents/python`](agents/python) | Python APM agent, PyPI `openlog-agent` (OpenTelemetry Python distribution, Apache-2.0) |

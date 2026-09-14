@@ -1,4 +1,4 @@
-// `@openlog/node/nest`: NestJS route naming that does not depend on a NestJS instrumentation (NestJS 12 is ESM-only and
+// `openlog-node/nest`: NestJS route naming that does not depend on a NestJS instrumentation (NestJS 12 is ESM-only and
 // outside the range of @opentelemetry/instrumentation-nestjs-core). No dependency on @nestjs packages: the interceptor is
 // typed structurally and Nest only needs an object with an `intercept(context, next)` method.
 import { context, trace, type Span } from '@opentelemetry/api';
@@ -45,7 +45,7 @@ export const NEST_CALLBACK_ATTRIBUTE = 'nestjs.callback';
  * instrumentation's RPC metadata, as express/koa/fastify instrumentations do) and renames the span `<METHOD> <route>`,
  * plus `nestjs.controller` / `nestjs.callback`. Works for NestJS 8–12 on the express and fastify platforms.
  *
- *   import { OpenLogNestInterceptor } from '@openlog/node/nest';
+ *   import { OpenLogNestInterceptor } from 'openlog-node/nest';
  *   app.useGlobalInterceptors(new OpenLogNestInterceptor());
  *   // or: providers: [{ provide: APP_INTERCEPTOR, useClass: OpenLogNestInterceptor }]
  *

@@ -34,7 +34,7 @@ const (
 )
 
 type onboardingPackageJSON struct {
-	// Name is the registry package name (@openlog/node, openlog-agent, OpenLog.Agent).
+	// Name is the registry package name (openlog-node, openlog-agent, OpenLog.Agent).
 	Name string `json:"name"`
 	// Version is the package version: agent_version, as PEP 440 for Python.
 	Version string `json:"version"`
@@ -132,7 +132,7 @@ func agentPackages(ctx context.Context, checker *PackageRegistryChecker, version
 		return u, u + ".sha256"
 	}
 	p := &onboardingPackagesJSON{
-		Node:   onboardingPackageJSON{Name: "@openlog/node", Version: v, RegistryURL: "https://www.npmjs.com/package/@openlog/node/v/" + v},
+		Node:   onboardingPackageJSON{Name: "openlog-node", Version: v, RegistryURL: "https://www.npmjs.com/package/openlog-node/v/" + v},
 		Python: onboardingPackageJSON{Name: "openlog-agent", Version: pyv, RegistryURL: "https://pypi.org/project/openlog-agent/" + pyv + "/"},
 		Dotnet: onboardingPackageJSON{Name: "OpenLog.Agent", Version: v, RegistryURL: "https://www.nuget.org/packages/OpenLog.Agent/" + v},
 	}
@@ -150,7 +150,7 @@ func agentPackages(ctx context.Context, checker *PackageRegistryChecker, version
 		dst *string
 		url string
 	}{
-		{&p.Node.Registry, checker.npm + "/@openlog%2fnode/" + v},
+		{&p.Node.Registry, checker.npm + "/openlog-node/" + v},
 		{&p.Python.Registry, checker.pypi + "/pypi/openlog-agent/" + pyv + "/json"},
 		{&p.Dotnet.Registry, checker.nuget + "/v3-flatcontainer/openlog.agent/" + nugetV + "/openlog.agent.nuspec"},
 	}

@@ -85,7 +85,7 @@ export const onboardingHandlers = [
       },
       // Like a release whose registry publishing is not configured: the commands use the GitHub release assets.
       agent_packages: {
-        node: mockPackage("@openlog/node", "0.9.1", "openlog-node-0.9.1.tgz", "https://www.npmjs.com/package/@openlog/node/v/0.9.1"),
+        node: mockPackage("openlog-node", "0.9.1", "openlog-node-0.9.1.tgz", "https://www.npmjs.com/package/openlog-node/v/0.9.1"),
         python: mockPackage("openlog-agent", "0.9.1", "openlog_agent-0.9.1-py3-none-any.whl", "https://pypi.org/project/openlog-agent/0.9.1/"),
         dotnet: mockPackage("OpenLog.Agent", "0.9.1", "OpenLog.Agent.0.9.1.nupkg", "https://www.nuget.org/packages/OpenLog.Agent/0.9.1"),
       },

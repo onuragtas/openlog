@@ -26,7 +26,7 @@ mkdirSync(esm, { recursive: true });
 writeFileSync(join(esm, 'package.json'), JSON.stringify({ type: 'module' }) + '\n');
 const require = createRequire(import.meta.url);
 let names = [];
-// index: the agent API; nest: the NestJS interceptor (@openlog/node/nest).
+// index: the agent API; nest: the NestJS interceptor (openlog-node/nest).
 for (const mod of ['index', 'nest']) {
   const exported = Object.keys(require(join(root, 'dist', 'cjs', `${mod}.js`))).filter((n) => /^[A-Za-z_$][\w$]*$/.test(n) && n !== 'default');
   if (mod === 'index') names = exported;
@@ -41,7 +41,7 @@ for (const mod of ['index', 'nest']) {
 }
 writeFileSync(
   join(esm, 'register.js'),
-  `// node --import @openlog/node/register app.mjs\n` +
+  `// node --import openlog-node/register app.mjs\n` +
     `// Registers the import-in-the-middle loader hook so ES module imports of instrumented libraries are patched, then\n` +
     `// starts the agent from the environment (same code path as --require).\n` +
     `import * as nodeModule from 'node:module';\n` +
@@ -52,4 +52,4 @@ writeFileSync(
     `const require = nodeModule.createRequire(import.meta.url);\n` +
     `require('../cjs/register.js');\n`,
 );
-console.log(`built @openlog/node ${pkg.version}: dist/cjs (${names.length} exports), dist/esm facade`);
+console.log(`built openlog-node ${pkg.version}: dist/cjs (${names.length} exports), dist/esm facade`);

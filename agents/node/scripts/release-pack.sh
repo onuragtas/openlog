@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the npm package tarball openlog-node-<version>.tgz (+ .sha256) of @openlog/node into a release directory,
+# Builds the npm package tarball openlog-node-<version>.tgz (+ .sha256) of openlog-node into a release directory,
 # where `make release-local` lists it in the signed manifest (component node-agent, format tgz) and release.yml
 # attaches it to the GitHub release, so `npm install <release URL>` works without the npm registry.
 #

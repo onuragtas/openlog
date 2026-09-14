@@ -1,5 +1,5 @@
 // End-to-end: NestJS 12 (ESM-only, outside @opentelemetry/instrumentation-nestjs-core's range) started with
-// `--import dist/esm/register.js`, on express and fastify, with and without the @openlog/node/nest interceptor.
+// `--import dist/esm/register.js`, on express and fastify, with and without the openlog-node/nest interceptor.
 // Needs `npm ci --prefix test/apps/nest12` and Node.js >= 20; otherwise the suite is skipped.
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';

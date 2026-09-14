@@ -111,7 +111,7 @@ export function findTarget(id: string | undefined): InstallTarget | undefined {
  */
 export const AGENT_PRODUCTS: Partial<Record<TargetId, string>> = {
   "apm/go": "github.com/onuragtas/openlog/agents/go",
-  "apm/node": "@openlog/node",
+  "apm/node": "openlog-node",
   "apm/python": "openlog-agent",
   "apm/java": "openlog-javaagent",
   "apm/dotnet": "OpenLog.Agent",
@@ -553,8 +553,8 @@ function agentPackage(c: Ctx, lang: PackageLang): { registry: true } | { registr
 
 function apmNode(c: Ctx) {
   const pkg = agentPackage(c, "node");
-  add(c, "install", "sh", pkg.registry ? "npm install @openlog/node" : `npm install ${pkg.url}`);
-  const run = c.o.nodeModules === "esm" ? "node --import @openlog/node/register server.mjs" : "node --require @openlog/node/register server.js";
+  add(c, "install", "sh", pkg.registry ? "npm install openlog-node" : `npm install ${pkg.url}`);
+  const run = c.o.nodeModules === "esm" ? "node --import openlog-node/register server.mjs" : "node --require openlog-node/register server.js";
   add(c, "run", "sh", `${openlogEnv(c)}\n${run}`);
   if (c.o.nodeModules === "esm") note(c, "nodeEsm");
 }

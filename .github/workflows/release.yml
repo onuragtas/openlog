@@ -862,12 +862,12 @@ jobs:
             done
           done < <(scripts/go-agent-release.sh modules)
 
-  # npm package @openlog/node (agents/node) at the product version, after the GitHub release is published
+  # npm package openlog-node (agents/node) at the product version, after the GitHub release is published
   # (docs/operations/releasing.md#nodejs-agent-package): the tarball of node-agent-package, the same file as the
   # release asset. Needs the repository secret NPM_TOKEN; without it the job only warns (the release asset still
   # installs). npm versions are immutable: an already published version is skipped.
   node-agent-npm:
-    name: npm publish @openlog/node
+    name: npm publish openlog-node
     needs: [prepare, release]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -886,7 +886,7 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::secret NPM_TOKEN is not set; @openlog/node $VERSION is not published (docs/operations/releasing.md#nodejs-agent-package)"
+            echo "::warning::secret NPM_TOKEN is not set; openlog-node $VERSION is not published (docs/operations/releasing.md#nodejs-agent-package)"
           fi
       - name: tarball built by node-agent-package (the GitHub release asset)
         if: steps.token.outputs.present == 'true'
@@ -905,15 +905,15 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP/node-agent"
           sha256sum -c ./*.sha256
-          if npm view "@openlog/node@$VERSION" version >/dev/null 2>&1; then
-            echo "@openlog/node@$VERSION is already published"
+          if npm view "openlog-node@$VERSION" version >/dev/null 2>&1; then
+            echo "openlog-node@$VERSION is already published"
             exit 0
           fi
           tag=latest
           if [ "$CHANNEL" = beta ]; then tag=beta; fi
           npm publish "./openlog-node-$VERSION.tgz" --access public --provenance --tag "$tag"
           echo "### npm" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`npm install @openlog/node@$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`npm install openlog-node@$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
 
   # PyPI package openlog-agent (agents/python, D-073) at the tag version, after the GitHub release is published
   # (docs/operations/releasing.md#python-agent-package). Trusted publishing (OIDC, environment `pypi`), no token

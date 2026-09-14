@@ -119,7 +119,7 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
     await user.click(await screen.findByRole("button", { name: "Show key" }));
     const run = screen.getAllByTestId("command-block").find((b) => b.getAttribute("data-block") === "run")!;
     expect(run).toHaveTextContent("export OPENLOG_LICENSE_KEY=olk_9f3c2a71pastedvalue");
-    expect(run).toHaveTextContent("node --require @openlog/node/register server.js");
+    expect(run).toHaveTextContent("node --require openlog-node/register server.js");
     // No registry check result: the package comes from the GitHub release, and a note says so.
     const install = screen.getAllByTestId("command-block").find((b) => b.getAttribute("data-block") === "install")!;
     expect(install).toHaveTextContent("npm install https://github.com/onuragtas/openlog/releases/download/v0.9.1/openlog-node-0.9.1.tgz");

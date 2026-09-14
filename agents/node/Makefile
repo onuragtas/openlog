@@ -1,4 +1,4 @@
-# Node.js agent (@openlog/node). Every target runs inside a node container, so no local Node.js is needed
+# Node.js agent (openlog-node). Every target runs inside a node container, so no local Node.js is needed
 # (NODE=local runs the npm scripts directly, e.g. in CI).
 NODE_VERSION ?= 22
 NM_VOLUME ?= openlog-node-agent-nm

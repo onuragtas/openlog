@@ -1,7 +1,7 @@
 {
   "name": "openlog-node-e2e-nest12",
   "private": true,
-  "description": "NestJS 12 (ESM-only) e2e application for @openlog/node; install with `npm ci --prefix test/apps/nest12`",
+  "description": "NestJS 12 (ESM-only) e2e application for openlog-node; install with `npm ci --prefix test/apps/nest12`",
   "type": "module",
   "engines": {
     "node": ">=20"

@@ -13,7 +13,7 @@
 #
 #   apm-host      Debian 12 + openlog-infra-agent; machine-id = host.id of the demo services
 #   web-host      Debian 12 + nginx, redis, postgresql + openlog-infra-agent (logs, integrations)
-#   frontend      Node.js (openlog Node.js agent @openlog/node built from agents/node)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-33000}
+#   frontend      Node.js (openlog Node.js agent openlog-node built from agents/node)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-33000}
 #                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps frontend loadgen)
 #   orders        Go (OTel) -> orders-db
 #   catalog       PHP 8.3 (OTel) -> redis

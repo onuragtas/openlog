@@ -28,7 +28,7 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `openlog_<v>_linux_{amd64,arm64}.tar.gz` (all backend binaries) | `component=backend` |
 | `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP agent: 36 modules, `openlog-php-install`; [php-agent.md](../contracts/php-agent.md) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
 | `openlog-javaagent-<v>.jar` + `.sha256` (Java agent, [below](#java-agent-jar)) | `component=java-agent`, `os`/`arch` `any`, `format=jar` (the `.sha256` is not in the manifest) |
-| `openlog-node-<v>.tgz` + `.sha256` (`npm pack` of `@openlog/node`, [below](#language-agent-packages-github-release)) | `component=node-agent`, `os`/`arch` `any`, `format=tgz` |
+| `openlog-node-<v>.tgz` + `.sha256` (`npm pack` of `openlog-node`, [below](#language-agent-packages-github-release)) | `component=node-agent`, `os`/`arch` `any`, `format=tgz` |
 | `openlog_agent-<pep440 v>-py3-none-any.whl` + `.sha256` (Python agent wheel) | `component=python-agent`, `os`/`arch` `any`, `format=whl` |
 | `openlog_agent-<pep440 v>.tar.gz` + `.sha256` (Python agent sdist) | not in the manifest |
 | `OpenLog.Agent.<v>.nupkg` + `.sha256` (.NET agent) | `component=dotnet-agent`, `os`/`arch` `any`, `format=nupkg` |
@@ -93,10 +93,10 @@ its version with `-version`.
    `charts/openlog-agent` after the first `helm-oci` run (optional, see [Helm charts](#helm-charts)).
 5. Protect tags `v*` (Settings → Rules → Tag rulesets) so only maintainers can cut releases.
 
-6. **npm (Node.js agent `@openlog/node`, optional):** on npmjs.com create the organization `openlog` (scope `@openlog`,
-   free for public packages) and a *granular access token* with read/write permission for packages of the `openlog`
-   scope (for the very first publish, before the package exists, grant it on the whole scope; 2FA-enforcing
-   accounts: the token must be allowed to bypass 2FA, i.e. an automation/granular token). Store it as the repository
+6. **npm (Node.js agent `openlog-node`, optional):** the package is unscoped, so no npm organization is needed. On
+   npmjs.com create a *granular access token* with read and write permission for packages (for the very first
+   publish, before `openlog-node` exists, grant it on all packages; afterwards it can be limited to `openlog-node`;
+   2FA-enforcing accounts: the token must be allowed to bypass 2FA). Store it as the repository
    *secret* `NPM_TOKEN`. Without the secret, `release.yml` skips the npm job with a warning and everything else is
    released. Provenance (`npm publish --provenance`) needs the public GitHub repository and the job's `id-token: write`
    permission (already set). Rotate the token before it expires (granular tokens have an expiry date).
@@ -175,7 +175,7 @@ Commit with `[skip release]` in the message so the preparation push is not relea
    them (best effort).
 
 6. `node-agent-npm` – after the GitHub release is published, publishes the `openlog-node-<v>.tgz` built by
-   `node-agent-package` (the release asset) as `@openlog/node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
+   `node-agent-package` (the release asset) as `openlog-node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
 
 - `python-agent-pypi` – after the GitHub release is published, publishes the wheel and sdist built by
   `python-agent-package` (the release assets) as `openlog-agent==<v>` to PyPI with trusted publishing (see
@@ -274,14 +274,18 @@ the dry-run manifest.
 
 ### Node.js agent package
 
-The Node.js agent (`agents/node`) is published to npm as `@openlog/node` at the product version (D-025, D-062). Unlike
-the Go modules it needs **no preparation commit**: npm publishes built files, so `release.yml` (`node-agent-npm`, after
-the `release` job) runs `npm version X.Y.Z --no-git-tag-version` in the checkout (the build writes it into
-`src/version.ts`, reported as `telemetry.distro.version`), `npm ci`, `npm test` (unit + end-to-end), and
+The Node.js agent (`agents/node`) is published to npm as `openlog-node` at the product version (D-025, D-062). It was
+`@openlog/node` until 0.1.20: the npm name `openlog` (users and organizations share one namespace) is taken, so the
+package is unscoped; no npm organization is needed, the `NPM_TOKEN` owner publishes it. The OpenTelemetry scope names
+`@openlog/node/runtime` and `@openlog/node/console` are unchanged (stored telemetry keeps matching). Unlike the Go
+modules it needs **no preparation commit**: npm publishes built files. `node-agent-package` runs
+`agents/node/scripts/release-pack.sh X.Y.Z` (`npm version X.Y.Z --no-git-tag-version`, written into `src/version.ts`
+and reported as `telemetry.distro.version`; `npm ci`; `npm test` unless `RUN_TESTS=0`; `npm pack`), and
+`node-agent-npm` (after the `release` job) publishes exactly that tarball, the release asset, with
 `npm publish --access public --provenance --tag <latest|beta>` (`vX.Y.Z-beta.N` → dist-tag `beta`, so
-`npm install @openlog/node` keeps resolving the latest stable version). An already published version is skipped
+`npm install openlog-node` keeps resolving the latest stable version). An already published version is skipped
 (npm versions are immutable, so re-running the job is safe; a broken version must be deprecated with
-`npm deprecate @openlog/node@X.Y.Z "<reason>"` and fixed by the next release). Between releases,
+`npm deprecate openlog-node@X.Y.Z "<reason>"` and fixed by the next release). Between releases,
 `agents/node/package.json` keeps the last released version.
 
 Setup: [one-time setup](#one-time-setup-repository-owner) step 6 (`NPM_TOKEN`). Local check of the package contents:

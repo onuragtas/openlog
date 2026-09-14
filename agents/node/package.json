@@ -1,5 +1,5 @@
 {
-  "name": "@openlog/node",
+  "name": "openlog-node",
   "version": "0.1.9",
   "description": "openlog APM agent for Node.js: an OpenTelemetry distribution (traces, metrics, logs over OTLP)",
   "license": "Apache-2.0",

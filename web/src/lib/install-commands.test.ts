@@ -38,7 +38,7 @@ const pkgInfo = (registry: AgentPackageInfo["registry"], name: string, version: 
 });
 const packages = (registry: AgentPackageInfo["registry"]): Partial<OnboardingInfo> => ({
   agent_packages: {
-    node: pkgInfo(registry, "@openlog/node", "0.9.1", "openlog-node-0.9.1.tgz"),
+    node: pkgInfo(registry, "openlog-node", "0.9.1", "openlog-node-0.9.1.tgz"),
     python: pkgInfo(registry, "openlog-agent", "0.9.1", "openlog_agent-0.9.1-py3-none-any.whl"),
     dotnet: pkgInfo(registry, "OpenLog.Agent", "0.9.1", "OpenLog.Agent.0.9.1.nupkg"),
   },
@@ -222,10 +222,10 @@ describe("APM agents", () => {
   });
 
   it("Node.js: CommonJS --require and ES modules --import", () => {
-    expect(block("apm/node", "install", {}, onRegistry).code).toBe("npm install @openlog/node");
-    expect(block("apm/node", "run", { serviceName: "checkout" }).code).toMatch(/export OPENLOG_SERVICE_NAME=checkout\nnode --require @openlog\/node\/register server\.js$/);
+    expect(block("apm/node", "install", {}, onRegistry).code).toBe("npm install openlog-node");
+    expect(block("apm/node", "run", { serviceName: "checkout" }).code).toMatch(/export OPENLOG_SERVICE_NAME=checkout\nnode --require openlog-node\/register server\.js$/);
     const esm = build("apm/node", { nodeModules: "esm" });
-    expect(esm.blocks.find((b) => b.id === "run")!.code).toMatch(/\nnode --import @openlog\/node\/register server\.mjs$/);
+    expect(esm.blocks.find((b) => b.id === "run")!.code).toMatch(/\nnode --import openlog-node\/register server\.mjs$/);
     expect(esm.notes).toContain("nodeEsm");
   });
 

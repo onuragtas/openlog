@@ -83,11 +83,11 @@ function withTimeout(p: Promise<unknown>, ms: number, what: string): Promise<voi
  * never thrown into application code; start() itself only throws on invalid configuration (ConfigError) or when an
  * agent is already running.
  *
- *   const { start } = require('@openlog/node');
+ *   const { start } = require('openlog-node');
  *   const agent = start({ serviceName: 'checkout' });
  *   process.on('SIGTERM', () => agent.shutdown().finally(() => process.exit(0)));
  *
- * Call it before the application requires the libraries to instrument (or use `@openlog/node/register`).
+ * Call it before the application requires the libraries to instrument (or use `openlog-node/register`).
  */
 export function start(options: OpenlogOptions = {}, internals: StartInternals = {}): Agent {
   const env = internals.env ?? process.env;
@@ -230,7 +230,7 @@ export function shutdown(): Promise<void> {
 }
 
 /**
- * Entry point of `@openlog/node/register`: starts from the environment, never throws into the application, and (unless
+ * Entry point of `openlog-node/register`: starts from the environment, never throws into the application, and (unless
  * OPENLOG_SHUTDOWN_ON_SIGNAL=false) flushes on beforeExit, SIGTERM and SIGINT. When the application has no signal
  * handler of its own, the signal is re-raised after the flush so the process terminates as it would without the agent.
  */

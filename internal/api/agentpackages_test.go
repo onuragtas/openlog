@@ -17,8 +17,8 @@ func TestAgentPackages(t *testing.T) {
 		hits[r.URL.EscapedPath()]++
 		mu.Unlock()
 		switch r.URL.EscapedPath() {
-		case "/@openlog%2fnode/1.2.0-beta.3":
-			_, _ = w.Write([]byte(`{"name":"@openlog/node","version":"1.2.0-beta.3"}`))
+		case "/openlog-node/1.2.0-beta.3":
+			_, _ = w.Write([]byte(`{"name":"openlog-node","version":"1.2.0-beta.3"}`))
 		case "/pypi/openlog-agent/1.2.0b3/json":
 			http.NotFound(w, r)
 		default: // nuget: server error → unknown
@@ -58,7 +58,7 @@ func TestAgentPackages(t *testing.T) {
 	agentPackages(context.Background(), c, &v)
 	now = now.Add(11 * time.Minute)
 	agentPackages(context.Background(), c, &v)
-	if hits["/@openlog%2fnode/1.2.0-beta.3"] != 1 || hits["/pypi/openlog-agent/1.2.0b3/json"] != 1 {
+	if hits["/openlog-node/1.2.0-beta.3"] != 1 || hits["/pypi/openlog-agent/1.2.0b3/json"] != 1 {
 		t.Errorf("cache not used: %v", hits)
 	}
 	if hits["/v3-flatcontainer/openlog.agent/1.2.0-beta.3/openlog.agent.nuspec"] != 2 {
@@ -66,7 +66,7 @@ func TestAgentPackages(t *testing.T) {
 	}
 	now = now.Add(time.Hour)
 	agentPackages(context.Background(), c, &v)
-	if hits["/@openlog%2fnode/1.2.0-beta.3"] != 2 {
+	if hits["/openlog-node/1.2.0-beta.3"] != 2 {
 		t.Errorf("expired cache entry not re-checked: %v", hits)
 	}
 

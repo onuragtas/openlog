@@ -120,7 +120,7 @@ describe("ApmHintFooter", { timeout: 20_000 }, () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
     const cases: [ApmHint, string, string][] = [
-      [{ language: "nodejs", agent: "openlog-agent-nodejs" }, "Install @openlog/node", "/add-data/apm/node"],
+      [{ language: "nodejs", agent: "openlog-agent-nodejs" }, "Install openlog-node", "/add-data/apm/node"],
       [{ language: "python", agent: "openlog-agent-python" }, "Install openlog-agent", "/add-data/apm/python"],
       [{ language: "java", agent: "openlog-agent-java" }, "Install openlog-javaagent", "/add-data/apm/java"],
       [{ language: "dotnet", agent: "openlog-agent-dotnet" }, "Install OpenLog.Agent", "/add-data/apm/dotnet"],
