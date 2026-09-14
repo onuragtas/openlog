@@ -67,9 +67,11 @@ func TestNativeCollectorsProduceHostMetrics(t *testing.T) {
 	}
 	now := time.Now()
 	names := map[string]bool{}
-	for round := 0; round < 2; round++ {
+	// Utilization needs CPU counters that moved between two rounds; they advance in scheduler ticks, so a busy
+	// or idle host can need more than one extra round.
+	for round := 0; round < 2 || (round < 8 && !names["system.cpu.utilization"]); round++ {
 		if round > 0 {
-			time.Sleep(500 * time.Millisecond) // CPU counters advance in scheduler ticks
+			time.Sleep(500 * time.Millisecond)
 		}
 		for _, c := range cs {
 			ms, err := c.Collect(now.Add(time.Duration(round) * time.Second))

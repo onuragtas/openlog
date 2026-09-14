@@ -30,7 +30,11 @@ func New(root string) *FS {
 	if root == "" {
 		root = "/"
 	}
-	return &FS{root: filepath.Clean(root)}
+	root = filepath.Clean(root)
+	if filepath.ToSlash(root) == "/" {
+		root = "/" // filepath.Clean("/") is `\` on Windows: IsHostRoot and NativeOS compare with "/"
+	}
+	return &FS{root: root}
 }
 
 // WithRecorder returns a copy that reports permission errors to rec.

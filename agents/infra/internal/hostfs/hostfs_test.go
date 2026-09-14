@@ -24,3 +24,16 @@ func TestPath(t *testing.T) {
 		t.Error("ProcSelf mismatch")
 	}
 }
+
+// Runs on every OS: on Windows filepath.Clean("/") is `\`, which once made NativeOS false and sent every
+// collector to procfs.
+func TestHostRootOnEveryOS(t *testing.T) {
+	for _, root := range []string{"", "/", "//", "/./"} {
+		if f := New(root); !f.IsHostRoot() || f.Root() != "/" || f.NativeOS() != (runtime.GOOS != "linux") {
+			t.Errorf("New(%q): root %q, IsHostRoot %v, NativeOS %v", root, f.Root(), f.IsHostRoot(), f.NativeOS())
+		}
+	}
+	if New("/host").IsHostRoot() || New("/host").NativeOS() {
+		t.Error(`New("/host") must not be the host root`)
+	}
+}
