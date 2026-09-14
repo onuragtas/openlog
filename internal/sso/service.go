@@ -74,6 +74,7 @@ type Service struct {
 
 	mu        sync.Mutex
 	providers map[string]*oidcClient
+	metrics   *refreshMetrics
 }
 
 // NewService creates a Service on top of the auth service (users, memberships, sessions, audit log).
@@ -125,6 +126,16 @@ func (s *Service) SAMLEntityID(connectionID string) string {
 // SAMLACSURL is the assertion consumer service URL of a connection.
 func (s *Service) SAMLACSURL(connectionID string) string {
 	return s.cfg.PublicURL + "/api/v1/sso/saml/" + connectionID + "/acs"
+}
+
+// SAMLSLOURL is the single logout service URL of a connection (LogoutRequest and LogoutResponse, both bindings).
+func (s *Service) SAMLSLOURL(connectionID string) string {
+	return s.cfg.PublicURL + "/api/v1/sso/saml/" + connectionID + "/slo"
+}
+
+// OIDCPostLogoutRedirectURL is the post_logout_redirect_uri to register at the OIDC provider.
+func (s *Service) OIDCPostLogoutRedirectURL() string {
+	return s.cfg.PublicURL + "/api/v1/sso/oidc/logout/callback"
 }
 
 // SCIMBaseURL is the SCIM 2.0 base URL.
@@ -228,9 +239,10 @@ func roleFor(ms []RoleMapping, groups []string) (auth.Role, bool) {
 	return best, best != ""
 }
 
-// RoleForGroups returns the role the organization's mappings give groups, or def when none matches (internal/scim).
+// RoleForGroups returns the role the organization-wide mappings give groups, or def when none matches
+// (internal/scim).
 func (s *Service) RoleForGroups(ctx context.Context, orgID string, groups []string, def auth.Role) (auth.Role, error) {
-	ms, err := s.store.ListRoleMappings(ctx, orgID)
+	ms, err := s.store.ListRoleMappings(ctx, orgID, "")
 	if err != nil {
 		return "", s.fail(err)
 	}

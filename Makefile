@@ -132,9 +132,13 @@ RELEASE_IMAGE ?=
 # Extra build-index arguments, e.g. "--entry 0.3.0=https://…/v0.3.0/manifest.json".
 RELEASE_INDEX_ARGS ?=
 RELEASE_ARCHES ?= amd64 arm64
-# 1: fail instead of skipping the chart when helm is missing (CI).
+# 1: fail instead of skipping the charts when neither helm nor Docker is available (CI).
 RELEASE_REQUIRE_HELM ?= 0
 HELM ?= helm
+# release-helm runs helm from this image when $(HELM) is not installed.
+HELM_IMAGE ?= alpine/helm:3.17.3@sha256:d899e6316789fec04ee95300a18e454b7942539cbb3d89bde3e0655d6ca2e895
+# Charts packaged by release-helm as <chart>-<version>.tgz (manifest helm_charts, releasing.md).
+RELEASE_HELM_CHARTS ?= openlog openlog-agent
 NFPM_IMAGE ?= goreleaser/nfpm:v2.47.0@sha256:a662cb167d7b6d3a83920c83d76b12d02b8ac5dd2c13e5c62c15270b23f6df0c
 NFPM ?= docker run --rm --user $$(id -u):$$(id -g) -v "$(CURDIR)":/work -w /work $(NFPM_IMAGE)
 RELEASE_SERVE_PORT ?= 18090
@@ -181,6 +185,12 @@ PHP_PACKAGES ?= deb rpm apk
 release-php-agent:
 	@mkdir -p $(RELEASE_DIR)
 	TARGETS="$(PHP_TARGETS)" PACKAGES="$(PHP_PACKAGES)" agents/php/packaging/build-artifacts.sh "$(VERSION)" "$(RELEASE_DIR)"
+
+# Java agent jar (openlog-javaagent-<v>.jar + .sha256, component java-agent, format jar) into $(RELEASE_DIR) before
+# release-local. Gradle runs in eclipse-temurin:21-jdk; JAVA_BUILD=local uses the host JDK (release.yml, CI dry run).
+.PHONY: release-java-agent
+release-java-agent:
+	agents/java/scripts/release-jar.sh "$(VERSION)" "$(RELEASE_DIR)"
 
 release-tool:
 	@mkdir -p $(BIN)
@@ -256,10 +266,16 @@ release-backend: release-tool
 
 release-helm:
 	@set -euo pipefail; mkdir -p $(RELEASE_DIR); \
-	if command -v "$(HELM)" >/dev/null 2>&1; then \
-		"$(HELM)" package deploy/helm/openlog --version $(VERSION) --app-version $(VERSION) --destination $(RELEASE_DIR); \
-	elif [ "$(RELEASE_REQUIRE_HELM)" = 1 ]; then echo "helm not found (HELM=$(HELM))"; exit 1; \
-	else echo "WARNING: helm not found (HELM=$(HELM)); the release has no Helm chart"; fi
+	out="$$(cd $(RELEASE_DIR) && pwd)"; \
+	if command -v "$(HELM)" >/dev/null 2>&1; then helm=("$(HELM)"); dest="$$out"; \
+	elif command -v docker >/dev/null 2>&1; then \
+		helm=(docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)":/work:ro -v "$$out":/out -w /work $(HELM_IMAGE)); dest=/out; \
+	elif [ "$(RELEASE_REQUIRE_HELM)" = 1 ]; then echo "neither helm (HELM=$(HELM)) nor docker found"; exit 1; \
+	else echo "WARNING: neither helm (HELM=$(HELM)) nor docker found; the release has no Helm charts"; exit 0; fi; \
+	for chart in $(RELEASE_HELM_CHARTS); do \
+		rm -f "$$out/$$chart-$(VERSION).tgz"; \
+		"$${helm[@]}" package "deploy/helm/$$chart" --version $(VERSION) --app-version $(VERSION) --destination "$$dest"; \
+	done
 
 release-manifest: release-tool
 	@set -euo pipefail; \

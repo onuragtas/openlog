@@ -1,5 +1,5 @@
 import { AlertTriangle } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { DashboardThreshold, DashboardUnit, DashboardVisualization, DashboardWidgetOptions } from "@/api/dashboards";
 import type { OqlResult } from "@/api/oql";
@@ -14,6 +14,7 @@ import {
   deltaPercent,
   heatmapModel,
   pieSlices,
+  seriesLabel,
   summarize,
   summaryColumns,
   thresholdState,
@@ -25,6 +26,9 @@ import {
 import { useTheme } from "@/lib/theme";
 import { cn, paletteColor } from "@/lib/utils";
 import { queryErrorMessage } from "./query-error";
+
+/** Called with the facet values of a clicked group (dashboard cross-widget filters). */
+export type SelectFacets = (values: string[]) => void;
 
 export interface QueryResultProps {
   result: OqlResult | undefined;
@@ -40,6 +44,8 @@ export interface QueryResultProps {
   onRetry?: () => void;
   /** Rows read, elapsed time, bucket and rollup below the result (console). */
   showMetadata?: boolean;
+  /** Makes facet values clickable (results with FACET only). */
+  onSelectFacets?: SelectFacets;
 }
 
 export function QueryError({ error, onRetry, className }: { error: unknown; onRetry?: () => void; className?: string }) {
@@ -76,6 +82,25 @@ function fmtCell(v: CellValue | undefined, unit: UnitKind, locale: string): stri
   return typeof v === "number" ? formatValue(v, unit, locale) : v;
 }
 
+/** A facet value that filters the dashboard when clicked; plain text without a handler. */
+function FacetValue({ facets, onSelect, className, children }: { facets: string[] | undefined; onSelect?: SelectFacets; className?: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  if (!onSelect || !facets || facets.length === 0) return <span className={className}>{children}</span>;
+  const label = t("dashboards.filters.add", { value: facets.join(" · ") || t("oql.result.emptyValue") });
+  return (
+    <button
+      type="button"
+      className={cn("max-w-full cursor-pointer truncate rounded-sm text-left underline-offset-2 hover:underline focus-visible:underline", className)}
+      title={label}
+      aria-label={label}
+      onClick={() => onSelect(facets)}
+      data-testid="facet-filter"
+    >
+      {children}
+    </button>
+  );
+}
+
 function Delta({ current, previous }: { current: CellValue | undefined; previous: CellValue | undefined }) {
   const { i18n } = useTranslation();
   const d = deltaPercent(current, previous);
@@ -93,12 +118,13 @@ const STATE_CLASS: Record<Exclude<ThresholdState, null>, string> = {
   warning: "border-warning/70 bg-warning/15 text-warning-text",
 };
 
-export function ResultTable({ result, unit }: { result: OqlResult; unit: UnitKind }) {
+export function ResultTable({ result, unit, onSelect }: { result: OqlResult; unit: UnitKind; onSelect?: SelectFacets }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const rows = useMemo(() => summarize(result), [result]);
   const columns = summaryColumns(result);
   const facetHeads = result.kind === "histogram" ? [t("oql.result.bucket")] : result.facets;
+  const select = result.kind === "histogram" ? undefined : onSelect;
   const compare = rows.some((r) => r.previous !== null);
   return (
     <Table data-testid="result-table">
@@ -129,7 +155,9 @@ export function ResultTable({ result, unit }: { result: OqlResult; unit: UnitKin
           <TableRow key={ri}>
             {facetHeads.map((_, fi) => (
               <TableCell key={`f-${fi}`} className="max-w-72 truncate" title={r.facets[fi]}>
-                {r.facets[fi] === "" ? <span className="text-muted-foreground">{t("oql.result.emptyValue")}</span> : r.facets[fi]}
+                <FacetValue facets={r.facets} onSelect={select}>
+                  {r.facets[fi] === "" ? <span className="text-muted-foreground">{t("oql.result.emptyValue")}</span> : r.facets[fi]}
+                </FacetValue>
               </TableCell>
             ))}
             {columns.map((_, ci) => [
@@ -154,7 +182,7 @@ export function ResultTable({ result, unit }: { result: OqlResult; unit: UnitKin
   );
 }
 
-export function Billboard({ result, unit, thresholds }: { result: OqlResult; unit: UnitKind; thresholds?: DashboardThreshold[] }) {
+export function Billboard({ result, unit, thresholds, onSelect }: { result: OqlResult; unit: UnitKind; thresholds?: DashboardThreshold[]; onSelect?: SelectFacets }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const items = useMemo(() => {
@@ -162,9 +190,15 @@ export function Billboard({ result, unit, thresholds }: { result: OqlResult; uni
     const columns = summaryColumns(result);
     if (result.kind === "single") {
       const r = rows[0];
-      return columns.map((c, i) => ({ label: c.name, value: r?.values[i] ?? null, previous: r?.previous?.[i] ?? null, compare: !!r?.previous }));
+      return columns.map((c, i) => ({ label: c.name, value: r?.values[i] ?? null, previous: r?.previous?.[i] ?? null, compare: !!r?.previous, facets: undefined as string[] | undefined }));
     }
-    return rows.slice(0, 12).map((r) => ({ label: r.facets.join(" · "), value: r.values[0] ?? null, previous: r.previous?.[0] ?? null, compare: !!r.previous }));
+    return rows.slice(0, 12).map((r) => ({
+      label: r.facets.join(" · "),
+      value: r.values[0] ?? null,
+      previous: r.previous?.[0] ?? null,
+      compare: !!r.previous,
+      facets: result.kind === "histogram" ? undefined : r.facets,
+    }));
   }, [result]);
   return (
     <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2" data-testid="billboard">
@@ -172,9 +206,9 @@ export function Billboard({ result, unit, thresholds }: { result: OqlResult; uni
         const state = thresholdState(it.value, thresholds);
         return (
           <div key={i} data-state={state ?? "ok"} className={cn("flex min-w-0 flex-col justify-center rounded-lg border px-3 py-2", state ? STATE_CLASS[state] : "border-transparent")}>
-            <span className="truncate text-xs text-muted-foreground" title={it.label}>
-              {it.label}
-            </span>
+            <FacetValue facets={it.facets} onSelect={onSelect} className="truncate text-xs text-muted-foreground">
+              <span title={it.label}>{it.label}</span>
+            </FacetValue>
             <span className="truncate text-2xl font-semibold tabular-nums sm:text-3xl" data-testid="billboard-value">
               {fmtCell(it.value, unit, locale)}
             </span>
@@ -192,7 +226,7 @@ export function Billboard({ result, unit, thresholds }: { result: OqlResult; uni
   );
 }
 
-export function BarList({ result, unit }: { result: OqlResult; unit: UnitKind }) {
+export function BarList({ result, unit, onSelect }: { result: OqlResult; unit: UnitKind; onSelect?: SelectFacets }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const items = useMemo(() => barItems(result), [result]);
@@ -202,9 +236,9 @@ export function BarList({ result, unit }: { result: OqlResult; unit: UnitKind })
       {items.map((b, i) => (
         <li key={i} className="min-w-0 text-xs">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate" title={b.label}>
-              {b.label || t("oql.result.emptyValue")}
-            </span>
+            <FacetValue facets={b.facets} onSelect={onSelect} className="min-w-0 truncate">
+              <span title={b.label}>{b.label || t("oql.result.emptyValue")}</span>
+            </FacetValue>
             <span className="shrink-0 font-mono tabular-nums">{formatValue(b.value, unit, locale)}</span>
           </div>
           <div className="mt-0.5 h-2 rounded bg-muted" aria-hidden="true">
@@ -221,7 +255,7 @@ export function BarList({ result, unit }: { result: OqlResult; unit: UnitKind })
   );
 }
 
-export function PieChart({ result, unit, title, showLegend = true }: { result: OqlResult; unit: UnitKind; title: string; showLegend?: boolean }) {
+export function PieChart({ result, unit, title, showLegend = true, onSelect }: { result: OqlResult; unit: UnitKind; title: string; showLegend?: boolean; onSelect?: SelectFacets }) {
   const { t, i18n } = useTranslation();
   const { resolved } = useTheme();
   const locale = i18n.resolvedLanguage ?? "en";
@@ -236,7 +270,19 @@ export function PieChart({ result, unit, title, showLegend = true }: { result: O
         {slices.map((s, i) => {
           const len = s.fraction * 100;
           return (
-            <circle key={i} cx="21" cy="21" r={r} fill="none" stroke={paletteColor(i, resolved)} strokeWidth="6" strokeDasharray={`${len} ${100 - len}`} strokeDashoffset={offsets[i]}>
+            <circle
+              key={i}
+              cx="21"
+              cy="21"
+              r={r}
+              fill="none"
+              stroke={paletteColor(i, resolved)}
+              strokeWidth="6"
+              strokeDasharray={`${len} ${100 - len}`}
+              strokeDashoffset={offsets[i]}
+              className={cn(onSelect && s.facets && "cursor-pointer")}
+              onClick={onSelect && s.facets ? () => onSelect(s.facets!) : undefined}
+            >
               <title>{`${s.label}: ${formatValue(s.value, unit, locale)}`}</title>
             </circle>
           );
@@ -247,9 +293,9 @@ export function PieChart({ result, unit, title, showLegend = true }: { result: O
           {slices.map((s, i) => (
             <li key={i} className="flex min-w-0 items-center gap-2">
               <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-[3px]" style={{ background: paletteColor(i, resolved) }} />
-              <span className="min-w-0 truncate" title={s.label}>
-                {s.label || t("oql.result.emptyValue")}
-              </span>
+              <FacetValue facets={s.facets} onSelect={onSelect} className="min-w-0 truncate">
+                <span title={s.label}>{s.label || t("oql.result.emptyValue")}</span>
+              </FacetValue>
               <span className="ml-auto shrink-0 pl-2 font-mono tabular-nums">{formatValue(s.value, unit, locale)}</span>
               <span className="w-10 shrink-0 text-right text-muted-foreground tabular-nums">{Math.round(s.fraction * 100)}%</span>
             </li>
@@ -260,11 +306,11 @@ export function PieChart({ result, unit, title, showLegend = true }: { result: O
   );
 }
 
-export function Heatmap({ result, unit, title }: { result: OqlResult; unit: UnitKind; title: string }) {
+export function Heatmap({ result, unit, title, onSelect }: { result: OqlResult; unit: UnitKind; title: string; onSelect?: SelectFacets }) {
   const { i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const model = useMemo(() => heatmapModel(result), [result]);
-  if (!model) return <BarList result={result} unit={unit} />;
+  if (!model) return <BarList result={result} unit={unit} onSelect={onSelect} />;
   const colLabel = (c: (typeof model.columns)[number]) => c.label ?? formatDateTime(c.time ?? 0, locale);
   const n = model.columns.length;
   const ticks = n > 0 ? [0, Math.floor((n - 1) / 2), n - 1] : [];
@@ -273,7 +319,9 @@ export function Heatmap({ result, unit, title }: { result: OqlResult; unit: Unit
       <div className="grid min-w-full gap-px text-[10px]" style={{ gridTemplateColumns: `minmax(4rem, 9rem) repeat(${n}, minmax(4px, 1fr))` }}>
         {model.rows.map((row, ri) => [
           <div key={`l-${ri}`} className="truncate pr-2 text-xs text-muted-foreground" title={row.label}>
-            {row.label}
+            <FacetValue facets={row.facets} onSelect={onSelect}>
+              {row.label}
+            </FacetValue>
           </div>,
           ...row.cells.map((v, ci) => (
             <div
@@ -321,10 +369,21 @@ export function ResultMetadata({ result }: { result: OqlResult }) {
 }
 
 /** Draws an OQL result as the chosen visualization (markdown widgets are rendered by the caller). */
-export function QueryResult({ result, visualization, title, unit, thresholds, options, height = 220, isLoading, error, onRetry, showMetadata }: QueryResultProps) {
+export function QueryResult({ result, visualization, title, unit, thresholds, options, height = 220, isLoading, error, onRetry, showMetadata, onSelectFacets }: QueryResultProps) {
   const { t } = useTranslation();
   const u = unitKind(unit);
   const chart = useMemo(() => (result?.kind === "timeseries" ? toChartData(result, t("oql.result.previous")) : null), [result, t]);
+  const select = result && result.facets.length > 0 ? onSelectFacets : undefined;
+  // Chart legend labels → facet values of the current (not COMPARE WITH) series.
+  const seriesFacets = useMemo(() => {
+    const m = new Map<string, string[]>();
+    if (result?.kind === "timeseries") {
+      for (const s of result.series) {
+        if (s.facets.length > 0) m.set(seriesLabel(result.columns, s.facets, s.column), s.facets);
+      }
+    }
+    return m;
+  }, [result]);
 
   if (error && !result) return <QueryError error={error} onRetry={onRetry} />;
   if (!result) {
@@ -356,26 +415,28 @@ export function QueryResult({ result, visualization, title, unit, thresholds, op
               from={parseTs(result.metadata.from)}
               to={parseTs(result.metadata.to)}
               height={height}
+              selectLabel={select ? (label) => (seriesFacets.has(label) ? t("dashboards.filters.add", { value: label }) : null) : undefined}
+              onSelectSeries={select ? (label) => select(seriesFacets.get(label) ?? []) : undefined}
             />
           );
         } else {
-          body = <BarList result={result} unit={u} />;
+          body = <BarList result={result} unit={u} onSelect={select} />;
         }
         break;
       case "table":
-        body = <ResultTable result={result} unit={u} />;
+        body = <ResultTable result={result} unit={u} onSelect={select} />;
         break;
       case "billboard":
-        body = <Billboard result={result} unit={u} thresholds={thresholds} />;
+        body = <Billboard result={result} unit={u} thresholds={thresholds} onSelect={select} />;
         break;
       case "pie":
-        body = <PieChart result={result} unit={u} title={title} showLegend={options?.legend !== false} />;
+        body = <PieChart result={result} unit={u} title={title} showLegend={options?.legend !== false} onSelect={select} />;
         break;
       case "heatmap":
-        body = <Heatmap result={result} unit={u} title={title} />;
+        body = <Heatmap result={result} unit={u} title={title} onSelect={select} />;
         break;
       default:
-        body = <ResultTable result={result} unit={u} />;
+        body = <ResultTable result={result} unit={u} onSelect={select} />;
     }
   }
 

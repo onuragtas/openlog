@@ -23,7 +23,9 @@ import (
 //	openlog-infra-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm      component infra-agent
 //	openlog-php-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm|.apk   component php-agent (agents/php/packaging/build-artifacts.sh)
 //	openlog_<v>_<os>_<arch>.tar.gz                            component backend (all backend binaries)
-//	openlog-<v>.tgz                                           Helm chart (manifest.helm_chart)
+//	openlog-<v>.tgz                                           Helm chart (manifest.helm_chart and helm_charts.openlog)
+//	openlog-agent-<v>.tgz                                     Helm chart (manifest.helm_charts.openlog-agent)
+//	openlog-javaagent-<v>.jar                                 component java-agent, os/arch "any", format jar
 var componentPrefixes = map[string]string{
 	"openlog-infra-agent": lib.ComponentInfraAgent,
 	"openlog-php-agent":   lib.ComponentPHPAgent,
@@ -32,9 +34,25 @@ var componentPrefixes = map[string]string{
 
 var artifactFormats = []string{lib.FormatTarGz, lib.FormatDeb, lib.FormatRPM, lib.FormatAPK}
 
+// helmCharts are the charts `make release-helm` packages (deploy/helm/<chart>) as <chart>-<v>.tgz.
+var helmCharts = []string{"openlog", "openlog-agent"}
+
+// helmChartName reports the chart of a packaged chart file name of this version.
+func helmChartName(name, version string) (string, bool) {
+	for _, chart := range helmCharts {
+		if name == chart+"-"+version+".tgz" {
+			return chart, true
+		}
+	}
+	return "", false
+}
+
 // classify maps a file name of a release directory to an artifact. ok is false for files that are
 // not release artifacts (manifest, signatures, install.sh, …).
 func classify(name, version string) (a lib.Artifact, ok bool) {
+	if name == "openlog-javaagent-"+version+"."+lib.FormatJar {
+		return lib.Artifact{Component: lib.ComponentJavaAgent, OS: lib.PlatformAny, Arch: lib.PlatformAny, Format: lib.FormatJar, Name: name}, true
+	}
 	for _, format := range artifactFormats {
 		base, found := strings.CutSuffix(name, "."+format)
 		if !found {
@@ -183,12 +201,19 @@ func buildManifest(o manifestOptions) (*lib.Manifest, error) {
 		}
 		name := e.Name()
 		path := filepath.Join(o.Dist, name)
-		if name == "openlog-"+version+".tgz" {
+		if chart, ok := helmChartName(name, version); ok {
 			sum, _, err := hashFile(path)
 			if err != nil {
 				return nil, err
 			}
-			m.HelmChart = &lib.File{Name: name, URL: base + "/" + name, SHA256: sum}
+			f := lib.File{Name: name, URL: base + "/" + name, SHA256: sum}
+			if m.HelmCharts == nil {
+				m.HelmCharts = map[string]lib.File{}
+			}
+			m.HelmCharts[chart] = f
+			if chart == "openlog" {
+				m.HelmChart = &f
+			}
 			continue
 		}
 		a, ok := classify(name, version)

@@ -29,6 +29,7 @@ type Store struct {
 	tokens     map[string]sso.SCIMToken
 	scimUsers  map[[2]string]sso.SCIMUser
 	groups     map[string]sso.SCIMGroup
+	sessions   map[string]sso.SSOSession
 }
 
 var _ sso.Store = (*Store)(nil)
@@ -37,7 +38,7 @@ var _ sso.Store = (*Store)(nil)
 func New(users auth.Store) *Store {
 	return &Store{users: users, conns: map[string]sso.Connection{}, domains: map[string]sso.Domain{}, mappings: map[string][]sso.RoleMapping{},
 		states: map[string]sso.LoginState{}, assertions: map[string]time.Time{}, tokens: map[string]sso.SCIMToken{},
-		scimUsers: map[[2]string]sso.SCIMUser{}, groups: map[string]sso.SCIMGroup{}}
+		scimUsers: map[[2]string]sso.SCIMUser{}, groups: map[string]sso.SCIMGroup{}, sessions: map[string]sso.SSOSession{}}
 }
 
 func tp(t time.Time) *time.Time { return &t }
@@ -45,13 +46,11 @@ func tp(t time.Time) *time.Time { return &t }
 func (s *Store) CreateConnection(_ context.Context, c *sso.Connection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, x := range s.conns {
-		if x.OrgID == c.OrgID {
-			return auth.ErrAlreadyExists
-		}
-	}
 	if c.ID == "" {
 		c.ID = uuid.NewString()
+	}
+	if _, ok := s.conns[c.ID]; ok {
+		return auth.ErrAlreadyExists
 	}
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = time.Now()
@@ -60,15 +59,44 @@ func (s *Store) CreateConnection(_ context.Context, c *sso.Connection) error {
 	return nil
 }
 
-func (s *Store) GetConnection(_ context.Context, orgID string) (sso.Connection, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// orgConnsLocked returns the organization's connections, the default (oldest) first.
+func (s *Store) orgConnsLocked(orgID string) []sso.Connection {
+	out := []sso.Connection{}
 	for _, x := range s.conns {
 		if x.OrgID == orgID {
-			return x, nil
+			out = append(out, x)
 		}
 	}
-	return sso.Connection{}, auth.ErrNotFound
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.Before(out[j].CreatedAt) || (out[i].CreatedAt.Equal(out[j].CreatedAt) && out[i].ID < out[j].ID)
+	})
+	return out
+}
+
+func (s *Store) ListConnections(_ context.Context, orgID string) ([]sso.Connection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.orgConnsLocked(orgID), nil
+}
+
+func (s *Store) getConnLocked(orgID, id string) (sso.Connection, error) {
+	if id == "" {
+		if cs := s.orgConnsLocked(orgID); len(cs) > 0 {
+			return cs[0], nil
+		}
+		return sso.Connection{}, auth.ErrNotFound
+	}
+	c, ok := s.conns[id]
+	if !ok || c.OrgID != orgID {
+		return sso.Connection{}, auth.ErrNotFound
+	}
+	return c, nil
+}
+
+func (s *Store) GetConnection(_ context.Context, orgID, id string) (sso.Connection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.getConnLocked(orgID, id)
 }
 
 func (s *Store) GetConnectionByID(_ context.Context, id string) (sso.Connection, error) {
@@ -85,31 +113,44 @@ func (s *Store) UpdateConnection(_ context.Context, c *sso.Connection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	old, ok := s.conns[c.ID]
-	if !ok {
+	if !ok || old.OrgID != c.OrgID {
 		return auth.ErrNotFound
 	}
 	next := *c
+	next.CreatedAt = old.CreatedAt
 	next.TestedVersion, next.LastTestAt, next.LastTestOK, next.LastTestError, next.LastTestDetails =
 		old.TestedVersion, old.LastTestAt, old.LastTestOK, old.LastTestError, old.LastTestDetails
+	next.Refresh = old.Refresh
 	s.conns[c.ID] = next
 	return nil
 }
 
-func (s *Store) DeleteConnection(_ context.Context, orgID string) (sso.Connection, error) {
+func (s *Store) DeleteConnection(_ context.Context, orgID, id string) (sso.Connection, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for id, x := range s.conns {
-		if x.OrgID == orgID {
-			delete(s.conns, id)
-			for k, st := range s.states {
-				if st.ConnectionID == id {
-					delete(s.states, k)
-				}
-			}
-			return x, nil
+	x, ok := s.conns[id]
+	if !ok || x.OrgID != orgID {
+		return sso.Connection{}, auth.ErrNotFound
+	}
+	delete(s.conns, id)
+	for k, st := range s.states {
+		if st.ConnectionID == id {
+			delete(s.states, k)
 		}
 	}
-	return sso.Connection{}, auth.ErrNotFound
+	for k, d := range s.domains {
+		if d.ConnectionID == id {
+			d.ConnectionID = ""
+			s.domains[k] = d
+		}
+	}
+	delete(s.mappings, orgID+"|"+id)
+	for k, ss := range s.sessions {
+		if ss.ConnectionID == id {
+			delete(s.sessions, k)
+		}
+	}
+	return x, nil
 }
 
 func (s *Store) RecordTest(_ context.Context, id string, version int, ok bool, errMsg string, details map[string]any, at time.Time) error {
@@ -130,22 +171,163 @@ func (s *Store) RecordTest(_ context.Context, id string, version int, ok bool, e
 	return nil
 }
 
-func (s *Store) GetOrgPolicy(_ context.Context, orgID, emailDomain string) (sso.OrgPolicy, error) {
+// routedLocked returns the connection a verified domain routes to.
+func (s *Store) routedLocked(d sso.Domain) (sso.Connection, bool) {
+	c, err := s.getConnLocked(d.OrgID, d.ConnectionID)
+	return c, err == nil
+}
+
+func (s *Store) GetOrgPolicy(_ context.Context, orgID, connectionID, emailDomain string) (sso.OrgPolicy, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var p sso.OrgPolicy
-	for _, c := range s.conns {
-		if c.OrgID == orgID {
-			p = sso.OrgPolicy{ConnectionID: c.ID, Enabled: c.Enabled, Enforce: c.Enforce, BreakGlassUserIDs: append([]string(nil), c.BreakGlassUserIDs...),
-				SessionMaxAge: c.SessionMaxAge}
-		}
+	if c, ok := s.conns[connectionID]; ok && connectionID != "" && c.OrgID == orgID {
+		p.ConnectionID, p.Enabled, p.SessionMaxAge = c.ID, c.Enabled, c.SessionMaxAge
 	}
+	p.BreakGlassUserIDs = []string{}
 	for _, d := range s.domains {
-		if d.OrgID == orgID && d.VerifiedAt != nil && d.Domain == emailDomain {
+		if emailDomain != "" && d.OrgID == orgID && d.VerifiedAt != nil && d.Domain == emailDomain {
 			p.DomainVerified = true
+			if r, ok := s.routedLocked(d); ok {
+				p.Enforce = r.Enabled && r.Enforce
+				p.BreakGlassUserIDs = append([]string{}, r.BreakGlassUserIDs...)
+			}
 		}
 	}
 	return p, nil
+}
+
+func (s *Store) ConnectionForDomain(_ context.Context, domain string) (sso.Connection, sso.Domain, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.domains {
+		if d.Domain == domain && d.VerifiedAt != nil {
+			c, ok := s.routedLocked(d)
+			if !ok {
+				return sso.Connection{}, d, auth.ErrNotFound
+			}
+			return c, d, nil
+		}
+	}
+	return sso.Connection{}, sso.Domain{}, auth.ErrNotFound
+}
+
+func (s *Store) RecordRefresh(_ context.Context, id string, ok bool, errMsg string, cache *sso.IdPCache, next, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, found := s.conns[id]
+	if !found {
+		return auth.ErrNotFound
+	}
+	c.Refresh.RefreshedAt, c.Refresh.OK, c.Refresh.Error, c.Refresh.NextAt = tp(at), &ok, errMsg, tp(next)
+	if ok {
+		c.Refresh.Failures = 0
+		if cache != nil {
+			c.Refresh.Cache = *cache
+		}
+	} else {
+		c.Refresh.Failures++
+	}
+	s.conns[id] = c
+	return nil
+}
+
+func (s *Store) ListRefreshDue(_ context.Context, now time.Time, limit int) ([]sso.Connection, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []sso.Connection{}
+	for _, c := range s.conns {
+		if c.Enabled && (c.Refresh.NextAt == nil || !c.Refresh.NextAt.After(now)) {
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i].Refresh.NextAt, out[j].Refresh.NextAt
+		if (a == nil) != (b == nil) {
+			return a == nil
+		}
+		if a != nil && !a.Equal(*b) {
+			return a.Before(*b)
+		}
+		return out[i].ID < out[j].ID
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (s *Store) UpdateSAMLMetadata(_ context.Context, id string, version int, cfg sso.SAMLConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.conns[id]
+	if !ok || c.ConfigVersion != version || c.Protocol != sso.ProtocolSAML {
+		return auth.ErrNotFound
+	}
+	c.SAML = &cfg
+	s.conns[id] = c
+	return nil
+}
+
+func (s *Store) CountRefreshFailing(context.Context) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, c := range s.conns {
+		if c.Enabled && c.Refresh.OK != nil && !*c.Refresh.OK {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (s *Store) CreateSSOSession(_ context.Context, x *sso.SSOSession) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.sessions[x.SessionID]; ok {
+		return auth.ErrAlreadyExists
+	}
+	if x.CreatedAt.IsZero() {
+		x.CreatedAt = time.Now()
+	}
+	s.sessions[x.SessionID] = *x
+	return nil
+}
+
+func (s *Store) GetSSOSession(_ context.Context, sessionID string) (sso.SSOSession, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x, ok := s.sessions[sessionID]
+	if !ok {
+		return sso.SSOSession{}, auth.ErrNotFound
+	}
+	return x, nil
+}
+
+func (s *Store) ListSSOSessions(ctx context.Context, connectionID, subject, userID string, now time.Time) ([]sso.SSOSession, error) {
+	if subject == "" && userID == "" {
+		return []sso.SSOSession{}, nil
+	}
+	s.mu.Lock()
+	var cand []sso.SSOSession
+	for _, x := range s.sessions {
+		if x.ConnectionID == connectionID && (subject == "" || x.Subject == subject) && (userID == "" || x.UserID == userID) {
+			cand = append(cand, x)
+		}
+	}
+	s.mu.Unlock()
+	out := []sso.SSOSession{}
+	for _, x := range cand {
+		active, err := s.users.ListSessions(ctx, x.UserID, now)
+		if err != nil {
+			return nil, err
+		}
+		if slices.ContainsFunc(active, func(a auth.Session) bool { return a.ID == x.SessionID }) {
+			out = append(out, x)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
 }
 
 func (s *Store) CreateDomain(_ context.Context, d *sso.Domain) error {
@@ -268,18 +450,45 @@ func (s *Store) FindVerifiedDomain(_ context.Context, domain string) (sso.Domain
 	return sso.Domain{}, auth.ErrNotFound
 }
 
-func (s *Store) ListRoleMappings(_ context.Context, orgID string) ([]sso.RoleMapping, error) {
+func (s *Store) SetDomainConnection(_ context.Context, orgID, id, connectionID string) (sso.Domain, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]sso.RoleMapping{}, s.mappings[orgID]...), nil
+	d, ok := s.domains[id]
+	if !ok || d.OrgID != orgID {
+		return sso.Domain{}, auth.ErrNotFound
+	}
+	if connectionID != "" {
+		if c, ok := s.conns[connectionID]; !ok || c.OrgID != orgID {
+			return sso.Domain{}, auth.ErrNotFound
+		}
+	}
+	d.ConnectionID = connectionID
+	s.domains[id] = d
+	return d, nil
 }
 
-func (s *Store) ReplaceRoleMappings(_ context.Context, orgID string, ms []sso.RoleMapping) error {
+func (s *Store) ListRoleMappings(_ context.Context, orgID, connectionID string) ([]sso.RoleMapping, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return append([]sso.RoleMapping{}, s.mappings[orgID+"|"+connectionID]...), nil
+}
+
+func (s *Store) ReplaceRoleMappings(_ context.Context, orgID, connectionID string, ms []sso.RoleMapping) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if connectionID != "" {
+		if c, ok := s.conns[connectionID]; !ok || c.OrgID != orgID {
+			return auth.ErrNotFound
+		}
+	}
+	for _, m := range ms {
+		if m.Role != auth.RoleAdmin && m.Role != auth.RoleMember && m.Role != auth.RoleViewer {
+			return auth.ErrInvalidArgument
+		}
+	}
 	out := append([]sso.RoleMapping{}, ms...)
 	sort.Slice(out, func(i, j int) bool { return out[i].Group < out[j].Group })
-	s.mappings[orgID] = out
+	s.mappings[orgID+"|"+connectionID] = out
 	return nil
 }
 

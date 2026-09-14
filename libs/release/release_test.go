@@ -2,6 +2,7 @@ package release
 
 import (
 	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -86,6 +87,40 @@ func TestParseManifestPHPAgentArtifacts(t *testing.T) {
 	dup := strings.Replace(data, art("apk"), art("tar.gz"), 1)
 	if _, err := ParseManifest([]byte(dup)); err == nil || !strings.Contains(err.Error(), "duplicate php-agent/linux/arm64/tar.gz") {
 		t.Errorf("duplicate php-agent artifact: err = %v", err)
+	}
+}
+
+// helm_charts (every chart of the release) is optional and ignored by consumers that only know helm_chart.
+func TestParseManifestHelmCharts(t *testing.T) {
+	sum := strings.Repeat("cd", 32)
+	chart := func(name, file, sha string) string {
+		return `"` + name + `": {"name": "` + file + `", "url": "https://example.com/` + file + `", "sha256": "` + sha + `"}`
+	}
+	with := func(entries string) string {
+		return strings.Replace(validManifest, `"artifacts": [`, `"helm_charts": {`+entries+`}, "artifacts": [`, 1)
+	}
+	m, err := ParseManifest([]byte(with(chart("openlog", "openlog-0.4.0.tgz", sum) + ", " + chart("openlog-agent", "openlog-agent-0.4.0.tgz", sum))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.HelmCharts) != 2 || m.HelmCharts["openlog-agent"].Name != "openlog-agent-0.4.0.tgz" {
+		t.Errorf("helm_charts = %+v", m.HelmCharts)
+	}
+	for name, entries := range map[string]string{
+		"sha256":     chart("openlog-agent", "openlog-agent-0.4.0.tgz", "xyz"),
+		"file name":  chart("openlog-agent", "../openlog-agent-0.4.0.tgz", sum),
+		"chart name": chart("", "openlog-agent-0.4.0.tgz", sum),
+	} {
+		if _, err := ParseManifest([]byte(with(entries))); err == nil {
+			t.Errorf("%s: want error", name)
+		}
+	}
+	// An older consumer's view of the manifest: the unknown field does not break decoding.
+	var old struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal([]byte(with(chart("openlog-agent", "openlog-agent-0.4.0.tgz", sum))), &old); err != nil || old.Version != "0.4.0" {
+		t.Errorf("old decode: %v %q", err, old.Version)
 	}
 }
 

@@ -23,28 +23,39 @@ const (
 	// docs/contracts/php-agent.md §7. Consumers ignore components and formats they do not know, so adding
 	// them does not change the schema version.
 	ComponentPHPAgent = "php-agent"
+	// ComponentJavaAgent is openlog-javaagent-<v>.jar (agents/java, D-072). The jar runs on every platform, so its
+	// os and arch are PlatformAny.
+	ComponentJavaAgent = "java-agent"
 
 	FormatTarGz = "tar.gz"
 	FormatDeb   = "deb"
 	FormatRPM   = "rpm"
 	FormatAPK   = "apk"
+	FormatJar   = "jar"
+
+	// PlatformAny is the os and arch of platform-independent artifacts (the Java agent jar).
+	PlatformAny = "any"
 )
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // Manifest describes one release. See docs/contracts/releases-updates.md §2.
 type Manifest struct {
-	Schema        int                      `json:"schema"`
-	Product       string                   `json:"product"`
-	Version       string                   `json:"version"`
-	Channel       string                   `json:"channel"`
-	ReleasedAt    time.Time                `json:"released_at"`
-	NotesURL      string                   `json:"notes_url,omitempty"`
-	Compatibility Compatibility            `json:"compatibility"`
-	Artifacts     []Artifact               `json:"artifacts"`
-	Images        map[string]string        `json:"images,omitempty"`
-	HelmChart     *File                    `json:"helm_chart,omitempty"`
-	Migrations    map[string]MigrationInfo `json:"migrations,omitempty"`
+	Schema        int               `json:"schema"`
+	Product       string            `json:"product"`
+	Version       string            `json:"version"`
+	Channel       string            `json:"channel"`
+	ReleasedAt    time.Time         `json:"released_at"`
+	NotesURL      string            `json:"notes_url,omitempty"`
+	Compatibility Compatibility     `json:"compatibility"`
+	Artifacts     []Artifact        `json:"artifacts"`
+	Images        map[string]string `json:"images,omitempty"`
+	HelmChart     *File             `json:"helm_chart,omitempty"`
+	// HelmCharts lists every Helm chart of the release by chart name ("openlog", "openlog-agent").
+	// helm_chart stays the "openlog" chart for consumers that predate this field; unknown fields are
+	// ignored by older binaries, so adding it does not change the schema version.
+	HelmCharts map[string]File          `json:"helm_charts,omitempty"`
+	Migrations map[string]MigrationInfo `json:"migrations,omitempty"`
 
 	version Version
 }
@@ -157,6 +168,20 @@ func (m *Manifest) validate() error {
 	}
 	if m.HelmChart != nil && m.HelmChart.SHA256 != "" && !sha256Hex.MatchString(m.HelmChart.SHA256) {
 		return fmt.Errorf("helm_chart: sha256 must be 64 lowercase hex characters")
+	}
+	for chart, f := range m.HelmCharts {
+		if chart == "" || strings.ContainsAny(chart, `/\`) {
+			return fmt.Errorf("helm_charts: invalid chart name %q", chart)
+		}
+		if f.Name == "" || strings.ContainsAny(f.Name, `/\`) || f.Name == "." || f.Name == ".." {
+			return fmt.Errorf("helm_charts.%s: invalid name %q", chart, f.Name)
+		}
+		if err := checkURL(f.URL); err != nil {
+			return fmt.Errorf("helm_charts.%s: %w", chart, err)
+		}
+		if !sha256Hex.MatchString(f.SHA256) {
+			return fmt.Errorf("helm_charts.%s: sha256 must be 64 lowercase hex characters", chart)
+		}
 	}
 	return nil
 }

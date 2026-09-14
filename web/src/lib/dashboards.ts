@@ -192,6 +192,17 @@ export function requestVariables(variables: readonly DashboardVariable[], vars: 
   return out;
 }
 
+/** Locked variable values for share links and reports: the selections in effect, without "All" (name → values). */
+export function lockedVariables(variables: readonly DashboardVariable[], vars: VarValues | undefined): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const v of variables) {
+    const values = selectedValues(v, vars).filter((x) => x !== "");
+    if (isAll(values)) continue;
+    out[v.name] = v.multi ? values : values.slice(0, 1);
+  }
+  return out;
+}
+
 /** Values offered by a query variable: the first facet of every result row (deduplicated). */
 export function variableOptions(rows: readonly { facets: string[] }[]): string[] {
   const seen = new Set<string>();

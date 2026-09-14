@@ -95,6 +95,8 @@ type oqlRequest struct {
 	From      flexTime     `json:"from"`
 	To        flexTime     `json:"to"`
 	Variables oqlVariables `json:"variables"`
+	// Filters are dashboard cross-widget filters (oql.md §7); applied only where the event type has the attribute.
+	Filters []oql.Filter `json:"filters"`
 }
 
 func (s *Server) decodeOQL(r *http.Request) (oqlRequest, oql.Options, error) {
@@ -108,7 +110,10 @@ func (s *Server) decodeOQL(r *http.Request) (oqlRequest, oql.Options, error) {
 	if len(in.Query) > oql.MaxQueryBytes {
 		return in, oql.Options{}, badRequest("query must be at most %d bytes", oql.MaxQueryBytes)
 	}
-	opt := oql.Options{Now: s.now(), Variables: in.Variables, MaxLimit: min(oql.MaxTableLimit, max(s.cfg.MaxRows, 1))}
+	opt := oql.Options{Now: s.now(), Variables: in.Variables, Filters: in.Filters, MaxLimit: min(oql.MaxTableLimit, max(s.cfg.MaxRows, 1))}
+	if len(in.Filters) > oql.MaxFilters {
+		return in, opt, badRequest("at most %d filters", oql.MaxFilters)
+	}
 	if (in.From == "") != (in.To == "") {
 		return in, opt, badRequest("from and to must be given together")
 	}
@@ -174,7 +179,10 @@ func (s *Server) validateOQL(w http.ResponseWriter, r *http.Request, _ *query.Sc
 	if len(in.Query) > oql.MaxQueryBytes*2 {
 		return badRequest("query must be at most %d bytes", oql.MaxQueryBytes)
 	}
-	writeJSON(w, http.StatusOK, oql.Validate(in.Query, oql.Options{Now: s.now(), Variables: in.Variables,
+	if len(in.Filters) > oql.MaxFilters {
+		return badRequest("at most %d filters", oql.MaxFilters)
+	}
+	writeJSON(w, http.StatusOK, oql.Validate(in.Query, oql.Options{Now: s.now(), Variables: in.Variables, Filters: in.Filters,
 		MaxLimit: min(oql.MaxTableLimit, max(s.cfg.MaxRows, 1))}))
 	return nil
 }

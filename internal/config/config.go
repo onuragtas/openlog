@@ -168,6 +168,8 @@ type Config struct {
 	TailSampling TailSampling
 	// Usage configures usage metering, plans, quotas and billing (usage.go, D-079..D-081).
 	Usage Usage
+	// Onboarding holds the public ingest URLs shown in the UI's install commands (onboarding.go).
+	Onboarding Onboarding
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -306,6 +308,7 @@ func Load(getenv func(string) string) (Config, error) {
 		Storage:      loadStorage(&p),
 		TailSampling: loadTailSampling(&p),
 		Usage:        loadUsage(&p),
+		Onboarding:   loadOnboarding(&p), // onboarding.go
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
@@ -363,6 +366,7 @@ func (c Config) validate(getenv func(string) string) error {
 	errs = append(errs, c.validateStorage()...)
 	errs = append(errs, c.TailSampling.validate()...)
 	errs = append(errs, c.validateUsage()...)
+	errs = append(errs, c.Onboarding.validate()...) // onboarding.go
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))
 	}

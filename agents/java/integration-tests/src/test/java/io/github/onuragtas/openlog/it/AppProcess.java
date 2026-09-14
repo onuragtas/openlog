@@ -51,6 +51,21 @@ public final class AppProcess implements AutoCloseable {
   public static AppProcess start(
       String name, Path appDir, String mainClass, Path agentJar, Map<String, String> env, List<String> jvmArgs, boolean echo)
       throws IOException {
+    return launch(name, List.of("-cp", appDir.resolve("lib") + "/*", mainClass), agentJar, env, jvmArgs, echo);
+  }
+
+  /** Starts {@code java -jar jar} (e.g. Quarkus' quarkus-run.jar). */
+  public static AppProcess startJar(String name, Path jar, Path agentJar, Map<String, String> env, List<String> jvmArgs, boolean echo)
+      throws IOException {
+    if (!Files.isRegularFile(jar)) {
+      throw new IOException("application jar not found: " + jar);
+    }
+    return launch(name, List.of("-jar", jar.toString()), agentJar, env, jvmArgs, echo);
+  }
+
+  private static AppProcess launch(
+      String name, List<String> appArgs, Path agentJar, Map<String, String> env, List<String> jvmArgs, boolean echo)
+      throws IOException {
     int port = freePort();
     List<String> cmd = new ArrayList<>();
     cmd.add(Paths.get(System.getProperty("java.home"), "bin", "java").toString());
@@ -62,9 +77,7 @@ public final class AppProcess implements AutoCloseable {
       cmd.add("-javaagent:" + agentJar);
     }
     cmd.addAll(jvmArgs);
-    cmd.add("-cp");
-    cmd.add(appDir.resolve("lib") + "/*");
-    cmd.add(mainClass);
+    cmd.addAll(appArgs);
     ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
     pb.environment().putAll(env);
     pb.environment().put("APP_PORT", Integer.toString(port));

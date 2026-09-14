@@ -64,6 +64,26 @@ export async function putOrgPlan(org: string, body: OrgPlanInput): Promise<OrgPl
   return unwrap(await api.PUT("/api/v1/admin/orgs/{org}/plan", { params: { path: { org } }, body }));
 }
 
+export type OrgQueryLimits = S["OrgQueryLimits"];
+export type OrgQueryLimitsInput = S["OrgQueryLimitsInput"];
+export type QueryLimitSetting = keyof S["QueryLimitValues"];
+export const QUERY_LIMIT_SETTINGS: readonly QueryLimitSetting[] = ["max_memory_usage", "max_rows_to_read", "max_bytes_to_read"];
+
+/** Query limits of the organization: layers, effective values and their sources (usage.md §4.5). */
+export const queryLimitsQuery = () =>
+  queryOptions({
+    queryKey: ["usage", "query-limits"],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/usage/query-limits", { signal })),
+  });
+
+export async function putQueryLimits(body: OrgQueryLimitsInput): Promise<OrgQueryLimits> {
+  return unwrap(await api.PUT("/api/v1/usage/query-limits", { body }));
+}
+
+export async function deleteQueryLimits(): Promise<OrgQueryLimits> {
+  return unwrap(await api.DELETE("/api/v1/usage/query-limits", {}));
+}
+
 /** Downloads the invoice-period export (admins and owners). */
 export async function downloadUsageExport(period: UsagePeriod, format: "csv" | "json", tenantId: string): Promise<void> {
   const res = await api.GET("/api/v1/usage/export", { params: { query: { period, format } }, parseAs: "blob" });

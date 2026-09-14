@@ -10,10 +10,10 @@ import (
 
 // Policy implements auth.SessionPolicy (D-077):
 //
-//   - An SSO session acts only in its organization, only while that organization's connection is the one that
-//     created it and is enabled, and only until the connection's maximum session age (re-authentication).
-//   - When a connection enforces SSO, password sessions of members whose e-mail domain is verified by the
-//     organization cannot act in it, except break-glass owners.
+//   - An SSO session acts only in its organization, only while the connection that created it still exists in that
+//     organization and is enabled, and only until the connection's maximum session age (re-authentication).
+//   - When the connection a verified e-mail domain routes to enforces SSO, password sessions of members with that
+//     domain cannot act in the organization, except that connection's break-glass owners.
 type Policy struct{ s *Service }
 
 // Policy returns the session policy to install with auth.Service.SetSessionPolicy.
@@ -33,11 +33,11 @@ func (p *Policy) CheckSession(ctx context.Context, sess auth.Session, u auth.Use
 		if sess.OrgID != m.Org.ID {
 			return errSSOSessionOtherOrg
 		}
-		pol, err := p.s.store.GetOrgPolicy(ctx, m.Org.ID, "")
+		pol, err := p.s.store.GetOrgPolicy(ctx, m.Org.ID, sess.ConnectionID, "")
 		if err != nil {
 			return err
 		}
-		if pol.ConnectionID == "" || pol.ConnectionID != sess.ConnectionID || !pol.Enabled {
+		if sess.ConnectionID == "" || pol.ConnectionID != sess.ConnectionID || !pol.Enabled {
 			return errSSOSessionEnded
 		}
 		if pol.SessionMaxAge > 0 && now.Sub(sess.CreatedAt) >= pol.SessionMaxAge {
@@ -45,7 +45,7 @@ func (p *Policy) CheckSession(ctx context.Context, sess auth.Session, u auth.Use
 		}
 		return nil
 	}
-	pol, err := p.s.store.GetOrgPolicy(ctx, m.Org.ID, emailDomain(u.Email))
+	pol, err := p.s.store.GetOrgPolicy(ctx, m.Org.ID, "", emailDomain(u.Email))
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (p *Policy) CheckSession(ctx context.Context, sess auth.Session, u auth.Use
 }
 
 func requiresSSO(pol OrgPolicy, userID string, role auth.Role) bool {
-	if pol.ConnectionID == "" || !pol.Enabled || !pol.Enforce || !pol.DomainVerified {
+	if !pol.Enforce || !pol.DomainVerified {
 		return false
 	}
 	return role != auth.RoleOwner || !slices.Contains(pol.BreakGlassUserIDs, userID)
@@ -70,7 +70,7 @@ func (p *Policy) CheckPasswordLogin(ctx context.Context, u auth.User, ms []auth.
 	}
 	domain := emailDomain(u.Email)
 	for _, m := range ms {
-		pol, err := p.s.store.GetOrgPolicy(ctx, m.Org.ID, domain)
+		pol, err := p.s.store.GetOrgPolicy(ctx, m.Org.ID, "", domain)
 		if err != nil {
 			return err
 		}

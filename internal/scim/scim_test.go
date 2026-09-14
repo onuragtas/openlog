@@ -114,7 +114,7 @@ func patch(ops ...map[string]any) map[string]any {
 func TestSCIMProvisioning(t *testing.T) {
 	e := newEnv(t, "tenant-a", "example.com", nil)
 	ctx := context.Background()
-	if _, err := e.sso.ReplaceRoleMappings(ctx, e.owner, []sso.RoleMapping{{Group: "openlog-admins", Role: auth.RoleAdmin}}, auth.ClientMeta{}); err != nil {
+	if _, err := e.sso.ReplaceRoleMappings(ctx, e.owner, "", []sso.RoleMapping{{Group: "openlog-admins", Role: auth.RoleAdmin}}, auth.ClientMeta{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -228,8 +228,13 @@ func TestSCIMProvisioning(t *testing.T) {
 		"name": map[string]string{"givenName": "Alice", "familyName": "Smith"}}); code != http.StatusOK || body["name"].(map[string]any)["familyName"] != "Smith" {
 		t.Fatalf("put: %d %v", code, body)
 	}
-	if code, _ := e.do(http.MethodPatch, "/Users/"+aliceID, patch(map[string]any{"op": "replace", "path": "userName", "value": "alice2@example.com"})); code != http.StatusBadRequest {
-		t.Fatalf("e-mail change: %d", code)
+	// E-mail change (D-089): a userName that was the account's address moves the account to the new address.
+	if code, body := e.do(http.MethodPatch, "/Users/"+aliceID, patch(map[string]any{"op": "replace", "path": "userName", "value": "alice2@example.com"})); code != http.StatusOK ||
+		body["emails"].([]any)[0].(map[string]any)["value"] != "alice2@example.com" {
+		t.Fatalf("e-mail change: %d %v", code, body)
+	}
+	if _, err := e.users.GetUserByEmail(ctx, "alice@example.com"); err == nil {
+		t.Fatal("old address still resolves")
 	}
 
 	// Owners cannot be deprovisioned through SCIM.
@@ -285,5 +290,76 @@ func TestSCIMProvisioning(t *testing.T) {
 	}
 	if code, _ := e.do(http.MethodGet, "/Users", nil); code != http.StatusUnauthorized {
 		t.Fatalf("revoked token: %d", code)
+	}
+}
+
+// TestSCIMEmailChange covers e-mail changes through PUT and PATCH (D-089).
+func TestSCIMEmailChange(t *testing.T) {
+	e := newEnv(t, "tenant-a", "example.com", nil)
+	ctx := context.Background()
+	code, alice := e.do(http.MethodPost, "/Users", map[string]any{"userName": "alice@example.com", "active": true})
+	if code != http.StatusCreated {
+		t.Fatalf("create: %d %v", code, alice)
+	}
+	id := alice["id"].(string)
+	accountEmail := func() string {
+		u, err := e.users.GetUser(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.Email
+	}
+
+	// PUT with a new primary e-mail (Entra style: userName stays the UPN).
+	if code, body := e.do(http.MethodPut, "/Users/"+id, map[string]any{"userName": "alice@example.com", "active": true,
+		"emails": []map[string]any{{"value": "Alice.Liddell@example.com", "primary": true, "type": "work"}}}); code != http.StatusOK || accountEmail() != "alice.liddell@example.com" {
+		t.Fatalf("PUT e-mail change: %d %v (%s)", code, body, accountEmail())
+	}
+	// PATCH emails[type eq "work"].value.
+	if code, body := e.do(http.MethodPatch, "/Users/"+id, patch(map[string]any{"op": "replace", "path": `emails[type eq "work"].value`, "value": "alice3@example.com"})); code != http.StatusOK || accountEmail() != "alice3@example.com" {
+		t.Fatalf("PATCH emails[type eq work]: %d %v", code, body)
+	}
+	// Path-less PATCH (Okta style).
+	if code, _ := e.do(http.MethodPatch, "/Users/"+id, patch(map[string]any{"op": "replace", "value": map[string]any{"emails": []map[string]any{{"value": "alice4@example.com", "primary": true}}}})); code != http.StatusOK || accountEmail() != "alice4@example.com" {
+		t.Fatalf("path-less PATCH: %d %s", code, accountEmail())
+	}
+
+	// Another account already uses the address: 409 uniqueness, nothing changes.
+	hash, _ := auth.HashPassword("bob's long password")
+	now := time.Now()
+	bob := auth.User{Email: "bob@example.com", PasswordHash: hash, EmailVerifiedAt: &now}
+	if err := e.users.CreateUser(ctx, &bob); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := e.do(http.MethodPatch, "/Users/"+id, patch(map[string]any{"op": "replace", "path": "emails", "value": []map[string]any{{"value": "bob@example.com", "primary": true}}})); code != http.StatusConflict || body["scimType"] != "uniqueness" || accountEmail() != "alice4@example.com" {
+		t.Fatalf("conflicting e-mail: %d %v", code, body)
+	}
+	// A domain the organization has not verified.
+	if code, body := e.do(http.MethodPatch, "/Users/"+id, patch(map[string]any{"op": "replace", "path": `emails[primary eq true].value`, "value": "alice@gmail.com"})); code != http.StatusBadRequest || body["scimType"] != "invalidValue" {
+		t.Fatalf("unverified domain: %d %v", code, body)
+	}
+	if code, _ := e.do(http.MethodPatch, "/Users/"+id, patch(map[string]any{"op": "replace", "path": "emails", "value": []map[string]any{{"value": "not an address", "primary": true}}})); code != http.StatusBadRequest {
+		t.Fatalf("invalid address: %d", code)
+	}
+	// Owners' addresses are managed in openlog.
+	code, owner := e.do(http.MethodPost, "/Users", map[string]any{"userName": "owner@example.com"})
+	if code != http.StatusCreated {
+		t.Fatalf("owner create: %d", code)
+	}
+	if code, body := e.do(http.MethodPatch, "/Users/"+owner["id"].(string), patch(map[string]any{"op": "replace", "path": "userName", "value": "boss@example.com"})); code != http.StatusBadRequest || body["scimType"] != "mutability" {
+		t.Fatalf("owner e-mail change: %d %v", code, body)
+	}
+	// A changed userName that was not the account's address does not change the address.
+	if code, _ := e.do(http.MethodPatch, "/Users/"+id, patch(map[string]any{"op": "replace", "path": "userName", "value": "alice-upn@example.com"})); code != http.StatusOK || accountEmail() != "alice4@example.com" {
+		t.Fatalf("userName change: %d %s", code, accountEmail())
+	}
+	changes := 0
+	for _, ev := range e.users.AuditEvents() {
+		if ev.Action == "scim.user.email_change" {
+			changes++
+		}
+	}
+	if changes != 3 {
+		t.Fatalf("scim.user.email_change audit events = %d", changes)
 	}
 }

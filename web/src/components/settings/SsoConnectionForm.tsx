@@ -1,13 +1,16 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ExternalLink, XCircle } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, ExternalLink, X, XCircle } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  deleteSsoConnection,
-  saveSsoConnection,
-  ssoStateQuery,
-  startSsoTest,
-  testSsoConnection,
+  createSsoConnection,
+  SSO_TEST_CONNECTION_KEY,
+  ssoConnectionLabel,
+  ssoConnectionQuery,
+  startSsoTestById,
+  storeSsoState,
+  testSsoConnectionById,
+  updateSsoConnection,
   type SsoConnection,
   type SsoConnectionInput,
   type SsoState,
@@ -18,7 +21,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
-import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 import { SsoCopyField } from "./SsoCopyField";
 
@@ -46,6 +48,8 @@ interface Draft {
   jit: boolean;
   defaultRole: AssignableRole;
   maxAge: number;
+  logoutRedirects: string;
+  allowExternalInvitations: boolean;
 }
 
 const MAX_AGES = [
@@ -55,6 +59,8 @@ const MAX_AGES = [
   { seconds: 24 * 3600, label: "sso.connection.maxAge24h" },
   { seconds: 7 * 24 * 3600, label: "sso.connection.maxAge7d" },
 ] as const;
+
+const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
 function draftFrom(c: SsoConnection | null): Draft {
   return {
@@ -78,6 +84,8 @@ function draftFrom(c: SsoConnection | null): Draft {
     jit: c?.jit_enabled ?? true,
     defaultRole: c?.default_role ?? "viewer",
     maxAge: c?.session_max_age_seconds ?? 0,
+    logoutRedirects: (c?.logout_redirect_allowlist ?? []).join("\n"),
+    allowExternalInvitations: c?.allow_external_invitations ?? true,
   };
 }
 
@@ -92,6 +100,8 @@ function toInput(d: Draft, stored: SsoConnection | null): SsoConnectionInput {
     jit_enabled: d.jit,
     default_role: d.defaultRole,
     session_max_age_seconds: d.maxAge,
+    logout_redirect_allowlist: lines(d.logoutRedirects),
+    allow_external_invitations: d.allowExternalInvitations,
   };
   if (d.protocol === "oidc") {
     // Omitted secret = keep the stored one; "" = remove it.
@@ -113,7 +123,7 @@ function toInput(d: Draft, stored: SsoConnection | null): SsoConnectionInput {
       idp_metadata_url: d.metadataUrl.trim(),
       idp_metadata_xml: d.metadataXml.trim(),
       allow_idp_initiated: d.allowIdpInitiated,
-      relay_state_allowlist: d.allowIdpInitiated ? d.relayStates.split("\n").map((s) => s.trim()).filter(Boolean) : [],
+      relay_state_allowlist: d.allowIdpInitiated ? lines(d.relayStates) : [],
       sign_authn_requests: d.signRequests,
     },
   };
@@ -149,47 +159,74 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
 
 const textareaClass = "min-h-24 w-full resize-y rounded-md border border-input bg-background px-2 py-1 font-mono text-xs";
 
-/** Connection setup wizard (protocol → service provider values → identity provider → users), tests and deletion. */
-export function SsoConnectionForm({ state }: { state: SsoState }) {
+/**
+ * Connection setup wizard (protocol → service provider values → identity provider → users) and tests of one
+ * connection. `connectionId` null creates a new connection; `onSaved` receives the saved connection.
+ */
+export function SsoConnectionForm({
+  state,
+  connectionId,
+  onSaved,
+  onClose,
+}: {
+  state: SsoState;
+  connectionId: string | null;
+  onSaved?: (c: SsoConnection) => void;
+  onClose?: () => void;
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const id = useId();
-  const stored = state.connection;
+  const stored = connectionId ? (state.connections.find((c) => c.id === connectionId) ?? null) : null;
+  // The addressed connection's service provider values (SAML URLs are per connection).
+  const detail = useQuery({ ...ssoConnectionQuery(connectionId ?? ""), enabled: connectionId !== null });
   const [draft, setDraft] = useState<Draft>(() => draftFrom(stored));
   const [step, setStep] = useState(stored ? 2 : 0);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
 
   const save = useMutation({
-    mutationFn: () => saveSsoConnection(toInput(draft, stored)),
+    mutationFn: () => (stored ? updateSsoConnection(stored.id, toInput(draft, stored)) : createSsoConnection(toInput(draft, null))),
     onSuccess: (res) => {
-      qc.setQueryData(ssoStateQuery().queryKey, res);
+      storeSsoState(qc, res);
       setDraft(draftFrom(res.connection));
       if (draft.protocol === "saml" && stored?.protocol !== "saml") setStep(1); // show the generated SP values
+      if (res.connection) onSaved?.(res.connection);
     },
   });
-  const checks = useMutation({ mutationFn: testSsoConnection });
-  const startTest = useMutation({ mutationFn: startSsoTest, onSuccess: (url) => window.location.assign(url) });
-  const remove = useMutation({
-    mutationFn: deleteSsoConnection,
-    onSuccess: () => {
-      setDraft(draftFrom(null));
-      setStep(0);
-      checks.reset();
+  const checks = useMutation({ mutationFn: () => testSsoConnectionById(stored!.id) });
+  const startTest = useMutation({
+    mutationFn: () => startSsoTestById(stored!.id),
+    onSuccess: (url) => {
+      try {
+        sessionStorage.setItem(SSO_TEST_CONNECTION_KEY, stored!.id);
+      } catch {
+        // the settings page then opens without the tested connection
+      }
+      window.location.assign(url);
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: ["settings", "sso"] }),
   });
 
   const steps = [t("sso.connection.stepProtocol"), t("sso.connection.stepServiceProvider"), t("sso.connection.stepIdentityProvider"), t("sso.connection.stepUsers")];
-  const sp = state.service_provider;
+  const sp = (stored && detail.data?.connection?.id === stored.id ? detail.data : state).service_provider;
   const samlSaved = stored?.protocol === "saml" && sp.saml_entity_id && sp.saml_acs_url && sp.saml_metadata_url;
+  const listMode = state.connections.length > 0;
+  const title = !listMode ? t("sso.connection.title") : stored ? t("sso.connection.editTitle", { name: ssoConnectionLabel(stored) }) : t("sso.connection.newTitle");
 
   return (
-    <SettingsSection title={t("sso.connection.title")} description={t("sso.connection.description")}>
+    <SettingsSection title={title} description={t("sso.connection.description")}>
+      {onClose && (
+        <div className="-mt-2 flex justify-end">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            <X aria-hidden="true" />
+            {t("sso.connection.close")}
+          </Button>
+        </div>
+      )}
       {stored && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Badge variant={stored.enabled ? "success" : "outline"}>{stored.protocol === "oidc" ? t("sso.connection.oidc") : t("sso.connection.saml")}</Badge>
-          {stored.name && <span className="font-medium">{stored.name}</span>}
-          {stored.enforce && <Badge variant="warning">{t("sso.enforcement.active")}</Badge>}
+          {stored.name && <span className="font-medium break-all">{stored.name}</span>}
+          {stored.enforce && <Badge variant="warning">{t("sso.connections.enforced")}</Badge>}
         </div>
       )}
       <ol aria-label={t("sso.connection.stepsLabel")} className="flex flex-wrap gap-1">
@@ -242,11 +279,15 @@ export function SsoConnectionForm({ state }: { state: SsoState }) {
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">{t("sso.connection.spIntro")}</p>
             {draft.protocol === "oidc" ? (
-              <SsoCopyField label={t("sso.connection.redirectUri")} value={sp.oidc_redirect_uri} />
+              <>
+                <SsoCopyField label={t("sso.connection.redirectUri")} value={sp.oidc_redirect_uri} />
+                <SsoCopyField label={t("sso.connection.postLogoutRedirectUri")} value={sp.oidc_post_logout_redirect_uri} />
+              </>
             ) : samlSaved ? (
               <>
                 <SsoCopyField label={t("sso.connection.entityId")} value={sp.saml_entity_id!} />
                 <SsoCopyField label={t("sso.connection.acsUrl")} value={sp.saml_acs_url!} />
+                {sp.saml_slo_url && <SsoCopyField label={t("sso.connection.sloUrl")} value={sp.saml_slo_url} />}
                 <SsoCopyField label={t("sso.connection.metadataUrl")} value={sp.saml_metadata_url!} />
                 {sp.saml_certificate_pem && <SsoCopyField label={t("sso.connection.certificate")} value={sp.saml_certificate_pem} multiline />}
               </>
@@ -293,21 +334,30 @@ export function SsoConnectionForm({ state }: { state: SsoState }) {
               <textarea id={`${id}-mdxml`} className={textareaClass} value={draft.metadataXml} spellCheck={false} onChange={(e) => set("metadataXml", e.target.value)} />
             </Field>
             {stored?.saml && (
-              <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
-                <dt className="text-muted-foreground">{t("sso.connection.idpEntityId")}</dt>
-                <dd className="font-mono text-xs break-all">{stored.saml.idp_entity_id}</dd>
-                <dt className="text-muted-foreground">{t("sso.connection.idpSsoUrl")}</dt>
-                <dd className="font-mono text-xs break-all">{stored.saml.idp_sso_url}</dd>
-                <dt className="text-muted-foreground">{t("sso.connection.idpCert")}</dt>
-                <dd className="font-mono text-xs break-all">
-                  {stored.saml.idp_certificates.join(", ")}
-                  {stored.saml.idp_cert_not_after && (
-                    <span className="block font-sans text-muted-foreground">
-                      {t("sso.connection.idpCertExpires", { date: stored.saml.idp_cert_not_after.slice(0, 10) })}
-                    </span>
+              <>
+                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+                  <dt className="text-muted-foreground">{t("sso.connection.idpEntityId")}</dt>
+                  <dd className="font-mono text-xs break-all">{stored.saml.idp_entity_id}</dd>
+                  <dt className="text-muted-foreground">{t("sso.connection.idpSsoUrl")}</dt>
+                  <dd className="font-mono text-xs break-all">{stored.saml.idp_sso_url}</dd>
+                  {stored.saml.idp_slo_url && (
+                    <>
+                      <dt className="text-muted-foreground">{t("sso.connection.idpSloUrl")}</dt>
+                      <dd className="font-mono text-xs break-all">{stored.saml.idp_slo_url}</dd>
+                    </>
                   )}
-                </dd>
-              </dl>
+                  <dt className="text-muted-foreground">{t("sso.connection.idpCert")}</dt>
+                  <dd className="font-mono text-xs break-all">
+                    {stored.saml.idp_certificates.join(", ")}
+                    {stored.saml.idp_cert_not_after && (
+                      <span className="block font-sans text-muted-foreground">
+                        {t("sso.connection.idpCertExpires", { date: stored.saml.idp_cert_not_after.slice(0, 10) })}
+                      </span>
+                    )}
+                  </dd>
+                </dl>
+                {!stored.saml.idp_slo_url && <p className="text-xs text-muted-foreground">{t("sso.connection.idpNoSlo")}</p>}
+              </>
             )}
             <Checkbox id={`${id}-signreq`} checked={draft.signRequests} onChange={(v) => set("signRequests", v)} label={t("sso.connection.signRequests")} />
             <Checkbox
@@ -363,6 +413,16 @@ export function SsoConnectionForm({ state }: { state: SsoState }) {
             {draft.protocol === "oidc" && (
               <Checkbox id={`${id}-emailverified`} checked={draft.requireEmailVerified} onChange={(v) => set("requireEmailVerified", v)} label={t("sso.connection.requireEmailVerified")} />
             )}
+            <Field id={`${id}-logout`} label={t("sso.connection.logoutRedirects")} hint={t("sso.connection.logoutRedirectsHint")}>
+              <textarea id={`${id}-logout`} className={textareaClass} value={draft.logoutRedirects} spellCheck={false} onChange={(e) => set("logoutRedirects", e.target.value)} />
+            </Field>
+            <Checkbox
+              id={`${id}-extinv`}
+              checked={draft.allowExternalInvitations}
+              onChange={(v) => set("allowExternalInvitations", v)}
+              label={t("sso.connection.allowExternalInvitations")}
+              hint={t("sso.connection.allowExternalInvitationsHint")}
+            />
           </div>
         )}
 
@@ -434,10 +494,6 @@ export function SsoConnectionForm({ state }: { state: SsoState }) {
               )}
             </div>
           )}
-          <div>
-            <ConfirmButton label={t("sso.connection.delete")} confirmLabel={t("sso.connection.confirmDelete")} pending={remove.isPending} onConfirm={() => remove.mutate()} />
-          </div>
-          <FormError error={remove.error} />
         </div>
       )}
     </SettingsSection>

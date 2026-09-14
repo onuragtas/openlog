@@ -1,0 +1,11 @@
+{{define "subject"}}[openlog] {{.Domain}} alan adını doğrulayın{{end}}
+
+{{define "text"}}
+{{.Requester}}, {{.Domain}} alan adının openlog üzerindeki "{{.OrgName}}" organizasyonuna ait olduğunun doğrulanmasını istedi.
+
+Bu alan adında e-posta adresi olan üyeler organizasyonun tek oturum açma (SSO) yöntemiyle giriş yapabilecek.
+
+Onaylamak için bu bağlantıyı 24 saat içinde açın veya bu e-postayı dikkate almayın:
+
+{{.Link}}
+{{end}}

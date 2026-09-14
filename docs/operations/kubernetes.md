@@ -27,6 +27,16 @@ helm install openlog-agent deploy/helm/openlog-agent -n openlog-agent \
   --set existingSecret.name=openlog-license
 ```
 
+Released chart instead of the repository checkout (chart `version` = `appVersion` = openlog version; also attached to
+every GitHub release as `openlog-agent-<version>.tgz`, sha256 in the signed manifest):
+
+```bash
+helm install openlog-agent oci://ghcr.io/onuragtas/charts/openlog-agent --version 0.4.0 -n openlog-agent \
+  --set clusterName=prod-eu-1 \
+  --set endpoint=https://ingest.openlog.example:4318 \
+  --set existingSecret.name=openlog-license
+```
+
 Verify:
 
 ```bash

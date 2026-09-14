@@ -41,22 +41,28 @@ func jsonOrEmpty(v any) (string, error) {
 // ---- connections ----
 
 type connConfig struct {
-	OIDC *sso.OIDCConfig `json:"oidc,omitempty"`
-	SAML *sso.SAMLConfig `json:"saml,omitempty"`
+	OIDC                    *sso.OIDCConfig `json:"oidc,omitempty"`
+	SAML                    *sso.SAMLConfig `json:"saml,omitempty"`
+	LogoutRedirectAllowlist []string        `json:"logout_redirect_allowlist,omitempty"`
 }
 
 const connCols = `id::text, org_id::text, protocol, name, enabled, config::text, secret_enc, sp_key_enc, email_attribute, name_attribute,
 	groups_attribute, jit_enabled, default_role, session_max_age_seconds, enforce, break_glass_user_ids::text[], config_version,
 	tested_version, last_test_at, last_test_ok, last_test_error, last_test_details::text, coalesce(created_by::text, ''),
-	coalesce(updated_by::text, ''), created_at, updated_at`
+	coalesce(updated_by::text, ''), created_at, updated_at, allow_external_invitations, idp_refreshed_at, idp_refresh_ok,
+	idp_refresh_error, idp_refresh_failures, idp_next_refresh_at, idp_cache::text`
+
+// connOrder puts the default (oldest) connection first.
+const connOrder = ` ORDER BY created_at, id`
 
 func scanConn(row pgx.Row) (sso.Connection, error) {
 	var c sso.Connection
-	var protocol, role, cfg, details string
+	var protocol, role, cfg, details, cache string
 	var maxAge int64
 	err := row.Scan(&c.ID, &c.OrgID, &protocol, &c.Name, &c.Enabled, &cfg, &c.SecretEnc, &c.SPKeyEnc, &c.EmailAttribute, &c.NameAttribute,
 		&c.GroupsAttribute, &c.JITEnabled, &role, &maxAge, &c.Enforce, &c.BreakGlassUserIDs, &c.ConfigVersion,
-		&c.TestedVersion, &c.LastTestAt, &c.LastTestOK, &c.LastTestError, &details, &c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt)
+		&c.TestedVersion, &c.LastTestAt, &c.LastTestOK, &c.LastTestError, &details, &c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt,
+		&c.AllowExternalInvitations, &c.Refresh.RefreshedAt, &c.Refresh.OK, &c.Refresh.Error, &c.Refresh.Failures, &c.Refresh.NextAt, &cache)
 	if err != nil {
 		return c, mapErr(err)
 	}
@@ -65,16 +71,24 @@ func scanConn(row pgx.Row) (sso.Connection, error) {
 	if err := json.Unmarshal([]byte(cfg), &cc); err != nil {
 		return c, err
 	}
-	c.OIDC, c.SAML = cc.OIDC, cc.SAML
+	c.OIDC, c.SAML, c.LogoutRedirectAllowlist = cc.OIDC, cc.SAML, cc.LogoutRedirectAllowlist
 	_ = json.Unmarshal([]byte(details), &c.LastTestDetails)
+	_ = json.Unmarshal([]byte(cache), &c.Refresh.Cache)
 	if c.BreakGlassUserIDs == nil {
 		c.BreakGlassUserIDs = []string{}
 	}
 	return c, nil
 }
 
+func scanConns(rows pgx.Rows, err error) ([]sso.Connection, error) {
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (sso.Connection, error) { return scanConn(r) })
+}
+
 func connArgs(c *sso.Connection) ([]any, error) {
-	cfg, err := jsonOrEmpty(connConfig{OIDC: c.OIDC, SAML: c.SAML})
+	cfg, err := jsonOrEmpty(connConfig{OIDC: c.OIDC, SAML: c.SAML, LogoutRedirectAllowlist: c.LogoutRedirectAllowlist})
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +98,7 @@ func connArgs(c *sso.Connection) ([]any, error) {
 	}
 	return []any{c.ID, c.OrgID, string(c.Protocol), c.Name, c.Enabled, cfg, c.SecretEnc, c.SPKeyEnc, c.EmailAttribute, c.NameAttribute,
 		c.GroupsAttribute, c.JITEnabled, string(c.DefaultRole), int64(c.SessionMaxAge / time.Second), c.Enforce, ids, c.ConfigVersion,
-		nullID(c.CreatedBy), nullID(c.UpdatedBy)}, nil
+		nullID(c.CreatedBy), nullID(c.UpdatedBy), c.AllowExternalInvitations}, nil
 }
 
 func (s *SSOStore) CreateConnection(ctx context.Context, c *sso.Connection) error {
@@ -102,16 +116,26 @@ func (s *SSOStore) CreateConnection(ctx context.Context, c *sso.Connection) erro
 	args = append(args, c.CreatedAt)
 	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO sso_connections (id, org_id, protocol, name, enabled, config, secret_enc, sp_key_enc,
 			email_attribute, name_attribute, groups_attribute, jit_enabled, default_role, session_max_age_seconds, enforce, break_glass_user_ids,
-			config_version, created_by, updated_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::uuid[], $17, $18::uuid, $19::uuid, $20, $20)
+			config_version, created_by, updated_by, allow_external_invitations, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::uuid[], $17, $18::uuid, $19::uuid, $20, $21, $21)
 		RETURNING updated_at`, args...).Scan(&c.UpdatedAt))
 }
 
-func (s *SSOStore) GetConnection(ctx context.Context, orgID string) (sso.Connection, error) {
+func (s *SSOStore) ListConnections(ctx context.Context, orgID string) ([]sso.Connection, error) {
 	if !validID(orgID) {
+		return []sso.Connection{}, nil
+	}
+	return scanConns(s.pool.Query(ctx, `SELECT `+connCols+` FROM sso_connections WHERE org_id = $1`+connOrder, orgID))
+}
+
+func (s *SSOStore) GetConnection(ctx context.Context, orgID, id string) (sso.Connection, error) {
+	if !validID(orgID) || (id != "" && !validID(id)) {
 		return sso.Connection{}, auth.ErrNotFound
 	}
-	return scanConn(s.pool.QueryRow(ctx, `SELECT `+connCols+` FROM sso_connections WHERE org_id = $1`, orgID))
+	if id == "" {
+		return scanConn(s.pool.QueryRow(ctx, `SELECT `+connCols+` FROM sso_connections WHERE org_id = $1`+connOrder+` LIMIT 1`, orgID))
+	}
+	return scanConn(s.pool.QueryRow(ctx, `SELECT `+connCols+` FROM sso_connections WHERE org_id = $1 AND id = $2`, orgID, id))
 }
 
 func (s *SSOStore) GetConnectionByID(ctx context.Context, id string) (sso.Connection, error) {
@@ -133,15 +157,15 @@ func (s *SSOStore) UpdateConnection(ctx context.Context, c *sso.Connection) erro
 	return affected(s.pool.Exec(ctx, `UPDATE sso_connections SET protocol = $3, name = $4, enabled = $5, config = $6::jsonb,
 			secret_enc = $7, sp_key_enc = $8, email_attribute = $9, name_attribute = $10, groups_attribute = $11, jit_enabled = $12,
 			default_role = $13, session_max_age_seconds = $14, enforce = $15, break_glass_user_ids = $16::uuid[], config_version = $17,
-			updated_by = $19::uuid, updated_at = $20
+			updated_by = $19::uuid, allow_external_invitations = $20, updated_at = $21
 		WHERE id = $1 AND org_id = $2 AND $18::uuid IS NOT DISTINCT FROM $18::uuid`, args...))
 }
 
-func (s *SSOStore) DeleteConnection(ctx context.Context, orgID string) (sso.Connection, error) {
-	if !validID(orgID) {
+func (s *SSOStore) DeleteConnection(ctx context.Context, orgID, id string) (sso.Connection, error) {
+	if !validID(orgID, id) {
 		return sso.Connection{}, auth.ErrNotFound
 	}
-	return scanConn(s.pool.QueryRow(ctx, `DELETE FROM sso_connections WHERE org_id = $1 RETURNING `+connCols, orgID))
+	return scanConn(s.pool.QueryRow(ctx, `DELETE FROM sso_connections WHERE org_id = $1 AND id = $2 RETURNING `+connCols, orgID, id))
 }
 
 func (s *SSOStore) RecordTest(ctx context.Context, id string, version int, ok bool, errMsg string, details map[string]any, at time.Time) error {
@@ -158,40 +182,151 @@ func (s *SSOStore) RecordTest(ctx context.Context, id string, version int, ok bo
 		WHERE id = $1`, id, at, ok, errMsg, d, version))
 }
 
-func (s *SSOStore) GetOrgPolicy(ctx context.Context, orgID, emailDomain string) (sso.OrgPolicy, error) {
+// GetOrgPolicy reads the session's connection and the routed connection of the user's e-mail domain in one
+// statement (every session-authenticated request).
+func (s *SSOStore) GetOrgPolicy(ctx context.Context, orgID, connectionID, emailDomain string) (sso.OrgPolicy, error) {
 	var p sso.OrgPolicy
 	if !validID(orgID) {
 		return p, nil
 	}
+	if connectionID != "" && !validID(connectionID) {
+		connectionID = ""
+	}
 	var maxAge int64
-	err := s.pool.QueryRow(ctx, `SELECT coalesce(c.id::text, ''), coalesce(c.enabled, false), coalesce(c.enforce, false),
-			coalesce(c.break_glass_user_ids::text[], '{}'), coalesce(c.session_max_age_seconds, 0),
-			$2 <> '' AND EXISTS (SELECT 1 FROM sso_domains d WHERE d.org_id = $1 AND d.domain = $2 AND d.verified_at IS NOT NULL)
-		FROM (SELECT 1) AS one LEFT JOIN sso_connections c ON c.org_id = $1`, orgID, emailDomain).
-		Scan(&p.ConnectionID, &p.Enabled, &p.Enforce, &p.BreakGlassUserIDs, &maxAge, &p.DomainVerified)
+	err := s.pool.QueryRow(ctx, `SELECT coalesce(sc.id::text, ''), coalesce(sc.enabled, false), coalesce(sc.session_max_age_seconds, 0),
+			d.id IS NOT NULL, coalesce(r.enabled AND r.enforce, false), coalesce(r.break_glass_user_ids::text[], '{}')
+		FROM (SELECT 1) AS one
+		LEFT JOIN sso_connections sc ON $2 <> '' AND sc.org_id = $1 AND sc.id::text = $2
+		LEFT JOIN sso_domains d ON $3 <> '' AND d.org_id = $1 AND d.domain = $3 AND d.verified_at IS NOT NULL
+		LEFT JOIN LATERAL (
+			SELECT c.enabled, c.enforce, c.break_glass_user_ids FROM sso_connections c
+			WHERE d.id IS NOT NULL AND c.org_id = $1 AND c.id = coalesce(d.connection_id,
+				(SELECT x.id FROM sso_connections x WHERE x.org_id = $1 ORDER BY x.created_at, x.id LIMIT 1))
+		) r ON true`, orgID, connectionID, emailDomain).
+		Scan(&p.ConnectionID, &p.Enabled, &maxAge, &p.DomainVerified, &p.Enforce, &p.BreakGlassUserIDs)
 	p.SessionMaxAge = time.Duration(maxAge) * time.Second
 	return p, err
+}
+
+func (s *SSOStore) ConnectionForDomain(ctx context.Context, domain string) (sso.Connection, sso.Domain, error) {
+	d, err := s.FindVerifiedDomain(ctx, domain)
+	if err != nil {
+		return sso.Connection{}, d, err
+	}
+	c, err := s.GetConnection(ctx, d.OrgID, d.ConnectionID)
+	return c, d, err
+}
+
+// ---- background refresh ----
+
+func (s *SSOStore) RecordRefresh(ctx context.Context, id string, ok bool, errMsg string, cache *sso.IdPCache, next, at time.Time) error {
+	if !validID(id) {
+		return auth.ErrNotFound
+	}
+	var cacheJSON *string
+	if ok && cache != nil {
+		b, err := json.Marshal(cache)
+		if err != nil {
+			return err
+		}
+		v := string(b)
+		cacheJSON = &v
+	}
+	return affected(s.pool.Exec(ctx, `UPDATE sso_connections SET idp_refreshed_at = $2, idp_refresh_ok = $3, idp_refresh_error = $4,
+			idp_refresh_failures = CASE WHEN $3 THEN 0 ELSE idp_refresh_failures + 1 END, idp_next_refresh_at = $5,
+			idp_cache = coalesce($6::jsonb, idp_cache)
+		WHERE id = $1`, id, at, ok, errMsg, next, cacheJSON))
+}
+
+func (s *SSOStore) ListRefreshDue(ctx context.Context, now time.Time, limit int) ([]sso.Connection, error) {
+	return scanConns(s.pool.Query(ctx, `SELECT `+connCols+` FROM sso_connections
+		WHERE enabled AND (idp_next_refresh_at IS NULL OR idp_next_refresh_at <= $1)
+		ORDER BY idp_next_refresh_at NULLS FIRST, id LIMIT $2`, now, limit))
+}
+
+func (s *SSOStore) UpdateSAMLMetadata(ctx context.Context, id string, version int, cfg sso.SAMLConfig) error {
+	if !validID(id) {
+		return auth.ErrNotFound
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return affected(s.pool.Exec(ctx, `UPDATE sso_connections SET config = jsonb_set(config, '{saml}', $3::jsonb)
+		WHERE id = $1 AND config_version = $2 AND protocol = 'saml'`, id, version, string(b)))
+}
+
+func (s *SSOStore) CountRefreshFailing(ctx context.Context) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM sso_connections WHERE enabled AND idp_refresh_ok = false`).Scan(&n)
+	return n, err
+}
+
+// ---- SSO sessions (single logout) ----
+
+const ssoSessionCols = `x.session_id::text, x.connection_id::text, x.org_id::text, x.user_id::text, x.subject, x.name_id_format,
+	x.name_qualifier, x.sp_name_qualifier, x.session_index, x.id_token_enc, x.created_at`
+
+func scanSSOSession(r pgx.Row) (sso.SSOSession, error) {
+	var x sso.SSOSession
+	err := r.Scan(&x.SessionID, &x.ConnectionID, &x.OrgID, &x.UserID, &x.Subject, &x.NameIDFormat, &x.NameQualifier, &x.SPNameQualifier,
+		&x.SessionIndex, &x.IDTokenEnc, &x.CreatedAt)
+	return x, mapErr(err)
+}
+
+func (s *SSOStore) CreateSSOSession(ctx context.Context, x *sso.SSOSession) error {
+	if !validID(x.SessionID, x.ConnectionID, x.OrgID, x.UserID) {
+		return auth.ErrNotFound
+	}
+	x.CreatedAt = ts(x.CreatedAt)
+	_, err := s.pool.Exec(ctx, `INSERT INTO sso_sessions (session_id, connection_id, org_id, user_id, subject, name_id_format, name_qualifier,
+			sp_name_qualifier, session_index, id_token_enc, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, x.SessionID, x.ConnectionID, x.OrgID, x.UserID, x.Subject, x.NameIDFormat,
+		x.NameQualifier, x.SPNameQualifier, x.SessionIndex, x.IDTokenEnc, x.CreatedAt)
+	return mapErr(err)
+}
+
+func (s *SSOStore) GetSSOSession(ctx context.Context, sessionID string) (sso.SSOSession, error) {
+	if !validID(sessionID) {
+		return sso.SSOSession{}, auth.ErrNotFound
+	}
+	return scanSSOSession(s.pool.QueryRow(ctx, `SELECT `+ssoSessionCols+` FROM sso_sessions x WHERE x.session_id = $1`, sessionID))
+}
+
+func (s *SSOStore) ListSSOSessions(ctx context.Context, connectionID, subject, userID string, now time.Time) ([]sso.SSOSession, error) {
+	if !validID(connectionID) || (userID != "" && !validID(userID)) || (subject == "" && userID == "") {
+		return []sso.SSOSession{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT `+ssoSessionCols+` FROM sso_sessions x JOIN sessions s ON s.id = x.session_id
+		WHERE x.connection_id = $1 AND ($2 = '' OR x.subject = $2) AND ($3 = '' OR x.user_id::text = $3)
+		  AND s.revoked_at IS NULL AND s.expires_at > $4
+		ORDER BY x.created_at`, connectionID, subject, userID, now)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (sso.SSOSession, error) { return scanSSOSession(r) })
 }
 
 // ---- domains ----
 
 const domainCols = `id::text, org_id::text, domain, dns_token, email_token_hash, email_address, email_expires_at, verified_at,
-	verification_method, last_checked_at, coalesce(created_by::text, ''), created_at`
+	verification_method, last_checked_at, coalesce(connection_id::text, ''), coalesce(created_by::text, ''), created_at`
 
 func scanDomain(row pgx.Row) (sso.Domain, error) {
 	var d sso.Domain
 	err := row.Scan(&d.ID, &d.OrgID, &d.Domain, &d.DNSToken, &d.EmailTokenHash, &d.EmailAddress, &d.EmailExpiresAt, &d.VerifiedAt,
-		&d.VerificationMethod, &d.LastCheckedAt, &d.CreatedBy, &d.CreatedAt)
+		&d.VerificationMethod, &d.LastCheckedAt, &d.ConnectionID, &d.CreatedBy, &d.CreatedAt)
 	return d, mapErr(err)
 }
 
 func (s *SSOStore) CreateDomain(ctx context.Context, d *sso.Domain) error {
-	if !validID(d.OrgID) {
+	if !validID(d.OrgID) || (d.ConnectionID != "" && !validID(d.ConnectionID)) {
 		return auth.ErrNotFound
 	}
 	d.CreatedAt = ts(d.CreatedAt)
-	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO sso_domains (org_id, domain, dns_token, created_by, created_at)
-		VALUES ($1, $2, $3, $4::uuid, $5) RETURNING id::text`, d.OrgID, d.Domain, d.DNSToken, nullID(d.CreatedBy), d.CreatedAt).Scan(&d.ID))
+	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO sso_domains (org_id, domain, dns_token, created_by, created_at, connection_id)
+		VALUES ($1, $2, $3, $4::uuid, $5, $6::uuid) RETURNING id::text`, d.OrgID, d.Domain, d.DNSToken, nullID(d.CreatedBy), d.CreatedAt,
+		nullID(d.ConnectionID)).Scan(&d.ID))
 }
 
 func (s *SSOStore) ListDomains(ctx context.Context, orgID string) ([]sso.Domain, error) {
@@ -218,9 +353,6 @@ func (s *SSOStore) DeleteDomain(ctx context.Context, orgID, id string) (sso.Doma
 	}
 	return scanDomain(s.pool.QueryRow(ctx, `DELETE FROM sso_domains WHERE org_id = $1 AND id = $2 RETURNING `+domainCols, orgID, id))
 }
-
-const verifySet = `verified_at = coalesce(verified_at, $V), verification_method = CASE WHEN verified_at IS NULL THEN $M ELSE verification_method END,
-	email_token_hash = NULL, email_expires_at = NULL`
 
 func (s *SSOStore) MarkDomainVerified(ctx context.Context, orgID, id, method string, at time.Time) (sso.Domain, error) {
 	if !validID(orgID, id) {
@@ -259,13 +391,24 @@ func (s *SSOStore) FindVerifiedDomain(ctx context.Context, domain string) (sso.D
 	return scanDomain(s.pool.QueryRow(ctx, `SELECT `+domainCols+` FROM sso_domains WHERE domain = $1 AND verified_at IS NOT NULL`, domain))
 }
 
+func (s *SSOStore) SetDomainConnection(ctx context.Context, orgID, id, connectionID string) (sso.Domain, error) {
+	if !validID(orgID, id) || (connectionID != "" && !validID(connectionID)) {
+		return sso.Domain{}, auth.ErrNotFound
+	}
+	return scanDomain(s.pool.QueryRow(ctx, `UPDATE sso_domains SET connection_id = $3::uuid
+		WHERE org_id = $1 AND id = $2
+		  AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM sso_connections c WHERE c.id = $3::uuid AND c.org_id = $1))
+		RETURNING `+domainCols, orgID, id, nullID(connectionID)))
+}
+
 // ---- role mappings ----
 
-func (s *SSOStore) ListRoleMappings(ctx context.Context, orgID string) ([]sso.RoleMapping, error) {
-	if !validID(orgID) {
+func (s *SSOStore) ListRoleMappings(ctx context.Context, orgID, connectionID string) ([]sso.RoleMapping, error) {
+	if !validID(orgID) || (connectionID != "" && !validID(connectionID)) {
 		return []sso.RoleMapping{}, nil
 	}
-	rows, err := s.pool.Query(ctx, `SELECT group_name, role FROM sso_role_mappings WHERE org_id = $1 ORDER BY group_name`, orgID)
+	rows, err := s.pool.Query(ctx, `SELECT group_name, role FROM sso_role_mappings
+		WHERE org_id = $1 AND connection_id IS NOT DISTINCT FROM $2::uuid ORDER BY group_name`, orgID, nullID(connectionID))
 	if err != nil {
 		return nil, err
 	}
@@ -278,16 +421,23 @@ func (s *SSOStore) ListRoleMappings(ctx context.Context, orgID string) ([]sso.Ro
 	})
 }
 
-func (s *SSOStore) ReplaceRoleMappings(ctx context.Context, orgID string, ms []sso.RoleMapping) error {
-	if !validID(orgID) {
+func (s *SSOStore) ReplaceRoleMappings(ctx context.Context, orgID, connectionID string, ms []sso.RoleMapping) error {
+	if !validID(orgID) || (connectionID != "" && !validID(connectionID)) {
 		return auth.ErrNotFound
 	}
 	return s.inTx(ctx, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `DELETE FROM sso_role_mappings WHERE org_id = $1`, orgID); err != nil {
+		if connectionID != "" {
+			if err := affected(tx.Exec(ctx, `SELECT 1 FROM sso_connections WHERE id = $1 AND org_id = $2 FOR UPDATE`, connectionID, orgID)); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM sso_role_mappings WHERE org_id = $1 AND connection_id IS NOT DISTINCT FROM $2::uuid`,
+			orgID, nullID(connectionID)); err != nil {
 			return err
 		}
 		for _, m := range ms {
-			if _, err := tx.Exec(ctx, `INSERT INTO sso_role_mappings (org_id, group_name, role) VALUES ($1, $2, $3)`, orgID, m.Group, string(m.Role)); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO sso_role_mappings (org_id, connection_id, group_name, role) VALUES ($1, $2::uuid, $3, $4)`,
+				orgID, nullID(connectionID), m.Group, string(m.Role)); err != nil {
 				return err
 			}
 		}

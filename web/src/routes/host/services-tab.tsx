@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Code2, LineChart } from "lucide-react";
-import { useId, useState } from "react";
+import { LineChart } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { hostQuery, servicesQuery } from "@/api/queries";
 import type { DiscoveredService, InventoryItem } from "@/api/types";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
+import { ApmHintFooter } from "@/components/onboarding/ApmHintFooter";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateOptional } from "@/i18n/dynamic";
 import { formatRelative } from "@/lib/format";
@@ -36,8 +36,6 @@ export function asService(item: InventoryItem): DiscoveredService {
 
 function ServiceCard({ item, hostId }: { item: InventoryItem; hostId: string }) {
   const { t } = useTranslation();
-  const id = useId();
-  const [apmOpen, setApmOpen] = useState(false);
   const s = asService(item);
   const integration = integrationOf(s);
   const status = integration.status;
@@ -124,21 +122,7 @@ function ServiceCard({ item, hostId }: { item: InventoryItem; hostId: string }) 
           </Link>
         </CardFooter>
       )}
-      {hint && (
-        <CardFooter className="flex-col items-stretch gap-2 border-t pt-3">
-          <Button variant="outline" size="sm" aria-expanded={apmOpen} aria-controls={`${id}-apm`} onClick={() => setApmOpen((o) => !o)}>
-            <Code2 aria-hidden="true" />
-            {t("services.apmInstall", { language })}
-          </Button>
-          {apmOpen && (
-            <div id={`${id}-apm`} className="rounded-md bg-accent p-3 text-xs text-accent-foreground">
-              <p className="mb-1 font-semibold">{t("services.apmTitle")}</p>
-              <p>{t("services.apmBody", { name, language, agent: hint.agent ?? "" })}</p>
-              <p className="mt-1 text-muted-foreground">{t("services.apmSoon")}</p>
-            </div>
-          )}
-        </CardFooter>
-      )}
+      {hint && <ApmHintFooter hint={hint} hostId={hostId} serviceName={name} language={language} />}
     </Card>
   );
 }

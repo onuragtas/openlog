@@ -66,6 +66,8 @@ type Metadata struct {
 	FacetLimit    int       `json:"facet_limit"`
 	Truncated     bool      `json:"truncated"`
 	Warnings      []string  `json:"warnings"`
+	// IgnoredFilters are the dashboard filters (attributes) that do not apply to the query's event type.
+	IgnoredFilters []string `json:"ignored_filters,omitempty"`
 }
 
 // Result is the outcome of Execute.
@@ -106,6 +108,7 @@ func Execute(ctx context.Context, sc *query.Scope, p *Plan) (*Result, error) {
 	for _, w := range p.Warnings {
 		res.Metadata.Warnings = append(res.Metadata.Warnings, w.Msg)
 	}
+	res.Metadata.IgnoredFilters = p.IgnoredFilters
 	part, truncated, err := p.run(st.ctx(ctx), sc, p.From, p.To, 0)
 	if err != nil {
 		return nil, err

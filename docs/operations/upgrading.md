@@ -254,4 +254,29 @@ of the newer release run again on the next upgrade.
 | `rollback_failed` | Manual action: `docker ps -a` — start `<name>-pre-update` after renaming it back, or restore from backup. |
 | Contract migration never runs | `openlog-migrate -plan` names the old instance; stop it, or wait 5 minutes after it died without a graceful shutdown. |
 | UI keeps asking to reload | A load balancer still sends some requests to an older pod; finish the rollout. |
-| Acceptance tests | `make mixed-version` (N and N+1 side by side, contract gating), `make updater-acceptance` (Compose 0.9.0 → 0.9.1 → broken 0.9.2 rolled back). |
+| Acceptance tests | `make mixed-version` (N and N+1 side by side, contract gating), `make updater-acceptance` (Compose 0.9.0 → 0.9.1 with test expand + contract migrations → broken 0.9.2 rolled back; see below). |
+
+### What `make updater-acceptance` proves
+
+`test/autoupdate` (compose project `openlog-updtest`, host ports 25xxx, a local registry and a release index signed with a
+throwaway key) runs the real `deploy/compose` stack and `openlog-updater` in `auto` mode:
+
+1. **0.9.0 → 0.9.1**: every step `ok` (backup → pull → migrate → recreate → health → cleanup → contract-migrate); the test
+   expand migration 9001 runs in the migrate step, the contract migration 9002 (`requires-all-at-least 0.9.1`) only in
+   contract-migrate after the old container stopped; hosts, log/span/metric row counts, the logs and APM queries, the
+   `pg_dump` backup and the rewritten `OPENLOG_IMAGE` are checked.
+2. **Broken 0.9.2** (a real build with one more expand migration, 9003, whose allinone never becomes ready): the migrate
+   step applies 9003, health fails (`not healthy within …: connection refused`), the containers are rolled back to 0.9.1
+   (`rolled_back`, recorded in `failed_versions` and the audit log). **The expand migration stays applied**: 0.9.1 serves
+   the same rows, answers queries and ingests new data with it — the reason expand migrations must stay compatible with
+   the previous release. The next check shows `up_to_date` with `no eligible release newer than 0.9.1: 0.9.2: failed
+   before on this installation`, which is what Settings → Organization → Version and updates displays.
+
+`UPDTEST_FROM_IMAGE=ghcr.io/onuragtas/openlog:<published version>` starts from a published release instead of 0.9.0
+(its own `openlog-updater` performs the update; `UPDTEST_UPDATER=to` uses the new one), so the update also applies every
+real migration added since that release. `UPDTEST_KEEP=1` keeps the stack.
+
+Measured 2026-09-14 (`UPDTEST_FROM_IMAGE=ghcr.io/onuragtas/openlog:0.1.9`, 212 s): the published 0.1.9 updater installed
+the working-tree build, the migrate step applied PostgreSQL 0010…0056 (16 migrations) and ClickHouse 0020…0050 (7) plus the
+test migrations before the new container started, every step was `ok`, and hosts and telemetry rows were kept; the broken
+release was then rolled back as above. The default run (0.9.0 built from the tree) took 240 s.

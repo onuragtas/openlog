@@ -73,6 +73,9 @@ func TestClassify(t *testing.T) {
 		"manifest.json":                                nil,
 		"install.sh":                                   nil,
 		"openlog-infra-agent_0.4.0_linux.tar.gz":       nil,
+		"openlog-javaagent-0.4.0.jar":                  {Component: "java-agent", OS: "any", Arch: "any", Format: "jar"},
+		"openlog-javaagent-0.3.0.jar":                  nil,
+		"openlog-javaagent-0.4.0.jar.sha256":           nil,
 	}
 	for name, want := range cases {
 		got, ok := classify(name, "0.4.0")
@@ -99,7 +102,11 @@ func TestReleaseFlow(t *testing.T) {
 	writeFile(t, filepath.Join(dist, "openlog_0.4.0_linux_amd64.tar.gz"), "backend")
 	writeFile(t, filepath.Join(dist, "openlog-php-agent_0.4.0_linux_amd64.tar.gz"), "php-modules")
 	writeFile(t, filepath.Join(dist, "openlog-php-agent_0.4.0_linux_amd64.apk"), "apk")
+	writeFile(t, filepath.Join(dist, "openlog-javaagent-0.4.0.jar"), "jar")
+	writeFile(t, filepath.Join(dist, "openlog-javaagent-0.4.0.jar.sha256"), "sum")
 	writeFile(t, filepath.Join(dist, "openlog-0.4.0.tgz"), "chart")
+	writeFile(t, filepath.Join(dist, "openlog-agent-0.4.0.tgz"), "agent-chart")
+	writeFile(t, filepath.Join(dist, "openlog-agent-0.3.0.tgz"), "old agent chart")
 	writeFile(t, filepath.Join(dist, "install.sh"), "#!/bin/sh\n")
 	mig := filepath.Join(root, "migrations")
 	writeFile(t, filepath.Join(mig, "0001_init.sql"), "-- openlog:phase expand\n")
@@ -122,8 +129,11 @@ func TestReleaseFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Channel != "stable" || m.Version != "0.4.0" || len(m.Artifacts) != 5 {
+	if m.Channel != "stable" || m.Version != "0.4.0" || len(m.Artifacts) != 6 {
 		t.Fatalf("manifest = %+v", m)
+	}
+	if a, ok := m.Artifact(lib.ComponentJavaAgent, lib.PlatformAny, lib.PlatformAny, lib.FormatJar); !ok || a.Size != int64(len("jar")) {
+		t.Errorf("java-agent jar = %+v %v", a, ok)
 	}
 	if a, ok := m.Artifact(lib.ComponentPHPAgent, "linux", "amd64", lib.FormatTarGz); !ok || a.Size != int64(len("php-modules")) {
 		t.Errorf("php-agent tarball = %+v %v", a, ok)
@@ -140,6 +150,10 @@ func TestReleaseFlow(t *testing.T) {
 	}
 	if m.HelmChart == nil || m.HelmChart.Name != "openlog-0.4.0.tgz" {
 		t.Errorf("helm chart = %+v", m.HelmChart)
+	}
+	if len(m.HelmCharts) != 2 || m.HelmCharts["openlog"] != *m.HelmChart ||
+		m.HelmCharts["openlog-agent"].URL != base+"/openlog-agent-0.4.0.tgz" {
+		t.Errorf("helm charts = %+v", m.HelmCharts)
 	}
 	if got := m.Migrations["postgres"]; got.Latest != 2 || len(got.ContractPending) != 1 || got.ContractPending[0] != 2 {
 		t.Errorf("migrations = %+v", got)
@@ -168,7 +182,8 @@ func TestReleaseFlow(t *testing.T) {
 	writeFile(t, keyFile, "# test\n"+pub2+"\n")
 	for _, keys := range []string{pub, keyFile, pub + "," + pub2} {
 		out, code := runCmd(t, "verify", "--keys", keys, "--check-artifacts", manifest)
-		if code != 0 || !strings.Contains(out, "OK manifest 0.4.0") || !strings.Contains(out, "OK helm chart") {
+		if code != 0 || !strings.Contains(out, "OK manifest 0.4.0") || !strings.Contains(out, "OK helm chart openlog-0.4.0.tgz") ||
+			!strings.Contains(out, "OK helm chart openlog-agent-0.4.0.tgz") {
 			t.Errorf("verify --keys %s: %d %s", keys, code, out)
 		}
 	}
@@ -176,6 +191,13 @@ func TestReleaseFlow(t *testing.T) {
 	if out, code := runCmd(t, "verify", "--keys", other, manifest); code != 1 {
 		t.Errorf("verify with untrusted key: %d %s", code, out)
 	}
+	agentChart := filepath.Join(dist, "openlog-agent-0.4.0.tgz")
+	writeFile(t, agentChart, "tampered chart")
+	if out, code := runCmd(t, "verify", "--keys", pub, "--check-artifacts", manifest); code != 1 ||
+		!strings.Contains(out, "helm chart openlog-agent-0.4.0.tgz: sha256 mismatch") {
+		t.Errorf("verify tampered agent chart: %d %s", code, out)
+	}
+	writeFile(t, agentChart, "agent-chart")
 	writeFile(t, filepath.Join(dist, "openlog-infra-agent_0.4.0_linux_amd64.deb"), "tampered")
 	if out, code := runCmd(t, "verify", "--keys", pub, "--check-artifacts", manifest); code != 1 || !strings.Contains(out, "mismatch") {
 		t.Errorf("verify tampered artifact: %d %s", code, out)

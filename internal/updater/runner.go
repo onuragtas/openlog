@@ -10,6 +10,7 @@ import (
 
 	lib "github.com/onuragtas/openlog/libs/release"
 
+	"github.com/onuragtas/openlog/internal/updatemsg"
 	"github.com/onuragtas/openlog/internal/updatereq"
 )
 
@@ -83,7 +84,7 @@ func (r *Runner) Loop(ctx context.Context) {
 		r.Log.Error("recovering an interrupted update failed", "err", err)
 	}
 	if r.Requests != nil {
-		if err := r.Requests.Abandon(ctx, "interrupted: openlog-updater restarted while handling the request"); err != nil && !updatereq.IsUndefinedTable(err) {
+		if err := r.Requests.Abandon(ctx, updatemsg.Format(updatemsg.RequestInterrupted, nil)); err != nil && !updatereq.IsUndefinedTable(err) {
 			r.Log.Debug("cannot mark interrupted update requests", "err", err)
 		}
 	}
@@ -225,6 +226,12 @@ func rejectf(format string, args ...any) error {
 	return &RejectedError{Msg: fmt.Sprintf(format, args...)}
 }
 
+// reject is a RejectedError with a fixed message (internal/updatemsg), so the request message can
+// be translated.
+func reject(code string, params updatemsg.Params) error {
+	return &RejectedError{Msg: updatemsg.Format(code, params)}
+}
+
 // RunOnce performs one check and, depending on the mode and window, one update.
 func (r *Runner) RunOnce(ctx context.Context) error {
 	_, err := r.run(ctx, nil)
@@ -244,16 +251,18 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 		}
 	}
 	fail := func(err error) (Status, error) {
-		st.State, st.Error, st.Message = StateError, err.Error(), ""
+		st.State, st.Error = StateError, err.Error()
+		st.clearMessage()
 		save()
 		return st, err
 	}
 	apply := req != nil && req.Action == updatereq.ActionApply
 	if r.Cfg.Mode == ModeOff {
-		st.State, st.Message, st.Error = StateOff, "OPENLOG_UPDATER_MODE=off", ""
+		st.State, st.Error = StateOff, ""
+		st.setMessage(updatemsg.ModeOff, updatemsg.Params{})
 		save()
 		if apply {
-			return st, rejectf("updates are disabled (OPENLOG_UPDATER_MODE=off)")
+			return st, reject(updatemsg.RequestModeOff, updatemsg.Params{})
 		}
 		return st, nil
 	}
@@ -282,23 +291,25 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	}
 	st.Error = ""
 	if target == nil {
-		st.State, st.Message, st.TargetVersion, st.NotesURL = StateUpToDate, reason, "", ""
+		st.State, st.TargetVersion, st.NotesURL = StateUpToDate, "", ""
+		st.setText(reason)
 		r.Log.Info("no update", "current", cur, "reason", reason)
 		save()
 		if apply {
-			return st, rejectf("%s is not installable: %s", req.TargetVersion, reason)
+			return st, reject(updatemsg.RequestNotInstallable, updatemsg.Params{"version": req.TargetVersion, "reason": reason})
 		}
 		return st, nil
 	}
 	st.TargetVersion, st.NotesURL = target.Version.String(), target.Manifest.NotesURL
+	version := updatemsg.Params{"version": st.TargetVersion}
 	if apply && st.TargetVersion != req.TargetVersion {
 		// The index changed since the admin confirmed: never install a version nobody confirmed.
 		if st.State != StateAvailable && st.State != StateWaiting {
 			st.State = StateAvailable
 		}
-		st.Message = fmt.Sprintf("openlog %s is available", st.TargetVersion)
+		st.setMessage(updatemsg.UpdateAvailable, version)
 		save()
-		return st, rejectf("the release to install is now %s, not the requested %s: check again and confirm the new version", st.TargetVersion, req.TargetVersion)
+		return st, reject(updatemsg.RequestTargetChanged, updatemsg.Params{"version": st.TargetVersion, "requested": req.TargetVersion})
 	}
 	ignoreWindow := apply && req.IgnoreMaintenanceWindow
 	switch {
@@ -306,19 +317,22 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 		if st.State != StateAvailable {
 			r.audit(ctx, "updater.update_available", map[string]any{"from": cur, "to": st.TargetVersion})
 		}
-		st.State, st.Message = StateAvailable, fmt.Sprintf("openlog %s is available (OPENLOG_UPDATER_MODE=notify)", st.TargetVersion)
+		st.State = StateAvailable
+		st.setMessage(updatemsg.UpdateAvailableNotify, version)
 		r.Log.Info("update available", "current", cur, "target", st.TargetVersion)
 		save()
 		return st, nil
 	case !ignoreWindow && !InWindow(r.Cfg.MaintenanceWindows, r.now()):
-		st.State, st.Message = StateWaiting, fmt.Sprintf("openlog %s will be installed in the next maintenance window", st.TargetVersion)
+		st.State = StateWaiting
+		st.setMessage(updatemsg.WaitingForWindow, version)
 		if apply && r.Cfg.Mode == ModeNotify {
-			st.State, st.Message = StateAvailable, fmt.Sprintf("openlog %s is available (OPENLOG_UPDATER_MODE=notify)", st.TargetVersion)
+			st.State = StateAvailable
+			st.setMessage(updatemsg.UpdateAvailableNotify, version)
 		}
 		r.Log.Info("update waiting for maintenance window", "target", st.TargetVersion)
 		save()
 		if apply {
-			return st, rejectf("outside the maintenance window (OPENLOG_UPDATER_MAINTENANCE_WINDOW): confirm installing outside the window to update now")
+			return st, reject(updatemsg.RequestOutsideWindow, updatemsg.Params{})
 		}
 		return st, nil
 	}
@@ -327,7 +341,8 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	// (every step has its own timeout, and a crash is recovered at the next start).
 	actx := context.WithoutCancel(ctx)
 	started := r.now()
-	st.State, st.Message, st.PreviousVersion = StateUpdating, "", cur
+	st.State, st.PreviousVersion = StateUpdating, cur
+	st.clearMessage()
 	st.StartedAt, st.FinishedAt, st.Steps, st.BackupFile = &started, nil, nil, ""
 	details := map[string]any{"from": cur, "to": st.TargetVersion, "image": target.Image, "engine": st.Engine}
 	if apply {
@@ -343,7 +358,8 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	st.FinishedAt = &finished
 	h := HistoryEntry{From: cur, To: st.TargetVersion, At: finished}
 	if err == nil {
-		st.State, st.CurrentVersion, st.Message = StateSucceeded, st.TargetVersion, fmt.Sprintf("updated %s → %s", cur, st.TargetVersion)
+		st.State, st.CurrentVersion = StateSucceeded, st.TargetVersion
+		st.setMessage(updatemsg.Updated, updatemsg.Params{"from": cur, "to": st.TargetVersion})
 		h.Result = StateSucceeded
 		st.addHistory(h)
 		r.Log.Info("update succeeded", "from", cur, "to", st.TargetVersion, "duration", finished.Sub(started).Round(time.Second))
@@ -358,13 +374,14 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	if !slices.Contains(st.FailedVersions, st.TargetVersion) {
 		st.FailedVersions = append(st.FailedVersions, st.TargetVersion)
 	}
+	fromTo := updatemsg.Params{"to": st.TargetVersion, "from": cur}
 	switch st.State {
 	case StateRolledBack:
-		st.Message = fmt.Sprintf("update to %s failed and was rolled back to %s", st.TargetVersion, cur)
+		st.setMessage(updatemsg.RolledBack, fromTo)
 	case StateRollbackFailed:
-		st.Message = fmt.Sprintf("update to %s failed and the rollback to %s failed: manual action required", st.TargetVersion, cur)
+		st.setMessage(updatemsg.RollbackFailed, fromTo)
 	default:
-		st.Message = fmt.Sprintf("update to %s failed before services were changed", st.TargetVersion)
+		st.setMessage(updatemsg.FailedBeforeChange, updatemsg.Params{"to": st.TargetVersion})
 	}
 	h.Result, h.Error = st.State, st.Error
 	st.addHistory(h)

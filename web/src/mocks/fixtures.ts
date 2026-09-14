@@ -115,7 +115,7 @@ function services(host: string): InventoryItem[] {
       svc({
         rule_id: "php-fpm", name: "PHP-FPM", category: "runtime", instance: "/usr/sbin/php-fpm8.3", version: "8.3.6",
         matched_by: ["process", "systemd_unit"], pids: [1201, 1202], systemd_units: ["php8.3-fpm.service"], packages: ["dpkg:php8.3-fpm"],
-        integration: { status: "not_available" }, apm_hint: { language: "php", agent: "openlog-agent-php" },
+        integration: { status: "not_available" }, apm_hint: { language: "php", agent: "openlog-agent-php", status: "not_installed" },
       }),
     );
   }

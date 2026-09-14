@@ -7,10 +7,10 @@ import (
 	"github.com/onuragtas/openlog/internal/auth"
 )
 
-// SCIMDefaultRole is the role of provisioned members without a matching group: the connection's default role,
-// or viewer without a connection.
+// SCIMDefaultRole is the role of provisioned members without a matching group: the default connection's default
+// role, or viewer without a connection.
 func (s *Service) SCIMDefaultRole(ctx context.Context, orgID string) (auth.Role, error) {
-	c, err := s.store.GetConnection(ctx, orgID)
+	c, err := s.store.GetConnection(ctx, orgID, "")
 	if errors.Is(err, auth.ErrNotFound) {
 		return auth.RoleViewer, nil
 	}
@@ -24,7 +24,7 @@ func (s *Service) SCIMDefaultRole(ctx context.Context, orgID string) (auth.Role,
 // groups and the organization's role mappings. Nothing changes when the organization has no mappings; owners are
 // never changed. It returns the number of changed memberships.
 func (s *Service) SyncSCIMRoles(ctx context.Context, orgID, userID, ip string) (int, error) {
-	mappings, err := s.store.ListRoleMappings(ctx, orgID)
+	mappings, err := s.store.ListRoleMappings(ctx, orgID, "")
 	if err != nil {
 		return 0, s.fail(err)
 	}

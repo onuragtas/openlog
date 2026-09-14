@@ -67,6 +67,27 @@ describe("UsageSettings", () => {
     expect(screen.getAllByText("Pro").length).toBeGreaterThan(1); // plan badge and the selected option
   });
 
+  it("shows query limits with their sources and lets owners override them", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderWithClient(<UsageSettings />);
+    const section = (await screen.findByRole("heading", { name: "Query limits" })).closest("section")!;
+    const rows = within(section).getByTestId("query-limit-max_rows_to_read");
+    expect(await within(section).findAllByText("Server default")).toHaveLength(3);
+
+    await user.type(within(rows).getByRole("textbox"), "5000");
+    await user.click(within(section).getByRole("button", { name: "Save limits" }));
+    expect(await within(rows).findByText("Organization")).toBeInTheDocument();
+    expect(within(section).getByText(/All servers apply it within 30 s/)).toBeInTheDocument();
+
+    await user.type(within(within(section).getByTestId("query-limit-max_bytes_to_read")).getByRole("textbox"), "-1");
+    await user.click(within(section).getByRole("button", { name: "Save limits" }));
+    expect(await within(section).findByRole("alert")).toHaveTextContent("whole numbers");
+
+    await user.click(within(section).getByRole("button", { name: "Use plan and server defaults" }));
+    await waitFor(() => expect(within(section).getAllByText("Server default")).toHaveLength(3));
+  });
+
   it("hides export for viewers", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     setSelectedOrg(MOCK_STAGING_ORG_ID); // viewer there

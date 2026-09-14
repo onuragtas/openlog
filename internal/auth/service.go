@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	mailtemplates "github.com/onuragtas/openlog/internal/mail/templates"
 	"github.com/onuragtas/openlog/internal/tenant"
 )
 
@@ -114,11 +115,14 @@ func (s *Service) Config() Config { return s.cfg }
 type ClientMeta struct {
 	IP        string
 	UserAgent string
+	// Locale is the supported e-mail language the client prefers (Accept-Language; "" = none, English).
+	Locale string
 }
 
 // Meta extracts ClientMeta from r, honouring OPENLOG_API_TRUSTED_PROXIES.
 func (s *Service) Meta(r *http.Request) ClientMeta {
-	return ClientMeta{IP: ClientIP(r, s.cfg.TrustedProxies), UserAgent: truncate(r.UserAgent(), 256)}
+	return ClientMeta{IP: ClientIP(r, s.cfg.TrustedProxies), UserAgent: truncate(r.UserAgent(), 256),
+		Locale: mailtemplates.FromAcceptLanguage(r.Header.Get("Accept-Language"))}
 }
 
 // fail converts store errors: *Error values pass through, anything else is
@@ -455,6 +459,9 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 			return LoginResult{}, Organization{}, invalid("sign-up with this e-mail domain is not allowed; use another address")
 		}
 	}
+	if err := s.checkClaimedSignup(ctx, email); err != nil { // claimed domain with SSO (external.go, D-089)
+		return LoginResult{}, Organization{}, err
+	}
 	hash, err := HashPassword(in.Password)
 	if err != nil {
 		return LoginResult{}, Organization{}, err
@@ -464,7 +471,7 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 		return LoginResult{}, Organization{}, err
 	}
 	org := Organization{TenantID: tenantID, Name: orgName, CreatedAt: now}
-	u := User{Email: email, Name: name, PasswordHash: hash, CreatedAt: now}
+	u := User{Email: email, Name: name, PasswordHash: hash, CreatedAt: now, Locale: meta.Locale}
 	if !s.cfg.RequireEmailVerification {
 		u.EmailVerifiedAt = &now
 	}
@@ -481,7 +488,7 @@ func (s *Service) Signup(ctx context.Context, in SignupInput, meta ClientMeta) (
 	s.audit(ctx, org.ID, u.ID, u.Email, meta, "org.create", "organization", org.ID, map[string]any{"name": org.Name, "via": "signup"})
 	if u.EmailVerifiedAt == nil && s.EmailEnabled() {
 		// Best effort: the user is signed in either way and can resend the e-mail.
-		_ = s.startVerification(ctx, u)
+		_ = s.startVerification(ctx, u, meta.Locale)
 	}
 	return res, org, nil
 }

@@ -1,0 +1,9 @@
+{{define "subject"}}[openlog] E-posta adresinizi doğrulayın{{end}}
+
+{{define "text"}}
+Yeni openlog hesabınızın e-posta adresini doğrulayın.
+
+Bağlantının geçerliliği {{date .ExpiresAt}} tarihinde sona erer. Kaydolmadıysanız bu e-postayı dikkate almayın.
+
+{{.Link}}
+{{end}}

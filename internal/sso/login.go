@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -100,6 +101,7 @@ func (s *Service) allowIP(ctx context.Context, purpose, ip string, max int) erro
 type Discovery struct {
 	SSO              bool
 	OrganizationName string
+	ConnectionName   string
 	Protocol         Protocol
 	Enforced         bool
 }
@@ -113,20 +115,13 @@ func normalizeEmail(email string) (string, bool) {
 	return email, err == nil && a.Address == email && a.Name == ""
 }
 
-// enabledConnectionFor returns the enabled connection of the organization that verified the domain of email.
+// enabledConnectionFor returns the connection the verified domain of email routes to (ok: it is enabled).
 func (s *Service) enabledConnectionFor(ctx context.Context, email string) (Connection, bool, error) {
 	email, ok := normalizeEmail(email)
 	if !ok {
 		return Connection{}, false, invalid("a valid email address is required")
 	}
-	d, err := s.store.FindVerifiedDomain(ctx, emailDomain(email))
-	if errors.Is(err, auth.ErrNotFound) {
-		return Connection{}, false, nil
-	}
-	if err != nil {
-		return Connection{}, false, s.fail(err)
-	}
-	c, err := s.store.GetConnection(ctx, d.OrgID)
+	c, _, err := s.store.ConnectionForDomain(ctx, emailDomain(email))
 	if errors.Is(err, auth.ErrNotFound) {
 		return Connection{}, false, nil
 	}
@@ -153,7 +148,7 @@ func (s *Service) Discover(ctx context.Context, email string, meta auth.ClientMe
 	if err != nil {
 		return Discovery{}, s.fail(err)
 	}
-	return Discovery{SSO: true, OrganizationName: org.Name, Protocol: c.Protocol, Enforced: c.Enforce}, nil
+	return Discovery{SSO: true, OrganizationName: org.Name, ConnectionName: c.Name, Protocol: c.Protocol, Enforced: c.Enforce}, nil
 }
 
 // StartLogin starts an SP-initiated sign-in for email (public, rate limited).
@@ -440,13 +435,29 @@ func (s *Service) finish(ctx context.Context, c Connection, st LoginState, id Id
 		}
 		return s.failure(ctx, &st, &c, code, err, meta, id.Email)
 	}
+	// Record the IdP session for single logout; without it an IdP LogoutRequest could not end this session, so the
+	// sign-in fails closed.
+	link := SSOSession{SessionID: res.Session.ID, ConnectionID: c.ID, OrgID: c.OrgID, UserID: u.ID, Subject: truncate(id.Subject, 1024),
+		NameIDFormat: truncate(id.NameIDFormat, 256), NameQualifier: truncate(id.NameQualifier, 1024),
+		SPNameQualifier: truncate(id.SPNameQualifier, 1024), SessionIndex: truncate(id.SessionIndex, 1024), CreatedAt: s.now()}
+	if id.IDToken != "" && len(id.IDToken) <= 16<<10 {
+		if sealed, err := s.cfg.SecretBox.Seal([]byte(id.IDToken), idTokenAAD(res.Session.ID)); err == nil {
+			link.IDTokenEnc = sealed
+		}
+	}
+	if err := s.store.CreateSSOSession(ctx, &link); err != nil {
+		if rerr := s.users.RevokeSession(ctx, u.ID, res.Session.ID, s.now()); rerr != nil {
+			s.log.Error("cannot revoke a session without IdP session record", "session_id", res.Session.ID, "err", rerr)
+		}
+		return s.failure(ctx, &st, &c, ErrCodeUnavailable, fmt.Errorf("cannot record the IdP session: %w", err), meta, id.Email)
+	}
 	s.audit(ctx, c.OrgID, u.ID, u.Email, meta.IP, "sso.login", "session", res.Session.ID, map[string]any{"protocol": c.Protocol,
 		"connection_id": c.ID, "subject": truncate(id.Subject, 256), "jit": jit, "idp_initiated": st.IdPInitiated})
 	return Outcome{Redirect: st.RedirectTo, Session: &res}
 }
 
 // checkIdentity applies the identity requirements shared by sign-in and test: an e-mail address, verified when
-// required (OIDC), in a domain verified by the connection's organization.
+// required (OIDC), in a domain verified by the connection's organization and routed to this connection.
 func (s *Service) checkIdentity(ctx context.Context, c Connection, id Identity) (string, string, error) {
 	email, ok := normalizeEmail(id.Email)
 	if !ok {
@@ -455,36 +466,52 @@ func (s *Service) checkIdentity(ctx context.Context, c Connection, id Identity) 
 	if c.Protocol == ProtocolOIDC && c.OIDC != nil && c.OIDC.RequireEmailVerified && !id.EmailVerified {
 		return "", ErrCodeEmailNotVerified, errors.New("the identity provider did not mark the e-mail address as verified")
 	}
-	d, err := s.store.FindVerifiedDomain(ctx, emailDomain(email))
+	routed, d, err := s.store.ConnectionForDomain(ctx, emailDomain(email))
 	if errors.Is(err, auth.ErrNotFound) || (err == nil && d.OrgID != c.OrgID) {
 		return "", ErrCodeDomainNotVerified, errors.New("the e-mail domain " + emailDomain(email) + " is not a verified domain of the organization")
 	}
 	if err != nil {
 		return "", ErrCodeUnavailable, err
 	}
+	if routed.ID != c.ID {
+		return "", ErrCodeDomainNotVerified, errors.New("the e-mail domain " + emailDomain(email) + " signs in through another connection of the organization")
+	}
 	return email, "", nil
 }
 
-// provision maps the identity to a user and membership: JIT creation with the mapped or default role, and role
+// provision maps the identity to a user and membership: a pending invitation of the organization is accepted
+// (with its role, also when JIT is off), else JIT creation with the mapped or default role, and role
 // synchronisation from IdP groups for existing non-owner members.
 func (s *Service) provision(ctx context.Context, c Connection, id Identity, meta auth.ClientMeta) (auth.User, bool, string, error) {
 	email, code, err := s.checkIdentity(ctx, c, id)
 	if err != nil {
 		return auth.User{}, false, code, err
 	}
-	mappings, err := s.store.ListRoleMappings(ctx, c.OrgID)
+	mappings, err := s.mappingsFor(ctx, c)
 	if err != nil {
 		return auth.User{}, false, ErrCodeUnavailable, err
 	}
 	now := s.now()
+	inv, hasInv, err := s.pendingInvitation(ctx, c.OrgID, email)
+	if err != nil {
+		return auth.User{}, false, ErrCodeUnavailable, err
+	}
 	jit := false
 	u, err := s.users.GetUserByEmail(ctx, email)
 	if errors.Is(err, auth.ErrNotFound) {
-		if !c.JITEnabled {
+		if !c.JITEnabled && !hasInv {
 			return auth.User{}, false, ErrCodeNotMember, errors.New("no account and just-in-time provisioning is off")
 		}
 		name, _ := cleanText(id.Name, "name", 200, false)
 		u = auth.User{Email: email, Name: name, CreatedAt: now, EmailVerifiedAt: &now}
+		if hasInv {
+			if err := s.acceptInvitation(ctx, c, inv, &u, meta); err == nil {
+				return u, true, "", nil
+			} else if !errors.Is(err, auth.ErrAlreadyExists) && !errors.Is(err, auth.ErrNotFound) {
+				return auth.User{}, false, ErrCodeUnavailable, err
+			}
+			u = auth.User{Email: email, Name: name, CreatedAt: now, EmailVerifiedAt: &now}
+		}
 		if err := s.users.CreateUser(ctx, &u); err != nil && !errors.Is(err, auth.ErrAlreadyExists) {
 			return auth.User{}, false, ErrCodeUnavailable, err
 		} else if err != nil {
@@ -501,13 +528,20 @@ func (s *Service) provision(ctx context.Context, c Connection, id Identity, meta
 	m, err := s.users.GetMembership(ctx, c.OrgID, u.ID)
 	switch {
 	case errors.Is(err, auth.ErrNotFound):
-		if !c.JITEnabled {
-			return auth.User{}, false, ErrCodeNotMember, errors.New("not a member and just-in-time provisioning is off")
-		}
 		if su, err := s.store.GetSCIMUser(ctx, c.OrgID, u.ID); err == nil && !su.Active {
 			return auth.User{}, false, ErrCodeDeprovisioned, errors.New("the user was deactivated by SCIM provisioning")
 		} else if err != nil && !errors.Is(err, auth.ErrNotFound) {
 			return auth.User{}, false, ErrCodeUnavailable, err
+		}
+		if hasInv {
+			if err := s.acceptInvitation(ctx, c, inv, &u, meta); err == nil || errors.Is(err, auth.ErrAlreadyExists) {
+				return u, true, "", nil
+			} else if !errors.Is(err, auth.ErrNotFound) {
+				return auth.User{}, false, ErrCodeUnavailable, err
+			}
+		}
+		if !c.JITEnabled {
+			return auth.User{}, false, ErrCodeNotMember, errors.New("not a member and just-in-time provisioning is off")
 		}
 		role := c.DefaultRole
 		if r, ok := roleFor(mappings, id.Groups); ok {
@@ -535,13 +569,37 @@ func (s *Service) provision(ctx context.Context, c Connection, id Identity, meta
 	return u, jit, "", nil
 }
 
+// pendingInvitation returns the organization's pending invitation of email.
+func (s *Service) pendingInvitation(ctx context.Context, orgID, email string) (auth.Invitation, bool, error) {
+	invs, err := s.users.ListInvitations(ctx, orgID, s.now(), false)
+	if err != nil {
+		return auth.Invitation{}, false, err
+	}
+	for _, inv := range invs {
+		if inv.Email == email && inv.Pending(s.now()) {
+			return inv, true, nil
+		}
+	}
+	return auth.Invitation{}, false, nil
+}
+
+// acceptInvitation accepts an invitation for a user signing in with SSO (creating the user when u.ID == "").
+func (s *Service) acceptInvitation(ctx context.Context, c Connection, inv auth.Invitation, u *auth.User, meta auth.ClientMeta) error {
+	if err := s.users.AcceptInvitation(ctx, inv.ID, u, s.now()); err != nil {
+		return err
+	}
+	s.audit(ctx, c.OrgID, u.ID, u.Email, meta.IP, "invitation.accept", "invitation", inv.ID, map[string]any{"role": inv.Role, "via": "sso",
+		"protocol": c.Protocol})
+	return nil
+}
+
 // finishTest records the result of a test sign-in without creating anything.
 func (s *Service) finishTest(ctx context.Context, c Connection, st LoginState, id Identity, meta auth.ClientMeta) Outcome {
 	email, code, err := s.checkIdentity(ctx, c, id)
 	if err != nil {
 		return s.failure(ctx, &st, &c, code, err, meta, id.Email)
 	}
-	mappings, err := s.store.ListRoleMappings(ctx, c.OrgID)
+	mappings, err := s.mappingsFor(ctx, c)
 	if err != nil {
 		return s.failure(ctx, &st, &c, ErrCodeUnavailable, err, meta, email)
 	}

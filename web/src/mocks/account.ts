@@ -32,6 +32,38 @@ const STATUS: Record<Code, number> = {
 const fail = (code: Code, message: string) => HttpResponse.json({ error: { code, message } }, { status: STATUS[code] });
 const noContent = () => new HttpResponse(null, { status: 204 });
 
+/** Invitation of the "Default" organization to an address in its SSO-claimed domain (openlog.local, mocks/sso.ts). */
+export const MOCK_SSO_INVITE_TOKEN = "oli_mock-sso-invitation";
+/** Invitation of the "Staging" organization to an address in the domain claimed by "Default". */
+export const MOCK_SSO_EXTERNAL_INVITE_TOKEN = "oli_mock-sso-external-invitation";
+
+/** Claimed-domain redirection (D-089): the enabled SSO connection an e-mail domain routes to, registered by mocks/sso.ts. */
+export interface MockClaimedDomain {
+  organizationName: string;
+  connectionName: string;
+  protocol: "oidc" | "saml";
+  allowExternalInvitations: boolean;
+}
+let claimedDomain: (email: string) => MockClaimedDomain | null = () => null;
+export function setMockClaimedDomainPolicy(fn: (email: string) => MockClaimedDomain | null): void {
+  claimedDomain = fn;
+}
+const claimedError = (email: string, c: MockClaimedDomain) =>
+  fail("failed_precondition", `the e-mail domain ${email.split("@")[1] ?? ""} uses single sign-on of the organization "${c.organizationName}"; continue with single sign-on`);
+
+const MOCK_INVITES: Record<string, { organization_name: string; email: string; same: boolean }> = {
+  [MOCK_INVITE_TOKEN]: { organization_name: "Default", email: "new@example.com", same: true },
+  [MOCK_SSO_INVITE_TOKEN]: { organization_name: "Default", email: "new.hire@openlog.local", same: true },
+  [MOCK_SSO_EXTERNAL_INVITE_TOKEN]: { organization_name: "Staging", email: "contractor@openlog.local", same: false },
+};
+
+/** The `sso` object of an invitation lookup (internal/sso InvitationRedirect). */
+function invitationSso(inv: { email: string; same: boolean }) {
+  const c = claimedDomain(inv.email);
+  if (!c || (!inv.same && c.allowExternalInvitations)) return null;
+  return { claim: c, json: { required: true, organization_name: c.organizationName, connection_name: c.connectionName, protocol: c.protocol, same_organization: inv.same } };
+}
+
 interface SessionState {
   signedIn: boolean;
   csrf: string;
@@ -246,6 +278,8 @@ export const accountHandlers = [
     if ((b.password ?? "").length < 8) return fail("invalid_argument", "password must be at least 8 characters");
     if (!b.organization_name?.trim()) return fail("invalid_argument", "organization name is required");
     if (db.config.captcha && !b.captcha_token) return fail("invalid_argument", "complete the CAPTCHA");
+    const claim = claimedDomain(email);
+    if (claim) return claimedError(email, claim);
     if (email === MOCK_EMAIL) return fail("already_exists", "an account with this email already exists");
     db.user = { ...db.user, email, name: b.name ?? "", email_verified: !db.config.email_verification_required };
     mockAuth.signIn();
@@ -304,7 +338,23 @@ export const accountHandlers = [
 
   http.get(`${API}/version`, authed(null, () =>
     HttpResponse.json(
-      { version: "0.1.0-mock", commit: "mock", date: "", latest_available: null, update_check: "disabled", updater: null },
+      {
+        version: "0.1.0-mock",
+        commit: "mock",
+        date: "",
+        latest_available: null,
+        update_check: "disabled",
+        updater: {
+          engine: "compose",
+          mode: "notify",
+          state: "up_to_date",
+          message: "0.1.0-mock is the newest release on channel stable",
+          message_code: "up_to_date_newest",
+          message_params: { version: "0.1.0-mock", channel: "stable" },
+          current_version: "0.1.0-mock",
+          checked_at: "2026-09-13T10:00:00Z",
+        },
+      },
       { headers: { "X-Openlog-Version": "0.1.0-mock" } },
     ),
   )),
@@ -388,13 +438,20 @@ export const accountHandlers = [
 
   http.post(`${API}/invitations/lookup`, async ({ request }) => {
     const { token } = await body<{ token: string }>(request);
-    if (token !== MOCK_INVITE_TOKEN) return fail("not_found", "invitation is invalid or has expired");
-    return HttpResponse.json({ organization_name: "Default", email: "new@example.com", role: "member", expires_at: formatTs(Date.now() + 86_400_000), user_exists: false });
+    const inv = MOCK_INVITES[token ?? ""];
+    if (!inv) return fail("not_found", "invitation is invalid or has expired");
+    return HttpResponse.json({
+      organization_name: inv.organization_name, email: inv.email, role: "member", expires_at: formatTs(Date.now() + 86_400_000), user_exists: false,
+      sso: invitationSso(inv)?.json ?? null,
+    });
   }),
 
   http.post(`${API}/invitations/accept`, async ({ request }) => {
     const b = await body<{ token: string; password: string; name: string }>(request);
-    if (b.token !== MOCK_INVITE_TOKEN) return fail("not_found", "invitation is invalid or has expired");
+    const inv = MOCK_INVITES[b.token ?? ""];
+    if (!inv) return fail("not_found", "invitation is invalid or has expired");
+    const sso = invitationSso(inv);
+    if (sso) return claimedError(inv.email, sso.claim);
     if ((b.password ?? "").length < 8) return fail("invalid_argument", "password must be at least 8 characters");
     mockAuth.signIn();
     return HttpResponse.json(me({ org: db.orgs[0]!, role: db.orgs[0]!.role, kind: "session" }));

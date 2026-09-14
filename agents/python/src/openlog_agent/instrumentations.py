@@ -14,6 +14,9 @@ INSTRUMENTATION_PACKAGES: Dict[str, str] = {
     "flask": "opentelemetry-instrumentation-flask",
     "fastapi": "opentelemetry-instrumentation-fastapi",
     "starlette": "opentelemetry-instrumentation-starlette",
+    "tornado": "opentelemetry-instrumentation-tornado",
+    "falcon": "opentelemetry-instrumentation-falcon",
+    "pyramid": "opentelemetry-instrumentation-pyramid",
     "requests": "opentelemetry-instrumentation-requests",
     "httpx": "opentelemetry-instrumentation-httpx",
     "aiohttp-client": "opentelemetry-instrumentation-aiohttp-client",
@@ -27,6 +30,10 @@ INSTRUMENTATION_PACKAGES: Dict[str, str] = {
     "sqlalchemy": "opentelemetry-instrumentation-sqlalchemy",
     "redis": "opentelemetry-instrumentation-redis",
     "celery": "opentelemetry-instrumentation-celery",
+    "aio-pika": "opentelemetry-instrumentation-aio-pika",
+    "confluent_kafka": "opentelemetry-instrumentation-confluent-kafka",
+    "kafka": "opentelemetry-instrumentation-kafka-python",
+    "aiokafka": "opentelemetry-instrumentation-aiokafka",
     "grpc_client": "opentelemetry-instrumentation-grpc",
     "grpc_server": "opentelemetry-instrumentation-grpc",
     "grpc_aio_client": "opentelemetry-instrumentation-grpc",
@@ -42,6 +49,13 @@ _ALIASES: Dict[str, Tuple[str, ...]] = {
     "mysql": ("pymysql", "mysqlclient"),
     "mysqldb": ("mysqlclient",),
     "httpx2": ("httpx2",),
+    "aio_pika": ("aio-pika",),
+    "aiopika": ("aio-pika",),
+    "rabbitmq": ("aio-pika",),
+    "confluent-kafka": ("confluent_kafka",),
+    "kafka-python": ("kafka",),
+    "kafka_python": ("kafka",),
+    "kafka-all": ("confluent_kafka", "kafka", "aiokafka"),
 }
 
 #: Framework instrumentations that read OTEL_PYTHON_<NAME>_EXCLUDED_URLS.
@@ -130,6 +144,30 @@ def _flask_request_hook(span: Any, _environ: Any) -> None:
         pass
 
 
+#: WSGI environ key where the Falcon instrumentation keeps the exception of the responder
+_FALCON_EXC_KEY = "opentelemetry-falcon.exc"
+
+
+def _falcon_response_hook(span: Any, req: Any, _resp: Any) -> None:
+    """Falcon keeps the responder's exception in the environ but only sets the span status (apm.md §3 needs the event).
+
+    HTTPError/HTTPStatus raised on purpose are responses, not errors of the application, and are not recorded.
+    """
+    if span is None or not span.is_recording():
+        return
+    try:
+        exc = req.env.get(_FALCON_EXC_KEY)
+        if not isinstance(exc, Exception):
+            return
+        import falcon  # pylint: disable=import-outside-toplevel
+
+        if isinstance(exc, (falcon.HTTPError, falcon.HTTPStatus)):
+            return
+        span.record_exception(exc)
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+
 def instrumentor_kwargs(name: str, cfg: Config, providers: Mapping[str, Any]) -> Dict[str, Any]:
     """Agent defaults for one instrumentation, merged with ``instrumentation_config`` (user values win; hooks chain)."""
     # Some instrumentors forward every keyword to strict signatures (FastAPIInstrumentor.instrument_app), so only the
@@ -150,5 +188,7 @@ def instrumentor_kwargs(name: str, cfg: Config, providers: Mapping[str, Any]) ->
             user.update(value)
     if name == "flask":
         kwargs["request_hook"] = _chain(_flask_request_hook, user.pop("request_hook", None))
+    elif name == "falcon":
+        kwargs["response_hook"] = _chain(_falcon_response_hook, user.pop("response_hook", None))
     kwargs.update(user)
     return kwargs

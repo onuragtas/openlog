@@ -131,3 +131,19 @@ minute; filters and facets on `attributes[…]` are exact because a series (`ser
 Syntax and validation errors carry the byte offset, length, 1-based line and column of the offending token
 (`POST /api/v1/query/validate`). `POST /api/v1/query` answers `400 invalid_argument` with the message prefixed by
 `line L, column C: `.
+
+## 7. Dashboard filters
+
+`POST /api/v1/query` and `/query/validate` accept `"filters": [{"attribute", "value", "event_type"?}]` (≤ 10), the
+cross-widget filters of dashboards (api.md "Dashboards" › "Cross-widget filters"). `attribute` is parsed like an attribute
+in a query (`host.name`, `` `quoted` ``, `attributes['k']`, `resource['k']`, `resource.k`; unparsable → `400`); `value` is
+≤ 4096 bytes without control characters. Each applicable filter becomes the predicate `attribute = value`, ANDed with the
+query's `WHERE` before planning: the value is a bound parameter like every literal and variable value, and rollup
+eligibility, facet limits and time range limits apply as if the predicate were written in the query. A filter applies when
+- the attribute is a known attribute of the query's event type (number attributes need a numeric value, booleans
+  `true`/`false`/`1`/`0`), or
+- it is an explicit `attributes[...]` / `resource[...]` lookup and the event type has that map, or
+- it is an unknown name (an implicit `attributes['name']` lookup) and `event_type` is the query's event type.
+
+Otherwise the filter is skipped and its attribute is listed in `metadata.ignored_filters` (omitted when empty). `tenant_id`
+and names starting with `_` never apply.

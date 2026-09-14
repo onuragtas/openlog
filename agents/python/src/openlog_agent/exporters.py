@@ -30,6 +30,13 @@ NON_SQL_SYSTEMS = frozenset(
     )
 )
 _KV_SANITIZED = re.compile(r"^[A-Z][A-Z._-]*( \?)*( …)?$")
+_CONTRIB_MINOR = re.compile(r"^0\.(\d+)b")
+
+
+def _contrib_minor(version: Optional[str]) -> int:
+    """0.65b0 -> 65; unknown versions -> 0."""
+    m = _CONTRIB_MINOR.match(version or "")
+    return int(m.group(1)) if m else 0
 
 
 def process_query_text(text: str, system: str, mode: str) -> Optional[str]:
@@ -78,6 +85,29 @@ def transform_span(span: ReadableSpan, mode: str) -> ReadableSpan:
                 changed[key] = out
     if span.kind == SpanKind.SERVER:
         route = attrs.get("http.route")
+        instrumentation_scope = getattr(span, "instrumentation_scope", None)
+        scope = getattr(instrumentation_scope, "name", "") or ""
+        method = attrs.get("http.request.method") or attrs.get("http.method")
+        if (
+            route is None
+            and scope.startswith("opentelemetry.instrumentation.tornado")
+            and isinstance(method, str)
+            and _contrib_minor(getattr(instrumentation_scope, "version", None)) >= 63
+        ):
+            # Tornado (contrib >= 0.63) names the span "<METHOD> <route>" from the matched rule but sets http.route only
+            # on metrics; older versions name it with the request path, which is not a route
+            if name.startswith(method + " /"):
+                route = name[len(method) + 1 :]
+                changed = dict(attrs) if changed is None else changed
+                changed["http.route"] = route
+        elif (
+            scope.startswith("opentelemetry.instrumentation.pyramid")
+            and isinstance(route, str)
+            and isinstance(method, str)
+            and name == route
+        ):
+            # Pyramid names the span with the bare route pattern
+            name = f"{method} {route}"
         if isinstance(route, str) and route and not route.startswith("/") and route != "*":
             if changed is None:
                 changed = dict(attrs)

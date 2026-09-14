@@ -9,9 +9,11 @@ import { kubernetesHandlers, kubernetesLogs } from "./kubernetes";
 import { fleetHandlers } from "./fleet";
 import { integrationSettingsHandlers } from "./integrationSettings";
 import { dashboardHandlers } from "./dashboards";
+import { dashboardSharingHandlers } from "./dashboardSharing";
 import { oqlHandlers } from "./oql";
 import { usageHandlers } from "./usage";
 import { ssoHandlers } from "./sso";
+import { onboardingHandlers, onboardingHosts } from "./onboarding";
 import * as fx from "./fixtures";
 
 type ErrorCode = "invalid_argument" | "unauthenticated" | "not_found" | "internal" | "timeout";
@@ -77,12 +79,13 @@ export const handlers = [
     const lim = limit(url);
     if (lim instanceof Response) return lim;
     const now = Date.now();
-    const list = fx.hosts(now).filter((h) => Date.parse(h.last_seen) >= now - 24 * 3_600_000);
+    const list = [...fx.hosts(now), ...onboardingHosts(now)].filter((h) => Date.parse(h.last_seen) >= now - 24 * 3_600_000);
     return HttpResponse.json({ hosts: list.slice(0, lim) });
   })),
 
   http.get(`${API}/hosts/:hostId`, authed(({ params }) => {
-    const h = fx.hosts(Date.now()).find((x) => x.host_id === params.hostId);
+    const now = Date.now();
+    const h = [...fx.hosts(now), ...onboardingHosts(now)].find((x) => x.host_id === params.hostId);
     return h ? HttpResponse.json(h) : apiError("not_found", "host not found");
   })),
 
@@ -289,9 +292,11 @@ export const handlers = [
   ...apmHandlers,
   ...alertHandlers,
   ...oqlHandlers,
+  ...dashboardSharingHandlers, // before dashboardHandlers: /dashboards/settings is not /dashboards/:id
   ...dashboardHandlers,
   ...usageHandlers,
   ...ssoHandlers,
+  ...onboardingHandlers,
 
   http.all(`${API}/*`, () => apiError("not_found", "no such endpoint")),
 ];

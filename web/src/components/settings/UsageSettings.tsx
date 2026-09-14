@@ -30,6 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatBytes, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { FormError, SettingsSection } from "./common";
+import { QueryLimitsSettings } from "./QueryLimitsSettings";
 
 const SIGNALS: readonly UsageSignal[] = ["traces", "logs", "metrics"];
 
@@ -275,6 +276,8 @@ export function UsageSettings() {
           </div>
         )}
       </SettingsSection>
+
+      {o && <QueryLimitsSettings />}
 
       {o?.can_manage_plan && <PlanOverride orgId={o.organization.id} />}
     </div>

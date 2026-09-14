@@ -83,12 +83,75 @@ describe("VersionSettings", () => {
     expect(screen.getByText("Enabled")).toBeInTheDocument();
     expect(within(screen.getByTestId("latest-release")).getByText("0.9.1")).toBeInTheDocument();
     const updater = screen.getByTestId("updater-status");
-    expect(within(updater).getByText("updating")).toBeInTheDocument();
+    expect(within(updater).getByText("Updating")).toBeInTheDocument();
     expect(within(updater).getByText("auto")).toBeInTheDocument();
     const steps = within(updater).getByRole("list", { name: "Update steps" });
-    expect(within(steps).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["backup", "pull"]);
+    expect(within(steps).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Backup", "Pull image"]);
     // No request channel (static auth mode): no buttons.
     expect(screen.queryByRole("button", { name: "Check now" })).not.toBeInTheDocument();
+  });
+
+  it("translates updater messages by code and falls back to the English message", async () => {
+    server.use(
+      http.get("*/api/v1/version", () =>
+        HttpResponse.json({
+          ...baseVersion,
+          updater: {
+            ...notifyUpdater,
+            state: "rolled_back",
+            message: "update to 0.9.1 failed and was rolled back to 0.9.0",
+            message_code: "rolled_back",
+            message_params: { to: "0.9.1", from: "0.9.0" },
+            error: "health: container exited",
+            steps: [{ name: "future-step", status: "failed", started_at: "2026-09-13T10:00:00Z" }],
+          },
+          update_requests: {
+            ...baseVersion.update_requests,
+            latest: request({
+              action: "apply",
+              target_version: "0.9.1",
+              state: "failed",
+              message: "update to 0.9.1 failed and was rolled back to 0.9.0: health: container exited",
+              message_code: "rolled_back",
+              message_params: { to: "0.9.1", from: "0.9.0", error: "health: container exited" },
+            }),
+          },
+        }),
+      ),
+    );
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<VersionSettings />);
+
+    const updater = await screen.findByTestId("updater-status");
+    expect(within(updater).getByText("Rolled back")).toBeInTheDocument();
+    expect(within(updater).getByText("The update to 0.9.1 failed and was rolled back to 0.9.0.")).toBeInTheDocument();
+    expect(within(updater).getByText("health: container exited")).toBeInTheDocument();
+    // Unknown step names are shown as they are.
+    expect(within(updater).getByText("future-step")).toBeInTheDocument();
+    expect(screen.getByTestId("update-request")).toHaveTextContent(
+      "The update to 0.9.1 failed and was rolled back to 0.9.0. Error: health: container exited",
+    );
+  });
+
+  it("shows the English message of documents without or with an unknown code", async () => {
+    server.use(
+      http.get("*/api/v1/version", () =>
+        HttpResponse.json({
+          ...baseVersion,
+          updater: { ...notifyUpdater, message: "openlog 0.9.1 is available (OPENLOG_UPDATER_MODE=notify)" },
+          update_requests: {
+            ...baseVersion.update_requests,
+            latest: request({ state: "done", message: "something new from a newer updater", message_code: "not_known_yet", message_params: {} }),
+          },
+        }),
+      ),
+    );
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<VersionSettings />);
+
+    const updater = await screen.findByTestId("updater-status");
+    expect(within(updater).getByText("openlog 0.9.1 is available (OPENLOG_UPDATER_MODE=notify)")).toBeInTheDocument();
+    expect(screen.getByTestId("update-request")).toHaveTextContent("something new from a newer updater");
   });
 
   it("says up to date without a newer release and no updater", async () => {

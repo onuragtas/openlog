@@ -16,6 +16,7 @@ import { ClusterTiles, WorkloadsByKind } from "@/components/kubernetes/ClusterOv
 import { EventList } from "@/components/kubernetes/EventList";
 import { KubernetesNav } from "@/components/kubernetes/KubernetesNav";
 import { NodeTable, PodTable, WorkloadTable } from "@/components/kubernetes/KubernetesTables";
+import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ function NoClusters() {
     <EmptyState icon={<Ship className="size-5" aria-hidden="true" />}>
       <p className="font-medium text-foreground">{t("kubernetes.empty")}</p>
       <p className="mt-1">{t("kubernetes.emptyHint")}</p>
+      <AddDataLink target="kubernetes" label={t("addData.empty.kubernetes")} />
     </EmptyState>
   );
 }

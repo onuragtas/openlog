@@ -315,7 +315,13 @@ func (f *fakeEvalStore) SaveStatuses(_ context.Context, s []StoredStatus) error 
 	f.saved = s
 	return nil
 }
-func (f *fakeEvalStore) OwnerEmails(context.Context, string) ([]string, error) { return f.owners, nil }
+func (f *fakeEvalStore) Owners(context.Context, string) ([]Owner, error) {
+	out := make([]Owner, len(f.owners))
+	for i, e := range f.owners {
+		out[i] = Owner{Email: e}
+	}
+	return out, nil
+}
 func key(org string, p time.Time, m string, th int) string {
 	return org + p.Format("2006-01") + m + string(rune('0'+th/10))
 }

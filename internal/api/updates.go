@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/internal/auth"
+	"github.com/onuragtas/openlog/internal/updatemsg"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
 	lib "github.com/onuragtas/openlog/libs/release"
@@ -154,16 +155,20 @@ func (s *Server) requestUpdateApply(w http.ResponseWriter, r *http.Request, p *a
 }
 
 type updateRequestJSON struct {
-	ID                      string  `json:"id"`
-	Action                  string  `json:"action"`
-	TargetVersion           string  `json:"target_version"`
-	IgnoreMaintenanceWindow bool    `json:"ignore_maintenance_window"`
-	State                   string  `json:"state"`
-	Message                 string  `json:"message"`
-	RequestedByEmail        *string `json:"requested_by_email"`
-	RequestedAt             string  `json:"requested_at"`
-	PickedAt                *string `json:"picked_at"`
-	FinishedAt              *string `json:"finished_at"`
+	ID                      string `json:"id"`
+	Action                  string `json:"action"`
+	TargetVersion           string `json:"target_version"`
+	IgnoreMaintenanceWindow bool   `json:"ignore_maintenance_window"`
+	State                   string `json:"state"`
+	Message                 string `json:"message"`
+	// MessageCode/MessageParams identify a fixed updater message for translation (derived from
+	// Message, internal/updatemsg); omitted for free text.
+	MessageCode      string            `json:"message_code,omitempty"`
+	MessageParams    map[string]string `json:"message_params,omitempty"`
+	RequestedByEmail *string           `json:"requested_by_email"`
+	RequestedAt      string            `json:"requested_at"`
+	PickedAt         *string           `json:"picked_at"`
+	FinishedAt       *string           `json:"finished_at"`
 }
 
 // updateRequestResponse renders a request; the requester's email only for principals that may
@@ -174,6 +179,9 @@ func updateRequestResponse(r *updatereq.Request, withEmail bool) *updateRequestJ
 	}
 	out := &updateRequestJSON{ID: r.ID, Action: r.Action, TargetVersion: r.TargetVersion, IgnoreMaintenanceWindow: r.IgnoreMaintenanceWindow,
 		State: r.State, Message: r.Message, RequestedAt: formatTime(r.RequestedAt), PickedAt: optTime(r.PickedAt), FinishedAt: optTime(r.FinishedAt)}
+	if code, params, ok := updatemsg.Parse(r.Message); ok {
+		out.MessageCode, out.MessageParams = code, params
+	}
 	if withEmail {
 		out.RequestedByEmail = optString(r.RequestedByEmail)
 	}

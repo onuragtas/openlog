@@ -28,7 +28,7 @@ func TestSSOStore(t *testing.T) {
 	orgB, _ := e.Bootstrap("sso-b")
 	now := time.Now().UTC().Truncate(time.Microsecond)
 
-	// Connections: one per organization, settings round-trip, test result bookkeeping.
+	// Connections: several per organization (the oldest is the default), settings round-trip, test result bookkeeping.
 	c := sso.Connection{ID: uuid.NewString(), OrgID: orgA.ID, Protocol: sso.ProtocolOIDC, Name: "Okta", Enabled: true,
 		OIDC:      &sso.OIDCConfig{Issuer: "https://idp.example", ClientID: "cid", Scopes: []string{"groups"}, RequireEmailVerified: true},
 		SecretEnc: []byte{1, 2, 3}, JITEnabled: true, DefaultRole: auth.RoleMember, SessionMaxAge: time.Hour,
@@ -36,12 +36,17 @@ func TestSSOStore(t *testing.T) {
 	if err := st.CreateConnection(ctx, &c); err != nil {
 		t.Fatal(err)
 	}
-	dup := c
-	dup.ID = uuid.NewString()
-	if err := st.CreateConnection(ctx, &dup); !errors.Is(err, auth.ErrAlreadyExists) {
+	second := c
+	second.ID, second.Name, second.CreatedAt, second.AllowExternalInvitations = uuid.NewString(), "Second", now.Add(time.Second), true
+	second.LogoutRedirectAllowlist = []string{"/hosts"}
+	if err := st.CreateConnection(ctx, &second); err != nil {
 		t.Fatalf("second connection: %v", err)
 	}
-	got, err := st.GetConnection(ctx, orgA.ID)
+	if cs, err := st.ListConnections(ctx, orgA.ID); err != nil || len(cs) != 2 || cs[0].ID != c.ID || !cs[1].AllowExternalInvitations ||
+		cs[1].LogoutRedirectAllowlist[0] != "/hosts" {
+		t.Fatalf("list connections = %+v, %v", cs, err)
+	}
+	got, err := st.GetConnection(ctx, orgA.ID, "")
 	if err != nil || got.OIDC == nil || got.OIDC.Scopes[0] != "groups" || got.SessionMaxAge != time.Hour || got.BreakGlassUserIDs[0] != ownerA.P.UserID ||
 		string(got.SecretEnc) != string([]byte{1, 2, 3}) || got.DefaultRole != auth.RoleMember {
 		t.Fatalf("get connection = %+v, %v", got, err)
@@ -100,22 +105,22 @@ func TestSSOStore(t *testing.T) {
 	}
 
 	// Policy query: one statement with connection and domain.
-	pol, err := st.GetOrgPolicy(ctx, orgA.ID, "acme.example")
+	pol, err := st.GetOrgPolicy(ctx, orgA.ID, c.ID, "acme.example")
 	if err != nil || pol.ConnectionID != c.ID || !pol.Enabled || !pol.DomainVerified || pol.SessionMaxAge != time.Hour {
 		t.Fatalf("policy = %+v, %v", pol, err)
 	}
-	if pol, err := st.GetOrgPolicy(ctx, orgB.ID, "acme.example"); err != nil || pol.ConnectionID != "" || pol.DomainVerified {
+	if pol, err := st.GetOrgPolicy(ctx, orgB.ID, c.ID, "acme.example"); err != nil || pol.ConnectionID != "" || pol.DomainVerified {
 		t.Fatalf("policy of org without connection = %+v, %v", pol, err)
 	}
 
 	// Role mappings replace atomically.
-	if err := st.ReplaceRoleMappings(ctx, orgA.ID, []sso.RoleMapping{{Group: "a", Role: auth.RoleAdmin}, {Group: "b", Role: auth.RoleViewer}}); err != nil {
+	if err := st.ReplaceRoleMappings(ctx, orgA.ID, "", []sso.RoleMapping{{Group: "a", Role: auth.RoleAdmin}, {Group: "b", Role: auth.RoleViewer}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.ReplaceRoleMappings(ctx, orgA.ID, []sso.RoleMapping{{Group: "c", Role: auth.RoleOwner}}); err == nil {
+	if err := st.ReplaceRoleMappings(ctx, orgA.ID, "", []sso.RoleMapping{{Group: "c", Role: auth.RoleOwner}}); err == nil {
 		t.Fatal("owner mapping accepted (CHECK)")
 	}
-	if ms, _ := st.ListRoleMappings(ctx, orgA.ID); len(ms) != 2 {
+	if ms, _ := st.ListRoleMappings(ctx, orgA.ID, ""); len(ms) != 2 {
 		t.Fatalf("mappings after failed replace = %v", ms)
 	}
 
@@ -232,7 +237,7 @@ func TestSSOStore(t *testing.T) {
 	if pw.AuthMethod != auth.MethodPassword || pw.OrgID != "" {
 		t.Fatalf("password session = %+v", pw)
 	}
-	if _, err := st.DeleteConnection(ctx, orgA.ID); err != nil {
+	if _, err := st.DeleteConnection(ctx, orgA.ID, c.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := users.GetSessionByTokenHash(ctx, sess.TokenHash); !errors.Is(err, auth.ErrNotFound) {

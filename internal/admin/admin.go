@@ -67,6 +67,42 @@ func (s *Server) AddCheck(name string, fn CheckFunc) {
 	s.mu.Unlock()
 }
 
+// Gate registers a readiness check that fails with reason until the returned release function is called (e.g.
+// "applying migrations" while a service migrates before its other checks exist). Without it /readyz, which has no
+// checks yet, would report ready during start-up. Release is idempotent.
+func (s *Server) Gate(name, reason string) (release func()) {
+	var open atomic.Bool
+	s.AddCheck(name, func(context.Context) error {
+		if !open.Load() {
+			return errors.New(reason)
+		}
+		return nil
+	})
+	return func() { open.Store(true) }
+}
+
+// ListenerCheck reports ready once a TCP listener accepts connections on the local side of listen address addr
+// (":8080", "0.0.0.0:8080" and "[::]:8080" are dialed on loopback), so /readyz waits for the service's port, not only
+// for its dependencies.
+func ListenerCheck(addr string) CheckFunc {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return func(context.Context) error { return err }
+	}
+	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
+		host = "127.0.0.1"
+	}
+	target := net.JoinHostPort(host, port)
+	return func(ctx context.Context) error {
+		var d net.Dialer
+		c, err := d.DialContext(ctx, "tcp", target)
+		if err != nil {
+			return errors.New("not listening on " + addr + " yet")
+		}
+		return c.Close()
+	}
+}
+
 // SetDraining makes /readyz fail so load balancers stop sending traffic
 // before the service shuts down.
 func (s *Server) SetDraining() { s.draining.Store(true) }

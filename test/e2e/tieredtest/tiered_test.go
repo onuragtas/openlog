@@ -310,6 +310,75 @@ func TestTieredStorage(t *testing.T) {
 		before["apm_errors"] = count(t, ctx, conn, counts["apm_errors"])
 	})
 
+	// BACKUP DATABASE ... TO S3 while parts are on the cold volume, DROP DATABASE, RESTORE (tiered-storage.md "Backups
+	// and restore"). Opt-in: TIEREDTEST_BACKUP=1. It runs before the S3 outage phases: right after MinIO was stopped and
+	// started, BACKUP failed repeatedly with S3_ERROR (empty message) for a while, even on an idle host. The outage and
+	// disable phases then run against the restored database.
+	t.Run("backup_restore", func(t *testing.T) {
+		if os.Getenv("TIEREDTEST_BACKUP") != "1" {
+			t.Skip("TIEREDTEST_BACKUP=1 runs the BACKUP ... TO S3 / RESTORE rehearsal")
+		}
+		rowsBefore := tableRows(t, ctx, conn)
+		coldBefore := count(t, ctx, conn, "SELECT count() FROM clusterAllReplicas('openlog', system.parts) WHERE database = 'openlog' AND active AND disk_name = 'openlog_s3'")
+		if coldBefore == 0 {
+			t.Fatal("no cold parts to back up")
+		}
+		coldTablesBefore := coldTables(t, ctx, conn)
+		t.Logf("tables with parts on S3 before the backup: %v", coldTablesBefore)
+		var dest string
+		start := time.Now()
+		for attempt := 1; ; attempt++ {
+			d := fmt.Sprintf("S3('http://minio:9000/openlog-backup/%d-%d/', 'openlog-tiered', 'openlog-tiered-secret')", time.Now().Unix(), attempt)
+			err := conn.Exec(ctx, "BACKUP DATABASE openlog ON CLUSTER 'openlog' TO "+d)
+			if err == nil {
+				dest = d
+				break
+			}
+			if attempt == 3 {
+				t.Fatalf("BACKUP DATABASE failed %d times, last: %s", attempt, firstLine(err.Error()))
+			}
+			t.Logf("BACKUP DATABASE attempt %d failed (retrying in 10 s): %s", attempt, firstLine(err.Error()))
+			time.Sleep(10 * time.Second)
+		}
+		t.Logf("BACKUP DATABASE openlog ON CLUSTER TO S3: %s (%d cold parts, %d tables)", time.Since(start).Round(time.Millisecond), coldBefore, len(rowsBefore))
+		exec1(t, ctx, conn, "DROP DATABASE openlog ON CLUSTER 'openlog' SYNC")
+		start = time.Now()
+		exec1(t, ctx, conn, "RESTORE DATABASE openlog ON CLUSTER 'openlog' FROM "+dest)
+		t.Logf("RESTORE DATABASE openlog ON CLUSTER FROM S3: %s", time.Since(start).Round(time.Millisecond))
+		exec1(t, ctx, conn, "SYSTEM SYNC REPLICA ON CLUSTER 'openlog' openlog.logs_local")
+		exec1(t, ctx, conn, "SYSTEM DROP FILESYSTEM CACHE ON CLUSTER 'openlog'")
+		if got := tableRows(t, ctx, conn); fmt.Sprint(got) != fmt.Sprint(rowsBefore) {
+			t.Errorf("rows per table after restore:\n%v\nbefore:\n%v", got, rowsBefore)
+		}
+		if got := snapshot(t, ctx, conn); fmt.Sprint(got) != fmt.Sprint(before) {
+			t.Fatalf("after restore %v, before %v", got, before)
+		}
+		// Restored parts land on the hot volume; the restored TTL moves the same tables to S3 again on every replica
+		// (movesDone does not apply here: the delete phase already expired the cold APM rows).
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			got := coldTables(t, ctx, conn)
+			if fmt.Sprint(got) == fmt.Sprint(coldTablesBefore) {
+				t.Logf("tables with parts on S3 after the restore: %v", got)
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("moves after restore not done: tables on S3 %v, before the backup %v", got, coldTablesBefore)
+			}
+			time.Sleep(5 * time.Second)
+		}
+		exec1(t, ctx, conn, "SYSTEM DROP FILESYSTEM CACHE ON CLUSTER 'openlog'")
+		if got := snapshot(t, ctx, conn); fmt.Sprint(got) != fmt.Sprint(before) {
+			t.Fatalf("after restore and moves %v, before %v", got, before)
+		}
+		if n := count(t, ctx, conn, "SELECT count() FROM openlog.logs WHERE timestamp < now() - INTERVAL 5 DAY"); n == 0 {
+			t.Error("no cold log rows after restore")
+		}
+		if plan, err := migrate.ApplyTableTTLs(ctx, conn, opts, log); err != nil || plan.Changed() {
+			t.Errorf("openlog-migrate TTL step after restore not a no-op: %+v %v", plan, err)
+		}
+	})
+
 	t.Run("s3_unavailable", func(t *testing.T) {
 		if out, err := compose("stop", "minio"); err != nil {
 			t.Fatalf("stop minio: %v\n%s", err, out)
@@ -476,6 +545,66 @@ func waitCluster(t *testing.T, ctx context.Context, conn clickhouse.Conn) {
 		}
 		time.Sleep(2 * time.Second)
 	}
+}
+
+// coldTables returns, per openlog table with active parts on the S3 disk, the number of replicas holding such parts.
+func coldTables(t *testing.T, ctx context.Context, conn clickhouse.Conn) map[string]uint64 {
+	t.Helper()
+	rows, err := conn.Query(ctx, "SELECT table, uniqExact(hostName()) FROM clusterAllReplicas('openlog', system.parts) "+
+		"WHERE database = 'openlog' AND active AND disk_name = 'openlog_s3' GROUP BY table ORDER BY table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := map[string]uint64{}
+	for rows.Next() {
+		var table string
+		var n uint64
+		if err := rows.Scan(&table, &n); err != nil {
+			t.Fatal(err)
+		}
+		out[table] = n
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// rollupChecks are logical checks of the Summing/Replacing tables, whose part row counts shrink when a restore merges.
+var rollupChecks = map[string]string{
+	"usage_signals_1h":  "SELECT toUInt64(sum(items) + sum(bytes)) FROM openlog.usage_signals_1h",
+	"usage_entities_1d": "SELECT count() FROM (SELECT DISTINCT tenant_id, day, kind, entity FROM openlog.usage_entities_1d)",
+	"table_settings":    "SELECT count() FROM (SELECT DISTINCT name FROM openlog.table_settings)",
+}
+
+// tableRows returns the active rows per plain replicated MergeTree table (summed over one replica per shard) plus the
+// rollupChecks.
+func tableRows(t *testing.T, ctx context.Context, conn clickhouse.Conn) map[string]uint64 {
+	t.Helper()
+	rows, err := conn.Query(ctx, "SELECT p.table, toUInt64(sum(p.rows)) FROM clusterAllReplicas('openlog', system.parts) AS p "+
+		"WHERE p.database = 'openlog' AND p.active AND hostName() IN ('ch-s1r1', 'ch-s2r1') AND p.table IN "+
+		"(SELECT name FROM system.tables WHERE database = 'openlog' AND engine = 'ReplicatedMergeTree') GROUP BY p.table ORDER BY p.table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := map[string]uint64{}
+	for rows.Next() {
+		var table string
+		var n uint64
+		if err := rows.Scan(&table, &n); err != nil {
+			t.Fatal(err)
+		}
+		out[table] = n
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for name, q := range rollupChecks {
+		out[name+" (logical)"] = count(t, ctx, conn, q)
+	}
+	return out
 }
 
 func firstLine(s string) string {

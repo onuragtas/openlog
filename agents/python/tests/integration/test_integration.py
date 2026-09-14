@@ -169,3 +169,54 @@ def test_celery_prefork(capture, db_env):
     finally:
         worker.stop(signal.SIGTERM, 30)
         worker.close()
+
+
+def _dump(cap):
+    return "\n".join(
+        f"{s['kind']} {s['name']!r} trace={s['trace_id'][:8]} span={s['span_id'][:8]} parent={s['parent_span_id'][:8]} "
+        f"links={[l[:8] for l in s['links']]} scope={s['scope']} "
+        f"{ {k: v for k, v in s['attributes'].items() if k.startswith(('messaging', 'server', 'network'))} }"
+        for s in cap.spans
+    )
+
+
+def test_messaging_producer_consumer(capture, db_env):
+    env = dict(db_env, OPENLOG_ENDPOINT=capture.url, OPENLOG_SERVICE_NAME="messaging-app")
+    proc = run_script("messaging_app.py", env, timeout=300)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    spans = capture.spans
+    dump = _dump(capture)
+
+    def only(pred, what):
+        found = [s for s in spans if pred(s)]
+        assert len(found) == 1, f"{what}: {len(found)}\n{dump}"
+        return found[0]
+
+    for client, system, destination in (
+        ("aio-pika", "rabbitmq", "orders-"),
+        ("confluent", "kafka", "orders-confluent-"),
+        ("kafka-python", "kafka", "orders-kafka-python-"),
+        ("aiokafka", "kafka", "orders-aiokafka-"),
+    ):
+        publish = only(lambda s, c=client: s["name"] == f"publish {c}", f"publish {client}")
+        producer = only(
+            lambda s, p=publish: s["kind"] == PRODUCER and s["parent_span_id"] == p["span_id"], f"{client} producer"
+        )
+        assert producer["attributes"]["messaging.system"] == system, dump
+        dest = producer["attributes"].get("messaging.destination.name") or producer["attributes"].get(
+            "messaging.destination", ""
+        )
+        assert destination in str(dest) or client == "aio-pika", dump
+        handle = only(lambda s, c=client: s["name"] == f"handle {c}", f"handle {client}")
+        consumers = [s for s in spans if s["kind"] == CONSUMER and s["attributes"].get("messaging.system") == system]
+        if client == "confluent":
+            # confluent-kafka links the consume span to the producer's context (a poll may return several messages)
+            linked = [s for s in consumers if producer["trace_id"] in s["links"]]
+            assert linked, f"{client}: no consumer span linked to the producer\n{dump}"
+        else:
+            # the consumer span continues the producer's trace
+            consumer = next((s for s in consumers if s["parent_span_id"] == producer["span_id"]), None)
+            assert consumer is not None, f"{client}: no consumer child of the producer\n{dump}"
+            assert consumer["trace_id"] == publish["trace_id"]
+            if client == "aio-pika":
+                assert handle["parent_span_id"] == consumer["span_id"], dump

@@ -77,6 +77,12 @@ func serveIndex(w http.ResponseWriter, r *http.Request, fsys fs.FS) {
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	h.Set("X-Frame-Options", "DENY")
+	if strings.HasPrefix(r.URL.Path, "/shared/") {
+		// Public dashboard share links (docs/contracts/api.md "Share links"): the token in the path must not leak
+		// through the Referer of links in markdown widgets, and the page must not be indexed.
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("X-Robots-Tag", "noindex, nofollow")
+	}
 	w.WriteHeader(http.StatusOK)
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(b)

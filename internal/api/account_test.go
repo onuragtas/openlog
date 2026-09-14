@@ -440,15 +440,17 @@ func TestScopeOnlyCreatedInWrap(t *testing.T) {
 				}
 				if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Scope" {
 					calls++
-					if fn.Name.Name != "wrap" {
-						t.Errorf("%s: %s calls .Scope(); scopes must only be created in wrap", fset.Position(call.Pos()), fn.Name.Name)
+					// wrap: tenant of the authenticated principal. shareScope (dashboard_public.go): tenant of a share link's
+					// organization, resolved from the token hash in PostgreSQL (D-087). No other function creates scopes.
+					if fn.Name.Name != "wrap" && fn.Name.Name != "shareScope" {
+						t.Errorf("%s: %s calls .Scope(); scopes must only be created in wrap (or shareScope for share links)", fset.Position(call.Pos()), fn.Name.Name)
 					}
 				}
 				return true
 			})
 		}
 	}
-	if calls != 1 {
-		t.Errorf("found %d .Scope() calls, want exactly 1 (in wrap)", calls)
+	if calls != 2 {
+		t.Errorf("found %d .Scope() calls, want exactly 2 (one in wrap, one in shareScope)", calls)
 	}
 }

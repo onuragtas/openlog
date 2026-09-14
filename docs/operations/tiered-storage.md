@@ -114,8 +114,15 @@ clickhouse:
 
 The chart adds the storage policy to the ClickHouseInstallation (`config.d/openlog-storage.xml`, values through the
 container environment), the credentials from the Secret, the cache on the data volume (size the PVC for it) and, with
-`warm.enabled`, a second PVC per replica. The operator restarts the ClickHouse pods for the new configuration; the
-migrate hook Job then applies the moves. `openlog-admin storage status` runs in any api pod:
+`warm.enabled`, a second PVC per replica. The operator restarts the ClickHouse pods for the new configuration.
+
+Enabling on an existing release takes **two** `helm upgrade`s: the migrate Job is a pre-upgrade hook and runs before the
+ClickHouseInstallation receives the policy, so on that first upgrade the chart keeps `OPENLOG_STORAGE_TIERING_ENABLED=false`
+for migrate (it looks up the live CHI). Wait until `kubectl get chi` shows `Completed`, then run the same `helm upgrade`
+again to apply the moves. Before this was handled, the migrate hook failed with `storage policy "openlog_tiered" is not
+usable` until its deadline and the CHI change never got applied (kind, 2026-09-14). A fresh install (post-install hook)
+applies everything in one go. In-cluster MinIO instead of a bucket: `s3.endpoint: http://minio.<ns>.svc:9000/<bucket>/{shard}/{replica}/`,
+`region: us-east-1` (script `deploy/helm/test/kind-validate.sh`, step `tiered`; not yet validated end to end). `openlog-admin storage status` runs in any api pod:
 `kubectl exec deploy/<release>-api -- openlog-admin storage status`.
 
 ### External ClickHouse (Helm `external` mode, own servers)
@@ -194,9 +201,45 @@ pending openlog-migrate changes: none
 - A **disk or volume snapshot** of `/var/lib/clickhouse` contains only the *references* to cold parts. It restores
   correctly only while the referenced objects still exist; after merges or TTL deletes removed them, restored cold parts
   are broken. Do not rely on disk snapshots alone once tiering is on.
-- Use **`BACKUP TABLE openlog.<table>_local ON CLUSTER … TO S3('https://backup-bucket/…', …)`** (or `clickhouse-backup`
-  with object-disk support): it copies the data of cold parts too (server-side copy when source and target are on the
-  same S3 service) and restores into the same or a new policy.
+- Use **`BACKUP … ON CLUSTER … TO S3(…)`** (or `clickhouse-backup` with object-disk support): it copies the data of
+  cold parts too (server-side copy when source and target are on the same S3 service), one copy per shard.
+- Rehearsed with `TIEREDTEST_BACKUP=1 make tieredtest` (2 shards × 2 replicas, MinIO, parts on `default`, `warm` and
+  `cold`): the test phase backs up 132 cold parts in 2.8 s and restores in 3.3 s; a manual run on a stack under heavy host
+  load (≈370 000 rows, 146 of 328 parts on S3) took 37 s and 63 s:
+
+  ```sql
+  -- a separate bucket or prefix, never the data prefix of a replica
+  BACKUP DATABASE openlog ON CLUSTER 'openlog'
+    TO S3('https://backup-bucket.s3.eu-central-1.amazonaws.com/openlog/2026-09-14/', '<key id>', '<secret>');
+  SELECT name, status, error, total_size FROM system.backups ORDER BY start_time DESC LIMIT 1;   -- BACKUP_CREATED
+
+  -- restore (openlog stopped: docker compose stop openlog, or scale api/ingest/processor to 0)
+  DROP DATABASE openlog ON CLUSTER 'openlog' SYNC;
+  RESTORE DATABASE openlog ON CLUSTER 'openlog'
+    FROM S3('https://backup-bucket.s3.eu-central-1.amazonaws.com/openlog/2026-09-14/', '<key id>', '<secret>');
+  SYSTEM SYNC REPLICA ON CLUSTER 'openlog' openlog.logs_local;
+  ```
+
+  Then check rows per table (`SELECT table, sum(rows) FROM clusterAllReplicas('openlog', system.parts) WHERE database =
+  'openlog' AND active AND hostName() IN (<one replica per shard>) GROUP BY table`) against the same query before the
+  backup, and `openlog-admin storage status`. That comparison only holds for plain `ReplicatedMergeTree` tables: the
+  Summing/Replacing rollups (`usage_signals_1h`, `usage_entities_1d`, `schema_migrations`, `table_settings`) merge
+  during the restore and show fewer part rows (1 670 → 1 103 rows in `usage_entities_1d_local` in the test) with the same
+  content — compare `sum(items)` / distinct keys instead. Caveats found in the rehearsal:
+  - **Restored parts land on the hot `default` volume**, cold ones included; the tables keep the `openlog_tiered` policy and
+    their TTL, so the mover sends old parts to `warm`/`cold` again. The hot disks need room for the whole database
+    during a restore (or restore table by table).
+  - **Keeper paths are fixed** (`/clickhouse/tables/{shard}/openlog/<table>`): `RESTORE` into the running cluster needs the
+    database dropped with `SYNC` first; restoring next to it (another database name) collides on those paths. Rehearse
+    on a separate cluster with its own Keeper.
+  - Right after an S3 outage (the test's MinIO stop and start) `BACKUP … TO S3` kept failing for a while although reads,
+    moves and deletes of the data disk had recovered: `Code: 499 … S3_ERROR` with an empty message, when opening the
+    backup (`BackupWriterS3::fileExists`) or writing its first metadata objects — three attempts within 23 s failed on an
+    idle host; the same statement on the same cluster succeeded minutes later, and every backup without a preceding
+    outage succeeded at once. Do not schedule backups right after an S3 incident; retry a failed backup later, check
+    `status`/`error` in `system.backups`, and restore only from a backup whose status is `BACKUP_CREATED`. (The test's
+    `backup_restore` phase therefore runs before its outage phases.)
+  - openlog-migrate's TTL step is a no-op after the restore (`openlog.table_settings` is restored with the tables).
 - Never point two clusters (or a restored copy) at the same prefix; restore into a new prefix/bucket. A replica whose
   local disk is lost is rebuilt by fetching from its healthy peer (the fetched parts are uploaded again under its prefix);
   the objects of its old incarnation become orphans — delete that prefix after the replica has re-synced, or give the
@@ -211,7 +254,7 @@ Measured with `make tieredtest` (MinIO stopped while ClickHouse runs):
 |---|---|
 | S3 unavailable, inserts | **Unaffected** (hot volume), including rows older than the move age (270 ms for 1 000 rows in the test) |
 | S3 unavailable, queries on hot data only | Unaffected when partition pruning skips cold parts (14 ms in the test) |
-| S3 unavailable, queries touching cold parts | Fail with `Code: 499 … S3_ERROR` (`This error happened for S3 disk …`). Connection refused fails within seconds; an unreachable endpoint can block until the S3 client's retries give up (minutes) — API queries are cut by `OPENLOG_API_QUERY_TIMEOUT` (`504 timeout`), alert evaluations by `OPENLOG_ALERT_QUERY_TIMEOUT` (evaluation error, `no data` rules may fire) |
+| S3 unavailable, queries touching cold parts | Fail with `Code: 499 … S3_ERROR` (`This error happened for S3 disk …`); the API answers `503 storage_unavailable` (`"retryable": true`, `Retry-After`) and the UI shows "archive storage cannot be read right now" instead of a generic error. Connection refused fails within seconds; an unreachable endpoint can block until the S3 client's retries give up (minutes) — API queries are cut by `OPENLOG_API_QUERY_TIMEOUT` (`504 timeout`), alert evaluations by `OPENLOG_ALERT_QUERY_TIMEOUT` (evaluation error, `no data` rules may fire) |
 | S3 unavailable, moves / merges of cold parts / TTL deletes of cold parts | Fail and are retried (`failed moves (24h)`); parts stay on the hot volume, which keeps filling — watch *FREE* and *OVERDUE MOVES* |
 | ClickHouse restart while S3 is unavailable | The server starts (`skip_access_check`). Empty leftovers of recently dropped parts may be detached as `ignored_*` (`detached parts`); they carry no rows and can be removed with `ALTER TABLE … DROP DETACHED PART '…' SETTINGS allow_drop_detached = 1` |
 | S3 back | Reads, moves and deletes resume without intervention; row counts and both replicas of every shard were identical after recovery in the test |
@@ -242,4 +285,8 @@ disabled is a no-op; enabling switches exactly the managed tables on every repli
 parts reach `warm` and `cold` on all four replicas and objects appear under every `{shard}/{replica}` prefix; counts
 through Distributed tables are unchanged after dropping the cache and after restarting all servers; lowering the APM
 retention deletes cold parts; an S3 outage (inserts, hot and cold queries, a server restart) and recovery; disabling
-removes the moves and keeps the data. `TIEREDTEST_KEEP=1` leaves the stack running.
+removes the moves and keeps the data. `TIEREDTEST_KEEP=1` leaves the stack running. `TIEREDTEST_BACKUP=1` adds the
+`backup_restore` phase before disabling ([Backups and restore](#backups-and-restore)): `BACKUP DATABASE openlog ON CLUSTER
+… TO S3` into the MinIO bucket `openlog-backup` (retried after the outage phases), `DROP DATABASE … SYNC`, `RESTORE`,
+then part rows of the plain tables and logical checks of the Summing/Replacing rollups, the Distributed counts, the moves
+back to `warm`/`cold` and a no-op TTL step.

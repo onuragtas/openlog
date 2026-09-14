@@ -27,6 +27,9 @@ type User struct {
 	// EmailVerifiedAt is nil only for self-service sign-ups that have not confirmed their address yet
 	// (OPENLOG_SIGNUP_REQUIRE_VERIFICATION); every other way of creating a user sets it.
 	EmailVerifiedAt *time.Time
+	// Locale is the e-mail language preferred when the user was created (Accept-Language; "" = English). Written on
+	// insert only; used for notifications sent without a request (usage e-mails).
+	Locale string
 }
 
 // EmailVerification is a one-time e-mail address confirmation token. TokenHash = sha256(token).
@@ -38,6 +41,7 @@ type EmailVerification struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	UsedAt    *time.Time
+	Locale    string // language of the e-mail that carried the token
 }
 
 // AuditFilter selects audit events (newest first). Zero values do not filter.
@@ -157,6 +161,7 @@ type Invitation struct {
 	RevokedAt      *time.Time
 	LastSentAt     *time.Time // last invitation e-mail (nil: never e-mailed)
 	SendCount      int        // invitation e-mails sent
+	Locale         string     // e-mail language: the inviter's Accept-Language at creation ("" = English)
 }
 
 // Expired reports whether a not yet accepted or revoked invitation has passed its expiry at now.
@@ -200,6 +205,9 @@ type Store interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	SetUserPassword(ctx context.Context, userID, hash string) error
 	SetUserLastLogin(ctx context.Context, userID string, at time.Time) error
+	// SetUserEmail changes a user's (normalized) e-mail address; ErrAlreadyExists when another account uses it
+	// (SCIM e-mail change, D-089).
+	SetUserEmail(ctx context.Context, userID, email string) error
 
 	AddMember(ctx context.Context, orgID, userID string, role Role) error
 	GetMembership(ctx context.Context, orgID, userID string) (Membership, error)

@@ -1,18 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, UserPlus } from "lucide-react";
+import { KeyRound, Loader2, UserPlus } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { authConfigQuery, signup, type Me } from "@/api/account";
 import { ApiError } from "@/api/client";
+import { discoverSso } from "@/api/sso";
 import { LoadingState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Captcha, type CaptchaProvider } from "./Captcha";
+import { SsoSignIn } from "./SsoSignIn";
 
 /** Self-service sign-up (POST /auth/signup). Router-free: the route passes navigation in. */
-export function SignupForm({ onSignedUp, loginLink }: { onSignedUp: (me: Me) => void; loginLink: ReactNode }) {
+export function SignupForm({
+  onSignedUp,
+  loginLink,
+  navigate,
+}: {
+  onSignedUp: (me: Me) => void;
+  loginLink: ReactNode;
+  /** External navigation of "Continue with SSO" (default window.location.assign). */
+  navigate?: (url: string) => void;
+}) {
   const { t } = useTranslation();
   const id = useId();
   const config = useQuery(authConfigQuery());
@@ -25,6 +36,13 @@ export function SignupForm({ onSignedUp, loginLink }: { onSignedUp: (me: Me) => 
   const [captchaKey, setCaptchaKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Claimed-domain redirection (D-089): the organization whose single sign-on this e-mail domain uses.
+  const [claimedBy, setClaimedBy] = useState<string | null>(null);
+  const [ssoMode, setSsoMode] = useState(false);
+
+  if (ssoMode && claimedBy !== null) {
+    return <SsoSignIn initialEmail={email.trim()} notice={t("sso.login.signupClaimed", { org: claimedBy })} onBack={() => setSsoMode(false)} navigate={navigate} />;
+  }
 
   if (config.isPending) {
     return (
@@ -51,6 +69,7 @@ export function SignupForm({ onSignedUp, loginLink }: { onSignedUp: (me: Me) => 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setClaimedBy(null);
     if (email.trim() === "" || org.trim() === "" || password === "") {
       setError(t("signup.required"));
       return;
@@ -83,7 +102,12 @@ export function SignupForm({ onSignedUp, loginLink }: { onSignedUp: (me: Me) => 
       setCaptchaToken(null);
       setCaptchaKey((k) => k + 1);
       if (!(err instanceof ApiError)) setError(t("login.unreachable"));
-      else if (err.status === 409) setError(t("signup.emailTaken"));
+      else if (err.status === 409 && err.code === "failed_precondition") {
+        // The e-mail domain signs in with an organization's single sign-on: no password account.
+        const d = await discoverSso(email.trim()).catch(() => null);
+        if (d?.sso) setClaimedBy(d.organization_name ?? "");
+        else setError(err.message);
+      } else if (err.status === 409) setError(t("signup.emailTaken"));
       else if (err.status === 429) setError(t("signup.rateLimited"));
       else if (err.status === 403) setError(t("signup.disabled"));
       else setError(err.message);
@@ -140,6 +164,17 @@ export function SignupForm({ onSignedUp, loginLink }: { onSignedUp: (me: Me) => 
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
+        )}
+        {claimedBy !== null && (
+          <div className="flex flex-col items-start gap-2 rounded-lg border border-warning/60 bg-warning/10 p-3">
+            <p role="alert" className="text-sm">
+              {t("sso.login.signupClaimed", { org: claimedBy })}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setSsoMode(true)}>
+              <KeyRound aria-hidden="true" />
+              {t("sso.login.button")}
+            </Button>
+          </div>
         )}
         <p className="text-sm text-muted-foreground">
           {t("signup.haveAccount")} {loginLink}

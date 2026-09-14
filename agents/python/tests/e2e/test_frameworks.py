@@ -2,6 +2,7 @@
 
 import sys
 
+import pytest
 from otlp import CLIENT, SERVER
 
 from apps import App, agent_env, free_port
@@ -33,7 +34,7 @@ def assert_error(span, message):
     assert "Traceback" in ev[0]["attributes"]["exception.stacktrace"]
 
 
-def assert_common_telemetry(cap, service, route_span):
+def assert_common_telemetry(cap, service, route_span, metric_route=True):
     # license key header on every export request; the agent's own export requests are not traced
     assert cap.requests and all(r["headers"].get("openlog-license-key") == "test-license-key" for r in cap.requests)
     assert all("/v1/" not in str(s["attributes"].get("url.full", "")) for s in cap.spans)
@@ -49,7 +50,8 @@ def assert_common_telemetry(cap, service, route_span):
         assert "process.memory.usage" in names
     duration = next(m for m in cap.metrics if m["name"] == "http.server.request.duration")
     assert duration["unit"] == "s" and duration["type"] == "histogram"
-    assert any(p["attributes"].get("http.route") for p in duration["points"])
+    if metric_route:  # the WSGI-based Falcon and Pyramid instrumentations record the metric without http.route
+        assert any(p["attributes"].get("http.route") for p in duration["points"])
     assert_resource(duration["resource"], service)
     # OTLP log of the request's log call, correlated with the server span
     log = cap.wait_for(
@@ -116,6 +118,57 @@ def test_django(capture, apps):
     assert_resource(route["resource"], "django-shop")
     assert_error(server_span(capture, "GET /boom/"), "django boom")
     assert_common_telemetry(capture, "django-shop", route)
+
+
+def _chain_linked(cap, chain_name, nested_name):
+    chain = server_span(cap, chain_name)
+    client = cap.wait_for(
+        "client span",
+        lambda: next((s for s in cap.spans if s["kind"] == CLIENT and s["parent_span_id"] == chain["span_id"]), None),
+    )
+    nested = cap.wait_for(
+        "nested server span",
+        lambda: next((s for s in cap.spans if s["kind"] == SERVER and s["parent_span_id"] == client["span_id"]), None),
+    )
+    assert nested["name"] == nested_name and nested["trace_id"] == chain["trace_id"]
+
+
+@pytest.mark.parametrize(
+    "framework,argv,route,metric_route",
+    [
+        # Tornado names the span from the matched rule; the agent sets http.route from it
+        ("tornado", ["python", "tornado_app.py"], "/users/{user_id}", True),
+        ("falcon", ["python", "falcon_app.py"], "/users/{user_id:int}", False),
+        # Pyramid names the span with the bare route pattern; the agent prefixes the method
+        ("pyramid", ["python", "pyramid_app.py"], "/users/{user_id}", False),
+    ],
+)
+def test_tornado_falcon_pyramid(capture, apps, framework, argv, route, metric_route):
+    port = free_port()
+    service = f"{framework}-shop"
+    app = apps(App(argv, agent_env(capture.url, service), port)).wait_ready()
+    assert app.get("/users/42")[0] == 200
+    assert app.get("/boom")[0] == 500
+    assert app.get("/chain")[0] == 200
+    if framework == "tornado" and sys.version_info < (3, 10):
+        # contrib 0.62 (the Python 3.9 line) names Tornado spans with the request path and sets no http.route; the
+        # agent does not turn a path into a route (the backend normalizes the path instead)
+        span = server_span(capture, "GET /users/42")
+        assert "http.route" not in span["attributes"]
+        assert_error(server_span(capture, "GET /boom"), "tornado boom 42")
+        _chain_linked(capture, "GET /chain", "GET /users/7")
+        return
+    span = server_span(capture, f"GET {route}")
+    assert span["attributes"]["http.route"] == route
+    assert span["attributes"]["http.request.method"] == "GET"
+    assert span["attributes"]["http.response.status_code"] == 200
+    assert span["parent_span_id"] == ""
+    assert_resource(span["resource"], service)
+    boom = server_span(capture, "GET /boom")
+    assert boom["attributes"]["http.route"] == "/boom"
+    assert_error(boom, f"{framework} boom 42")
+    _chain_linked(capture, "GET /chain", f"GET {route}")
+    assert_common_telemetry(capture, service, span, metric_route)
 
 
 def test_fastapi(capture, apps):

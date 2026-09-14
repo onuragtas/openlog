@@ -8,6 +8,7 @@ import { oqlQuery, type OqlVariables } from "@/api/oql";
 import { Markdown } from "@/components/oql/Markdown";
 import { QueryResult } from "@/components/oql/QueryResult";
 import { Button } from "@/components/ui/button";
+import { filtersForFacets, type DashboardFilter } from "@/lib/dashboard-filters";
 import { ROW_HEIGHT } from "@/lib/dashboards";
 import { isCustomRange, type RangeSpec } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -20,28 +21,45 @@ export interface WidgetBodyProps {
   range: RangeSpec;
   variables: OqlVariables;
   height?: number;
+  /** Dashboard cross-widget filters sent with the query (applied where the event type has the attribute). */
+  filters?: readonly DashboardFilter[];
+  /** Makes facet values clickable: called with the filters of the clicked group. */
+  onSelectFilters?: (filters: DashboardFilter[]) => void;
 }
 
 /** Runs the widget's query (refreshed every minute for relative ranges) and draws it; markdown needs no query. */
-export function WidgetBody({ widget, range, variables, height }: WidgetBodyProps) {
+export function WidgetBody({ widget, range, variables, height, filters, onSelectFilters }: WidgetBodyProps) {
   const { t } = useTranslation();
   const markdown = widget.visualization === "markdown";
-  const q = useQuery({ ...oqlQuery({ query: widget.query, range, variables }, { refetchMs: isCustomRange(range) ? false : 60_000 }), enabled: !markdown && widget.query.trim() !== "" });
+  const q = useQuery({
+    ...oqlQuery({ query: widget.query, range, variables, filters: filters?.length ? [...filters] : undefined }, { refetchMs: isCustomRange(range) ? false : 60_000 }),
+    enabled: !markdown && widget.query.trim() !== "",
+  });
   if (markdown) return <Markdown text={widget.markdown} />;
   if (!widget.query.trim()) return <p className="py-4 text-center text-sm text-muted-foreground">{t("dashboards.widget.noQuery")}</p>;
+  const data = q.data;
+  const ignored = filters?.length ? (data?.metadata.ignored_filters ?? []) : [];
   return (
-    <QueryResult
-      result={q.data}
-      visualization={widget.visualization}
-      title={widget.title || widget.query}
-      unit={widget.unit}
-      thresholds={widget.thresholds}
-      options={widget.options}
-      height={height ?? chartHeightFor(widget.layout.h)}
-      isLoading={q.isFetching}
-      error={q.error}
-      onRetry={() => void q.refetch()}
-    />
+    <div className="flex min-w-0 flex-col gap-1">
+      {ignored.length > 0 && (
+        <p className="text-[11px] text-muted-foreground" data-testid="filters-ignored">
+          {t("dashboards.filters.ignored", { attributes: [...new Set(ignored)].join(", ") })}
+        </p>
+      )}
+      <QueryResult
+        result={data}
+        visualization={widget.visualization}
+        title={widget.title || widget.query}
+        unit={widget.unit}
+        thresholds={widget.thresholds}
+        options={widget.options}
+        height={height ?? chartHeightFor(widget.layout.h)}
+        isLoading={q.isFetching}
+        error={q.error}
+        onRetry={() => void q.refetch()}
+        onSelectFacets={onSelectFilters && data ? (values) => onSelectFilters(filtersForFacets(data.facets, values, data.event_type)) : undefined}
+      />
+    </div>
   );
 }
 
@@ -54,7 +72,7 @@ export interface WidgetCardProps extends Omit<WidgetBodyProps, "height"> {
   fill?: boolean;
 }
 
-export function WidgetCard({ widget, range, variables, edit, onEdit, onDuplicate, onDelete, fill }: WidgetCardProps) {
+export function WidgetCard({ widget, range, variables, edit, onEdit, onDuplicate, onDelete, fill, filters, onSelectFilters }: WidgetCardProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const title = widget.title || t("dashboards.widget.untitled");
@@ -78,7 +96,7 @@ export function WidgetCard({ widget, range, variables, edit, onEdit, onDuplicate
         {edit && <WidgetMenu title={title} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} />}
       </header>
       <div className={cn("min-h-0 min-w-0 flex-1 overflow-auto p-3", widget.visualization === "billboard" && "flex flex-col justify-center")}>
-        <WidgetBody widget={widget} range={range} variables={variables} />
+        <WidgetBody widget={widget} range={range} variables={variables} filters={filters} onSelectFilters={edit ? undefined : onSelectFilters} />
       </div>
     </section>
   );

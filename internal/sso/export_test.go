@@ -1,6 +1,18 @@
 package sso
 
-import "context"
+import (
+	"context"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+// RefreshRunsForTest returns the refresh counter of protocol and result (RefreshJob must have been called).
+func RefreshRunsForTest(s *Service, protocol, result string) prometheus.Counter {
+	return s.metrics.runs.WithLabelValues(protocol, result)
+}
+
+// RefreshFailingForTest returns the failing connections gauge.
+func RefreshFailingForTest(s *Service) prometheus.Gauge { return s.metrics.failing }
 
 // VerifyIDTokenForTest validates raw like the OIDC callback does (discovery, JWKS, claims, nonce).
 func (s *Service) VerifyIDTokenForTest(ctx context.Context, c Connection, raw, nonce string) error {

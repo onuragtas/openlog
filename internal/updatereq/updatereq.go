@@ -13,6 +13,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/onuragtas/openlog/internal/updatemsg"
 )
 
 // Actions.
@@ -264,7 +266,7 @@ func (m *MemQueue) All() []Request {
 	return out
 }
 
-const expiredMessage = "not picked up by openlog-updater within 15m (is an updater with request support running?)"
+var expiredMessage = updatemsg.Format(updatemsg.RequestExpired, nil)
 
 // clip bounds a message to the column limit (2000 bytes, valid UTF-8).
 func clip(s string) string {

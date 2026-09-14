@@ -160,6 +160,8 @@ export interface BarItem {
   label: string;
   value: number;
   previous: number | null;
+  /** Facet values of the group (dashboard filters); absent for single results, histograms and "other". */
+  facets?: string[];
 }
 
 /** Horizontal bar list items: one per group (first number column), per column (single) or per bucket (histogram). */
@@ -177,7 +179,10 @@ export function barItems(result: OqlResult): BarItem[] {
   const col = result.kind === "histogram" ? 0 : firstNumberColumn(result.columns);
   return rows.flatMap((r) => {
     const v = num(r.values[col]);
-    return v === null ? [] : [{ label: r.facets.join(" · "), value: v, previous: num(r.previous?.[col]) }];
+    if (v === null) return [];
+    const item: BarItem = { label: r.facets.join(" · "), value: v, previous: num(r.previous?.[col]) };
+    if (result.kind !== "histogram") item.facets = r.facets;
+    return [item];
   });
 }
 
@@ -185,6 +190,8 @@ export interface PieSlice {
   label: string;
   value: number;
   fraction: number;
+  /** Facet values of the slice's group (absent for "other" and single results). */
+  facets?: string[];
 }
 
 /** Pie slices of positive values (at most `max`; the rest is merged into "other"). */
@@ -193,13 +200,14 @@ export function pieSlices(result: OqlResult, otherLabel: string, max = 8): PieSl
   items.sort((a, b) => b.value - a.value);
   const shown = items.slice(0, max);
   const rest = items.slice(max).reduce((s, b) => s + b.value, 0);
-  const list = rest > 0 ? [...shown, { label: otherLabel, value: rest, previous: null }] : shown;
+  const list: BarItem[] = rest > 0 ? [...shown, { label: otherLabel, value: rest, previous: null }] : shown;
   const total = list.reduce((s, b) => s + b.value, 0);
-  return total > 0 ? list.map((b) => ({ label: b.label, value: b.value, fraction: b.value / total })) : [];
+  return total > 0 ? list.map((b) => ({ label: b.label, value: b.value, fraction: b.value / total, ...(b.facets ? { facets: b.facets } : {}) })) : [];
 }
 
 export interface HeatmapModel {
-  rows: { label: string; cells: (number | null)[] }[];
+  /** `facets`: facet values of the row's series (timeseries with FACET only). */
+  rows: { label: string; cells: (number | null)[]; facets?: string[] }[];
   /** Bucket start times (ms) for timeseries, or bucket ranges for histograms. */
   columns: { key: string; time?: number; label?: string }[];
   max: number;
@@ -227,7 +235,7 @@ export function heatmapModel(result: OqlResult): HeatmapModel | null {
   const rows = series.map((s) => {
     const cells: (number | null)[] = times.map(() => null);
     for (const [t, v] of s.points) cells[index.get(t)!] = track(v);
-    return { label: s.facets.join(" · ") || (result.columns[col]?.name ?? ""), cells };
+    return { label: s.facets.join(" · ") || (result.columns[col]?.name ?? ""), cells, ...(s.facets.length > 0 ? { facets: s.facets } : {}) };
   });
   return { rows, columns: times.map((t) => ({ key: String(t), time: t })), max };
 }

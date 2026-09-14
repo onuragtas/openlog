@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- IIS integrated pipeline: the OpenTelemetry HTTP module creates the SERVER span of every ASP.NET 4.x request.
+     (The OpenTelemetry.Instrumentation.AspNet package adds this entry on install in classic projects.) -->
+<configuration>
+  <appSettings>
+    <add key="OPENLOG_LICENSE_KEY" value="dev-license-key" />
+    <add key="OPENLOG_ENDPOINT" value="http://localhost:4318" />
+  </appSettings>
+  <system.webServer>
+    <modules>
+      <add name="TelemetryHttpModule" type="OpenTelemetry.Instrumentation.AspNet.TelemetryHttpModule, OpenTelemetry.Instrumentation.AspNet.TelemetryHttpModule" preCondition="integratedMode,managedHandler" />
+    </modules>
+    <handlers>
+      <add name="Users" path="users" verb="GET" type="OpenLog.AspNetFramework.Sample.UsersHandler, OpenLog.AspNetFramework.Sample" />
+    </handlers>
+  </system.webServer>
+</configuration>

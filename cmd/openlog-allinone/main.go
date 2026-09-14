@@ -21,9 +21,12 @@ func main() {
 	}
 	app.Main("openlog-allinone", func(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog.Logger) error {
 		if cfg.MigrateOnStart {
+			// Not ready while migrating: no other readiness check is registered yet.
+			release := adm.Gate("migrations", "applying migrations")
 			if err := app.RunMigrate(ctx, cfg, log); err != nil {
 				return err
 			}
+			release()
 		}
 		fns := []func(ctx context.Context) error{
 			func(ctx context.Context) error { return app.RunIngest(ctx, cfg, adm, log) },

@@ -96,15 +96,22 @@ integration tests (`integration-tests/`) run these with the openlog jar against 
 | Logback | Spring Boot default | `trace_id`/`span_id` in the MDC (application output) and OTLP log records with trace/span ids |
 | Log4j2 | spring-boot-starter-log4j2 | same, through the Log4j2 context data provider |
 | JVM runtime | JDK 17, 21 | `jvm.memory.used`, `jvm.thread.count`, `jvm.class.loaded`, `jvm.cpu.time`; `http.server.request.duration`; disabling runtime metrics |
+| JAX-RS | Jersey 3.1 `ServletContainer` on embedded Jetty 12 (ee10) | SERVER span `GET /users/{id}` with `http.route`, W3C parent, JDBC CLIENT span in the request trace with the sanitized statement, 500 → ERROR, ignored paths, openlog resource |
+| Quarkus (JVM mode) | Quarkus 3.39, Quarkus REST, `quarkus-run.jar` | same as JAX-RS (`@Blocking` resource method) |
+| Vert.x Web | Vert.x 4.5 router, JDBC in `executeBlocking` | same, `http.route` `/users/:id` (Vert.x syntax) |
+| Micronaut | Micronaut 4.10 (Netty), `@ExecuteOn(BLOCKING)` | JDBC span in the request trace, errors, resource; **no `http.route`** (see below) |
 
-JAX-RS (Jersey, RESTEasy), Micronaut, Quarkus, Vert.x, Servlet containers, JMS, RabbitMQ, MongoDB, Cassandra,
-Elasticsearch, AWS SDK, OkHttp, Apache HttpClient and the rest of the upstream list are instrumented by the same
-agent but are not part of the openlog test suite.
+Servlet containers, JMS, RabbitMQ, MongoDB, Cassandra, Elasticsearch, AWS SDK, OkHttp, Apache HttpClient and the rest of
+the upstream list are instrumented by the same agent but are not part of the openlog test suite.
 
 **Transaction names.** The APM backend names a web transaction `<METHOD> <http.route>` ([apm.md §2.1](../../docs/contracts/apm.md)).
-The upstream instrumentations set `http.route` on the HTTP server span for Spring MVC, WebFlux, JAX-RS, Micronaut,
-Quarkus RESTEasy, Ktor, Play, Grails, Struts and servlet mappings, and rename the span to `GET /users/{id}`.
-Requests without a route (404s, plain servlets) are grouped by the backend's path normalization.
+The upstream instrumentations set `http.route` on the HTTP server span for Spring MVC, WebFlux, JAX-RS on a servlet
+container, Quarkus REST, Vert.x Web, Ktor, Play, Grails, Struts and servlet mappings, and rename the span to
+`GET /users/{id}`. Requests without a route are grouped by the backend's path normalization of `url.path`. Verified
+gaps of the upstream agent 2.31.1: **Micronaut** has no instrumentation (the SERVER span comes from Netty and is named
+`GET`), and **Jersey on Grizzly or Jersey's Jetty handler container** (`jersey-container-grizzly2-http`,
+`jersey-container-jetty-http`) gets a SERVER span without `http.route`; deploy Jersey as a servlet
+(`jersey-container-servlet`) to get route names.
 
 ## Database statements
 
@@ -237,10 +244,11 @@ spans that carry a statement). To reduce the cost:
 
 ## Versioning and releases
 
-The jar is versioned with the openlog product (D-025). Every release `vX.Y.Z` attaches `openlog-javaagent-X.Y.Z.jar`
-and `openlog-javaagent-X.Y.Z.jar.sha256` to the GitHub release (`release.yml`, job `java-agent-jar`; see
-[releasing.md](../../docs/operations/releasing.md#java-agent-jar)). The jar is not yet listed in the signed release
-manifest; verify it with the checksum file from the same release. The manifest `Openlog-Javaagent-Version` and
+The jar is versioned with the openlog product (D-025). Every release `vX.Y.Z` publishes `openlog-javaagent-X.Y.Z.jar`
+and `openlog-javaagent-X.Y.Z.jar.sha256` with the GitHub release (`release.yml`, job `java-agent-jar`; see
+[releasing.md](../../docs/operations/releasing.md#java-agent-jar)). The jar is listed in the signed release manifest
+(`manifest.json`, component `java-agent`, format `jar`): `openlog-release verify --keys <key> --check-artifacts
+manifest.json` in a directory with the jar checks signature and sha256, or compare with the `.sha256` file. The manifest `Openlog-Javaagent-Version` and
 `Openlog-Upstream-Javaagent-Version` attributes, plus `telemetry.distro.version`, identify a jar. The upstream agent
 version is pinned in `gradle.properties` and moves with openlog releases. **Maven Central** publishing
 (`io.github.onuragtas.openlog:openlog-javaagent`, for build tools that download agents) is planned, not done.
@@ -254,6 +262,8 @@ volume, so nothing is written into the checkout:
 agents/java/test/run.sh                                  # ./gradlew check integrationTest (starts PostgreSQL, MySQL, Redis, Kafka)
 NO_SERVICES=1 agents/java/test/run.sh :extension:test :agentJar
 JAVA_TEST_JDK=17 agents/java/test/run.sh check
+agents/java/test/run.sh :integration-tests:integrationTest --tests '*QuarkusIT'   # one framework
+JAVA_TEST_PROJECT=my-prefix JAVA_TEST_KAFKA_PORT=59192 agents/java/test/run.sh   # other compose/volume names, Kafka host port
 agents/java/test/run.sh bench                            # overhead micro-benchmark
 agents/java/test/run.sh down                             # remove containers and volumes
 ```
@@ -262,8 +272,10 @@ agents/java/test/run.sh down                             # remove containers and
 |---|---|
 | `extension/` | the openlog extension (Java 8 bytecode, no runtime dependencies): `OpenlogCustomizerProvider` (SPI), config mapping, `sampling/`, `db/`, `resource/`; unit tests incl. the Go sampler fixtures and SDK autoconfiguration |
 | `build.gradle.kts` | `agentJar`: upstream agent + `extensions/openlog-extension.jar` → `build/libs/openlog-javaagent-<version>.jar`, `agentJarChecksum` |
-| `testapps/mvc`, `testapps/webflux` | sample applications |
-| `integration-tests/` | OTLP capture server, application launcher, `SpringMvcIT`, `SpringWebfluxIT`, `OverheadBench` |
+| `testapps/mvc`, `testapps/webflux` | Spring Boot sample applications |
+| `testapps/jaxrs`, `testapps/quarkus`, `testapps/micronaut`, `testapps/vertx` | the same small application (`/users/{id}` with JDBC, `/fail`) per framework; Quarkus is built by the Quarkus Gradle plugin (`quarkusBuild`) |
+| `integration-tests/` | OTLP capture server, application launcher, `SpringMvcIT`, `SpringWebfluxIT`, `FrameworkIT` (`JaxrsJerseyIT`, `QuarkusIT`, `MicronautIT`, `VertxWebIT`), `OverheadBench` |
+| `scripts/release-jar.sh` | release build of the jar + `.sha256` into a release directory (`make release-java-agent`, `release.yml`) |
 | `test/docker-compose.yml` | throwaway services (project `openlog-m4-java-test`) and the Gradle runner |
 
 Upgrading the upstream agent: change `otelJavaagentVersion`/`otelSdkVersion`/`otelProtoVersion` in `gradle.properties`,

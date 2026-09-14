@@ -1,28 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Circle, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { membersQuery, useMe } from "@/api/account";
-import { ssoDomainsQuery, ssoStateQuery, updateSsoEnforcement, type SsoState } from "@/api/sso";
+import { ssoConnectionLabel, ssoDomainsQuery, storeSsoState, updateSsoConnectionEnforcement, type SsoConnection, type SsoDomain, type SsoState } from "@/api/sso";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { FormError, SettingsSection } from "./common";
 
-/** Enforce SSO with lockout safeguards and break-glass owners (owner only). */
-export function SsoEnforcement({ state }: { state: SsoState }) {
+/** Whether a domain's sign-ins use connection id (domains without connection_id use the default, first connection). */
+function routesTo(d: SsoDomain, connections: SsoConnection[], id: string): boolean {
+  return d.connection_id ? d.connection_id === id : connections[0]?.id === id;
+}
+
+function EnforcementPanel({ c, state }: { c: SsoConnection; state: SsoState }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const me = useMe().data;
   const isOwner = me?.role === "owner";
-  const c = state.connection!;
   const members = useQuery(membersQuery());
   const domains = useQuery(ssoDomainsQuery());
   const [breakGlass, setBreakGlass] = useState<string[] | null>(null);
   const selected = breakGlass ?? c.break_glass_user_ids;
   const [confirming, setConfirming] = useState(false);
   const update = useMutation({
-    mutationFn: (enforce: boolean) => updateSsoEnforcement(enforce, selected),
+    mutationFn: (enforce: boolean) => updateSsoConnectionEnforcement(c.id, enforce, selected),
     onSuccess: (res) => {
-      qc.setQueryData(ssoStateQuery().queryKey, res);
+      storeSsoState(qc, res);
       setBreakGlass(null);
       setConfirming(false);
     },
@@ -32,13 +37,13 @@ export function SsoEnforcement({ state }: { state: SsoState }) {
   const requirements = [
     { ok: c.enabled, label: t("sso.enforcement.reqEnabled") },
     { ok: c.tested, label: t("sso.enforcement.reqTested") },
-    { ok: (domains.data ?? []).some((d) => d.verified), label: t("sso.enforcement.reqDomain") },
+    { ok: (domains.data ?? []).some((d) => d.verified && routesTo(d, state.connections, c.id)), label: t("sso.enforcement.reqDomain") },
     { ok: selected.length > 0, label: t("sso.enforcement.reqBreakGlass") },
   ];
   const ready = requirements.every((r) => r.ok);
 
   return (
-    <SettingsSection title={t("sso.enforcement.title")} description={t("sso.enforcement.description")}>
+    <>
       <p role="status" className="flex items-center gap-2 text-sm font-medium">
         <ShieldCheck className={c.enforce ? "size-4 text-success" : "size-4 text-muted-foreground"} aria-hidden="true" />
         {c.enforce ? t("sso.enforcement.active") : t("sso.enforcement.inactive")}
@@ -50,7 +55,7 @@ export function SsoEnforcement({ state }: { state: SsoState }) {
           <ul className="flex flex-col gap-1 text-sm" aria-label={t("sso.enforcement.prerequisites")}>
             {requirements.map((r) => (
               <li key={r.label} className="flex items-center gap-2" data-ok={r.ok}>
-                {r.ok ? <CheckCircle2 className="size-4 text-success" aria-hidden="true" /> : <Circle className="size-4 text-muted-foreground" aria-hidden="true" />}
+                {r.ok ? <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" /> : <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
                 <span className={r.ok ? undefined : "text-muted-foreground"}>{r.label}</span>
               </li>
             ))}
@@ -104,6 +109,34 @@ export function SsoEnforcement({ state }: { state: SsoState }) {
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/** Enforce SSO per connection with lockout safeguards and break-glass owners (owner only). */
+export function SsoEnforcement({ state, preferredId }: { state: SsoState; preferredId?: string | null }) {
+  const { t } = useTranslation();
+  const id = useId();
+  const [chosen, setChosen] = useState<string | null>(null);
+  const exists = (x: string | null | undefined): x is string => !!x && state.connections.some((c) => c.id === x);
+  const currentId = exists(chosen) ? chosen : exists(preferredId) ? preferredId : state.connections[0]!.id;
+  const c = state.connections.find((x) => x.id === currentId)!;
+
+  return (
+    <SettingsSection title={t("sso.enforcement.title")} description={t("sso.enforcement.description")}>
+      {state.connections.length > 1 && (
+        <div className="flex max-w-sm flex-col gap-1.5">
+          <Label htmlFor={`${id}-connection`}>{t("sso.enforcement.connection")}</Label>
+          <NativeSelect id={`${id}-connection`} value={c.id} onChange={(e) => setChosen(e.target.value)}>
+            {state.connections.map((x) => (
+              <option key={x.id} value={x.id}>
+                {ssoConnectionLabel(x)}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+      <EnforcementPanel key={c.id} c={c} state={state} />
     </SettingsSection>
   );
 }

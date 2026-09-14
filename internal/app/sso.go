@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/onuragtas/openlog/internal/api"
 	"github.com/onuragtas/openlog/internal/auth"
@@ -15,12 +16,14 @@ import (
 )
 
 // startSSO enables single sign-on, domain verification and SCIM on the api (D-077, D-078): the SSO service, the
-// session policy of the auth service and the cleanup of expired sign-in states. No-op in static auth mode or with
-// OPENLOG_SSO_ENABLED=false.
-func startSSO(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, svc *auth.Service, srv *api.Server, log *slog.Logger) {
+// session policy of the auth service (also the claimed-domain policy of sign-up and invitations, D-089) and the
+// cleanup of expired sign-in states. It returns the leader task refreshing IdP metadata (D-088). No-op in static auth
+// mode or with OPENLOG_SSO_ENABLED=false.
+func startSSO(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, svc *auth.Service, srv *api.Server,
+	reg prometheus.Registerer, log *slog.Logger) []leaderTask {
 	s := cfg.API.Auth.SSO
 	if !s.Enabled || pool == nil || svc == nil {
-		return
+		return nil
 	}
 	box := sso.NewSecretBox(s.SecretKey, s.SecretKeyPrevious, cfg.KeyHash.Secret, cfg.KeyHash.SecretPrevious)
 	if !box.Encrypted() {
@@ -55,4 +58,5 @@ func startSSO(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, svc *a
 			}
 		}
 	}()
+	return []leaderTask{{"sso-idp-refresh", ssoSvc.RefreshJob(reg)}}
 }

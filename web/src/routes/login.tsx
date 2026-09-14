@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { authConfigQuery, login, meQuery } from "@/api/account";
 import { ApiError } from "@/api/client";
 import { AuthLayout } from "@/components/settings/AuthLayout";
+import { SsoLogoutNotice } from "@/components/settings/SsoLogoutNotice";
 import { SsoSignIn } from "@/components/settings/SsoSignIn";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -130,10 +131,12 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {message && (
+          {message ? (
             <p id={`${id}-msg`} role="alert" className={warningTone ? "text-sm text-warning" : "text-sm text-destructive"}>
               {message}
             </p>
+          ) : (
+            <SsoLogoutNotice status={search.sso_logout} />
           )}
           {ssoEnabled && (
             <Button type="button" variant="outline" onClick={() => setMode("sso")}>

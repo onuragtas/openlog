@@ -25,8 +25,11 @@ tasks.test {
 }
 
 val agentJarFile = rootProject.layout.buildDirectory.file("libs/openlog-javaagent-${project.version}.jar")
-val mvcDir = project(":testapps:mvc").layout.buildDirectory.dir("install/mvc")
-val webfluxDir = project(":testapps:webflux").layout.buildDirectory.dir("install/webflux")
+// classpath applications (installDist → build/install/<name>/lib)
+val installedApps = listOf("mvc", "webflux", "jaxrs", "micronaut", "vertx")
+fun installDir(app: String) = project(":testapps:$app").layout.buildDirectory.dir("install/$app")
+val mvcDir = installDir("mvc")
+val quarkusDir = project(":testapps:quarkus").layout.buildDirectory.dir("quarkus-app")
 
 tasks.register<Test>("integrationTest") {
   group = "verification"
@@ -34,10 +37,11 @@ tasks.register<Test>("integrationTest") {
   testClassesDirs = sourceSets["test"].output.classesDirs
   classpath = sourceSets["test"].runtimeClasspath
   useJUnitPlatform()
-  dependsOn(":agentJar", ":testapps:mvc:installDist", ":testapps:webflux:installDist")
+  dependsOn(":agentJar", ":testapps:quarkus:quarkusBuild")
+  installedApps.forEach { dependsOn(":testapps:$it:installDist") }
   systemProperty("openlog.agent.jar", agentJarFile.get().asFile.absolutePath)
-  systemProperty("openlog.app.mvc", mvcDir.get().asFile.absolutePath)
-  systemProperty("openlog.app.webflux", webfluxDir.get().asFile.absolutePath)
+  installedApps.forEach { systemProperty("openlog.app.$it", installDir(it).get().asFile.absolutePath) }
+  systemProperty("openlog.app.quarkus", quarkusDir.get().asFile.absolutePath)
   outputs.upToDateWhen { false }
   testLogging {
     events("passed", "failed", "skipped")

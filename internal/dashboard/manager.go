@@ -15,12 +15,16 @@ type Store interface {
 	// users when admin), ordered by name; q filters by name substring (case-insensitive).
 	List(ctx context.Context, orgID, viewerID string, admin bool, q string) ([]Summary, error)
 	Get(ctx context.Context, orgID, id string) (*Dashboard, error)
-	// Create inserts d (ids set by the caller) with version 1.
+	// Create inserts d (ids set by the caller) with version 1 and records version 1 in the history.
 	Create(ctx context.Context, d *Dashboard) error
-	// Replace overwrites the document of d.ID when its version is expectedVersion (ErrConflict otherwise) and
-	// increments the version.
+	// Replace overwrites the document of d.ID when its version is expectedVersion (ErrConflict otherwise),
+	// increments the version and records it in the history (keeping MaxVersions versions).
 	Replace(ctx context.Context, d *Dashboard, expectedVersion int) error
 	Delete(ctx context.Context, orgID, id string) error
+	// ListVersions returns the stored versions of a dashboard, newest first (versions.go).
+	ListVersions(ctx context.Context, orgID, id string) ([]VersionInfo, error)
+	// GetVersion returns one stored version (ErrNotFound when unknown or pruned).
+	GetVersion(ctx context.Context, orgID, id string, version int) (*Version, error)
 }
 
 // Viewer is the principal acting on dashboards.
@@ -52,10 +56,14 @@ type Manager struct {
 	newID func() string
 }
 
-// NewManager creates a manager.
+// NewManager creates a manager. When store also implements ShareStore and ReportStore (PGStore does), share links
+// and scheduled reports are available.
 func NewManager(store Store) *Manager {
 	return &Manager{store: store, now: time.Now, newID: uuid.NewString}
 }
+
+// SetClock replaces the clock (tests).
+func (m *Manager) SetClock(now func() time.Time) { m.now = now }
 
 // List returns the dashboards v may read.
 func (m *Manager) List(ctx context.Context, orgID string, v Viewer, q string) ([]Summary, error) {
@@ -101,10 +109,12 @@ func (m *Manager) Update(ctx context.Context, orgID, id string, in Input, v View
 	if err != nil {
 		return nil, err
 	}
-	return m.replace(ctx, old, in, v)
+	return m.replace(ctx, old, in, v, nil, 0)
 }
 
-func (m *Manager) replace(ctx context.Context, old *Dashboard, in Input, v Viewer) (*Dashboard, error) {
+// replace validates in and replaces old. restoring (with restoredFrom) is the stored version being restored: its page
+// and widget ids are kept too.
+func (m *Manager) replace(ctx context.Context, old *Dashboard, in Input, v Viewer, restoring *Snapshot, restoredFrom int) (*Dashboard, error) {
 	if !v.CanEdit(old) {
 		return nil, ErrForbidden
 	}
@@ -118,8 +128,8 @@ func (m *Manager) replace(ctx context.Context, old *Dashboard, in Input, v Viewe
 	if d.Visibility != old.Visibility && !v.creator(old) && old.CreatedBy != "" {
 		return nil, invalid("only the creator can change the visibility of a dashboard")
 	}
-	d.ID, d.OrgID, d.CreatedBy, d.UpdatedBy = old.ID, old.OrgID, old.CreatedBy, v.UserID
-	m.assignIDs(d, old)
+	d.ID, d.OrgID, d.CreatedBy, d.UpdatedBy, d.RestoredFrom = old.ID, old.OrgID, old.CreatedBy, v.UserID, restoredFrom
+	m.assignIDs(d, old, restoring)
 	if err := m.store.Replace(ctx, d, in.Version); err != nil {
 		return nil, err
 	}
@@ -175,7 +185,7 @@ func (m *Manager) AddWidget(ctx context.Context, orgID, id, pageID string, w Wid
 	}
 	w.Layout.Y = bottom
 	in.Pages[idx].Widgets = append(in.Pages[idx].Widgets, w)
-	return m.replace(ctx, old, in, v)
+	return m.replace(ctx, old, in, v, nil, 0)
 }
 
 // Duplicate copies a readable dashboard as a new dashboard of v.
@@ -221,15 +231,24 @@ func canonicalID(id string) (string, bool) {
 	return u.String(), true
 }
 
-// assignIDs keeps page and widget ids that belong to old and are used once; every other page or widget gets a new id.
-func (m *Manager) assignIDs(d *Dashboard, old *Dashboard) {
+// assignIDs keeps page and widget ids that belong to old (or to a stored version of it in extra) and are used once;
+// every other page or widget gets a new id.
+func (m *Manager) assignIDs(d *Dashboard, old *Dashboard, extra ...*Snapshot) {
 	known := map[string]bool{}
-	if old != nil {
-		for _, p := range old.Pages {
+	addPages := func(pages []Page) {
+		for _, p := range pages {
 			known[p.ID] = true
 			for _, w := range p.Widgets {
 				known[w.ID] = true
 			}
+		}
+	}
+	if old != nil {
+		addPages(old.Pages)
+	}
+	for _, s := range extra {
+		if s != nil {
+			addPages(s.Pages)
 		}
 	}
 	used := map[string]bool{}

@@ -4,7 +4,8 @@ openlog organizations can sign in through their identity provider (IdP) with **O
 claim their e-mail domains, map IdP groups to roles, **enforce** single sign-on, and let the IdP **provision**
 members with **SCIM 2.0**. Contracts: [api.md](../contracts/api.md) "Single sign-on" and "SCIM",
 [postgres.md](../contracts/postgres.md) "Single sign-on and SCIM", [config.md](../contracts/config.md); decisions
-D-077 (SSO) and D-078 (SCIM).
+D-077 (SSO), D-078 (SCIM), D-088 (several connections, single logout, encrypted assertions, metadata refresh) and
+D-089 (claimed domains, SCIM e-mail changes).
 
 Everything is configured per organization under **Settings → Single sign-on** (administrators; enforcement: owners).
 
@@ -19,7 +20,8 @@ Everything is configured per organization under **Settings → Single sign-on** 
 | `OPENLOG_SMTP_*` | Optional: verify domains by e-mail instead of DNS. |
 
 The api must reach the IdP (OIDC discovery, JWKS, token endpoint; SAML metadata URL) through
-`OPENLOG_SSO_HTTP_TIMEOUT` (10 s). Browsers reach the IdP directly; the IdP never calls openlog except SCIM.
+`OPENLOG_SSO_HTTP_TIMEOUT` (10 s). Browsers reach the IdP directly; the IdP never calls openlog except SCIM (single
+logout runs through the browser, see section 5).
 
 **Key rotation.** Set the new value as `OPENLOG_SSO_SECRET_KEY` and the old one as
 `OPENLOG_SSO_SECRET_KEY_PREVIOUS` on all pods, then re-save every connection (Settings → Single sign-on → Save;
@@ -45,6 +47,13 @@ The TXT record can be removed after verification. Removing the domain in openlog
 
 ## 3. Create the connection
 
+An organization can have up to **10 connections** (for example the parent company on Entra ID and a subsidiary on
+Okta). The first connection is the **default connection**. Each verified domain signs in through the connection
+chosen in its **Connection** column (default: the default connection); a connection only accepts identities of the
+domains routed to it, so one IdP cannot sign in as the users of another IdP's domain. **Add connection** opens the
+wizard for a new connection; each connection can be disabled, refreshed or deleted separately (deleting routes its
+domains back to the default connection and ends its sessions).
+
 The wizard has four steps: **Protocol → Service provider → Identity provider → Users and roles**. Save once with
 the IdP values, run **Check configuration**, then **Test sign-in** (signs you in at the IdP and shows the e-mail,
 groups and role openlog would use — no session or member is created).
@@ -54,10 +63,12 @@ Values openlog shows for your IdP:
 | | OIDC | SAML |
 |---|---|---|
 | Redirect / ACS URL | `https://openlog.example.com/api/v1/sso/oidc/callback` | `https://openlog.example.com/api/v1/sso/saml/<connection id>/acs` |
+| Logout URL | post logout redirect URI `https://openlog.example.com/api/v1/sso/oidc/logout/callback` | single logout service `https://openlog.example.com/api/v1/sso/saml/<connection id>/slo` (HTTP-Redirect and HTTP-POST, in the metadata) |
 | Entity ID / audience | client ID | `https://openlog.example.com/api/v1/sso/saml/<connection id>/metadata` (also the metadata URL) |
 | Sign-in initiated by | openlog (authorization code + PKCE S256, state, nonce) | openlog (HTTP-Redirect AuthnRequest), optionally IdP |
 | NameID | – | e-mail address (or unspecified with an `email` attribute) |
-| Signing | RS/PS/ES 256–512, EdDSA (never `none`/HMAC) | RSA/ECDSA SHA-256/384/512 (SHA-1 refused); assertions or response must be signed |
+| Signing | RS/PS/ES 256–512, EdDSA (never `none`/HMAC) | RSA/ECDSA SHA-256/384/512 (SHA-1 refused); assertions or response must be signed; logout messages are signed both ways |
+| Encryption | – | Optional encrypted assertions with the SP certificate: AES-256/192/128-GCM or -CBC, RSA-OAEP (2001 MGF1P or xmlenc 1.1 with MGF1-SHA-256/…); RSA PKCS#1 v1.5 and 3DES are refused |
 
 The SAML entity ID and ACS URL are generated when a SAML connection is first saved (paste the IdP metadata URL or
 XML, save, then copy the SP values or give the IdP the metadata URL).
@@ -109,18 +120,22 @@ no SCIM push to custom apps.
 ### Keycloak
 
 - **OIDC:** Clients → Create client (OpenID Connect), Client authentication ON, Standard flow ON, Valid redirect
-  URIs = openlog's redirect URI; PKCE method S256 (Advanced). Client scopes → dedicated scope → Add mapper *Group
+  URIs = openlog's redirect URI, Valid post logout redirect URIs = openlog's post logout redirect URI (or `+`); PKCE
+  method S256 (Advanced). Client scopes → dedicated scope → Add mapper *Group
   Membership*, token claim name `groups`, *Full group path* OFF. Issuer
   `https://keycloak.example.com/realms/<realm>`.
 - **SAML:** Clients → Import client, upload openlog's SP metadata (or Realm settings → *client-description
   converter* over the admin API). Name ID format `email`, Force name ID format ON, Sign assertions ON, Encrypt
-  assertions OFF, Client signature required OFF (unless "Sign authentication requests" is on in openlog). Mappers:
+  assertions ON or OFF (Keycloak's default AES-256-GCM/RSA-OAEP works), Client signature required ON together with
+  "Sign authentication requests" in openlog (the SP certificate comes from the metadata), Front channel logout ON with
+  the Logout service redirect/POST binding URL = openlog's single logout service. Mappers:
   *User Property* `email` → attribute `email`; *Group list* → attribute `groups`, full path OFF. IdP metadata URL:
   `https://keycloak.example.com/realms/<realm>/protocol/saml/descriptor`. IdP-initiated: set *IDP-Initiated SSO URL
   name* and *relay state* (e.g. `/hosts`) on the client and allow IdP-initiated sign-in with that path in openlog.
 
-The end-to-end test in `test/sso` runs both flows against Keycloak 26 (see
-`test/integration/sso/docker-compose.yml`).
+The end-to-end test in `test/sso` runs both flows against Keycloak 26 — an OIDC default connection and a SAML
+connection with encrypted assertions routed by domain, single logout in both directions, OIDC RP-initiated logout —
+(see `test/integration/sso/docker-compose.yml`).
 
 ## 4. Users and roles
 
@@ -128,27 +143,61 @@ The end-to-end test in `test/sso` runs both flows against Keycloak 26 (see
   account (no password) and the membership with the mapped role, else the **default role** (viewer).
 - **Role mappings** (group → admin/member/viewer): the highest matching role wins. When mappings exist and the IdP
   sends a groups claim/attribute, non-owner roles are synchronized on every sign-in (and on SCIM group changes).
-  Owners are never changed by SSO or SCIM.
+  Owners are never changed by SSO or SCIM. Mappings are **organization-wide** (used by SCIM and by every connection)
+  or **per connection** (a connection with own mappings uses only those at sign-in).
+- **Invitations:** an invited address signs in with SSO to accept the invitation (with the invited role, also when
+  just-in-time provisioning is off).
 - **Maximum session length** forces users back to the IdP after 1 h – 7 days (otherwise `OPENLOG_SESSION_TTL`).
-- SSO sessions act **only in the organization they signed in to**; they end when the connection is disabled,
-  deleted or replaced. Logout is local (the IdP session is not ended).
+- SSO sessions act **only in the organization they signed in to**; they end when their connection is disabled or
+  deleted. **Sign out** is local; **Sign out everywhere (IdP)** in the user menu also ends the IdP session (section 5).
 - IdP-initiated SAML is off by default. It cannot be bound to the browser (login CSRF), so enable it only if users
   need the IdP app launcher, and list the allowed start pages (RelayState).
 
-## 5. Enforce single sign-on
+## 5. Single logout
 
-Owners can require SSO. openlog refuses to turn enforcement on until:
+**Sign out everywhere (IdP)** (user menu, SSO sessions only) ends the openlog session, the user's other openlog sessions
+of the same connection and then the session at the identity provider:
+
+- **SAML:** openlog sends a LogoutRequest (NameID and SessionIndex of the sign-in, signed with the SP key) to the IdP's
+  SingleLogoutService from its metadata; the IdP answers at openlog's single logout service and the browser returns to
+  the login page with "You are signed out of openlog and your identity provider" (`?sso_logout=ok`) or, when the IdP
+  does not confirm, a hint to close the browser (`?sso_logout=partial`). Without a SingleLogoutService in the IdP
+  metadata only the openlog sessions end.
+- **IdP-initiated SAML logout:** when the user signs out at the IdP (or another application of the same IdP session),
+  the IdP sends a LogoutRequest through the browser (front-channel) to the single logout service. openlog accepts it
+  only when it is signed by the IdP certificate, addressed to this connection, current and not replayed, ends the
+  sessions of that NameID (and SessionIndex) and answers with a signed LogoutResponse. SOAP back-channel logout is not
+  supported: enable front-channel logout at the IdP.
+- **OIDC:** openlog redirects to the provider's `end_session_endpoint` with `id_token_hint` and the post logout
+  redirect URI; register that URI at the provider (Keycloak "Valid post logout redirect URIs", Okta "Sign-out redirect
+  URIs", Entra ID "Front-channel logout URL" is not needed). OIDC back-channel logout from the provider is not
+  supported.
+- **Return path:** `/login`, or a path listed under "Logout redirect paths" on the last wizard step.
+
+Every logout is audited (`sso.logout` with `via` `user` or `idp` and the number of revoked sessions).
+
+## 6. Enforce single sign-on
+
+Owners can require SSO **per connection**: enforcement applies to members whose verified e-mail domain signs in
+through that connection. openlog refuses to turn enforcement on until:
 
 1. the connection is enabled,
 2. a **test sign-in of the current settings** succeeded (every save needs a new test),
-3. at least one domain is verified,
+3. at least one verified domain signs in through the connection,
 4. at least one **break-glass owner** is selected — these owners keep password sign-in if the IdP fails,
 5. you keep access yourself (you are a break-glass owner or signed in through this connection).
 
 With enforcement on, members whose e-mail domain is verified cannot use password sessions in the organization
 (existing ones lose access on their next request; password sign-in answers "requires single sign-on" when all
 their organizations enforce SSO). Members outside the verified domains (contractors with other addresses) are not
-affected. The connection cannot be disabled or deleted, and the last verified domain not removed, while enforced.
+affected. The connection cannot be disabled or deleted, and its last verified domain can be neither removed nor moved to
+another connection, while enforced.
+
+**Claimed domains.** When a verified domain signs in through an enabled connection, addresses of that domain cannot
+create password accounts: self-service sign-up shows "<organization> signs in with single sign-on for this e-mail
+domain" with **Continue with SSO**, and invitations of that organization are accepted by signing in with SSO. An
+invitation of *another* organization to such an address is accepted with a password only while "Allow invitations to
+other organizations with a password" is on for the connection (default on).
 
 **Lockout recovery** (IdP down, no break-glass owner can sign in): an operator can turn enforcement off in
 PostgreSQL:
@@ -157,7 +206,24 @@ PostgreSQL:
 UPDATE sso_connections SET enforce = false WHERE org_id = (SELECT id FROM organizations WHERE tenant_id = '<tenant>');
 ```
 
-## 6. SCIM provisioning
+## 7. IdP metadata refresh and connection health
+
+The api leader refreshes the IdP documents of enabled connections in the background: OIDC discovery and JWKS every
+30 minutes (every api pod uses the refreshed copy for up to an hour, so a key rotation or a slow discovery endpoint does
+not delay sign-ins), SAML metadata from the metadata URL at half its `cacheDuration` or remaining `validUntil` (between
+15 minutes and 24 hours, 6 hours without either). Refreshed SAML metadata with the same entity ID replaces the stored
+copy (new signing certificates, SSO/SLO URLs) without invalidating the test sign-in; the change is audited
+(`sso.connection.metadata_refresh`). A changed entity ID, expired metadata or an expired signing certificate is
+reported instead — save the connection to accept a new entity ID. Pasted metadata is re-validated only.
+
+Each connection shows its health: **OK**, **Warning** (one or two failed refreshes, certificate expiring within 30
+days, metadata valid for less than 7 days), **Error** (three failed refreshes in a row, expired certificate) or
+**Unknown** (not refreshed yet) with the last check; **Refresh now** runs the refresh immediately. Failed refreshes
+retry after 5, 10, 20, 40 minutes, then hourly. Metrics: `openlog_sso_idp_refresh_total{protocol,result}`,
+`openlog_sso_idp_refresh_duration_seconds{protocol}`, `openlog_sso_idp_refresh_failing_connections` (alert when it
+stays above 0).
+
+## 8. SCIM provisioning
 
 Create a token under **SCIM provisioning** (`ols_…`, shown once, hashed like API keys) and configure the IdP with
 the SCIM base URL `https://openlog.example.com/api/scim/v2`. Supported: `/Users` and `/Groups` (GET with
@@ -166,13 +232,18 @@ the SCIM base URL `https://openlog.example.com/api/scim/v2`. Supported: `/Users`
 `/ResourceTypes`, `/Schemas`. No bulk, sort or ETags.
 
 - Creating an active user adds the membership (and the account when the address is new; addresses must be in a
-  verified domain). Changing the e-mail address of a provisioned user is not supported (deprovision and provision).
+  verified domain).
+- **E-mail changes:** a new primary address in `emails` (PUT, PATCH `emails`, `emails[primary eq true].value`,
+  `emails[type eq "work"].value`), or a new `userName` when the old `userName` was the address, changes the openlog
+  account's address when both the old and the new address are in verified domains of the organization, the new
+  address is not used by another account (`409 uniqueness`) and the user is not an owner (`400 mutability`). Audited as
+  `scim.user.email_change`.
 - `active=false` or DELETE removes the membership **immediately**, revokes the user's SSO sessions of the
   organization and the API keys they created there; a deprovisioned user is not re-added by JIT sign-in until the
   IdP reactivates them. Owners cannot be deprovisioned through SCIM.
 - SCIM group membership + role mappings set roles (recomputed when mappings change).
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
 Failed sign-ins return to `/login?sso_error=<code>` and are recorded in the audit log (`sso.login_failed` with the
 reason; the details are only visible to administrators). Successful ones log `sso.login`.
@@ -188,5 +259,8 @@ reason; the details are only visible to administrators). Successful ones log `ss
 | `not_member` | Just-in-time provisioning is off and the user is not a member |
 | `deprovisioned` | SCIM deactivated the user |
 | `disabled` | The connection is disabled or was deleted |
+| `domain_not_verified` after adding a connection | The domain signs in through another connection: check its **Connection** column |
+| `invalid_request` at `/login` after an IdP logout | The IdP LogoutRequest was unsigned, not addressed to this connection's SLO URL, too old or signed with SHA-1 — check the IdP's signing and front-channel logout settings |
+| `?sso_logout=partial` | The IdP did not confirm the logout (unsigned or failed LogoutResponse); openlog sessions ended anyway |
 
 **Check configuration** shows discovery/JWKS/PKCE (OIDC) or metadata/certificate expiry (SAML) problems directly.

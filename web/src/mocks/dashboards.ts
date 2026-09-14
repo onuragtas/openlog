@@ -234,6 +234,16 @@ const find = (info: Info, ctx: Ctx) => {
   return d && visible(d, ctx) ? d : null;
 };
 
+/** The stored mock dashboard (mocks/dashboardSharing.ts: versions, share links). */
+export function mockDashboard(id: string): Stored | undefined {
+  return db.dashboards.find((x) => x.id === id);
+}
+
+/** Replaces a stored mock dashboard (version restore). */
+export function replaceMockDashboard(d: Stored): void {
+  db.dashboards = db.dashboards.map((x) => (x.id === d.id ? d : x));
+}
+
 export const dashboardHandlers = [
   http.get(API, guarded(false, ({ request }, ctx) => {
     const q = (new URL(request.url).searchParams.get("q") ?? "").toLowerCase();

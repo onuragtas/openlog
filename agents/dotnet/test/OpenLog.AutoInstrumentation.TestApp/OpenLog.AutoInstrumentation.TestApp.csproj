@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- ASP.NET Core app WITHOUT any OpenTelemetry or openlog reference, started by the automatic instrumentation test
+       (test/autoinstrumentation/run.sh) under the OpenTelemetry .NET automatic instrumentation + the openlog plugin. -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -148,6 +148,7 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 	topics := queue.NewTopicWatcher(prod.Client(), queue.Topics(cfg.KafkaTopicPrefix), log)
 	go topics.Run(ctx)
 	adm.AddCheck("kafka_topics", topics.Check)
+	adm.AddCheck("ingest_listener", admin.ListenerCheck(cfg.Ingest.HTTPAddr)) // OTLP/HTTP port accepts connections
 	svc := ingest.New(cfg.Ingest, cfg.KafkaTopicPrefix, res, prod, log, adm.Registry())
 	svc.SetSplitTraces(cfg.TailSampling.Enabled) // one record per trace id for openlog-sampler (D-075)
 	// SaaS mode quota enforcement (usage.go, D-080).
@@ -273,10 +274,12 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	}
 	defer closeDB()
 	adm.AddCheck("clickhouse", db.Ping)
+	adm.AddCheck("api_listener", admin.ListenerCheck(cfg.API.HTTPAddr)) // ready only once the API port accepts connections
 	srv := api.New(cfg.API, db, authn, log, adm.Registry())
+	var ssoTasks []leaderTask
 	if svc != nil {
 		srv.SetAccounts(svc)
-		startSSO(ctx, cfg, pgPool, svc, srv, log) // sso.go (D-077, D-078)
+		ssoTasks = startSSO(ctx, cfg, pgPool, svc, srv, adm.Registry(), log) // sso.go (D-077, D-078, D-088)
 	}
 	var apmSettings apm.SettingsStore // nil in static mode: default Apdex T
 	if pgPool != nil {
@@ -292,12 +295,19 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	if err := startIntegrationSettingsAPI(cfg, pgPool, srv, log); err != nil { // fleet.go
 		return err
 	}
-	startDashboardAPI(pgPool, srv) // dashboards.go
-	if pgPool != nil {             // tail sampling policies (D-075); static mode serves the read-only default
+	dashboardTasks, err := startDashboardAPI(cfg, pgPool, db, srv, log) // dashboards.go: dashboards, share links, reports (D-086, D-087)
+	if err != nil {
+		return err
+	}
+	if pgPool != nil { // tail sampling policies (D-075); static mode serves the read-only default
 		srv.SetTailSampling(tailsampling.PGStore{Pool: pgPool}, cfg.TailSampling.Enabled)
 	} else {
 		srv.SetTailSampling(nil, cfg.TailSampling.Enabled)
 	}
+	srv.SetOnboarding(api.OnboardingConfig{ // GET /api/v1/onboarding: "Add data" install commands
+		PublicURL: cfg.Alert.PublicURL, IngestPublicURL: cfg.Onboarding.IngestPublicURL, IngestPublicGRPCURL: cfg.Onboarding.IngestPublicGRPCURL,
+		CORSAllowedOrigins: cfg.Ingest.CORSAllowedOrigins, Channel: cfg.UpdateCheck.Channel,
+	})
 	usageTasks, err := startUsageAPI(ctx, cfg, pgPool, conn, db, srv, adm.Registry(), log) // usage.go (D-079..D-081)
 	if err != nil {
 		return err
@@ -313,7 +323,7 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		}, log.With("job", "apm-link"), adm.Registry()).Run
 	}
 	fleetController := startFleetAPI(ctx, cfg, pgPool, srv, adm.Registry(), log)
-	startLeaderTasks(ctx, cfg, pgPool, srv, log, fleetController, apmLinker, usageTasks...)
+	startLeaderTasks(ctx, cfg, pgPool, srv, log, fleetController, apmLinker, append(append(usageTasks, dashboardTasks...), ssoTasks...)...)
 	if cfg.API.UIEnabled {
 		srv.SetUI(web.Handler(web.Dist()))
 		log.Info("web UI enabled", "path", "/")

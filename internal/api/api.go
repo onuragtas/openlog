@@ -49,12 +49,16 @@ type Server struct {
 	// nil: no integration settings endpoints (intsettings.go; static auth mode)
 	intSettings *intsettings.Manager
 	dashboards  *dashboard.Manager // nil: no dashboard endpoints (dashboards.go; static auth mode)
+	// rate limits of the public dashboard share link endpoints (dashboard_public.go, D-087)
+	publicShares *shareLimiter
 	// tail sampling policy endpoints (tailsampling.go, D-075)
 	tailSampling *tailSamplingState
 	// usage, plan and billing endpoints (usage.go, D-079..D-081); nil: none
 	usage *UsageDeps
 	// single sign-on, domain verification and SCIM endpoints (sso.go, D-077, D-078); nil: none
 	sso ssoService
+	// public endpoints and flags of GET /api/v1/onboarding ("Add data" page, onboarding.go); nil: derived from requests
+	onboarding *OnboardingConfig
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -122,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 	s.tailSamplingRoutes(mux) // tailsampling.go (D-075)
 	s.usageRoutes(mux)        // usage.go (D-079..D-081)
 	s.ssoRoutes(mux)          // sso.go: single sign-on, domains, SCIM (D-077, D-078)
+	s.onboardingRoutes(mux)   // onboarding.go: "Add data" install command inputs
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})
@@ -253,6 +258,11 @@ func (s *Server) toAPIError(err error) *apiError {
 		return &apiError{http.StatusUnprocessableEntity, "resource_exhausted",
 			"query exceeded the " + le.Limit + " limit of this organization; narrow the time range or add filters"}
 	}
+	if se, ok := query.AsStorageError(err); ok { // cold (S3) parts unreadable (query/storage.go, D-066)
+		s.log.Warn("clickhouse storage error", "code", se.Code, "err", err)
+		return &apiError{http.StatusServiceUnavailable, "storage_unavailable",
+			"part of the requested data is on storage that cannot be read right now; retry later or query a more recent time range"}
+	}
 	var ex *ch.Exception
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ex) && (ex.Code == 159 || ex.Code == 160)) {
 		return &apiError{http.StatusGatewayTimeout, "timeout", "query timed out"}
@@ -267,7 +277,11 @@ func writeError(w http.ResponseWriter, e *apiError) {
 	if e.status == http.StatusTooManyRequests || e.status == http.StatusServiceUnavailable {
 		w.Header().Set("Retry-After", "30")
 	}
-	writeJSON(w, e.status, map[string]any{"error": map[string]string{"code": e.code, "message": e.message}})
+	body := map[string]any{"code": e.code, "message": e.message}
+	if e.code == "storage_unavailable" {
+		body["retryable"] = true
+	}
+	writeJSON(w, e.status, map[string]any{"error": body})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

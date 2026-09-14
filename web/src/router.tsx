@@ -5,12 +5,13 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect } from "@tanstack/react-router";
 import { meQuery } from "@/api/account";
 import { ApiError } from "@/api/client";
-import { SSO_ERROR_CODES, type SsoErrorCode } from "@/api/sso";
+import { SSO_ERROR_CODES, ssoLogoutStatus, type SsoErrorCode, type SsoLogoutStatus } from "@/api/sso";
 import { AppShell } from "@/components/AppShell";
 import { LoadingState } from "@/components/StateViews";
 import { NotFoundPage } from "@/routes/not-found";
 import { LoginPage } from "@/routes/login";
 import { validateRangeSearch, type RangeSpec } from "@/lib/time";
+import { sanitizeFiltersSearch, type DashboardFilter } from "@/lib/dashboard-filters";
 import { sanitizeVarsSearch } from "@/lib/dashboards";
 import { POD_PHASES, WORKLOAD_HEALTHS, WORKLOAD_KINDS, type PodPhaseParam, type WorkloadHealthParam, type WorkloadKind } from "@/lib/kubernetes";
 
@@ -77,6 +78,8 @@ export interface LoginSearch {
   expired?: boolean;
   /** Failed single sign-on (docs/contracts/api.md "Single sign-on", components/settings/SsoSignIn). */
   sso_error?: SsoErrorCode;
+  /** "Sign out everywhere" returned from the identity provider (components/settings/SsoLogoutNotice). */
+  sso_logout?: SsoLogoutStatus;
 }
 
 const loginRoute = createRoute({
@@ -86,6 +89,7 @@ const loginRoute = createRoute({
     redirect: str(s.redirect)?.startsWith("/") ? str(s.redirect) : undefined,
     expired: s.expired === true || s.expired === "true" || s.expired === 1 ? true : undefined,
     sso_error: oneOf(SSO_ERROR_CODES, s.sso_error),
+    sso_logout: ssoLogoutStatus(s.sso_logout),
   }),
   component: LoginPage,
 });
@@ -658,6 +662,8 @@ export interface DashboardSearch {
   /** Selected variable values by variable name (lib/dashboards.ts sanitizeVarsSearch). */
   vars?: Record<string, string[]>;
   edit?: boolean;
+  /** Cross-widget filters (lib/dashboard-filters.ts sanitizeFiltersSearch). */
+  filters?: DashboardFilter[];
 }
 
 const dashboardRoute = createRoute({
@@ -666,9 +672,30 @@ const dashboardRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): DashboardSearch => ({
     page: str(s.page),
     vars: sanitizeVarsSearch(s.vars),
+    filters: sanitizeFiltersSearch(s.filters),
     edit: s.edit === true || s.edit === "true" ? true : undefined,
   }),
   component: DashboardPage,
+});
+
+// ---- Add data (routes/add-data.tsx): guided agent installs, deep links such as /add-data/linux, /add-data/apm/node ----
+
+const AddDataPage = lazyRouteComponent(() => import("@/routes/add-data"), "AddDataPage");
+const AddDataTargetPage = lazyRouteComponent(() => import("@/routes/add-data"), "AddDataTargetPage");
+
+export interface AddDataSearch {
+  /** Prefill from a host's Services tab: host id, host name and discovered service name. */
+  host?: string;
+  hostName?: string;
+  service?: string;
+}
+
+const addDataRoute = createRoute({ getParentRoute: () => appRoute, path: "/add-data", component: AddDataPage });
+const addDataTargetRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/add-data/$",
+  validateSearch: (s: Record<string, unknown>): AddDataSearch => ({ host: str(s.host), hostName: str(s.hostName), service: str(s.service) }),
+  component: AddDataTargetPage,
 });
 
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/settings", component: SettingsLayout });
@@ -689,11 +716,23 @@ const settingsTailSamplingRoute = createRoute({ getParentRoute: () => settingsRo
 const settingsUsageRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/usage", component: UsageSettingsPage });
 // Single sign-on settings and the public domain verification link (components/settings/Sso*.tsx, D-077).
 const SsoSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SsoSettingsPage");
-const settingsSsoRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/sso", component: SsoSettingsPage });
+const settingsSsoRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "/sso",
+  // Set by the server when a test sign-in returns (components/settings/SsoSettings).
+  validateSearch: (s: Record<string, unknown>): { sso_test?: "ok" | "failed" } => ({ sso_test: s.sso_test === "ok" || s.sso_test === "failed" ? s.sso_test : undefined }),
+  component: SsoSettingsPage,
+});
 const ssoVerifyDomainRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sso/verify-domain",
   component: lazyRouteComponent(() => import("@/components/settings/SsoVerifyDomain"), "SsoVerifyDomainPage"),
+});
+// Public read-only dashboard share links: no session and no app navigation (routes/shared-dashboard.tsx, D-087).
+const sharedDashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/shared/dashboards/$token",
+  component: lazyRouteComponent(() => import("@/routes/shared-dashboard"), "SharedDashboardPage"),
 });
 
 export const routeTree = rootRoute.addChildren([
@@ -702,6 +741,7 @@ export const routeTree = rootRoute.addChildren([
   signupRoute,
   verifyEmailRoute,
   ssoVerifyDomainRoute,
+  sharedDashboardRoute,
   appRoute.addChildren([
     indexRoute,
     hostsRoute,
@@ -727,6 +767,8 @@ export const routeTree = rootRoute.addChildren([
     queryRoute,
     dashboardsRoute,
     dashboardRoute,
+    addDataRoute,
+    addDataTargetRoute,
     alertsRoute.addChildren([
       alertsIndexRoute,
       alertsIncidentsRoute,

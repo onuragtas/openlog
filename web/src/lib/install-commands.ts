@@ -1,0 +1,872 @@
+// Install commands of the "Add data" page (routes/add-data.tsx). Everything here is pure and unit tested
+// (install-commands.test.ts): flags, variable names and URLs follow the agents' own documentation
+// (scripts/install.sh, agents/*/README.md, deploy/helm/openlog-agent, docs/contracts/php-agent.md §7).
+// The license key only ever appears in command text shown to the user; never in a URL.
+
+export const TARGET_IDS = [
+  "linux",
+  "docker",
+  "kubernetes",
+  "apm/go",
+  "apm/node",
+  "apm/python",
+  "apm/java",
+  "apm/dotnet",
+  "apm/php",
+  "logs/host",
+  "logs/containers",
+  "logs/browser",
+  "logs/otel",
+  "otel/sdk",
+  "otel/collector",
+  "integrations/nginx",
+  "integrations/redis",
+  "integrations/mysql",
+  "integrations/postgresql",
+] as const;
+export type TargetId = (typeof TARGET_IDS)[number];
+
+export const TARGET_GROUPS = ["infrastructure", "apm", "logs", "opentelemetry", "integrations"] as const;
+export type TargetGroup = (typeof TARGET_GROUPS)[number];
+
+/** What the verification step waits for. */
+export type VerifyKind = "host" | "kubernetes" | "apm" | "logs" | "integration";
+
+export type OptionKey =
+  | "hostName"
+  | "distro"
+  | "channel"
+  | "dockerAccess"
+  | "clusterName"
+  | "serviceName"
+  | "environment"
+  | "nodeModules"
+  | "pythonLauncher"
+  | "javaMode"
+  | "dotnetApp"
+  | "phpMode"
+  | "phpPackage"
+  | "arch"
+  | "otelLanguage"
+  | "protocol"
+  | "logPath"
+  | "journald"
+  | "browserOrigin";
+
+export interface InstallTarget {
+  id: TargetId;
+  group: TargetGroup;
+  verify: VerifyKind;
+  /** Options shown in the options step, in order. */
+  options: OptionKey[];
+  /** Integration id for integration targets (lib/integrations.ts ids). */
+  integration?: "nginx" | "redis" | "mysql" | "postgresql";
+  /** Documentation in the repository. */
+  docs: string;
+  /** Other card to set up first (e.g. the infra agent for PHP and host logs). */
+  requires?: TargetId;
+}
+
+const REPO = "https://github.com/onuragtas/openlog";
+const RELEASES = `${REPO}/releases`;
+const blob = (path: string) => `${REPO}/blob/master/${path}`;
+
+export const INSTALL_TARGETS: readonly InstallTarget[] = [
+  { id: "linux", group: "infrastructure", verify: "host", options: ["distro", "channel", "dockerAccess", "hostName"], docs: blob("agents/infra/README.md") },
+  { id: "docker", group: "infrastructure", verify: "host", options: ["hostName"], docs: blob("agents/infra/README.md") },
+  { id: "kubernetes", group: "infrastructure", verify: "kubernetes", options: ["clusterName", "environment"], docs: blob("docs/operations/kubernetes.md") },
+  { id: "apm/go", group: "apm", verify: "apm", options: ["serviceName", "environment"], docs: blob("agents/go/README.md") },
+  { id: "apm/node", group: "apm", verify: "apm", options: ["serviceName", "environment", "nodeModules"], docs: blob("agents/node/README.md") },
+  { id: "apm/python", group: "apm", verify: "apm", options: ["serviceName", "environment", "pythonLauncher"], docs: blob("agents/python/README.md") },
+  { id: "apm/java", group: "apm", verify: "apm", options: ["serviceName", "environment", "javaMode"], docs: blob("agents/java/README.md") },
+  { id: "apm/dotnet", group: "apm", verify: "apm", options: ["serviceName", "environment", "dotnetApp"], docs: blob("agents/dotnet/README.md") },
+  { id: "apm/php", group: "apm", verify: "apm", options: ["serviceName", "environment", "phpMode", "phpPackage", "arch"], docs: blob("docs/contracts/php-agent.md"), requires: "linux" },
+  { id: "logs/host", group: "logs", verify: "logs", options: ["logPath", "journald"], docs: blob("agents/infra/README.md#logs"), requires: "linux" },
+  { id: "logs/containers", group: "logs", verify: "logs", options: [], docs: blob("agents/infra/README.md#logs"), requires: "linux" },
+  { id: "logs/browser", group: "logs", verify: "logs", options: ["serviceName", "environment", "browserOrigin"], docs: blob("docs/contracts/config.md") },
+  { id: "logs/otel", group: "logs", verify: "logs", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
+  { id: "otel/sdk", group: "opentelemetry", verify: "apm", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
+  { id: "otel/collector", group: "opentelemetry", verify: "apm", options: ["protocol"], docs: blob("README.md") },
+  { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
+  { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
+  { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
+  { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: "linux" },
+];
+
+export function findTarget(id: string | undefined): InstallTarget | undefined {
+  const clean = (id ?? "").replace(/^\/+|\/+$/g, "");
+  return INSTALL_TARGETS.find((t) => t.id === clean);
+}
+
+/**
+ * Product each APM card installs. Discovery hints carry identifiers such as `openlog-agent-php`
+ * (semantic-conventions §3.4); these are the names users install.
+ */
+export const AGENT_PRODUCTS: Partial<Record<TargetId, string>> = {
+  "apm/go": "github.com/onuragtas/openlog/agents/go",
+  "apm/node": "@openlog/node",
+  "apm/python": "openlog-agent",
+  "apm/java": "openlog-javaagent",
+  "apm/dotnet": "OpenLog.Agent",
+  "apm/php": "openlog-php-agent",
+};
+
+/** Maps a discovery `apm_hint.language` (agents/infra/rules/*.yaml) to its Add data card. */
+export function apmTargetForLanguage(language: string | undefined | null): TargetId | undefined {
+  switch ((language ?? "").toLowerCase()) {
+    case "php":
+      return "apm/php";
+    case "node":
+    case "nodejs":
+      return "apm/node";
+    case "python":
+      return "apm/python";
+    case "java":
+    case "jvm":
+      return "apm/java";
+    case "dotnet":
+      return "apm/dotnet";
+    case "go":
+      return "apm/go";
+    default:
+      return undefined;
+  }
+}
+
+export interface InstallOptions {
+  /** Value inserted for the license key; empty = placeholder. Held in memory only. */
+  licenseKey: string;
+  hostName: string;
+  distro: "auto" | "deb" | "rpm" | "tarball";
+  channel: "stable" | "beta";
+  dockerAccess: boolean;
+  clusterName: string;
+  serviceName: string;
+  environment: string;
+  nodeModules: "commonjs" | "esm";
+  pythonLauncher: "python" | "gunicorn" | "uvicorn" | "django" | "celery";
+  javaMode: "jvm" | "docker";
+  dotnetApp: "aspnet" | "console";
+  phpMode: "fleet" | "package";
+  phpPackage: "deb" | "rpm" | "apk";
+  arch: "amd64" | "arm64";
+  otelLanguage: "node" | "python" | "java" | "dotnet" | "go" | "other";
+  protocol: "http" | "grpc";
+  logPath: string;
+  journald: boolean;
+  browserOrigin: string;
+}
+
+export const DEFAULT_OPTIONS: InstallOptions = {
+  licenseKey: "",
+  hostName: "",
+  distro: "auto",
+  channel: "stable",
+  dockerAccess: true,
+  clusterName: "",
+  serviceName: "",
+  environment: "",
+  nodeModules: "commonjs",
+  pythonLauncher: "python",
+  javaMode: "jvm",
+  dotnetApp: "aspnet",
+  phpMode: "package",
+  phpPackage: "deb",
+  arch: "amd64",
+  otelLanguage: "node",
+  protocol: "http",
+  logPath: "/var/log/myapp/*.log",
+  journald: false,
+  browserOrigin: "",
+};
+
+/** The parts of GET /api/v1/onboarding the commands use. */
+export interface OnboardingInfo {
+  otlp_http: { url: string };
+  otlp_grpc: { url: string };
+  agent_version: string | null;
+  cors_enabled: boolean;
+  features?: { fleet_php_install?: boolean };
+}
+
+export type BlockLang = "sh" | "yaml" | "go" | "js" | "csharp" | "dockerfile" | "sql" | "nginx" | "ini";
+
+export type BlockLabel =
+  | "install"
+  | "download"
+  | "packageInstall"
+  | "enablePhp"
+  | "phpSettings"
+  | "fleetConfig"
+  | "secret"
+  | "helmInstall"
+  | "code"
+  | "environment"
+  | "run"
+  | "dockerfile"
+  | "dockerRun"
+  | "agentConfig"
+  | "journalAccess"
+  | "containerLabels"
+  | "restart"
+  | "serverCors"
+  | "sender"
+  | "otelInstall"
+  | "collectorEnv"
+  | "collectorConfig"
+  | "collectorRun"
+  | "stubStatus"
+  | "redisAcl"
+  | "sqlUser"
+  | "passwordFile"
+  | "verify";
+
+export interface CommandBlock {
+  /** Unique within one result. */
+  id: string;
+  label: BlockLabel;
+  lang: BlockLang;
+  code: string;
+  /** The block contains the real license key (masked in the UI until revealed). */
+  containsKey: boolean;
+}
+
+export type NoteKey =
+  | "placeholderKey"
+  | "versionUnknown"
+  | "distroAuto"
+  | "archAuto"
+  | "dockerGroup"
+  | "dockerImageTag"
+  | "helmChartSource"
+  | "helmPodSecurity"
+  | "goStart"
+  | "nodeEsm"
+  | "pythonModules"
+  | "javaChecksum"
+  | "javaDockerKey"
+  | "dotnetRuntime"
+  | "phpNeedsInfraAgent"
+  | "phpFleetPage"
+  | "phpFleetUnavailable"
+  | "phpIniFile"
+  | "mergeConfig"
+  | "journaldGroup"
+  | "containerLogsDefault"
+  | "corsRequired"
+  | "corsConfigured"
+  | "browserKeyPublic"
+  | "otelGoSdk"
+  | "otelOtherSdk"
+  | "otelLogsBridge"
+  | "collectorPorts"
+  | "grpcInsecure"
+  | "integrationUi"
+  | "integrationAuto"
+  | "passwordPlaceholder"
+  | "redisAclOptional";
+
+export interface InstallCommands {
+  blocks: CommandBlock[];
+  notes: NoteKey[];
+}
+
+export const LICENSE_KEY_PLACEHOLDER = "<LICENSE_KEY>";
+const DEFAULT_SERVICE = "my-service";
+const DEFAULT_CLUSTER = "my-cluster";
+const INFRA_IMAGE = "ghcr.io/onuragtas/openlog-infra-agent";
+const INSTALL_SH = `${RELEASES}/latest/download/install.sh`;
+const CONT = " \\\n  ";
+
+const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+/** POSIX shell quoting: safe words stay as they are, everything else is single-quoted. */
+export function shQuote(value: string): string {
+  if (value === "") return "''";
+  return SHELL_SAFE.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** YAML double-quoted scalar (a JSON string is one). */
+export function yamlQuote(value: string): string {
+  return JSON.stringify(value);
+}
+
+/** String literal for Go, JavaScript and C# (JSON escaping is valid in all three for text input). */
+const codeString = (value: string) => JSON.stringify(value);
+
+/** Helm --set value: commas and backslashes are Helm syntax. */
+const helmValue = (value: string) => value.replace(/\\/g, "\\\\").replace(/,/g, "\\,");
+
+/** Strips characters that no install target can carry safely in names (quotes, backslashes, control characters). */
+export function cleanName(value: string): string {
+  return value.replace(/[\p{Cc}"'`\\]/gu, "").trim();
+}
+
+/** Display form of text containing the key: the key replaced by a masked form. Copying always uses the real text. */
+export function maskKey(text: string, key: string): string {
+  if (!key || key === LICENSE_KEY_PLACEHOLDER) return text;
+  const masked = key.length > 12 ? `${key.slice(0, 4)}${"•".repeat(12)}` : "•".repeat(12);
+  return text.split(key).join(masked);
+}
+
+const stripSlash = (u: string) => u.replace(/\/+$/, "");
+
+interface Ctx {
+  o: InstallOptions;
+  key: string;
+  hasKey: boolean;
+  http: string;
+  grpc: string;
+  version: string | null;
+  info: OnboardingInfo;
+  service: string;
+  env: string;
+  blocks: CommandBlock[];
+  notes: NoteKey[];
+}
+
+function add(c: Ctx, label: BlockLabel, lang: BlockLang, code: string) {
+  const n = c.blocks.filter((b) => b.label === label).length;
+  c.blocks.push({ id: n === 0 ? label : `${label}-${n + 1}`, label, lang, code, containsKey: c.hasKey && code.includes(c.key) });
+}
+
+function note(c: Ctx, key: NoteKey) {
+  if (!c.notes.includes(key)) c.notes.push(key);
+}
+
+/** `export NAME=value` lines of the openlog agents' shared configuration (agents/go/README.md "Configuration"). */
+function openlogEnv(c: Ctx, extra: [string, string][] = []): string {
+  const lines: [string, string][] = [
+    ["OPENLOG_LICENSE_KEY", c.key],
+    ["OPENLOG_ENDPOINT", c.http],
+    ["OPENLOG_SERVICE_NAME", c.service],
+  ];
+  if (c.env) lines.push(["OPENLOG_ENVIRONMENT", c.env]);
+  return [...lines, ...extra].map(([k, v]) => `export ${k}=${shQuote(v)}`).join("\n");
+}
+
+function releaseAsset(c: Ctx, file: (v: string) => string): string {
+  const v = c.version ?? "X.Y.Z";
+  return `${RELEASES}/download/v${v}/${file(v)}`;
+}
+
+// ---- infrastructure ----
+
+function linux(c: Ctx) {
+  const args = [`--license-key ${shQuote(c.key)}`, `--endpoint ${shQuote(c.http)}`];
+  if (c.o.distro !== "auto") args.push(`--method ${c.o.distro}`);
+  if (c.o.channel === "beta") args.push("--channel beta");
+  if (!c.o.dockerAccess) args.push("--no-docker-access");
+  add(c, "install", "sh", `curl -fsSL ${INSTALL_SH} | sudo sh -s --${CONT}${args.join(CONT)}`);
+  add(c, "verify", "sh", "systemctl status openlog-infra-agent --no-pager\njournalctl -u openlog-infra-agent -f");
+  note(c, c.o.distro === "auto" ? "distroAuto" : "archAuto");
+  if (c.o.dockerAccess) note(c, "dockerGroup");
+}
+
+function docker(c: Ctx) {
+  const tag = c.version ?? "latest";
+  const lines = [
+    "docker run -d --name openlog-infra-agent --restart unless-stopped",
+    "--pid=host --network=host",
+    "-v /:/host:ro -v openlog-agent-state:/var/lib/openlog-infra-agent",
+    "--cap-add SYS_PTRACE --cap-add DAC_READ_SEARCH",
+    `-e OPENLOG_LICENSE_KEY=${shQuote(c.key)}`,
+    `-e OPENLOG_ENDPOINT=${shQuote(c.http)}`,
+    `${INFRA_IMAGE}:${tag}`,
+  ];
+  add(c, "dockerRun", "sh", lines.join(CONT));
+  add(c, "verify", "sh", "docker logs -f openlog-infra-agent");
+  note(c, "dockerImageTag");
+}
+
+function kubernetes(c: Ctx) {
+  const cluster = cleanName(c.o.clusterName) || DEFAULT_CLUSTER;
+  add(
+    c,
+    "secret",
+    "sh",
+    [
+      "kubectl create namespace openlog-agent",
+      "kubectl label namespace openlog-agent pod-security.kubernetes.io/enforce=privileged",
+      `kubectl -n openlog-agent create secret generic openlog-license --from-literal=license-key=${shQuote(c.key)}`,
+    ].join("\n"),
+  );
+  const ref = c.version ? `v${c.version}` : "master";
+  add(c, "download", "sh", `git clone --depth 1 --branch ${ref} ${REPO}.git openlog`);
+  const sets = [
+    `--set ${shQuote(`clusterName=${helmValue(cluster)}`)}`,
+    `--set ${shQuote(`endpoint=${helmValue(c.http)}`)}`,
+    "--set existingSecret.name=openlog-license",
+  ];
+  if (c.env) sets.push(`--set-string ${shQuote(`extraAttributes.env=${helmValue(c.env)}`)}`);
+  add(c, "helmInstall", "sh", ["helm install openlog-agent ./openlog/deploy/helm/openlog-agent -n openlog-agent", ...sets].join(CONT));
+  add(
+    c,
+    "verify",
+    "sh",
+    [
+      "kubectl -n openlog-agent rollout status ds/openlog-agent-openlog-agent-node",
+      "kubectl -n openlog-agent logs ds/openlog-agent-openlog-agent-node | grep 'kubernetes node mode'",
+    ].join("\n"),
+  );
+  note(c, "helmPodSecurity");
+  note(c, "helmChartSource");
+}
+
+// ---- APM ----
+
+function apmGo(c: Ctx) {
+  add(c, "install", "sh", "go get github.com/onuragtas/openlog/agents/go");
+  add(
+    c,
+    "code",
+    "go",
+    [
+      'import openlog "github.com/onuragtas/openlog/agents/go"',
+      "",
+      "func main() {",
+      `\tshutdown, err := openlog.Start(context.Background(), openlog.WithServiceName(${codeString(c.service)}))`,
+      "\tif err != nil {",
+      "\t\tlog.Fatal(err)",
+      "\t}",
+      "\tdefer shutdown(context.Background()) // flushes buffered telemetry",
+      "\t// ...",
+      "}",
+    ].join("\n"),
+  );
+  add(c, "run", "sh", `${openlogEnv(c)}\ngo run .`);
+  note(c, "goStart");
+}
+
+function apmNode(c: Ctx) {
+  add(c, "install", "sh", "npm install @openlog/node");
+  const run = c.o.nodeModules === "esm" ? "node --import @openlog/node/register server.mjs" : "node --require @openlog/node/register server.js";
+  add(c, "run", "sh", `${openlogEnv(c)}\n${run}`);
+  if (c.o.nodeModules === "esm") note(c, "nodeEsm");
+}
+
+const PYTHON_RUN: Record<InstallOptions["pythonLauncher"], string> = {
+  python: "openlog-instrument python app.py",
+  gunicorn: "openlog-instrument gunicorn -w 4 -b 0.0.0.0:8000 myproject.wsgi:application",
+  uvicorn: "openlog-instrument uvicorn main:app --host 0.0.0.0 --workers 4",
+  django: "DJANGO_SETTINGS_MODULE=myproject.settings openlog-instrument python manage.py runserver --noreload",
+  celery: "openlog-instrument celery -A myproject worker --concurrency 8",
+};
+
+function apmPython(c: Ctx) {
+  add(c, "install", "sh", "pip install openlog-agent");
+  add(c, "run", "sh", `${openlogEnv(c)}\n${PYTHON_RUN[c.o.pythonLauncher]}`);
+  if (c.o.pythonLauncher !== "python") note(c, "pythonModules");
+}
+
+function apmJava(c: Ctx) {
+  const jar = releaseAsset(c, (v) => `openlog-javaagent-${v}.jar`);
+  const file = `openlog-javaagent-${c.version ?? "X.Y.Z"}.jar`;
+  if (c.o.javaMode === "docker") {
+    add(
+      c,
+      "dockerfile",
+      "dockerfile",
+      [
+        `ADD ${jar} /opt/openlog/openlog-javaagent.jar`,
+        'ENV JAVA_TOOL_OPTIONS="-javaagent:/opt/openlog/openlog-javaagent.jar"',
+        `ENV OPENLOG_SERVICE_NAME=${codeString(c.service)}`,
+        ...(c.env ? [`ENV OPENLOG_ENVIRONMENT=${codeString(c.env)}`] : []),
+      ].join("\n"),
+    );
+    add(c, "dockerRun", "sh", ["docker run -d", `-e OPENLOG_LICENSE_KEY=${shQuote(c.key)}`, `-e OPENLOG_ENDPOINT=${shQuote(c.http)}`, "my-java-app"].join(CONT));
+    note(c, "javaChecksum");
+    note(c, "javaDockerKey");
+  } else {
+    add(
+      c,
+      "download",
+      "sh",
+      [
+        `curl -fsSLO ${jar}`,
+        `curl -fsSLO ${jar}.sha256`,
+        `sha256sum -c ${file}.sha256`,
+        `sudo install -D -m 0644 ${file} /opt/openlog/openlog-javaagent.jar`,
+      ].join("\n"),
+    );
+    add(c, "run", "sh", `${openlogEnv(c)}\njava -javaagent:/opt/openlog/openlog-javaagent.jar -jar app.jar`);
+  }
+  if (!c.version) note(c, "versionUnknown");
+}
+
+function apmDotnet(c: Ctx) {
+  add(c, "install", "sh", "dotnet add package OpenLog.Agent");
+  const code =
+    c.o.dotnetApp === "console"
+      ? ["using OpenLog.Agent;", "", `using var agent = OpenLogAgent.Start(o => o.ServiceName = ${codeString(c.service)}); // flushes on Dispose`].join("\n")
+      : ["var builder = WebApplication.CreateBuilder(args);", "builder.Services.AddOpenLog(); // OPENLOG_* variables configure it", "var app = builder.Build();"].join("\n");
+  add(c, "code", "csharp", code);
+  add(c, "run", "sh", `${openlogEnv(c)}\ndotnet run`);
+  note(c, "dotnetRuntime");
+}
+
+function apmPhp(c: Ctx) {
+  note(c, "phpNeedsInfraAgent");
+  if (c.o.phpMode === "fleet") {
+    if (c.info.features?.fleet_php_install === false) note(c, "phpFleetUnavailable");
+    else note(c, "phpFleetPage");
+    add(c, "fleetConfig", "yaml", ["# /etc/openlog-infra-agent/config.yaml (php_agent section)", "php_agent:", "  mode: auto", "  reload: graceful"].join("\n"));
+    add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+    note(c, "mergeConfig");
+  } else {
+    const pkg = c.o.phpPackage;
+    const url = releaseAsset(c, (v) => `openlog-php-agent_${v}_linux_${c.o.arch}.${pkg}`);
+    const file = `openlog-php-agent_${c.version ?? "X.Y.Z"}_linux_${c.o.arch}.${pkg}`;
+    const installer = pkg === "deb" ? `sudo apt-get install ./${file}` : pkg === "rpm" ? `sudo dnf install ./${file}` : `sudo apk add --allow-untrusted ./${file}`;
+    add(c, "packageInstall", "sh", `curl -fsSLO ${url}\n${installer}`);
+    add(c, "enablePhp", "sh", "sudo openlog-php-install status\nsudo openlog-php-install install --reload");
+    if (!c.version) note(c, "versionUnknown");
+  }
+  add(
+    c,
+    "phpSettings",
+    "ini",
+    ["; e.g. /etc/php/8.3/fpm/conf.d/91-openlog-service.ini", `openlog.service_name = ${codeString(c.service)}`, ...(c.env ? [`openlog.environment = ${codeString(c.env)}`] : [])].join("\n"),
+  );
+  note(c, "phpIniFile");
+}
+
+// ---- logs ----
+
+function logsHost(c: Ctx) {
+  const lines = ["# /etc/openlog-infra-agent/config.yaml", "logs:", "  enabled: true", "  files:", `    - path: ${yamlQuote(c.o.logPath.trim() || DEFAULT_OPTIONS.logPath)}`];
+  if (c.o.journald) lines.push("  journald:", "    enabled: true");
+  add(c, "agentConfig", "yaml", lines.join("\n"));
+  if (c.o.journald) {
+    add(c, "journalAccess", "sh", "sudo usermod -aG systemd-journal openlog-agent");
+    note(c, "journaldGroup");
+  }
+  add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+  note(c, "mergeConfig");
+}
+
+function logsContainers(c: Ctx) {
+  add(c, "agentConfig", "yaml", ["# /etc/openlog-infra-agent/config.yaml", "containers:", "  enabled: true", "logs:", "  containers:", "    enabled: true"].join("\n"));
+  add(
+    c,
+    "containerLabels",
+    "sh",
+    ["# no logs from one container", "docker run --label openlog.logs=false …", "# group stack traces: a record starts at a matching line", "docker run --label 'openlog.logs.multiline=^\\d{4}-\\d{2}-\\d{2}' …"].join("\n"),
+  );
+  add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+  note(c, "containerLogsDefault");
+  note(c, "mergeConfig");
+}
+
+function logsBrowser(c: Ctx) {
+  const origin = c.o.browserOrigin.trim() || "https://app.example.com";
+  if (!c.info.cors_enabled) {
+    add(c, "serverCors", "sh", [`# openlog server environment (e.g. /opt/openlog-server/.env), then restart openlog-ingest`, `OPENLOG_INGEST_CORS_ALLOWED_ORIGINS=${shQuote(origin)}`].join("\n"));
+    note(c, "corsRequired");
+  } else {
+    note(c, "corsConfigured");
+  }
+  const resource = [`{ key: "service.name", value: { stringValue: ${codeString(c.service)} } }`];
+  if (c.env) resource.push(`{ key: "deployment.environment.name", value: { stringValue: ${codeString(c.env)} } }`);
+  add(
+    c,
+    "sender",
+    "js",
+    [
+      `const OPENLOG_LOGS_URL = ${codeString(`${c.http}/v1/logs`)};`,
+      `const OPENLOG_LICENSE_KEY = ${codeString(c.key)}; // use a dedicated key: everything in a browser is public`,
+      "",
+      "export function sendLog(severityText, message, attributes = {}) {",
+      "  return fetch(OPENLOG_LOGS_URL, {",
+      '    method: "POST",',
+      "    keepalive: true,",
+      '    headers: { "Content-Type": "application/json", "openlog-license-key": OPENLOG_LICENSE_KEY },',
+      "    body: JSON.stringify({",
+      "      resourceLogs: [{",
+      `        resource: { attributes: [${resource.join(", ")}] },`,
+      "        scopeLogs: [{ logRecords: [{",
+      "          timeUnixNano: `${Date.now()}000000`,",
+      "          severityText,",
+      "          body: { stringValue: String(message) },",
+      "          attributes: Object.entries(attributes).map(([key, v]) => ({ key, value: { stringValue: String(v) } })),",
+      "        }] }],",
+      "      }],",
+      "    }),",
+      "  });",
+      "}",
+      "",
+      'sendLog("INFO", "page loaded", { "url.path": location.pathname });',
+    ].join("\n"),
+  );
+  note(c, "browserKeyPublic");
+}
+
+// ---- OpenTelemetry ----
+
+function otelEnv(c: Ctx, logs: boolean): string {
+  const grpc = c.o.protocol === "grpc";
+  const header = c.hasKey ? encodeURIComponent(c.key) : c.key;
+  const lines: [string, string][] = [
+    ["OTEL_EXPORTER_OTLP_ENDPOINT", grpc ? c.grpc : c.http],
+    ["OTEL_EXPORTER_OTLP_PROTOCOL", grpc ? "grpc" : "http/protobuf"],
+    ["OTEL_EXPORTER_OTLP_HEADERS", `openlog-license-key=${header}`],
+    ["OTEL_SERVICE_NAME", c.service],
+  ];
+  if (c.env) lines.push(["OTEL_RESOURCE_ATTRIBUTES", `deployment.environment.name=${encodeURIComponent(c.env)}`]);
+  if (logs) {
+    lines.push(["OTEL_LOGS_EXPORTER", "otlp"]);
+    if (c.o.otelLanguage === "python") lines.push(["OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED", "true"]);
+  }
+  return lines.map(([k, v]) => `export ${k}=${shQuote(v)}`).join("\n");
+}
+
+function otelSdk(c: Ctx, logs: boolean) {
+  const env = otelEnv(c, logs);
+  switch (c.o.otelLanguage) {
+    case "node":
+      add(c, "otelInstall", "sh", "npm install --save @opentelemetry/api @opentelemetry/auto-instrumentations-node");
+      add(c, "run", "sh", `${env}\nnode --require @opentelemetry/auto-instrumentations-node/register app.js`);
+      break;
+    case "python":
+      add(c, "otelInstall", "sh", "pip install opentelemetry-distro opentelemetry-exporter-otlp\nopentelemetry-bootstrap -a install");
+      add(c, "run", "sh", `${env}\nopentelemetry-instrument python app.py`);
+      break;
+    case "java":
+      add(c, "otelInstall", "sh", "curl -fsSLO https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar");
+      add(c, "run", "sh", `${env}\njava -javaagent:./opentelemetry-javaagent.jar -jar app.jar`);
+      break;
+    case "dotnet":
+      add(
+        c,
+        "otelInstall",
+        "sh",
+        "curl -fsSLO https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/latest/download/otel-dotnet-auto-install.sh\nsh ./otel-dotnet-auto-install.sh",
+      );
+      add(c, "run", "sh", `${env}\n. $HOME/.otel-dotnet-auto/instrument.sh\ndotnet MyApp.dll`);
+      break;
+    case "go":
+      add(c, "environment", "sh", env);
+      note(c, "otelGoSdk");
+      break;
+    default:
+      add(c, "environment", "sh", env);
+      note(c, "otelOtherSdk");
+  }
+  if (logs) note(c, "otelLogsBridge");
+}
+
+function collector(c: Ctx) {
+  add(c, "collectorEnv", "sh", `export OPENLOG_LICENSE_KEY=${shQuote(c.key)}`);
+  const grpc = c.o.protocol === "grpc";
+  let exporterName: string;
+  let exporter: string[];
+  if (grpc) {
+    let hostPort = c.grpc;
+    let insecure = false;
+    try {
+      const u = new URL(c.grpc);
+      insecure = u.protocol === "http:";
+      hostPort = u.host || c.grpc;
+    } catch {
+      // keep the configured value
+    }
+    exporterName = "otlp/openlog";
+    exporter = ["  otlp/openlog:", `    endpoint: ${yamlQuote(hostPort)}`, ...(insecure ? ["    tls:", "      insecure: true"] : [])];
+    if (insecure) note(c, "grpcInsecure");
+  } else {
+    exporterName = "otlphttp/openlog";
+    exporter = ["  otlphttp/openlog:", `    endpoint: ${yamlQuote(c.http)}`, "    compression: gzip"];
+  }
+  const pipeline = (signal: string) => [`    ${signal}:`, "      receivers: [otlp]", "      processors: [batch]", `      exporters: [${exporterName}]`];
+  add(
+    c,
+    "collectorConfig",
+    "yaml",
+    [
+      "# openlog-collector.yaml",
+      "receivers:",
+      "  otlp:",
+      "    protocols:",
+      "      grpc:",
+      "        endpoint: 0.0.0.0:4317",
+      "      http:",
+      "        endpoint: 0.0.0.0:4318",
+      "",
+      "processors:",
+      "  batch: {}",
+      "",
+      "exporters:",
+      ...exporter,
+      "    headers:",
+      "      openlog-license-key: ${env:OPENLOG_LICENSE_KEY}",
+      "",
+      "service:",
+      "  pipelines:",
+      ...pipeline("traces"),
+      ...pipeline("metrics"),
+      ...pipeline("logs"),
+    ].join("\n"),
+  );
+  add(c, "collectorRun", "sh", "otelcol-contrib --config openlog-collector.yaml");
+  note(c, "collectorPorts");
+}
+
+// ---- integrations ----
+
+const PASSWORD_FILE = (name: string) =>
+  [`sudo install -m 0600 -o openlog-agent -g openlog-agent /dev/null /etc/openlog-infra-agent/${name}.password`, `sudoedit /etc/openlog-infra-agent/${name}.password`].join("\n");
+
+function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
+  note(c, "integrationUi");
+  switch (id) {
+    case "nginx":
+      add(
+        c,
+        "stubStatus",
+        "nginx",
+        [
+          "# nginx: stub_status (the agent finds it on any discovered port; it never edits nginx configuration)",
+          "location = /nginx_status {",
+          "    stub_status;",
+          "    allow 127.0.0.1;",
+          "    allow 172.16.0.0/12;   # Docker networks: published ports arrive from the bridge gateway",
+          "    deny all;",
+          "}",
+        ].join("\n"),
+      );
+      add(c, "restart", "sh", "sudo nginx -t && sudo systemctl reload nginx");
+      note(c, "integrationAuto");
+      break;
+    case "redis":
+      add(c, "redisAcl", "sh", "redis-cli ACL SETUSER openlog on '><password>' +info +ping");
+      add(c, "passwordFile", "sh", PASSWORD_FILE("redis"));
+      add(c, "agentConfig", "yaml", ["# /etc/openlog-infra-agent/config.yaml", "integrations:", "  redis:", "    username: openlog", "    password: file:/etc/openlog-infra-agent/redis.password"].join("\n"));
+      add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+      note(c, "redisAclOptional");
+      note(c, "passwordPlaceholder");
+      break;
+    case "mysql":
+      add(
+        c,
+        "sqlUser",
+        "sql",
+        [
+          "-- MySQL 8 / MariaDB 10.5+ (MariaDB >= 10.5.9: REPLICA MONITOR instead of REPLICATION CLIENT)",
+          "-- For a server in a Docker container use 'openlog'@'%' (or the bridge subnet).",
+          "CREATE USER 'openlog'@'localhost' IDENTIFIED BY '<password>' WITH MAX_USER_CONNECTIONS 3;",
+          "GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'openlog'@'localhost';",
+          "GRANT SELECT ON performance_schema.* TO 'openlog'@'localhost';",
+        ].join("\n"),
+      );
+      add(c, "passwordFile", "sh", PASSWORD_FILE("mysql"));
+      add(c, "agentConfig", "yaml", ["# /etc/openlog-infra-agent/config.yaml", "integrations:", "  mysql:", "    username: openlog", "    password: file:/etc/openlog-infra-agent/mysql.password"].join("\n"));
+      add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+      note(c, "passwordPlaceholder");
+      break;
+    case "postgresql":
+      add(
+        c,
+        "sqlUser",
+        "sql",
+        ["-- PostgreSQL 10+", "CREATE ROLE openlog WITH LOGIN PASSWORD '<password>' CONNECTION LIMIT 3;", "GRANT pg_monitor TO openlog;"].join("\n"),
+      );
+      add(c, "passwordFile", "sh", PASSWORD_FILE("postgresql"));
+      add(
+        c,
+        "agentConfig",
+        "yaml",
+        ["# /etc/openlog-infra-agent/config.yaml", "integrations:", "  postgresql:", "    username: openlog", "    password: file:/etc/openlog-infra-agent/postgresql.password"].join("\n"),
+      );
+      add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+      note(c, "passwordPlaceholder");
+      break;
+  }
+  note(c, "mergeConfig");
+}
+
+/**
+ * Commands for one Add data card. Pure: the same inputs give the same text. Values are shell-quoted, YAML-quoted or
+ * code-string-escaped where they are inserted; the license key never appears in a URL.
+ */
+export function buildInstallCommands(target: TargetId, options: InstallOptions, onboarding: OnboardingInfo): InstallCommands {
+  const key = options.licenseKey.trim() || LICENSE_KEY_PLACEHOLDER;
+  const c: Ctx = {
+    o: options,
+    key,
+    hasKey: key !== LICENSE_KEY_PLACEHOLDER,
+    http: stripSlash(onboarding.otlp_http.url),
+    grpc: stripSlash(onboarding.otlp_grpc.url),
+    version: onboarding.agent_version,
+    info: onboarding,
+    service: cleanName(options.serviceName) || DEFAULT_SERVICE,
+    env: cleanName(options.environment),
+    blocks: [],
+    notes: [],
+  };
+  const def = findTarget(target);
+  if (!def) return { blocks: [], notes: [] };
+  switch (target) {
+    case "linux":
+      linux(c);
+      break;
+    case "docker":
+      docker(c);
+      break;
+    case "kubernetes":
+      kubernetes(c);
+      break;
+    case "apm/go":
+      apmGo(c);
+      break;
+    case "apm/node":
+      apmNode(c);
+      break;
+    case "apm/python":
+      apmPython(c);
+      break;
+    case "apm/java":
+      apmJava(c);
+      break;
+    case "apm/dotnet":
+      apmDotnet(c);
+      break;
+    case "apm/php":
+      apmPhp(c);
+      break;
+    case "logs/host":
+      logsHost(c);
+      break;
+    case "logs/containers":
+      logsContainers(c);
+      break;
+    case "logs/browser":
+      logsBrowser(c);
+      break;
+    case "logs/otel":
+      otelSdk(c, true);
+      break;
+    case "otel/sdk":
+      otelSdk(c, false);
+      break;
+    case "otel/collector":
+      collector(c);
+      break;
+    default:
+      if (def.integration) integration(c, def.integration);
+  }
+  const usesKey = def.verify !== "integration" && target !== "logs/host" && target !== "logs/containers" && !(target === "apm/php");
+  if (!c.hasKey && usesKey) c.notes.unshift("placeholderKey");
+  return { blocks: c.blocks, notes: c.notes };
+}
+
+/** Whether a card's commands need a license key at all (host log and integration cards reuse the infra agent's). */
+export function targetNeedsKey(target: TargetId): boolean {
+  const def = findTarget(target);
+  if (!def) return false;
+  return def.verify !== "integration" && target !== "logs/host" && target !== "logs/containers" && target !== "apm/php";
+}
+
+/** The service name the verification step looks for (PHP defaults to php-app when the ini setting is not used). */
+export function expectedServiceName(options: InstallOptions): string {
+  return cleanName(options.serviceName) || DEFAULT_SERVICE;
+}

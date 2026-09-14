@@ -34,7 +34,7 @@ test("login → hosts → host detail", async ({ page }) => {
   await page.getByRole("tab", { name: "Services" }).click();
   await expect(page).toHaveURL(/tab=services/);
   await expect(page.getByTestId("service-card")).toHaveCount(4);
-  await expect(page.getByRole("button", { name: "Install openlog PHP agent" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Install openlog-php-agent" })).toBeVisible();
   // One port format everywhere; the process command is shown when the agent sends it.
   await expect(page.getByText("tcp [::]:80", { exact: true })).toBeVisible();
   await expect(page.getByTestId("service-card").filter({ hasText: "Redis" })).toContainText("Command: redis-server");

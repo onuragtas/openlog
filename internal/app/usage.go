@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -90,11 +88,14 @@ func startUsageAPI(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, c
 	store := quota.PGStore{Pool: pool}
 	deps.Store = store
 
-	// Plan query limits (D-080): OPENLOG_QUERY_TENANT_LIMITS wins, then the plan's limits over the defaults.
-	pl := &planQueryLimits{query: cfg.Query, catalog: catalog, store: store, log: log}
-	pl.refresh(ctx)
-	go pl.run(ctx)
-	db.SetLimitsFunc("api", pl.limits)
+	// Query limits (D-080, usage.md §4.5): defaults < plan < organization setting < OPENLOG_QUERY_TENANT_LIMITS.
+	ql := startQueryLimits(ctx, cfg, pool, catalog, db, "api", log)
+	deps.Query, deps.QueryLimits = cfg.Query, store
+	deps.QueryLimitsChanged = func(ctx context.Context) {
+		if err := ql.Load(ctx); err != nil {
+			log.Warn("cannot reload query limits after a change", "err", err)
+		}
+	}
 
 	var mailer auth.Mailer
 	if s := cfg.Alert.SMTP; s.Host != "" {
@@ -129,71 +130,4 @@ func startUsageAPI(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, c
 	log.Info("usage metering enabled", "saas_mode", u.SaaSMode, "plans", catalog.PlanIDs(), "default_plan", catalog.Default,
 		"tenant_retention", u.RetentionEnabled, "billing_provider", u.BillingProvider, "superadmins", len(u.SuperadminEmails))
 	return tasks, nil
-}
-
-// planQueryLimits resolves the ClickHouse query limits of a tenant from its plan, refreshed every minute on every
-// api pod.
-type planQueryLimits struct {
-	query   config.Query
-	catalog *quota.Catalog
-	store   quota.PGStore
-	log     *slog.Logger
-
-	mu     sync.RWMutex
-	byTent map[string]quota.QueryLimits
-}
-
-func (p *planQueryLimits) refresh(ctx context.Context) {
-	rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	orgs, err := p.store.ListOrgPlans(rctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			p.log.Debug("cannot load plan query limits", "err", err)
-		}
-		return
-	}
-	m := make(map[string]quota.QueryLimits, len(orgs))
-	for _, op := range orgs {
-		if q := p.catalog.EffectivePlan(op).Limits.Query; q != (quota.QueryLimits{}) {
-			m[op.TenantID] = q
-		}
-	}
-	p.mu.Lock()
-	p.byTent = m
-	p.mu.Unlock()
-}
-
-func (p *planQueryLimits) run(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Minute):
-			p.refresh(ctx)
-		}
-	}
-}
-
-func (p *planQueryLimits) limits(tenant string) config.QueryLimits {
-	if l, ok := p.query.Tenants[tenant]; ok {
-		return l
-	}
-	l := p.query.Defaults
-	p.mu.RLock()
-	q, ok := p.byTent[tenant]
-	p.mu.RUnlock()
-	if !ok {
-		return l
-	}
-	if q.MaxMemoryUsage > 0 {
-		l.MaxMemoryUsage = q.MaxMemoryUsage
-	}
-	if q.MaxRowsToRead > 0 {
-		l.MaxRowsToRead = q.MaxRowsToRead
-	}
-	if q.MaxBytesToRead > 0 {
-		l.MaxBytesToRead = q.MaxBytesToRead
-	}
-	return l
 }

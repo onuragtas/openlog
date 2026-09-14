@@ -503,7 +503,9 @@ produce what §1–§7 and §11 need without configuration; all follow the same 
 The **Java agent** (`agents/java`, `openlog-javaagent.jar`, D-072) is the upstream OpenTelemetry Java agent plus an openlog
 extension and follows the same contract. It uses the same `OPENLOG_*` variables (also as `openlog.*` system
 properties) and the same `host.id` chain and `container.id` sources. The upstream instrumentations (Spring MVC/WebFlux,
-JAX-RS, servlet, …) set `http.route` and name the server span `<METHOD> <route>`. Exceptions are recorded as `exception`
+JAX-RS on a servlet container, Quarkus REST, Vert.x Web, servlet, …) set `http.route` and name the server span
+`<METHOD> <route>`; Micronaut and Jersey on Grizzly/Jersey's Jetty handler get a server span named `<METHOD>` without
+`http.route`, which the backend groups by normalized `url.path` (§2.1). Exceptions are recorded as `exception`
 events in the Java stack format (§3.2). The sampler matches the Go agent's and is verified against the Go fixtures;
 the W3C random flag is set by the OTel Java SDK. `db.query.text`/`db.statement` are sanitized with the Go algorithm on
 the export path; the upstream sanitizer is disabled by default, and MongoDB/Elasticsearch/OpenSearch keep upstream
@@ -521,19 +523,26 @@ bit. OpenTelemetry .NET creates no `Activity` below an unsampled local parent, s
 parent's span id with the same decision and `tracestate`. `db.query.text`/`db.statement` are sanitized with the Go
 algorithm (Npgsql, SqlClient, MySqlConnector; EF Core through its provider), Redis statements become `CMD ? ?`, capped
 at 4096 characters. `ILogger` records are exported as OTLP logs with trace/span ids, which are also added to the
-application's log scopes.
+application's log scopes. MassTransit and Confluent.Kafka (through its OpenTelemetry instrumentation package) continue
+the request trace into PRODUCER and consumer-side spans with `messaging.*` attributes. Applications that cannot be
+recompiled use the OpenTelemetry .NET automatic instrumentation with the agent's plugin, which applies the same resource,
+sampler, propagator, processors and license header (tested against a pinned automatic instrumentation release).
 
 The **Python agent** (`agents/python`, PyPI `openlog-agent`, D-073) is a distribution of the OpenTelemetry Python SDK
 and contrib instrumentations (`openlog-instrument <command>` or `openlog_agent.start()`) with the same `OPENLOG_*`
 variables, `host.id` chain and `container.id` sources; stable HTTP and database semantic conventions are enabled by
-default. Django, Flask and FastAPI/Starlette server spans carry `http.route` and are named `<METHOD> <route>` (the agent
-sets the route for Flask from the URL rule and prefixes Django resolver routes with `/`); gRPC server spans carry
-`rpc.system`/`rpc.service`/`rpc.method`, Celery tasks are `consumer` spans. Exceptions are `exception` events with
+default. Django, Flask, FastAPI/Starlette, Tornado, Falcon and Pyramid server spans carry `http.route` and are named
+`<METHOD> <route>` (the agent sets the route for Flask from the URL rule and for Tornado from the span name, prefixes
+Django resolver routes with `/`, adds the method to Pyramid span names and records Falcon responder exceptions); gRPC
+server spans carry `rpc.system`/`rpc.service`/`rpc.method`. Celery tasks and aio-pika (RabbitMQ), kafka-python and
+aiokafka consumers are `consumer` spans that continue the producer's trace; confluent-kafka consumer spans link to it. Exceptions are `exception` events with
 Python tracebacks. The sampler is the Go sampler's port, verified against the Go fixtures (the W3C random flag is set by
 the SDK from 1.42, by the agent on the Python 3.9 line). `db.query.text`/`db.statement` are sanitized with the Go
 algorithm on the export path, Redis statements become `CMD ? ?`, capped at 4096 UTF-8 bytes. stdlib `logging` records
 are exported as OTLP logs and get `trace_id`/`span_id` for the application's own output (structlog processor
-available). Workers of pre-fork servers (gunicorn, Celery prefork) report their own `process.pid`.
+available). Workers of pre-fork servers (gunicorn, uWSGI, Celery prefork) report their own `process.pid`; under uWSGI,
+which forks without Python's fork hooks, the providers start in each worker after fork. gevent/eventlet greenlets keep
+their own active span. Python 3.9 – 3.13.
 
 Runtime metrics are regular OTLP metrics (not APM tables): Java `jvm.*` (memory, GC, threads, classes, CPU); Python
 `cpython.gc.*`, `openlog.cpython.gc.time`/`openlog.cpython.gc.pause.max` plus `process.*` (CPU, memory, threads, file

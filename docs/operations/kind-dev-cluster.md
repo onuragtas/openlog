@@ -150,3 +150,49 @@ kubectl -n openlog delete pvc --all
 kubectl -n openlog delete secret openlog-credentials
 kind delete cluster --name openlog-dev
 ```
+
+## Validation run: operators mode + CloudNativePG + TLS (2026-09-14)
+
+Script: [`deploy/helm/test/kind-validate.sh`](../../deploy/helm/test/kind-validate.sh) (`STEPS=base,failover,tls`,
+`KEEP=1` keeps the cluster). It encodes the steps below, which were run by hand on kind v0.33.0 (`kindest/node:v1.37.0`,
+1 control-plane + 2 workers, cluster `openlog-r-kind`), Helm v4.3.0, Strimzi chart 1.2.0, Altinity operator chart
+0.27.3, CloudNativePG chart 0.26.1 (operator 1.27.1), cert-manager v1.21.2, openlog image built from the tree and
+loaded with `kind load` (`pullPolicy: Never`). Tiny sizing: Kafka 1 dual node (RF 1, 3 partitions), ClickHouse
+1 shard x 2 replicas, Keeper x3, CNPG 2 instances, one replica per service, no Envoy.
+
+| Step | Result |
+|---|---|
+| Install (no `--wait`) | Keeper, ClickHouse, Kafka, CNPG, migrations and bootstrap done ~3 min after `helm install`; 87 schema objects on both replicas; org `Dev` + owner created |
+| loadgen (2 min, 3 hosts, 50 logs/s + 50 spans/s) | 0 request errors; 5950 logs / 5950 spans / 1520 datapoints in ClickHouse; `/api/v1/hosts`, `/api/v1/logs`, `POST /api/v1/query` (session login) answer with the data |
+| CNPG failover (`kubectl delete pod` of the primary) | API kept answering 200. The old primary stayed `Terminating` for ~3 min 12 s (smart shutdown waits for the openlog pods' pooled connections, CNPG default `smartShutdownTimeout` 180 s), then promotion took ~1 s with a single 503 on `/auth/me`. The chart now sets `postgres.operator.smartShutdownTimeout: 15` (not re-measured) |
+| ClickHouse server TLS, step A (`clickhouse.tls.server.secretName`, `verificationMode: strict`) | 9440/8443 listening, `remote_servers` on 9440 with `<secure>1</secure>`, rolling restart ~2.5 min; `clickhouse-client --secure` with a client certificate works, without one the handshake is reset |
+| Step B (`clickhouse.tls.enabled`, `clientSecret`) | openlog on `clickhouse-openlog:9440` with client certificate; loadgen again 0 errors, rows doubled; no TLS warnings |
+| Keeper + replication TLS (D-093, on by default with server TLS) | ClickHouse connects to `secure://keeper-openlog.openlog.svc:9281`; Raft "SSL enabled" (leader + 2 synced followers); 9009 gone, 9010 listening; replicas register `scheme: https` / port 9010 in Keeper and download parts (`DownloadPart` without error), both replicas 17700 logs, empty replication queue errors |
+| Tiered storage with in-cluster MinIO | **chart bug found** (below); end-to-end run not completed: the Docker VM disk (shared with other workloads) dropped to 2.8 GB free, so the cluster was deleted |
+| Tail sampling, agent chart | not run (same reason); chart render with `tailSampling.enabled` checked only |
+
+Resources of this stack: node containers ~6 GiB RSS (worker 3.3 GiB, worker2 1.7 GiB, control-plane 0.9 GiB) and
+~12 GB of disk (containerd images + local-path volumes). With the rest of the Docker VM busy the control plane's
+controller-manager and scheduler lost their leases and restarted a few times.
+
+Pitfalls found on this run:
+
+- **Enabling ClickHouse TLS on an existing release needs two upgrades.** The migrate Job is a pre-upgrade hook and runs
+  before the CHI change is applied; with `tls.enabled` in the same upgrade it would dial 9440 before ClickHouse serves it.
+  Between step A and step B the old plaintext processor/api pods read port 9440 from `system.clusters` and their direct
+  shard connections fail the handshake (`apm edge linking failed ... handshake`); ingest keeps writing to Kafka, so run
+  step B right after the CHI shows `Completed`.
+- **Keeper TLS on a running ensemble** leaves Raft mixed (TLS and plaintext peers): keeper-0 failed its liveness probe
+  3 times and the operator's StatefulSet wait timed out (5 min) before it rolled the other two; ~6 min without quorum
+  (Replicated inserts and `ON CLUSTER` DDL stop). Enable it in a maintenance window or at install time.
+- **Tiered storage enabled on an existing release** deadlocked: the pre-upgrade migrate hook failed with
+  `storage policy "openlog_tiered" is not usable` until its deadline, so the CHI never received the policy. Fixed in the
+  chart: migrate keeps tiering off while the live CHI lacks the policy file; run `helm upgrade` a second time after the
+  CHI rollout (docs/operations/tiered-storage.md).
+- **`disableInsecure` with `verificationMode: strict`** was not tried: operator 0.27.3 can reach ClickHouse over HTTPS
+  (`configs.files.config.yaml.clickhouse.access.scheme/port/rootCASecretRef`) but cannot present a client certificate,
+  which strict mode requires on 8443. The plaintext Keeper port 2181 also stays (operator liveness probe `ruok`).
+- **Upgrading the Altinity operator chart** runs a CRD pre-upgrade Job with `bitnami/kubectl:latest`; its first pull took
+  ~2 min and the default `--timeout 5m` expired. Use `--timeout 10m`.
+- The operator-generated per-host ClickHouse/Keeper Services are headless, so the extra TLS ports (9281, 9010) need no
+  Service change; only the CHI's ClusterIP Service lists 9440/8443.

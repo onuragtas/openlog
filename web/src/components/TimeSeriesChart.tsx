@@ -1,3 +1,4 @@
+import { Filter } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import uPlot from "uplot";
@@ -51,6 +52,9 @@ export interface TimeSeriesChartProps {
   showLegend?: boolean;
   /** Vertical dashed marker lines (e.g. deployments), `t` in unix ms. */
   markers?: readonly ChartMarker[];
+  /** Adds a "filter by" action to legend entries whose label it returns an accessible name for (dashboard filters). */
+  selectLabel?: (seriesLabel: string) => string | null;
+  onSelectSeries?: (seriesLabel: string) => void;
 }
 
 export interface ChartMarker {
@@ -267,7 +271,23 @@ interface LegendItem {
   visible: boolean;
 }
 
-function ChartLegend({ items, time, since, collapsedCount, onToggle }: { items: LegendItem[]; time: string; since: string | null; collapsedCount: number; onToggle: (i: number) => void }) {
+function ChartLegend({
+  items,
+  time,
+  since,
+  collapsedCount,
+  onToggle,
+  selectLabel,
+  onSelect,
+}: {
+  items: LegendItem[];
+  time: string;
+  since: string | null;
+  collapsedCount: number;
+  onToggle: (i: number) => void;
+  selectLabel?: (label: string) => string | null;
+  onSelect?: (label: string) => void;
+}) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const overflow = items.length > collapsedCount;
@@ -278,25 +298,40 @@ function ChartLegend({ items, time, since, collapsedCount, onToggle }: { items: 
         <li className="px-1 py-0.5 text-muted-foreground">
           {t("charts.time")}: <span className="font-mono text-foreground">{time}</span>
         </li>
-        {shown.map((it, i) => (
-          <li key={it.label} className="min-w-0 max-w-full">
-            <button
-              type="button"
-              aria-pressed={it.visible}
-              title={t("charts.toggleSeries", { label: it.label })}
-              onClick={() => onToggle(i)}
-              className="inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted pointer-coarse:py-2"
-            >
-              <span
-                aria-hidden="true"
-                className="inline-block size-2.5 shrink-0 rounded-[3px] border-2"
-                style={{ borderColor: it.color, background: it.visible ? it.color : "transparent" }}
-              />
-              <span className={cn("truncate", it.visible ? "text-foreground" : "text-muted-foreground line-through")}>{it.label}</span>
-              {it.visible && <span className="shrink-0 font-mono text-muted-foreground">{it.value}</span>}
-            </button>
-          </li>
-        ))}
+        {shown.map((it, i) => {
+          const filterLabel = onSelect ? (selectLabel?.(it.label) ?? null) : null;
+          return (
+            <li key={it.label} className="flex min-w-0 max-w-full items-center">
+              <button
+                type="button"
+                aria-pressed={it.visible}
+                title={t("charts.toggleSeries", { label: it.label })}
+                onClick={() => onToggle(i)}
+                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted pointer-coarse:py-2"
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block size-2.5 shrink-0 rounded-[3px] border-2"
+                  style={{ borderColor: it.color, background: it.visible ? it.color : "transparent" }}
+                />
+                <span className={cn("truncate", it.visible ? "text-foreground" : "text-muted-foreground line-through")}>{it.label}</span>
+                {it.visible && <span className="shrink-0 font-mono text-muted-foreground">{it.value}</span>}
+              </button>
+              {filterLabel && (
+                <button
+                  type="button"
+                  aria-label={filterLabel}
+                  title={filterLabel}
+                  onClick={() => onSelect?.(it.label)}
+                  className="inline-flex shrink-0 items-center rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:p-2"
+                  data-testid="legend-filter"
+                >
+                  <Filter className="size-3" aria-hidden="true" />
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <div className="ml-auto flex items-center gap-2">
         {since && <span className="py-0.5 text-muted-foreground">{since}</span>}
@@ -317,7 +352,7 @@ function ChartLegend({ items, time, since, collapsedCount, onToggle }: { items: 
  * data refreshes and legend toggles go through setSeries/setData, and
  * container width changes (resize, rotation, drawer) go through setSize.
  */
-export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers }: TimeSeriesChartProps) {
+export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers, selectLabel, onSelectSeries }: TimeSeriesChartProps) {
   const { t, i18n } = useTranslation();
   const { resolved } = useTheme();
   const mobile = useIsMobile();
@@ -516,6 +551,8 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
           const label = aligned.labels[i]!;
           setOverrides((o) => ({ ...o, [label]: !(visible[i] !== false) }));
         }}
+        selectLabel={selectLabel}
+        onSelect={onSelectSeries}
       />}
     </div>
   );

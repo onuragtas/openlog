@@ -7,7 +7,8 @@
 #   agents/java/test/run.sh down                     remove containers and volumes (Gradle cache included)
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-compose=(docker compose -p openlog-m4-java-test -f "$here/docker-compose.yml")
+# JAVA_TEST_PROJECT: compose project and volume name prefix (default openlog-m4-java-test / openlog-m4-java-*)
+compose=(docker compose -p "${JAVA_TEST_PROJECT:-openlog-m4-java-test}" -f "$here/docker-compose.yml")
 
 if [ "${1:-}" = down ]; then
   "${compose[@]}" --profile runner down -v --remove-orphans

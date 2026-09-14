@@ -24,6 +24,8 @@ export interface OqlRunSpec {
   /** Time range sent as from/to; null = the query's own SINCE/UNTIL. */
   range: RangeSpec | null;
   variables?: OqlVariables;
+  /** Dashboard cross-widget filters (oql.md §7). */
+  filters?: S["DashboardFilter"][];
   /** Changes on every explicit run so the console re-executes identical queries. */
   runId?: number;
 }
@@ -33,7 +35,15 @@ const rangeKey = (r: RangeSpec | null) => (r ? [r.range ?? "", r.from ?? "", r.t
 /** Runs an OQL query. Relative ranges are resolved when the query runs, so refetches move the window. */
 export const oqlQuery = (spec: OqlRunSpec, opts: { refetchMs?: number | false; enabled?: boolean } = {}) =>
   queryOptions({
-    queryKey: ["oql", "query", spec.query, rangeKey(spec.range), spec.variables ? JSON.stringify(spec.variables) : "", spec.runId ?? 0],
+    queryKey: [
+      "oql",
+      "query",
+      spec.query,
+      rangeKey(spec.range),
+      spec.variables ? JSON.stringify(spec.variables) : "",
+      spec.runId ?? 0,
+      spec.filters?.length ? JSON.stringify(spec.filters) : "",
+    ],
     queryFn: async ({ signal }) => {
       const body: S["OqlQueryRequest"] = { query: spec.query };
       if (spec.range) {
@@ -42,6 +52,7 @@ export const oqlQuery = (spec: OqlRunSpec, opts: { refetchMs?: number | false; e
         body.to = String(Math.floor(r.to));
       }
       if (spec.variables && Object.keys(spec.variables).length > 0) body.variables = spec.variables;
+      if (spec.filters && spec.filters.length > 0) body.filters = spec.filters;
       // openapi-fetch widens the [ms, value] point tuple; the schema type is exact.
       return unwrap(await api.POST("/api/v1/query", { body, signal })) as OqlResult;
     },

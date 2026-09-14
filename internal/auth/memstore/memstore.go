@@ -226,6 +226,25 @@ func (s *Store) SetUserLastLogin(_ context.Context, userID string, at time.Time)
 	return nil
 }
 
+func (s *Store) SetUserEmail(_ context.Context, userID, email string) error {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return err
+	}
+	u, ok := s.users[userID]
+	if !ok {
+		return auth.ErrNotFound
+	}
+	for id, x := range s.users {
+		if id != userID && x.Email == email {
+			return auth.ErrAlreadyExists
+		}
+	}
+	u.Email = email
+	s.users[userID] = u
+	return nil
+}
+
 func (s *Store) AddMember(_ context.Context, orgID, userID string, role auth.Role) error {
 	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {

@@ -3,6 +3,7 @@
 # Requires: repository variable OPENLOG_RELEASE_PUBLIC_KEYS (comma-separated base64 public keys,
 # compiled into every binary) and secret OPENLOG_RELEASE_SIGNING_KEY (base64 Ed25519 seed).
 # Optional during key rotation: secret OPENLOG_RELEASE_SIGNING_KEY_2 (adds a second signature).
+# Optional: variable HELM_OCI_PUSH=true pushes the Helm charts to oci://ghcr.io/onuragtas/charts (job helm-oci).
 name: release
 
 on:
@@ -155,8 +156,39 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # openlog-javaagent-<version>.jar + .sha256 (agents/java, D-072), handed to the release job, which lists the jar in
+  # the signed manifest (component java-agent, format jar) and publishes both files with the GitHub release
+  # (docs/operations/releasing.md#java-agent-jar). The jar is reproducible.
+  java-agent-jar:
+    name: Java agent jar
+    needs: [prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: build and unit-test at the tag version
+        run: |
+          JAVA_BUILD=local agents/java/scripts/release-jar.sh "$VERSION" dist/java
+          {
+            echo "### Java agent"
+            echo "\`java -javaagent:openlog-javaagent-$VERSION.jar -jar app.jar\` ($(cut -d' ' -f1 "dist/java/openlog-javaagent-$VERSION.jar.sha256"))"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: java-agent
+          path: dist/java/openlog-javaagent-*
+          if-no-files-found: error
+          retention-days: 7
+
   release:
-    needs: [prepare, image, php-agent-artifacts]
+    needs: [prepare, image, php-agent-artifacts, java-agent-jar]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -206,6 +238,12 @@ jobs:
           merge-multiple: true
           path: dist/v${{ needs.prepare.outputs.version }}
 
+      - name: Java agent jar into the release directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: java-agent
+          path: dist/v${{ needs.prepare.outputs.version }}
+
       - name: build, sign and verify
         env:
           OPENLOG_RELEASE_SIGNING_KEY: ${{ secrets.OPENLOG_RELEASE_SIGNING_KEY }}
@@ -238,6 +276,66 @@ jobs:
           if [ -n "$latest" ] && [ "$latest" != "$TAG" ]; then
             gh release upload "$latest" dist/index.json dist/index.json.sig --clobber
           fi
+
+  # Helm charts openlog and openlog-agent as OCI artifacts in oci://ghcr.io/onuragtas/charts
+  # (docs/operations/releasing.md#helm-charts), after the GitHub release is published. Skipped with a warning unless
+  # the repository variable HELM_OCI_PUSH is "true". The charts come from the release assets and are checked against
+  # the sha256 in its manifest, so the registry serves the same bytes.
+  helm-oci:
+    name: Helm charts to GHCR (OCI)
+    needs: [prepare, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HELM_OCI_PUSH: ${{ vars.HELM_OCI_PUSH }}
+      CHARTS_REPO: oci://ghcr.io/onuragtas/charts
+    steps:
+      - id: enabled
+        name: HELM_OCI_PUSH configured
+        run: |
+          if [ "$HELM_OCI_PUSH" = true ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::variable HELM_OCI_PUSH is not true; Helm charts $VERSION are not pushed to $CHARTS_REPO (docs/operations/releasing.md#helm-charts)"
+          fi
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        if: steps.enabled.outputs.present == 'true'
+        with:
+          version: v4.3.0
+      - name: charts from the GitHub release, checked against manifest.json
+        if: steps.enabled.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/charts" && cd "$RUNNER_TEMP/charts"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            -p manifest.json -p "openlog-$VERSION.tgz" -p "openlog-agent-$VERSION.tgz"
+          for chart in openlog openlog-agent; do
+            want="$(jq -r --arg c "$chart" '.helm_charts[$c].sha256 // empty' manifest.json)"
+            [ -n "$want" ] || { echo "::error::helm_charts.$chart is missing from manifest.json"; exit 1; }
+            echo "$want  $chart-$VERSION.tgz" | sha256sum -c -
+          done
+      - name: push
+        if: steps.enabled.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for chart in openlog openlog-agent; do
+            helm push "$RUNNER_TEMP/charts/$chart-$VERSION.tgz" "$CHARTS_REPO"
+          done
+          {
+            echo "### Helm charts"
+            echo '```sh'
+            echo "helm install openlog $CHARTS_REPO/openlog --version $VERSION"
+            echo "helm install openlog-agent $CHARTS_REPO/openlog-agent --version $VERSION"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Go module tags on the product tag's commit (agents/go/vX.Y.Z, agents/go/instrumentation/<name>/vX.Y.Z).
   # Pushed only after the release is published: the Go module proxy caches a version forever, so a
@@ -425,39 +523,6 @@ jobs:
           echo "### PyPI" >> "$GITHUB_STEP_SUMMARY"
           echo "\`pip install openlog-agent==$PYV\`" >> "$GITHUB_STEP_SUMMARY"
 
-  # openlog-javaagent-<version>.jar + .sha256 (agents/java, D-072) attached to the published GitHub release
-  # (docs/operations/releasing.md#java-agent-jar). Not in the signed manifest (built after it). The jar is
-  # reproducible, so a re-run uploads the same bytes (--clobber).
-  java-agent-jar:
-    name: Java agent jar on the GitHub release
-    needs: [prepare, release]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write
-    env:
-      VERSION: ${{ needs.prepare.outputs.version }}
-      TAG: ${{ github.ref_name }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: gradle
-      - name: build and unit-test at the tag version
-        working-directory: agents/java
-        run: ./gradlew --no-daemon --console=plain -Pversion="$VERSION" :extension:test :agentJar :agentJarChecksum
-      - name: attach to the release
-        working-directory: agents/java/build/libs
-        run: |
-          (cd . && sha256sum -c "openlog-javaagent-$VERSION.jar.sha256")
-          gh release upload "$TAG" "openlog-javaagent-$VERSION.jar" "openlog-javaagent-$VERSION.jar.sha256" --clobber
-          {
-            echo "### Java agent"
-            echo "\`java -javaagent:openlog-javaagent-$VERSION.jar -jar app.jar\` ($(cut -d' ' -f1 "openlog-javaagent-$VERSION.jar.sha256"))"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   # OpenLog.Agent NuGet package (agents/dotnet, D-074) at the tag version, after the GitHub release is published
   # (docs/operations/releasing.md#net-agent-package). Skipped with a warning without the NUGET_API_KEY secret.

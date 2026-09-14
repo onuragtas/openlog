@@ -175,6 +175,9 @@ func classify(err error) error {
 	if le, ok := AsLimitError(err); ok {
 		return le
 	}
+	if se, ok := AsStorageError(err); ok { // storage.go
+		return se
+	}
 	return err
 }
 

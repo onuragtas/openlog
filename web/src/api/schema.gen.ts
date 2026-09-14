@@ -928,6 +928,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inputs of the "Add data" install commands
+         * @description Any authenticated principal with an organization (viewer and up, API keys too; 403 without an organization).
+         *     Public OTLP endpoints (configured with OPENLOG_INGEST_PUBLIC_URL / OPENLOG_INGEST_PUBLIC_GRPC_URL, else derived
+         *     from OPENLOG_PUBLIC_URL or the request host with ports 4318/4317), the release version and channel the commands
+         *     pin, whether browser CORS is configured, the caller's organization and role, and feature flags. Never returns
+         *     secrets; `Cache-Control: no-store`.
+         */
+        get: operations["getOnboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/config": {
         parameters: {
             query?: never;
@@ -970,7 +994,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Only when OPENLOG_SIGNUP_ENABLED=true. Creates a user and a new organization they own. */
+        /** @description Only when OPENLOG_SIGNUP_ENABLED=true. Creates a user and a new organization they own. An address in a domain verified by an organization with an enabled SSO connection answers 409 failed_precondition (claimed-domain redirection, D-089; `POST /api/v1/auth/sso/discover` names the organization). */
         post: operations["signup"];
         delete?: never;
         options?: never;
@@ -1095,6 +1119,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/sso/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Signed-in user. Whether the current session was created by single sign-on and whether "Sign out everywhere" also ends the IdP session. */
+        get: operations["getSSOSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sso/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Signed-in user ("Sign out everywhere", D-088). Ends the current session and, for an SSO session, the user's other sessions of the same connection, clears the session cookie, and returns where the browser ends the IdP session: `redirect_url` (SAML HTTP-Redirect binding with a signed LogoutRequest, or the OIDC end_session_endpoint with id_token_hint and post_logout_redirect_uri) or `post` (SAML HTTP-POST binding: submit a form with `fields` to `url`). Both null = only openlog sessions ended. The IdP returns the browser to `redirect` (`/login` or a path of the connection's `logout_redirect_allowlist`) with `?sso_logout=ok|partial`. */
+        post: operations["ssoLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/oidc/logout/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description OIDC post_logout_redirect_uri. Always answers 303 to the UI path of the logout with `sso_logout=ok` (unknown state → `/login`). */
+        get: operations["oidcLogoutCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/saml/{connection_id}/slo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description SAML single logout service, HTTP-Redirect binding (`SAMLRequest` or `SAMLResponse`, `RelayState`, `SigAlg`, `Signature`; the query signature is required, RSA/ECDSA SHA-256/384/512). An IdP LogoutRequest (issuer, destination, IssueInstant, replay checked; NameID or EncryptedID) ends the connection's active sessions with that NameID (and SessionIndex) and is answered with a signed LogoutResponse through the IdP's SingleLogoutService (303, or an auto-submitting form for HTTP-POST). A LogoutResponse completes an SP-initiated logout: 303 to the UI path with `sso_logout=ok|partial`. Invalid messages → 303 `/login?sso_error=<code>`. */
+        get: operations["samlSLORedirect"];
+        put?: never;
+        /** @description SAML single logout service, HTTP-POST binding (enveloped signature required). Same semantics as GET. */
+        post: operations["samlSLOPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sso/oidc/callback": {
         parameters: {
             query?: never;
@@ -1168,9 +1261,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description admin, owner */
+        /** @description admin, owner. Single-connection API — the organization's default (oldest) connection; see /api/v1/sso/connections. */
         get: operations["getSSOConnection"];
-        /** @description admin, owner. Creates or replaces the connection; every save increases config_version (enforcement needs a new test). */
+        /** @description admin, owner. Updates the default connection or creates it when there is none; every save increases config_version (enforcement needs a new test). */
         put: operations["saveSSOConnection"];
         post?: never;
         /** @description admin, owner. Refused (409) while enforced; ends the connection's SSO sessions. */
@@ -1240,8 +1333,135 @@ export interface paths {
         };
         /** @description admin, owner */
         get: operations["listSSORoleMappings"];
-        /** @description admin, owner. Replaces all mappings (at most 200); roles of SCIM-provisioned members are recomputed. */
+        /** @description admin, owner. Replaces the organization-wide mappings (at most 200; used by SCIM and by connections without own mappings); roles of SCIM-provisioned members are recomputed. */
         put: operations["replaceSSORoleMappings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description admin, owner. All connections of the organization (`connections`, the default connection first); `connection` is null. */
+        get: operations["listSSOConnections"];
+        put?: never;
+        /** @description admin, owner. Adds a connection (at most 10 per organization). The first connection is the default connection (domains without `connection_id` route to it). */
+        post: operations["createSSOConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description admin, owner. `connection` is the addressed connection; `service_provider` carries its SAML values. */
+        get: operations["getSSOConnectionByID"];
+        /** @description admin, owner. Replaces the settings (increments config_version). Disabling an enforcing connection → 409. */
+        put: operations["updateSSOConnection"];
+        post?: never;
+        /** @description admin, owner. Refused (409) while enforced; ends the connection's sessions; its domains route to the default connection. */
+        delete: operations["deleteSSOConnectionByID"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner. Server-side checks of the connection. */
+        post: operations["testSSOConnectionByID"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections/{id}/test/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner. Test sign-in of the connection (see /api/v1/sso/connection/test/start). */
+        post: operations["startSSOTestByID"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner. Fetches the OIDC discovery document and JWKS or the SAML metadata now (like the background refresh) and returns the updated `health`. 30 per connection per 10 min. */
+        post: operations["refreshSSOConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections/{id}/enforcement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description owner. Enforcement of the connection for members whose e-mail domain routes to it; the safeguards of /api/v1/sso/enforcement apply to its routed domains. */
+        put: operations["updateSSOConnectionEnforcement"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/connections/{id}/role-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description admin, owner. Mappings of the connection; a connection without own mappings uses the organization-wide mappings (/api/v1/sso/role-mappings). */
+        get: operations["listSSOConnectionRoleMappings"];
+        /** @description admin, owner. Replaces the connection's mappings (at most 200; an empty list falls back to the organization-wide mappings). */
+        put: operations["replaceSSOConnectionRoleMappings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1292,9 +1512,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** @description admin, owner. Routes sign-ins of the domain to a connection of the organization (`null` = the default connection). Moving the last verified domain away from an enforcing connection → 409. */
+        put: operations["assignSSODomain"];
         post?: never;
-        /** @description admin, owner. The last verified domain cannot be removed while SSO is enforced (409). */
+        /** @description admin, owner. The last verified domain of an enforcing connection cannot be removed (409). */
         delete: operations["deleteSSODomain"];
         options?: never;
         head?: never;
@@ -2405,6 +2626,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboards/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dashboard sharing settings of the organization */
+        get: operations["getDashboardSettings"];
+        /** Change the dashboard sharing settings (admin, owner) */
+        put: operations["updateDashboardSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listDashboardVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get: operations["getDashboardVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save a stored version as the new current version */
+        post: operations["restoreDashboardVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listDashboardShares"];
+        put?: never;
+        /** Create a read-only share link (the token is returned only here) */
+        post: operations["createDashboardShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/shares/{share_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeDashboardShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listDashboardReports"];
+        put?: never;
+        post: operations["createDashboardReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboards/{id}/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateDashboardReport"];
+        post?: never;
+        delete: operations["deleteDashboardReport"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/dashboards/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        /** Read-only dashboard of a share link (no authentication) */
+        get: operations["getSharedDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/dashboards/{token}/widgets/{widget_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                widget_id: string;
+            };
+            cookie?: never;
+        };
+        /** Result of a shared widget's stored query for the link's range and variables (no authentication) */
+        get: operations["getSharedWidgetResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/usage": {
         parameters: {
             query?: never;
@@ -2504,6 +2914,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/usage/query-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ClickHouse query limits of the organization with their layers (usage.md §4.5; postgres auth mode) */
+        get: operations["getQueryLimits"];
+        /** Set the organization layer (owner without SaaS mode, superadmin; audit query_limits.update) */
+        put: operations["putQueryLimits"];
+        post?: never;
+        /** Remove the organization layer (same permission as PUT; audit query_limits.delete) */
+        delete: operations["deleteQueryLimits"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/orgs/{org}/plan": {
         parameters: {
             query?: never;
@@ -2557,6 +2986,53 @@ export interface components {
             max_memory_usage?: number;
             max_rows_to_read?: number;
             max_bytes_to_read?: number;
+        };
+        /** @description 0 = not set by openlog (the ClickHouse read user's profile applies) */
+        QueryLimitValues: {
+            /** Format: int64 */
+            max_memory_usage: number;
+            /** Format: int64 */
+            max_rows_to_read: number;
+            /** Format: int64 */
+            max_bytes_to_read: number;
+        };
+        /** @description null or absent = inherit the plan / defaults */
+        OrgQueryLimitsInput: {
+            /** Format: int64 */
+            max_memory_usage?: number | null;
+            /** Format: int64 */
+            max_rows_to_read?: number | null;
+            /** Format: int64 */
+            max_bytes_to_read?: number | null;
+        };
+        /** @enum {string} */
+        QueryLimitSource: "default" | "plan" | "organization" | "environment";
+        OrgQueryLimits: {
+            defaults: components["schemas"]["QueryLimitValues"];
+            plan: components["schemas"]["QueryLimitValues"];
+            /** @description The organization setting; null when none is stored */
+            organization: null | {
+                /** Format: int64 */
+                max_memory_usage: number | null;
+                /** Format: int64 */
+                max_rows_to_read: number | null;
+                /** Format: int64 */
+                max_bytes_to_read: number | null;
+                updated_at: components["schemas"]["Timestamp"];
+                /** @description E-mail of the last editor (empty when the user was deleted) */
+                updated_by: string;
+            };
+            /** @description The tenant's OPENLOG_QUERY_TENANT_LIMITS entry (replaces every layer); null when none */
+            environment: null | components["schemas"]["QueryLimitValues"];
+            effective: components["schemas"]["QueryLimitValues"];
+            sources: {
+                max_memory_usage: components["schemas"]["QueryLimitSource"];
+                max_rows_to_read: components["schemas"]["QueryLimitSource"];
+                max_bytes_to_read: components["schemas"]["QueryLimitSource"];
+            };
+            can_manage: boolean;
+            /** @description Other api/alert pods apply a change within this many seconds */
+            refresh_seconds: number;
         };
         /** @description 0 or absent = unlimited (retention_days absent = table default) */
         PlanLimits: {
@@ -2755,8 +3231,10 @@ export interface components {
         Error: {
             error: {
                 /** @enum {string} */
-                code: "invalid_argument" | "unauthenticated" | "permission_denied" | "not_found" | "already_exists" | "failed_precondition" | "resource_exhausted" | "internal" | "unavailable" | "timeout";
+                code: "invalid_argument" | "unauthenticated" | "permission_denied" | "not_found" | "already_exists" | "failed_precondition" | "resource_exhausted" | "internal" | "unavailable" | "storage_unavailable" | "timeout";
                 message: string;
+                /** @description Present (true) on storage_unavailable; the same request is expected to succeed later. */
+                retryable?: boolean;
             };
         };
         /**
@@ -3226,8 +3704,15 @@ export interface components {
                 endpoint?: string;
             };
             apm_hint?: null | {
+                /** @description Runtime language of the discovered service (php, nodejs, python, java, dotnet) */
                 language?: string;
+                /** @description Discovery identifier of the matching agent (e.g. openlog-agent-php); not a package name */
                 agent?: string;
+                /**
+                 * @description Set by the infra agent for openlog-agent-php: active = PHP spans received in the last 10 minutes (semantic-conventions §3.4)
+                 * @enum {string}
+                 */
+                status?: "active" | "not_installed";
             };
         };
         LogRecord: {
@@ -3722,6 +4207,8 @@ export interface components {
         SSODiscovery: {
             sso: boolean;
             organization_name: string | null;
+            /** @description Name of the connection the e-mail domain routes to */
+            connection_name: string | null;
             protocol: ("oidc" | "saml") | null;
             enforced: boolean;
         };
@@ -3734,16 +4221,63 @@ export interface components {
             /** @description Domains can be verified by e-mail (SMTP configured) */
             email_verification_available: boolean;
             domain_email_local_parts: string[];
-            /** @description Values to register at the identity provider. SAML values exist once a SAML connection is saved. */
+            /** @description Values to register at the identity provider. SAML values are those of the addressed SAML connection. */
             service_provider: {
                 oidc_redirect_uri: string;
+                /** @description Register as a valid post logout redirect URI (RP-initiated logout) */
+                oidc_post_logout_redirect_uri: string;
                 scim_base_url: string;
                 saml_entity_id: string | null;
                 saml_acs_url: string | null;
+                /** @description Single logout service (HTTP-Redirect and HTTP-POST), also in the SP metadata */
+                saml_slo_url: string | null;
                 saml_metadata_url: string | null;
                 saml_certificate_pem: string | null;
             };
+            /** @description The addressed connection (the default connection on the single-connection API; null on the list) */
             connection: components["schemas"]["SSOConnection"] | null;
+            /** @description All connections, the default first */
+            connections: components["schemas"]["SSOConnection"][];
+        };
+        /** @description Background refresh of the IdP documents (OIDC discovery/JWKS, SAML metadata) and certificate/metadata expiry. */
+        SSOHealth: {
+            /**
+             * @description unknown = not refreshed yet; error = 3 consecutive failures or an expired certificate
+             * @enum {string}
+             */
+            status: "ok" | "warning" | "error" | "unknown";
+            message: string;
+            checked_at: components["schemas"]["NullableTimestamp"];
+            next_at: components["schemas"]["NullableTimestamp"];
+            /** @description Consecutive failed refreshes */
+            failures: number;
+            metadata_valid_until: components["schemas"]["NullableTimestamp"];
+        };
+        SSORoleMappings: {
+            mappings: components["schemas"]["SSORoleMapping"][];
+            /** @description null = organization-wide */
+            connection_id: string | null;
+        };
+        SSOSessionInfo: {
+            /** @description The session was created by single sign-on */
+            sso: boolean;
+            protocol: ("oidc" | "saml") | null;
+            connection_id: string | null;
+            connection_name: string | null;
+            /** @description The IdP session can be ended (SAML SingleLogoutService or OIDC end_session_endpoint) */
+            idp_logout: boolean;
+        };
+        SSOLogoutResult: {
+            protocol: ("oidc" | "saml") | null;
+            /** @description Navigate the browser here to end the IdP session */
+            redirect_url: string | null;
+            post: {
+                url: string;
+                fields: {
+                    [key: string]: string;
+                };
+            } | null;
+            revoked_sessions: number;
         };
         SSOConnection: {
             id: string;
@@ -3751,6 +4285,8 @@ export interface components {
             protocol: "oidc" | "saml";
             name: string;
             enabled: boolean;
+            /** @description The organization's default (oldest) connection: domains without connection_id route to it */
+            default: boolean;
             oidc: {
                 issuer: string;
                 client_id: string;
@@ -3760,9 +4296,12 @@ export interface components {
                 client_secret_set: boolean;
             } | null;
             saml: {
+                /** @description Re-fetched by the background refresh */
                 idp_metadata_url: string;
                 idp_entity_id: string;
                 idp_sso_url: string;
+                /** @description IdP SingleLogoutService (null: no SAML single logout) */
+                idp_slo_url: string | null;
                 /** @description SHA-256 fingerprints of the IdP signing certificates */
                 idp_certificates: string[];
                 idp_cert_not_after: components["schemas"]["NullableTimestamp"];
@@ -3780,6 +4319,10 @@ export interface components {
             default_role: "admin" | "member" | "viewer";
             /** @description 0 = OPENLOG_SESSION_TTL only */
             session_max_age_seconds: number;
+            /** @description UI paths single logout may return to besides /login */
+            logout_redirect_allowlist: string[];
+            /** @description Members of domains routed here may accept invitations of other organizations with a password */
+            allow_external_invitations: boolean;
             enforce: boolean;
             break_glass_user_ids: string[];
             config_version: number;
@@ -3796,6 +4339,7 @@ export interface components {
                     [key: string]: unknown;
                 };
             } | null;
+            health: components["schemas"]["SSOHealth"];
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
         };
@@ -3833,6 +4377,9 @@ export interface components {
             default_role: "admin" | "member" | "viewer";
             /** @description 0 or 300–2592000 */
             session_max_age_seconds?: number;
+            logout_redirect_allowlist?: string[];
+            /** @description Omitted keeps the stored value (true for a new connection) */
+            allow_external_invitations?: boolean;
         };
         SSOTestResult: {
             ok: boolean;
@@ -3862,6 +4409,8 @@ export interface components {
             email_address: string | null;
             email_expires_at: components["schemas"]["NullableTimestamp"];
             last_checked_at: components["schemas"]["NullableTimestamp"];
+            /** @description Connection sign-ins of the domain use (null = the default connection) */
+            connection_id: string | null;
             created_at: components["schemas"]["Timestamp"];
         };
         SSORoleMapping: {
@@ -3947,6 +4496,12 @@ export interface components {
             state: "pending" | "running" | "done" | "failed" | "expired";
             /** @description Result reported by the updater (e.g. the reason a request failed) */
             message: string;
+            /** @description Stable code of message when it is a fixed updater message (see UpdaterStatus.message_code; request-only codes: request_mode_off, request_not_installable, request_target_changed, request_outside_window, request_interrupted, request_expired); omitted for free text */
+            message_code?: string;
+            /** @description Parameters of message_code (e.g. version, from, to, reason, details; error = English error appended to the message) */
+            message_params?: {
+                [key: string]: string;
+            };
             /** @description Only for callers with can_request */
             requested_by_email: string | null;
             /** Format: date-time */
@@ -3955,6 +4510,56 @@ export interface components {
             picked_at: string | null;
             /** Format: date-time */
             finished_at: string | null;
+        };
+        OnboardingEndpoint: {
+            /** @example https://ingest.openlog.example.com:4318 */
+            url: string;
+            /**
+             * @description configured: OPENLOG_PUBLIC_URL / OPENLOG_INGEST_PUBLIC_URL / OPENLOG_INGEST_PUBLIC_GRPC_URL.
+             *     derived_public_url: scheme and host of OPENLOG_PUBLIC_URL with port 4318 (gRPC 4317).
+             *     derived_ingest_url: gRPC only, host of OPENLOG_INGEST_PUBLIC_URL with port 4317.
+             *     derived_request: scheme and host the browser used (well-formed X-Forwarded-Proto/-Host win).
+             * @enum {string}
+             */
+            source: "configured" | "derived_public_url" | "derived_ingest_url" | "derived_request";
+        };
+        /** @description Inputs of the web UI's "Add data" install commands (GET /api/v1/onboarding). No secrets. */
+        Onboarding: {
+            ui_url: components["schemas"]["OnboardingEndpoint"];
+            otlp_http: components["schemas"]["OnboardingEndpoint"];
+            otlp_grpc: components["schemas"]["OnboardingEndpoint"];
+            /** @example 0.9.1 */
+            server_version: string;
+            /**
+             * @description Release the commands pin (Java jar, container image tag, Helm chart tag): the newest verified release of release_channel when the release check found one, else this server's release version; null for dev builds.
+             * @example 0.9.2
+             */
+            agent_version: string | null;
+            /** @enum {string} */
+            release_channel: "stable" | "beta";
+            /** @description OPENLOG_INGEST_CORS_ALLOWED_ORIGINS is set (browser OTLP/JSON logs) */
+            cors_enabled: boolean;
+            cors_allowed_origins: string[];
+            /** @enum {string} */
+            auth_mode: "postgres" | "static";
+            organization: {
+                id: string;
+                tenant_id: string;
+                name: string;
+            };
+            role: components["schemas"]["Role"];
+            features: {
+                /** @description License key management endpoints exist (postgres auth mode) */
+                license_keys: boolean;
+                /** @description The caller is a signed-in admin or owner */
+                can_create_license_keys: boolean;
+                /** @description The caller is a signed-in member or higher */
+                can_list_license_keys: boolean;
+                /** @description The fleet can install the PHP agent (php-agent.md §7.3) */
+                fleet_php_install: boolean;
+                /** @description OPENLOG_TAILSAMPLING_ENABLED */
+                tail_sampling: boolean;
+            };
         };
         AvailableRelease: {
             /** @example 0.9.2 */
@@ -3970,7 +4575,14 @@ export interface components {
             mode: "off" | "notify" | "auto";
             /** @enum {string} */
             state: "off" | "error" | "up_to_date" | "available" | "waiting_for_maintenance_window" | "updating" | "succeeded" | "failed" | "rolled_back" | "rollback_failed";
+            /** @description English text (kept for older clients and logs) */
             message?: string;
+            /** @description Stable code of message for translation; absent for free text and in documents of older updaters. Known: mode_off, update_available, update_available_notify, waiting_for_window, updated, rolled_back, rollback_failed, failed_before_change, up_to_date_newest, up_to_date_no_eligible */
+            message_code?: string;
+            /** @description Parameters of message_code: version, from, to, channel, details (English) */
+            message_params?: {
+                [key: string]: string;
+            };
             error?: string;
             current_version?: string;
             target_version?: string;
@@ -4054,6 +4666,15 @@ export interface components {
             expires_at: components["schemas"]["Timestamp"];
             /** @description true: sign in with the existing password to accept */
             user_exists: boolean;
+            /** @description Claimed-domain redirection (D-089): the invitation must be accepted with single sign-on — the e-mail domain is verified by an organization with an enabled connection (the inviting one, `same_organization`, or another one that does not allow external invitations). Password acceptance answers 409. */
+            sso: {
+                required: boolean;
+                organization_name: string;
+                connection_name: string;
+                /** @enum {string} */
+                protocol: "oidc" | "saml";
+                same_organization: boolean;
+            } | null;
         };
         LicenseKey: {
             id: string;
@@ -4936,6 +5557,8 @@ export interface components {
             /** @description RFC3339 or unix ms; overrides UNTIL (requires from) */
             to?: string;
             variables?: components["schemas"]["OqlVariables"];
+            /** @description Dashboard cross-widget filters (oql.md §7), applied where the event type has the attribute */
+            filters?: components["schemas"]["DashboardFilter"][];
         };
         OqlColumn: {
             /** @description Alias or rendered aggregate */
@@ -4985,6 +5608,8 @@ export interface components {
             facet_limit: number;
             truncated: boolean;
             warnings: string[];
+            /** @description Dashboard filters (attributes) that do not apply to the event type; omitted when none */
+            ignored_filters?: string[];
         };
         OqlResult: {
             /** @enum {string} */
@@ -5165,6 +5790,197 @@ export interface components {
         DashboardImport: components["schemas"]["DashboardExport"] & {
             visibility?: components["schemas"]["DashboardVisibility"];
         };
+        DashboardFilter: {
+            /** @description OQL attribute: host.name, attributes['k'], resource['k'] */
+            attribute: string;
+            value: string;
+            /** @description Event type of the widget the filter was taken from (implicit attributes apply only to it) */
+            event_type?: string;
+        };
+        DashboardSettings: {
+            share_links_enabled: boolean;
+            report_domains: string[];
+            updated_at: string | null;
+            can_edit: boolean;
+        };
+        DashboardSettingsInput: {
+            share_links_enabled: boolean;
+            report_domains?: string[];
+        };
+        DashboardVersion: {
+            version: number;
+            author_user_id: string | null;
+            author_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            restored_from: number | null;
+            page_count: number;
+            widget_count: number;
+        };
+        DashboardVersionList: {
+            versions: components["schemas"]["DashboardVersion"][];
+            current_version: number;
+            can_restore: boolean;
+        };
+        DashboardPageRef: {
+            id: string;
+            name: string;
+        };
+        DashboardWidgetRef: {
+            id: string;
+            title: string;
+            /** @description Page name */
+            page: string;
+            fields?: ("title" | "visualization" | "layout" | "query" | "markdown" | "unit" | "thresholds" | "options" | "page")[];
+        };
+        DashboardDiff: {
+            name: boolean;
+            description: boolean;
+            visibility: boolean;
+            variables: boolean;
+            pages_added: components["schemas"]["DashboardPageRef"][];
+            pages_removed: components["schemas"]["DashboardPageRef"][];
+            pages_renamed: components["schemas"]["DashboardPageRef"][];
+            widgets_added: components["schemas"]["DashboardWidgetRef"][];
+            widgets_removed: components["schemas"]["DashboardWidgetRef"][];
+            widgets_changed: components["schemas"]["DashboardWidgetRef"][];
+        };
+        DashboardVersionDetail: components["schemas"]["DashboardVersion"] & {
+            document: {
+                name: string;
+                description: string;
+                visibility: components["schemas"]["DashboardVisibility"];
+                variables: components["schemas"]["DashboardVariable"][];
+                pages: components["schemas"]["DashboardPage"][];
+            };
+            current_version: number;
+            previous_version: number | null;
+            changes: components["schemas"]["DashboardDiff"] | null;
+            differences_from_current: components["schemas"]["DashboardDiff"];
+        };
+        DashboardRestore: {
+            /** @description The current version of the dashboard that was read */
+            version: number;
+        };
+        /** @description Locked variable values by variable name */
+        DashboardLockedVariables: {
+            [key: string]: string[];
+        };
+        DashboardShareInput: {
+            label?: string;
+            /**
+             * Format: date-time
+             * @description 5 minutes to 90 days ahead
+             */
+            expires_at: string;
+            /** @description Relative range (1 minute to 31 days); or from and to */
+            range?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            variables?: components["schemas"]["DashboardLockedVariables"];
+        };
+        DashboardShare: {
+            id: string;
+            label: string;
+            range: string | null;
+            from: string | null;
+            to: string | null;
+            variables: components["schemas"]["DashboardLockedVariables"];
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            expires_at: components["schemas"]["Timestamp"];
+            revoked_at: string | null;
+            last_used_at: string | null;
+            use_count: number;
+            active: boolean;
+        };
+        DashboardShareCreated: components["schemas"]["DashboardShare"] & {
+            /** @description Returned only when the link is created */
+            token: string;
+            /** @description Web UI page of the link: /shared/dashboards/{token} */
+            path: string;
+        };
+        /** @enum {string} */
+        DashboardReportFrequency: "daily" | "weekly";
+        DashboardReportInput: {
+            name?: string;
+            frequency: components["schemas"]["DashboardReportFrequency"];
+            /** @description 0 = Sunday (weekly) */
+            weekday?: number;
+            hour: number;
+            minute?: number;
+            /** @description IANA time zone (default UTC) */
+            timezone?: string;
+            recipients: string[];
+            /** @enum {string} */
+            language?: "en" | "tr";
+            /** @description Relative range (default 24h daily */
+            range?: string;
+            variables?: components["schemas"]["DashboardLockedVariables"];
+            enabled?: boolean;
+        };
+        DashboardReportRun: {
+            /** @description Local date YYYY-MM-DD */
+            period: string;
+            /** @enum {string} */
+            status: "running" | "sent" | "partial" | "failed" | "skipped";
+            error: string;
+            recipients: number;
+            started_at: components["schemas"]["Timestamp"];
+            finished_at: string | null;
+        };
+        DashboardReport: {
+            id: string;
+            name: string;
+            frequency: components["schemas"]["DashboardReportFrequency"];
+            weekday: number;
+            hour: number;
+            minute: number;
+            timezone: string;
+            recipients: string[];
+            /** @enum {string} */
+            language: "en" | "tr";
+            range: string;
+            variables: components["schemas"]["DashboardLockedVariables"];
+            enabled: boolean;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            next_run_at: string | null;
+            last_run: components["schemas"]["DashboardReportRun"] | null;
+        };
+        SharedDashboardWidget: {
+            id: string;
+            title: string;
+            visualization: components["schemas"]["DashboardVisualization"];
+            layout: components["schemas"]["DashboardWidgetLayout"];
+            markdown: string;
+            unit: components["schemas"]["DashboardUnit"];
+            thresholds: components["schemas"]["DashboardThreshold"][];
+            options: components["schemas"]["DashboardWidgetOptions"];
+        };
+        SharedDashboard: {
+            name: string;
+            description: string;
+            pages: {
+                id: string;
+                name: string;
+                widgets: components["schemas"]["SharedDashboardWidget"][];
+            }[];
+            variables: {
+                name: string;
+                label: string;
+                /** @description Locked values (empty = All) */
+                values: string[];
+            }[];
+            time_range: {
+                range: string | null;
+                from: string | null;
+                to: string | null;
+            };
+            expires_at: components["schemas"]["Timestamp"];
+        };
     };
     responses: {
         /** @description invalid_argument */
@@ -5239,7 +6055,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description unavailable (authentication backend), with Retry-After */
+        /** @description unavailable (authentication backend) or storage_unavailable (telemetry queries whose data on cold/S3 storage cannot be read; retryable true), with Retry-After */
         Unavailable: {
             headers: {
                 [name: string]: unknown;
@@ -7181,6 +7997,28 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    getOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     getAuthConfig: {
         parameters: {
             query?: never;
@@ -7435,6 +8273,149 @@ export interface operations {
             404: components["responses"]["NotFound"];
             429: components["responses"]["TooManyRequests"];
             503: components["responses"]["Unavailable"];
+        };
+    };
+    getSSOSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOSessionInfo"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    ssoLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Relative UI path after the IdP logout (default /login) */
+                    redirect?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Signed out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOLogoutResult"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    oidcLogoutCallback: {
+        parameters: {
+            query?: {
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the UI */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    samlSLORedirect: {
+        parameters: {
+            query?: {
+                SAMLRequest?: string;
+                SAMLResponse?: string;
+                RelayState?: string;
+                SigAlg?: string;
+                Signature?: string;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Auto-submitting HTML form (LogoutResponse to an IdP with the HTTP-POST binding only) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Redirect to the IdP or the UI */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    samlSLOPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    SAMLRequest?: string;
+                    SAMLResponse?: string;
+                    RelayState?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Auto-submitting HTML form */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Redirect to the IdP or the UI */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     oidcCallback: {
@@ -7737,6 +8718,306 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    listSSOConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSOConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description Created; `connection` is the new connection */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSSOConnectionByID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSOConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteSSOConnectionByID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    testSSOConnectionByID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    startSSOTestByID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Identity provider URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        redirect_url: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    refreshSSOConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refreshed (see connection.health) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateSSOConnectionEnforcement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enforce: boolean;
+                    break_glass_user_ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listSSOConnectionRoleMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mappings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSORoleMappings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceSSOConnectionRoleMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    mappings: components["schemas"]["SSORoleMapping"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSORoleMappings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listSSODomains: {
         parameters: {
             query?: never;
@@ -7827,6 +9108,39 @@ export interface operations {
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
             503: components["responses"]["Unavailable"];
+        };
+    };
+    assignSSODomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    connection_id: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Assigned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSODomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteSSODomain: {
@@ -10300,6 +11614,403 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getDashboardSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSettings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateDashboardSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listDashboardVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored versions, newest first (at most 50) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardVersionList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getDashboardVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One version with its changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardVersionDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreDashboardVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardRestore"];
+            };
+        };
+        responses: {
+            /** @description Dashboard (new version) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listDashboardShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Share links of the dashboard (without tokens), newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        shares: components["schemas"]["DashboardShare"][];
+                        share_links_enabled: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createDashboardShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardShareInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardShareCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revokeDashboardShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked share link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardShare"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listDashboardReports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scheduled reports of the dashboard */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        reports: components["schemas"]["DashboardReport"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createDashboardReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardReportInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateDashboardReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardReportInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteDashboardReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSharedDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shared dashboard */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDashboard"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getSharedWidgetResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                widget_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OQL result (execution statistics blanked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OqlResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The widget's stored query cannot be run */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            /** @description Query timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getUsage: {
         parameters: {
             query?: {
@@ -10446,6 +12157,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanCatalog"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getQueryLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Layers, effective limits and sources */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgQueryLimits"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putQueryLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgQueryLimitsInput"];
+            };
+        };
+        responses: {
+            /** @description New state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgQueryLimits"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteQueryLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgQueryLimits"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

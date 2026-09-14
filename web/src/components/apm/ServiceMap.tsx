@@ -50,13 +50,24 @@ const NODE_W = 220;
 const NODE_H = 88;
 const ERROR_EDGE = 0.05;
 
-type NodeData = { node: ApmMapNode; focused: boolean; label: string; locale: string; typeLabel: string; state: ElementState; countsLabel: string };
+type NodeData = { node: ApmMapNode; focused: boolean; label: string; locale: string; typeLabel: string; state: ElementState; countsLabel: string; showCounts: boolean };
 type MapNode = Node<NodeData, "apm">;
 
 const ICONS = { service: Box, db: Database, external: Globe, messaging: MessageSquare } as const;
 
+/** localStorage key of the "hosts and containers" toggle (per browser). */
+const INFRA_COUNTS_KEY = "openlog.apm.map.infraCounts";
+
+function loadShowCounts(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(INFRA_COUNTS_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
 const ApmNodeView = memo(function ApmNodeView({ data }: NodeProps<MapNode>) {
-  const { node, focused, locale, typeLabel, state, countsLabel } = data;
+  const { node, focused, locale, typeLabel, state, countsLabel, showCounts } = data;
   const Icon = ICONS[node.type] ?? Box;
   const hasTraffic = node.requests > 0;
   const isService = node.type === "service";
@@ -80,16 +91,16 @@ const ApmNodeView = memo(function ApmNodeView({ data }: NodeProps<MapNode>) {
       </div>
       <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
         <span className="min-w-0 truncate">{node.environment ? `${typeLabel} · ${node.environment}` : typeLabel}</span>
-        {isService && (node.host_count > 0 || node.container_count > 0) && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums" title={countsLabel}>
+        {isService && showCounts && (node.host_count > 0 || node.container_count > 0) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1 tabular-nums" title={countsLabel} data-testid="map-node-counts">
             {node.host_count > 0 && (
-              <span className="inline-flex items-center gap-0.5">
+              <span className="inline-flex items-center gap-0.5 rounded border bg-muted px-1 text-foreground">
                 <Server className="size-3" aria-hidden="true" />
                 {node.host_count}
               </span>
             )}
             {node.container_count > 0 && (
-              <span className="inline-flex items-center gap-0.5">
+              <span className="inline-flex items-center gap-0.5 rounded border bg-muted px-1 text-foreground">
                 <Container className="size-3" aria-hidden="true" />
                 {node.container_count}
               </span>
@@ -140,6 +151,17 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
   const [centeredOn, setCenteredOn] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   const [showAllConnections, setShowAllConnections] = useState(false);
+  const [showCounts, setShowCounts] = useState(loadShowCounts);
+  const hasCounts = useMemo(() => data.nodes.some((n) => n.type === "service" && (n.host_count > 0 || n.container_count > 0)), [data.nodes]);
+  const toggleCounts = () =>
+    setShowCounts((prev) => {
+      try {
+        globalThis.localStorage?.setItem(INFRA_COUNTS_KEY, prev ? "0" : "1");
+      } catch {
+        // storage unavailable (private mode): the choice lasts for this page only
+      }
+      return !prev;
+    });
   const showList = mobile && view === "list";
   const opts = useMemo(() => mapRenderOptions(data.nodes.length, data.edges.length), [data.nodes.length, data.edges.length]);
   const highlight = useMemo(() => pathSets(path), [path]);
@@ -162,13 +184,13 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
           id: n.id,
           type: "apm",
           position: positions.get(n.id) ?? { x: 0, y: 0 },
-          data: { node: n, focused: n.id === focusId, locale, typeLabel, label, countsLabel, state: elementState(n.id, highlight?.nodes) },
-          ariaLabel: countsLabel ? `${label}, ${countsLabel}` : label,
+          data: { node: n, focused: n.id === focusId, locale, typeLabel, label, countsLabel, showCounts, state: elementState(n.id, highlight?.nodes) },
+          ariaLabel: countsLabel && showCounts ? `${label}, ${countsLabel}` : label,
           draggable: true,
           connectable: false,
         };
       }),
-    [data.nodes, positions, focusId, locale, t, highlight],
+    [data.nodes, positions, focusId, locale, t, highlight, showCounts],
   );
 
   const edges = useMemo(
@@ -313,6 +335,20 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
           <Background gap={20} />
           <Controls showInteractive={false} />
           <Panel position="top-right" className="flex flex-col items-end gap-1">
+            {hasCounts && (
+              <Button
+                variant={showCounts ? "secondary" : "outline"}
+                size="sm"
+                className={cn("bg-card", mobile && "min-h-10")}
+                aria-pressed={showCounts}
+                title={t("apm.map.infraCountsHint")}
+                onClick={toggleCounts}
+                data-testid="map-infra-toggle"
+              >
+                <Server aria-hidden="true" />
+                {t("apm.map.infraCounts")}
+              </Button>
+            )}
             {mobile && (
               <Button variant="outline" size="sm" className="min-h-10 bg-card" onClick={fitAll} data-testid="map-fit-all">
                 <Maximize aria-hidden="true" />

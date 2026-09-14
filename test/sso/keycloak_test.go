@@ -1,7 +1,9 @@
 //go:build ssoe2e
 
 // End-to-end single sign-on test against a real Keycloak (OIDC and SAML), PostgreSQL and the api HTTP handlers
-// (D-077, D-078). See test/integration/sso/docker-compose.yml:
+// (D-077, D-078, D-088, D-089): two connections of one organization routed by domain, encrypted SAML assertions,
+// SAML single logout in both directions, OIDC RP-initiated logout, claimed-domain invitations and SCIM e-mail
+// changes. See test/integration/sso/docker-compose.yml:
 //
 //	docker compose -f test/integration/sso/docker-compose.yml up -d --wait
 //	OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55440/openlog?sslmode=disable \
@@ -11,6 +13,7 @@ package sso_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,6 +67,11 @@ type browser struct {
 	csrf string
 	// lastSAMLResponse is the last SAMLResponse posted to the ACS (replay test).
 	lastSAMLResponse, lastRelayState, lastACS string
+	// lastStart is the IdP URL of the last "Sign in with SSO"; loginForms counts submitted Keycloak login forms.
+	lastStart  string
+	loginForms int
+	// idpPage lets browse end on an identity provider page (after an IdP-initiated logout) and returns "idp-page".
+	idpPage bool
 }
 
 func (h *harness) newBrowser() *browser {
@@ -136,8 +144,11 @@ func (b *browser) me() (int, meJSON) {
 var (
 	loginFormRe = regexp.MustCompile(`(?s)<form[^>]*?action="([^"]*login-actions/authenticate[^"]*)"`)
 	postFormRe  = regexp.MustCompile(`(?s)<form[^>]*?action="([^"]+)"`)
-	samlRespRe  = regexp.MustCompile(`name="SAMLResponse"\s+value="([^"]+)"`)
+	samlRespRe  = regexp.MustCompile(`name="(SAMLResponse|SAMLRequest)"\s+value="([^"]+)"`)
 	relayRe     = regexp.MustCompile(`name="RelayState"\s+value="([^"]*)"`)
+	// Keycloak's "Do you want to log out?" page of the OIDC logout endpoint.
+	logoutFormRe  = regexp.MustCompile(`(?s)<form[^>]*?action="([^"]*logout-confirm[^"]*)"`)
+	sessionCodeRe = regexp.MustCompile(`name="session_code"\s+value="([^"]*)"`)
 )
 
 // browse follows a navigation starting at target: redirects are followed; Keycloak's login form is submitted
@@ -178,15 +189,31 @@ func (b *browser) browse(target, username, password string) string {
 			if r := relayRe.FindStringSubmatch(page); r != nil {
 				relay = html.UnescapeString(r[1])
 			}
-			b.lastSAMLResponse, b.lastRelayState, b.lastACS = html.UnescapeString(m[1]), relay, action
-			target, method, body = action, http.MethodPost, url.Values{"SAMLResponse": {b.lastSAMLResponse}, "RelayState": {relay}}
+			value := html.UnescapeString(m[2])
+			if m[1] == "SAMLResponse" && strings.HasSuffix(action, "/acs") {
+				b.lastSAMLResponse, b.lastRelayState, b.lastACS = value, relay, action
+			}
+			target, method, body = action, http.MethodPost, url.Values{m[1]: {value}, "RelayState": {relay}}
+			continue
+		}
+		if m := logoutFormRe.FindStringSubmatch(page); m != nil {
+			code := ""
+			if c := sessionCodeRe.FindStringSubmatch(page); c != nil {
+				code = html.UnescapeString(c[1])
+			}
+			action, _ := res.Request.URL.Parse(html.UnescapeString(m[1]))
+			target, method, body = action.String(), http.MethodPost, url.Values{"session_code": {code}, "confirmLogout": {"Logout"}}
 			continue
 		}
 		if m := loginFormRe.FindStringSubmatch(page); m != nil && !submitted {
 			submitted = true
+			b.loginForms++
 			target, method = html.UnescapeString(m[1]), http.MethodPost
 			body = url.Values{"username": {username}, "password": {password}, "credentialId": {""}}
 			continue
+		}
+		if b.idpPage && strings.HasPrefix(target, b.h.kc) && res.StatusCode == http.StatusOK {
+			return "idp-page"
 		}
 		b.t.Fatalf("unexpected page at %s (%d): %.1500s", target, res.StatusCode, page)
 	}
@@ -206,7 +233,44 @@ func (b *browser) ssoLogin(email, username, password, redirect string) string {
 	if !strings.HasPrefix(start.RedirectURL, b.h.kc) {
 		b.t.Fatalf("redirect_url = %s", start.RedirectURL)
 	}
+	b.lastStart = start.RedirectURL
 	return b.browse(start.RedirectURL, username, password)
+}
+
+// logoutEverywhere runs "Sign out everywhere (IdP)" and follows the browser through the identity provider.
+func (b *browser) logoutEverywhere() string {
+	b.t.Helper()
+	b.me() // CSRF token
+	var out struct {
+		RedirectURL *string `json:"redirect_url"`
+		Post        *struct {
+			URL    string            `json:"url"`
+			Fields map[string]string `json:"fields"`
+		} `json:"post"`
+	}
+	if code := b.apiJSON(http.MethodPost, "/api/v1/auth/sso/logout", map[string]string{"redirect": "/login"}, &out); code != http.StatusOK {
+		b.t.Fatalf("sso logout: %d", code)
+	}
+	switch {
+	case out.RedirectURL != nil:
+		if !strings.HasPrefix(*out.RedirectURL, b.h.kc) {
+			b.t.Fatalf("logout redirect_url = %s", *out.RedirectURL)
+		}
+		return b.browse(*out.RedirectURL, "", "")
+	case out.Post != nil:
+		res, err := b.c.PostForm(out.Post.URL, url.Values{"SAMLRequest": {out.Post.Fields["SAMLRequest"]}, "RelayState": {out.Post.Fields["RelayState"]}})
+		if err != nil {
+			b.t.Fatal(err)
+		}
+		res.Body.Close()
+		loc, _ := res.Request.URL.Parse(res.Header.Get("Location"))
+		if loc == nil {
+			b.t.Fatalf("IdP answered the POST LogoutRequest with %d", res.StatusCode)
+		}
+		return b.browse(loc.String(), "", "")
+	}
+	b.t.Fatal("the logout did not continue at the identity provider")
+	return ""
 }
 
 func (h *harness) keycloakAdminToken() string {
@@ -245,7 +309,7 @@ func (h *harness) keycloakAdmin(token, method, path, contentType string, body []
 
 // registerSAMLClient imports openlog's SP metadata into Keycloak (as an administrator would) and adds the e-mail
 // and group attribute mappers and IdP-initiated sign-in.
-func (h *harness) registerSAMLClient(metadata []byte) {
+func (h *harness) registerSAMLClient(metadata []byte, spCertPEM, sloURL string) {
 	h.t.Helper()
 	token := h.keycloakAdminToken()
 	list, _ := h.keycloakAdmin(token, http.MethodGet, "/clients", "", nil)
@@ -270,8 +334,19 @@ func (h *harness) registerSAMLClient(metadata []byte) {
 	}
 	attrs["saml_name_id_format"] = "email"
 	attrs["saml.force.name.id.format"] = "true"
-	attrs["saml.encrypt"] = "false"
-	attrs["saml.client.signature"] = "false"
+	// Encrypted assertions with Keycloak's defaults (AES-256-GCM, RSA-OAEP with SHA-256), signed AuthnRequests and
+	// LogoutRequests from openlog, front-channel single logout.
+	certB64 := strings.Join(strings.Fields(strings.NewReplacer("-----BEGIN CERTIFICATE-----", "", "-----END CERTIFICATE-----", "").Replace(spCertPEM)), "")
+	attrs["saml.encrypt"] = "true"
+	attrs["saml.encryption.certificate"] = certB64
+	attrs["saml.encryption.algorithm"] = "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+	attrs["saml.encryption.keyAlgorithm"] = "http://www.w3.org/2009/xmlenc11#rsa-oaep"
+	attrs["saml.encryption.digestMethod"] = "http://www.w3.org/2001/04/xmlenc#sha256"
+	attrs["saml.encryption.maskGenerationFunction"] = "http://www.w3.org/2009/xmlenc11#mgf1sha256"
+	attrs["saml.client.signature"] = "true"
+	attrs["saml.signing.certificate"] = certB64
+	attrs["saml_single_logout_service_url_redirect"] = sloURL
+	attrs["saml_single_logout_service_url_post"] = sloURL
 	attrs["saml.assertion.signature"] = "true"
 	attrs["saml.server.signature"] = "true"
 	attrs["saml.signature.algorithm"] = "RSA_SHA256"
@@ -279,6 +354,7 @@ func (h *harness) registerSAMLClient(metadata []byte) {
 	attrs["saml_idp_initiated_sso_relay_state"] = "/hosts"
 	client["attributes"] = attrs
 	client["enabled"] = true
+	client["frontchannelLogout"] = true
 	client["protocolMappers"] = []map[string]any{
 		{"name": "email", "protocol": "saml", "protocolMapper": "saml-user-property-mapper",
 			"config": map[string]string{"user.attribute": "email", "attribute.name": "email", "attribute.nameformat": "Basic", "friendly.name": "email"}},
@@ -313,7 +389,8 @@ func TestKeycloakSSO(t *testing.T) {
 	if err := postgres.Migrate(ctx, pool, ms, log); err != nil {
 		t.Fatal(err)
 	}
-	for _, q := range []string{`DELETE FROM organizations WHERE tenant_id LIKE 'ssoe2e%'`, `DELETE FROM users WHERE email LIKE '%@acme.test' OR email LIKE '%@evil.test'`} {
+	for _, q := range []string{`DELETE FROM organizations WHERE tenant_id LIKE 'ssoe2e%'`, `DELETE FROM users WHERE email LIKE '%@acme.test' OR email LIKE '%.acme.test' OR email LIKE '%@evil.test'`,
+		`DELETE FROM login_failures`} { // login_failures: rate limit counters of earlier runs
 		if _, err := pool.Exec(ctx, q); err != nil {
 			t.Fatal(err)
 		}
@@ -351,6 +428,18 @@ func TestKeycloakSSO(t *testing.T) {
 	_, ownerMe := owner.me()
 	h.ownerID = ownerMe.User.ID
 
+	// carol@acme.test joins with a password before the domain is claimed (enforcement test below).
+	var inv struct {
+		Token string `json:"token"`
+	}
+	if code := owner.apiJSON(http.MethodPost, "/api/v1/invitations", map[string]string{"email": "carol@acme.test", "role": "member"}, &inv); code != http.StatusCreated {
+		t.Fatalf("invite: %d", code)
+	}
+	carol := h.newBrowser()
+	if code := carol.apiJSON(http.MethodPost, "/api/v1/invitations/accept", map[string]string{"token": inv.Token, "password": "carol password e2e", "name": "Carol"}, nil); code != http.StatusOK {
+		t.Fatalf("accept: %d", code)
+	}
+
 	var dom struct {
 		ID        string            `json:"id"`
 		Verified  bool              `json:"verified"`
@@ -362,6 +451,14 @@ func TestKeycloakSSO(t *testing.T) {
 	h.resolver[dom.DNSRecord["name"]] = []string{dom.DNSRecord["value"]}
 	if code := owner.apiJSON(http.MethodPost, "/api/v1/sso/domains/"+dom.ID+"/verify", map[string]string{"method": "dns_txt"}, &dom); code != http.StatusOK || !dom.Verified {
 		t.Fatalf("verify domain: %d %+v", code, dom)
+	}
+	acmeDomainID := dom.ID
+	if code := owner.apiJSON(http.MethodPost, "/api/v1/sso/domains", map[string]string{"domain": "sub.acme.test"}, &dom); code != http.StatusCreated {
+		t.Fatalf("add second domain: %d", code)
+	}
+	h.resolver[dom.DNSRecord["name"]] = []string{dom.DNSRecord["value"]}
+	if code := owner.apiJSON(http.MethodPost, "/api/v1/sso/domains/"+dom.ID+"/verify", map[string]string{"method": "dns_txt"}, &dom); code != http.StatusOK || !dom.Verified {
+		t.Fatalf("verify second domain: %d %+v", code, dom)
 	}
 	if code := owner.apiJSON(http.MethodPut, "/api/v1/sso/role-mappings", map[string]any{"mappings": []map[string]string{{"group": "openlog-admins", "role": "admin"}}}, nil); code != http.StatusOK {
 		t.Fatalf("role mappings: %d", code)
@@ -424,6 +521,11 @@ func TestKeycloakSSO(t *testing.T) {
 		if code, _ := eve.me(); code != http.StatusUnauthorized {
 			t.Fatalf("eve has a session: %d", code)
 		}
+		frank := h.newBrowser()
+		frank.t = t
+		if landing := frank.ssoLogin("frank@sub.acme.test", "frank", "frank-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("frank landed on %s", landing)
+		}
 	})
 
 	t.Run("test sign-in and enforcement", func(t *testing.T) {
@@ -450,18 +552,8 @@ func TestKeycloakSSO(t *testing.T) {
 		if code := owner.apiJSON(http.MethodPut, "/api/v1/sso/enforcement", map[string]any{"enforce": true, "break_glass_user_ids": []string{h.ownerID}}, nil); code != http.StatusOK {
 			t.Fatalf("enforce: %d", code)
 		}
-		// carol@acme.test accepts an invitation with a password: her password sign-in is refused.
-		var inv struct {
-			Token string `json:"token"`
-		}
-		if code := owner.apiJSON(http.MethodPost, "/api/v1/invitations", map[string]string{"email": "carol@acme.test", "role": "member"}, &inv); code != http.StatusCreated {
-			t.Fatalf("invite: %d", code)
-		}
-		carol := h.newBrowser()
+		// carol@acme.test joined with a password: her password session and sign-in are refused.
 		carol.t = t
-		if code := carol.apiJSON(http.MethodPost, "/api/v1/invitations/accept", map[string]string{"token": inv.Token, "password": "carol password e2e", "name": "Carol"}, nil); code != http.StatusOK {
-			t.Fatalf("accept: %d", code)
-		}
 		if code, me := carol.me(); code != http.StatusOK || me.Organization != nil {
 			t.Fatalf("carol's password session acts in the enforcing organization: %d %+v", code, me)
 		}
@@ -470,6 +562,28 @@ func TestKeycloakSSO(t *testing.T) {
 		}
 		if code := carol.apiJSON(http.MethodPost, "/api/v1/auth/login", map[string]string{"email": "carol@acme.test", "password": "carol password e2e"}, &errBody); code != http.StatusForbidden || !strings.Contains(errBody.Error.Message, "single sign-on") {
 			t.Fatalf("carol password login: %d %+v", code, errBody)
+		}
+		// Claimed domain: a new invitation to acme.test must be accepted with SSO.
+		var zoe struct {
+			Token string `json:"token"`
+		}
+		if code := owner.apiJSON(http.MethodPost, "/api/v1/invitations", map[string]string{"email": "zoe@acme.test", "role": "member"}, &zoe); code != http.StatusCreated {
+			t.Fatalf("invite zoe: %d", code)
+		}
+		var lookup struct {
+			SSO *struct {
+				Required         bool `json:"required"`
+				SameOrganization bool `json:"same_organization"`
+			} `json:"sso"`
+		}
+		anon := h.newBrowser()
+		anon.t = t
+		if code := anon.apiJSON(http.MethodPost, "/api/v1/invitations/lookup", map[string]string{"token": zoe.Token}, &lookup); code != http.StatusOK ||
+			lookup.SSO == nil || !lookup.SSO.Required || !lookup.SSO.SameOrganization {
+			t.Fatalf("claimed invitation lookup: %d %+v", code, lookup)
+		}
+		if code := anon.apiJSON(http.MethodPost, "/api/v1/invitations/accept", map[string]string{"token": zoe.Token, "password": "zoe password e2e"}, nil); code != http.StatusConflict {
+			t.Fatalf("password acceptance of a claimed invitation: %d", code)
 		}
 		// The break-glass owner signs in with a password; alice with SSO.
 		owner2 := h.newBrowser()
@@ -486,13 +600,47 @@ func TestKeycloakSSO(t *testing.T) {
 		}
 	})
 
-	t.Run("SAML sign-in, IdP-initiated sign-in, replay and SCIM deprovisioning", func(t *testing.T) {
+	t.Run("OIDC RP-initiated logout ends the Keycloak session", func(t *testing.T) {
+		alice := h.newBrowser()
+		alice.t = t
+		if landing := alice.ssoLogin("alice@acme.test", "alice", "alice-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("alice landed on %s", landing)
+		}
+		alice.me()
+		var info struct {
+			SSO       bool   `json:"sso"`
+			Protocol  string `json:"protocol"`
+			IdPLogout bool   `json:"idp_logout"`
+		}
+		if code := alice.apiJSON(http.MethodGet, "/api/v1/auth/sso/session", nil, &info); code != http.StatusOK || !info.SSO || info.Protocol != "oidc" || !info.IdPLogout {
+			t.Fatalf("session info: %d %+v", code, info)
+		}
+		if landing := alice.logoutEverywhere(); landing != "/login?sso_logout=ok" {
+			t.Fatalf("OIDC logout landed on %s", landing)
+		}
+		if code, _ := alice.me(); code != http.StatusUnauthorized {
+			t.Fatalf("alice after logout: %d", code)
+		}
+		// Keycloak asks for the password again: its session ended.
+		alice.loginForms = 0
+		if landing := alice.ssoLogin("alice@acme.test", "alice", "alice-password", "/hosts"); landing != "/hosts" || alice.loginForms != 1 {
+			t.Fatalf("sign-in after logout landed on %s with %d login forms", landing, alice.loginForms)
+		}
+	})
+
+	var samlID string
+	t.Run("second SAML connection with encrypted assertions, IdP-initiated sign-in, replay and SCIM deprovisioning", func(t *testing.T) {
 		owner.t = t
 		samlBody := map[string]any{"protocol": "saml", "name": "Keycloak SAML", "enabled": true, "default_role": "member",
 			"saml": map[string]any{"idp_metadata_url": kc + "/realms/" + realm + "/protocol/saml/descriptor", "allow_idp_initiated": true,
-				"relay_state_allowlist": []string{"/hosts"}}}
-		if code := owner.apiJSON(http.MethodPut, "/api/v1/sso/connection", samlBody, &state); code != http.StatusOK {
-			t.Fatalf("save SAML connection: %d", code)
+				"relay_state_allowlist": []string{"/hosts"}, "sign_authn_requests": true}}
+		if code := owner.apiJSON(http.MethodPost, "/api/v1/sso/connections", samlBody, &state); code != http.StatusCreated {
+			t.Fatalf("create SAML connection: %d", code)
+		}
+		samlID = state.Connection.ID
+		// acme.test signs in through SAML now; sub.acme.test stays on the default OIDC connection.
+		if code := owner.apiJSON(http.MethodPut, "/api/v1/sso/domains/"+acmeDomainID, map[string]any{"connection_id": samlID}, nil); code != http.StatusOK {
+			t.Fatalf("assign acme.test: %d", code)
 		}
 		mdURL, _ := state.ServiceProvider["saml_metadata_url"].(string)
 		res, err := http.Get(mdURL)
@@ -501,7 +649,16 @@ func TestKeycloakSSO(t *testing.T) {
 		}
 		metadata, _ := io.ReadAll(res.Body)
 		res.Body.Close()
-		h.registerSAMLClient(metadata)
+		h.registerSAMLClient(metadata, state.ServiceProvider["saml_certificate_pem"].(string), state.ServiceProvider["saml_slo_url"].(string))
+		var disc struct {
+			Protocol       string `json:"protocol"`
+			ConnectionName string `json:"connection_name"`
+		}
+		for email, want := range map[string]string{"dave@acme.test": "saml", "frank@sub.acme.test": "oidc"} {
+			if code := owner.apiJSON(http.MethodPost, "/api/v1/auth/sso/discover", map[string]string{"email": email}, &disc); code != http.StatusOK || disc.Protocol != want {
+				t.Fatalf("discover %s: %d %+v", email, code, disc)
+			}
+		}
 
 		dave := h.newBrowser()
 		dave.t = t
@@ -510,6 +667,15 @@ func TestKeycloakSSO(t *testing.T) {
 		}
 		if code, me := dave.me(); code != http.StatusOK || me.User.Email != "dave@acme.test" || *me.Role != "member" {
 			t.Fatalf("dave me: %d %+v", code, me)
+		}
+		if raw, _ := base64.StdEncoding.DecodeString(dave.lastSAMLResponse); !bytes.Contains(raw, []byte("EncryptedAssertion")) || bytes.Contains(raw, []byte("dave@acme.test")) {
+			t.Fatalf("the SAML assertion was not encrypted: %.600s", raw)
+		}
+		// frank (sub.acme.test) still signs in through the default OIDC connection.
+		frank := h.newBrowser()
+		frank.t = t
+		if landing := frank.ssoLogin("frank@sub.acme.test", "frank", "frank-password", "/hosts"); landing != "/hosts" || !strings.Contains(frank.lastStart, "/protocol/openid-connect/") {
+			t.Fatalf("frank landed on %s via %s", landing, frank.lastStart)
 		}
 		// Replaying the posted SAMLResponse is refused.
 		replay := h.newBrowser()
@@ -561,6 +727,20 @@ func TestKeycloakSSO(t *testing.T) {
 			_ = json.NewDecoder(res.Body).Decode(&out)
 			return res.StatusCode, out
 		}
+		// SCIM e-mail change of frank (sub.acme.test); an address of another account is a uniqueness conflict.
+		code, fu := scim(http.MethodPost, "/Users", map[string]any{"userName": "frank@sub.acme.test", "active": true})
+		if code != http.StatusCreated {
+			t.Fatalf("scim create frank: %d %v", code, fu)
+		}
+		patchOp := func(path string, value any) map[string]any {
+			return map[string]any{"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"}, "Operations": []map[string]any{{"op": "replace", "path": path, "value": value}}}
+		}
+		if code, body := scim(http.MethodPatch, "/Users/"+fu["id"].(string), patchOp(`emails[type eq "work"].value`, "frank.renamed@sub.acme.test")); code != http.StatusOK {
+			t.Fatalf("scim e-mail change: %d %v", code, body)
+		}
+		if code, body := scim(http.MethodPatch, "/Users/"+fu["id"].(string), patchOp(`emails[type eq "work"].value`, "dave@acme.test")); code != http.StatusConflict || body["scimType"] != "uniqueness" {
+			t.Fatalf("scim conflicting e-mail: %d %v", code, body)
+		}
 		code, user := scim(http.MethodPost, "/Users", map[string]any{"userName": "alice@acme.test", "active": true})
 		if code != http.StatusCreated {
 			t.Fatalf("scim create: %d %v", code, user)
@@ -591,10 +771,69 @@ func TestKeycloakSSO(t *testing.T) {
 		for _, e := range audit.Events {
 			seen[e.Action] = true
 		}
-		for _, a := range []string{"sso.login", "sso.login_failed", "sso.connection.test_login", "sso.enforcement.update", "member.add", "scim.user.deactivate"} {
+		for _, a := range []string{"sso.login", "sso.login_failed", "sso.connection.test_login", "sso.enforcement.update", "member.add", "scim.user.deactivate",
+			"sso.connection.create", "sso.domain.assign", "sso.logout", "scim.user.email_change"} {
 			if !seen[a] {
 				t.Errorf("audit action %s missing (%v)", a, seen)
 			}
+		}
+	})
+
+	t.Run("SAML single logout, SP- and IdP-initiated", func(t *testing.T) {
+		if samlID == "" {
+			t.Skip("SAML connection not created")
+		}
+		dave := h.newBrowser()
+		dave.t = t
+		if landing := dave.ssoLogin("dave@acme.test", "dave", "dave-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("dave landed on %s", landing)
+		}
+		if landing := dave.logoutEverywhere(); landing != "/login?sso_logout=ok" {
+			t.Fatalf("SP-initiated SAML logout landed on %s", landing)
+		}
+		if code, _ := dave.me(); code != http.StatusUnauthorized {
+			t.Fatalf("dave after logout: %d", code)
+		}
+		dave.loginForms = 0
+		if landing := dave.ssoLogin("dave@acme.test", "dave", "dave-password", "/hosts"); landing != "/hosts" || dave.loginForms != 1 {
+			t.Fatalf("sign-in after SAML logout landed on %s with %d login forms", landing, dave.loginForms)
+		}
+
+		// IdP-initiated: the user signs out at Keycloak (its logout page); Keycloak sends a LogoutRequest to openlog through
+		// the browser (front-channel logout of the SAML client).
+		bob := h.newBrowser()
+		bob.t = t
+		if landing := bob.ssoLogin("bob@acme.test", "bob", "bob-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("bob landed on %s", landing)
+		}
+		if code, _ := bob.me(); code != http.StatusOK {
+			t.Fatalf("bob before IdP logout: %d", code)
+		}
+		bob.idpPage = true
+		if landing := bob.browse(kc+"/realms/"+realm+"/protocol/openid-connect/logout", "", ""); landing != "idp-page" && !strings.HasPrefix(landing, "/login") {
+			t.Fatalf("IdP-initiated logout landed on %s", landing)
+		}
+		if code, _ := bob.me(); code != http.StatusUnauthorized {
+			t.Fatalf("bob's openlog session after the IdP logout: %d", code)
+		}
+		var audit struct {
+			Events []struct {
+				Action  string         `json:"action"`
+				Details map[string]any `json:"details"`
+			} `json:"events"`
+		}
+		owner.t = t
+		if code := owner.apiJSON(http.MethodGet, "/api/v1/audit-log?limit=500&action=sso.logout", nil, &audit); code != http.StatusOK {
+			t.Fatalf("audit: %d", code)
+		}
+		via := map[string]bool{}
+		for _, e := range audit.Events {
+			if v, _ := e.Details["via"].(string); v != "" {
+				via[v] = true
+			}
+		}
+		if !via["idp"] || !via["user"] {
+			t.Fatalf("sso.logout audit events by via = %v", via)
 		}
 	})
 }

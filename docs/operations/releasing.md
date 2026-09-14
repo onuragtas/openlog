@@ -27,7 +27,8 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `openlog-infra-agent_<v>_linux_{amd64,arm64}.{deb,rpm}` | `format=deb` / `rpm` |
 | `openlog_<v>_linux_{amd64,arm64}.tar.gz` (all backend binaries) | `component=backend` |
 | `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP agent: 36 modules, `openlog-php-install`; [php-agent.md](../contracts/php-agent.md) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
-| `openlog-<v>.tgz` (Helm chart, `version` = `appVersion` = `<v>`) | `helm_chart` |
+| `openlog-<v>.tgz` (Helm chart `deploy/helm/openlog`, `version` = `appVersion` = `<v>`) | `helm_charts.openlog` (and `helm_chart`) |
+| `openlog-agent-<v>.tgz` (Helm chart `deploy/helm/openlog-agent`, `version` = `appVersion` = `<v>`) | `helm_charts.openlog-agent` |
 | `ghcr.io/onuragtas/openlog:<v>` (not a file) | `images.openlog` = `…@sha256:<digest>` |
 | `manifest.json`, `manifest.json.sig` | signed |
 | `index.json`, `index.json.sig` | signed; all releases, newest first |
@@ -83,7 +84,8 @@ its version with `-version`.
 3. **Settings → Actions → General → Workflow permissions:** read and write (the release job
    creates releases; the image job pushes to GHCR with `packages: write`).
 4. After the first image push, make the GHCR package `openlog` **public** (Packages → openlog →
-   Package settings) so that pulls work without credentials.
+   Package settings) so that pulls work without credentials. The same applies to `charts/openlog` and
+   `charts/openlog-agent` after the first `helm-oci` run (optional, see [Helm charts](#helm-charts)).
 5. Protect tags `v*` (Settings → Rules → Tag rulesets) so only maintainers can cut releases.
 
 6. **npm (Node.js agent `@openlog/node`, optional):** on npmjs.com create the organization `openlog` (scope `@openlog`,
@@ -131,7 +133,9 @@ git push origin v0.4.0
 2. `go-agent-modules` – fails the release (before anything is built) unless the tagged commit is prepared:
    `scripts/go-agent-release.sh check` and `verify` (see [Go agent modules](#go-agent-modules)).
 3. `image` – builds `linux/amd64,linux/arm64` with version + compiled-in keys, pushes
-   `ghcr.io/onuragtas/openlog:<v>` (and `:latest` for stable), outputs the digest.
+   `ghcr.io/onuragtas/openlog:<v>` (and `:latest` for stable), outputs the digest. In parallel,
+   `php-agent-artifacts` builds the PHP agent artifacts and `java-agent-jar` the Java agent jar
+   (see [Java agent jar](#java-agent-jar)); both are handed to `release` as workflow artifacts.
 4. `release` – `make web`, collects previous releases that have a `manifest.json` via the GitHub API,
    `make release-local VERSION=<v> RELEASE_IMAGE=ghcr.io/onuragtas/openlog@<digest> …`
    (build → sign → `verify --check-artifacts` → index over all releases → sign → verify), installs
@@ -152,6 +156,11 @@ git push origin v0.4.0
 
 7. `dotnet-agent-nuget` – after the GitHub release is published, runs the .NET agent unit tests, packs
    `OpenLog.Agent` at the tag version and pushes it to nuget.org (see [.NET agent package](#net-agent-package)).
+
+- `helm-oci` – optional (repository variable `HELM_OCI_PUSH` = `true`, otherwise skipped with a warning): after the
+  GitHub release is published, downloads `openlog-<v>.tgz` and `openlog-agent-<v>.tgz` from it, checks their sha256
+  against the signed `manifest.json` and pushes them to `oci://ghcr.io/onuragtas/charts` (see
+  [Helm charts](#helm-charts)).
 
 Nothing is published if any step fails; a failed draft can be deleted and the tag re-pushed. A failed
 `go-agent-tags` job can simply be re-run: tags that already point at the commit are skipped.
@@ -243,23 +252,25 @@ variable `PYPI_PUBLISH`). Local check of the package: `make -C agents/python bui
 ### Java agent jar
 
 The Java agent (`agents/java`, D-072) is released as `openlog-javaagent-X.Y.Z.jar` plus `openlog-javaagent-X.Y.Z.jar.sha256`
-(`sha256sum` format) on the GitHub release. No preparation commit is needed. `release.yml` job `java-agent-jar` runs
-after the `release` job and does the following:
-- builds with `./gradlew -Pversion=X.Y.Z :extension:test :agentJar :agentJarChecksum`; the version becomes
-  `telemetry.distro.version` and the `Openlog-Javaagent-Version` manifest attribute;
-- uploads both files with `gh release upload --clobber`. The jar is built reproducibly, with fixed timestamps and
-  file order, so a re-run uploads the same bytes.
+(`sha256sum` format) and is listed in the signed `manifest.json` as component `java-agent`, format `jar`, `os`/`arch`
+`any` ([releases-updates.md §2](../contracts/releases-updates.md)). No preparation commit is needed. `release.yml` job
+`java-agent-jar` runs in parallel with `image` and `php-agent-artifacts`, before `release`:
+- `JAVA_BUILD=local agents/java/scripts/release-jar.sh X.Y.Z dist/java` builds with
+  `./gradlew -Pversion=X.Y.Z :extension:test :agentJar :agentJarChecksum` (the version becomes
+  `telemetry.distro.version` and the `Openlog-Javaagent-Version` jar manifest attribute) and checks the `.sha256`;
+- uploads both files as the workflow artifact `java-agent`. The `release` job downloads them into `dist/v<v>/` before
+  `make release-local`, so `build-manifest` hashes the jar, it is signed with everything else, `verify --check-artifacts`
+  checks it, and both files are published with the GitHub release. The jar is built reproducibly, with fixed timestamps
+  and file order.
 
-`agents/java/gradle.properties` keeps `version=0.0.0-dev` between releases.
+`agents/java/gradle.properties` keeps `version=0.0.0-dev` between releases. The infra agent's update pipeline ignores the
+`java-agent` component (it installs only `infra-agent`); the manifest entry lets users and tooling verify a downloaded
+jar against the signed release instead of the loose `.sha256` file. The CI job `release dry run` builds the jar the same
+way and fails unless it is in the dry-run manifest. Publishing to Maven Central
+(`io.github.onuragtas.openlog:openlog-javaagent`: Sonatype namespace, signing key, `maven-publish`) is future work.
 
-The jar is **not in the signed `manifest.json`**. `build-manifest` runs in the `release` job before the jar exists and
-has no `java-agent` component; Java agents are not installed by the infra agent's update pipeline. Users verify the jar
-with the `.sha256` file from the same release. Listing it in the manifest (build the jar before `make release-local`,
-add a component) and publishing to Maven Central (`io.github.onuragtas.openlog:openlog-javaagent`: Sonatype namespace,
-signing key, `maven-publish`) are future work.
-
-Local build: `NO_SERVICES=1 agents/java/test/run.sh -Pversion=X.Y.Z :agentJar :agentJarChecksum` (in the runner volume
-`openlog-m4-java-work`).
+Local release with the jar: `make release-java-agent VERSION=X.Y.Z` (Gradle in `eclipse-temurin:21-jdk`; `JAVA_BUILD=local`
+uses the host JDK) before `make release-local VERSION=X.Y.Z …`, like `make release-php-agent`.
 
 ### .NET agent package
 
@@ -274,6 +285,29 @@ broken version is unlisted or deprecated on nuget.org and fixed by the next rele
 
 Setup: [one-time setup](#one-time-setup-repository-owner) step 7 (`NUGET_API_KEY`). Local check of the package:
 `make -C agents/dotnet pack VERSION=X.Y.Z` (the CI job `dotnet-agent` packs on every run).
+
+### Helm charts
+
+`make release-helm` (part of `release-local`) packages `deploy/helm/openlog` and `deploy/helm/openlog-agent` with
+`helm package --version <v> --app-version <v>` into `dist/v<v>/openlog-<v>.tgz` and `openlog-agent-<v>.tgz`;
+`Chart.yaml` in the repository keeps its placeholder version. Without a local `helm` it runs the pinned `HELM_IMAGE`
+(`alpine/helm`) container; CI installs helm with `azure/setup-helm` and sets `RELEASE_REQUIRE_HELM=1`.
+`build-manifest` records both in the signed manifest (`helm_charts`, sha256; `helm_chart` stays the `openlog`
+chart, [releases-updates.md](../contracts/releases-updates.md) §2), `verify --check-artifacts` checks them, and
+`release.yml` uploads them with every other file of `dist/v<v>/` to the GitHub release.
+
+OCI registry (optional): set the repository *variable* `HELM_OCI_PUSH` = `true`. The `helm-oci` job then pushes both
+charts, taken from the published release and checked against its manifest, to `oci://ghcr.io/onuragtas/charts` with
+the job's `GITHUB_TOKEN` (`packages: write`; workflow permissions as in [one-time setup](#one-time-setup-repository-owner)
+step 3). New GHCR packages are private: make `charts/openlog` and `charts/openlog-agent` public after the first push.
+Without the variable the job only warns. A re-run pushes the same bytes again (OCI tags are overwritten).
+
+```sh
+helm install openlog oci://ghcr.io/onuragtas/charts/openlog --version 0.4.0 -n openlog --create-namespace -f my-values.yaml
+helm install openlog-agent oci://ghcr.io/onuragtas/charts/openlog-agent --version 0.4.0 -n openlog-agent -f agent-values.yaml
+# or from the release asset
+helm install openlog https://github.com/onuragtas/openlog/releases/download/v0.4.0/openlog-0.4.0.tgz -n openlog -f my-values.yaml
+```
 
 ## Verifying a release
 
@@ -296,6 +330,7 @@ OK manifest 0.4.0 channel=stable artifacts=10
 OK artifact openlog_0.4.0_linux_amd64.tar.gz 5e1d…
 …
 OK helm chart openlog-0.4.0.tgz 9a7c…
+OK helm chart openlog-agent-0.4.0.tgz 41be…
 ```
 
 Check the version and keys a binary was built with: `openlog-infra-agent -version`, `openlog-api -version`.
@@ -376,8 +411,8 @@ Notes:
 
   **Tampered artifact** (must be rejected): change the tarball *without* re-running `build-manifest`.
   **Bad signature** (must be rejected): edit one byte of `manifest.json` after signing.
-- Useful variables: `RELEASE_ARCHES=amd64` (faster), `HELM=/path/to/helm` (the chart is skipped with a
-  warning when helm is missing), `NFPM=nfpm` (local nfpm instead of Docker), `RELEASE_CHANNEL`,
+- Useful variables: `RELEASE_ARCHES=amd64` (faster), `HELM=/path/to/helm` (without helm the charts are packaged in
+  the pinned `HELM_IMAGE` container; they are skipped with a warning only when Docker is missing too), `NFPM=nfpm` (local nfpm instead of Docker), `RELEASE_CHANNEL`,
   `RELEASE_COMPAT`, `RELEASE_IMAGE`, `RELEASE_INDEX_ARGS="--entry 0.8.0=https://…/manifest.json"`.
 - The backend tarballs embed the placeholder UI unless `make web` ran before.
 - Checks: `make package-test VERSION=0.9.0` (deb in debian:12, rpm in rockylinux/rockylinux:9, arch of the

@@ -1,0 +1,9 @@
+{{define "subject"}}[openlog] Confirm your e-mail address{{end}}
+
+{{define "text"}}
+Confirm the e-mail address of your new openlog account.
+
+The link expires on {{date .ExpiresAt}}. If you did not sign up, ignore this e-mail.
+
+{{.Link}}
+{{end}}

@@ -20,6 +20,7 @@ import { TransactionsTab } from "@/components/apm/TransactionsTab";
 import { ServiceContainers } from "@/components/containers/ServiceContainers";
 import { ServiceKubernetesPods } from "@/components/kubernetes/ServiceKubernetesPods";
 import { PageHeader } from "@/components/AppShell";
+import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,7 +128,10 @@ export function ApmServicesPage() {
         ) : all.isError ? (
           <ErrorState error={all.error} onRetry={() => void all.refetch()} />
         ) : all.data.services.length === 0 ? (
-          <EmptyState>{t("apm.empty")}</EmptyState>
+          <EmptyState>
+            <p>{t("apm.empty")}</p>
+            <AddDataLink label={t("addData.empty.apm")} />
+          </EmptyState>
         ) : services.length === 0 ? (
           <EmptyState>{t("apm.noMatch", { q })}</EmptyState>
         ) : (

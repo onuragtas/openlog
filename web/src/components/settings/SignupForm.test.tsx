@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { MOCK_EMAIL, setMockAuthConfig } from "@/mocks/account";
+import { resetMockSso, setMockSsoConnection } from "@/mocks/sso";
 import { SignupForm } from "./SignupForm";
 
 function renderWithClient(ui: ReactElement) {
@@ -53,6 +54,25 @@ describe("SignupForm", () => {
     expect(me.user.email).toBe("new@example.com");
     expect(me.user.email_verified).toBe(false);
     expect(me.role).toBe("owner");
+  });
+
+  it("sends addresses of a domain claimed by single sign-on to SSO", async () => {
+    resetMockSso();
+    setMockSsoConnection({ enabled: true });
+    setMockAuthConfig({ signup_enabled: true });
+    const onSignedUp = vi.fn();
+    const user = userEvent.setup();
+    renderWithClient(<SignupForm onSignedUp={onSignedUp} loginLink={loginLink} navigate={vi.fn()} />);
+    await screen.findByRole("button", { name: "Create account" });
+    await fill(user, "someone@openlog.local", "long enough pw");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(await screen.findByText("Default signs in with single sign-on for this e-mail domain.")).toBeInTheDocument();
+    expect(onSignedUp).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Continue with SSO" }));
+    expect(screen.getByRole("heading", { name: "Sign in with single sign-on" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Work e-mail")).toHaveValue("someone@openlog.local");
+    resetMockSso();
   });
 
   it("requires the CAPTCHA when configured", async () => {

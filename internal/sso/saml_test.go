@@ -273,7 +273,7 @@ func TestSAMLLoginFlow(t *testing.T) {
 	c := env.samlConnection(t, idp.metadataXML(t), true, []string{"/dashboards"})
 	ctx := context.Background()
 	entity, acs := env.sso.SAMLEntityID(c.ID), env.sso.SAMLACSURL(c.ID)
-	if _, err := env.sso.ReplaceRoleMappings(ctx, env.ownerPrincipal(), []sso.RoleMapping{{Group: "openlog-admins", Role: auth.RoleAdmin}}, auth.ClientMeta{}); err != nil {
+	if _, err := env.sso.ReplaceRoleMappings(ctx, env.ownerPrincipal(), "", []sso.RoleMapping{{Group: "openlog-admins", Role: auth.RoleAdmin}}, auth.ClientMeta{}); err != nil {
 		t.Fatal(err)
 	}
 

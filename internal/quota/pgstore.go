@@ -173,21 +173,21 @@ func (s PGStore) MemberCounts(ctx context.Context) (map[string]int64, error) {
 	return out, rows.Err()
 }
 
-// OwnerEmails returns the e-mail addresses of the organization's enabled owners.
-func (s PGStore) OwnerEmails(ctx context.Context, orgID string) ([]string, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT u.email FROM memberships m JOIN users u ON u.id = m.user_id
+// Owners returns the e-mail addresses and e-mail languages of the organization's enabled owners.
+func (s PGStore) Owners(ctx context.Context, orgID string) ([]Owner, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT u.email, u.locale FROM memberships m JOIN users u ON u.id = m.user_id
 		WHERE m.org_id = $1::uuid AND m.role = 'owner' AND u.disabled_at IS NULL ORDER BY u.email`, orgID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	var out []Owner
 	for rows.Next() {
-		var e string
-		if err := rows.Scan(&e); err != nil {
+		var o Owner
+		if err := rows.Scan(&o.Email, &o.Locale); err != nil {
 			return nil, err
 		}
-		out = append(out, e)
+		out = append(out, o)
 	}
 	return out, rows.Err()
 }

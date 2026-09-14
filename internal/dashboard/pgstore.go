@@ -152,7 +152,10 @@ func (s *PGStore) Create(ctx context.Context, d *Dashboard) error {
 			d.ID, d.OrgID, d.Name, d.Description, d.Visibility, string(vars), nullID(d.CreatedBy), nullID(d.UpdatedBy)); err != nil {
 			return err
 		}
-		return insertPages(ctx, tx, d)
+		if err := insertPages(ctx, tx, d); err != nil {
+			return err
+		}
+		return insertVersion(ctx, tx, d, 1)
 	})
 }
 
@@ -182,7 +185,10 @@ func (s *PGStore) Replace(ctx context.Context, d *Dashboard, expectedVersion int
 		if _, err := tx.Exec(ctx, `DELETE FROM dashboard_pages WHERE dashboard_id = $1`, d.ID); err != nil {
 			return err
 		}
-		return insertPages(ctx, tx, d)
+		if err := insertPages(ctx, tx, d); err != nil {
+			return err
+		}
+		return insertVersion(ctx, tx, d, expectedVersion+1)
 	})
 }
 

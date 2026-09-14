@@ -124,6 +124,8 @@ type Dashboard struct {
 	UpdatedBy      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// RestoredFrom is set on a Replace that restores a stored version (recorded in the version history only).
+	RestoredFrom int
 }
 
 // Summary is a list entry.

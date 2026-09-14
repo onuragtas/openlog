@@ -18,14 +18,14 @@ install:
 ifeq ($(PY),local)
 	$(RUN) '$(PYBIN) -m pip install -q -e . -r tests/requirements-test.txt'
 else
-	$(RUN) 'test -x /venv/bin/python || python -m venv /venv; $(PYBIN) -m pip install -q -e . -r tests/requirements-test.txt'
+	$(RUN) 'command -v gcc >/dev/null || (apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc libc6-dev >/dev/null); test -x /venv/bin/python || python -m venv /venv; $(PYBIN) -m pip install -q -e . -r tests/requirements-test.txt'
 endif
 
 lint:
 	$(RUN) '$(PYBIN) -m ruff check src tests && $(PYBIN) -m ruff format --check src'
 
 # Unit tests (Go sampler fixtures, sanitizer cases shared with Go/Node) + end-to-end tests with Flask, Django,
-# FastAPI and gunicorn pre-fork workers against an OTLP capture server.
+# FastAPI, Tornado, Falcon, Pyramid, gunicorn and uWSGI pre-fork workers and gevent/eventlet against an OTLP capture server.
 test:
 	$(RUN) '$(PYBIN) -m pytest -q -p no:cacheprovider tests/unit tests/e2e'
 
@@ -35,7 +35,7 @@ test-unit:
 test-e2e:
 	$(RUN) '$(PYBIN) -m pytest -q -p no:cacheprovider tests/e2e'
 
-# Real PostgreSQL, MySQL and Redis (+ Celery prefork worker, gRPC) in compose project openlog-m4-python-test.
+# Real PostgreSQL, MySQL, Redis, RabbitMQ and Kafka (+ Celery prefork worker, gRPC) in compose project openlog-m4-python-test.
 test-integration:
 	$(COMPOSE) up -d --wait postgres mysql redis
 	PYTHON_VERSION=$(PYTHON_VERSION) $(COMPOSE) --profile runner run --rm --build runner; status=$$?; $(COMPOSE) down -v; exit $$status

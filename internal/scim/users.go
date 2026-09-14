@@ -340,14 +340,41 @@ func (h *Handler) setActive(ctx context.Context, q *request, su *sso.SCIMUser, a
 	return "scim.user.deactivate", details, nil
 }
 
-func (h *Handler) saveUser(ctx context.Context, w http.ResponseWriter, q *request, su sso.SCIMUser, prev sso.SCIMUser, active bool) error {
-	if !strings.EqualFold(su.UserName, prev.UserName) {
-		u, err := h.sso.Users().GetUser(ctx, su.UserID)
-		if err != nil {
-			return err
+// emailOf returns the primary (or first) address of an emails list ("" = none).
+func emailOf(emails []emailJSON) string {
+	for _, e := range emails {
+		if e.Primary {
+			return e.Value
 		}
-		if !strings.EqualFold(su.UserName, u.Email) && strings.Contains(su.UserName, "@") {
-			return errMutability("changing the e-mail address of a user is not supported; deprovision and provision the new address")
+	}
+	if len(emails) > 0 {
+		return emails[0].Value
+	}
+	return ""
+}
+
+// saveUser stores a PUT/PATCH. emailReq is the address the request's emails ask for ("" = none); otherwise a
+// changed userName is the new address when the previous userName was the account's address.
+func (h *Handler) saveUser(ctx context.Context, w http.ResponseWriter, q *request, su sso.SCIMUser, prev sso.SCIMUser, active bool, emailReq string) error {
+	u, err := h.sso.Users().GetUser(ctx, su.UserID)
+	if err != nil {
+		return err
+	}
+	target := strings.TrimSpace(emailReq)
+	if target == "" && !strings.EqualFold(su.UserName, prev.UserName) && strings.EqualFold(prev.UserName, u.Email) && strings.Contains(su.UserName, "@") {
+		target = su.UserName
+	}
+	if !strings.EqualFold(su.UserName, prev.UserName) {
+		if _, total, err := h.sso.Store().ListSCIMUsers(ctx, q.org.ID, sso.SCIMFilter{UserName: su.UserName}, 0, 1); err != nil {
+			return err
+		} else if total > 0 {
+			return errConflict("a user with this userName already exists")
+		}
+	}
+	var emailChange map[string]any
+	if target != "" && !strings.EqualFold(auth.NormalizeEmail(target), u.Email) {
+		if emailChange, err = h.changeEmail(ctx, q, u, target); err != nil {
+			return err
 		}
 	}
 	action, details, err := h.setActive(ctx, q, &su, active)
@@ -360,6 +387,9 @@ func (h *Handler) saveUser(ctx context.Context, w http.ResponseWriter, q *reques
 		}
 		return err
 	}
+	if emailChange != nil {
+		h.audit(ctx, q, "scim.user.email_change", "user", su.UserID, emailChange)
+	}
 	if action == "" {
 		action = "scim.user.update"
 	}
@@ -370,6 +400,43 @@ func (h *Handler) saveUser(ctx context.Context, w http.ResponseWriter, q *reques
 	}
 	writeJSON(w, http.StatusOK, res)
 	return nil
+}
+
+// changeEmail changes the account's e-mail address (D-089): the new address must be valid, in a verified domain of
+// the organization and not used by another account (409 uniqueness); the current address must be in a verified
+// domain of the organization as well, and owners' addresses are managed in openlog.
+func (h *Handler) changeEmail(ctx context.Context, q *request, u auth.User, target string) (map[string]any, error) {
+	email, ok := validEmail(target)
+	if !ok {
+		return nil, errBadRequest("invalidValue", "the new e-mail address is not valid")
+	}
+	if err := h.requireDomain(ctx, q, email); err != nil {
+		return nil, err
+	}
+	if err := h.requireDomain(ctx, q, u.Email); err != nil {
+		var se *scimError
+		if errors.As(err, &se) {
+			return nil, errMutability("the current e-mail address is not in a verified domain of the organization")
+		}
+		return nil, err
+	}
+	if m, err := h.sso.Users().GetMembership(ctx, q.org.ID, u.ID); err == nil && m.Role == auth.RoleOwner {
+		return nil, errMutability("the e-mail address of an owner is managed in openlog")
+	} else if err != nil && !errors.Is(err, auth.ErrNotFound) {
+		return nil, err
+	}
+	if other, err := h.sso.Users().GetUserByEmail(ctx, email); err == nil && other.ID != u.ID {
+		return nil, errConflict("the e-mail address is already used by another account")
+	} else if err != nil && !errors.Is(err, auth.ErrNotFound) {
+		return nil, err
+	}
+	if err := h.sso.Users().SetUserEmail(ctx, u.ID, email); err != nil {
+		if errors.Is(err, auth.ErrAlreadyExists) {
+			return nil, errConflict("the e-mail address is already used by another account")
+		}
+		return nil, err
+	}
+	return map[string]any{"from": u.Email, "to": email}, nil
 }
 
 func (h *Handler) replaceUser(ctx context.Context, w http.ResponseWriter, q *request, id string) error {
@@ -386,7 +453,7 @@ func (h *Handler) replaceUser(ctx context.Context, w http.ResponseWriter, q *req
 		return err
 	}
 	active := in.Active == nil || *in.Active
-	return h.saveUser(ctx, w, q, su, prev, active)
+	return h.saveUser(ctx, w, q, su, prev, active, emailOf(in.Emails))
 }
 
 func (h *Handler) patchUser(ctx context.Context, w http.ResponseWriter, q *request, id string) error {
@@ -403,6 +470,7 @@ func (h *Handler) patchUser(ctx context.Context, w http.ResponseWriter, q *reque
 	}
 	su := prev
 	active := prev.Active
+	email := ""
 	for _, op := range p.Operations {
 		kind := strings.ToLower(op.Op)
 		if kind != "add" && kind != "replace" && kind != "remove" {
@@ -417,23 +485,47 @@ func (h *Handler) patchUser(ctx context.Context, w http.ResponseWriter, q *reque
 				return errBadRequest("invalidValue", "value must be an object when path is omitted")
 			}
 			for k, v := range obj {
-				if err := patchUserAttr(&su, &active, k, v, false); err != nil {
+				if err := patchUserAttr(&su, &active, &email, k, v, false); err != nil {
 					return err
 				}
 			}
 			continue
 		}
-		if err := patchUserAttr(&su, &active, op.Path, op.Value, kind == "remove"); err != nil {
+		if err := patchUserAttr(&su, &active, &email, op.Path, op.Value, kind == "remove"); err != nil {
 			return err
 		}
 	}
 	if su.UserName == "" {
 		return errBadRequest("invalidValue", "userName is required")
 	}
-	return h.saveUser(ctx, w, q, su, prev, active)
+	return h.saveUser(ctx, w, q, su, prev, active, email)
 }
 
-func patchUserAttr(su *sso.SCIMUser, active *bool, path string, raw json.RawMessage, remove bool) error {
+// patchEmail reads the new address of an emails operation: the emails array, or the value of
+// emails[primary eq true].value / emails[type eq "work"].value.
+func patchEmail(lp string, raw json.RawMessage, email *string) error {
+	if lp == "emails" {
+		var list []emailJSON
+		if err := json.Unmarshal(raw, &list); err != nil {
+			return errBadRequest("invalidValue", "emails must be an array")
+		}
+		*email = emailOf(list)
+		return nil
+	}
+	if strings.HasPrefix(lp, "emails[") && strings.HasSuffix(lp, "].value") {
+		filter := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(lp, "emails["), "].value"), " ", "")
+		if filter == "primaryeqtrue" || filter == `typeeq"work"` {
+			v, err := stringValue(raw)
+			if err != nil {
+				return err
+			}
+			*email = v
+		}
+	}
+	return nil
+}
+
+func patchUserAttr(su *sso.SCIMUser, active *bool, email *string, path string, raw json.RawMessage, remove bool) error {
 	str := func(max int, field string) (string, error) {
 		if remove {
 			return "", nil
@@ -477,10 +569,16 @@ func patchUserAttr(su *sso.SCIMUser, active *bool, path string, raw json.RawMess
 			su.FamilyName, err = clean(n.FamilyName, 200, "name.familyName")
 		}
 	default:
-		// E-mail addresses, phone numbers, enterprise extension attributes …: accepted and ignored (the openlog
-		// account is keyed by its e-mail address, which SCIM does not change).
+		// E-mail addresses change the account's address (saveUser); phone numbers, enterprise extension
+		// attributes …: accepted and ignored.
 		lp := strings.ToLower(path)
-		if strings.HasPrefix(lp, "emails") || strings.HasPrefix(lp, "phonenumbers") || strings.HasPrefix(lp, "addresses") ||
+		if strings.HasPrefix(lp, "emails") {
+			if remove {
+				return nil
+			}
+			return patchEmail(lp, raw, email)
+		}
+		if strings.HasPrefix(lp, "phonenumbers") || strings.HasPrefix(lp, "addresses") ||
 			strings.HasPrefix(lp, "title") || strings.HasPrefix(lp, "preferredlanguage") || strings.HasPrefix(lp, "locale") ||
 			strings.HasPrefix(lp, "timezone") || strings.HasPrefix(lp, "nickname") || strings.HasPrefix(lp, "urn:") ||
 			strings.HasPrefix(lp, "schemas") || strings.HasPrefix(lp, "name.") || strings.HasPrefix(lp, "usertype") {

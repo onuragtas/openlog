@@ -23,7 +23,8 @@ test("single sign-on settings: domain, OIDC wizard, test sign-in, enforcement an
 
   // Connection wizard (OIDC).
   await page.getByRole("button", { name: "2. Service provider" }).click();
-  await expect(page.getByRole("textbox", { name: "Redirect URI" })).toHaveValue(/\/api\/v1\/sso\/oidc\/callback$/);
+  await expect(page.getByRole("textbox", { name: "Redirect URI", exact: true })).toHaveValue(/\/api\/v1\/sso\/oidc\/callback$/);
+  await expect(page.getByRole("textbox", { name: "Post-logout redirect URI" })).toHaveValue(/\/api\/v1\/sso\/oidc\/logout\/callback$/);
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("textbox", { name: "Issuer URL" }).fill("https://idp.example.com");
   await page.getByRole("textbox", { name: "Client ID" }).fill("openlog");
@@ -76,4 +77,81 @@ test("the login page explains failed SSO sign-ins", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("not verified for this organization");
   await page.goto("/login?sso_error=not-a-code");
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("the login page reports the result of signing out everywhere", async ({ page }) => {
+  await page.goto("/login?sso_logout=ok");
+  await expect(page.getByRole("status")).toHaveText("You are signed out of openlog and your identity provider.");
+  await page.goto("/login?sso_logout=partial");
+  await expect(page.getByRole("status")).toContainText("did not confirm the sign-out");
+  await page.goto("/login?sso_logout=bogus");
+  await expect(page.getByRole("status")).toHaveCount(0);
+});
+
+test("several SSO connections: add, route a domain, refresh health", async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("openlog.mock.sso.preset", "enabled-oidc"));
+  await signIn(page, "/settings/sso");
+  const list = page.getByRole("list", { name: "Single sign-on connections" });
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(list.getByText("Mock IdP")).toBeVisible();
+
+  // Add a second OIDC connection.
+  await page.getByRole("button", { name: "Add connection" }).click();
+  await expect(page.getByRole("heading", { name: "New connection" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Display name" }).fill("Contractors");
+  await page.getByRole("button", { name: "3. Identity provider" }).click();
+  await page.getByRole("textbox", { name: "Issuer URL" }).fill("https://contractors.example.com");
+  await page.getByRole("textbox", { name: "Client ID" }).fill("openlog-contractors");
+  await page.getByRole("button", { name: "4. Users and roles" }).click();
+  await page.getByRole("textbox", { name: "Logout redirect paths" }).fill("/goodbye");
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByText("Connection saved.")).toBeVisible();
+  await expect(list.getByRole("listitem")).toHaveCount(2);
+  const row = list.getByRole("listitem").filter({ hasText: "Contractors" });
+  await expect(row.getByText("Not checked yet")).toBeVisible();
+
+  // Refresh the IdP documents.
+  await row.getByRole("button", { name: "Refresh now" }).click();
+  await expect(row.getByText("Healthy")).toBeVisible();
+
+  // Route the verified domain to the new connection; it survives a reload.
+  const domainConnection = page.getByTestId("sso-domain-openlog.local").getByLabel("Connection");
+  await domainConnection.selectOption({ label: "Contractors" });
+  await page.reload();
+  await expect(page.getByTestId("sso-domain-openlog.local").getByLabel("Connection")).toHaveValue(/0f7b3c1e-/);
+  await expect(page.getByTestId("sso-domain-openlog.local").getByLabel("Connection").locator("option:checked")).toHaveText("Contractors");
+
+  // Phone width: the page does not scroll horizontally.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible();
+  expect(Number(await page.evaluate("document.documentElement.scrollWidth - window.innerWidth"))).toBeLessThanOrEqual(1);
+});
+
+test("sign out everywhere ends the openlog and the identity provider session", async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem("openlog.mock.sso.preset", "enabled-oidc");
+    if (!sessionStorage.getItem("e2e.sso.session.set")) {
+      sessionStorage.setItem("openlog.mock.sso.session", "sso");
+      sessionStorage.setItem("e2e.sso.session.set", "1");
+    }
+  });
+  await signIn(page, "/hosts");
+  await expect(page).toHaveURL(/\/hosts/);
+  await page.getByRole("button", { name: "Sign out everywhere (IdP)" }).click();
+  await expect(page).toHaveURL(/\/login\?sso_logout=ok/);
+  await expect(page.getByRole("status")).toHaveText("You are signed out of openlog and your identity provider.");
+  await page.goto("/hosts");
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("an invitation to a domain claimed by single sign-on is accepted with SSO", async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("openlog.mock.sso.preset", "enabled-oidc"));
+  await page.goto("/invite#token=oli_mock-sso-invitation");
+  await expect(page.getByRole("status")).toHaveText("Default uses single sign-on for new.hire@openlog.local.");
+  await expect(page.getByText("Sign in with single sign-on to accept the invitation.")).toBeVisible();
+  await expect(page.getByLabel("Password")).toHaveCount(0);
+  await page.getByRole("button", { name: "Continue with SSO" }).click();
+  await expect(page.getByLabel("Work e-mail")).toHaveValue("new.hire@openlog.local");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page).toHaveURL(/\/hosts/);
 });

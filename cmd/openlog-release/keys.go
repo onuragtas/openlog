@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	lib "github.com/onuragtas/openlog/libs/release"
@@ -191,15 +192,30 @@ func cmdVerify(args []string, stdout io.Writer) error {
 				}
 				fmt.Fprintf(stdout, "OK artifact %s %s\n", a.Name, sum)
 			}
+			charts := map[string]string{} // file name -> sha256
 			if m.HelmChart != nil && m.HelmChart.SHA256 != "" {
-				sum, _, err := hashFile(filepath.Join(dir, m.HelmChart.Name))
+				charts[m.HelmChart.Name] = m.HelmChart.SHA256
+			}
+			for _, f := range m.HelmCharts {
+				if prev, ok := charts[f.Name]; ok && prev != f.SHA256 {
+					return fmt.Errorf("helm chart %s: helm_chart and helm_charts disagree", f.Name)
+				}
+				charts[f.Name] = f.SHA256
+			}
+			names := make([]string, 0, len(charts))
+			for name := range charts {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			for _, name := range names {
+				sum, _, err := hashFile(filepath.Join(dir, name))
 				if err != nil {
 					return err
 				}
-				if sum != m.HelmChart.SHA256 {
-					return fmt.Errorf("helm chart %s: sha256 mismatch", m.HelmChart.Name)
+				if sum != charts[name] {
+					return fmt.Errorf("helm chart %s: sha256 mismatch", name)
 				}
-				fmt.Fprintf(stdout, "OK helm chart %s %s\n", m.HelmChart.Name, sum)
+				fmt.Fprintf(stdout, "OK helm chart %s %s\n", name, sum)
 			}
 		}
 	case probe.Channels != nil:

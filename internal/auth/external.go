@@ -35,6 +35,33 @@ type SessionPolicy interface {
 	CheckPasswordLogin(ctx context.Context, u User, ms []Membership, now time.Time) error
 }
 
+// ClaimedDomainPolicy is implemented by a SessionPolicy that knows claimed e-mail domains (internal/sso, D-089):
+// addresses of a domain whose organization signs in with SSO do not create password accounts.
+type ClaimedDomainPolicy interface {
+	// CheckSignup is called before a self-service sign-up of email; an error refuses it.
+	CheckSignup(ctx context.Context, email string) error
+	// CheckInvitation is called before an invitation is accepted with a password; an error refuses it.
+	CheckInvitation(ctx context.Context, inv Invitation) error
+}
+
+func (s *Service) checkClaimedSignup(ctx context.Context, email string) error {
+	if cp, ok := s.policy.(ClaimedDomainPolicy); ok {
+		if err := cp.CheckSignup(ctx, email); err != nil {
+			return s.policyError(err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) checkClaimedInvitation(ctx context.Context, inv Invitation) error {
+	if cp, ok := s.policy.(ClaimedDomainPolicy); ok {
+		if err := cp.CheckInvitation(ctx, inv); err != nil {
+			return s.policyError(err)
+		}
+	}
+	return nil
+}
+
 // SetSessionPolicy installs p (nil removes it). Must be called before serving requests.
 func (s *Service) SetSessionPolicy(p SessionPolicy) { s.policy = p }
 

@@ -146,6 +146,12 @@ minute, with metrics, inventory and discovered services. Integrations (nginx, Re
 collection are configured in the same file — see [agents/infra/README.md](agents/infra/README.md).
 A source-built agent has no release keys compiled in, so it does not update itself; release installs do.
 
+**Guided install in the UI:** open **Add data** (top bar, or `http://<server>:8080/add-data`). It builds the install
+commands for Linux hosts (install.sh/deb/rpm/tarball), the Docker container agent, Kubernetes (Helm), the APM agents
+(Go, Node.js, Python, Java, .NET, PHP), logs, OpenTelemetry SDKs/Collector and integrations with this server's
+endpoint prefilled, can create a license key for the install (admins; shown once) and waits until the data arrives.
+Behind a reverse proxy or with a separate ingest name, set `OPENLOG_INGEST_PUBLIC_URL` (docs/contracts/config.md).
+
 ### 5. Applications, HTTPS and firewall
 
 - **Application traces:** any OpenTelemetry SDK works — `OTEL_EXPORTER_OTLP_ENDPOINT=http://<server>:4318`,

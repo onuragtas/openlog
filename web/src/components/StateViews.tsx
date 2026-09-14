@@ -19,7 +19,9 @@ export function ErrorState({ error, onRetry, className, title }: { error: unknow
   const { t } = useTranslation();
   const detail =
     error instanceof ApiError
-      ? t("common.errorDetail", { message: error.message, code: error.code })
+      ? error.code === "storage_unavailable"
+        ? t("common.storageUnavailable")
+        : t("common.errorDetail", { message: error.message, code: error.code })
       : error instanceof Error
         ? error.message
         : String(error);

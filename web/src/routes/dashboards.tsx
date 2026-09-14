@@ -26,9 +26,9 @@ export function DashboardPage() {
     <DashboardView
       key={dashboardId}
       dashboardId={dashboardId}
-      search={{ page: search.page, vars: search.vars, edit: search.edit }}
+      search={{ page: search.page, vars: search.vars, edit: search.edit, filters: search.filters }}
       range={{ range: search.range, from: search.from, to: search.to }}
-      onSearchChange={(patch) => void navigate({ to: "/dashboards/$dashboardId", params: { dashboardId }, search: (prev) => ({ ...prev, ...patch }), replace: true })}
+      onSearchChange={(patch) => void navigate({ from: "/dashboards/$dashboardId", to: "/dashboards/$dashboardId", params: { dashboardId }, search: (prev) => ({ ...prev, ...patch }), replace: true })}
       onOpenDashboard={(id) => void navigate({ to: "/dashboards/$dashboardId", params: { dashboardId: id }, search: (prev) => ({ range: prev.range, from: prev.from, to: prev.to }) })}
     />
   );

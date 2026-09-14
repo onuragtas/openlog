@@ -18,6 +18,15 @@
     <PackageVersion Include="Grpc.Net.Client" Version="2.83.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.36.1" />
     <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
+    <!-- MassTransit 8 is the last Apache-2.0 major version (9 is commercially licensed) -->
+    <PackageVersion Include="MassTransit" Version="8.5.10" />
+    <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.10" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.15.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.ConfluentKafka" Version="0.3.0-alpha.1" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.3" />
+    <!-- .NET Framework / ASP.NET 4.x compile-only check (samples/OpenLog.AspNetFramework.Sample) -->
+    <PackageVersion Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNet" Version="1.18.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />

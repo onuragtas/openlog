@@ -1,4 +1,5 @@
-# Unit + end-to-end tests (CI: Python 3.9 and 3.12). Versions pinned per Python line.
+# Unit + end-to-end tests (CI: Python 3.9, 3.12 and 3.13). Versions pinned per Python line.
+# uwsgi is built from source: it needs a C compiler and the Python headers (Debian: gcc; setup-python ships headers).
 pytest==9.1.1; python_version >= "3.10"
 pytest==8.4.2; python_version < "3.10"
 ruff==0.16.7
@@ -17,3 +18,12 @@ requests==2.34.2; python_version >= "3.10"
 requests==2.32.5; python_version < "3.10"
 structlog==26.1.0; python_version >= "3.10"
 structlog==25.5.0; python_version < "3.10"
+tornado==6.5.8
+falcon==4.3.1
+pyramid==2.1; python_version >= "3.10"
+pyramid==2.0.2; python_version < "3.10"
+gevent==26.8.0; python_version >= "3.10"
+gevent==25.9.1; python_version < "3.10"
+eventlet==0.41.2; python_version >= "3.10"
+eventlet==0.40.4; python_version < "3.10"
+uwsgi==2.0.31; sys_platform == "linux"

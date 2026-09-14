@@ -7,6 +7,9 @@
 {{- $ts := .Values.clickhouse.tieredStorage }}
 {{- $tiered := $ts.enabled }}
 {{- $warm := and $ts.enabled $ts.warm.enabled }}
+{{- /* D-093: Keeper client + Raft TLS and interserver HTTPS, both only together with server TLS. */}}
+{{- $keeperTLS := and $serverTLS $tls.server.keeper $tls.server.keeper.enabled }}
+{{- $interserverTLS := and $serverTLS $tls.server.interserverHTTPS $tls.server.interserverHTTPS.enabled }}
 # ClickHouse Keeper ensemble (Raft) used by ReplicatedMergeTree and ON CLUSTER DDL.
 # Requires the Altinity clickhouse-operator (>= 0.24) watching this namespace.
 apiVersion: clickhouse-keeper.altinity.com/v1
@@ -29,10 +32,43 @@ spec:
       logger/level: information
       logger/console: "true"
       keeper_server/four_letter_word_white_list: "*"
+      {{- if $keeperTLS }}
+      # D-093: client port over TLS and Raft over TLS (merged into the operator's raft_configuration). Certificates from
+      # clickhouse.tls.server.secretName, mounted below.
+      keeper_server/tcp_port_secure: "{{ int $tls.server.keeper.securePort }}"
+      keeper_server/raft_configuration/secure: "true"
+      openSSL/server/certificateFile: /etc/clickhouse-keeper/tls/tls.crt
+      openSSL/server/privateKeyFile: /etc/clickhouse-keeper/tls/tls.key
+      openSSL/server/caConfig: /etc/clickhouse-keeper/tls/ca.crt
+      openSSL/server/verificationMode: {{ $tls.server.verificationMode }}
+      openSSL/server/loadDefaultCAFile: "false"
+      openSSL/server/disableProtocols: sslv2,sslv3,tlsv1,tlsv1_1
+      openSSL/client/certificateFile: /etc/clickhouse-keeper/tls/tls.crt
+      openSSL/client/privateKeyFile: /etc/clickhouse-keeper/tls/tls.key
+      openSSL/client/caConfig: /etc/clickhouse-keeper/tls/ca.crt
+      openSSL/client/verificationMode: relaxed
+      openSSL/client/loadDefaultCAFile: "false"
+      openSSL/client/disableProtocols: sslv2,sslv3,tlsv1,tlsv1_1
+      openSSL/client/invalidCertificateHandler/name: RejectCertificateHandler
+      {{- end }}
   templates:
     podTemplates:
       - name: keeper
         spec:
+          {{- if $keeperTLS }}
+          # clickhouse-keeper runs as uid/gid 101: the TLS key (mode 0440) is readable through fsGroup.
+          securityContext:
+            fsGroup: 101
+          volumes:
+            - name: openlog-tls
+              secret:
+                secretName: {{ $tls.server.secretName }}
+                defaultMode: 0440
+                items:
+                  - {key: {{ $tls.server.certKey }}, path: tls.crt}
+                  - {key: {{ $tls.server.keyKey }}, path: tls.key}
+                  - {key: {{ $tls.server.caKey }}, path: ca.crt}
+          {{- end }}
           affinity:
           {{- if $k.affinity }}
             {{- toYaml $k.affinity | nindent 12 }}
@@ -53,6 +89,12 @@ spec:
               image: {{ $k.image }}
               resources:
                 {{- toYaml $k.resources | nindent 16 }}
+              {{- if $keeperTLS }}
+              volumeMounts:
+                - name: openlog-tls
+                  mountPath: /etc/clickhouse-keeper/tls
+                  readOnly: true
+              {{- end }}
     volumeClaimTemplates:
       - name: keeper-data
         spec:
@@ -83,7 +125,13 @@ spec:
     zookeeper:
       nodes:
         - host: {{ include "openlog.keeper.host" . }}
+          {{- if $keeperTLS }}
+          # Keeper client connections over TLS (D-093).
+          port: {{ int $tls.server.keeper.securePort }}
+          secure: "yes"
+          {{- else }}
           port: {{ $k.port }}
+          {{- end }}
     users:
       # Application user for openlog services and openlog-migrate (password from the Secret).
       {{ include "openlog.clickhouse.user" . }}/k8s_secret_password: {{ include "openlog.secretName" . }}/{{ include "openlog.secret.clickhousePasswordKey" . }}
@@ -210,6 +258,11 @@ spec:
               </invalidCertificateHandler>
             </client>
           </openSSL>
+          {{- if $interserverTLS }}
+          <!-- D-093: replication (part fetches) over HTTPS. ClickHouse refuses both interserver ports at once. -->
+          <interserver_http_port remove="1"/>
+          <interserver_https_port>{{ int $tls.server.interserverHTTPS.port }}</interserver_https_port>
+          {{- end }}
         </clickhouse>
       {{- end }}
     {{- end }}

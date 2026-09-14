@@ -74,6 +74,17 @@ func TestHandlerContentTypes(t *testing.T) {
 	}
 }
 
+func TestHandlerSharedDashboardHeaders(t *testing.T) {
+	h := Handler(testFS())
+	rec := get(t, h, "GET", "/shared/dashboards/olds_abc")
+	if rec.Code != http.StatusOK || rec.Header().Get("Referrer-Policy") != "no-referrer" || rec.Header().Get("X-Robots-Tag") != "noindex, nofollow" {
+		t.Errorf("shared page: %d %v", rec.Code, rec.Header())
+	}
+	if rec := get(t, h, "GET", "/dashboards/x"); rec.Header().Get("Referrer-Policy") != "" {
+		t.Errorf("other pages keep the default referrer policy: %v", rec.Header())
+	}
+}
+
 func TestHandlerNoIndex(t *testing.T) {
 	h := Handler(fstest.MapFS{})
 	if rec := get(t, h, "GET", "/"); rec.Code != http.StatusNotFound {

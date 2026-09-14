@@ -7,6 +7,7 @@ import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DateTimeText, FormError, SettingsSection } from "./common";
+import { updateMessage, updateState, updateStep } from "./updateMessages";
 
 type Updater = NonNullable<VersionInfo["updater"]>;
 
@@ -147,7 +148,7 @@ export function VersionSettings() {
           {u ? (
             <div className="flex flex-col gap-1.5">
               <span className="flex flex-wrap items-center gap-2">
-                <Badge variant={updaterVariant(u.state)}>{u.state}</Badge>
+                <Badge variant={updaterVariant(u.state)}>{updateState(u.state)}</Badge>
                 <span className="text-xs text-muted-foreground">
                   {u.engine} · {t("update.info.mode")}: <span className="font-mono">{u.mode}</span>
                 </span>
@@ -157,13 +158,14 @@ export function VersionSettings() {
                   </span>
                 )}
               </span>
-              {(u.error || u.message) && <span className={u.error ? "text-destructive-text" : "text-muted-foreground"}>{u.error || u.message}</span>}
+              {u.message && <span className="text-muted-foreground">{updateMessage(u.message, u.message_code, u.message_params)}</span>}
+              {u.error && <span className="text-destructive-text">{u.error}</span>}
               {steps.length > 0 && (
                 <ol className="flex flex-wrap gap-1" aria-label={t("update.info.steps")}>
                   {steps.map((s, i) => (
                     <li key={`${s.name}-${i}`}>
                       <Badge variant={s.status === "ok" ? "success" : s.status === "failed" ? "destructive" : "warning"} title={s.detail}>
-                        {s.name}
+                        {updateStep(s.name)}
                       </Badge>
                     </li>
                   ))}
@@ -196,7 +198,9 @@ export function VersionSettings() {
                 </span>
               </span>
               {latest.message && (
-                <span className={latest.state === "failed" || latest.state === "expired" ? "text-destructive-text" : "text-muted-foreground"}>{latest.message}</span>
+                <span className={latest.state === "failed" || latest.state === "expired" ? "text-destructive-text" : "text-muted-foreground"}>
+                  {updateMessage(latest.message, latest.message_code, latest.message_params)}
+                </span>
               )}
             </dd>
           </>

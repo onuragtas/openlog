@@ -26,9 +26,11 @@ const media = vi.hoisted(() => {
   return state;
 });
 import { MOCK_DASHBOARD_IDS, resetMockDashboards } from "@/mocks/dashboards";
+import { resetMockDashboardSharing } from "@/mocks/dashboardSharing";
 import { ThemeProvider } from "@/lib/theme";
 import { DashboardsList } from "./DashboardsList";
 import { DashboardView, type DashboardViewSearch } from "./DashboardView";
+import { SharedDashboardView } from "./SharedDashboardView";
 
 function renderUi(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -62,7 +64,10 @@ function ViewHarness({ onSearch, initial = {} }: { onSearch?: (p: DashboardViewS
 const widgetTitles = () => screen.getAllByTestId("dashboard-widget").map((w) => within(w).getAllByRole("heading")[0]!.textContent);
 
 describe("dashboards", () => {
-  beforeEach(() => resetMockDashboards());
+  beforeEach(() => {
+    resetMockDashboards();
+    resetMockDashboardSharing();
+  });
   afterEach(() => {
     media.belowLg = false;
   });
@@ -176,4 +181,94 @@ describe("dashboards", () => {
     expect(await screen.findByTestId("dashboard-cards")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   }, 30_000);
+
+  it("cross-widget filters: a clicked facet value becomes a removable filter chip", async () => {
+    media.belowLg = true;
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    renderUi(<ViewHarness onSearch={onSearch} />);
+
+    const table = await screen.findByTestId("result-table");
+    const facet = (await within(table).findAllByTestId("facet-filter"))[0]!;
+    const value = facet.textContent!;
+    await user.click(facet);
+    expect(onSearch).toHaveBeenLastCalledWith({ filters: [{ attribute: "transaction.name", value, event_type: "Transaction" }] });
+
+    const bar = await screen.findByRole("group", { name: "Dashboard filters" });
+    expect(within(bar).getByTestId("filter-chip")).toHaveTextContent(`transaction.name = ${value}`);
+    // Clicking the same value again removes it (toggle); the chip's button removes it too.
+    await user.click(within(bar).getByRole("button", { name: `Remove filter transaction.name = ${value}` }));
+    expect(onSearch).toHaveBeenLastCalledWith({ filters: undefined });
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Dashboard filters" })).not.toBeInTheDocument());
+
+    // Edit mode does not turn values into filters.
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await waitFor(() => expect(within(screen.getByTestId("result-table")).queryByTestId("facet-filter")).not.toBeInTheDocument());
+  }, 30_000);
+
+  it("version history: shows what a version changed and restores it as a new version", async () => {
+    media.belowLg = true;
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderUi(<ViewHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "Version history" }));
+    const sheet = await screen.findByRole("dialog", { name: "Version history" });
+    const items = await within(sheet).findAllByTestId("version-item");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Version 3");
+    expect(items[0]).toHaveTextContent("Current");
+
+    await user.click(items[1]!);
+    const detail = await within(sheet).findByTestId("version-detail");
+    expect(await within(detail).findByText(/oldest kept version/)).toBeInTheDocument();
+    // What restoring it would change: the draft name and one widget fewer.
+    expect(within(detail).getByText("Name changed")).toBeInTheDocument();
+    expect(within(detail).getByText(/1 widget removed: Errors by service/)).toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Restore this version" }));
+    await user.click(within(detail).getByRole("button", { name: "Save version 2 as a new version" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Version history" })).not.toBeInTheDocument());
+    expect(await screen.findByRole("heading", { level: 1, name: "Infrastructure overview (draft)" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId("dashboard-widget")).toHaveLength(7));
+  }, 30_000);
+
+  it("share links: an admin enables sharing, creates a link shown once, and the public view renders it read-only", async () => {
+    media.belowLg = true;
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const { unmount } = renderUi(<ViewHarness initial={{ vars: { host: ["web-1"] } }} />);
+
+    await user.click(await screen.findByRole("button", { name: "Share links" }));
+    const sheet = await screen.findByRole("dialog", { name: "Share links" });
+    expect(await within(sheet).findByTestId("share-disabled")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Enable share links" }));
+    const form = await within(sheet).findByTestId("share-create");
+    expect(within(form).getByText("Locked variables: Host = web-1")).toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Label"), "Office TV");
+    await user.selectOptions(within(form).getByLabelText("Expires after"), "30");
+    await user.click(within(form).getByRole("button", { name: "Create link" }));
+
+    const url = (await within(sheet).findByTestId("share-url")) as HTMLInputElement;
+    expect(url.value).toMatch(/\/shared\/dashboards\/olds_[A-Za-z0-9_-]{43}$/);
+    const item = await within(sheet).findByTestId("share-item");
+    expect(item).toHaveTextContent("Office TV");
+    expect(item).toHaveTextContent("Active");
+    const token = url.value.split("/").pop()!;
+    unmount();
+
+    renderUi(<SharedDashboardView token={token} />);
+    expect(await screen.findByRole("heading", { level: 1, name: "Infrastructure overview" })).toBeInTheDocument();
+    expect(screen.getByText("Shared dashboard (read-only)")).toBeInTheDocument();
+    expect(screen.getByTestId("shared-variables")).toHaveTextContent("Host: web-1");
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+    expect((await screen.findAllByTestId("billboard-value"))[0]!.textContent).toMatch(/\d/);
+  }, 30_000);
+
+  it("the public view explains an invalid link", async () => {
+    renderUi(<SharedDashboardView token="olds_revoked" />);
+    expect(await screen.findByRole("heading", { name: "Link not available" })).toBeInTheDocument();
+  });
 });

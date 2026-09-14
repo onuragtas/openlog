@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Copy, Download, Pencil, Plus, Settings } from "lucide-react";
+import { ArrowLeft, Copy, Download, History, Mail, Pencil, Plus, Settings, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
@@ -20,6 +20,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { removeFilter, toggleFilters, type DashboardFilter } from "@/lib/dashboard-filters";
 import {
   applyLayout,
   dashboardToInput,
@@ -37,7 +38,11 @@ import {
 import type { RangeSpec } from "@/lib/time";
 import { DashboardGrid } from "./DashboardGrid";
 import { DashboardSettings } from "./DashboardSettings";
+import { FilterBar } from "./FilterBar";
+import { ReportsDialog } from "./ReportsDialog";
+import { ShareDialog } from "./ShareDialog";
 import { VariablesBar } from "./VariablesBar";
+import { VersionHistory } from "./VersionHistory";
 import { WidgetCard } from "./WidgetCard";
 import { WidgetEditor } from "./WidgetEditor";
 
@@ -45,6 +50,8 @@ export interface DashboardViewSearch {
   page?: string;
   vars?: VarValues;
   edit?: boolean;
+  /** Cross-widget filters (URL `filters`). */
+  filters?: DashboardFilter[];
 }
 
 export interface DashboardViewProps {
@@ -57,6 +64,8 @@ export interface DashboardViewProps {
 
 const LAYOUT_SAVE_DELAY = 800;
 
+type Panel = "history" | "share" | "reports";
+
 export function DashboardView({ dashboardId, search, range, onSearchChange, onOpenDashboard }: DashboardViewProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -66,6 +75,7 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
   const [conflict, setConflict] = useState(false);
   const [editing, setEditing] = useState<{ widget: DashboardWidget; isNew: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [panel, setPanel] = useState<Panel | null>(null);
   const doc = local ?? q.data;
   const latest = useRef(doc);
   useEffect(() => {
@@ -78,6 +88,7 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
     onSuccess: (d) => {
       queryClient.setQueryData(dashboardQuery(d.id).queryKey, d);
       void queryClient.invalidateQueries({ queryKey: ["dashboards", "list"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboards", "versions", d.id] });
       setLocal(null);
       setEditing(null);
       setSettingsOpen(false);
@@ -117,6 +128,8 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
   const canEdit = doc.can_edit;
   const edit = !!search.edit && canEdit;
   const page = doc.pages.find((p) => p.id === search.page) ?? doc.pages[0]!;
+  // Share links and reports: editors, and admins/owners (api.md "Share links", "Scheduled reports").
+  const canShare = canEdit || atLeast(me?.role, "admin");
 
   const onLayoutChange = (layout: GridItemLayout[]) => {
     if (!edit || !layoutChanged(page.widgets, layout)) return;
@@ -134,6 +147,11 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
     setConflict(false);
     save.reset();
     void q.refetch();
+  };
+
+  const openPanel = (p: Panel) => () => setPanel(p);
+  const closePanel = (open: boolean) => {
+    if (!open) setPanel(null);
   };
 
   return (
@@ -170,6 +188,19 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
                 <Settings aria-hidden="true" />
               </Button>
             )}
+            {canShare && (
+              <Button variant="outline" size="icon" aria-label={t("dashboards.share.title")} title={t("dashboards.share.title")} onClick={openPanel("share")} data-testid="open-share">
+                <Share2 aria-hidden="true" />
+              </Button>
+            )}
+            {canShare && (
+              <Button variant="outline" size="icon" aria-label={t("dashboards.reports.title")} title={t("dashboards.reports.title")} onClick={openPanel("reports")} data-testid="open-reports">
+                <Mail aria-hidden="true" />
+              </Button>
+            )}
+            <Button variant="outline" size="icon" aria-label={t("dashboards.history.title")} title={t("dashboards.history.title")} onClick={openPanel("history")} data-testid="open-history">
+              <History aria-hidden="true" />
+            </Button>
             {atLeast(me?.role, "member") && (
               <Button variant="outline" size="icon" aria-label={t("dashboards.duplicateNamed", { name: doc.name })} title={t("dashboards.duplicate")} disabled={duplicate.isPending} onClick={() => duplicate.mutate()}>
                 <Copy aria-hidden="true" />
@@ -195,6 +226,11 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
       )}
 
       <VariablesBar variables={doc.variables} vars={search.vars} range={range} onChange={(vars) => onSearchChange({ vars })} />
+      <FilterBar
+        filters={search.filters}
+        onRemove={(i) => onSearchChange({ filters: removeFilter(search.filters, i) })}
+        onClear={() => onSearchChange({ filters: undefined })}
+      />
 
       {doc.pages.length > 1 && (
         <Tabs value={page.id} onValueChange={(id) => onSearchChange({ page: id === doc.pages[0]!.id ? undefined : id })}>
@@ -233,6 +269,8 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
               variables={variables}
               edit={edit}
               fill={mode === "grid"}
+              filters={search.filters}
+              onSelectFilters={(fs) => onSearchChange({ filters: toggleFilters(search.filters, fs) })}
               onEdit={() => setEditing({ widget: w, isNew: false })}
               onDuplicate={() => persist(duplicateWidget(doc, page.id, w.id, t("dashboards.copySuffix")))}
               onDelete={() => persist(removeWidget(doc, page.id, w.id))}
@@ -269,6 +307,22 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
           if (!next.pages.some((p) => p.id === search.page)) onSearchChange({ page: undefined });
         }}
       />
+      <VersionHistory
+        dashboard={doc}
+        open={panel === "history"}
+        onOpenChange={closePanel}
+        onRestored={(d) => {
+          clearTimeout(timer.current);
+          queryClient.setQueryData(dashboardQuery(d.id).queryKey, d);
+          void queryClient.invalidateQueries({ queryKey: ["dashboards", "list"] });
+          setLocal(null);
+          setConflict(false);
+          setPanel(null);
+          if (!d.pages.some((p) => p.id === search.page)) onSearchChange({ page: undefined });
+        }}
+      />
+      {canShare && <ShareDialog dashboard={doc} open={panel === "share"} onOpenChange={closePanel} range={range} vars={search.vars} />}
+      {canShare && <ReportsDialog dashboard={doc} open={panel === "reports"} onOpenChange={closePanel} vars={search.vars} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { Activity, Bell, Boxes, Container, LayoutDashboard, LogOut, Menu, MoreVertical, Plug, Rocket, ScrollText, SearchCode, Server, Settings, Ship, X } from "lucide-react";
+import { Activity, Bell, Boxes, Container, LayoutDashboard, LogOut, Menu, MoreVertical, Plug, PlusCircle, Rocket, ScrollText, SearchCode, Server, Settings, Ship, X } from "lucide-react";
+import { AddDataButton } from "@/components/onboarding/AddDataButton";
 import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
 import { logout, useMe } from "@/api/account";
@@ -8,6 +9,7 @@ import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { OrgSwitcher } from "@/components/settings/OrgSwitcher";
 import { UsageBanner } from "@/components/settings/UsageBanner";
+import { SsoSignOutButton } from "@/components/SsoSignOutButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TimeRangePicker } from "@/components/TimeRangePicker";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +20,7 @@ import { useNavDrawer } from "@/lib/nav-drawer";
 import type { RangeSpec } from "@/lib/time";
 
 const NAV = [
+  { to: "/add-data", icon: PlusCircle, label: "addData.nav" },
   { to: "/hosts", icon: Server, label: "nav.hosts" },
   { to: "/containers", icon: Container, label: "nav.containers" },
   { to: "/kubernetes", icon: Ship, label: "nav.kubernetes" },
@@ -96,6 +99,7 @@ function SidebarContent({ onNavigate, closeButton }: { onNavigate?: () => void; 
           <LogOut className="size-4 shrink-0" aria-hidden="true" />
           <span>{t("nav.signOut")}</span>
         </button>
+        <SsoSignOutButton className={`${itemClass} w-full`} onBeforeSignOut={onNavigate} goToLogin={() => void navigate({ to: "/login" })} />
       </div>
     </>
   );
@@ -147,7 +151,7 @@ export function AppShell() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [drawerOpen, setDrawerOpen] = useNavDrawer(pathname);
-  const showRange = !pathname.startsWith("/traces/") && !pathname.startsWith("/settings") && pathname !== "/inventory" && pathname !== "/hosts" && pathname !== "/fleet" && !pathname.startsWith("/alerts");
+  const showRange = !pathname.startsWith("/traces/") && !pathname.startsWith("/settings") && pathname !== "/inventory" && pathname !== "/hosts" && pathname !== "/fleet" && !pathname.startsWith("/alerts") && !pathname.startsWith("/add-data");
 
   return (
     <div className="flex h-full min-h-0">
@@ -183,6 +187,7 @@ export function AppShell() {
             <Menu aria-hidden="true" />
           </Button>
           <OrgSwitcher className="mr-auto" />
+          <AddDataButton />
           {showRange && <UrlTimeRangePicker />}
           <div className="hidden items-center gap-2 md:flex">
             <LanguageSwitch />

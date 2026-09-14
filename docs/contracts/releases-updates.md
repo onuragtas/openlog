@@ -35,13 +35,22 @@ Plan and rationale: [../plan/09-releases-updates.md](../plan/09-releases-updates
   ],
   "images": {"openlog": "ghcr.io/onuragtas/openlog@sha256:…"},
   "helm_chart": {"name": "openlog-0.4.0.tgz", "url": "…", "sha256": "…"},
+  "helm_charts": {"openlog": {"name": "openlog-0.4.0.tgz", "url": "…", "sha256": "…"},
+                  "openlog-agent": {"name": "openlog-agent-0.4.0.tgz", "url": "…", "sha256": "…"}},
   "migrations": {"postgres": {"latest": 3, "contract_pending": []}, "clickhouse": {"latest": 7, "contract_pending": []}}
 }
 ```
 
 - `component` values: `infra-agent`, `backend`, `php-agent` (php-agent.md §7.1: `openlog-php-agent_<v>_linux_<arch>.tar.gz`
-  with the modules of every PHP ABI and `openlog-php-install`, plus `.deb`/`.rpm`/`.apk`). `format`: `tar.gz`, `deb`,
-  `rpm`, `apk`. Consumers ignore components and formats they do not know, so new ones do not change `schema`.
+  with the modules of every PHP ABI and `openlog-php-install`, plus `.deb`/`.rpm`/`.apk`), `java-agent`
+  (`openlog-javaagent-<v>.jar`, platform independent: `os` and `arch` are `any`). `format`: `tar.gz`, `deb`, `rpm`,
+  `apk`, `jar`. Consumers ignore components and formats they do not know, so new ones do not change `schema`.
+- Helm charts: `helm_charts` maps the chart name (`openlog`, `openlog-agent`) to the packaged chart
+  `<chart>-<version>.tgz` (chart `version` = `appVersion` = release version); `name`, `url` and `sha256` are required.
+  `helm_chart` is kept and always equals `helm_charts.openlog`, for consumers that predate `helm_charts`. Both are
+  optional (a release built without helm has neither). `helm_charts` was added without a `schema` change: manifests
+  are decoded without rejecting unknown fields, so older binaries verify and use such manifests unchanged (the
+  signature covers the raw bytes, including the new field).
 - Tarball layout: a single top-level directory `openlog-infra-agent_<v>_linux_<arch>/` containing `openlog-infra-agent`, `LICENSE`, `README.md`, `packaging/`.
 - `compatibility.min_upgrade_from`: agents/backends older than this must upgrade through an intermediate version.
 - `compatibility.rollback_floor`: the lowest version a rollback may target from this version.

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Compile-only check (CI on Linux, no Windows runner): ASP.NET 4.x (System.Web) on .NET Framework 4.8 with the
+       netstandard2.0 OpenLog.Agent build and OpenTelemetry's TelemetryHttpModule (README: .NET Framework). The
+       reference assemblies come from Microsoft.NETFramework.ReferenceAssemblies; the output is never run. -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/OpenLog.Agent/OpenLog.Agent.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" PrivateAssets="All" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNet" />
+    <Reference Include="System.Web" />
+  </ItemGroup>
+
+</Project>

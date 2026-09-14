@@ -43,6 +43,9 @@ func TestQueryLimitErrors(t *testing.T) {
 		{202, "Too many simultaneous queries", http.StatusTooManyRequests, true, "resource_exhausted"},
 		{241, "Memory limit (total) exceeded", http.StatusTooManyRequests, true, "resource_exhausted"},
 		{159, "Timeout exceeded", http.StatusGatewayTimeout, false, "timeout"},
+		// Cold (S3) parts unreadable: 503 storage_unavailable, retryable (query/storage.go).
+		{499, "S3 exception: Access Denied", http.StatusServiceUnavailable, true, "storage_unavailable"},
+		{209, "Timeout exceeded while reading from ReadBufferFromS3", http.StatusServiceUnavailable, true, "storage_unavailable"},
 	} {
 		conn := failingConn{err: &ch.Exception{Code: tc.code, Message: tc.msg}}
 		s := New(config.API{QueryTimeout: time.Second, MaxRows: 100}, query.New(conn, "openlog", time.Second),
@@ -52,10 +55,14 @@ func TestQueryLimitErrors(t *testing.T) {
 		rec := httptest.NewRecorder()
 		s.Handler().ServeHTTP(rec, req)
 		var body struct {
-			Error struct{ Code, Message string }
+			Error struct {
+				Code, Message string
+				Retryable     bool
+			}
 		}
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)
-		if rec.Code != tc.status || body.Error.Code != tc.errCode || (rec.Header().Get("Retry-After") != "") != tc.retryAfter {
+		if rec.Code != tc.status || body.Error.Code != tc.errCode || (rec.Header().Get("Retry-After") != "") != tc.retryAfter ||
+			body.Error.Retryable != (tc.errCode == "storage_unavailable") {
 			t.Errorf("code %d %q: HTTP %d %s Retry-After %q", tc.code, tc.msg, rec.Code, rec.Body, rec.Header().Get("Retry-After"))
 		}
 	}

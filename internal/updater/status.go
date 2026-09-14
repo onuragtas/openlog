@@ -14,6 +14,7 @@ import (
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/updatecheck"
+	"github.com/onuragtas/openlog/internal/updatemsg"
 )
 
 // States reported in Status.State.
@@ -58,25 +59,48 @@ type HistoryEntry struct {
 // Status is the updater state document (system_state "updater", shown as `updater` in
 // GET /api/v1/version).
 type Status struct {
-	Engine          string         `json:"engine"`
-	Mode            string         `json:"mode"`
-	State           string         `json:"state"`
-	Message         string         `json:"message,omitempty"`
-	Error           string         `json:"error,omitempty"`
-	CurrentVersion  string         `json:"current_version,omitempty"`
-	TargetVersion   string         `json:"target_version,omitempty"`
-	PreviousVersion string         `json:"previous_version,omitempty"`
-	NotesURL        string         `json:"notes_url,omitempty"`
-	CheckedAt       time.Time      `json:"checked_at"`
-	StartedAt       *time.Time     `json:"started_at,omitempty"`
-	FinishedAt      *time.Time     `json:"finished_at,omitempty"`
-	BackupFile      string         `json:"backup_file,omitempty"`
-	Steps           []StepRecord   `json:"steps,omitempty"`
-	FailedVersions  []string       `json:"failed_versions,omitempty"`
-	History         []HistoryEntry `json:"history,omitempty"`
+	Engine  string `json:"engine"`
+	Mode    string `json:"mode"`
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
+	// MessageCode and MessageParams identify Message for translation (internal/updatemsg); empty
+	// when Message is free text or empty.
+	MessageCode     string            `json:"message_code,omitempty"`
+	MessageParams   map[string]string `json:"message_params,omitempty"`
+	Error           string            `json:"error,omitempty"`
+	CurrentVersion  string            `json:"current_version,omitempty"`
+	TargetVersion   string            `json:"target_version,omitempty"`
+	PreviousVersion string            `json:"previous_version,omitempty"`
+	NotesURL        string            `json:"notes_url,omitempty"`
+	CheckedAt       time.Time         `json:"checked_at"`
+	StartedAt       *time.Time        `json:"started_at,omitempty"`
+	FinishedAt      *time.Time        `json:"finished_at,omitempty"`
+	BackupFile      string            `json:"backup_file,omitempty"`
+	Steps           []StepRecord      `json:"steps,omitempty"`
+	FailedVersions  []string          `json:"failed_versions,omitempty"`
+	History         []HistoryEntry    `json:"history,omitempty"`
 }
 
 const maxHistory = 10
+
+// setMessage sets Message to the English text of code (internal/updatemsg) and records the code
+// and params for translation.
+func (s *Status) setMessage(code string, params updatemsg.Params) {
+	s.Message, s.MessageCode, s.MessageParams = updatemsg.Format(code, params), code, params
+}
+
+// setText sets Message to text, with its code when text is a known updater message.
+func (s *Status) setText(text string) {
+	s.Message, s.MessageCode, s.MessageParams = text, "", nil
+	if code, params, ok := updatemsg.Parse(text); ok {
+		s.MessageCode, s.MessageParams = code, params
+	}
+}
+
+// clearMessage removes Message and its code.
+func (s *Status) clearMessage() {
+	s.Message, s.MessageCode, s.MessageParams = "", "", nil
+}
 
 func (s *Status) beginStep(name string, now time.Time) {
 	s.Steps = append(s.Steps, StepRecord{Name: name, Status: StepRunning, StartedAt: now})

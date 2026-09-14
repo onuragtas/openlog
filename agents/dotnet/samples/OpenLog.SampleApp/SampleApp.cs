@@ -3,26 +3,33 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
+using Confluent.Kafka;
 using Grpc.Core;
+using MassTransit;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 using Npgsql;
 using OpenLog.Agent;
+using OpenTelemetry.Trace;
 using OpenLog.SampleApp.Grpc;
 using StackExchange.Redis;
 
 namespace OpenLog.SampleApp;
 
-/// <summary>Ports and backends of the sample app (environment: HTTP_PORT, GRPC_PORT, PG_CONNECTION, MYSQL_CONNECTION, REDIS_CONNECTION).</summary>
+/// <summary>Ports and backends of the sample app (environment: HTTP_PORT, GRPC_PORT, PG_CONNECTION, MYSQL_CONNECTION, REDIS_CONNECTION,
+/// SQLSERVER_CONNECTION, RABBITMQ_CONNECTION, KAFKA_BOOTSTRAP).</summary>
 public sealed class SampleSettings
 {
     public int HttpPort { get; set; } = 8080;
@@ -30,6 +37,10 @@ public sealed class SampleSettings
     public string? Postgres { get; set; }
     public string? MySql { get; set; }
     public string? Redis { get; set; }
+    public string? SqlServer { get; set; }
+    /// <summary>MassTransit RabbitMQ host URI, e.g. amqp://openlog:openlog@127.0.0.1:45672/</summary>
+    public string? RabbitMq { get; set; }
+    public string? Kafka { get; set; }
     /// <summary>false: the agent is not registered (overhead baseline).</summary>
     public bool Agent { get; set; } = true;
     /// <summary>false: no console logger (benchmark).</summary>
@@ -45,6 +56,9 @@ public sealed class SampleSettings
             Postgres = Env("PG_CONNECTION"),
             MySql = Env("MYSQL_CONNECTION"),
             Redis = Env("REDIS_CONNECTION"),
+            SqlServer = Env("SQLSERVER_CONNECTION"),
+            RabbitMq = Env("RABBITMQ_CONNECTION"),
+            Kafka = Env("KAFKA_BOOTSTRAP"),
             Agent = Env("SAMPLE_AGENT") != "false",
         };
     }
@@ -62,6 +76,54 @@ public sealed class ShopContext : DbContext
     public ShopContext(DbContextOptions<ShopContext> options) : base(options) { }
 
     public DbSet<Product> Products => Set<Product>();
+}
+
+/// <summary>MassTransit message published by /messaging/masstransit.</summary>
+public sealed record OrderPlaced(int Id);
+
+public sealed class OrderPlacedConsumer : IConsumer<OrderPlaced>
+{
+    private readonly ILogger<OrderPlacedConsumer> logger;
+
+    public OrderPlacedConsumer(ILogger<OrderPlacedConsumer> logger) => this.logger = logger;
+
+    public Task Consume(ConsumeContext<OrderPlaced> context)
+    {
+        logger.LogInformation("consumed masstransit order {OrderId}", context.Message.Id);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Consumes <see cref="SampleApp.KafkaTopic"/> with the instrumented Confluent.Kafka consumer.</summary>
+public sealed class KafkaOrderConsumer : BackgroundService
+{
+    private readonly InstrumentedConsumerBuilder<string, string> builder;
+    private readonly ILogger<KafkaOrderConsumer> logger;
+
+    public KafkaOrderConsumer(InstrumentedConsumerBuilder<string, string> builder, ILogger<KafkaOrderConsumer> logger)
+    {
+        this.builder = builder;
+        this.logger = logger;
+    }
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Factory.StartNew(() =>
+    {
+        using var consumer = builder.Build();
+        consumer.Subscribe(SampleApp.KafkaTopic);
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var result = consumer.Consume(TimeSpan.FromMilliseconds(250));
+                if (result?.Message != null) logger.LogInformation("consumed kafka order {Order}", result.Message.Value);
+            }
+            catch (ConsumeException e)
+            {
+                logger.LogDebug("kafka consume: {Reason}", e.Error.Reason);
+            }
+        }
+        consumer.Close();
+    }, stoppingToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 }
 
 public sealed class GreeterService : Greeter.GreeterBase
@@ -95,6 +157,8 @@ public sealed class OrdersController : ControllerBase
 
 public static class SampleApp
 {
+    public const string KafkaTopic = "openlog-dotnet-orders";
+
     public static WebApplication Build(SampleSettings settings, Action<OpenLogOptions>? configureAgent = null, string[]? args = null)
     {
         var builder = WebApplication.CreateBuilder(args ?? Array.Empty<string>());
@@ -115,7 +179,22 @@ public static class SampleApp
             });
         }
 
-        if (settings.Agent) builder.Services.AddOpenLog(configureAgent);
+        if (settings.Agent)
+        {
+            builder.Services.AddOpenLog(o =>
+            {
+                configureAgent?.Invoke(o);
+                if (settings.Kafka == null) return;
+                // Confluent.Kafka has no ActivitySource of its own: OpenTelemetry.Instrumentation.ConfluentKafka (prerelease)
+                // wraps the producer and consumer builders registered below
+                var previous = o.ConfigureTracing;
+                o.ConfigureTracing = b =>
+                {
+                    previous?.Invoke(b);
+                    b.AddKafkaProducerInstrumentation<string, string>().AddKafkaConsumerInstrumentation<string, string>();
+                };
+            });
+        }
         // explicit application part: the host may be started from another entry assembly (tests, benchmark)
         builder.Services.AddControllers().AddApplicationPart(typeof(OrdersController).Assembly);
         builder.Services.AddGrpc();
@@ -128,6 +207,32 @@ public static class SampleApp
         {
             // the OpenTelemetry StackExchange.Redis instrumentation picks the multiplexer up from DI
             builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(settings.Redis));
+        }
+
+        if (settings.RabbitMq != null)
+        {
+            builder.Services.AddMassTransit(x =>
+            {
+                x.AddConsumer<OrderPlacedConsumer>();
+                x.UsingRabbitMq((ctx, cfg) =>
+                {
+                    cfg.Host(new Uri(settings.RabbitMq));
+                    cfg.ConfigureEndpoints(ctx);
+                });
+            });
+        }
+        if (settings.Kafka != null)
+        {
+            builder.Services.AddSingleton(_ => new InstrumentedProducerBuilder<string, string>(new ProducerConfig { BootstrapServers = settings.Kafka }));
+            builder.Services.AddSingleton(_ => new InstrumentedConsumerBuilder<string, string>(new ConsumerConfig
+            {
+                BootstrapServers = settings.Kafka,
+                GroupId = "openlog-sample",
+                AutoOffsetReset = AutoOffsetReset.Earliest,
+                AllowAutoCreateTopics = true,
+            }));
+            builder.Services.AddSingleton(sp => sp.GetRequiredService<InstrumentedProducerBuilder<string, string>>().Build());
+            builder.Services.AddHostedService<KafkaOrderConsumer>();
         }
 
         var app = builder.Build();
@@ -191,6 +296,27 @@ public static class SampleApp
             await using var cmd = new MySqlCommand("SELECT 7 FROM DUAL WHERE \"secret\" = 'secret' AND 3 IN (1, 2, 3)", conn);
             var v = await cmd.ExecuteScalarAsync();
             return Results.Text(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture) ?? "");
+        });
+
+        app.MapGet("/db/sqlserver", async () =>
+        {
+            await using var conn = new SqlConnection(settings.SqlServer ?? throw new InvalidOperationException("SQLSERVER_CONNECTION not set"));
+            await conn.OpenAsync();
+            await using var cmd = new SqlCommand("SELECT 42 AS answer WHERE 'secret' = 'secret' AND 1 IN (1, 2)", conn);
+            var v = await cmd.ExecuteScalarAsync();
+            return Results.Text(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture) ?? "");
+        });
+
+        app.MapGet("/messaging/masstransit/{id:int}", async (int id, [FromServices] IPublishEndpoint publish) =>
+        {
+            await publish.Publish(new OrderPlaced(id));
+            return Results.Text("published");
+        });
+
+        app.MapGet("/messaging/kafka/{id:int}", async (int id, [FromServices] IProducer<string, string> producer) =>
+        {
+            var r = await producer.ProduceAsync(KafkaTopic, new Message<string, string> { Key = "order", Value = "order-" + id });
+            return Results.Text(r.Status.ToString());
         });
 
         app.MapGet("/db/redis", async ([FromServices] IConnectionMultiplexer redis) =>

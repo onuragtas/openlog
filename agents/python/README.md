@@ -24,6 +24,7 @@ openlog-instrument python app.py
 openlog-instrument gunicorn -w 4 -b 0.0.0.0:8000 shop.wsgi:application
 openlog-instrument uvicorn main:app --host 0.0.0.0 --workers 4
 openlog-instrument celery -A proj worker --concurrency 8
+openlog-instrument uwsgi --master --processes 4 --threads 2 --die-on-term --http :8000 --wsgi-file app.py
 DJANGO_SETTINGS_MODULE=shop.settings openlog-instrument python manage.py runserver --noreload
 ```
 
@@ -112,22 +113,34 @@ instrumentation is activated only when its library is installed in a supported v
 | `django` | Django | SERVER spans named `<METHOD> /<route>` (the agent adds the leading `/` to resolver routes), exceptions, `http.server.request.duration`. Needs `DJANGO_SETTINGS_MODULE` |
 | `flask` | Flask | SERVER spans `<METHOD> <url rule>`, `http.route` set by the agent, exceptions, HTTP metrics |
 | `fastapi`, `starlette` | FastAPI, Starlette (ASGI) | SERVER spans `<METHOD> <route>`, exceptions, HTTP metrics; the per-message `http send`/`http receive` spans are turned off |
+| `tornado` | Tornado ≥ 5.1 | SERVER spans `<METHOD> <route>` from the matched rule (the agent sets `http.route`, which upstream only puts on the metrics), exceptions, HTTP metrics; `AsyncHTTPClient` CLIENT spans |
+| `falcon` | Falcon 1.4 – 4.x | SERVER spans `<METHOD> <uri template>` with `http.route`; the agent records the responder's exception as an `exception` event (upstream only sets the status; `HTTPError`/`HTTPStatus` are not recorded); HTTP metrics without `http.route` |
+| `pyramid` | Pyramid ≥ 1.7 | SERVER spans `<METHOD> <route pattern>` with `http.route` (upstream names them with the pattern only; the agent adds the method), exceptions, HTTP metrics without `http.route` |
 | `requests`, `httpx`, `aiohttp-client`, `urllib`, `urllib3` | HTTP clients | CLIENT spans, W3C propagation, `http.client.request.duration` |
 | `psycopg2`, `psycopg`, `asyncpg` | PostgreSQL | CLIENT spans, `db.query.text` sanitized |
 | `pymysql`, `mysqlclient` | MySQL / MariaDB | CLIENT spans, `db.query.text` sanitized (`"…"` is a string) |
 | `sqlalchemy` | SQLAlchemy 1.x, 2.0 | CLIENT spans per statement (plus the driver's spans) |
 | `redis` | redis-py (sync and asyncio) | CLIENT spans, `db.query.text` = `SET ? ?` |
 | `celery` | Celery | PRODUCER `apply_async/<task>` and CONSUMER `run/<task>` spans with propagation through the broker |
+| `aio-pika` (alias `rabbitmq`) | aio-pika 7.2 – 9.x (RabbitMQ) | PRODUCER spans for `Exchange.publish`, CONSUMER spans around `Queue.consume` callbacks as children of the producer span (W3C context in the message headers), `messaging.system=rabbitmq` |
+| `confluent_kafka` | confluent-kafka 1.8 – 2.x | PRODUCER `<topic> send` spans; CONSUMER spans for `poll`/`consume` **linked** to the producer spans (one poll can return messages of several traces), `messaging.system=kafka` |
+| `kafka` (`kafka-python`) | kafka-python 2.x (3.x is not supported upstream yet) | PRODUCER `<topic> send`, CONSUMER `<topic> receive` per record (iteration) as a child of the producer span |
+| `aiokafka` | aiokafka 0.8 – 0.x | PRODUCER `<topic> send`, CONSUMER `<topic> receive` (`getone`/`getmany`) as a child of the producer span |
 | `grpc` (`grpc_client`, `grpc_server`, `grpc_aio_client`, `grpc_aio_server`) | grpcio | SERVER/CLIENT spans (`rpc.system`, `rpc.service`, `rpc.method`, `rpc.grpc.status_code`) |
 | `logging` | stdlib `logging` | OTLP log export of records that pass the logger levels, with trace context |
 
-The CI suite runs Flask 3.1, Django 4.2 (Python 3.9) and 6.1 (3.12), FastAPI 0.128/0.141 with uvicorn, gunicorn 23/26,
-psycopg2 2.9, psycopg 3.3, asyncpg 0.31, PyMySQL 1.2, mysqlclient 2.2, SQLAlchemy 2.0, redis 8.1, Celery 5.6, grpcio
-1.83 and aiohttp 3.14 (the database, Celery and gRPC suite on Python 3.12).
+`kafka-all` disables the three Kafka instrumentations at once.
+
+The CI suite runs on Python 3.9, 3.12 and 3.13: Flask 3.1, Django 4.2 (Python 3.9) and 6.1 (3.12+), FastAPI
+0.128/0.141 with uvicorn, Tornado 6.5, Falcon 4.3, Pyramid 2.0/2.1, gunicorn 23/26, uWSGI 2.0.31, gevent 25.9/26.8,
+eventlet 0.40/0.41, psycopg2 2.9, psycopg 3.3, asyncpg 0.31, PyMySQL 1.2, mysqlclient 2.2, SQLAlchemy 2.0, redis 8.1,
+Celery 5.6, grpcio 1.83, aiohttp 3.14, aio-pika 9.6 (RabbitMQ 4.1), confluent-kafka 2.15, kafka-python 2.3 and aiokafka
+0.14 (Kafka 4.1) (the database, broker, Celery and gRPC suite on Python 3.12).
 
 **Transaction names.** The APM backend names a web transaction `<METHOD> <http.route>`
 ([apm.md §2.1](../../docs/contracts/apm.md)). Requests without a route (404s) are grouped by the backend's path
-normalization. gRPC transactions are `<rpc.service>/<rpc.method>`, Celery tasks are messaging (`consumer`) entry spans.
+normalization. gRPC transactions are `<rpc.service>/<rpc.method>`; Celery tasks and RabbitMQ/Kafka consumers are
+messaging (`consumer`) entry spans.
 
 **Database statements.** With `OPENLOG_DB_QUERY_TEXT=sanitized` (default) SQL is normalized exactly like the Go and
 Node.js agents (shared test cases): string, numeric, hex and dollar-quoted literals → `?`, `IN (…)` and multi-row
@@ -177,9 +190,56 @@ time that must not be shared across fork), start it from gunicorn's `post_fork` 
 from openlog_agent import post_fork  # starts the agent in each worker
 ```
 
-uWSGI: enable `lazy-apps = true` (or `enable-threads = true` with `import openlog_agent; openlog_agent.start()` in a
-`@postfork` function), since uWSGI forks without running Python fork hooks otherwise. gevent/eventlet monkey patching
-is not verified by the test suite.
+### uWSGI
+
+uWSGI forks its workers in C, without Python's fork hooks, so export threads started in the master would not run in the
+workers (requests hang on locks held by the missing threads). The agent therefore detects the uWSGI master, under
+`openlog-instrument` and with `start()` in a module the master imports, and only installs the instrumentations there;
+the providers and export threads start in each worker from `uwsgi.post_fork_hook` (kept first in `uwsgidecorators`'
+`@postfork` chain when the application imports it). On Python < 3.12 the `uwsgi` module does not exist yet when
+`openlog-instrument` starts; the agent sets the hook at the first `import` statement that runs once uWSGI created it
+(loading the application), and then removes its import hook. `get_agent()` returns a pending agent in the master.
+
+```ini
+[uwsgi]
+master = true
+processes = 4
+threads = 2          ; optional
+lazy-apps = false    ; both work
+die-on-term = true   ; uWSGI 2.0 reloads on SIGTERM otherwise
+; no py-call-osafterfork: not needed, and with Python 3.13 it aborts the workers (Fatal Python error: PyMutex_Unlock)
+```
+
+```sh
+openlog-instrument uwsgi --ini uwsgi.ini --http :8000 --wsgi-file app.py
+```
+
+The e2e suite checks `--master --processes 3` with and without `lazy-apps` and `threads`, with `uwsgidecorators`, and
+with `start()` from code: every worker exports under its own `process.pid`, the master exports nothing, W3C propagation
+works between workers, and a graceful stop (`SIGINT`/`SIGTERM` with `die-on-term`) loses no span, because workers flush
+at exit. If uWSGI logs `Python threads support is disabled` (older versions), add `enable-threads = true`, otherwise the
+export threads do not run between requests. Workers recycled with `max-requests` flush at exit like any other.
+
+### gevent and eventlet
+
+Monkey-patched servers work under `openlog-instrument` (the agent starts before the patch) and with
+`openlog_agent.start()` called right after `gevent.monkey.patch_all()` / `eventlet.monkey_patch()`; patching first is
+the order gevent and eventlet recommend. The e2e suite checks `gevent.pywsgi`, `eventlet.wsgi` and
+`gunicorn -k gevent` workers with concurrent requests: no span is lost, the active span follows each greenlet (the
+spans of concurrent requests never mix), and `SIGTERM` flushes (the flush runs in a greenlet, because the event loop
+runs signal handlers where blocking is not allowed).
+
+A greenlet spawned inside a request starts with an empty context, like a new thread: its spans start new traces. Run it
+in a copy of the request's context to keep it in the trace, one copy per greenlet:
+
+```python
+import contextvars, gevent
+
+gevent.spawn(contextvars.copy_context().run, fetch_price, item_id)   # eventlet.spawn(...) likewise
+```
+
+Under `openlog-instrument`, gevent may print harmless `KeyError` tracebacks from `threading` when the process exits
+(threads started before the patch). gunicorn 26 no longer has an eventlet worker.
 
 ## Sampling
 
@@ -294,17 +354,20 @@ pip install openlog-agent==X.Y.Z
 Everything runs in containers (local Python tooling on iCloud Drive may hang):
 
 ```sh
-make install test                     # Python 3.12: venv volume, unit + end-to-end tests
+make install test                     # Python 3.12: venv volume, unit + end-to-end tests (installs gcc for uWSGI)
+make install test PYTHON_VERSION=3.13
 make install test PYTHON_VERSION=3.9  # the Python 3.9 line
 make lint
-make test-integration                 # real PostgreSQL/MySQL/Redis, Celery, gRPC (compose project openlog-m4-python-test)
+make test-integration                 # real PostgreSQL/MySQL/Redis/RabbitMQ/Kafka, Celery, gRPC (compose project openlog-m4-python-test)
 make bench                            # overhead micro-benchmark
 make build                            # wheel + sdist in dist/
 ```
 
 Unit tests cover configuration, resource detection, the sampler (Go fixtures), the SQL sanitizer (cases shared with
 the Go and Node.js agents), export-time span rewriting, runtime metrics and instrumentation defaults. End-to-end tests
-start Flask, Django and FastAPI applications under `openlog-instrument` (and with `start()`) against an OTLP capture
-server: route names, errors, propagation, HTTP and runtime metrics, correlated logs, resource, license header, ignored
-paths, SIGTERM flush, disabled agent, invalid configuration, ingest outage, and gunicorn pre-fork workers. The release
+start Flask, Django, FastAPI, Tornado, Falcon and Pyramid applications under `openlog-instrument` (and with `start()`)
+against an OTLP capture server: route names, errors, propagation, HTTP and runtime metrics, correlated logs, resource,
+license header, ignored paths, SIGTERM flush, disabled agent, invalid configuration, ingest outage, gunicorn and uWSGI
+pre-fork workers, and gevent/eventlet servers. The integration suite produces and consumes through real RabbitMQ and
+Kafka brokers (producer and consumer in one trace, or linked for confluent-kafka). The release
 flow is described in [releasing.md](../../docs/operations/releasing.md#python-agent-package).

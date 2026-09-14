@@ -7,6 +7,7 @@ import { hostsQuery } from "@/api/queries";
 import type { Host } from "@/api/types";
 import { AttributeChips } from "@/components/AttributeChips";
 import { PageHeader } from "@/components/AppShell";
+import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -66,7 +67,10 @@ export function HostsPage() {
         ) : query.isError ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : query.data.length === 0 ? (
-          <EmptyState>{t("hosts.empty")}</EmptyState>
+          <EmptyState>
+            <p>{t("hosts.empty")}</p>
+            <AddDataLink target="linux" label={t("addData.empty.hosts")} />
+          </EmptyState>
         ) : hosts.length === 0 ? (
           <EmptyState>{t("hosts.noMatch", { q })}</EmptyState>
         ) : (

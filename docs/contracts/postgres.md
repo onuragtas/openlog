@@ -39,6 +39,7 @@ Nothing that grants access is stored in plaintext:
 | SCIM token | `ols_` + 48 hex chars | `scim_tokens.key_hash`, hashed like API keys (D-044); `key_prefix` = first 12 chars |
 | SSO sign-in state / binding cookie | 32 random bytes each, base64url | `sso_login_states.state_hash` / `binding_hash = sha256(…)`; the PKCE verifier and nonce are stored for 10 minutes |
 | Domain verification e-mail token | `oldv_` + 48 hex chars | `sso_domains.email_token_hash = sha256(token)` |
+| Dashboard share link token | `olds_` + 43 base64url chars (256 random bits) | `dashboard_shares.token_hash = sha256(token)` (`0054_dashboard_shares`, D-087) |
 | OIDC client secret, SAML SP private key | IdP-issued / generated RSA 2048 | `sso_connections.secret_enc` / `sp_key_enc` = AES-256-GCM with a key from `OPENLOG_SSO_SECRET_KEY` (else derived from `OPENLOG_KEY_HASH_SECRET`; `_PREVIOUS` values decrypt), associated data = purpose + connection id. Format `0x01 ‖ key id (4) ‖ nonce ‖ ciphertext`; `0x00 ‖ plaintext` without any key (warning) |
 | Password | user-chosen, 8–256 chars | `users.password_hash` = argon2id PHC string (`m=19456,t=2,p=1`, 16-byte salt, 32-byte key) |
 
@@ -81,10 +82,11 @@ rules but may be as short as 8 characters, so development defaults such as `dev-
 | `created_at`, `updated_at`, `last_login_at` | timestamptz | |
 | `disabled_at` | timestamptz NULL | disabled users cannot sign in; their sessions stop working |
 | `email_verified_at` | timestamptz NULL | `0011_email_verification`: NULL only for self-service sign-ups that have not confirmed their address (`OPENLOG_SIGNUP_REQUIRE_VERIFICATION`); they cannot create license/API keys or invite. Existing rows were backfilled with `created_at`; the column default `now()` keeps users created by older binaries verified |
+| `locale` | text | `0050_email_locale`: e-mail language preferred when the user was created (sign-up, invitation acceptance; `Accept-Language` reduced to a supported language: `en`, `tr`), `''` = English. Used for usage notifications to owners |
 
 ### `email_verifications` (`0011_email_verification`)
 `id`, `user_id`, `email`, `token_hash` (UNIQUE), `created_at`, `expires_at` (`OPENLOG_EMAIL_VERIFICATION_TTL`),
-`used_at`. Opening the link sets `used_at` and `users.email_verified_at` in one transaction (only while the
+`used_at`, `locale` (`0050_email_locale`: language of the e-mail that carried the link). Opening the link sets `used_at` and `users.email_verified_at` in one transaction (only while the
 user still has that e-mail). Every resend creates a new row; older unused links stay valid until they expire. Rows
 expired or used more than a day ago are deleted by the hourly auth cleanup.
 
@@ -123,7 +125,8 @@ per `(org_id, email)` (partial unique index); an expired pending invitation is r
 created. Accepting marks the invitation and inserts the membership in one transaction. `last_sent_at` and
 `send_count` (`0010_invitation_email`) record invitation e-mails. Resending replaces `token_hash` and
 `expires_at` of an invitation that is neither accepted nor revoked (also after expiry), so the previous link stops
-working.
+working. `locale` (`0050_email_locale`) is the inviter's language when the invitation was created; resent e-mails keep
+it (`''`: the resending admin's language).
 
 ### `audit_log`
 `id` (identity), `org_id` (NULL for user-level events such as sign-in), `actor_user_id`, `actor_email`,
@@ -162,40 +165,51 @@ organization and per invited address, and verification e-mails per user (windows
 Listing (`GET /audit-log`) filters by `actor_email` substring, `action` prefix (`starts_with`) and time, newest
 first with a keyset cursor on `(created_at, id)`, served by `audit_log_org_idx`.
 
-## Single sign-on and SCIM (`0030_sso`)
+## Single sign-on and SCIM (`0030_sso`, `0056_sso_connections_slo`)
 
-OIDC/SAML connections, claimed domains, role mappings, sign-in states, the SAML replay cache and SCIM provisioning
-([api.md](api.md#single-sign-on), D-077, D-078, code `internal/sso`, `internal/scim`, store
-`internal/store/postgres/sso.go`).
+OIDC/SAML connections, claimed domains, role mappings, sign-in and logout states, the SAML replay cache, single
+logout session data and SCIM provisioning ([api.md](api.md#single-sign-on), D-077, D-078, D-088, D-089, code
+`internal/sso`, `internal/scim`, store `internal/store/postgres/sso.go`).
 
 ### `sso_connections`
-`id` (PK), `org_id` (UNIQUE, FK organizations: one connection per organization), `protocol` (`oidc`·`saml`),
+`id` (PK), `org_id` (FK organizations; index `(org_id, created_at, id)`; `0056` dropped the UNIQUE: up to 10
+connections, enforced by the api; the oldest is the **default connection**), `protocol` (`oidc`·`saml`),
 `name`, `enabled`, `config` (jsonb `{"oidc": {issuer, client_id, scopes, require_email_verified}}` or
 `{"saml": {idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_certificates, idp_cert_not_after,
-allow_idp_initiated, relay_state_allowlist, sign_authn_requests, sp_certificate_pem}}`), `secret_enc`, `sp_key_enc`
+allow_idp_initiated, relay_state_allowlist, sign_authn_requests, sp_certificate_pem, idp_slo_url, idp_slo_binding}}` plus
+`logout_redirect_allowlist`), `secret_enc`, `sp_key_enc`
 (sealed, see "Secrets"), `email_attribute`, `name_attribute`, `groups_attribute` (empty = defaults), `jit_enabled`,
 `default_role` (admin·member·viewer), `session_max_age_seconds` (0 = session TTL), `enforce`
 (CHECK: only when `enabled`), `break_glass_user_ids uuid[]`, `config_version` (incremented by every settings save),
 `tested_version` (set by a successful test sign-in of that version), `last_test_at`, `last_test_ok`,
-`last_test_error`, `last_test_details` (jsonb: email, groups, role), `created_by`, `updated_by`, timestamps.
-The session policy reads `enabled`, `enforce`, `break_glass_user_ids`, `session_max_age_seconds` and whether the
-user's e-mail domain is verified in **one** statement per session-authenticated request (`org_id` unique index,
-`sso_domains (org_id, domain)`).
+`last_test_error`, `last_test_details` (jsonb: email, groups, role), `created_by`, `updated_by`, timestamps;
+`0056`: `allow_external_invitations` (default true, claimed-domain invitations), background refresh state
+`idp_refreshed_at`, `idp_refresh_ok` (NULL = never), `idp_refresh_error`, `idp_refresh_failures` (consecutive),
+`idp_next_refresh_at` (partial index `WHERE enabled`), `idp_cache` (jsonb `{fetched_at, issuer, oidc_discovery,
+oidc_jwks, saml_valid_until}` of the last successful fetch; written only by the refresh, never by a settings save).
+Refreshed SAML metadata is written into `config.saml` with `WHERE config_version = <read version>` and does not
+change the version. The session policy reads the session's connection (`enabled`, `session_max_age_seconds`) and the
+connection the user's verified e-mail domain routes to (`enabled AND enforce`, `break_glass_user_ids`) in **one**
+statement per session-authenticated request (primary key, `sso_domains (org_id, domain)`, `sso_connections_org_idx`).
 
 ### `sso_domains`
 `id`, `org_id`, `domain` (lower case), `dns_token` (public TXT value), `email_token_hash`/`email_address`/
 `email_expires_at` (pending e-mail verification, 24 h), `verified_at`, `verification_method` (`dns_txt`·`email`),
-`last_checked_at`, `created_by`, `created_at`. UNIQUE `(org_id, domain)`; **partial UNIQUE `(domain) WHERE
-verified_at IS NOT NULL`**: a domain is verified by one organization only (a second verification →
-`already_exists`).
+`last_checked_at`, `created_by`, `created_at`, `connection_id` (`0056`, FK `sso_connections` **ON DELETE SET NULL**;
+NULL = the default connection). UNIQUE `(org_id, domain)`; **partial UNIQUE `(domain) WHERE verified_at IS NOT
+NULL`**: a domain is verified by one organization only (a second verification → `already_exists`). A connection id of
+another organization is refused by the store.
 
 ### `sso_role_mappings`
-PK `(org_id, group_name)`, `role` (admin·member·viewer; owners are never mapped), `created_at`. Shared by SSO sign-in
-and SCIM groups; replaced as a whole in one transaction.
+`org_id`, `connection_id` (`0056`, FK, cascade; NULL = organization-wide), `group_name`, `role` (admin·member·viewer;
+owners are never mapped), `created_at`. UNIQUE `(org_id, coalesce(connection_id, 00000000-…), group_name)` (replaces
+the former PK). Organization-wide mappings are used by SCIM groups and by connections without own mappings; each scope
+is replaced as a whole in one transaction.
 
 ### `sso_login_states`
 In-flight sign-ins: `state_hash` (UNIQUE), `binding_hash` (NULL for IdP-initiated SAML), `org_id`, `connection_id`
-(FK, cascade), `purpose` (`login`·`test`), `idp_initiated`, `nonce`, `pkce_verifier`, `saml_request_id`,
+(FK, cascade), `purpose` (`login`·`test`·`logout`), `idp_initiated`, `nonce`, `pkce_verifier`, `saml_request_id`
+(the AuthnRequest, or the LogoutRequest of an SP-initiated logout),
 `redirect_to`, `actor_user_id` (test), `config_version` (a settings change during the sign-in expires it), `result`
 (jsonb verified identity between SAML ACS and completion), `created_at`, `expires_at` (`OPENLOG_SSO_LOGIN_TTL`;
 IdP-initiated 1 min), `consumed_at`. Consumption is a single `UPDATE … WHERE consumed_at IS NULL AND expires_at > now
@@ -205,6 +219,14 @@ RETURNING`, so a state completes once across all pods; `result` is written only 
 PK `(connection_id, assertion_id)`, `expires_at` (latest `NotOnOrAfter` + clock skew, at least 10 min). `INSERT … ON
 CONFLICT DO UPDATE … WHERE expires_at < now()`: an id is accepted once until it expires (replay protection across
 pods).
+
+### `sso_sessions` (`0056`)
+The IdP session of an SSO session: `session_id` (PK, FK `sessions`, cascade), `connection_id` (FK, cascade), `org_id`,
+`user_id`, `subject` (SAML NameID value / OIDC `sub`), `name_id_format`, `name_qualifier`, `sp_name_qualifier`,
+`session_index` (SAML SessionIndex / OIDC `sid`), `id_token_enc` (OIDC ID token for `id_token_hint`, sealed like
+client secrets with AAD `oidc-id-token:<session id>`), `created_at`. Index `(connection_id, subject)`: an IdP
+LogoutRequest lists the active sessions (joined with `sessions`: not revoked, not expired) of the connection with the
+NameID; index `user_id`. The rows of LogoutRequest IDs share the replay cache (`sso_saml_assertions`, `slo:<id>`).
 
 ### `scim_tokens`
 Like `api_keys`: `id`, `org_id`, `name`, `key_prefix`, `key_hash` (UNIQUE, HMAC/SHA-256 per D-044; rehashed on lookup),
@@ -225,8 +247,13 @@ organization's groups.
 only in this organization), `sso_connection_id` (FK `sso_connections`, **ON DELETE CASCADE**: deleting a connection
 deletes its sessions). Older api binaries insert password sessions with the defaults.
 
-Cleanup (api, every 10 minutes, idempotent): login states expired more than an hour ago, expired assertion ids,
-expired domain e-mail tokens.
+Cleanup (api, every 10 minutes, idempotent): login and logout states expired more than an hour ago, expired assertion
+and LogoutRequest ids, expired domain e-mail tokens. `users.email` is changed by SCIM (`SetUserEmail`, UNIQUE →
+`already_exists`).
+
+Mixed versions (`0056`, expand): an older api reads one connection per organization (the first row it gets), treats
+connection-specific role mappings as organization-wide (its replace deletes them) and creates no `sso_sessions`
+rows, so its sessions cannot be ended by an IdP LogoutRequest until the rollout finishes.
 
 ## Fleet (agent updates, `0002_fleet`)
 
@@ -384,6 +411,23 @@ with the kept ids. Reads of one dashboard use a repeatable-read, read-only trans
 (`visibility = 'org' OR created_by = viewer OR (created_by IS NULL AND admin)`). Audit: `dashboard.{create,update,delete,duplicate,import}`.
 `0021_alert_oql` adds `oql` to `alert_rules.type` ([alerting.md](alerting.md) §2.10).
 
+Version history, sharing and scheduled reports (`0053_dashboard_versions`, `0054_dashboard_shares`,
+`0055_dashboard_reports`; [api.md](api.md#dashboards), D-086, D-087):
+
+| Table | Key | Content |
+|---|---|---|
+| `dashboard_versions` | `(dashboard_id, version)` | `dashboard_id` (cascade), `document` (jsonb `{name, description, visibility, variables, pages}` with page and widget ids), `author_id` (SET NULL), `restored_from`, `created_at`. The newest 50 per dashboard are kept (pruned in the saving transaction); 0053 backfills the current version of every existing dashboard |
+| `dashboard_org_settings` | `org_id` | `shares_enabled` (default false), `report_domains` (text[] ≤ 20), `updated_by` (SET NULL), `updated_at`. No row = defaults |
+| `dashboard_shares` | `id` | `org_id`, `dashboard_id` (both cascade), `token_hash` (SHA-256 of the token, unique), `label` (≤ 100), `time_range` (relative) or `range_from`/`range_to` (fixed; CHECK exactly one), `variables` (jsonb), `created_by`/`revoked_by` (SET NULL), `created_at`, `expires_at`, `revoked_at`, `last_used_at`, `use_count`. Index `(dashboard_id, created_at DESC)` |
+| `dashboard_reports` | `id` | `org_id`, `dashboard_id` (both cascade), `name` (≤ 100), `frequency` (`daily`·`weekly`), `weekday` (0 = Sunday), `hour`, `minute`, `timezone`, `recipients` (text[] 1–20), `language` (`en`·`tr`), `time_range`, `variables` (jsonb), `enabled`, `created_by` (SET NULL), timestamps. Partial index on enabled |
+| `dashboard_report_runs` | `(report_id, period)` | `report_id` (cascade), `period` (local date `YYYY-MM-DD`), `status` (`running`·`sent`·`partial`·`failed`·`skipped`), `error` (≤ 1000), `recipients` (sent count), `started_at`, `finished_at`; runs older than 90 days are deleted when a new run of the report is claimed |
+
+Every save inserts its version row in the same transaction as the document. A share link lookup joins the organization
+(tenant id), `dashboard_org_settings.shares_enabled` and the creator's membership; `last_used_at`/`use_count` are
+updated at most once a minute per link. Creating a share link or report locks the dashboard row `FOR UPDATE` to enforce
+the per-dashboard limits. The report job claims `(report_id, period)` with `INSERT … ON CONFLICT DO NOTHING` before
+sending. Audit: `dashboard.{restore,settings.update,share.create,share.revoke,share.access,report.create,report.update,report.delete}`.
+
 ## Alerting (`0004_alerting`)
 
 Rules, evaluation state, incidents, channels, mutes and the notification outbox ([alerting.md](alerting.md), API:
@@ -452,6 +496,13 @@ fall back to the default plan), `overrides` jsonb (partial limits, `quota.Overri
 `billing_customer_id`, `billing_subscription_id` (empty until connected; partial index on provider + customer),
 `note`, `updated_by`, `updated_at`. Written only by superadmins (`PUT /api/v1/admin/orgs/{org}/plan`) and billing
 webhooks, each change with audit action `plan.update` (target `organization`).
+
+### `org_query_limits` (`0051_org_query_limits`)
+Organization layer of the ClickHouse query limits ([usage.md](usage.md) §4.5). PK `org_id` (cascade):
+`max_memory_usage`, `max_rows_to_read`, `max_bytes_to_read` (bigint `>= 0`; NULL = inherit the plan/defaults, `0` = not
+set by openlog), `updated_by`, `updated_at`. No row = nothing set; clearing every value deletes the row. Written through
+`PUT`/`DELETE /api/v1/usage/query-limits` with audit actions `query_limits.update` / `query_limits.delete`; read by
+every api and alert pod every 30 s.
 
 ### `tenant_quota_status`
 Latest evaluation per tenant (PK `tenant_id`), upserted by the api leader every `OPENLOG_USAGE_EVALUATION_INTERVAL`:

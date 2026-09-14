@@ -1,0 +1,11 @@
+{{define "subject"}}[openlog] Verify the domain {{.Domain}}{{end}}
+
+{{define "text"}}
+{{.Requester}} asked to verify that the domain {{.Domain}} belongs to the organization "{{.OrgName}}" on openlog.
+
+Members with addresses at this domain will be able to sign in through the organization's single sign-on.
+
+Open this link within 24 hours to confirm, or ignore this e-mail:
+
+{{.Link}}
+{{end}}

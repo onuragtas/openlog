@@ -94,6 +94,31 @@ def test_instrumentor_kwargs():
     assert "exclude_spans" not in instrumentor_kwargs("django", cfg, {})
 
 
+def test_falcon_response_hook_records_the_responder_exception():
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    exporter = InMemorySpanExporter()
+    tp = TracerProvider(shutdown_on_exit=False)
+    tp.add_span_processor(SimpleSpanProcessor(exporter))
+    calls = []
+    cfg, _ = load_config({}, instrumentation_config={"falcon": {"response_hook": lambda *a: calls.append("user")}})
+    hook = instrumentor_kwargs("falcon", cfg, {})["response_hook"]
+
+    class Req:
+        def __init__(self, exc):
+            self.env = {"opentelemetry-falcon.exc": exc} if exc is not None else {}
+
+    import falcon
+
+    for name, exc in (("boom", ValueError("falcon boom")), ("not-found", falcon.HTTPNotFound()), ("ok", None)):
+        with tp.get_tracer("t").start_as_current_span(name) as span:
+            hook(span, Req(exc), None)
+    events = {s.name: [e.name for e in s.events] for s in exporter.get_finished_spans()}
+    assert events == {"boom": ["exception"], "not-found": [], "ok": []}
+    assert calls == ["user", "user", "user"]
+
+
 def test_log_correlation():
     provider = TracerProvider(shutdown_on_exit=False)
     tracer = provider.get_tracer("t")

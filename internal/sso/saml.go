@@ -47,13 +47,24 @@ var samlDigestAlgs = map[string]bool{
 	"http://www.w3.org/2001/04/xmlenc#sha512":       true,
 }
 
+// samlEncAlgs is the allowlist of XML encryption algorithms in an EncryptedAssertion or EncryptedID: AES-GCM and
+// AES-CBC content encryption, RSA-OAEP key transport (no RSA PKCS#1 v1.5, no 3DES).
+var samlEncAlgs = map[string]bool{
+	"http://www.w3.org/2009/xmlenc11#aes128-gcm": true, "http://www.w3.org/2009/xmlenc11#aes192-gcm": true,
+	"http://www.w3.org/2009/xmlenc11#aes256-gcm": true, "http://www.w3.org/2001/04/xmlenc#aes128-cbc": true,
+	"http://www.w3.org/2001/04/xmlenc#aes192-cbc": true, "http://www.w3.org/2001/04/xmlenc#aes256-cbc": true,
+	"http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p": true, "http://www.w3.org/2009/xmlenc11#rsa-oaep": true,
+}
+
 var samlOnce sync.Once
 
-// configureSAML sets crewjam/saml's process-wide clock skew once (all connections share OPENLOG_SSO_CLOCK_SKEW).
+// configureSAML sets crewjam/saml's process-wide clock skew and registers the AES-GCM and RSA-OAEP decrypters
+// (samlenc.go) once (all connections share OPENLOG_SSO_CLOCK_SKEW).
 func configureSAML(skew time.Duration) {
 	samlOnce.Do(func() {
 		saml.MaxClockSkew = skew
 		saml.MaxIssueDelay = 90*time.Second + skew
+		registerDecrypters()
 	})
 }
 
@@ -70,6 +81,25 @@ func (strictVerifier) VerifySignature(vc *dsig.ValidationContext, el *etree.Elem
 	}
 	if sigs != 1 {
 		return fmt.Errorf("expected one Signature on %s, found %d", el.Tag, sigs)
+	}
+	// The signed element must not contain further SAML messages or assertions (also after decryption of an
+	// EncryptedAssertion, which the document precheck cannot see).
+	nested := false
+	var walk func(e *etree.Element)
+	walk = func(e *etree.Element) {
+		for _, ch := range e.ChildElements() {
+			switch ch.Tag {
+			case "Assertion", "EncryptedAssertion", "Response", "LogoutRequest", "LogoutResponse":
+				nested = true
+			}
+			walk(ch)
+		}
+	}
+	if el.Tag != "Response" { // a signed Response carries its one assertion (precheckSAMLResponse)
+		walk(el)
+	}
+	if nested {
+		return fmt.Errorf("the signed %s contains a nested SAML message or assertion", el.Tag)
 	}
 	sm := el.FindElement("./Signature/SignedInfo/SignatureMethod")
 	if sm == nil || !samlSigAlgs[sm.SelectAttrValue("Algorithm", "")] {
@@ -172,6 +202,12 @@ func idpMetadataInfo(xmlData []byte, now time.Time) (*saml.EntityDescriptor, SAM
 	if out.IdPSSOURL == "" {
 		return nil, out, errors.New("the IdP has no SingleSignOnService with the HTTP-Redirect binding")
 	}
+	if loc, _, binding := idpSLOEndpoint(md); loc != "" {
+		if u, err := url.Parse(loc); err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+			return nil, out, errors.New("the IdP SingleLogoutService location is not an http(s) URL")
+		}
+		out.IdPSLOURL, out.IdPSLOBinding = loc, binding
+	}
 	if u, err := url.Parse(out.IdPSSOURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") {
 		return nil, out, errors.New("the IdP SingleSignOnService location is not an http(s) URL")
 	}
@@ -222,9 +258,14 @@ func (s *Service) samlSP(c Connection, allowIdPInitiated bool) (*saml.ServicePro
 	if err != nil {
 		return nil, err
 	}
+	sloURL, err := url.Parse(s.SAMLSLOURL(c.ID))
+	if err != nil {
+		return nil, err
+	}
 	sp := &saml.ServiceProvider{
 		EntityID: entityID, Key: signer, Certificate: cert, HTTPClient: s.client,
-		MetadataURL: *mdURL, AcsURL: *acsURL, IDPMetadata: md,
+		MetadataURL: *mdURL, AcsURL: *acsURL, SloURL: *sloURL, IDPMetadata: md,
+		LogoutBindings:    []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding},
 		AuthnNameIDFormat: saml.UnspecifiedNameIDFormat, AllowIDPInitiated: allowIdPInitiated,
 		SignatureVerifier: strictVerifier{}, MetadataValidDuration: 48 * time.Hour,
 		// crewjam accepts assertions without an AudienceRestriction; require one naming this SP.
@@ -275,10 +316,30 @@ func (s *Service) SAMLMetadata(c Connection) ([]byte, error) {
 	}
 	md := sp.Metadata()
 	for i := range md.SPSSODescriptors {
+		d := &md.SPSSODescriptors[i]
 		wantSigned := true
-		md.SPSSODescriptors[i].WantAssertionsSigned = &wantSigned
+		d.WantAssertionsSigned = &wantSigned
 		signed := c.SAML.SignAuthnRequests
-		md.SPSSODescriptors[i].AuthnRequestsSigned = &signed
+		d.AuthnRequestsSigned = &signed
+		// Logout messages are always signed: publish the signing certificate, and the encryption algorithms openlog
+		// decrypts (samlEncAlgs) for encrypted assertions.
+		hasSigning := false
+		for k := range d.KeyDescriptors {
+			kd := &d.KeyDescriptors[k]
+			switch kd.Use {
+			case "signing":
+				hasSigning = true
+			case "encryption":
+				kd.EncryptionMethods = []saml.EncryptionMethod{{Algorithm: "http://www.w3.org/2009/xmlenc11#aes256-gcm"},
+					{Algorithm: "http://www.w3.org/2009/xmlenc11#aes128-gcm"}, {Algorithm: "http://www.w3.org/2001/04/xmlenc#aes256-cbc"},
+					{Algorithm: "http://www.w3.org/2001/04/xmlenc#aes128-cbc"}, {Algorithm: "http://www.w3.org/2009/xmlenc11#rsa-oaep"},
+					{Algorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"}}
+			}
+		}
+		if !hasSigning && sp.Certificate != nil {
+			d.KeyDescriptors = append(d.KeyDescriptors, saml.KeyDescriptor{Use: "signing", KeyInfo: saml.KeyInfo{X509Data: saml.X509Data{
+				X509Certificates: []saml.X509Certificate{{Data: base64.StdEncoding.EncodeToString(sp.Certificate.Raw)}}}}})
+		}
 	}
 	return marshalMetadata(md)
 }
@@ -307,19 +368,30 @@ func precheckSAMLResponse(doc []byte) (string, error) {
 		return "", errors.New("the document is not a SAML Response")
 	}
 	assertions, responses := 0, 0
-	var walk func(e *etree.Element)
-	walk = func(e *etree.Element) {
+	var badAlg string
+	var walk func(e *etree.Element, encrypted bool)
+	walk = func(e *etree.Element, encrypted bool) {
 		switch e.Tag {
-		case "Assertion", "EncryptedAssertion":
+		case "Assertion":
 			assertions++
+		case "EncryptedAssertion":
+			assertions++
+			encrypted = true
 		case "Response":
 			responses++
+		case "EncryptionMethod":
+			if alg := e.SelectAttrValue("Algorithm", ""); encrypted && !samlEncAlgs[alg] && badAlg == "" {
+				badAlg = alg
+			}
 		}
 		for _, ch := range e.ChildElements() {
-			walk(ch)
+			walk(ch, encrypted)
 		}
 	}
-	walk(root)
+	walk(root, false)
+	if badAlg != "" {
+		return "", fmt.Errorf("encryption algorithm %q is not allowed", badAlg)
+	}
 	if responses != 1 {
 		return "", errors.New("nested Response elements are not allowed")
 	}
@@ -424,8 +496,15 @@ func firstAttr(a *saml.Assertion, names ...string) string {
 // samlIdentity extracts the identity of a verified assertion.
 func samlIdentity(c Connection, a *saml.Assertion) Identity {
 	id := Identity{Issuer: a.Issuer.Value, EmailVerified: true}
-	if a.Subject.NameID != nil {
-		id.Subject = strings.TrimSpace(a.Subject.NameID.Value)
+	if n := a.Subject.NameID; n != nil {
+		id.Subject = strings.TrimSpace(n.Value)
+		id.NameIDFormat, id.NameQualifier, id.SPNameQualifier = n.Format, n.NameQualifier, n.SPNameQualifier
+	}
+	for _, st := range a.AuthnStatements {
+		if st.SessionIndex != "" {
+			id.SessionIndex = st.SessionIndex
+			break
+		}
 	}
 	emailNames := []string{"email", "mail", "emailaddress", "urn:oid:0.9.2342.19200300.100.1.3",
 		"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"}

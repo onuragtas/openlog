@@ -476,6 +476,10 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
   value: {{ $ts.policyRefresh | quote }}
 - name: OPENLOG_TAILSAMPLING_DEFAULT_POLICY
   value: {{ $ts.defaultPolicy | quote }}
+- name: OPENLOG_TAILSAMPLING_GROUP
+  value: {{ $ts.group | default "openlog-sampler" | quote }}
+- name: OPENLOG_TAILSAMPLING_PRODUCE_TIMEOUT
+  value: {{ $ts.produceTimeout | default "10s" | quote }}
 {{- end }}
 {{- end }}
 {{- if has $c (list "processor" "api" "migrate" "alert") }}
@@ -557,6 +561,18 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
   value: {{ $a.invitationTTL | quote }}
 - name: OPENLOG_API_TRUSTED_PROXIES
   value: {{ join "," $a.trustedProxies | quote }}
+{{- /* Single sign-on secret key and sign-up CAPTCHA secret (chart Secret or auth.existingSecret; absent keys = unset). */}}
+{{- range $env := list (list "OPENLOG_SSO_SECRET_KEY" $a.ssoSecretKeyKey "sso-secret-key") (list "OPENLOG_SSO_SECRET_KEY_PREVIOUS" $a.ssoSecretKeyPreviousKey "sso-secret-key-previous") (list "OPENLOG_SIGNUP_CAPTCHA_SECRET" $a.captchaSecretKey "signup-captcha-secret") }}
+- name: {{ index $env 0 }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.keyName" (dict "root" $root "existing" (index $env 1) "chart" (index $env 2)) }}
+      optional: true
+{{- end }}
+{{- end }}
+{{- if and (has $c (list "ingest" "api")) (include "openlog.postgres.enabled" $root) }}
+{{ include "openlog.keyHashEnv" $root }}
 {{- end }}
 {{- if and (eq $c "ingest") (include "openlog.postgres.enabled" $root) }}
 {{- /* Integration setting passwords in agent sync answers (releases-updates.md §3). */}}
@@ -610,6 +626,13 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
     secretKeyRef:
       name: {{ . }}
       key: {{ $al.smtp.passwordSecret.key }}
+{{- else }}
+- name: OPENLOG_SMTP_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" $root }}
+      key: {{ include "openlog.secret.keyName" (dict "root" $root "existing" $al.smtp.passwordKey "chart" "smtp-password") }}
+      optional: true
 {{- end }}
 {{- end }}
 {{- if eq $c "migrate" }}
@@ -629,8 +652,19 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 {{- if has $c (list "migrate" "api") }}
 {{- /* migrate applies the moves; api pods run `openlog-admin storage status` (docs/operations/tiered-storage.md). */}}
 {{- with $root.Values.clickhouse.tieredStorage }}
+{{- $tiering := .enabled }}
+{{- /* Operators mode: the pre-upgrade migrate hook runs before the ClickHouseInstallation receives the storage policy.
+     On the upgrade that enables tiering, migrate would fail ("storage policy not usable") and block the CHI change
+     forever (seen on kind, 2026-09-14). Keep it off for migrate while the live CHI lacks the policy file; the next
+     `helm upgrade` applies the moves. A fresh install (no CHI yet, post-install hook) and `helm template` keep it on. */}}
+{{- if and .enabled (eq $c "migrate") (include "openlog.operators" $root) }}
+{{- $chi := lookup "clickhouse.altinity.com/v1" "ClickHouseInstallation" $root.Release.Namespace (include "openlog.clickhouse.name" $root) }}
+{{- if and $chi (not (hasKey (dig "spec" "configuration" "files" dict $chi) "config.d/openlog-storage.xml")) }}
+{{- $tiering = false }}
+{{- end }}
+{{- end }}
 - name: OPENLOG_STORAGE_TIERING_ENABLED
-  value: {{ .enabled | toString | quote }}
+  value: {{ $tiering | toString | quote }}
 - name: OPENLOG_STORAGE_POLICY
   value: {{ .policy | quote }}
 {{- range $class, $days := .coldAfterDays }}
@@ -643,7 +677,12 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 {{- end }}
 {{- end }}
 {{- end }}
-{{- range $k, $v := .values.config }}
+{{- /* Component config wins over the top-level config for the same name (explicit sets: sprig merge would let a
+     boolean false lose). */}}
+{{- $cfg := dict }}
+{{- range $k, $v := ($root.Values.config | default dict) }}{{- $_ := set $cfg $k $v }}{{- end }}
+{{- range $k, $v := (.values.config | default dict) }}{{- $_ := set $cfg $k $v }}{{- end }}
+{{- range $k, $v := $cfg }}
 - name: {{ $k }}
   value: {{ include "openlog.envValue" $v }}
 {{- end }}
@@ -653,6 +692,28 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 {{- with .values.extraEnv }}
 {{ toYaml . }}
 {{- end }}
+{{- end -}}
+
+{{/* Key name in the credentials Secret: the configured one with auth.existingSecret, else the chart's.
+     ctx: dict "root" $ "existing" <key name setting> "chart" <chart key> */}}
+{{- define "openlog.secret.keyName" -}}
+{{- if .root.Values.auth.existingSecret -}}{{ .existing }}{{- else -}}{{ .chart }}{{- end -}}
+{{- end -}}
+
+{{/* OPENLOG_KEY_HASH_SECRET(_PREVIOUS) of ingest, api and the bootstrap Job (D-044: same value everywhere). ctx: root */}}
+{{- define "openlog.keyHashEnv" -}}
+- name: OPENLOG_KEY_HASH_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" . }}
+      key: {{ include "openlog.secret.keyName" (dict "root" . "existing" .Values.auth.keyHashSecretKey "chart" "key-hash-secret") }}
+      optional: true
+- name: OPENLOG_KEY_HASH_SECRET_PREVIOUS
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "openlog.secretName" . }}
+      key: {{ include "openlog.secret.keyName" (dict "root" . "existing" .Values.auth.keyHashSecretPreviousKey "chart" "key-hash-secret-previous") }}
+      optional: true
 {{- end -}}
 
 {{/* Secret keys of the alerting encryption keys (chart Secret or auth.existingSecret). ctx: root */}}

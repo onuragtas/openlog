@@ -4,8 +4,12 @@
   "sslRequired": "none",
   "loginWithEmailAllowed": true,
   "groups": [
-    { "name": "openlog-admins" },
-    { "name": "engineering" }
+    {
+      "name": "openlog-admins"
+    },
+    {
+      "name": "engineering"
+    }
   ],
   "users": [
     {
@@ -15,8 +19,17 @@
       "enabled": true,
       "firstName": "Alice",
       "lastName": "Admin",
-      "credentials": [{ "type": "password", "value": "alice-password", "temporary": false }],
-      "groups": ["/openlog-admins", "/engineering"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-password",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/openlog-admins",
+        "/engineering"
+      ]
     },
     {
       "username": "bob",
@@ -25,8 +38,16 @@
       "enabled": true,
       "firstName": "Bob",
       "lastName": "Viewer",
-      "credentials": [{ "type": "password", "value": "bob-password", "temporary": false }],
-      "groups": ["/engineering"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob-password",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/engineering"
+      ]
     },
     {
       "username": "dave",
@@ -35,7 +56,13 @@
       "enabled": true,
       "firstName": "Dave",
       "lastName": "Saml",
-      "credentials": [{ "type": "password", "value": "dave-password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dave-password",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "eve",
@@ -44,7 +71,13 @@
       "enabled": true,
       "firstName": "Eve",
       "lastName": "Outsider",
-      "credentials": [{ "type": "password", "value": "eve-password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "eve-password",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "unverified",
@@ -53,7 +86,31 @@
       "enabled": true,
       "firstName": "Una",
       "lastName": "Verified",
-      "credentials": [{ "type": "password", "value": "unverified-password", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "unverified-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "frank",
+      "email": "frank@sub.acme.test",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Frank",
+      "lastName": "Subsidiary",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "frank-password",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/engineering"
+      ]
     }
   ],
   "clients": [
@@ -68,9 +125,14 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "implicitFlowEnabled": false,
-      "redirectUris": ["http://127.0.0.1:*"],
+      "redirectUris": [
+        "http://127.0.0.1:*"
+      ],
       "webOrigins": [],
-      "attributes": { "pkce.code.challenge.method": "S256" },
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
       "protocolMappers": [
         {
           "name": "groups",
@@ -85,7 +147,8 @@
             "claim.name": "groups"
           }
         }
-      ]
+      ],
+      "frontchannelLogout": true
     }
   ]
 }

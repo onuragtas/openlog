@@ -7,6 +7,7 @@ import { acceptInvitation, authConfigQuery, lookupInvitation } from "@/api/accou
 import { setSelectedOrg } from "@/api/auth";
 import { ApiError } from "@/api/client";
 import { AuthLayout } from "@/components/settings/AuthLayout";
+import { InvitationSso } from "@/components/settings/InvitationSso";
 import { LoadingState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,7 @@ export function InvitePage() {
       if (!(err instanceof ApiError)) setError(t("login.unreachable"));
       else if (err.status === 401) setError(t("invite.wrongPassword"));
       else if (err.status === 404) setError(t("invite.invalid"));
+      else if (err.status === 409 && err.code === "failed_precondition") setError(err.message); // claimed domain: SSO required
       else if (err.status === 409) setError(t("invite.alreadyMember"));
       else setError(err.message);
     }
@@ -81,6 +83,18 @@ export function InvitePage() {
         </CardContent>
       ) : !info ? (
         failure(t("invite.invalid"))
+      ) : info.sso ? (
+        <InvitationSso
+          organizationName={info.organization_name}
+          email={info.email}
+          roleLabel={t(`settings.roles.${info.role}`)}
+          sso={info.sso}
+          loginLink={
+            <Link to="/login" className="text-sm text-primary underline-offset-4 hover:underline">
+              {t("invite.toLogin")}
+            </Link>
+          }
+        />
       ) : (
         <form onSubmit={submit} noValidate>
           <CardHeader>

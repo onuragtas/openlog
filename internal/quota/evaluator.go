@@ -3,7 +3,6 @@ package quota
 import (
 	"context"
 	"fmt"
-	"html"
 	"log/slog"
 	"math"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/onuragtas/openlog/internal/auth"
+	mailtemplates "github.com/onuragtas/openlog/internal/mail/templates"
 	"github.com/onuragtas/openlog/internal/usage"
 )
 
@@ -20,7 +20,7 @@ type EvalStore interface {
 	ListOrgPlans(ctx context.Context) ([]OrgPlan, error)
 	MemberCounts(ctx context.Context) (map[string]int64, error)
 	SaveStatuses(ctx context.Context, sts []StoredStatus) error
-	OwnerEmails(ctx context.Context, orgID string) ([]string, error)
+	Owners(ctx context.Context, orgID string) ([]Owner, error)
 	ClaimNotification(ctx context.Context, orgID string, periodStart time.Time, metric string, threshold int) (bool, error)
 	CompleteNotification(ctx context.Context, orgID string, periodStart time.Time, metric string, threshold, recipients int, sent bool) error
 }
@@ -144,12 +144,12 @@ func (e *Evaluator) notify(ctx context.Context, op OrgPlan, plan Plan, st Stored
 		if !claimed {
 			continue
 		}
-		owners, err := e.store.OwnerEmails(ctx, op.OrgID)
+		owners, err := e.store.Owners(ctx, op.OrgID)
 		sent := 0
 		if err == nil {
 			for _, to := range owners {
-				mail := UsageMail(op, plan, m, top, period, e.o.PublicURL, e.o.SaaS)
-				mail.To = to
+				mail := UsageMail(op, plan, m, top, period, e.o.PublicURL, e.o.SaaS, to.Locale)
+				mail.To = to.Email
 				if serr := e.o.Mailer.Send(ctx, mail); serr != nil {
 					e.o.Log.Warn("usage notification e-mail failed", "org_id", op.OrgID, "metric", m.Metric, "err", serr)
 					continue
@@ -187,28 +187,24 @@ func FormatMetricValue(metric string, v float64) string {
 	return fmt.Sprintf("%.0f", v)
 }
 
-// UsageMail builds the owner notification for metric m crossing threshold percent.
-func UsageMail(op OrgPlan, plan Plan, m MetricStatus, threshold int, period usage.Period, publicURL string, saas bool) auth.Mail {
-	label := MetricLabel(m.Metric)
-	subject := fmt.Sprintf("[openlog] %s: %s has reached %d%% of the %s plan limit", op.OrgName, label, threshold, plan.Name)
-	var b strings.Builder
-	fmt.Fprintf(&b, "Organization %q (%s) has used %s of %s %s this billing period (%s), %.1f%% of the limit of the %s plan.\n\n",
-		op.OrgName, op.TenantID, FormatMetricValue(m.Metric, m.Used), FormatMetricValue(m.Metric, m.Limit), strings.ToLower(label),
-		period.ID(), m.Percent, plan.Name)
-	switch {
-	case m.Metric == MetricIngestBytes && threshold >= 100 && saas && plan.Enforcement.HardIngestLimit:
-		fmt.Fprintf(&b, "New data is rejected once %.0f%% of the limit is used (grace %.0f%%) until the period ends on %s or the plan is upgraded.\n\n",
-			100+plan.Enforcement.GracePercent, plan.Enforcement.GracePercent, period.End.Format(time.DateOnly))
-	case threshold >= 100:
-		b.WriteString("The limit is exceeded. Consider upgrading the plan or reducing the data sent.\n\n")
-	default:
-		b.WriteString("Consider upgrading the plan or reducing the data sent before the limit is reached.\n\n")
-	}
+// Owner is a recipient of usage notifications.
+type Owner struct {
+	Email  string
+	Locale string // users.locale ("" = English)
+}
+
+// UsageMail builds the owner notification for metric m crossing threshold percent, in locale (internal/mail/templates).
+func UsageMail(op OrgPlan, plan Plan, m MetricStatus, threshold int, period usage.Period, publicURL string, saas bool, locale string) auth.Mail {
+	d := mailtemplates.UsageData{OrgName: op.OrgName, TenantID: op.TenantID, Metric: m.Metric,
+		Used: FormatMetricValue(m.Metric, m.Used), Limit: FormatMetricValue(m.Metric, m.Limit), Percent: m.Percent, Threshold: threshold,
+		PlanName: plan.Name, Period: period.ID(), PeriodEnd: period.End.Format(time.DateOnly), Exceeded: threshold >= 100,
+		HardBlock:    m.Metric == MetricIngestBytes && threshold >= 100 && saas && plan.Enforcement.HardIngestLimit,
+		BlockPercent: 100 + plan.Enforcement.GracePercent, GracePercent: plan.Enforcement.GracePercent}
 	if publicURL != "" {
-		fmt.Fprintf(&b, "Usage details: %s/settings/usage\n", strings.TrimRight(publicURL, "/"))
+		d.Link = strings.TrimRight(publicURL, "/") + "/settings/usage"
 	}
-	text := b.String()
-	return auth.Mail{Subject: subject, Text: text, HTML: "<pre style=\"font-family:sans-serif;white-space:pre-wrap\">" + html.EscapeString(text) + "</pre>"}
+	msg := mailtemplates.Usage(locale, d)
+	return auth.Mail{Subject: msg.Subject, Text: msg.Text, HTML: msg.HTML}
 }
 
 // Run evaluates every Interval until ctx is done (leader task).

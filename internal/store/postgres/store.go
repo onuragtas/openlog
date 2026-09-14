@@ -104,8 +104,8 @@ func insertUser(ctx context.Context, q pgx.Tx, u *auth.User) error {
 	}
 	u.CreatedAt = ts(u.CreatedAt)
 	// email_verified_at is written explicitly: NULL = unverified sign-up (the column default is for older binaries).
-	return q.QueryRow(ctx, `INSERT INTO users (email, name, password_hash, created_at, updated_at, email_verified_at)
-		VALUES ($1, $2, $3, $4, $4, $5) RETURNING id::text`, u.Email, u.Name, hash, u.CreatedAt, u.EmailVerifiedAt).Scan(&u.ID)
+	return q.QueryRow(ctx, `INSERT INTO users (email, name, password_hash, created_at, updated_at, email_verified_at, locale)
+		VALUES ($1, $2, $3, $4, $4, $5, $6) RETURNING id::text`, u.Email, u.Name, hash, u.CreatedAt, u.EmailVerifiedAt, u.Locale).Scan(&u.ID)
 }
 
 func (s *Store) CreateOrganization(ctx context.Context, org *auth.Organization, owner *auth.User) error {
@@ -187,6 +187,14 @@ func (s *Store) SetUserLastLogin(ctx context.Context, userID string, at time.Tim
 		return auth.ErrNotFound
 	}
 	return affected(s.pool.Exec(ctx, `UPDATE users SET last_login_at = $2 WHERE id = $1`, userID, at))
+}
+
+// SetUserEmail changes the address (users.email UNIQUE → ErrAlreadyExists).
+func (s *Store) SetUserEmail(ctx context.Context, userID, email string) error {
+	if !validID(userID) {
+		return auth.ErrNotFound
+	}
+	return affected(s.pool.Exec(ctx, `UPDATE users SET email = $2, updated_at = now() WHERE id = $1`, userID, email))
 }
 
 // ---- memberships ----
@@ -584,18 +592,18 @@ func (s *Store) CreateInvitation(ctx context.Context, inv *auth.Invitation) erro
 			inv.OrgID, inv.Email, inv.CreatedAt); err != nil {
 			return err
 		}
-		return tx.QueryRow(ctx, `INSERT INTO invitations (org_id, email, role, token_hash, invited_by, created_at, expires_at)
-			VALUES ($1, $2, $3, $4, $5::uuid, $6, $7) RETURNING id::text`,
-			inv.OrgID, inv.Email, string(inv.Role), inv.TokenHash, nullID(inv.InvitedBy), inv.CreatedAt, inv.ExpiresAt).Scan(&inv.ID)
+		return tx.QueryRow(ctx, `INSERT INTO invitations (org_id, email, role, token_hash, invited_by, created_at, expires_at, locale)
+			VALUES ($1, $2, $3, $4, $5::uuid, $6, $7, $8) RETURNING id::text`,
+			inv.OrgID, inv.Email, string(inv.Role), inv.TokenHash, nullID(inv.InvitedBy), inv.CreatedAt, inv.ExpiresAt, inv.Locale).Scan(&inv.ID)
 	})
 }
 
-const invitationCols = `i.id::text, i.org_id::text, i.email, i.role, i.token_hash, coalesce(i.invited_by::text, ''), i.created_at, i.expires_at, i.accepted_at, i.revoked_at, i.last_sent_at, i.send_count`
+const invitationCols = `i.id::text, i.org_id::text, i.email, i.role, i.token_hash, coalesce(i.invited_by::text, ''), i.created_at, i.expires_at, i.accepted_at, i.revoked_at, i.last_sent_at, i.send_count, i.locale`
 
 func scanInvitation(r pgx.Row, extra ...any) (auth.Invitation, error) {
 	var i auth.Invitation
 	var role string
-	dest := append([]any{&i.ID, &i.OrgID, &i.Email, &role, &i.TokenHash, &i.InvitedBy, &i.CreatedAt, &i.ExpiresAt, &i.AcceptedAt, &i.RevokedAt, &i.LastSentAt, &i.SendCount}, extra...)
+	dest := append([]any{&i.ID, &i.OrgID, &i.Email, &role, &i.TokenHash, &i.InvitedBy, &i.CreatedAt, &i.ExpiresAt, &i.AcceptedAt, &i.RevokedAt, &i.LastSentAt, &i.SendCount, &i.Locale}, extra...)
 	err := r.Scan(dest...)
 	i.Role = auth.Role(role)
 	return i, err
@@ -751,8 +759,8 @@ func (s *Store) CreateEmailVerification(ctx context.Context, v *auth.EmailVerifi
 		return auth.ErrNotFound
 	}
 	v.CreatedAt = ts(v.CreatedAt)
-	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO email_verifications (user_id, email, token_hash, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id::text`, v.UserID, v.Email, v.TokenHash, v.CreatedAt, v.ExpiresAt).Scan(&v.ID))
+	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO email_verifications (user_id, email, token_hash, created_at, expires_at, locale)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id::text`, v.UserID, v.Email, v.TokenHash, v.CreatedAt, v.ExpiresAt, v.Locale).Scan(&v.ID))
 }
 
 func (s *Store) ConsumeEmailVerification(ctx context.Context, tokenHash []byte, at time.Time) (auth.User, error) {

@@ -58,7 +58,8 @@ services:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - mc alias set l http://minio:9000 openlog-tiered openlog-tiered-secret && mc mb -p l/openlog-tiered
+      # openlog-backup: target of the BACKUP ... TO S3 / RESTORE phase (TIEREDTEST_BACKUP=1), separate from the data bucket.
+      - mc alias set l http://minio:9000 openlog-tiered openlog-tiered-secret && mc mb -p l/openlog-tiered l/openlog-backup
     depends_on:
       minio:
         condition: service_healthy

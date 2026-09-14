@@ -2,6 +2,7 @@ package sso
 
 import (
 	"context"
+	"crypto"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	jose "github.com/go-jose/go-jose/v4"
 	"golang.org/x/oauth2"
 )
 
@@ -37,6 +39,7 @@ type oidcMetadata struct {
 	TokenURL            string   `json:"token_endpoint"`
 	JWKSURL             string   `json:"jwks_uri"`
 	UserInfoURL         string   `json:"userinfo_endpoint"`
+	EndSessionURL       string   `json:"end_session_endpoint"`
 	Algs                []string `json:"id_token_signing_alg_values_supported"`
 	CodeChallengeMethod []string `json:"code_challenge_methods_supported"`
 }
@@ -62,23 +65,28 @@ func (s *Service) oidcClient(ctx context.Context, c Connection) (*oidcClient, er
 	if _, err := ParseIdPURL(c.OIDC.Issuer, s.cfg.AllowPrivateNetworks); err != nil {
 		return nil, fmt.Errorf("issuer: %w", err)
 	}
-	// Background context: the provider keeps it (only its HTTP client) for later JWKS refreshes.
-	dctx, cancel := context.WithTimeout(s.clientContext(context.Background()), s.cfg.HTTPTimeout)
-	defer cancel()
-	go func() {
-		select {
-		case <-ctx.Done():
-			cancel()
-		case <-dctx.Done():
+	// The background refresh (refresh.go) stores discovery and JWKS; a fresh copy avoids the round trips on the
+	// sign-in path of every pod. Unknown key ids still fall back to the provider's JWKS.
+	provider, meta, static := s.cachedProvider(c, now)
+	if provider == nil {
+		// Background context: the provider keeps it (only its HTTP client) for later JWKS refreshes.
+		dctx, cancel := context.WithTimeout(s.clientContext(context.Background()), s.cfg.HTTPTimeout)
+		defer cancel()
+		go func() {
+			select {
+			case <-ctx.Done():
+				cancel()
+			case <-dctx.Done():
+			}
+		}()
+		var err error
+		provider, err = oidc.NewProvider(dctx, c.OIDC.Issuer)
+		if err != nil {
+			return nil, fmt.Errorf("discovery: %w", err)
 		}
-	}()
-	provider, err := oidc.NewProvider(dctx, c.OIDC.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("discovery: %w", err)
-	}
-	var meta oidcMetadata
-	if err := provider.Claims(&meta); err != nil {
-		return nil, fmt.Errorf("discovery: %w", err)
+		if err := provider.Claims(&meta); err != nil {
+			return nil, fmt.Errorf("discovery: %w", err)
+		}
 	}
 	algs := []string{oidc.RS256} // the OpenID Connect default when the provider does not list any
 	if len(meta.Algs) > 0 {
@@ -93,11 +101,18 @@ func (s *Service) oidcClient(ctx context.Context, c Connection) (*oidcClient, er
 		}
 	}
 	skew := s.cfg.ClockSkew
-	verifier := provider.VerifierContext(s.clientContext(context.Background()), &oidc.Config{
+	vcfg := &oidc.Config{
 		ClientID: c.OIDC.ClientID, SupportedSigningAlgs: algs,
 		// exp is checked against now − skew (tolerates a slightly fast IdP clock); iat is checked below.
 		Now: func() time.Time { return s.now().Add(-skew) },
-	})
+	}
+	var verifier *oidc.IDTokenVerifier
+	if static != nil {
+		remote := oidc.NewRemoteKeySet(s.clientContext(context.Background()), meta.JWKSURL)
+		verifier = oidc.NewVerifier(meta.Issuer, cachedKeySet{static: static, remote: remote}, vcfg)
+	} else {
+		verifier = provider.VerifierContext(s.clientContext(context.Background()), vcfg)
+	}
 	oc = &oidcClient{provider: provider, verifier: verifier, algs: algs, meta: meta, created: now}
 	s.mu.Lock()
 	for k := range s.providers { // drop older versions of this connection
@@ -108,6 +123,69 @@ func (s *Service) oidcClient(ctx context.Context, c Connection) (*oidcClient, er
 	s.providers[key] = oc
 	s.mu.Unlock()
 	return oc, nil
+}
+
+// forgetProvider drops the cached provider of a connection (deleted, or refreshed documents).
+func (s *Service) forgetProvider(connectionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k := range s.providers {
+		if strings.HasPrefix(k, connectionID+"|") {
+			delete(s.providers, k)
+		}
+	}
+}
+
+// cachedKeySet verifies with the refreshed JWKS first and falls back to the provider's JWKS (key rotation).
+type cachedKeySet struct {
+	static *oidc.StaticKeySet
+	remote oidc.KeySet
+}
+
+func (k cachedKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
+	if payload, err := k.static.VerifySignature(ctx, jwt); err == nil {
+		return payload, nil
+	}
+	return k.remote.VerifySignature(ctx, jwt)
+}
+
+// cachedProvider builds the provider from the discovery document and JWKS stored by the background refresh when
+// they belong to the connection's issuer and are younger than providerTTL; nil otherwise.
+func (s *Service) cachedProvider(c Connection, now time.Time) (*oidc.Provider, oidcMetadata, *oidc.StaticKeySet) {
+	var meta oidcMetadata
+	cache := c.Refresh.Cache
+	if cache.FetchedAt == nil || now.Sub(*cache.FetchedAt) >= providerTTL || cache.Issuer != c.OIDC.Issuer || len(cache.OIDCDiscovery) == 0 {
+		return nil, meta, nil
+	}
+	if err := json.Unmarshal(cache.OIDCDiscovery, &meta); err != nil || meta.Issuer != c.OIDC.Issuer || meta.AuthURL == "" || meta.TokenURL == "" {
+		return nil, oidcMetadata{}, nil
+	}
+	pc := oidc.ProviderConfig{IssuerURL: meta.Issuer, AuthURL: meta.AuthURL, TokenURL: meta.TokenURL, UserInfoURL: meta.UserInfoURL,
+		JWKSURL: meta.JWKSURL, Algorithms: meta.Algs}
+	provider := pc.NewProvider(s.clientContext(context.Background()))
+	keys, err := parseJWKS(cache.OIDCJWKS)
+	if err != nil || len(keys) == 0 {
+		return provider, meta, nil
+	}
+	return provider, meta, &oidc.StaticKeySet{PublicKeys: keys}
+}
+
+// parseJWKS returns the signature public keys of a JWKS.
+func parseJWKS(b []byte) ([]crypto.PublicKey, error) {
+	var set jose.JSONWebKeySet
+	if err := json.Unmarshal(b, &set); err != nil {
+		return nil, err
+	}
+	var out []crypto.PublicKey
+	for _, k := range set.Keys {
+		if k.Use != "" && k.Use != "sig" {
+			continue
+		}
+		if k.IsPublic() && k.Valid() {
+			out = append(out, k.Key)
+		}
+	}
+	return out, nil
 }
 
 func oidcScopes(c Connection) []string {
@@ -173,6 +251,7 @@ func (s *Service) oidcIdentity(ctx context.Context, c Connection, st LoginState,
 		return Identity{}, err
 	}
 	id := claimsIdentity(c, claims)
+	id.IDToken = raw
 	// Some providers put e-mail or groups only into the UserInfo response.
 	if (id.Email == "" || !id.GroupsPresent) && oc.meta.UserInfoURL != "" {
 		if ui, err := oc.provider.UserInfo(cctx, oauth2.StaticTokenSource(tok)); err == nil && ui.Subject == id.Subject {
@@ -270,6 +349,7 @@ func claimsIdentity(c Connection, claims map[string]any) Identity {
 		id.Name = strings.TrimSpace(claimString(claims, "given_name") + " " + claimString(claims, "family_name"))
 	}
 	id.Groups, id.GroupsPresent = claimStrings(claims, attrOr(c.GroupsAttribute, "groups"))
+	id.SessionIndex = claimString(claims, "sid")
 	return id
 }
 

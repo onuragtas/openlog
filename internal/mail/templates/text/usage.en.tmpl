@@ -1,0 +1,10 @@
+{{define "subject"}}[openlog] {{.OrgName}}: {{.MetricLabel}} has reached {{.Threshold}}% of the {{.PlanName}} plan limit{{end}}
+
+{{define "text"}}
+Organization "{{.OrgName}}" ({{.TenantID}}) has used {{.Used}} of {{.Limit}} {{lower .MetricLabel}} this billing period ({{.Period}}), {{printf "%.1f" .Percent}}% of the limit of the {{.PlanName}} plan.
+
+{{if .HardBlock}}New data is rejected once {{printf "%.0f" .BlockPercent}}% of the limit is used (grace {{printf "%.0f" .GracePercent}}%) until the period ends on {{.PeriodEnd}} or the plan is upgraded.{{else if .Exceeded}}The limit is exceeded. Consider upgrading the plan or reducing the data sent.{{else}}Consider upgrading the plan or reducing the data sent before the limit is reached.{{end}}
+{{with .Link}}
+Usage details: {{.}}
+{{end}}
+{{end}}

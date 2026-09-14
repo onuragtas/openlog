@@ -1,0 +1,9 @@
+{{define "subject"}}[openlog] {{.OrgName}} organizasyonuna davet edildiniz{{end}}
+
+{{define "text"}}
+{{if .Inviter}}{{.Inviter}}{{else}}Bir yönetici{{end}} sizi openlog üzerindeki "{{.OrgName}}" organizasyonuna {{.RoleLabel}} rolüyle davet etti.
+
+Davetin geçerliliği {{date .ExpiresAt}} tarihinde sona erer. Bu daveti beklemiyorsanız bu e-postayı dikkate almayın.
+
+{{.Link}}
+{{end}}

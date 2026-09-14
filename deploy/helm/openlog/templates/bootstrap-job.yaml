@@ -61,6 +61,16 @@ spec:
                   name: {{ include "openlog.secretName" . }}
                   key: {{ include "openlog.secret.bootstrapLicenseKeyKey" . }}
                   optional: true
+            - name: OPENLOG_BOOTSTRAP_OWNER_NAME
+              value: {{ $v.ownerName | default "" | quote }}
+            - name: OPENLOG_BOOTSTRAP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openlog.secretName" . }}
+                  key: {{ include "openlog.secret.keyName" (dict "root" . "existing" ($v.apiKeyKey | default "bootstrap-api-key") "chart" "bootstrap-api-key") }}
+                  optional: true
+            {{- /* Keys are stored with the same hashing as ingest and api (D-044). */}}
+            {{- include "openlog.keyHashEnv" . | nindent 12 }}
           resources:
             {{- toYaml $v.resources | nindent 12 }}
           securityContext:

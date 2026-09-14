@@ -81,8 +81,15 @@ describe("oql-result", () => {
 
   it("builds bar items, pie slices and heatmaps", () => {
     const facets = result({ kind: "facets", rows: [{ facets: ["a"], values: [30] }, { facets: ["b"], values: [10] }, { facets: ["c"], values: [0] }] });
-    expect(barItems(facets)).toEqual([{ label: "a", value: 30, previous: null }, { label: "b", value: 10, previous: null }, { label: "c", value: 0, previous: null }]);
-    expect(pieSlices(facets, "other")).toEqual([{ label: "a", value: 30, fraction: 0.75 }, { label: "b", value: 10, fraction: 0.25 }]);
+    expect(barItems(facets)).toEqual([
+      { label: "a", value: 30, previous: null, facets: ["a"] },
+      { label: "b", value: 10, previous: null, facets: ["b"] },
+      { label: "c", value: 0, previous: null, facets: ["c"] },
+    ]);
+    expect(pieSlices(facets, "other")).toEqual([
+      { label: "a", value: 30, fraction: 0.75, facets: ["a"] },
+      { label: "b", value: 10, fraction: 0.25, facets: ["b"] },
+    ]);
     expect(pieSlices(result({ kind: "facets", rows: [1, 2, 3].map((n) => ({ facets: [`f${n}`], values: [n] })) }), "other", 2).map((s) => s.label)).toEqual(["f3", "f2", "other"]);
 
     const hist = result({ kind: "histogram", buckets: [{ from: 0, to: 25, count: 17 }, { from: 25, to: 50, count: 3 }] });
@@ -97,7 +104,7 @@ describe("oql-result", () => {
       ],
     });
     expect(heatmapModel(ts)).toEqual({
-      rows: [{ label: "x", cells: [1, 5] }, { label: "y", cells: [null, 2] }],
+      rows: [{ label: "x", cells: [1, 5], facets: ["x"] }, { label: "y", cells: [null, 2], facets: ["y"] }],
       columns: [{ key: "1000", time: 1000 }, { key: "2000", time: 2000 }],
       max: 5,
     });

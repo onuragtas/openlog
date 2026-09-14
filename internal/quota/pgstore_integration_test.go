@@ -105,7 +105,7 @@ func TestPGStorePlansStatusNotifications(t *testing.T) {
 	if err != nil || counts[orgID] != 1 {
 		t.Errorf("member counts %v %v", counts[orgID], err)
 	}
-	if owners, err := s.OwnerEmails(ctx, orgID); err != nil || len(owners) != 1 {
+	if owners, err := s.Owners(ctx, orgID); err != nil || len(owners) != 1 || owners[0].Locale != "" {
 		t.Errorf("owners %v %v", owners, err)
 	}
 

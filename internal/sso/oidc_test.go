@@ -36,6 +36,7 @@ type fakeIdP struct {
 	codes  map[string]fakeCode // code → pending authorization
 	claims map[string]any      // overriding ID token claims for the next tokens
 	jwks   int                 // JWKS fetches
+	disco  int                 // discovery fetches
 }
 
 type fakeCode struct {
@@ -51,10 +52,11 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
 		f.mu.Lock()
 		algs := f.algs
+		f.disco++
 		f.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"issuer": f.srv.URL, "authorization_endpoint": f.srv.URL + "/auth", "token_endpoint": f.srv.URL + "/token",
-			"jwks_uri": f.srv.URL + "/jwks", "userinfo_endpoint": f.srv.URL + "/userinfo",
+			"jwks_uri": f.srv.URL + "/jwks", "userinfo_endpoint": f.srv.URL + "/userinfo", "end_session_endpoint": f.srv.URL + "/logout",
 			"id_token_signing_alg_values_supported": algs, "code_challenge_methods_supported": []string{"S256"},
 		})
 	})
@@ -363,7 +365,7 @@ func TestOIDCLoginFlow(t *testing.T) {
 		t.Fatalf("start without verified domain: %v", err)
 	}
 	env.verifyDomain(t, "example.com")
-	if _, err := env.sso.ReplaceRoleMappings(ctx, env.ownerPrincipal(), []sso.RoleMapping{{Group: "admins", Role: auth.RoleAdmin}}, auth.ClientMeta{}); err != nil {
+	if _, err := env.sso.ReplaceRoleMappings(ctx, env.ownerPrincipal(), "", []sso.RoleMapping{{Group: "admins", Role: auth.RoleAdmin}}, auth.ClientMeta{}); err != nil {
 		t.Fatal(err)
 	}
 	d, err := env.sso.Discover(ctx, "Alice@Example.com", auth.ClientMeta{})
@@ -485,7 +487,7 @@ func TestSessionPolicyAndEnforcement(t *testing.T) {
 	}
 
 	// Disabling the connection ends SSO sessions.
-	c, _ = env.store.GetConnection(ctx, env.org.ID)
+	c, _ = env.store.GetConnection(ctx, env.org.ID, "")
 	c.Enabled = false
 	if err := env.store.UpdateConnection(ctx, &c); err != nil {
 		t.Fatal(err)
@@ -508,28 +510,28 @@ func TestSessionPolicyAndEnforcement(t *testing.T) {
 
 	// Enforcement: lockout safeguards.
 	owner := env.ownerPrincipal()
-	if _, err := env.sso.UpdateEnforcement(ctx, owner, true, []string{env.owner.ID}, auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
+	if _, err := env.sso.UpdateEnforcement(ctx, owner, "", true, []string{env.owner.ID}, auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
 		t.Fatalf("enforce without test: %v", err)
 	}
 	if err := env.store.RecordTest(ctx, c.ID, c.ConfigVersion, true, "", nil, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.sso.UpdateEnforcement(ctx, owner, true, nil, auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
+	if _, err := env.sso.UpdateEnforcement(ctx, owner, "", true, nil, auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
 		t.Fatalf("enforce without break-glass: %v", err)
 	}
-	if _, err := env.sso.UpdateEnforcement(ctx, owner, true, []string{"7c1e2d9a-3b4f-4e5a-8b6c-000000000009"}, auth.ClientMeta{}); !errors.Is(err, auth.ErrInvalidArgument) {
+	if _, err := env.sso.UpdateEnforcement(ctx, owner, "", true, []string{"7c1e2d9a-3b4f-4e5a-8b6c-000000000009"}, auth.ClientMeta{}); !errors.Is(err, auth.ErrInvalidArgument) {
 		t.Fatalf("enforce with a non-owner break-glass: %v", err)
 	}
 	adminP := *owner
 	adminP.Role = auth.RoleAdmin
-	if _, err := env.sso.UpdateEnforcement(ctx, &adminP, true, []string{env.owner.ID}, auth.ClientMeta{}); !errors.Is(err, auth.ErrPermissionDenied) {
+	if _, err := env.sso.UpdateEnforcement(ctx, &adminP, "", true, []string{env.owner.ID}, auth.ClientMeta{}); !errors.Is(err, auth.ErrPermissionDenied) {
 		t.Fatalf("admin changes enforcement: %v", err)
 	}
-	if _, err := env.sso.UpdateEnforcement(ctx, owner, true, []string{env.owner.ID}, auth.ClientMeta{}); err != nil {
+	if _, err := env.sso.UpdateEnforcement(ctx, owner, "", true, []string{env.owner.ID}, auth.ClientMeta{}); err != nil {
 		t.Fatalf("enforce: %v", err)
 	}
 	// A config change while enforced keeps enforcement, but disabling/deleting is refused.
-	if err := env.sso.DeleteConnection(ctx, owner, auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
+	if err := env.sso.DeleteConnection(ctx, owner, "", auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
 		t.Fatalf("delete while enforced: %v", err)
 	}
 
@@ -555,7 +557,7 @@ func TestSessionPolicyAndEnforcement(t *testing.T) {
 		t.Fatalf("break-glass session: %+v %v", p, err)
 	}
 	// Without the break-glass entry the owner's password session loses the organization immediately.
-	c, _ = env.store.GetConnection(ctx, env.org.ID)
+	c, _ = env.store.GetConnection(ctx, env.org.ID, "")
 	c.BreakGlassUserIDs = []string{}
 	_ = env.store.UpdateConnection(ctx, &c)
 	if _, err := authReq(res.Token, env.org.ID); !errors.Is(err, auth.ErrPermissionDenied) {

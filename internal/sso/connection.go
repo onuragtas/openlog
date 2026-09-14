@@ -21,7 +21,7 @@ type Check struct {
 	Message string
 }
 
-// ConnectionInput is what an administrator saves (PUT /api/v1/sso/connection).
+// ConnectionInput is what an administrator saves (POST /api/v1/sso/connections, PUT …/connections/{id}).
 type ConnectionInput struct {
 	Protocol Protocol
 	Name     string
@@ -47,13 +47,19 @@ type ConnectionInput struct {
 	JITEnabled      *bool // nil = true
 	DefaultRole     auth.Role
 	SessionMaxAge   time.Duration
+
+	// LogoutRedirectAllowlist: relative UI paths single logout may return to besides /login.
+	LogoutRedirectAllowlist []string
+	// AllowExternalInvitations: nil keeps the stored value (true for a new connection).
+	AllowExternalInvitations *bool
 }
 
 const (
-	minSessionMaxAge = 5 * time.Minute
-	maxSessionMaxAge = 30 * 24 * time.Hour
-	maxBreakGlass    = 10
-	maxRoleMappings  = 200
+	minSessionMaxAge     = 5 * time.Minute
+	maxSessionMaxAge     = 30 * 24 * time.Hour
+	maxBreakGlass        = 10
+	maxRoleMappings      = 200
+	maxConnectionsPerOrg = 10
 )
 
 func cleanText(v, field string, max int, required bool) (string, error) {
@@ -76,45 +82,116 @@ func assignableRole(r auth.Role) bool {
 	return r == auth.RoleAdmin || r == auth.RoleMember || r == auth.RoleViewer
 }
 
-// GetConnection returns the organization's connection (admin+); auth.ErrNotFound when there is none.
-func (s *Service) GetConnection(ctx context.Context, p *auth.Principal) (Connection, error) {
+var errNoConnection = notFound("single sign-on is not configured")
+
+// ListConnections returns the organization's connections, the default connection first (admin+).
+func (s *Service) ListConnections(ctx context.Context, p *auth.Principal) ([]Connection, error) {
+	if err := s.gate(p, auth.RoleAdmin); err != nil {
+		return nil, err
+	}
+	cs, err := s.store.ListConnections(ctx, p.OrgID)
+	if err != nil {
+		return nil, s.fail(err)
+	}
+	return cs, nil
+}
+
+// GetConnection returns connection id of the organization, id "" = the default connection (admin+);
+// auth.ErrNotFound when there is none.
+func (s *Service) GetConnection(ctx context.Context, p *auth.Principal, id string) (Connection, error) {
 	if err := s.gate(p, auth.RoleAdmin); err != nil {
 		return Connection{}, err
 	}
-	c, err := s.store.GetConnection(ctx, p.OrgID)
+	c, err := s.store.GetConnection(ctx, p.OrgID, id)
 	if err != nil {
 		if errors.Is(err, auth.ErrNotFound) {
-			return Connection{}, notFound("single sign-on is not configured")
+			return Connection{}, errNoConnection
 		}
 		return Connection{}, s.fail(err)
 	}
 	return c, nil
 }
 
-// SaveConnection creates or replaces the organization's connection (admin+). Every save increases the
-// configuration version, so enforcement needs a new successful test after a change.
+// SaveConnection updates the organization's default connection, or creates it when there is none (admin+; the
+// single-connection API PUT /api/v1/sso/connection).
 func (s *Service) SaveConnection(ctx context.Context, p *auth.Principal, in ConnectionInput, meta auth.ClientMeta) (Connection, error) {
+	if err := s.gate(p, auth.RoleAdmin); err != nil {
+		return Connection{}, err
+	}
+	existing, err := s.store.GetConnection(ctx, p.OrgID, "")
+	if errors.Is(err, auth.ErrNotFound) {
+		return s.CreateConnection(ctx, p, in, meta)
+	}
+	if err != nil {
+		return Connection{}, s.fail(err)
+	}
+	return s.UpdateConnection(ctx, p, existing.ID, in, meta)
+}
+
+// CreateConnection adds a connection to the organization (admin+, at most 10).
+func (s *Service) CreateConnection(ctx context.Context, p *auth.Principal, in ConnectionInput, meta auth.ClientMeta) (Connection, error) {
 	if err := s.gate(p, auth.RoleAdmin); err != nil {
 		return Connection{}, err
 	}
 	if !s.Available() {
 		return Connection{}, errUnavailableNoURL
 	}
-	existing, err := s.store.GetConnection(ctx, p.OrgID)
-	isNew := errors.Is(err, auth.ErrNotFound)
-	if err != nil && !isNew {
+	cs, err := s.store.ListConnections(ctx, p.OrgID)
+	if err != nil {
 		return Connection{}, s.fail(err)
+	}
+	if len(cs) >= maxConnectionsPerOrg {
+		return Connection{}, precondition("an organization can have at most %d single sign-on connections", maxConnectionsPerOrg)
+	}
+	now := s.now()
+	c := Connection{ID: uuid.NewString(), OrgID: p.OrgID, CreatedBy: p.UserID, CreatedAt: now, AllowExternalInvitations: true}
+	if err := s.applyInput(ctx, &c, Connection{}, true, in, now); err != nil {
+		return Connection{}, err
+	}
+	c.UpdatedBy, c.UpdatedAt = p.UserID, now
+	if err := s.store.CreateConnection(ctx, &c); err != nil {
+		return Connection{}, s.fail(err)
+	}
+	s.auth.Audit(ctx, p, meta, "sso.connection.create", "sso_connection", c.ID, map[string]any{"protocol": c.Protocol, "enabled": c.Enabled,
+		"jit": c.JITEnabled, "default_role": c.DefaultRole, "version": c.ConfigVersion, "name": c.Name})
+	return c, nil
+}
+
+// UpdateConnection replaces the settings of a connection (admin+). Every save increases the configuration version,
+// so enforcement needs a new successful test after a change.
+func (s *Service) UpdateConnection(ctx context.Context, p *auth.Principal, id string, in ConnectionInput, meta auth.ClientMeta) (Connection, error) {
+	existing, err := s.GetConnection(ctx, p, id)
+	if err != nil {
+		return Connection{}, err
+	}
+	if !s.Available() {
+		return Connection{}, errUnavailableNoURL
+	}
+	if id == "" {
+		return Connection{}, invalid("connection id is required")
+	}
+	if existing.Enforce && !in.Enabled {
+		return Connection{}, precondition("turn off single sign-on enforcement before disabling the connection")
 	}
 	now := s.now()
 	c := existing
-	if isNew {
-		c = Connection{ID: uuid.NewString(), OrgID: p.OrgID, CreatedBy: p.UserID, CreatedAt: now, ConfigVersion: 0}
-	}
-	if !isNew && existing.Enforce && !in.Enabled {
-		return Connection{}, precondition("turn off single sign-on enforcement before disabling the connection")
-	}
-	if c.Name, err = cleanText(in.Name, "name", 200, false); err != nil {
+	if err := s.applyInput(ctx, &c, existing, false, in, now); err != nil {
 		return Connection{}, err
+	}
+	c.UpdatedBy, c.UpdatedAt = p.UserID, now
+	if err := s.store.UpdateConnection(ctx, &c); err != nil {
+		return Connection{}, s.fail(err)
+	}
+	s.auth.Audit(ctx, p, meta, "sso.connection.update", "sso_connection", c.ID, map[string]any{"protocol": c.Protocol, "enabled": c.Enabled,
+		"jit": c.JITEnabled, "default_role": c.DefaultRole, "version": c.ConfigVersion, "name": c.Name})
+	return c, nil
+}
+
+// applyInput validates in and writes it onto c (existing: the stored connection of an update).
+func (s *Service) applyInput(ctx context.Context, c *Connection, existing Connection, isNew bool, in ConnectionInput, now time.Time) error {
+	var err error
+	if c.Name, err = cleanText(in.Name, "name", 200, false); err != nil {
+		return err
 	}
 	for _, f := range []struct {
 		dst  *string
@@ -123,7 +200,7 @@ func (s *Service) SaveConnection(ctx context.Context, p *auth.Principal, in Conn
 	}{{&c.EmailAttribute, in.EmailAttribute, "email_attribute"}, {&c.NameAttribute, in.NameAttribute, "name_attribute"},
 		{&c.GroupsAttribute, in.GroupsAttribute, "groups_attribute"}} {
 		if *f.dst, err = cleanText(f.v, f.name, 256, false); err != nil {
-			return Connection{}, err
+			return err
 		}
 	}
 	c.DefaultRole = in.DefaultRole
@@ -131,47 +208,56 @@ func (s *Service) SaveConnection(ctx context.Context, p *auth.Principal, in Conn
 		c.DefaultRole = auth.RoleViewer
 	}
 	if !assignableRole(c.DefaultRole) {
-		return Connection{}, invalid("default_role must be admin, member or viewer (owners are managed in openlog)")
+		return invalid("default_role must be admin, member or viewer (owners are managed in openlog)")
 	}
 	if in.SessionMaxAge != 0 && (in.SessionMaxAge < minSessionMaxAge || in.SessionMaxAge > maxSessionMaxAge) {
-		return Connection{}, invalid("session_max_age_seconds must be 0 or between 300 and 2592000")
+		return invalid("session_max_age_seconds must be 0 or between 300 and 2592000")
 	}
 	c.SessionMaxAge = in.SessionMaxAge
 	c.JITEnabled = in.JITEnabled == nil || *in.JITEnabled
 	c.Enabled = in.Enabled
-
+	if in.AllowExternalInvitations != nil {
+		c.AllowExternalInvitations = *in.AllowExternalInvitations
+	}
+	if c.LogoutRedirectAllowlist, err = cleanPaths(in.LogoutRedirectAllowlist, "logout_redirect_allowlist"); err != nil {
+		return err
+	}
 	switch in.Protocol {
 	case ProtocolOIDC:
-		if err := s.applyOIDC(&c, existing, isNew, in); err != nil {
-			return Connection{}, err
+		if err := s.applyOIDC(c, existing, isNew, in); err != nil {
+			return err
 		}
 	case ProtocolSAML:
-		if err := s.applySAML(ctx, &c, existing, isNew, in, now); err != nil {
-			return Connection{}, err
+		if err := s.applySAML(ctx, c, existing, isNew, in, now); err != nil {
+			return err
 		}
 	default:
-		return Connection{}, invalid("protocol must be oidc or saml")
+		return invalid("protocol must be oidc or saml")
 	}
 	c.Protocol = in.Protocol
 	c.ConfigVersion++
-	c.UpdatedBy, c.UpdatedAt = p.UserID, now
-	if isNew {
-		if err := s.store.CreateConnection(ctx, &c); err != nil {
-			if errors.Is(err, auth.ErrAlreadyExists) {
-				return Connection{}, &auth.Error{Code: auth.CodeAlreadyExists, Message: "the organization already has a connection"}
-			}
-			return Connection{}, s.fail(err)
+	return nil
+}
+
+// cleanPaths validates an allowlist of relative UI paths (at most 20).
+func cleanPaths(in []string, field string) ([]string, error) {
+	if len(in) > 20 {
+		return nil, invalid("at most 20 %s entries", field)
+	}
+	var out []string
+	for _, pth := range in {
+		pth = strings.TrimSpace(pth)
+		if pth == "" {
+			continue
 		}
-	} else if err := s.store.UpdateConnection(ctx, &c); err != nil {
-		return Connection{}, s.fail(err)
+		if validRedirect(pth) != pth {
+			return nil, invalid("%s: %q must be a relative UI path such as /hosts", field, pth)
+		}
+		if !slices.Contains(out, pth) {
+			out = append(out, pth)
+		}
 	}
-	action := "sso.connection.update"
-	if isNew {
-		action = "sso.connection.create"
-	}
-	s.auth.Audit(ctx, p, meta, action, "sso_connection", c.ID, map[string]any{"protocol": c.Protocol, "enabled": c.Enabled,
-		"jit": c.JITEnabled, "default_role": c.DefaultRole, "version": c.ConfigVersion})
-	return c, nil
+	return out, nil
 }
 
 func (s *Service) applyOIDC(c *Connection, existing Connection, isNew bool, in ConnectionInput) error {
@@ -245,22 +331,12 @@ func (s *Service) applySAML(ctx context.Context, c *Connection, existing Connect
 	if err != nil {
 		return invalid("%v", err)
 	}
-	if len(in.RelayStateAllowlist) > 20 {
-		return invalid("at most 20 relay_state_allowlist entries")
-	}
-	var allow []string
-	for _, pth := range in.RelayStateAllowlist {
-		pth = strings.TrimSpace(pth)
-		if pth == "" {
-			continue
-		}
-		if validRedirect(pth) != pth {
-			return invalid("relay_state_allowlist: %q must be a relative UI path such as /hosts", pth)
-		}
-		allow = append(allow, pth)
+	allow, err := cleanPaths(in.RelayStateAllowlist, "relay_state_allowlist")
+	if err != nil {
+		return err
 	}
 	cfg := &SAMLConfig{IdPMetadataURL: metaURL, IdPMetadataXML: xmlData, IdPEntityID: info.IdPEntityID, IdPSSOURL: info.IdPSSOURL,
-		IdPCertificates: info.IdPCertificates, IdPCertNotAfter: info.IdPCertNotAfter,
+		IdPSLOURL: info.IdPSLOURL, IdPSLOBinding: info.IdPSLOBinding, IdPCertificates: info.IdPCertificates, IdPCertNotAfter: info.IdPCertNotAfter,
 		AllowIdPInitiated: in.AllowIdPInitiated, RelayStateAllowlist: allow, SignAuthnRequests: in.SignAuthnRequests}
 	if !isNew && existing.SAML != nil && len(existing.SPKeyEnc) > 0 {
 		cfg.SPCertificatePEM, c.SPKeyEnc = existing.SAML.SPCertificatePEM, existing.SPKeyEnc
@@ -279,26 +355,41 @@ func (s *Service) applySAML(ctx context.Context, c *Connection, existing Connect
 	return nil
 }
 
-// DeleteConnection removes the organization's connection (admin+). Its sessions end (sessions.sso_connection_id
-// cascades; the session policy refuses them as well).
-func (s *Service) DeleteConnection(ctx context.Context, p *auth.Principal, meta auth.ClientMeta) error {
-	c, err := s.GetConnection(ctx, p)
+// DeleteConnection removes a connection (admin+). Its sessions end (sessions.sso_connection_id cascades; the
+// session policy refuses them as well); its domains route to the default connection again.
+func (s *Service) DeleteConnection(ctx context.Context, p *auth.Principal, id string, meta auth.ClientMeta) error {
+	c, err := s.GetConnection(ctx, p, id)
 	if err != nil {
 		return err
 	}
 	if c.Enforce {
 		return precondition("turn off single sign-on enforcement before deleting the connection")
 	}
-	if _, err := s.store.DeleteConnection(ctx, p.OrgID); err != nil {
+	conns, err := s.store.ListConnections(ctx, p.OrgID)
+	if err != nil {
 		return s.fail(err)
 	}
-	s.auth.Audit(ctx, p, meta, "sso.connection.delete", "sso_connection", c.ID, map[string]any{"protocol": c.Protocol})
+	if len(conns) > 1 && conns[0].ID == c.ID {
+		// The next connection would become the default one and silently take over the unassigned domains.
+		ds, err := s.store.ListDomains(ctx, p.OrgID)
+		if err != nil {
+			return s.fail(err)
+		}
+		if slices.ContainsFunc(ds, func(d Domain) bool { return d.VerifiedAt != nil && d.ConnectionID == "" }) {
+			return precondition("assign the verified domains of the default connection to another connection before deleting it")
+		}
+	}
+	if _, err := s.store.DeleteConnection(ctx, p.OrgID, c.ID); err != nil {
+		return s.fail(err)
+	}
+	s.forgetProvider(c.ID)
+	s.auth.Audit(ctx, p, meta, "sso.connection.delete", "sso_connection", c.ID, map[string]any{"protocol": c.Protocol, "name": c.Name})
 	return nil
 }
 
-// TestConnection runs the server-side checks of the connection (admin+): discovery/JWKS or metadata/certificates.
-func (s *Service) TestConnection(ctx context.Context, p *auth.Principal, meta auth.ClientMeta) ([]Check, error) {
-	c, err := s.GetConnection(ctx, p)
+// TestConnection runs the server-side checks of a connection (admin+): discovery/JWKS or metadata/certificates.
+func (s *Service) TestConnection(ctx context.Context, p *auth.Principal, id string, meta auth.ClientMeta) ([]Check, error) {
+	c, err := s.GetConnection(ctx, p, id)
 	if err != nil {
 		return nil, err
 	}
@@ -317,10 +408,10 @@ func (s *Service) TestConnection(ctx context.Context, p *auth.Principal, meta au
 	return checks, nil
 }
 
-// StartTest starts a test sign-in of the current settings (admin+; also for a disabled connection). The result is
-// stored on the connection; no user, membership or session is created.
-func (s *Service) StartTest(ctx context.Context, p *auth.Principal, meta auth.ClientMeta) (Start, error) {
-	c, err := s.GetConnection(ctx, p)
+// StartTest starts a test sign-in of a connection's current settings (admin+; also for a disabled connection).
+// The result is stored on the connection; no user, membership or session is created.
+func (s *Service) StartTest(ctx context.Context, p *auth.Principal, id string, meta auth.ClientMeta) (Start, error) {
+	c, err := s.GetConnection(ctx, p, id)
 	if err != nil {
 		return Start{}, err
 	}
@@ -335,18 +426,28 @@ func (s *Service) StartTest(ctx context.Context, p *auth.Principal, meta auth.Cl
 	return st, nil
 }
 
-// UpdateEnforcement turns SSO enforcement on or off and sets the break-glass owners (owner only).
+// routesTo reports whether domain d routes to connection connID given the organization's connections (default
+// first).
+func routesTo(d Domain, conns []Connection, connID string) bool {
+	if d.ConnectionID != "" {
+		return d.ConnectionID == connID
+	}
+	return len(conns) > 0 && conns[0].ID == connID
+}
+
+// UpdateEnforcement turns SSO enforcement of a connection on or off and sets its break-glass owners (owner only).
+// Enforcement applies to members whose e-mail domain routes to the connection.
 //
-// Lockout safeguards for turning it on: the connection is enabled, its current settings passed a test sign-in,
-// the organization has a verified domain, at least one break-glass owner is named (all must be owners), and the
-// caller keeps access (is a break-glass owner or uses an SSO session of this connection).
-func (s *Service) UpdateEnforcement(ctx context.Context, p *auth.Principal, enforce bool, breakGlass []string, meta auth.ClientMeta) (Connection, error) {
+// Lockout safeguards for turning it on: the connection is enabled, its current settings passed a test sign-in, a
+// verified domain routes to it, at least one break-glass owner is named (all must be owners), and the caller keeps
+// access (is a break-glass owner or uses an SSO session of this connection).
+func (s *Service) UpdateEnforcement(ctx context.Context, p *auth.Principal, id string, enforce bool, breakGlass []string, meta auth.ClientMeta) (Connection, error) {
 	if err := s.gate(p, auth.RoleOwner); err != nil {
 		return Connection{}, err
 	}
-	c, err := s.store.GetConnection(ctx, p.OrgID)
+	c, err := s.store.GetConnection(ctx, p.OrgID, id)
 	if errors.Is(err, auth.ErrNotFound) {
-		return Connection{}, notFound("single sign-on is not configured")
+		return Connection{}, errNoConnection
 	}
 	if err != nil {
 		return Connection{}, s.fail(err)
@@ -382,8 +483,12 @@ func (s *Service) UpdateEnforcement(ctx context.Context, p *auth.Principal, enfo
 		if err != nil {
 			return Connection{}, s.fail(err)
 		}
-		if !slices.ContainsFunc(domains, func(d Domain) bool { return d.VerifiedAt != nil }) {
-			return Connection{}, precondition("verify at least one e-mail domain before enforcing single sign-on")
+		conns, err := s.store.ListConnections(ctx, p.OrgID)
+		if err != nil {
+			return Connection{}, s.fail(err)
+		}
+		if !slices.ContainsFunc(domains, func(d Domain) bool { return d.VerifiedAt != nil && routesTo(d, conns, c.ID) }) {
+			return Connection{}, precondition("verify at least one e-mail domain that signs in through this connection before enforcing single sign-on")
 		}
 		if !slices.Contains(ids, p.UserID) {
 			sso, err := s.sessionUsesConnection(ctx, p, c.ID)
@@ -417,21 +522,38 @@ func (s *Service) sessionUsesConnection(ctx context.Context, p *auth.Principal, 
 	return false, nil
 }
 
-// ListRoleMappings returns the organization's group → role mappings (admin+).
-func (s *Service) ListRoleMappings(ctx context.Context, p *auth.Principal) ([]RoleMapping, error) {
+// checkMappingScope validates the connection of a role mapping request ("" = organization-wide).
+func (s *Service) checkMappingScope(ctx context.Context, p *auth.Principal, connectionID string) error {
+	if connectionID == "" {
+		return nil
+	}
+	_, err := s.GetConnection(ctx, p, connectionID)
+	return err
+}
+
+// ListRoleMappings returns the group → role mappings of a connection, connectionID "" = organization-wide (admin+).
+func (s *Service) ListRoleMappings(ctx context.Context, p *auth.Principal, connectionID string) ([]RoleMapping, error) {
 	if err := s.gate(p, auth.RoleAdmin); err != nil {
 		return nil, err
 	}
-	ms, err := s.store.ListRoleMappings(ctx, p.OrgID)
+	if err := s.checkMappingScope(ctx, p, connectionID); err != nil {
+		return nil, err
+	}
+	ms, err := s.store.ListRoleMappings(ctx, p.OrgID, connectionID)
 	if err != nil {
 		return nil, s.fail(err)
 	}
 	return ms, nil
 }
 
-// ReplaceRoleMappings replaces the mappings (admin+). Roles of SCIM-provisioned members are recomputed.
-func (s *Service) ReplaceRoleMappings(ctx context.Context, p *auth.Principal, in []RoleMapping, meta auth.ClientMeta) ([]RoleMapping, error) {
+// ReplaceRoleMappings replaces the mappings of a connection or, connectionID "", the organization-wide mappings
+// (admin+). A connection with own mappings uses only those at sign-in; SCIM uses the organization-wide mappings, and
+// the roles of SCIM-provisioned members are recomputed when they change.
+func (s *Service) ReplaceRoleMappings(ctx context.Context, p *auth.Principal, connectionID string, in []RoleMapping, meta auth.ClientMeta) ([]RoleMapping, error) {
 	if err := s.gate(p, auth.RoleAdmin); err != nil {
+		return nil, err
+	}
+	if err := s.checkMappingScope(ctx, p, connectionID); err != nil {
 		return nil, err
 	}
 	if len(in) > maxRoleMappings {
@@ -453,11 +575,19 @@ func (s *Service) ReplaceRoleMappings(ctx context.Context, p *auth.Principal, in
 		seen[g] = true
 		out = append(out, RoleMapping{Group: g, Role: m.Role})
 	}
-	if err := s.store.ReplaceRoleMappings(ctx, p.OrgID, out); err != nil {
+	if err := s.store.ReplaceRoleMappings(ctx, p.OrgID, connectionID, out); err != nil {
+		if errors.Is(err, auth.ErrNotFound) {
+			return nil, errNoConnection
+		}
 		return nil, s.fail(err)
 	}
-	s.auth.Audit(ctx, p, meta, "sso.role_mappings.update", "organization", p.OrgID, map[string]any{"count": len(out)})
-	if s.cfg.SCIMEnabled {
+	details := map[string]any{"count": len(out)}
+	target, targetID := "organization", p.OrgID
+	if connectionID != "" {
+		target, targetID = "sso_connection", connectionID
+	}
+	s.auth.Audit(ctx, p, meta, "sso.role_mappings.update", target, targetID, details)
+	if s.cfg.SCIMEnabled && connectionID == "" {
 		if n, err := s.SyncSCIMRoles(ctx, p.OrgID, "", meta.IP); err != nil {
 			s.log.Warn("cannot recompute SCIM roles", "org_id", p.OrgID, "err", err)
 		} else if n > 0 {
@@ -465,4 +595,13 @@ func (s *Service) ReplaceRoleMappings(ctx context.Context, p *auth.Principal, in
 		}
 	}
 	return out, nil
+}
+
+// mappingsFor returns the role mappings used at a sign-in through c: its own, else the organization-wide ones.
+func (s *Service) mappingsFor(ctx context.Context, c Connection) ([]RoleMapping, error) {
+	ms, err := s.store.ListRoleMappings(ctx, c.OrgID, c.ID)
+	if err != nil || len(ms) > 0 {
+		return ms, err
+	}
+	return s.store.ListRoleMappings(ctx, c.OrgID, "")
 }

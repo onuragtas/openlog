@@ -14,6 +14,9 @@ spec:
   imageName: {{ $pg.imageName }}
   # Switchover to a replica, then update the old primary, without manual approval.
   primaryUpdateStrategy: unsupervised
+  # Seconds a stopping instance waits for clients to disconnect before a fast shutdown. openlog pods keep pooled
+  # connections open, so with the CNPG default (180) deleting or draining the primary delayed the failover by ~3 min.
+  smartShutdownTimeout: {{ int (default 180 $pg.smartShutdownTimeout) }}
   bootstrap:
     initdb:
       database: {{ $pg.database }}

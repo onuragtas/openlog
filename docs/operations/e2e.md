@@ -151,6 +151,11 @@ and `storage-tiered-warm.xml`, applies the schema and `migrate.ApplyTableTTLs` i
 S3 on every replica, reads through Distributed tables after a cache drop and a restart of all servers, deletion of cold
 parts, an S3 outage (inserts, hot/cold queries, a server restart) with recovery, and disabling. What it asserts and the
 measured failure behaviour: [tiered-storage.md](tiered-storage.md#test). `TIEREDTEST_KEEP=1` keeps the stack.
+`TIEREDTEST_BACKUP=1` adds the `backup_restore` phase before disabling: `BACKUP DATABASE openlog ON CLUSTER … TO S3` into
+the MinIO bucket `openlog-backup` while parts are on `warm`/`cold`, `DROP DATABASE … SYNC`, `RESTORE`, then rows per plain
+table and logical checks of the rollups, the Distributed counts, moves back to `warm`/`cold` and a no-op TTL step
+([Backups and restore](tiered-storage.md#backups-and-restore)). It adds a few minutes and needs a host that is not
+overloaded (Keeper timeouts otherwise).
 
 ## Debugging
 

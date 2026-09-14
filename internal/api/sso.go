@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -67,11 +68,18 @@ func (s *Server) ssoRoutes(mux *http.ServeMux) {
 	public("POST /api/v1/auth/sso/discover", s.ssoDiscover)
 	public("POST /api/v1/auth/sso/start", s.ssoStart)
 	public("GET /api/v1/sso/oidc/callback", s.ssoOIDCCallback)
+	public("GET /api/v1/sso/oidc/logout/callback", s.ssoOIDCLogoutCallback)
 	public("GET /api/v1/sso/saml/{connection_id}/metadata", s.ssoSAMLMetadata)
 	public("POST /api/v1/sso/saml/{connection_id}/acs", s.ssoSAMLACS)
+	public("GET /api/v1/sso/saml/{connection_id}/slo", s.ssoSAMLSLO)
+	public("POST /api/v1/sso/saml/{connection_id}/slo", s.ssoSAMLSLO)
 	public("GET /api/v1/sso/saml/complete", s.ssoSAMLComplete)
 	public("POST /api/v1/sso/domains/verify-email", s.ssoVerifyDomainEmail)
 
+	authed("GET /api/v1/auth/sso/session", s.ssoSessionInfo)
+	authed("POST /api/v1/auth/sso/logout", s.ssoLogout)
+
+	// Single-connection API (the organization's default connection, D-077).
 	authed("GET /api/v1/sso/connection", s.ssoGetConnection)
 	authed("PUT /api/v1/sso/connection", s.ssoSaveConnection)
 	authed("DELETE /api/v1/sso/connection", s.ssoDeleteConnection)
@@ -80,8 +88,23 @@ func (s *Server) ssoRoutes(mux *http.ServeMux) {
 	authed("PUT /api/v1/sso/enforcement", s.ssoEnforcement)
 	authed("GET /api/v1/sso/role-mappings", s.ssoListRoleMappings)
 	authed("PUT /api/v1/sso/role-mappings", s.ssoReplaceRoleMappings)
+
+	// Several connections per organization (D-088).
+	authed("GET /api/v1/sso/connections", s.ssoListConnections)
+	authed("POST /api/v1/sso/connections", s.ssoCreateConnection)
+	authed("GET /api/v1/sso/connections/{id}", s.ssoGetConnection)
+	authed("PUT /api/v1/sso/connections/{id}", s.ssoUpdateConnection)
+	authed("DELETE /api/v1/sso/connections/{id}", s.ssoDeleteConnection)
+	authed("POST /api/v1/sso/connections/{id}/test", s.ssoTestConnection)
+	authed("POST /api/v1/sso/connections/{id}/test/start", s.ssoStartTest)
+	authed("POST /api/v1/sso/connections/{id}/refresh", s.ssoRefreshConnection)
+	authed("PUT /api/v1/sso/connections/{id}/enforcement", s.ssoEnforcement)
+	authed("GET /api/v1/sso/connections/{id}/role-mappings", s.ssoListRoleMappings)
+	authed("PUT /api/v1/sso/connections/{id}/role-mappings", s.ssoReplaceRoleMappings)
+
 	authed("GET /api/v1/sso/domains", s.ssoListDomains)
 	authed("POST /api/v1/sso/domains", s.ssoAddDomain)
+	authed("PUT /api/v1/sso/domains/{id}", s.ssoAssignDomain)
 	authed("POST /api/v1/sso/domains/{id}/verify", s.ssoVerifyDomain)
 	authed("DELETE /api/v1/sso/domains/{id}", s.ssoDeleteDomain)
 	authed("GET /api/v1/scim/tokens", s.scimListTokens)
@@ -106,6 +129,7 @@ type ssoSAMLJSON struct {
 	IdPMetadataURL      string   `json:"idp_metadata_url"`
 	IdPEntityID         string   `json:"idp_entity_id"`
 	IdPSSOURL           string   `json:"idp_sso_url"`
+	IdPSLOURL           *string  `json:"idp_slo_url"`
 	IdPCertificates     []string `json:"idp_certificates"`
 	IdPCertNotAfter     *string  `json:"idp_cert_not_after"`
 	AllowIdPInitiated   bool     `json:"allow_idp_initiated"`
@@ -121,26 +145,39 @@ type ssoTestJSON struct {
 	Details map[string]any `json:"details"`
 }
 
+type ssoHealthJSON struct {
+	Status             string  `json:"status"`
+	Message            string  `json:"message"`
+	CheckedAt          *string `json:"checked_at"`
+	NextAt             *string `json:"next_at"`
+	Failures           int     `json:"failures"`
+	MetadataValidUntil *string `json:"metadata_valid_until"`
+}
+
 type ssoConnectionJSON struct {
-	ID                   string       `json:"id"`
-	Protocol             string       `json:"protocol"`
-	Name                 string       `json:"name"`
-	Enabled              bool         `json:"enabled"`
-	OIDC                 *ssoOIDCJSON `json:"oidc"`
-	SAML                 *ssoSAMLJSON `json:"saml"`
-	EmailAttribute       string       `json:"email_attribute"`
-	NameAttribute        string       `json:"name_attribute"`
-	GroupsAttribute      string       `json:"groups_attribute"`
-	JITEnabled           bool         `json:"jit_enabled"`
-	DefaultRole          string       `json:"default_role"`
-	SessionMaxAgeSeconds int64        `json:"session_max_age_seconds"`
-	Enforce              bool         `json:"enforce"`
-	BreakGlassUserIDs    []string     `json:"break_glass_user_ids"`
-	ConfigVersion        int          `json:"config_version"`
-	Tested               bool         `json:"tested"`
-	LastTest             *ssoTestJSON `json:"last_test"`
-	CreatedAt            string       `json:"created_at"`
-	UpdatedAt            string       `json:"updated_at"`
+	ID                       string        `json:"id"`
+	Protocol                 string        `json:"protocol"`
+	Name                     string        `json:"name"`
+	Enabled                  bool          `json:"enabled"`
+	Default                  bool          `json:"default"`
+	OIDC                     *ssoOIDCJSON  `json:"oidc"`
+	SAML                     *ssoSAMLJSON  `json:"saml"`
+	EmailAttribute           string        `json:"email_attribute"`
+	NameAttribute            string        `json:"name_attribute"`
+	GroupsAttribute          string        `json:"groups_attribute"`
+	JITEnabled               bool          `json:"jit_enabled"`
+	DefaultRole              string        `json:"default_role"`
+	SessionMaxAgeSeconds     int64         `json:"session_max_age_seconds"`
+	LogoutRedirectAllowlist  []string      `json:"logout_redirect_allowlist"`
+	AllowExternalInvitations bool          `json:"allow_external_invitations"`
+	Enforce                  bool          `json:"enforce"`
+	BreakGlassUserIDs        []string      `json:"break_glass_user_ids"`
+	ConfigVersion            int           `json:"config_version"`
+	Tested                   bool          `json:"tested"`
+	LastTest                 *ssoTestJSON  `json:"last_test"`
+	Health                   ssoHealthJSON `json:"health"`
+	CreatedAt                string        `json:"created_at"`
+	UpdatedAt                string        `json:"updated_at"`
 }
 
 func nonNilStrings(v []string) []string {
@@ -150,11 +187,15 @@ func nonNilStrings(v []string) []string {
 	return v
 }
 
-func ssoConnectionResponse(c sso.Connection) *ssoConnectionJSON {
-	out := &ssoConnectionJSON{ID: c.ID, Protocol: string(c.Protocol), Name: c.Name, Enabled: c.Enabled,
+func (s *Server) ssoConnectionResponse(c sso.Connection, isDefault bool) *ssoConnectionJSON {
+	h := s.sso.ConnectionHealth(c)
+	out := &ssoConnectionJSON{ID: c.ID, Protocol: string(c.Protocol), Name: c.Name, Enabled: c.Enabled, Default: isDefault,
 		EmailAttribute: c.EmailAttribute, NameAttribute: c.NameAttribute, GroupsAttribute: c.GroupsAttribute,
 		JITEnabled: c.JITEnabled, DefaultRole: string(c.DefaultRole), SessionMaxAgeSeconds: int64(c.SessionMaxAge / time.Second),
+		LogoutRedirectAllowlist: nonNilStrings(c.LogoutRedirectAllowlist), AllowExternalInvitations: c.AllowExternalInvitations,
 		Enforce: c.Enforce, BreakGlassUserIDs: nonNilStrings(c.BreakGlassUserIDs), ConfigVersion: c.ConfigVersion, Tested: c.Tested(),
+		Health: ssoHealthJSON{Status: h.Status, Message: h.Message, CheckedAt: optTime(h.CheckedAt), NextAt: optTime(h.NextAt),
+			Failures: h.Failures, MetadataValidUntil: optTime(h.MetadataValidUntil)},
 		CreatedAt: formatTime(c.CreatedAt), UpdatedAt: formatTime(c.UpdatedAt)}
 	if c.OIDC != nil {
 		out.OIDC = &ssoOIDCJSON{Issuer: c.OIDC.Issuer, ClientID: c.OIDC.ClientID, Scopes: nonNilStrings(c.OIDC.Scopes),
@@ -162,7 +203,7 @@ func ssoConnectionResponse(c sso.Connection) *ssoConnectionJSON {
 	}
 	if c.SAML != nil {
 		out.SAML = &ssoSAMLJSON{IdPMetadataURL: c.SAML.IdPMetadataURL, IdPEntityID: c.SAML.IdPEntityID, IdPSSOURL: c.SAML.IdPSSOURL,
-			IdPCertificates: nonNilStrings(c.SAML.IdPCertificates), AllowIdPInitiated: c.SAML.AllowIdPInitiated,
+			IdPSLOURL: ssoOptString(c.SAML.IdPSLOURL), IdPCertificates: nonNilStrings(c.SAML.IdPCertificates), AllowIdPInitiated: c.SAML.AllowIdPInitiated,
 			RelayStateAllowlist: nonNilStrings(c.SAML.RelayStateAllowlist), SignAuthnRequests: c.SAML.SignAuthnRequests}
 		if c.SAML.IdPCertNotAfter != "" {
 			v := c.SAML.IdPCertNotAfter
@@ -181,39 +222,53 @@ func ssoConnectionResponse(c sso.Connection) *ssoConnectionJSON {
 	return out
 }
 
-func (s *Server) ssoState(w http.ResponseWriter, c *sso.Connection) {
-	sp := map[string]any{"oidc_redirect_uri": s.sso.OIDCRedirectURL(), "scim_base_url": s.sso.SCIMBaseURL(),
-		"saml_entity_id": nil, "saml_acs_url": nil, "saml_metadata_url": nil, "saml_certificate_pem": nil}
+// writeSSOState answers the SSO settings: c is the addressed connection (nil: none), all connections are listed.
+func (s *Server) writeSSOState(w http.ResponseWriter, r *http.Request, p *auth.Principal, c *sso.Connection, status int) error {
+	conns, err := s.sso.ListConnections(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	sp := map[string]any{"oidc_redirect_uri": s.sso.OIDCRedirectURL(), "oidc_post_logout_redirect_uri": s.sso.OIDCPostLogoutRedirectURL(),
+		"scim_base_url": s.sso.SCIMBaseURL(), "saml_entity_id": nil, "saml_acs_url": nil, "saml_slo_url": nil, "saml_metadata_url": nil,
+		"saml_certificate_pem": nil}
 	var conn *ssoConnectionJSON
+	list := make([]*ssoConnectionJSON, 0, len(conns))
+	for i, x := range conns {
+		list = append(list, s.ssoConnectionResponse(x, i == 0))
+	}
 	if c != nil {
-		conn = ssoConnectionResponse(*c)
+		isDefault := len(conns) > 0 && conns[0].ID == c.ID
+		conn = s.ssoConnectionResponse(*c, isDefault)
 		if c.Protocol == sso.ProtocolSAML && c.SAML != nil {
-			sp["saml_entity_id"], sp["saml_acs_url"] = s.sso.SAMLEntityID(c.ID), s.sso.SAMLACSURL(c.ID)
+			sp["saml_entity_id"], sp["saml_acs_url"], sp["saml_slo_url"] = s.sso.SAMLEntityID(c.ID), s.sso.SAMLACSURL(c.ID), s.sso.SAMLSLOURL(c.ID)
 			sp["saml_metadata_url"], sp["saml_certificate_pem"] = s.sso.SAMLEntityID(c.ID), c.SAML.SPCertificatePEM
 		}
 	}
 	cfg := s.sso.Config()
-	writeJSON(w, http.StatusOK, map[string]any{"available": s.sso.Available(), "secrets_encrypted": cfg.SecretBox.Encrypted(),
+	writeJSON(w, status, map[string]any{"available": s.sso.Available(), "secrets_encrypted": cfg.SecretBox.Encrypted(),
 		"scim_enabled": s.sso.SCIMEnabled(), "email_verification_available": cfg.Mailer != nil && cfg.PublicURL != "",
-		"domain_email_local_parts": sso.DomainEmailLocalParts, "service_provider": sp, "connection": conn})
+		"domain_email_local_parts": sso.DomainEmailLocalParts, "service_provider": sp, "connection": conn, "connections": list})
+	return nil
 }
 
 // ---- admin ----
 
 func (s *Server) ssoGetConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	c, err := s.sso.GetConnection(r.Context(), p)
+	c, err := s.sso.GetConnection(r.Context(), p, r.PathValue("id"))
 	if err != nil {
-		if errors.Is(err, auth.ErrNotFound) {
-			s.ssoState(w, nil)
-			return nil
+		if errors.Is(err, auth.ErrNotFound) && r.PathValue("id") == "" {
+			return s.writeSSOState(w, r, p, nil, http.StatusOK)
 		}
 		return err
 	}
-	s.ssoState(w, &c)
-	return nil
+	return s.writeSSOState(w, r, p, &c, http.StatusOK)
 }
 
-func (s *Server) ssoSaveConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+func (s *Server) ssoListConnections(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	return s.writeSSOState(w, r, p, nil, http.StatusOK)
+}
+
+func parseConnectionInput(r *http.Request) (sso.ConnectionInput, error) {
 	var in struct {
 		Protocol string `json:"protocol"`
 		Name     string `json:"name"`
@@ -232,46 +287,80 @@ func (s *Server) ssoSaveConnection(w http.ResponseWriter, r *http.Request, p *au
 			RelayStateAllowlist []string `json:"relay_state_allowlist"`
 			SignAuthnRequests   bool     `json:"sign_authn_requests"`
 		} `json:"saml"`
-		EmailAttribute       string `json:"email_attribute"`
-		NameAttribute        string `json:"name_attribute"`
-		GroupsAttribute      string `json:"groups_attribute"`
-		JITEnabled           *bool  `json:"jit_enabled"`
-		DefaultRole          string `json:"default_role"`
-		SessionMaxAgeSeconds int64  `json:"session_max_age_seconds"`
+		EmailAttribute           string   `json:"email_attribute"`
+		NameAttribute            string   `json:"name_attribute"`
+		GroupsAttribute          string   `json:"groups_attribute"`
+		JITEnabled               *bool    `json:"jit_enabled"`
+		DefaultRole              string   `json:"default_role"`
+		SessionMaxAgeSeconds     int64    `json:"session_max_age_seconds"`
+		LogoutRedirectAllowlist  []string `json:"logout_redirect_allowlist"`
+		AllowExternalInvitations *bool    `json:"allow_external_invitations"`
 	}
 	if err := decodeJSONLimit(r, &in, 1<<20); err != nil {
-		return err
+		return sso.ConnectionInput{}, err
 	}
 	if in.SessionMaxAgeSeconds < 0 || in.SessionMaxAgeSeconds > 1<<31 {
-		return badRequest("session_max_age_seconds is out of range")
+		return sso.ConnectionInput{}, badRequest("session_max_age_seconds is out of range")
 	}
 	ci := sso.ConnectionInput{Protocol: sso.Protocol(in.Protocol), Name: in.Name, Enabled: in.Enabled,
 		EmailAttribute: in.EmailAttribute, NameAttribute: in.NameAttribute, GroupsAttribute: in.GroupsAttribute,
-		JITEnabled: in.JITEnabled, DefaultRole: auth.Role(in.DefaultRole), SessionMaxAge: time.Duration(in.SessionMaxAgeSeconds) * time.Second}
+		JITEnabled: in.JITEnabled, DefaultRole: auth.Role(in.DefaultRole), SessionMaxAge: time.Duration(in.SessionMaxAgeSeconds) * time.Second,
+		LogoutRedirectAllowlist: in.LogoutRedirectAllowlist, AllowExternalInvitations: in.AllowExternalInvitations}
 	switch ci.Protocol {
 	case sso.ProtocolOIDC:
 		if in.OIDC == nil {
-			return badRequest("oidc settings are required")
+			return ci, badRequest("oidc settings are required")
 		}
 		ci.Issuer, ci.ClientID, ci.ClientSecret, ci.Scopes, ci.RequireEmailVerified =
 			in.OIDC.Issuer, in.OIDC.ClientID, in.OIDC.ClientSecret, in.OIDC.Scopes, in.OIDC.RequireEmailVerified
 	case sso.ProtocolSAML:
 		if in.SAML == nil {
-			return badRequest("saml settings are required")
+			return ci, badRequest("saml settings are required")
 		}
 		ci.IdPMetadataURL, ci.IdPMetadataXML, ci.AllowIdPInitiated, ci.RelayStateAllowlist, ci.SignAuthnRequests =
 			in.SAML.IdPMetadataURL, in.SAML.IdPMetadataXML, in.SAML.AllowIdPInitiated, in.SAML.RelayStateAllowlist, in.SAML.SignAuthnRequests
+	}
+	return ci, nil
+}
+
+func (s *Server) ssoSaveConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ci, err := parseConnectionInput(r)
+	if err != nil {
+		return err
 	}
 	c, err := s.sso.SaveConnection(r.Context(), p, ci, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
-	s.ssoState(w, &c)
-	return nil
+	return s.writeSSOState(w, r, p, &c, http.StatusOK)
+}
+
+func (s *Server) ssoCreateConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ci, err := parseConnectionInput(r)
+	if err != nil {
+		return err
+	}
+	c, err := s.sso.CreateConnection(r.Context(), p, ci, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.writeSSOState(w, r, p, &c, http.StatusCreated)
+}
+
+func (s *Server) ssoUpdateConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	ci, err := parseConnectionInput(r)
+	if err != nil {
+		return err
+	}
+	c, err := s.sso.UpdateConnection(r.Context(), p, r.PathValue("id"), ci, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.writeSSOState(w, r, p, &c, http.StatusOK)
 }
 
 func (s *Server) ssoDeleteConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	if err := s.sso.DeleteConnection(r.Context(), p, s.accounts.Meta(r)); err != nil {
+	if err := s.sso.DeleteConnection(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r)); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -279,7 +368,7 @@ func (s *Server) ssoDeleteConnection(w http.ResponseWriter, r *http.Request, p *
 }
 
 func (s *Server) ssoTestConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	checks, err := s.sso.TestConnection(r.Context(), p, s.accounts.Meta(r))
+	checks, err := s.sso.TestConnection(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
@@ -299,13 +388,21 @@ func (s *Server) ssoTestConnection(w http.ResponseWriter, r *http.Request, p *au
 }
 
 func (s *Server) ssoStartTest(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	st, err := s.sso.StartTest(r.Context(), p, s.accounts.Meta(r))
+	st, err := s.sso.StartTest(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
 	http.SetCookie(w, s.sso.BindingCookie(st))
 	writeJSON(w, http.StatusOK, map[string]string{"redirect_url": st.URL})
 	return nil
+}
+
+func (s *Server) ssoRefreshConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	c, err := s.sso.RefreshNow(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.writeSSOState(w, r, p, &c, http.StatusOK)
 }
 
 func (s *Server) ssoEnforcement(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
@@ -316,12 +413,11 @@ func (s *Server) ssoEnforcement(w http.ResponseWriter, r *http.Request, p *auth.
 	if err := decodeJSON(r, &in); err != nil {
 		return err
 	}
-	c, err := s.sso.UpdateEnforcement(r.Context(), p, in.Enforce, in.BreakGlassUserIDs, s.accounts.Meta(r))
+	c, err := s.sso.UpdateEnforcement(r.Context(), p, r.PathValue("id"), in.Enforce, in.BreakGlassUserIDs, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
-	s.ssoState(w, &c)
-	return nil
+	return s.writeSSOState(w, r, p, &c, http.StatusOK)
 }
 
 type roleMappingJSON struct {
@@ -329,20 +425,20 @@ type roleMappingJSON struct {
 	Role  string `json:"role"`
 }
 
-func roleMappingsResponse(ms []sso.RoleMapping) map[string]any {
+func roleMappingsResponse(ms []sso.RoleMapping, connectionID string) map[string]any {
 	out := make([]roleMappingJSON, 0, len(ms))
 	for _, m := range ms {
 		out = append(out, roleMappingJSON{m.Group, string(m.Role)})
 	}
-	return map[string]any{"mappings": out}
+	return map[string]any{"mappings": out, "connection_id": ssoOptString(connectionID)}
 }
 
 func (s *Server) ssoListRoleMappings(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	ms, err := s.sso.ListRoleMappings(r.Context(), p)
+	ms, err := s.sso.ListRoleMappings(r.Context(), p, r.PathValue("id"))
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, roleMappingsResponse(ms))
+	writeJSON(w, http.StatusOK, roleMappingsResponse(ms, r.PathValue("id")))
 	return nil
 }
 
@@ -357,11 +453,11 @@ func (s *Server) ssoReplaceRoleMappings(w http.ResponseWriter, r *http.Request, 
 	for _, m := range in.Mappings {
 		ms = append(ms, sso.RoleMapping{Group: m.Group, Role: auth.Role(m.Role)})
 	}
-	out, err := s.sso.ReplaceRoleMappings(r.Context(), p, ms, s.accounts.Meta(r))
+	out, err := s.sso.ReplaceRoleMappings(r.Context(), p, r.PathValue("id"), ms, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, roleMappingsResponse(out))
+	writeJSON(w, http.StatusOK, roleMappingsResponse(out, r.PathValue("id")))
 	return nil
 }
 
@@ -375,6 +471,7 @@ type domainJSON struct {
 	EmailAddress       *string           `json:"email_address"`
 	EmailExpiresAt     *string           `json:"email_expires_at"`
 	LastCheckedAt      *string           `json:"last_checked_at"`
+	ConnectionID       *string           `json:"connection_id"`
 	CreatedAt          string            `json:"created_at"`
 }
 
@@ -390,7 +487,7 @@ func domainResponse(d sso.Domain) domainJSON {
 	out := domainJSON{ID: d.ID, Domain: d.Domain, Verified: d.VerifiedAt != nil, VerifiedAt: optTime(d.VerifiedAt),
 		VerificationMethod: ssoOptString(d.VerificationMethod), DNSRecord: map[string]string{"type": "TXT", "name": name, "value": value},
 		EmailAddress: ssoOptString(d.EmailAddress), EmailExpiresAt: optTime(d.EmailExpiresAt), LastCheckedAt: optTime(d.LastCheckedAt),
-		CreatedAt: formatTime(d.CreatedAt)}
+		ConnectionID: ssoOptString(d.ConnectionID), CreatedAt: formatTime(d.CreatedAt)}
 	if d.EmailExpiresAt == nil {
 		out.EmailAddress = nil
 	}
@@ -422,6 +519,25 @@ func (s *Server) ssoAddDomain(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		return err
 	}
 	writeJSON(w, http.StatusCreated, domainResponse(d))
+	return nil
+}
+
+func (s *Server) ssoAssignDomain(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		ConnectionID *string `json:"connection_id"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	id := ""
+	if in.ConnectionID != nil {
+		id = *in.ConnectionID
+	}
+	d, err := s.sso.AssignDomain(r.Context(), p, r.PathValue("id"), id, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, domainResponse(d))
 	return nil
 }
 
@@ -532,9 +648,9 @@ func (s *Server) ssoDiscover(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	out := map[string]any{"sso": d.SSO, "organization_name": nil, "protocol": nil, "enforced": d.Enforced}
+	out := map[string]any{"sso": d.SSO, "organization_name": nil, "connection_name": nil, "protocol": nil, "enforced": d.Enforced}
 	if d.SSO {
-		out["organization_name"], out["protocol"] = d.OrganizationName, d.Protocol
+		out["organization_name"], out["connection_name"], out["protocol"] = d.OrganizationName, d.ConnectionName, d.Protocol
 	}
 	writeJSON(w, http.StatusOK, out)
 	return nil
@@ -564,6 +680,79 @@ func cookieReader(r *http.Request) func(string) string {
 		}
 		return ""
 	}
+}
+
+// ---- single logout ----
+
+func (s *Server) ssoSessionInfo(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	info, err := s.sso.SessionInfo(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	out := map[string]any{"sso": info.SSO, "protocol": nil, "connection_id": nil, "connection_name": nil, "idp_logout": info.IdPLogout}
+	if info.SSO {
+		out["protocol"], out["connection_id"], out["connection_name"] = info.Protocol, info.ConnectionID, info.ConnectionName
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+func (s *Server) ssoLogout(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Redirect string `json:"redirect"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &in); err != nil {
+			return err
+		}
+	}
+	res, err := s.sso.Logout(r.Context(), p, in.Redirect, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, s.accounts.ClearedCookie())
+	out := map[string]any{"protocol": nil, "redirect_url": ssoOptString(res.RedirectURL), "post": nil, "revoked_sessions": res.Revoked}
+	if res.Protocol != "" {
+		out["protocol"] = res.Protocol
+	}
+	if res.PostURL != "" {
+		out["post"] = map[string]any{"url": res.PostURL, "fields": res.PostFields}
+	}
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+func (s *Server) ssoOIDCLogoutCallback(w http.ResponseWriter, r *http.Request) error {
+	s.ssoRedirect(w, s.sso.OIDCLogoutCallback(r.Context(), r.URL.Query().Get("state")))
+	return nil
+}
+
+func (s *Server) ssoSAMLSLO(w http.ResponseWriter, r *http.Request) error {
+	in := sso.SLOInput{Method: r.Method, RawQuery: r.URL.RawQuery, Form: url.Values{}}
+	if r.Method == http.MethodPost {
+		r.Body = http.MaxBytesReader(w, r.Body, maxACSBody)
+		if err := r.ParseForm(); err != nil {
+			return badRequest("invalid form body")
+		}
+		in.Form = r.PostForm
+	}
+	o := s.sso.SAMLSLO(r.Context(), r.PathValue("connection_id"), in, s.accounts.Meta(r))
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	switch {
+	case o.HTML != nil:
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", o.CSP)
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(o.HTML)
+	case o.External:
+		w.Header().Set("Location", o.Redirect)
+		w.WriteHeader(http.StatusSeeOther)
+	default:
+		s.ssoRedirect(w, sso.Outcome{Redirect: o.Redirect})
+	}
+	return nil
 }
 
 // ssoRedirect applies an sso.Outcome: session cookie, binding cookie removal and a 303 to the UI.

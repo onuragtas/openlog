@@ -215,8 +215,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.9 installs the last OpenTelemetry line that supports it (SDK 1.41 / contrib 0.62), 3.12 the current one
-        python: ["3.9", "3.12"]
+        # 3.9 installs the last OpenTelemetry line that supports it (SDK 1.41 / contrib 0.62), 3.12 and 3.13 the current one
+        python: ["3.9", "3.12", "3.13"]
     defaults:
       run:
         working-directory: agents/python
@@ -235,21 +235,23 @@ jobs:
       - name: lint
         if: matrix.python == '3.12'
         run: python -m ruff check src tests && python -m ruff format --check src tests
-      - name: unit + end-to-end tests (Go sampler fixtures, shared sanitizer cases, Flask/Django/FastAPI, gunicorn pre-fork workers)
+      - name: unit + end-to-end tests (Go sampler fixtures, shared sanitizer cases, Flask/Django/FastAPI/Tornado/Falcon/Pyramid, gunicorn and uWSGI workers, gevent/eventlet)
         run: python -m pytest -q -p no:cacheprovider tests/unit tests/e2e
-      - name: instrumentation tests against PostgreSQL, MySQL and Redis (psycopg2/3, asyncpg, PyMySQL, mysqlclient, SQLAlchemy, redis, Celery prefork, gRPC)
+      - name: instrumentation tests against PostgreSQL, MySQL, Redis, RabbitMQ and Kafka (psycopg2/3, asyncpg, PyMySQL, mysqlclient, SQLAlchemy, redis, Celery prefork, gRPC, aio-pika, confluent-kafka, kafka-python, aiokafka)
         if: matrix.python == '3.12'
         env:
           PG_URL: postgresql://openlog:openlog@127.0.0.1:55433/openlog
           MYSQL_HOST: 127.0.0.1
           MYSQL_PORT: "53307"
           REDIS_URL: redis://127.0.0.1:56380/0
+          RABBITMQ_URL: amqp://openlog:openlog@127.0.0.1:55673/
+          KAFKA_BOOTSTRAP: 127.0.0.1:59092
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libmysqlclient-dev pkg-config
           python -m pip install -r tests/requirements-integration.txt
-          $COMPOSE up -d --wait postgres mysql redis
+          $COMPOSE up -d --wait postgres mysql redis rabbitmq kafka
           python -m pytest -q -p no:cacheprovider tests/integration
-      - name: stop databases
+      - name: stop databases and brokers
         if: always() && matrix.python == '3.12'
         run: $COMPOSE down -v
       - name: wheel + sdist
@@ -263,7 +265,7 @@ jobs:
   java-agent:
     name: java-agent (JDK ${{ matrix.java }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -282,7 +284,7 @@ jobs:
           cache: gradle
       - name: unit tests (Go sampler fixtures, sanitizer, config, resource, SDK autoconfiguration) + agent jar
         run: ./gradlew --no-daemon --console=plain :extension:test :agentJar :agentJarChecksum
-      - name: integration tests (Spring Boot MVC/WebFlux, PostgreSQL, MySQL, Hibernate, Redis, Kafka, gRPC, Logback/Log4j2)
+      - name: integration tests (Spring Boot MVC/WebFlux, JAX-RS/Jersey, Quarkus, Micronaut, Vert.x, PostgreSQL, MySQL, Hibernate, Redis, Kafka, gRPC, Logback/Log4j2)
         run: |
           $COMPOSE up -d --wait postgres mysql redis kafka
           ./gradlew --no-daemon --console=plain :integration-tests:integrationTest
@@ -292,8 +294,9 @@ jobs:
 
   dotnet-agent:
     name: dotnet-agent (.NET ${{ matrix.dotnet }})
+    # ubuntu-24.04 is amd64: SQL Server runs from mcr.microsoft.com/mssql/server (no arm64 image; test/docker-compose.yml)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -308,6 +311,9 @@ jobs:
       PG_CONNECTION: Host=127.0.0.1;Port=45433;Username=openlog;Password=openlog;Database=openlog
       MYSQL_CONNECTION: Server=127.0.0.1;Port=43307;User ID=openlog;Password=openlog;Database=openlog
       REDIS_CONNECTION: 127.0.0.1:46380
+      RABBITMQ_CONNECTION: amqp://openlog:openlog@127.0.0.1:45672/
+      KAFKA_BOOTSTRAP: 127.0.0.1:49092
+      SQLSERVER_CONNECTION: Server=127.0.0.1,41433;User ID=sa;Password=Openlog-Test-1;TrustServerCertificate=true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -317,15 +323,23 @@ jobs:
             9.0.x
       - name: build (net8.0 + netstandard2.0, warnings as errors)
         run: dotnet build src/OpenLog.Agent/OpenLog.Agent.csproj -c Release
+      - name: .NET Framework 4.8 / ASP.NET 4.x HttpModule sample (compile only, netstandard2.0 agent)
+        if: matrix.dotnet == '9.0'
+        run: dotnet build samples/OpenLog.AspNetFramework.Sample/OpenLog.AspNetFramework.Sample.csproj -c Release
       - name: unit tests (Go sampler fixtures, sanitizer, config, resource, processors, propagator)
         run: dotnet test test/OpenLog.Agent.Tests/OpenLog.Agent.Tests.csproj -c Release -f "net${{ matrix.dotnet }}"
-      - name: integration tests (ASP.NET Core minimal API/MVC, HttpClient, gRPC, ILogger, metrics, PostgreSQL/EF Core, MySQL, Redis)
+      - name: integration tests (ASP.NET Core minimal API/MVC, HttpClient, gRPC, ILogger, metrics, PostgreSQL/EF Core, MySQL, Redis, SQL Server, MassTransit/RabbitMQ, Kafka)
         run: |
-          $COMPOSE up -d --wait postgres mysql redis
+          $COMPOSE --profile sqlserver up -d --wait postgres mysql redis rabbitmq kafka sqlserver
           dotnet test test/OpenLog.Agent.IntegrationTests/OpenLog.Agent.IntegrationTests.csproj -c Release -f "net${{ matrix.dotnet }}"
-      - name: stop databases
+      - name: stop databases and brokers
         if: always()
-        run: $COMPOSE down -v
+        run: $COMPOSE --profile sqlserver down -v
+      - name: OpenTelemetry .NET automatic instrumentation + openlog plugin (pinned release, sha256-verified)
+        env:
+          DOTNET: local
+          DOTNET_VERSION: ${{ matrix.dotnet }}
+        run: test/autoinstrumentation.sh
       - name: package
         if: matrix.dotnet == '9.0'
         run: dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -o "$RUNNER_TEMP/nupkg"
@@ -373,6 +387,13 @@ jobs:
           # Debian 12 PHP 8.2 (glibc) and Alpine PHP 8.3 (musl) modules: enough for the deb and apk install tests.
           TARGETS="8.2-nts-glibc 8.3-nts-musl" PACKAGES="deb apk" \
             agents/php/packaging/build-artifacts.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Java agent jar (component java-agent, like release.yml)
+        run: JAVA_BUILD=local agents/java/scripts/release-jar.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
       - name: signed local release
         run: |
           make release-testkeys
@@ -383,6 +404,7 @@ jobs:
           bin/openlog-release verify --keys dist/testkeys/public.key --check-artifacts "dist/v$DRYRUN_VERSION/manifest.json"
           bin/openlog-release verify --keys dist/testkeys/public.key dist/index.json
           grep -q '"component": "php-agent"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "php-agent artifacts missing from the manifest"; exit 1; }
+          grep -q '"name": "openlog-javaagent-'"$DRYRUN_VERSION"'.jar"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "java-agent jar missing from the manifest"; exit 1; }
       - name: PHP agent deb/apk install
         run: agents/php/packaging/test.sh "dist/v$DRYRUN_VERSION" "$DRYRUN_VERSION" deb apk
       - name: deb/rpm install

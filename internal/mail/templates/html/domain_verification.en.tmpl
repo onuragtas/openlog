@@ -1,0 +1,2 @@
+{{define "content"}}<p>{{.Requester}} asked to verify that the domain {{.Domain}} belongs to the organization "{{.OrgName}}" on openlog.</p><p>Members with addresses at this domain will be able to sign in through the organization's single sign-on.</p><p style="color:#666;font-size:12px">The link expires in 24 hours. If you did not expect this e-mail, ignore it.</p>{{end}}
+{{define "linkLabel"}}Verify {{.Domain}}{{end}}

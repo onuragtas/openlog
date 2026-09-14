@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/AppShell";
 import { LogFilters } from "@/components/LogFilters";
 import { LogTable } from "@/components/LogTable";
+import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { useLogPages } from "@/lib/use-logs";
@@ -70,7 +71,12 @@ export function LogsPage() {
         ) : query.isError && !logs ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : !logs || logs.length === 0 ? (
-          <EmptyState>{t("logs.empty")}</EmptyState>
+          <EmptyState>
+            <p>{t("logs.empty")}</p>
+            {!search.q && !search.severity && !search.service && !search.host && !search.trace && !search.span && !search.txn && (
+              <AddDataLink target="logs/host" label={t("addData.empty.logs")} />
+            )}
+          </EmptyState>
         ) : (
           <LogTable
             logs={logs}

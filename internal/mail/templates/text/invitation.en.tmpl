@@ -1,0 +1,9 @@
+{{define "subject"}}[openlog] You are invited to {{.OrgName}}{{end}}
+
+{{define "text"}}
+{{if .Inviter}}{{.Inviter}}{{else}}An administrator{{end}} invited you to join the organization "{{.OrgName}}" on openlog with the role {{.RoleLabel}}.
+
+The invitation expires on {{date .ExpiresAt}}. If you did not expect it, ignore this e-mail.
+
+{{.Link}}
+{{end}}

@@ -49,6 +49,8 @@ type Options struct {
 	DefaultLimit, MaxLimit int
 	// NoRollup forces raw Metric data points.
 	NoRollup bool
+	// Filters are dashboard cross-widget filters (filters.go), ANDed with WHERE where the event type has the attribute.
+	Filters []Filter
 }
 
 // resolved is the attribute an AST Attr refers to.
@@ -93,6 +95,8 @@ type Plan struct {
 	Compare   time.Duration
 	Warnings  []*Error
 	Variables []string // referenced variable names, sorted
+	// IgnoredFilters are dashboard filters (Options.Filters) that do not apply to this event type.
+	IgnoredFilters []string
 
 	vars map[string][]string
 	hist *Agg
@@ -160,6 +164,9 @@ func compile(src string, q *Query, opt Options) (*Plan, error) {
 		if err := c.resolve(f); err != nil {
 			return nil, err
 		}
+	}
+	if err := c.applyFilters(opt.Filters); err != nil {
+		return nil, err
 	}
 	if q.Where != nil {
 		if err := c.cond(q.Where); err != nil {

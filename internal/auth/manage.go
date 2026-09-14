@@ -160,14 +160,14 @@ func (s *Service) CreateInvitation(ctx context.Context, p *Principal, email stri
 	}
 	now := s.now()
 	inv := Invitation{OrgID: p.OrgID, Email: email, Role: role, TokenHash: HashSecret(token),
-		InvitedBy: p.UserID, InvitedByEmail: p.Email, CreatedAt: now, ExpiresAt: now.Add(s.cfg.InvitationTTL)}
+		InvitedBy: p.UserID, InvitedByEmail: p.Email, CreatedAt: now, ExpiresAt: now.Add(s.cfg.InvitationTTL), Locale: meta.Locale}
 	if err := s.store.CreateInvitation(ctx, &inv); err != nil {
 		if errors.Is(err, ErrAlreadyExists) {
 			return Invitation{}, "", &Error{Code: CodeAlreadyExists, Message: "a pending invitation for this email already exists"}
 		}
 		return Invitation{}, "", s.fail(err)
 	}
-	if sent := s.mailInvitation(ctx, p, inv, token); sent != nil {
+	if sent := s.mailInvitation(ctx, p, inv, token, meta.Locale); sent != nil {
 		inv.LastSentAt, inv.SendCount = sent, inv.SendCount+1
 	}
 	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "invitation.create", "invitation", inv.ID,
@@ -230,7 +230,7 @@ func (s *Service) ResendInvitation(ctx context.Context, p *Principal, id string,
 		return Invitation{}, "", false, s.fail(err)
 	}
 	inv.InvitedByEmail = cur.InvitedByEmail
-	sent := s.mailInvitation(ctx, p, inv, token)
+	sent := s.mailInvitation(ctx, p, inv, token, meta.Locale)
 	if sent != nil {
 		inv.LastSentAt, inv.SendCount = sent, inv.SendCount+1
 	}
@@ -291,6 +291,9 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, password, name st
 	if err := s.checkRate(ctx, key, now); err != nil {
 		return LoginResult{}, Organization{}, err
 	}
+	if err := s.checkClaimedInvitation(ctx, inv); err != nil { // claimed domain with SSO (external.go, D-089)
+		return LoginResult{}, Organization{}, err
+	}
 	var u User
 	if info.UserExists {
 		u, err = s.store.GetUserByEmail(ctx, inv.Email)
@@ -318,7 +321,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, password, name st
 			return LoginResult{}, Organization{}, err
 		}
 		// The inviting admin vouches for the address (or it received the invitation e-mail).
-		u = User{Email: inv.Email, Name: clean, PasswordHash: hash, CreatedAt: now, EmailVerifiedAt: &now}
+		u = User{Email: inv.Email, Name: clean, PasswordHash: hash, CreatedAt: now, EmailVerifiedAt: &now, Locale: meta.Locale}
 	}
 	if err := s.store.AcceptInvitation(ctx, inv.ID, &u, now); err != nil {
 		if errors.Is(err, ErrAlreadyExists) {

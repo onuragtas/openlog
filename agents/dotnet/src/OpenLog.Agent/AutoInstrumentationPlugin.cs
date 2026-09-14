@@ -77,6 +77,30 @@ public sealed class OpenLogPlugin
 
     public void ConfigureTracesOptions(OtlpExporterOptions options) => AddHeaders(options);
 
+    /// <summary>
+    /// Instrumentation options of the automatic instrumentation (matched by type name). ASP.NET Core: exception events and
+    /// OPENLOG_HTTP_IGNORE_PATHS, like AddOpenLog(). The parameter is <see cref="object"/> on purpose: instrumentation
+    /// assemblies carry their package version (e.g. 1.18.0.1289), and a typed parameter would bind this plugin to a newer
+    /// assembly than the automatic instrumentation ships, which makes its plugin discovery fail for every method.
+    /// </summary>
+    public void ConfigureTracesOptions(object options)
+    {
+        if (!cfg.Enabled || options == null) return;
+#if NET
+        if (options.GetType().FullName == "OpenTelemetry.Instrumentation.AspNetCore.AspNetCoreTraceInstrumentationOptions")
+        {
+            var type = options.GetType();
+            type.GetProperty("RecordException")?.SetValue(options, true);
+            var filter = type.GetProperty("Filter");
+            if (cfg.HttpIgnorePaths.Count == 0 || filter?.PropertyType != typeof(Func<Microsoft.AspNetCore.Http.HttpContext, bool>)) return;
+            var ignore = new System.Collections.Generic.HashSet<string>(cfg.HttpIgnorePaths, StringComparer.Ordinal);
+            var previous = (Func<Microsoft.AspNetCore.Http.HttpContext, bool>?)filter.GetValue(options);
+            filter.SetValue(options, new Func<Microsoft.AspNetCore.Http.HttpContext, bool>(ctx =>
+                !ignore.Contains(ctx.Request.Path.Value ?? "") && (previous == null || previous(ctx))));
+        }
+#endif
+    }
+
     public void ConfigureMetricsOptions(OtlpExporterOptions options) => AddHeaders(options);
 
     public void ConfigureLogsOptions(OtlpExporterOptions options) => AddHeaders(options);

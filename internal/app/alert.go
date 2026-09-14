@@ -15,6 +15,7 @@ import (
 	"github.com/onuragtas/openlog/internal/api"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/quota"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/version"
@@ -95,6 +96,12 @@ func RunAlert(ctx context.Context, cfg config.Config, adm *admin.Server, log *sl
 		return err
 	}
 	defer closeDB()
+	// Plan and organization query limits apply to evaluations too (usage.md §4.5, querylimits.go).
+	catalog, err := quota.LoadCatalog(cfg.Usage)
+	if err != nil {
+		return err
+	}
+	startQueryLimits(ctx, cfg, pool, catalog, db, "alert", log)
 	adm.AddCheck("clickhouse", db.Ping)
 
 	store := alert.NewPGStore(pool)

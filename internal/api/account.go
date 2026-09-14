@@ -411,10 +411,21 @@ func (s *Server) lookupInvitation(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"organization_name": info.Org.Name, "email": info.Invitation.Email, "role": info.Invitation.Role,
-		"expires_at": formatTime(info.Invitation.ExpiresAt), "user_exists": info.UserExists,
-	})
+		"expires_at": formatTime(info.Invitation.ExpiresAt), "user_exists": info.UserExists, "sso": nil,
+	}
+	if s.sso != nil { // sso.go: claimed-domain redirection (D-089)
+		red, err := s.sso.InvitationRedirect(r.Context(), info.Invitation)
+		if err != nil {
+			return err
+		}
+		if red != nil {
+			out["sso"] = map[string]any{"required": true, "organization_name": red.OrganizationName, "connection_name": red.ConnectionName,
+				"protocol": red.Protocol, "same_organization": red.SameOrganization}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 	return nil
 }
 

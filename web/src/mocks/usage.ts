@@ -1,6 +1,6 @@
 // MSW handlers for usage, plans and quota status (docs/contracts/api.md "Usage and plans").
 import { http, HttpResponse } from "msw";
-import type { OrgPlan, Plan, QuotaMetric, UsageDay, UsageOverview, UsageStatus } from "@/api/usage";
+import type { OrgPlan, OrgQueryLimits, OrgQueryLimitsInput, Plan, QuotaMetric, UsageDay, UsageOverview, UsageStatus } from "@/api/usage";
 import { authenticate } from "./account";
 
 const API = "*/api/v1";
@@ -25,10 +25,27 @@ interface Assignment {
   updated_at: string;
 }
 let assignments: Record<string, Assignment> = {};
+let queryLimits: Record<string, NonNullable<OrgQueryLimits["organization"]>> = {};
 
-/** Resets plan assignments (tests). */
+/** Resets plan assignments and query limits (tests). */
 export function resetMockUsage(): void {
   assignments = {};
+  queryLimits = {};
+}
+
+const QUERY_DEFAULTS = { max_memory_usage: 2 * GiB, max_rows_to_read: 2_000_000_000, max_bytes_to_read: 0 };
+
+function queryLimitsOf(tenant: string, canManage: boolean): OrgQueryLimits {
+  const plan = { max_memory_usage: 0, max_rows_to_read: 0, max_bytes_to_read: 0, ...planOf(tenant).plan.limits.query };
+  const org = queryLimits[tenant] ?? null;
+  const effective = { ...QUERY_DEFAULTS };
+  const sources: OrgQueryLimits["sources"] = { max_memory_usage: "default", max_rows_to_read: "default", max_bytes_to_read: "default" };
+  for (const k of ["max_memory_usage", "max_rows_to_read", "max_bytes_to_read"] as const) {
+    if (plan[k] > 0) [effective[k], sources[k]] = [plan[k], "plan"];
+    const o = org?.[k];
+    if (o !== null && o !== undefined) [effective[k], sources[k]] = [o, "organization"];
+  }
+  return { defaults: QUERY_DEFAULTS, plan, organization: org, environment: null, effective, sources, can_manage: canManage, refresh_seconds: 30 };
 }
 
 const USED: Record<string, { ingest: number; hosts: number; users: number }> = {
@@ -199,6 +216,35 @@ export const usageHandlers = [
       period_start: period(null).start.slice(0, 10),
     };
     return HttpResponse.json(body);
+  }),
+
+  http.get(`${API}/usage/query-limits`, ({ request }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    return HttpResponse.json(queryLimitsOf(ctx.org.tenant_id, ctx.kind === "session" && ctx.role === "owner"));
+  }),
+
+  http.put(`${API}/usage/query-limits`, async ({ request }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    if (ctx.kind !== "session" || ctx.role !== "owner") return forbidden("only organization owners can change query limits");
+    const body = (await request.json()) as OrgQueryLimitsInput;
+    const v = (x: number | null | undefined) => (x === undefined ? null : x);
+    const org = { max_memory_usage: v(body.max_memory_usage), max_rows_to_read: v(body.max_rows_to_read), max_bytes_to_read: v(body.max_bytes_to_read) };
+    if (Object.values(org).some((x) => x !== null && x < 0)) {
+      return HttpResponse.json({ error: { code: "invalid_argument", message: "values must be >= 0" } }, { status: 400 });
+    }
+    if (Object.values(org).every((x) => x === null)) delete queryLimits[ctx.org.tenant_id];
+    else queryLimits[ctx.org.tenant_id] = { ...org, updated_at: new Date().toISOString(), updated_by: "admin@openlog.local" };
+    return HttpResponse.json(queryLimitsOf(ctx.org.tenant_id, true));
+  }),
+
+  http.delete(`${API}/usage/query-limits`, ({ request }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    if (ctx.kind !== "session" || ctx.role !== "owner") return forbidden("only organization owners can change query limits");
+    delete queryLimits[ctx.org.tenant_id];
+    return HttpResponse.json(queryLimitsOf(ctx.org.tenant_id, true));
   }),
 
   http.get(`${API}/plans`, ({ request }) => {

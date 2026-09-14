@@ -1,8 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ssoErrorCode } from "@/api/sso";
+import { ssoErrorCode, ssoLogoutStatus } from "@/api/sso";
 import { resetMockSso, setMockSsoConnection } from "@/mocks/sso";
+import { SsoLogoutNotice } from "./SsoLogoutNotice";
 import { SsoSignIn } from "./SsoSignIn";
 
 describe("SsoSignIn", () => {
@@ -41,5 +42,18 @@ describe("SsoSignIn", () => {
     expect(ssoErrorCode("domain_not_verified")).toBe("domain_not_verified");
     expect(ssoErrorCode("<script>alert(1)</script>")).toBeUndefined();
     expect(ssoErrorCode(42)).toBeUndefined();
+  });
+
+  it("explains the result of signing out everywhere (?sso_logout=)", () => {
+    expect(ssoLogoutStatus("ok")).toBe("ok");
+    expect(ssoLogoutStatus("partial")).toBe("partial");
+    expect(ssoLogoutStatus("done")).toBeUndefined();
+
+    const { rerender, container } = render(<SsoLogoutNotice status="ok" />);
+    expect(screen.getByRole("status")).toHaveTextContent("You are signed out of openlog and your identity provider.");
+    rerender(<SsoLogoutNotice status="partial" />);
+    expect(screen.getByRole("status")).toHaveTextContent("the identity provider did not confirm the sign-out. Close the browser");
+    rerender(<SsoLogoutNotice status={undefined} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

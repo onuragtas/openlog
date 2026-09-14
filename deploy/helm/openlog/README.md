@@ -76,9 +76,14 @@ renders a `KafkaUser` (`<kafka name>-openlog`, User Operator enabled):
 
 Changing the listener on an existing cluster rolls the brokers; openlog pods pick up the new settings
 on the next `helm upgrade` (env and mounts change, so they roll too). Authorization (ACLs) is not
-configured by the chart. For Altinity ClickHouse in operators mode `clickhouse.tls.enabled` only
-switches the address to `clickhouse.tls.securePort`; the server certificate, `tcp_port_secure` and the
-`remote_servers` secure flag must be configured in the CHI (not rendered by the chart yet).
+configured by the chart. For Altinity ClickHouse in operators mode, `clickhouse.tls.server.secretName` makes the chart
+configure server TLS (`tcp_port_secure`, `https_port`, secure `remote_servers`), Keeper TLS (client port 9281 + Raft,
+`server.keeper`) and replication over HTTPS (`server.interserverHTTPS`, port 9010); the certificate must cover the
+ClickHouse pod hosts, the service host and the Keeper hosts (`keeper-<chk>.<ns>.svc`, `chk-<chk>-keeper-0-<n>`) with
+server and client usage. On an existing release enable it in two upgrades: first `clickhouse.tls.server.*`, and after
+the CHI/CHK show `Completed` `clickhouse.tls.enabled` + `clickhouse.tls.clientSecret` (in one upgrade the pre-upgrade
+migrate hook dials 9440 before ClickHouse serves it). Between the two, processor shard inserts fail the handshake and
+data waits in Kafka. Validated on kind with `verificationMode: strict` ([kind runbook](../../../docs/operations/kind-dev-cluster.md)).
 
 ## Dependency modes
 
@@ -152,7 +157,7 @@ SSE-KMS (`s3.diskSettings`) and, with `warm.enabled`, a second PVC per replica. 
 `s3.endpoint` so every replica has its own prefix. The migrate Job applies the moves per `coldAfterDays` /
 `warmAfterDays`; `kubectl exec deploy/<release>-api -- openlog-admin storage status` shows bytes per volume and pending
 moves. External mode: configure `storage_configuration` on every server yourself (same XML as
-`deploy/compose/clickhouse/storage-tiered.xml`), then enable. Not yet tried on a real cluster.
+`deploy/compose/clickhouse/storage-tiered.xml`), then enable. On an existing operators-mode release, run `helm upgrade` twice (see tiered-storage.md). Not yet validated end to end.
 
 ### PostgreSQL (`auth.mode: postgres`, default)
 
@@ -199,6 +204,18 @@ read-only API keys under Settings.
 
 ```bash
 helm install openlog deploy/helm/openlog -n openlog --create-namespace -f my-values.yaml --timeout 30m
+```
+
+Released charts (chart `version` = `appVersion` = openlog version, sha256 in the signed release manifest,
+[releasing.md](../../../docs/operations/releasing.md#helm-charts)) instead of the repository checkout:
+
+```bash
+# GitHub release asset
+helm install openlog https://github.com/onuragtas/openlog/releases/download/v0.4.0/openlog-0.4.0.tgz \
+  -n openlog --create-namespace -f my-values.yaml --timeout 30m
+# OCI registry (when the release was pushed to GHCR)
+helm install openlog oci://ghcr.io/onuragtas/charts/openlog --version 0.4.0 \
+  -n openlog --create-namespace -f my-values.yaml --timeout 30m
 ```
 
 Starting points: `values-dev.yaml` (3-agent k3d cluster) and `values-production.example.yaml`.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/billing"
+	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/quota"
 	"github.com/onuragtas/openlog/internal/usage"
 )
@@ -56,6 +57,11 @@ type UsageDeps struct {
 	Thresholds []int
 	// Billing is nil without a provider (OPENLOG_BILLING_PROVIDER=none).
 	Billing billing.Provider
+	// QueryLimits stores organization query limit settings (usage_querylimits.go); nil: no endpoints. Query holds
+	// the OPENLOG_QUERY_* layers; QueryLimitsChanged reloads this pod's cache after a change.
+	QueryLimits        QueryLimitsStore
+	Query              config.Query
+	QueryLimitsChanged func(ctx context.Context)
 }
 
 // SetUsage enables the usage endpoints. Must be called before Run.
@@ -115,6 +121,11 @@ func (s *Server) usageRoutes(mux *http.ServeMux) {
 	org("GET /api/v1/usage/export", s.exportUsage)
 	org("GET /api/v1/usage/status", s.getUsageStatus)
 	org("GET /api/v1/plans", s.listPlans)
+	if s.usage.Store != nil && s.usage.QueryLimits != nil { // usage_querylimits.go
+		org("GET /api/v1/usage/query-limits", s.getQueryLimits)
+		org("PUT /api/v1/usage/query-limits", s.putQueryLimits)
+		org("DELETE /api/v1/usage/query-limits", s.deleteQueryLimits)
+	}
 	if s.usage.Store != nil {
 		super("GET /api/v1/admin/orgs/{org}/plan", s.getOrgPlan)
 		super("PUT /api/v1/admin/orgs/{org}/plan", s.putOrgPlan)

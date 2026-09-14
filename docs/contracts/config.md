@@ -3,12 +3,21 @@
 All backend services are configured **only via environment variables** (12-factor), so the same image runs in Compose and Kubernetes.
 Durations use Go syntax (`2s`, `500ms`). Lists are comma-separated.
 
+Every variable below can be set in both deployments: Compose passes each one through from `.env`
+(`deploy/compose/.env.example` lists them, commented and grouped; empty = the default here) and the Helm chart
+(`deploy/helm/openlog/values.yaml`) has a structured value, a component `config` entry or the top-level `config` map
+for it, with secrets (SMTP password, key hash secrets, SSO secret keys, CAPTCHA secret, ClickHouse read password, S3
+keys, bootstrap keys) in the chart Secret or `auth.existingSecret`. `internal/config/envcoverage_test.go` fails when a
+variable read by `internal/config` is missing from this document, Compose or the chart; the few intentionally
+unexposed ones (Compose: listen addresses fixed by the port mappings, dependency TLS/SASL of the bundled containers;
+Helm: `openlog-allinone`-only switches) are listed there with the reason.
+
 ## Common (all services)
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPENLOG_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` (JSON logs to stdout) |
-| `OPENLOG_ADMIN_ADDR` | `:9464` | Admin HTTP: `/healthz`, `/readyz`, `/metrics` (Prometheus) |
+| `OPENLOG_ADMIN_ADDR` | `:9464` | Admin HTTP: `/healthz`, `/readyz`, `/metrics` (Prometheus). `/readyz` is 200 only when every registered check passes: dependencies (`kafka`, `kafka_topics`, `clickhouse`, `postgres`, …), the service's own port (`ingest_listener`, `api_listener`) and, in `openlog-allinone` with `OPENLOG_MIGRATE_ON_START`, `migrations` (`"applying migrations"`) until the start-up migrations finished |
 | `OPENLOG_KAFKA_BROKERS` | `localhost:9092` | Kafka bootstrap brokers |
 | `OPENLOG_KAFKA_TOPIC_PREFIX` | `openlog` | See [kafka.md](kafka.md) |
 | `OPENLOG_CLICKHOUSE_ADDR` | `localhost:9000` | ClickHouse native protocol addresses |
@@ -96,6 +105,10 @@ Errors: a query stopped by `max_memory_usage`, `max_rows_to_read` or `max_bytes_
 307, 396) returns `422` `{"error":{"code":"resource_exhausted"}}` naming the limit; a quota (201), too many simultaneous
 queries (202) or the server's total memory limit returns `429 resource_exhausted` with `Retry-After`; `max_execution_time`
 stays `504 timeout`. Alert evaluations record `query limit exceeded (<limit>): …` as the evaluation error.
+A query that cannot read data from storage — typically parts on S3 after tiered storage moved them (code 499
+`S3_ERROR`, 86 `RECEIVED_ERROR_FROM_REMOTE_IO_SERVER`, or socket timeouts / network / Poco exceptions whose message names
+S3) — returns `503` `{"error":{"code":"storage_unavailable","retryable":true}}` with `Retry-After` and is logged as
+`clickhouse storage error`; alert evaluations record `cold storage unavailable: …`.
 
 The read user needs a profile with `readonly = 2` (reads only; openlog must be able to set the limits above) and
 `SELECT` on `openlog.*` only. Compose creates `openlog_reader` from `deploy/compose/clickhouse/openlog-reader.xml`
@@ -162,6 +175,8 @@ per pod. Metric: `openlog_license_key_resolutions_total{result="hit|miss|negativ
 | `OPENLOG_API_QUERY_TIMEOUT` | `30s` | Sets ClickHouse `max_execution_time` (per-tenant limits: see "ClickHouse read-only user and per-tenant query limits") |
 | `OPENLOG_API_MAX_ROWS` | `10000` | Upper bound for list endpoints |
 | `OPENLOG_API_UI_ENABLED` | `true` | Serve the embedded web UI at `/` (SPA fallback for non-`/api` paths) |
+| `OPENLOG_INGEST_PUBLIC_URL` | `` | Public OTLP/HTTP base URL of ingest shown in the UI's **Add data** install commands (`GET /api/v1/onboarding`), e.g. `https://ingest.openlog.example.com:4318`; a path prefix is allowed, credentials/query/fragment/quotes/whitespace are not. Empty = scheme and host of `OPENLOG_PUBLIC_URL` with port `4318`, or without it the host the browser used. Set it when ingest has its own name or port (reverse proxy, load balancer). Only affects displayed commands |
+| `OPENLOG_INGEST_PUBLIC_GRPC_URL` | `` | Public OTLP/gRPC endpoint for the same commands, e.g. `https://ingest.openlog.example.com:4317`. Empty = the host of `OPENLOG_INGEST_PUBLIC_URL` (or of its fallback) with port `4317` |
 | `OPENLOG_SESSION_TTL` | `168h` | Absolute session lifetime (`postgres` mode) |
 | `OPENLOG_SESSION_IDLE_TIMEOUT` | `24h` | A session unused for this long ends (`0` disables); activity is recorded at most once a minute |
 | `OPENLOG_COOKIE_SECURE` | `true` | `Secure` attribute of the session cookie. Set `false` only for plain-HTTP development (the API logs a warning) |
@@ -195,6 +210,8 @@ of `openlog-alert` (`OPENLOG_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FR
 see below) with links to `OPENLOG_PUBLIC_URL`. Both must be set; otherwise invitations are shared as copyable links
 (the UI shows the link) and sign-ups are not verified. Sending is synchronous (15 s timeout) and limited to 100
 invitation e-mails per organization and 5 per invited address per hour, and 5 verification e-mails per user per hour.
+E-mails are sent as plain text + HTML in English or Turkish, chosen from the request's `Accept-Language` (api.md
+"Invitations" → "E-mail language"; templates in `internal/mail/templates`).
 
 **APM** ([apm.md](apm.md)):
 

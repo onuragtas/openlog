@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	lib "github.com/onuragtas/openlog/libs/release"
+
+	"github.com/onuragtas/openlog/internal/updatemsg"
 )
 
 // ImageComponent is the key of the backend image in manifest.images.
@@ -59,7 +61,7 @@ func SelectTarget(ctx context.Context, idx *lib.Index, channel string, current l
 		cands = append(cands, cand{v, e})
 	}
 	if len(cands) == 0 {
-		return nil, fmt.Sprintf("%s is the newest release on channel %s", current, channel), nil
+		return nil, updatemsg.Format(updatemsg.UpToDateNewest, updatemsg.Params{"version": current.String(), "channel": channel}), nil
 	}
 	sort.Slice(cands, func(i, j int) bool { return lib.Compare(cands[i].v, cands[j].v) > 0 })
 	var skipped []string
@@ -97,7 +99,7 @@ func SelectTarget(ctx context.Context, idx *lib.Index, channel string, current l
 		}
 		return &Target{Version: c.v, Manifest: m, ManifestURL: c.e.ManifestURL, Image: rewriteRepository(image, imageRepo)}, "", nil
 	}
-	return nil, "no eligible release newer than " + current.String() + ": " + strings.Join(skipped, "; "), nil
+	return nil, updatemsg.Format(updatemsg.UpToDateNoEligible, updatemsg.Params{"version": current.String(), "details": strings.Join(skipped, "; ")}), nil
 }
 
 // rewriteRepository replaces the repository of ref ("repo@sha256:…" or "repo:tag") by repo.

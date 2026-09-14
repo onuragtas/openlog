@@ -13,15 +13,69 @@ import (
 
 // MemStore implements dashboard.Store in memory with the visibility and version semantics of the PostgreSQL store.
 type MemStore struct {
-	mu     sync.Mutex
-	items  map[string]*dashboard.Dashboard
-	Emails map[string]string // user id → e-mail
-	Now    func() time.Time
+	mu       sync.Mutex
+	items    map[string]*dashboard.Dashboard
+	versions map[string][]dashboard.Version // dashboard id → versions, oldest first
+	Emails   map[string]string              // user id → e-mail
+	Now      func() time.Time
+	// Sharing and reports (memstore_share.go).
+	Members map[string][]string // org id → member e-mails (lower case)
+	Tenants map[string]string   // org id → tenant id
+	sharing sharingState
 }
 
 // New returns an empty store.
 func New() *MemStore {
-	return &MemStore{items: map[string]*dashboard.Dashboard{}, Emails: map[string]string{}, Now: time.Now}
+	return &MemStore{items: map[string]*dashboard.Dashboard{}, versions: map[string][]dashboard.Version{}, Emails: map[string]string{}, Now: time.Now,
+		Members: map[string][]string{}, Tenants: map[string]string{}, sharing: newSharingState()}
+}
+
+// recordVersion stores the snapshot of d (locked by the caller).
+func (s *MemStore) recordVersion(d *dashboard.Dashboard) {
+	snap := clone(d).Snapshot()
+	v := dashboard.Version{VersionInfo: dashboard.VersionInfo{Version: d.Version, AuthorID: d.UpdatedBy, AuthorEmail: s.Emails[d.UpdatedBy],
+		CreatedAt: s.Now(), RestoredFrom: d.RestoredFrom, PageCount: len(snap.Pages)}, Document: snap}
+	for _, p := range snap.Pages {
+		v.WidgetCount += len(p.Widgets)
+	}
+	list := append(s.versions[d.ID], v)
+	if len(list) > dashboard.MaxVersions {
+		list = append([]dashboard.Version(nil), list[len(list)-dashboard.MaxVersions:]...)
+	}
+	s.versions[d.ID] = list
+}
+
+func (s *MemStore) ListVersions(_ context.Context, orgID, id string) ([]dashboard.VersionInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.items[strings.ToLower(id)]
+	if !ok || d.OrgID != orgID {
+		return nil, dashboard.ErrNotFound
+	}
+	list := s.versions[d.ID]
+	out := make([]dashboard.VersionInfo, 0, len(list))
+	for i := len(list) - 1; i >= 0; i-- {
+		out = append(out, list[i].VersionInfo)
+	}
+	return out, nil
+}
+
+func (s *MemStore) GetVersion(_ context.Context, orgID, id string, version int) (*dashboard.Version, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.items[strings.ToLower(id)]
+	if !ok || d.OrgID != orgID {
+		return nil, dashboard.ErrNotFound
+	}
+	for _, v := range s.versions[d.ID] {
+		if v.Version == version {
+			c := v
+			c.Document = clone(&dashboard.Dashboard{Name: v.Document.Name, Description: v.Document.Description, Visibility: v.Document.Visibility,
+				Variables: v.Document.Variables, Pages: v.Document.Pages}).Snapshot()
+			return &c, nil
+		}
+	}
+	return nil, dashboard.ErrNotFound
 }
 
 func clone(d *dashboard.Dashboard) *dashboard.Dashboard {
@@ -83,7 +137,9 @@ func (s *MemStore) Create(_ context.Context, d *dashboard.Dashboard) error {
 	c.Version = 1
 	c.CreatedAt = s.Now()
 	c.UpdatedAt = c.CreatedAt
+	c.RestoredFrom = 0
 	s.items[c.ID] = c
+	s.recordVersion(c)
 	return nil
 }
 
@@ -102,6 +158,8 @@ func (s *MemStore) Replace(_ context.Context, d *dashboard.Dashboard, expectedVe
 	c.CreatedAt = old.CreatedAt
 	c.CreatedBy = old.CreatedBy
 	c.UpdatedAt = s.Now()
+	s.recordVersion(c)
+	c.RestoredFrom = 0
 	s.items[c.ID] = c
 	return nil
 }

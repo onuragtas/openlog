@@ -1,0 +1,10 @@
+{{define "subject"}}[openlog] {{.OrgName}}: {{.MetricLabel}}, {{.PlanName}} plan limitinin %{{.Threshold}} düzeyine ulaştı{{end}}
+
+{{define "text"}}
+"{{.OrgName}}" ({{.TenantID}}) organizasyonu bu fatura döneminde ({{.Period}}) {{.MetricLabel}} için {{.Limit}} limitin {{.Used}} kadarını kullandı; bu, {{.PlanName}} planı limitinin %{{printf "%.1f" .Percent}} kadarı.
+
+{{if .HardBlock}}Limitin %{{printf "%.0f" .BlockPercent}} kadarı (%{{printf "%.0f" .GracePercent}} tolerans) kullanıldığında yeni veriler, dönem {{.PeriodEnd}} tarihinde bitene veya plan yükseltilene kadar reddedilir.{{else if .Exceeded}}Limit aşıldı. Planı yükseltmeyi veya gönderilen veriyi azaltmayı değerlendirin.{{else}}Limite ulaşmadan önce planı yükseltmeyi veya gönderilen veriyi azaltmayı değerlendirin.{{end}}
+{{with .Link}}
+Kullanım ayrıntıları: {{.}}
+{{end}}
+{{end}}

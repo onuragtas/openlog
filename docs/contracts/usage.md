@@ -153,9 +153,21 @@ hour and stop being enforced).
 
 ### 4.5 Query limits
 
-Plan `limits.query` replaces the matching `OPENLOG_QUERY_*` defaults for the organization's api queries;
-`OPENLOG_QUERY_TENANT_LIMITS` entries still win. api pods refresh plan assignments every minute. (openlog-alert keeps the
-`OPENLOG_QUERY_*` limits.)
+ClickHouse `max_memory_usage`, `max_rows_to_read` and `max_bytes_to_read` of an organization's api queries and alert
+evaluations are resolved per setting from four layers, lowest to highest:
+
+| # | Layer | Set by | Value semantics |
+|---|---|---|---|
+| 1 | `OPENLOG_QUERY_MAX_*` defaults | environment | `0` = openlog does not set it |
+| 2 | plan `limits.query` (with `org_plans.overrides.query`) | plan catalog / superadmin | only values `> 0` replace layer 1 |
+| 3 | organization setting (`org_query_limits`, Settings → Usage & plan → Query limits, `PUT /api/v1/usage/query-limits`) | owner (self-hosted) or superadmin (SaaS mode) | a set value (including `0`) replaces layers 1–2; unset inherits |
+| 4 | `OPENLOG_QUERY_TENANT_LIMITS` entry of the tenant | environment | replaces all three settings (the operator's last word) |
+
+Who may change layer 3: superadmins always; organization owners (session users) only without `OPENLOG_SAAS_MODE`, because
+in SaaS mode the limits are part of the plan an operator sells (D-080). Every change writes audit action
+`query_limits.update` / `query_limits.delete`. Every api and alert pod caches layers 2–3 for all tenants and reloads them
+every 30 s (`quota.QueryLimitsResolver`; the pod that handled the change reloads at once), so queries never read
+PostgreSQL; while PostgreSQL is unreachable the last loaded layers stay in use (before the first load: layers 1 and 4).
 
 ## 5. Per-tenant retention (D-081)
 

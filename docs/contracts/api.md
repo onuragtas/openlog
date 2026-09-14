@@ -6,7 +6,9 @@ Machine-readable spec: [openapi.yaml](openapi.yaml). Data model: [postgres.md](p
 Errors: HTTP status + `{"error": {"code": "invalid_argument", "message": "…"}}`. Codes: `invalid_argument` (400),
 `unauthenticated` (401), `permission_denied` (403), `not_found` (404), `already_exists` (409),
 `failed_precondition` (409), `resource_exhausted` (429, with `Retry-After`), `internal` (500),
-`unavailable` (503, with `Retry-After`), `timeout` (504).
+`unavailable` (503, with `Retry-After`), `storage_unavailable` (503, with `Retry-After` and `"retryable": true`: a
+telemetry query could not read data from storage, typically parts on S3 after tiered storage; retry later or query a
+more recent range, [config.md](config.md) "ClickHouse read-only user and per-tenant query limits"), `timeout` (504).
 
 ## Authentication
 
@@ -46,7 +48,7 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 
 | Operation | viewer | member | admin | owner |
 |---|:-:|:-:|:-:|:-:|
-| Telemetry, `GET /orgs/current`, `GET /members`, `GET /fleet/*`, own sessions, leave organization | ✓ | ✓ | ✓ | ✓ |
+| Telemetry, `GET /orgs/current`, `GET /members`, `GET /fleet/*`, `GET /onboarding`, own sessions, leave organization | ✓ | ✓ | ✓ | ✓ |
 | `GET /license-keys`, `GET /api-keys`, `POST /api-keys`, revoke own API keys | | ✓ | ✓ | ✓ |
 | Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ |
 | Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
@@ -134,6 +136,13 @@ URL fragment). When e-mail is configured (`GET /auth/config` → `email_enabled`
 invitee from `OPENLOG_SMTP_FROM`; `email_sent` in the response says whether that succeeded (a failed or rate-limited
 e-mail never fails the request). Limits: 100 invitation e-mails per organization and 5 per invited address per hour.
 
+**E-mail language.** Transactional e-mails (invitation, sign-up verification, SSO domain verification, usage
+notifications) are rendered from `internal/mail/templates` as plain text + HTML in English or Turkish. There is no
+organization or user language setting: the language is the supported one the request's `Accept-Language` prefers most
+(`q` values honoured; none supported = English) — the inviter's for invitations (stored with the invitation and kept on
+resend), the new user's for verification links, the requesting admin's for domain verification, and for usage
+notifications the language each owner had when their account was created (`users.locale`, postgres.md).
+
 ### `GET /api/v1/invitations?include_expired=` · `POST /api/v1/invitations` `{"email", "role"}` · `DELETE /api/v1/invitations/{id}`
 List: `{"invitations": [{"id", "email", "role", "invited_by_email", "created_at", "expires_at", "expired", "last_sent_at", "send_count"}]}`
 — pending invitations; with `include_expired=true` also expired ones that were neither accepted nor revoked.
@@ -204,11 +213,13 @@ Actions: see [postgres.md](postgres.md#audit_log).
 
 ## Single sign-on
 
-OIDC and SAML 2.0 sign-in per organization (D-077; operations guide [sso.md](../operations/sso.md), code
+OIDC and SAML 2.0 sign-in per organization (D-077, D-088, D-089; operations guide [sso.md](../operations/sso.md), code
 `internal/sso`). Postgres auth mode, `OPENLOG_SSO_ENABLED=true` (default) and `OPENLOG_PUBLIC_URL` required;
 `GET /auth/config` reports `sso_enabled`.
 
-**Model.** An organization has at most one connection (`oidc` or `saml`) and claims e-mail domains. A domain is
+**Model.** An organization has up to 10 connections (`oidc` or `saml`) and claims e-mail domains. The oldest connection
+is the **default connection**; a verified domain routes sign-ins to its `connection_id` (`PUT /sso/domains/{id}`) or,
+when unset, to the default connection, and a connection accepts only identities of the domains routed to it. A domain is
 verified by a DNS TXT record `_openlog-verification.<domain>` = `openlog-domain-verification=<token>` or by a link
 e-mailed to `admin|administrator|hostmaster|postmaster|webmaster@<domain>`; a verified domain belongs to one
 organization. **Only identities whose e-mail address is in a verified domain of the connection's organization are
@@ -243,40 +254,90 @@ SameSite=Lax, Path=/api/v1/sso, 10 min; the server stores only its SHA-256) and 
   `unavailable`. Test sign-ins return to `/settings/sso?sso_test=ok|failed`. `Referrer-Policy: no-referrer`.
 
 **Sessions.** On every request an SSO session may act only in its organization (other `X-Openlog-Org-Id` → `403`),
-only while that organization's connection is the one that created it and enabled (else `401`), and only until the
-maximum session age (`401`). Logout is local.
+only while the connection that created it still exists and is enabled (else `401`), and only until the maximum
+session age (`401`). `POST /auth/logout` is local; single logout ends the IdP session as well.
 
-**Enforcement.** With `enforce`, password sessions of members whose e-mail domain is verified by the organization
-cannot act in it (`403 permission_denied` "this organization requires single sign-on"), except break-glass owners
-(owners listed in `break_glass_user_ids`). `POST /auth/login` with a correct password answers the same `403` when
+**Single logout (D-088).** The IdP session of every SSO session is recorded at sign-in (SAML NameID, format,
+qualifiers and `SessionIndex`; OIDC `sub`, `sid` and the ID token sealed like client secrets); a sign-in fails
+(`unavailable`) when it cannot be recorded. `POST /auth/sso/logout` ("Sign out everywhere") revokes the caller's
+session and the user's other sessions of the same connection first, clears the cookie, and returns where the browser
+ends the IdP session:
+- SAML (IdP metadata with a `SingleLogoutService`): a `LogoutRequest` (NameID, SessionIndex) signed with the SP key —
+  HTTP-Redirect binding with a RSA-SHA256 query signature (`redirect_url`) or HTTP-POST with an enveloped signature
+  (`post`). The IdP answers at `/sso/saml/{connection_id}/slo`; the `LogoutResponse` must be signed by an IdP
+  metadata certificate, with issuer = IdP entity ID, `Destination` (when present) = SLO URL, a current `IssueInstant`
+  and `InResponseTo` = the request (RelayState is a single-use state, `OPENLOG_SSO_LOGIN_TTL`) →
+  `303 <redirect>?sso_logout=ok`, otherwise `?sso_logout=partial`.
+- IdP-initiated: a `LogoutRequest` at `/sso/saml/{connection_id}/slo` (either binding) must be signed (query signature
+  with RSA/ECDSA SHA-256/384/512, or exactly one enveloped signature; SHA-1 refused), come from the IdP entity ID with
+  `Destination` = SLO URL, `IssueInstant` within 5 min plus clock skew and `NotOnOrAfter` not passed; its ID is kept in
+  the replay cache (`replay`). It carries a `NameID` or an `EncryptedID` (decrypted with the SP key). The connection's
+  active sessions with that NameID — restricted to the named `SessionIndex` values when the IdP sends any — are
+  revoked, and a `LogoutResponse` signed with the SP key (`Success`, or `Responder` when a revocation failed) goes to the
+  IdP's SingleLogoutService (`303` for HTTP-Redirect, an auto-submitting form with a hash-pinned
+  `Content-Security-Policy` for HTTP-POST). Invalid requests end at `/login?sso_error=invalid_request` without a
+  response and without revoking anything.
+- OIDC (discovery with `end_session_endpoint`): `redirect_url` = the end session endpoint with `id_token_hint`,
+  `client_id`, `post_logout_redirect_uri` = `/api/v1/sso/oidc/logout/callback` (register it at the IdP) and `state`;
+  the callback sends the browser to `<redirect>?sso_logout=ok`.
+- `redirect` must be `/login` or one of the connection's `logout_redirect_allowlist` paths (else `/login`). Without an
+  IdP logout endpoint only the openlog sessions end (`redirect_url` and `post` null).
+
+**Claimed domains (D-089).** An address whose verified domain routes to an **enabled** connection does not create
+password accounts: `POST /auth/signup` answers `409 failed_precondition` ("… uses single sign-on of the organization
+…"; `/auth/sso/discover` names it), and `POST /invitations/accept` answers the same `409` for invitations of that
+organization and — unless the connection has `allow_external_invitations` (default true) — of other organizations.
+`POST /invitations/lookup` returns `sso` (`required`, `organization_name`, `connection_name`, `protocol`,
+`same_organization`) so the UI offers "Continue with SSO" instead of the password form. An SSO sign-in accepts a
+pending invitation of the connection's organization with the invited role (also with JIT off).
+
+**Background refresh (D-088).** The api leader re-fetches, per enabled connection, the OIDC discovery document and JWKS
+every 30 min (stored in `sso_connections.idp_cache` and used by every pod for up to an hour, unknown key ids still fetch
+the JWKS) and the SAML metadata of `idp_metadata_url` at half its `cacheDuration`/remaining `validUntil` (15 min –
+24 h, default 6 h). Changed metadata with the same entity ID replaces the stored copy without a new `config_version`
+(audit `sso.connection.metadata_refresh`); a changed entity ID, expired metadata or an expired signing certificate
+fails the refresh. Failures back off 5 min → 1 h. `connection.health` reports `ok`, `warning` (1–2 failures, certificate
+expiring within 30 days, metadata valid for less than 7 days), `error` (3 failures, expired certificate) or `unknown`.
+Metrics: `openlog_sso_idp_refresh_total{protocol,result}`, `openlog_sso_idp_refresh_duration_seconds{protocol}`,
+`openlog_sso_idp_refresh_failing_connections`.
+
+**Enforcement.** Enforcement is a setting of a connection and applies to members whose verified e-mail domain routes to
+it. With `enforce`, password sessions of those members cannot act in the organization (`403 permission_denied` "this organization requires single sign-on"), except break-glass owners
+(owners listed in the connection's `break_glass_user_ids`). `POST /auth/login` with a correct password answers the same `403` when
 every organization of the user requires SSO (a user in another organization still signs in, without access to the
 enforcing one). Turning enforcement on (owner) requires an enabled connection whose current `config_version`
-passed a test sign-in, a verified domain, at least one break-glass owner, and that the caller keeps access
+passed a test sign-in, a verified domain routed to it, at least one break-glass owner, and that the caller keeps access
 (break-glass owner or SSO session of this connection) → else `409`. While enforced the connection cannot be
-disabled or deleted, and the last verified domain not removed (`409`).
+disabled or deleted, and its last verified domain can be neither removed nor routed elsewhere (`409`).
 
 | Endpoint | Who | Notes |
 |---|---|---|
-| `POST /auth/sso/discover` `{"email"}` | public | `{"sso", "organization_name", "protocol", "enforced"}`; reveals only whether a domain uses SSO. 60 per IP per 10 min |
+| `POST /auth/sso/discover` `{"email"}` | public | `{"sso", "organization_name", "connection_name", "protocol", "enforced"}` of the routed connection; reveals only whether a domain uses SSO. 60 per IP per 10 min |
 | `POST /auth/sso/start` `{"email", "redirect"?}` | public | `{"redirect_url"}` + binding cookie; `404` without an enabled connection for the domain; `503` IdP unreachable. 30 per IP per 10 min |
 | `GET /sso/oidc/callback` · `POST /sso/saml/{connection_id}/acs` · `GET /sso/saml/complete` | public | See above; always `303` |
-| `GET /sso/saml/{connection_id}/metadata` | public | SP metadata (`application/samlmetadata+xml`); the URL is the SP entity ID |
-| `GET /sso/connection` | admin, owner | `{"available", "secrets_encrypted", "scim_enabled", "email_verification_available", "domain_email_local_parts", "service_provider": {"oidc_redirect_uri", "scim_base_url", "saml_entity_id", "saml_acs_url", "saml_metadata_url", "saml_certificate_pem"}, "connection": SSOConnection\|null}` |
-| `PUT /sso/connection` `SSOConnectionInput` | admin, owner | Create/replace; `client_secret` omitted = keep, `""` = remove; SAML metadata is fetched from `idp_metadata_url` now (or pasted `idp_metadata_xml`); each save increments `config_version` |
-| `DELETE /sso/connection` | admin, owner | Ends the connection's SSO sessions |
+| `GET /sso/saml/{connection_id}/metadata` | public | SP metadata (`application/samlmetadata+xml`); the URL is the SP entity ID. Lists the ACS, the SLO service (both bindings), the signing certificate and the accepted encryption algorithms |
+| `GET\|POST /sso/saml/{connection_id}/slo` · `GET /sso/oidc/logout/callback` | public | Single logout, see above; `303` or an HTML form |
+| `GET /auth/sso/session` | signed-in user | `{"sso", "protocol", "connection_id", "connection_name", "idp_logout"}` |
+| `POST /auth/sso/logout` `{"redirect"?}` | signed-in user | `{"protocol", "redirect_url", "post": {"url", "fields"}\|null, "revoked_sessions"}`; clears the session cookie |
+| `GET /sso/connections` · `POST /sso/connections` `SSOConnectionInput` | admin, owner | SSOState `{"available", "secrets_encrypted", "scim_enabled", "email_verification_available", "domain_email_local_parts", "service_provider": {"oidc_redirect_uri", "oidc_post_logout_redirect_uri", "scim_base_url", "saml_entity_id", "saml_acs_url", "saml_slo_url", "saml_metadata_url", "saml_certificate_pem"}, "connection": SSOConnection\|null, "connections": [SSOConnection]}`; `POST` → `201` with the new connection; ≤ 10 per organization |
+| `GET\|PUT\|DELETE /sso/connections/{id}` · `POST /sso/connections/{id}/test` · `POST /sso/connections/{id}/test/start` · `PUT /sso/connections/{id}/enforcement` · `GET\|PUT /sso/connections/{id}/role-mappings` | admin, owner (enforcement: owner) | As the single-connection endpoints below, for one connection; `service_provider` holds its SAML values. `DELETE` ends its sessions and routes its domains to the default connection |
+| `POST /sso/connections/{id}/refresh` | admin, owner | Refresh now; SSOState with the new `health`; 30 per connection per 10 min |
+| `GET /sso/connection` · `PUT /sso/connection` · `DELETE /sso/connection` | admin, owner | Single-connection API (D-077) on the **default** connection; `PUT` creates it when there is none. `client_secret` omitted = keep, `""` = remove; SAML metadata is fetched from `idp_metadata_url` now (or pasted `idp_metadata_xml`); each save increments `config_version`. SSOConnection adds `default`, `logout_redirect_allowlist`, `allow_external_invitations`, `saml.idp_slo_url` and `health` |
 | `POST /sso/connection/test` | admin, owner | Server-side checks `{"ok", "checks": [{"name", "ok", "message"}]}` |
 | `POST /sso/connection/test/start` | admin, owner | `{"redirect_url"}`; a real sign-in at the IdP that only records `last_test` (email, groups, resulting role) |
 | `PUT /sso/enforcement` `{"enforce", "break_glass_user_ids"}` | owner | Safeguards above |
-| `GET /sso/role-mappings` · `PUT /sso/role-mappings` `{"mappings": [{"group", "role"}]}` | admin, owner | `role` ∈ admin, member, viewer; ≤ 200; highest matching role wins |
-| `GET /sso/domains` · `POST /sso/domains` `{"domain"}` · `DELETE /sso/domains/{id}` | admin, owner | ≤ 20 per organization; adding needs a confirmed e-mail address |
+| `GET /sso/role-mappings` · `PUT /sso/role-mappings` `{"mappings": [{"group", "role"}]}` | admin, owner | Organization-wide mappings (SCIM, and sign-ins through connections without own mappings); `{"mappings", "connection_id"}`; `role` ∈ admin, member, viewer; ≤ 200; highest matching role wins |
+| `GET /sso/domains` · `POST /sso/domains` `{"domain"}` · `PUT /sso/domains/{id}` `{"connection_id"}` · `DELETE /sso/domains/{id}` | admin, owner | ≤ 20 per organization; adding needs a confirmed e-mail address; `connection_id` null = default connection |
 | `POST /sso/domains/{id}/verify` `{"method": "dns_txt"\|"email", "email_local_part"?}` | admin, owner | `409` when the TXT record is missing or another organization verified the domain; e-mail: 5 per domain per 10 min, link valid 24 h |
 | `POST /sso/domains/verify-email` `{"token"}` | public | Token of the link `/sso/verify-domain#token=oldv_…` |
 | `GET /scim/tokens` · `POST /scim/tokens` `{"name", "expires_at"?}` · `DELETE /scim/tokens/{id}` | admin, owner | `POST` returns `{"token", "secret"}` once (`ols_` + 48 hex); ≤ 20 active |
 
-Audit actions: `sso.connection.create|update|delete|test|test_start|test_login`, `sso.enforcement.update`,
-`sso.role_mappings.update`, `sso.domain.add|verify|remove|verification_email`, `sso.login`, `sso.login_failed`
-(reason), `user.login_refused` (password sign-in refused by enforcement), `member.add` / `member.role_change` with
-`via` `sso_jit`, `sso_groups`, `scim`, `scim_groups`, and the SCIM actions below.
+Audit actions: `sso.connection.create|update|delete|test|test_start|test_login|refresh|metadata_refresh`,
+`sso.enforcement.update`, `sso.role_mappings.update`, `sso.domain.add|verify|remove|assign|verification_email`,
+`sso.login`, `sso.login_failed` (reason), `sso.logout` (`via` `user`/`idp`, revoked sessions), `sso.logout_complete`,
+`sso.logout_failed`, `user.login_refused` (password sign-in refused by enforcement), `invitation.accept` with `via`
+`sso`, `member.add` / `member.role_change` with `via` `sso_jit`, `sso_groups`, `scim`, `scim_groups`, and the SCIM
+actions below.
 
 ## SCIM
 
@@ -290,7 +351,7 @@ SCIM 2.0 provisioning (RFC 7643/7644 subset, D-078, code `internal/scim`) at **`
 |---|---|
 | `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas` | GET (patch and filter supported; no bulk, sort, ETag, password change) |
 | `/Users` | GET (`filter=userName eq "…"` \| `externalId eq "…"`, `startIndex`, `count` ≤ 500), POST |
-| `/Users/{id}` | GET, PUT, PATCH (`add`/`replace`/`remove`; paths `active`, `userName`, `externalId`, `displayName`, `name`, `name.givenName`, `name.familyName`; path-less object; other attributes accepted and ignored), DELETE |
+| `/Users/{id}` | GET, PUT, PATCH (`add`/`replace`/`remove`; paths `active`, `userName`, `externalId`, `displayName`, `name`, `name.givenName`, `name.familyName`, `emails`, `emails[primary eq true].value`, `emails[type eq "work"].value`; path-less object; other attributes accepted and ignored), DELETE |
 | `/Groups` | GET (`filter=displayName eq "…"` \| `externalId eq "…"`, `excludedAttributes=members`), POST |
 | `/Groups/{id}` | GET, PUT, PATCH (`displayName`, `externalId`, `members` add/replace/remove, `members[value eq "<id>"]` remove), DELETE |
 
@@ -301,9 +362,13 @@ role from SCIM groups or the connection's `default_role`, viewer without a conne
 strings `"False"`) or DELETE removes the membership immediately, revokes the user's SSO sessions bound to the
 organization and the API keys they created in it; other sessions lose the organization on their next request. A
 deactivated user is not re-added by JIT sign-in. Owners cannot be deactivated or deleted (`400 mutability`) and
-their role is never changed. Changing the e-mail address is refused (`400 mutability`). Group members must be
+their role is never changed. **E-mail change (D-089):** the primary (or first) address of `emails` in a PUT or PATCH —
+or a changed `userName` when the previous `userName` was the account's address — becomes the openlog account's
+address when it is valid (`400 invalidValue`), in a verified domain of the organization (`400 invalidValue`), not used
+by another account (`409 uniqueness`), the current address is in a verified domain of the organization and the user
+is not an owner (`400 mutability`); audit `scim.user.email_change` (`from`, `to`). Group members must be
 provisioned users; group changes recompute the members' roles through the role mappings.
-Audit actions: `scim.user.create|update|activate|deactivate|delete`, `scim.group.create|update|delete`
+Audit actions: `scim.user.create|update|activate|deactivate|delete|email_change`, `scim.group.create|update|delete`
 (actor `scim:<token name>`), `scim.token.create|revoke`.
 
 ## Version
@@ -314,6 +379,12 @@ Audit actions: `scim.user.create|update|activate|deactivate|delete`, `scim.group
 release of `OPENLOG_UPDATE_CHANNEL` when it is newer than the answering pod. `updater` is the status document of
 `openlog-updater` (`engine`, `mode`, `state`: `off|error|up_to_date|available|waiting_for_maintenance_window|updating|succeeded|failed|rolled_back|rollback_failed`,
 `current_version`, `target_version`, `steps[]`, `failed_versions[]`, `history[]`, …; see openapi `UpdaterStatus`).
+`updater.message` is English; for fixed messages `updater.message_code` (`mode_off`, `update_available`,
+`update_available_notify`, `waiting_for_window`, `updated`, `rolled_back`, `rollback_failed`, `failed_before_change`,
+`up_to_date_newest`, `up_to_date_no_eligible`) and `updater.message_params` (strings: `version`, `from`, `to`,
+`channel`, `details`) let clients translate it; both are absent in documents of older updaters and for free text
+(clients show `message` then). `update_requests.latest` carries the same `message_code`/`message_params` when its
+`message` is a fixed updater message (plus `error` for an appended English error).
 `update_requests` (null in static mode): `{"can_request", "updater_listening", "updater_polled_at", "latest": UpdateRequest | null}`;
 `can_request` = the caller may use the two endpoints below; `latest.requested_by_email` only when `can_request`.
 Every API response (including errors and the UI) carries `X-Openlog-Version`.
@@ -336,6 +407,35 @@ open; `429` within 30 s of the previous apply request. Audit `update.apply_reque
 `ignore_maintenance_window`, `engine`). Progress: poll `GET /version` (`update_requests.latest`, `updater.state`,
 `updater.steps`); the Compose updater picks requests up within `OPENLOG_UPDATER_REQUEST_POLL` (10 s), the Kubernetes
 CronJob at its next run.
+
+## Onboarding
+
+### `GET /api/v1/onboarding` (any principal with an organization, both auth modes)
+Inputs of the web UI's **Add data** page (`/add-data`), which builds copy-paste install commands in the browser.
+`200` with `Cache-Control: no-store`; `401` unauthenticated, `403` without an organization. No secrets: license key values
+are only returned once by `POST /api/v1/license-keys`, and a key the user pastes into the page never reaches the server.
+
+```json
+{"ui_url": {"url": "https://openlog.example.com", "source": "configured"},
+ "otlp_http": {"url": "https://openlog.example.com:4318", "source": "derived_public_url"},
+ "otlp_grpc": {"url": "https://openlog.example.com:4317", "source": "derived_public_url"},
+ "server_version": "0.9.1", "agent_version": "0.9.2", "release_channel": "stable",
+ "cors_enabled": false, "cors_allowed_origins": [], "auth_mode": "postgres",
+ "organization": {"id": "…", "tenant_id": "default", "name": "Default"}, "role": "admin",
+ "features": {"license_keys": true, "can_create_license_keys": true, "can_list_license_keys": true,
+              "fleet_php_install": true, "tail_sampling": false}}
+```
+
+- `source`: `configured` (`OPENLOG_PUBLIC_URL`, `OPENLOG_INGEST_PUBLIC_URL`, `OPENLOG_INGEST_PUBLIC_GRPC_URL`),
+  `derived_public_url` (scheme and host of `OPENLOG_PUBLIC_URL` with port 4318/4317), `derived_ingest_url` (gRPC: host of
+  `OPENLOG_INGEST_PUBLIC_URL` with port 4317) or `derived_request` (scheme and host the browser used; a well-formed
+  `X-Forwarded-Proto`/`X-Forwarded-Host` wins). The UI asks the user to confirm derived endpoints.
+- `agent_version`: the newest verified release of `release_channel` when the release check found one, else the
+  server's own release version; `null` for development builds (commands then use `latest` download URLs).
+- `cors_enabled` / `cors_allowed_origins`: `OPENLOG_INGEST_CORS_ALLOWED_ORIGINS` of this api pod (browser OTLP/JSON logs).
+- `features.can_create_license_keys`: signed-in admin or owner in postgres mode; `can_list_license_keys`: signed-in
+  member or higher; `fleet_php_install`: fleet endpoints exist (php-agent.md §7.3); `tail_sampling`:
+  `OPENLOG_TAILSAMPLING_ENABLED`.
 
 ## Hosts
 
@@ -1092,6 +1192,105 @@ Export: `{"openlog_dashboard": 1, "name", "description", "variables", "pages": [
 id]}]}`. Import takes the same document (plus optional `"visibility"`), validates it like `POST` and answers `201`
 Dashboard; unknown `openlog_dashboard` versions → `400`.
 
+### Cross-widget filters
+Clicking a facet value in a widget (table row, bar, pie slice, billboard, heatmap row or chart legend entry) adds a
+dashboard filter `attribute = value` (several values of one attribute are separate filters and all must match). The web UI
+keeps the filters in the URL (`filters`) and sends them with every widget query as `POST /api/v1/query`
+`"filters": [{"attribute": "host.name", "value": "web-1", "event_type": "Log"}]` (≤ 10). Each filter is ANDed with the
+widget query's `WHERE` at plan level (bound parameter) only where the widget's event type has the attribute; skipped
+filters are listed in `metadata.ignored_filters` ([oql.md](oql.md) §7). Filters are not saved with the dashboard and do
+not apply to share links or reports.
+
+### Version history: `GET /api/v1/dashboards/{id}/versions` · `GET …/versions/{version}` · `POST …/versions/{version}/restore`
+Every save (create, `PUT`, add widget, restore) stores the whole document as a new version; the newest 50 versions of a
+dashboard are kept (D-086). Reads: whoever can read the dashboard.
+List: `{"versions": [{"version", "author_user_id" | null, "author_email", "created_at", "restored_from" | null,
+"page_count", "widget_count"}], "current_version", "can_restore"}`, newest first.
+One version: the list entry plus `"document": {"name", "description", "visibility", "variables", "pages"}` (with page and
+widget ids), `"current_version"`, `"previous_version"` (the next older stored version, or `null`), `"changes"` (diff from
+the previous version to this one, `null` without one) and `"differences_from_current"` (diff from the current document to
+this version, i.e. what a restore changes). Diff: `{"name", "description", "visibility", "variables": bool,
+"pages_added" | "pages_removed" | "pages_renamed": [{"id", "name"}], "widgets_added" | "widgets_removed" |
+"widgets_changed": [{"id", "title", "page", "fields"?: ["title" | "visualization" | "layout" | "query" | "markdown" |
+"unit" | "thresholds" | "options" | "page"]}]}` (pages and widgets matched by id; `page` is the page name).
+Restore `{"version"}` (the current version that was read; `409` when it changed) saves the stored document as a new
+version with `restored_from` → `200` Dashboard. Same permission as `PUT`; the dashboard keeps its current visibility; page
+and widget ids of the stored version are kept; a stored query that no longer validates → `400`. Unknown or pruned version
+→ `404`. Audit: `dashboard.restore`. Saves by api pods of an older release (rolling upgrade) are missing from the history.
+
+### Sharing settings: `GET /api/v1/dashboards/settings` · `PUT /api/v1/dashboards/settings` `{"share_links_enabled", "report_domains"?}`
+Organization-wide: `{"share_links_enabled": false, "report_domains": [], "updated_at" | null, "can_edit"}`. Share links are
+off by default. `report_domains` (≤ 20 domain names, lower-cased, a leading `@` is dropped) are the e-mail domains
+scheduled reports may be sent to besides members. Reads: every role and API keys; `PUT`: signed-in admins and owners
+(`403` otherwise). Disabling share links stops all existing links immediately (they are kept and work again when
+re-enabled, unless expired or revoked). Audit: `dashboard.settings.update`.
+
+### Share links: `GET /api/v1/dashboards/{id}/shares` · `POST /api/v1/dashboards/{id}/shares` · `DELETE /api/v1/dashboards/{id}/shares/{share_id}`
+Read-only public links to one dashboard (D-087). Create: editors of the dashboard (same as `PUT`); list and revoke: editors
+and admins/owners who can read the dashboard. `POST` `{"label"?, "expires_at", "range"}` or `{"label"?, "expires_at",
+"from", "to"}`, optional `"variables": {"name": ["v", …]}`:
+- `expires_at` is required, 5 minutes to 90 days ahead (links cannot be extended; create a new one);
+- `range` is a relative range `<n>m`, `<n>h` or `<n>d` (1 minute – 31 days, ending at the time of each request); `from`/`to`
+  is a fixed range (≤ 31 days);
+- `variables` lock variable values (names of the dashboard's variables; `"*"` or no value = All); viewers cannot change them;
+- ≤ 20 active links per dashboard; label ≤ 100 characters; share links disabled → `409 failed_precondition`.
+
+→ `201` `{"id", "label", "range" | null, "from" | null, "to" | null, "variables", "created_by_email", "created_at",
+"expires_at", "revoked_at" | null, "last_used_at" | null, "use_count", "active", "token", "path"}`. The token (`olds_` + 43
+base64url characters, 256 random bits) is returned only in this response; only its SHA-256 hash is stored. `path` is the
+web UI page `/shared/dashboards/{token}`. `GET` returns `{"shares": [same objects without token and path],
+"share_links_enabled"}`, newest first; `DELETE` revokes (idempotent) → `200` share. `last_used_at` and `use_count` are
+updated at most once a minute per link. Audit: `dashboard.share.create`, `dashboard.share.revoke`, and
+`dashboard.share.access` (no actor, client IP) when a link is used after more than an hour without use.
+
+A link stops working when it expires or is revoked, share links are disabled for the organization, its creator is no
+longer a member of the organization, or the dashboard is deleted.
+
+### Public share link endpoints (no authentication)
+`GET /api/v1/public/dashboards/{token}` → `{"name", "description", "pages": [{"id", "name", "widgets": [{"id", "title",
+"visualization", "layout", "markdown", "unit", "thresholds", "options"}]}], "variables": [{"name", "label", "values"}],
+"time_range": {"range" | null, "from" | null, "to" | null}, "expires_at"}`. No query text, version, creator, e-mail
+addresses, dashboard or organization ids or names are returned.
+`GET /api/v1/public/dashboards/{token}/widgets/{widget_id}/result` → the result of the widget's stored query (shape of
+`POST /api/v1/query`) for the link's time range and locked variables, run with the owning organization's tenant scope,
+query limits and timeout; `metadata.table`, `rows_read` and `bytes_read` are blanked and `warnings` is empty. The request
+takes no parameters: clients cannot run other queries or change the range, variables or filters. Markdown or unknown
+widget → `404`; a stored query that no longer validates → `422`.
+Unknown, expired, revoked or disabled links → `404 not_found` with one message for all cases. Rate limits (per api pod):
+600 requests per minute per client IP, 1200 per link, and after 30 failed lookups from an IP within a minute every request
+of that IP is refused for the rest of the minute → `429 resource_exhausted` with `Retry-After`. Every response carries
+`Cache-Control: no-store`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none';
+form-action 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`,
+`X-Content-Type-Options: nosniff` and `Cross-Origin-Resource-Policy: same-origin`; no CORS headers. The web UI page
+`/shared/dashboards/{token}` is served with `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex, nofollow` and shows
+the dashboard read-only without navigation.
+
+### Scheduled reports: `GET /api/v1/dashboards/{id}/reports` · `POST` · `PUT …/reports/{report_id}` · `DELETE …/reports/{report_id}`
+E-mail summaries of a dashboard (D-087). Create: editors of the dashboard; list, change and delete: editors and
+admins/owners who can read the dashboard. Input: `{"name"?, "frequency": "daily" | "weekly", "weekday"?: 0–6 (0 = Sunday;
+weekly), "hour": 0–23, "minute"?: 0–59, "timezone"?: IANA time zone (default `"UTC"`), "recipients": ["…"] (1–20),
+"language"?: "en" | "tr", "range"?: relative range (default `"24h"` daily, `"7d"` weekly), "variables"?: {…},
+"enabled"?: true}`. Recipients must be members of the organization or in its `report_domains`; reports of a `private`
+dashboard only go to its creator (`400` otherwise). ≤ 10 reports per dashboard. → `201`/`200` `{"id", "name", "frequency",
+"weekday", "hour", "minute", "timezone", "recipients", "language", "range", "variables", "enabled", "created_by_email",
+"created_at", "updated_at", "next_run_at" | null, "last_run": {"period", "status": "running" | "sent" | "partial" |
+"failed" | "skipped", "error", "recipients", "started_at", "finished_at" | null} | null}`; `DELETE` → `204`. Audit:
+`dashboard.report.{create,update,delete}`.
+
+Sending (api leader, job `dashboard-reports`, checked every minute): a report is due when its latest scheduled local time
+passed within the last 6 hours and after the report was created or last changed. The period (local date) is claimed in
+`dashboard_report_runs` before anything is sent, so a period is sent at most once, also across leader changes (a crash
+while sending is not retried). Recipients are checked again before sending (members who left and removed domains are
+skipped). The stored queries of up to 50 widgets (markdown widgets are skipped) run server-side for
+`[scheduled time − range, scheduled time)` with the organization's tenant scope, query limits and the report's variables.
+The e-mail (subject, text and HTML in the report's language) shows single values, facet tables, and average/min/max/last
+per timeseries series as simple HTML tables (≤ 20 rows per widget) with a link to the dashboard for that period
+(`OPENLOG_PUBLIC_URL`). Without `OPENLOG_SMTP_HOST` runs are recorded as `failed`.
+Not implemented — PNG chart renderings: they need a headless browser or a server-side chart renderer. The planned design is
+an optional renderer service outside the api image that opens the read-only share view through a short-lived internal
+link, screenshots each widget and returns PNGs embedded in the e-mail as inline `Content-ID` parts; the HTML tables stay
+as the text fallback.
+
 ## Usage and plans
 
 Usage metering, plan limits, quota status and billing ([usage.md](usage.md), D-079–D-081). Reads: every role of the
@@ -1129,6 +1328,17 @@ UI banner.
 
 ### `GET /api/v1/plans`
 `{"plans": [Plan], "default"}` — the configured catalog.
+
+### `GET /api/v1/usage/query-limits` · `PUT /api/v1/usage/query-limits` · `DELETE /api/v1/usage/query-limits`
+ClickHouse query limits of the organization and where each comes from ([usage.md](usage.md) §4.5; postgres auth mode).
+Read: every role and API keys. `PUT`/`DELETE`: superadmins; owners (session) only when `OPENLOG_SAAS_MODE` is off —
+otherwise `403`. Response `{"defaults", "plan", "organization": {"max_memory_usage","max_rows_to_read","max_bytes_to_read",
+"updated_at","updated_by"} | null, "environment": {…} | null, "effective", "sources": {"max_memory_usage": "default"|"plan"|
+"organization"|"environment", …}, "can_manage", "refresh_seconds"}`; value objects carry the three settings (bytes, rows,
+bytes; `0` = not set by openlog). `PUT` body `{"max_memory_usage"?, "max_rows_to_read"?, "max_bytes_to_read"?}` replaces
+the organization setting: a number (`0`–`2^62`) sets the value, `null`/absent inherits; negative → `400`; all absent =
+`DELETE`. Both answer the new state; other pods apply it within `refresh_seconds`. Audit `query_limits.update` /
+`query_limits.delete`.
 
 ### `GET /api/v1/admin/orgs/{org}/plan` · `PUT /api/v1/admin/orgs/{org}/plan`
 Superadmin. `{org}` is the organization id or tenant id (`404` when unknown). Response `{"organization", "plan_id",

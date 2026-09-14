@@ -58,10 +58,12 @@ block the application.
 
 For applications you cannot recompile, install the
 [OpenTelemetry .NET automatic instrumentation](https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation)
-(1.16+) and add the openlog plugin, which ships in this package (`OpenLog.Agent.dll`, copy it next to the application or
-into the automatic instrumentation's store):
+(tested with **1.16.0**) and add the openlog plugin, which ships in this package: copy `lib/net8.0/OpenLog.Agent.dll` from
+the `OpenLog.Agent` package into the automatic instrumentation's `net/` directory. (Copying it next to the application
+does not work: the application's `deps.json` does not list it, so the plugin type cannot be loaded.)
 
 ```sh
+cp OpenLog.Agent.dll $HOME/.otel-dotnet-auto/net/
 . $HOME/.otel-dotnet-auto/instrument.sh
 export OTEL_DOTNET_AUTO_PLUGINS="OpenLog.Agent.AutoInstrumentation.OpenLogPlugin, OpenLog.Agent"
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
@@ -71,10 +73,15 @@ dotnet MyApp.dll
 
 The automatic instrumentation owns the providers, instrumentations and exporters (configured with its `OTEL_*`
 variables); the plugin adds the openlog resource (host.id chain, container.id, `OPENLOG_SERVICE_*`), the openlog
-sampler, the random-flag propagator, the route and DB statement processors, process metrics and the license key header.
-Status: the plugin is implemented against the documented plugin contract (methods discovered by name) and compiles
-against OpenTelemetry 1.18, but it is **not yet covered by an automated test with the automatic instrumentation**
-(which bundles OpenTelemetry 1.16); treat it as preview and prefer `AddOpenLog()` where you can change code.
+sampler, the random-flag propagator, the route and DB statement processors, process metrics, the license key header,
+exception events and `OPENLOG_HTTP_IGNORE_PATHS` for ASP.NET Core requests. `test/autoinstrumentation.sh` (CI, .NET 8
+and 9) downloads the pinned automatic instrumentation release (sha256-verified), installs the plugin, runs an ASP.NET
+Core app without any OpenTelemetry reference under the profiler and startup hook, and asserts resource
+(`host.id`, `service.*`, `telemetry.distro.*`), license header, sampler (`sampling.ratio` for `ot=th:c` parents),
+random-flag propagation on outbound calls, errors, correlated logs, ignored paths and the openlog process metrics.
+The plugin is compiled against OpenTelemetry 1.18 while automatic instrumentation 1.16 loads its own 1.16 assemblies;
+this works because the plugin's public methods only use `OpenTelemetry`/`OpenTelemetry.Api` types (assembly version
+1.0.0.0) and takes instrumentation options as `object`. When the automatic instrumentation is upgraded, re-run the test.
 
 ## Configuration
 
@@ -129,22 +136,26 @@ supported range is simply not instrumented.
 | `aspnetcore` | ASP.NET Core 8/9: minimal APIs, MVC/Web API, Razor Pages | SERVER spans named `<METHOD> <route>`, `http.route` from the endpoint (`/users/{id:int}`, `orders/{id:int}`), exceptions, W3C extraction, `http.server.request.duration` | minimal API + MVC attribute routes, unhandled exception |
 | `grpc` | gRPC for ASP.NET Core (`Grpc.AspNetCore`) | SERVER spans `greet.Greeter/SayHello` with `rpc.system.name`, `rpc.method`, `rpc.response.status_code`, `http.route` (needs `OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_ENABLE_GRPC_INSTRUMENTATION=true`, read when the host is built) | server + `Grpc.Net.Client` call |
 | `httpclient` | `HttpClient` / `IHttpClientFactory` (also `Grpc.Net.Client`) | CLIENT spans, propagation, `http.client.request.duration` | outbound call, sampled and unsampled propagation |
-| `sqlclient` | `Microsoft.Data.SqlClient`, `System.Data.SqlClient` | CLIENT spans, `db.query.text` sanitized | not against a real SQL Server (no ARM64 image); the sanitizer and processor are unit-tested |
+| `sqlclient` | `Microsoft.Data.SqlClient`, `System.Data.SqlClient` | CLIENT spans, `db.query.text` sanitized | Microsoft.Data.SqlClient 7.0 against SQL Server 2022 (CI, amd64) and Azure SQL Edge (arm64, local) |
 | `npgsql` | Npgsql 6+ (built-in `ActivitySource`) | CLIENT spans, `db.query.text` sanitized, Npgsql metrics | Npgsql 8/9 against PostgreSQL 16 |
 | — | Entity Framework Core | EF Core queries appear as spans of the ADO.NET provider (Npgsql, SqlClient, MySqlConnector) with sanitized SQL; no extra EF spans | EF Core 8/9 + Npgsql provider |
 | `mysqlconnector` | MySqlConnector 2.x (built-in `ActivitySource`) | CLIENT spans, statement sanitized with MySQL rules (`"…"` is a string, `#` comments) | MySqlConnector 2.6 against MySQL 8.4 |
 | `redis` | StackExchange.Redis via `OpenTelemetry.Instrumentation.StackExchangeRedis` | CLIENT spans, `db.query.text` = `SET ? ?` — enabled automatically when the application references that (prerelease) package; the multiplexer is taken from DI | StackExchange.Redis 3.2 against Redis 7 |
-| `masstransit` | MassTransit 8+ (built-in `ActivitySource`) | producer/consumer spans | not tested |
+| `masstransit` | MassTransit 8+ (built-in `ActivitySource`) | PRODUCER span `OrderPlaced publish` in the request trace (`messaging.system=rabbitmq`, `messaging.destination.name`), CONSUMER span `OrderPlaced process` in the same trace (`messaging.operation=process`, `messaging.masstransit.*`), consumer logs correlated | MassTransit 8.5 with the RabbitMQ transport against RabbitMQ 4.1 |
+| — | Confluent.Kafka via `OpenTelemetry.Instrumentation.ConfluentKafka` (prerelease; `InstrumentedProducerBuilder`/`InstrumentedConsumerBuilder` + `AddKafkaProducerInstrumentation`/`AddKafkaConsumerInstrumentation` in `ConfigureTracing`) | PRODUCER `send <topic>` below the request span, CLIENT `poll <topic>` continuing or linking the producer's trace, `messaging.system=kafka`, `messaging.destination.name` | Confluent.Kafka 2.15 + instrumentation 0.3.0-alpha.1 against Kafka 4.1 |
 | (`OPENLOG_LOGS_EXPORT`) | `Microsoft.Extensions.Logging` (`ILogger`) | OTLP logs with trace/span ids, formatted message, scopes and state values; `TraceId`/`SpanId` also added to the application's own log scopes (`ActivityTrackingOptions`) | minimal API, MVC and gRPC handler logs |
 
-Other libraries with an `ActivitySource` or `Meter` (Azure SDK, Confluent.Kafka via its OpenTelemetry package, your own
-code) are added with `OPENLOG_ACTIVITY_SOURCES` / `OPENLOG_METERS` or `ConfigureTracing`.
+MassTransit 9 is commercially licensed; the tests use MassTransit 8 (Apache-2.0). Other libraries with an
+`ActivitySource` or `Meter` (Azure SDK, your own code) are added with `OPENLOG_ACTIVITY_SOURCES` / `OPENLOG_METERS` or
+`ConfigureTracing`.
 
 **.NET Framework (ASP.NET 4.x).** The `netstandard2.0` build runs on .NET Framework 4.6.2+ with `OpenLogAgent.Start`
 (HttpClient, SqlClient, runtime metrics). Incoming ASP.NET requests need the OpenTelemetry HTTP module: add
 `OpenTelemetry.Instrumentation.AspNet` (it registers `TelemetryHttpModule` in `web.config`) and start the agent in
-`Application_Start` with `ConfigureTracing = b => b.AddAspNetInstrumentation()`. This path compiles in CI but is not
-exercised by the test suite (no Windows runner).
+`Application_Start` with `ConfigureTracing = b => b.AddAspNetInstrumentation()`
+([samples/OpenLog.AspNetFramework.Sample](samples/OpenLog.AspNetFramework.Sample): `Global` + `Web.config.sample`). CI
+compiles that sample for `net48` against the `netstandard2.0` agent build (`make build-netfx`, reference assemblies from
+`Microsoft.NETFramework.ReferenceAssemblies`), but it is not run: IIS and .NET Framework need a Windows runner.
 
 **Transaction names.** The APM backend names a web transaction `<METHOD> <http.route>`
 ([apm.md §2.1](../../docs/contracts/apm.md)). ASP.NET Core puts the endpoint's route template on the server span. When
@@ -252,7 +263,9 @@ Everything runs in SDK containers (no local .NET needed):
 
 ```sh
 make test                         # unit + end-to-end tests without databases (.NET 9; DOTNET_VERSION=8.0 for .NET 8)
-make test-integration             # + PostgreSQL, MySQL, Redis (compose project openlog-m4-dotnet-test, removed afterwards)
+make test-integration             # + PostgreSQL, MySQL, Redis, RabbitMQ, Kafka, SQL Server (compose project openlog-m4-dotnet-test, removed afterwards)
+make test-autoinstrumentation     # plugin under the pinned OpenTelemetry .NET automatic instrumentation
+make build-netfx                  # .NET Framework 4.8 / ASP.NET 4.x sample, compile only
 make bench                        # overhead benchmark
 make pack VERSION=0.1.9           # artifacts/nupkg/OpenLog.Agent.0.1.9.nupkg
 ```
@@ -260,6 +273,11 @@ make pack VERSION=0.1.9           # artifacts/nupkg/OpenLog.Agent.0.1.9.nupkg
 Layout: `src/OpenLog.Agent` (the package), `test/OpenLog.Agent.Tests` (xUnit: Go sampler fixtures, sanitizer with the
 Go test cases, configuration, resource detection, processors, propagator), `test/OpenLog.Agent.IntegrationTests`
 (the sample app with the real agent against an in-process OTLP capture server: spans, metrics, logs, resource,
-headers, propagation, ingest outage, `OpenLogAgent.Start`), `samples/OpenLog.SampleApp` (ASP.NET Core minimal API +
-MVC + gRPC + HttpClient + Npgsql/EF Core + MySqlConnector + StackExchange.Redis), `bench/OpenLog.Agent.Bench`. The
+headers, propagation, ingest outage, `OpenLogAgent.Start`, MassTransit/Kafka/SQL Server in `MessagingTests`, the
+automatic instrumentation plugin in `AutoInstrumentationTests`), `test/OpenLog.AutoInstrumentation.TestApp` (no
+OpenTelemetry reference), `samples/OpenLog.SampleApp` (ASP.NET Core minimal API + MVC + gRPC + HttpClient + Npgsql/EF
+Core + MySqlConnector + StackExchange.Redis + SqlClient + MassTransit + Confluent.Kafka),
+`samples/OpenLog.AspNetFramework.Sample` (net48, compile only), `bench/OpenLog.Agent.Bench`. SQL Server has no arm64
+`mssql/server` image: the Makefile picks `mcr.microsoft.com/azure-sql-edge` on arm64 (retired by Microsoft but still
+pullable; the SqlClient test passes against it) and CI (amd64) uses `mcr.microsoft.com/mssql/server:2022-latest`. The
 release flow is described in [releasing.md](../../docs/operations/releasing.md#net-agent-package).

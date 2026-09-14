@@ -24,6 +24,9 @@
 #   php-host      Debian 12 + PHP 8.3-FPM + nginx + openlog PHP extension + openlog-infra-agent (php_forwarder)
 #                 http://localhost:${LOCALAGENTS_PHP_PORT:-33080}; service php-shop, host.id a0de…0003
 #                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps php-host)
+#   python-shop   Python 3.13 FastAPI/uvicorn (openlog Python agent: wheel built from agents/python, openlog-instrument)
+#                 -> catalog, orders; http://localhost:${LOCALAGENTS_PYTHON_PORT:-33800}; python-shop-loadgen ~4 req/s
+#                 (build/update only these: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps python-shop python-shop-loadgen)
 
 name: openlog-agents
 
@@ -250,6 +253,35 @@ services:
       OPENLOG_ENDPOINT: http://openlog:4318
     ports: ["${LOCALAGENTS_PHP_PORT:-33080}:80"]
     volumes: ["php-host-state:/var/lib/openlog-infra-agent"]
+    restart: unless-stopped
+
+  python-shop:
+    # The agent detects container.id (mountinfo) itself, so no container-id entrypoint wrapper.
+    build:
+      context: python-shop
+      additional_contexts: {pyagent: ../../agents/python}
+    image: openlog-localagents/python-shop:1
+    hostname: python-shop
+    environment:
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+      OPENLOG_SERVICE_NAME: python-shop
+      OTEL_RESOURCE_ATTRIBUTES: *apm-resource
+      OPENLOG_HTTP_IGNORE_PATHS: /healthz
+      OPENLOG_METRIC_EXPORT_INTERVAL: 30s
+      CATALOG_URL: http://catalog:8080
+      ORDERS_URL: http://orders:8080
+    ports: ["${LOCALAGENTS_PYTHON_PORT:-33800}:8000"]
+    depends_on: [orders, catalog]
+    restart: unless-stopped
+
+  python-shop-loadgen:
+    image: openlog-localagents/python-shop:1
+    command: ["python", "loadgen.py"]
+    environment:
+      LOADGEN_TARGET: http://python-shop:8000
+      LOADGEN_RPS: ${LOCALAGENTS_PYTHON_LOADGEN_RPS:-4}
+    depends_on: [python-shop]
     restart: unless-stopped
 
 networks:

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { addSsoDomain, deleteSsoDomain, ssoDomainsQuery, verifySsoDomain, type SsoDomain, type SsoState } from "@/api/sso";
+import { addSsoDomain, assignSsoDomain, deleteSsoDomain, ssoConnectionLabel, ssoDomainsQuery, verifySsoDomain, type SsoDomain, type SsoState } from "@/api/sso";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ function DomainRow({ d, state }: { d: SsoDomain; state: SsoState }) {
     onSettled: invalidate,
   });
   const remove = useMutation({ mutationFn: () => deleteSsoDomain(d.id), onSettled: invalidate });
+  const assign = useMutation({ mutationFn: (connectionId: string | null) => assignSsoDomain(d.id, connectionId), onSettled: invalidate });
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border p-3" data-testid={`sso-domain-${d.domain}`}>
@@ -42,6 +43,27 @@ function DomainRow({ d, state }: { d: SsoDomain; state: SsoState }) {
           <ConfirmButton label={t("sso.domains.remove")} confirmLabel={t("sso.domains.confirmRemove")} pending={remove.isPending} onConfirm={() => remove.mutate()} />
         </span>
       </div>
+      {d.verified && state.connections.length > 1 && (
+        <div className="flex max-w-sm flex-col gap-1.5">
+          <Label htmlFor={`${id}-connection`} className="text-xs">
+            {t("sso.domains.connection")}
+          </Label>
+          <NativeSelect
+            id={`${id}-connection`}
+            value={assign.isPending ? (assign.variables ?? "") : (d.connection_id ?? "")}
+            disabled={assign.isPending}
+            onChange={(e) => assign.mutate(e.target.value === "" ? null : e.target.value)}
+          >
+            <option value="">{t("sso.domains.defaultConnection")}</option>
+            {state.connections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {ssoConnectionLabel(c)}
+              </option>
+            ))}
+          </NativeSelect>
+          <FormError error={assign.error} />
+        </div>
+      )}
       {!d.verified && (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("sso.domains.dnsHint")}</p>

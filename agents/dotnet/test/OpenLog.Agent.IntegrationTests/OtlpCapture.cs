@@ -127,6 +127,7 @@ public sealed class SpanData
     public int StatusCode;
     public Dictionary<string, object?> Attributes = new();
     public List<(string Name, Dictionary<string, object?> Attributes)> Events = new();
+    public List<(string TraceId, string SpanId)> Links = new();
     public Dictionary<string, object?> Resource = new();
     public Scope Scope = new();
 
@@ -271,6 +272,16 @@ public static class Otlp
                                     else if (ef == 3) KeyValue(er.Bytes(), evAttrs);
                                 });
                                 s.Events.Add((evName, evAttrs));
+                                break;
+                            case 13:
+                                var linkTrace = "";
+                                var linkSpan = "";
+                                ProtoReader.Decode(pr.Bytes(), (lr, lf, lw) =>
+                                {
+                                    if (lf == 1) linkTrace = Hex(lr.Bytes());
+                                    else if (lf == 2) linkSpan = Hex(lr.Bytes());
+                                });
+                                s.Links.Add((linkTrace, linkSpan));
                                 break;
                             case 15:
                                 ProtoReader.Decode(pr.Bytes(), (xr, xf, xw) =>

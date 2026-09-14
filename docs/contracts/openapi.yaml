@@ -1517,6 +1517,26 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /api/v1/onboarding:
+    get:
+      tags: [system]
+      operationId: getOnboarding
+      summary: Inputs of the "Add data" install commands
+      description: |
+        Any authenticated principal with an organization (viewer and up, API keys too; 403 without an organization).
+        Public OTLP endpoints (configured with OPENLOG_INGEST_PUBLIC_URL / OPENLOG_INGEST_PUBLIC_GRPC_URL, else derived
+        from OPENLOG_PUBLIC_URL or the request host with ports 4318/4317), the release version and channel the commands
+        pin, whether browser CORS is configured, the caller's organization and role, and feature flags. Never returns
+        secrets; `Cache-Control: no-store`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Onboarding" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /api/v1/auth/config:
     get:
       tags: [auth]
@@ -1556,7 +1576,10 @@ paths:
       tags: [auth]
       operationId: signup
       security: []
-      description: Only when OPENLOG_SIGNUP_ENABLED=true. Creates a user and a new organization they own.
+      description: >-
+        Only when OPENLOG_SIGNUP_ENABLED=true. Creates a user and a new organization they own. An address in a domain
+        verified by an organization with an enabled SSO connection answers 409 failed_precondition (claimed-domain
+        redirection, D-089; `POST /api/v1/auth/sso/discover` names the organization).
       requestBody:
         required: true
         content:
@@ -1706,6 +1729,109 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/auth/sso/session:
+    get:
+      tags: [sso]
+      operationId: getSSOSession
+      description: Signed-in user. Whether the current session was created by single sign-on and whether "Sign out everywhere" also ends the IdP session.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOSessionInfo" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/auth/sso/logout:
+    post:
+      tags: [sso]
+      operationId: ssoLogout
+      description: >-
+        Signed-in user ("Sign out everywhere", D-088). Ends the current session and, for an SSO session, the user's
+        other sessions of the same connection, clears the session cookie, and returns where the browser ends the IdP
+        session: `redirect_url` (SAML HTTP-Redirect binding with a signed LogoutRequest, or the OIDC
+        end_session_endpoint with id_token_hint and post_logout_redirect_uri) or `post` (SAML HTTP-POST binding: submit
+        a form with `fields` to `url`). Both null = only openlog sessions ended. The IdP returns the browser to
+        `redirect` (`/login` or a path of the connection's `logout_redirect_allowlist`) with `?sso_logout=ok|partial`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                redirect: { type: string, description: "Relative UI path after the IdP logout (default /login)" }
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOLogoutResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/sso/oidc/logout/callback:
+    get:
+      tags: [sso]
+      operationId: oidcLogoutCallback
+      security: []
+      description: OIDC post_logout_redirect_uri. Always answers 303 to the UI path of the logout with `sso_logout=ok` (unknown state → `/login`).
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "303": { description: Redirect to the UI }
+
+  /api/v1/sso/saml/{connection_id}/slo:
+    get:
+      tags: [sso]
+      operationId: samlSLORedirect
+      security: []
+      description: >-
+        SAML single logout service, HTTP-Redirect binding (`SAMLRequest` or `SAMLResponse`, `RelayState`, `SigAlg`,
+        `Signature`; the query signature is required, RSA/ECDSA SHA-256/384/512). An IdP LogoutRequest (issuer,
+        destination, IssueInstant, replay checked; NameID or EncryptedID) ends the connection's active sessions with
+        that NameID (and SessionIndex) and is answered with a signed LogoutResponse through the IdP's
+        SingleLogoutService (303, or an auto-submitting form for HTTP-POST). A LogoutResponse completes an SP-initiated
+        logout: 303 to the UI path with `sso_logout=ok|partial`. Invalid messages → 303 `/login?sso_error=<code>`.
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+        - { name: SAMLRequest, in: query, schema: { type: string } }
+        - { name: SAMLResponse, in: query, schema: { type: string } }
+        - { name: RelayState, in: query, schema: { type: string } }
+        - { name: SigAlg, in: query, schema: { type: string } }
+        - { name: Signature, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Auto-submitting HTML form (LogoutResponse to an IdP with the HTTP-POST binding only)
+          content:
+            text/html:
+              schema: { type: string }
+        "303": { description: Redirect to the IdP or the UI }
+    post:
+      tags: [sso]
+      operationId: samlSLOPost
+      security: []
+      description: SAML single logout service, HTTP-POST binding (enveloped signature required). Same semantics as GET.
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                SAMLRequest: { type: string }
+                SAMLResponse: { type: string }
+                RelayState: { type: string }
+      responses:
+        "200":
+          description: Auto-submitting HTML form
+          content:
+            text/html:
+              schema: { type: string }
+        "303": { description: Redirect to the IdP or the UI }
+
   /api/v1/sso/oidc/callback:
     get:
       tags: [sso]
@@ -1769,7 +1895,7 @@ paths:
     get:
       tags: [sso]
       operationId: getSSOConnection
-      description: admin, owner
+      description: admin, owner. Single-connection API — the organization's default (oldest) connection; see /api/v1/sso/connections.
       responses:
         "200":
           description: Connection (null when none) and the service provider values to register at the identity provider
@@ -1781,7 +1907,7 @@ paths:
     put:
       tags: [sso]
       operationId: saveSSOConnection
-      description: admin, owner. Creates or replaces the connection; every save increases config_version (enforcement needs a new test).
+      description: admin, owner. Updates the default connection or creates it when there is none; every save increases config_version (enforcement needs a new test).
       requestBody:
         required: true
         content:
@@ -1890,7 +2016,7 @@ paths:
     put:
       tags: [sso]
       operationId: replaceSSORoleMappings
-      description: admin, owner. Replaces all mappings (at most 200); roles of SCIM-provisioned members are recomputed.
+      description: admin, owner. Replaces the organization-wide mappings (at most 200; used by SCIM and by connections without own mappings); roles of SCIM-provisioned members are recomputed.
       requestBody:
         required: true
         content:
@@ -1913,6 +2039,212 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/sso/connections:
+    get:
+      tags: [sso]
+      operationId: listSSOConnections
+      description: admin, owner. All connections of the organization (`connections`, the default connection first); `connection` is null.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [sso]
+      operationId: createSSOConnection
+      description: admin, owner. Adds a connection (at most 10 per organization). The first connection is the default connection (domains without `connection_id` route to it).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SSOConnectionInput" }
+      responses:
+        "201":
+          description: Created; `connection` is the new connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/connections/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [sso]
+      operationId: getSSOConnectionByID
+      description: admin, owner. `connection` is the addressed connection; `service_provider` carries its SAML values.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [sso]
+      operationId: updateSSOConnection
+      description: admin, owner. Replaces the settings (increments config_version). Disabling an enforcing connection → 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SSOConnectionInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [sso]
+      operationId: deleteSSOConnectionByID
+      description: admin, owner. Refused (409) while enforced; ends the connection's sessions; its domains route to the default connection.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/connections/{id}/test:
+    post:
+      tags: [sso]
+      operationId: testSSOConnectionByID
+      description: admin, owner. Server-side checks of the connection.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Check results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOTestResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/sso/connections/{id}/test/start:
+    post:
+      tags: [sso]
+      operationId: startSSOTestByID
+      description: admin, owner. Test sign-in of the connection (see /api/v1/sso/connection/test/start).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Identity provider URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirect_url]
+                properties:
+                  redirect_url: { type: string }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/connections/{id}/refresh:
+    post:
+      tags: [sso]
+      operationId: refreshSSOConnection
+      description: admin, owner. Fetches the OIDC discovery document and JWKS or the SAML metadata now (like the background refresh) and returns the updated `health`. 30 per connection per 10 min.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Refreshed (see connection.health)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/sso/connections/{id}/enforcement:
+    put:
+      tags: [sso]
+      operationId: updateSSOConnectionEnforcement
+      description: owner. Enforcement of the connection for members whose e-mail domain routes to it; the safeguards of /api/v1/sso/enforcement apply to its routed domains.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enforce, break_glass_user_ids]
+              properties:
+                enforce: { type: boolean }
+                break_glass_user_ids: { type: array, items: { type: string }, maxItems: 10 }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/sso/connections/{id}/role-mappings:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [sso]
+      operationId: listSSOConnectionRoleMappings
+      description: admin, owner. Mappings of the connection; a connection without own mappings uses the organization-wide mappings (/api/v1/sso/role-mappings).
+      responses:
+        "200":
+          description: Mappings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSORoleMappings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [sso]
+      operationId: replaceSSOConnectionRoleMappings
+      description: admin, owner. Replaces the connection's mappings (at most 200; an empty list falls back to the organization-wide mappings).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mappings]
+              properties:
+                mappings: { type: array, items: { $ref: "#/components/schemas/SSORoleMapping" } }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSORoleMappings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/sso/domains:
     get:
@@ -1987,10 +2319,36 @@ paths:
         "503": { $ref: "#/components/responses/Unavailable" }
 
   /api/v1/sso/domains/{id}:
+    put:
+      tags: [sso]
+      operationId: assignSSODomain
+      description: admin, owner. Routes sign-ins of the domain to a connection of the organization (`null` = the default connection). Moving the last verified domain away from an enforcing connection → 409.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connection_id]
+              properties:
+                connection_id: { type: [string, "null"] }
+      responses:
+        "200":
+          description: Assigned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSODomain" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       tags: [sso]
       operationId: deleteSSODomain
-      description: admin, owner. The last verified domain cannot be removed while SSO is enforced (409).
+      description: admin, owner. The last verified domain of an enforcing connection cannot be removed (409).
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
@@ -3749,6 +4107,269 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/dashboards/settings:
+    get:
+      tags: [dashboards]
+      operationId: getDashboardSettings
+      summary: Dashboard sharing settings of the organization
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [dashboards]
+      operationId: updateDashboardSettings
+      summary: Change the dashboard sharing settings (admin, owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardSettingsInput" }
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/dashboards/{id}/versions:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: listDashboardVersions
+      responses:
+        "200":
+          description: Stored versions, newest first (at most 50)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardVersionList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/versions/{version}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      tags: [dashboards]
+      operationId: getDashboardVersion
+      responses:
+        "200":
+          description: One version with its changes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardVersionDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/versions/{version}/restore:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      tags: [dashboards]
+      operationId: restoreDashboardVersion
+      summary: Save a stored version as the new current version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardRestore" }
+      responses:
+        "200":
+          description: Dashboard (new version)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/dashboards/{id}/shares:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: listDashboardShares
+      responses:
+        "200":
+          description: Share links of the dashboard (without tokens), newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shares, share_links_enabled]
+                properties:
+                  shares: { type: array, items: { $ref: "#/components/schemas/DashboardShare" } }
+                  share_links_enabled: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [dashboards]
+      operationId: createDashboardShare
+      summary: Create a read-only share link (the token is returned only here)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardShareInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardShareCreated" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/dashboards/{id}/shares/{share_id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: share_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [dashboards]
+      operationId: revokeDashboardShare
+      responses:
+        "200":
+          description: Revoked share link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardShare" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/reports:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: listDashboardReports
+      responses:
+        "200":
+          description: Scheduled reports of the dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                properties:
+                  reports: { type: array, items: { $ref: "#/components/schemas/DashboardReport" } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [dashboards]
+      operationId: createDashboardReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardReportInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardReport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/dashboards/{id}/reports/{report_id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: report_id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [dashboards]
+      operationId: updateDashboardReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardReportInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardReport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [dashboards]
+      operationId: deleteDashboardReport
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/public/dashboards/{token}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: getSharedDashboard
+      summary: Read-only dashboard of a share link (no authentication)
+      security: []
+      responses:
+        "200":
+          description: Shared dashboard
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedDashboard" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /api/v1/public/dashboards/{token}/widgets/{widget_id}/result:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+      - { name: widget_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: getSharedWidgetResult
+      summary: Result of a shared widget's stored query for the link's range and variables (no authentication)
+      security: []
+      responses:
+        "200":
+          description: OQL result (execution statistics blanked)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OqlResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: The widget's stored query cannot be run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504":
+          description: Query timed out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/v1/usage:
     get:
       tags: [usage]
@@ -3844,6 +4465,50 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlanCatalog" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/usage/query-limits:
+    get:
+      tags: [usage]
+      operationId: getQueryLimits
+      summary: ClickHouse query limits of the organization with their layers (usage.md §4.5; postgres auth mode)
+      responses:
+        "200":
+          description: Layers, effective limits and sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgQueryLimits" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [usage]
+      operationId: putQueryLimits
+      summary: Set the organization layer (owner without SaaS mode, superadmin; audit query_limits.update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrgQueryLimitsInput" }
+      responses:
+        "200":
+          description: New state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgQueryLimits" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [usage]
+      operationId: deleteQueryLimits
+      summary: Remove the organization layer (same permission as PUT; audit query_limits.delete)
+      responses:
+        "200":
+          description: New state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrgQueryLimits" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
@@ -4072,7 +4737,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Unavailable:
-      description: unavailable (authentication backend), with Retry-After
+      description: unavailable (authentication backend) or storage_unavailable (telemetry queries whose data on cold/S3 storage cannot be read; retryable true), with Retry-After
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -4094,6 +4759,61 @@ components:
         max_memory_usage: { type: integer }
         max_rows_to_read: { type: integer }
         max_bytes_to_read: { type: integer }
+
+    QueryLimitValues:
+      type: object
+      description: 0 = not set by openlog (the ClickHouse read user's profile applies)
+      required: [max_memory_usage, max_rows_to_read, max_bytes_to_read]
+      properties:
+        max_memory_usage: { type: integer, format: int64 }
+        max_rows_to_read: { type: integer, format: int64 }
+        max_bytes_to_read: { type: integer, format: int64 }
+
+    OrgQueryLimitsInput:
+      type: object
+      description: null or absent = inherit the plan / defaults
+      properties:
+        max_memory_usage: { type: [integer, "null"], format: int64, minimum: 0 }
+        max_rows_to_read: { type: [integer, "null"], format: int64, minimum: 0 }
+        max_bytes_to_read: { type: [integer, "null"], format: int64, minimum: 0 }
+
+    QueryLimitSource:
+      type: string
+      enum: [default, plan, organization, environment]
+
+    OrgQueryLimits:
+      type: object
+      required: [defaults, plan, organization, environment, effective, sources, can_manage, refresh_seconds]
+      properties:
+        defaults: { $ref: "#/components/schemas/QueryLimitValues" }
+        plan: { $ref: "#/components/schemas/QueryLimitValues" }
+        organization:
+          description: The organization setting; null when none is stored
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [max_memory_usage, max_rows_to_read, max_bytes_to_read, updated_at, updated_by]
+              properties:
+                max_memory_usage: { type: [integer, "null"], format: int64 }
+                max_rows_to_read: { type: [integer, "null"], format: int64 }
+                max_bytes_to_read: { type: [integer, "null"], format: int64 }
+                updated_at: { $ref: "#/components/schemas/Timestamp" }
+                updated_by: { type: string, description: E-mail of the last editor (empty when the user was deleted) }
+        environment:
+          description: The tenant's OPENLOG_QUERY_TENANT_LIMITS entry (replaces every layer); null when none
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/QueryLimitValues"
+        effective: { $ref: "#/components/schemas/QueryLimitValues" }
+        sources:
+          type: object
+          required: [max_memory_usage, max_rows_to_read, max_bytes_to_read]
+          properties:
+            max_memory_usage: { $ref: "#/components/schemas/QueryLimitSource" }
+            max_rows_to_read: { $ref: "#/components/schemas/QueryLimitSource" }
+            max_bytes_to_read: { $ref: "#/components/schemas/QueryLimitSource" }
+        can_manage: { type: boolean }
+        refresh_seconds: { type: integer, description: Other api/alert pods apply a change within this many seconds }
 
     PlanLimits:
       type: object
@@ -4338,8 +5058,11 @@ components:
           properties:
             code:
               type: string
-              enum: [invalid_argument, unauthenticated, permission_denied, not_found, already_exists, failed_precondition, resource_exhausted, internal, unavailable, timeout]
+              enum: [invalid_argument, unauthenticated, permission_denied, not_found, already_exists, failed_precondition, resource_exhausted, internal, unavailable, storage_unavailable, timeout]
             message: { type: string }
+            retryable:
+              type: boolean
+              description: Present (true) on storage_unavailable; the same request is expected to succeed later.
 
     Timestamp:
       type: string
@@ -4913,8 +5636,12 @@ components:
             - type: "null"
             - type: object
               properties:
-                language: { type: string }
-                agent: { type: string }
+                language: { type: string, description: "Runtime language of the discovered service (php, nodejs, python, java, dotnet)" }
+                agent: { type: string, description: "Discovery identifier of the matching agent (e.g. openlog-agent-php); not a package name" }
+                status:
+                  type: string
+                  enum: [active, not_installed]
+                  description: "Set by the infra agent for openlog-agent-php: active = PHP spans received in the last 10 minutes (semantic-conventions §3.4)"
 
     LogRecord:
       type: object
@@ -5550,10 +6277,11 @@ components:
 
     SSODiscovery:
       type: object
-      required: [sso, organization_name, protocol, enforced]
+      required: [sso, organization_name, connection_name, protocol, enforced]
       properties:
         sso: { type: boolean }
         organization_name: { type: [string, "null"] }
+        connection_name: { type: [string, "null"], description: "Name of the connection the e-mail domain routes to" }
         protocol:
           oneOf:
             - { type: string, enum: [oidc, saml] }
@@ -5562,7 +6290,7 @@ components:
 
     SSOState:
       type: object
-      required: [available, secrets_encrypted, scim_enabled, email_verification_available, domain_email_local_parts, service_provider, connection]
+      required: [available, secrets_encrypted, scim_enabled, email_verification_available, domain_email_local_parts, service_provider, connection, connections]
       properties:
         available: { type: boolean, description: "OPENLOG_PUBLIC_URL is set (SSO cannot be used without it)" }
         secrets_encrypted: { type: boolean, description: "Client secrets and SP keys are sealed (OPENLOG_SSO_SECRET_KEY or OPENLOG_KEY_HASH_SECRET)" }
@@ -5571,29 +6299,86 @@ components:
         domain_email_local_parts: { type: array, items: { type: string } }
         service_provider:
           type: object
-          description: Values to register at the identity provider. SAML values exist once a SAML connection is saved.
-          required: [oidc_redirect_uri, scim_base_url, saml_entity_id, saml_acs_url, saml_metadata_url, saml_certificate_pem]
+          description: Values to register at the identity provider. SAML values are those of the addressed SAML connection.
+          required: [oidc_redirect_uri, oidc_post_logout_redirect_uri, scim_base_url, saml_entity_id, saml_acs_url, saml_slo_url, saml_metadata_url, saml_certificate_pem]
           properties:
             oidc_redirect_uri: { type: string }
+            oidc_post_logout_redirect_uri: { type: string, description: "Register as a valid post logout redirect URI (RP-initiated logout)" }
             scim_base_url: { type: string }
             saml_entity_id: { type: [string, "null"] }
             saml_acs_url: { type: [string, "null"] }
+            saml_slo_url: { type: [string, "null"], description: "Single logout service (HTTP-Redirect and HTTP-POST), also in the SP metadata" }
             saml_metadata_url: { type: [string, "null"] }
             saml_certificate_pem: { type: [string, "null"] }
         connection:
+          description: The addressed connection (the default connection on the single-connection API; null on the list)
           oneOf:
             - { $ref: "#/components/schemas/SSOConnection" }
             - { type: "null" }
+        connections: { type: array, items: { $ref: "#/components/schemas/SSOConnection" }, description: "All connections, the default first" }
+
+    SSOHealth:
+      type: object
+      description: Background refresh of the IdP documents (OIDC discovery/JWKS, SAML metadata) and certificate/metadata expiry.
+      required: [status, message, checked_at, next_at, failures, metadata_valid_until]
+      properties:
+        status: { type: string, enum: [ok, warning, error, unknown], description: "unknown = not refreshed yet; error = 3 consecutive failures or an expired certificate" }
+        message: { type: string }
+        checked_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        next_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        failures: { type: integer, description: Consecutive failed refreshes }
+        metadata_valid_until: { $ref: "#/components/schemas/NullableTimestamp" }
+
+    SSORoleMappings:
+      type: object
+      required: [mappings, connection_id]
+      properties:
+        mappings: { type: array, items: { $ref: "#/components/schemas/SSORoleMapping" } }
+        connection_id: { type: [string, "null"], description: "null = organization-wide" }
+
+    SSOSessionInfo:
+      type: object
+      required: [sso, protocol, connection_id, connection_name, idp_logout]
+      properties:
+        sso: { type: boolean, description: The session was created by single sign-on }
+        protocol:
+          oneOf:
+            - { type: string, enum: [oidc, saml] }
+            - { type: "null" }
+        connection_id: { type: [string, "null"] }
+        connection_name: { type: [string, "null"] }
+        idp_logout: { type: boolean, description: "The IdP session can be ended (SAML SingleLogoutService or OIDC end_session_endpoint)" }
+
+    SSOLogoutResult:
+      type: object
+      required: [protocol, redirect_url, post, revoked_sessions]
+      properties:
+        protocol:
+          oneOf:
+            - { type: string, enum: [oidc, saml] }
+            - { type: "null" }
+        redirect_url: { type: [string, "null"], description: "Navigate the browser here to end the IdP session" }
+        post:
+          oneOf:
+            - type: object
+              required: [url, fields]
+              properties:
+                url: { type: string }
+                fields: { type: object, additionalProperties: { type: string } }
+            - { type: "null" }
+        revoked_sessions: { type: integer }
 
     SSOConnection:
       type: object
-      required: [id, protocol, name, enabled, oidc, saml, email_attribute, name_attribute, groups_attribute, jit_enabled, default_role,
-        session_max_age_seconds, enforce, break_glass_user_ids, config_version, tested, last_test, created_at, updated_at]
+      required: [id, protocol, name, enabled, default, oidc, saml, email_attribute, name_attribute, groups_attribute, jit_enabled, default_role,
+        session_max_age_seconds, logout_redirect_allowlist, allow_external_invitations, enforce, break_glass_user_ids, config_version, tested,
+        last_test, health, created_at, updated_at]
       properties:
         id: { type: string }
         protocol: { type: string, enum: [oidc, saml] }
         name: { type: string }
         enabled: { type: boolean }
+        default: { type: boolean, description: "The organization's default (oldest) connection: domains without connection_id route to it" }
         oidc:
           oneOf:
             - type: object
@@ -5608,11 +6393,12 @@ components:
         saml:
           oneOf:
             - type: object
-              required: [idp_metadata_url, idp_entity_id, idp_sso_url, idp_certificates, idp_cert_not_after, allow_idp_initiated, relay_state_allowlist, sign_authn_requests]
+              required: [idp_metadata_url, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificates, idp_cert_not_after, allow_idp_initiated, relay_state_allowlist, sign_authn_requests]
               properties:
-                idp_metadata_url: { type: string }
+                idp_metadata_url: { type: string, description: "Re-fetched by the background refresh" }
                 idp_entity_id: { type: string }
                 idp_sso_url: { type: string }
+                idp_slo_url: { type: [string, "null"], description: "IdP SingleLogoutService (null: no SAML single logout)" }
                 idp_certificates: { type: array, items: { type: string }, description: SHA-256 fingerprints of the IdP signing certificates }
                 idp_cert_not_after: { $ref: "#/components/schemas/NullableTimestamp" }
                 allow_idp_initiated: { type: boolean }
@@ -5625,6 +6411,8 @@ components:
         jit_enabled: { type: boolean }
         default_role: { type: string, enum: [admin, member, viewer] }
         session_max_age_seconds: { type: integer, description: "0 = OPENLOG_SESSION_TTL only" }
+        logout_redirect_allowlist: { type: array, items: { type: string }, description: "UI paths single logout may return to besides /login" }
+        allow_external_invitations: { type: boolean, description: "Members of domains routed here may accept invitations of other organizations with a password" }
         enforce: { type: boolean }
         break_glass_user_ids: { type: array, items: { type: string } }
         config_version: { type: integer }
@@ -5640,6 +6428,7 @@ components:
                 error: { type: string }
                 details: { type: object, additionalProperties: true, description: "email, name, subject, groups, role, role_mapped" }
             - { type: "null" }
+        health: { $ref: "#/components/schemas/SSOHealth" }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         updated_at: { $ref: "#/components/schemas/Timestamp" }
 
@@ -5673,6 +6462,8 @@ components:
         jit_enabled: { type: boolean, default: true }
         default_role: { type: string, enum: [admin, member, viewer], default: viewer }
         session_max_age_seconds: { type: integer, description: "0 or 300–2592000" }
+        logout_redirect_allowlist: { type: array, items: { type: string }, maxItems: 20 }
+        allow_external_invitations: { type: boolean, description: "Omitted keeps the stored value (true for a new connection)" }
 
     SSOTestResult:
       type: object
@@ -5691,7 +6482,7 @@ components:
 
     SSODomain:
       type: object
-      required: [id, domain, verified, verified_at, verification_method, dns_record, email_address, email_expires_at, last_checked_at, created_at]
+      required: [id, domain, verified, verified_at, verification_method, dns_record, email_address, email_expires_at, last_checked_at, connection_id, created_at]
       properties:
         id: { type: string }
         domain: { type: string }
@@ -5708,6 +6499,7 @@ components:
         email_address: { type: [string, "null"], description: Address of a pending e-mail verification }
         email_expires_at: { $ref: "#/components/schemas/NullableTimestamp" }
         last_checked_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        connection_id: { type: [string, "null"], description: "Connection sign-ins of the domain use (null = the default connection)" }
         created_at: { $ref: "#/components/schemas/Timestamp" }
 
     SSORoleMapping:
@@ -5825,12 +6617,73 @@ components:
           enum: [pending, running, done, failed, expired]
           description: "expired: no updater picked the request up within 15 minutes"
         message: { type: string, description: Result reported by the updater (e.g. the reason a request failed) }
+        message_code:
+          type: string
+          description: "Stable code of message when it is a fixed updater message (see UpdaterStatus.message_code; request-only codes: request_mode_off, request_not_installable, request_target_changed, request_outside_window, request_interrupted, request_expired); omitted for free text"
+        message_params:
+          type: object
+          additionalProperties: { type: string }
+          description: "Parameters of message_code (e.g. version, from, to, reason, details; error = English error appended to the message)"
         requested_by_email:
           type: [string, "null"]
           description: Only for callers with can_request
         requested_at: { type: string, format: date-time }
         picked_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
+
+    OnboardingEndpoint:
+      type: object
+      required: [url, source]
+      properties:
+        url: { type: string, example: "https://ingest.openlog.example.com:4318" }
+        source:
+          type: string
+          description: |
+            configured: OPENLOG_PUBLIC_URL / OPENLOG_INGEST_PUBLIC_URL / OPENLOG_INGEST_PUBLIC_GRPC_URL.
+            derived_public_url: scheme and host of OPENLOG_PUBLIC_URL with port 4318 (gRPC 4317).
+            derived_ingest_url: gRPC only, host of OPENLOG_INGEST_PUBLIC_URL with port 4317.
+            derived_request: scheme and host the browser used (well-formed X-Forwarded-Proto/-Host win).
+          enum: [configured, derived_public_url, derived_ingest_url, derived_request]
+
+    Onboarding:
+      type: object
+      description: Inputs of the web UI's "Add data" install commands (GET /api/v1/onboarding). No secrets.
+      required: [ui_url, otlp_http, otlp_grpc, server_version, agent_version, release_channel, cors_enabled, cors_allowed_origins,
+        auth_mode, organization, role, features]
+      properties:
+        ui_url: { $ref: "#/components/schemas/OnboardingEndpoint" }
+        otlp_http: { $ref: "#/components/schemas/OnboardingEndpoint" }
+        otlp_grpc: { $ref: "#/components/schemas/OnboardingEndpoint" }
+        server_version: { type: string, example: "0.9.1" }
+        agent_version:
+          type: [string, "null"]
+          description: >-
+            Release the commands pin (Java jar, container image tag, Helm chart tag): the newest verified release of
+            release_channel when the release check found one, else this server's release version; null for dev builds.
+          example: "0.9.2"
+        release_channel: { type: string, enum: [stable, beta] }
+        cors_enabled: { type: boolean, description: OPENLOG_INGEST_CORS_ALLOWED_ORIGINS is set (browser OTLP/JSON logs) }
+        cors_allowed_origins:
+          type: array
+          items: { type: string }
+        auth_mode: { type: string, enum: [postgres, static] }
+        organization:
+          type: object
+          required: [id, tenant_id, name]
+          properties:
+            id: { type: string }
+            tenant_id: { type: string }
+            name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        features:
+          type: object
+          required: [license_keys, can_create_license_keys, can_list_license_keys, fleet_php_install, tail_sampling]
+          properties:
+            license_keys: { type: boolean, description: License key management endpoints exist (postgres auth mode) }
+            can_create_license_keys: { type: boolean, description: The caller is a signed-in admin or owner }
+            can_list_license_keys: { type: boolean, description: The caller is a signed-in member or higher }
+            fleet_php_install: { type: boolean, description: The fleet can install the PHP agent (php-agent.md §7.3) }
+            tail_sampling: { type: boolean, description: OPENLOG_TAILSAMPLING_ENABLED }
 
     AvailableRelease:
       type: object
@@ -5849,7 +6702,14 @@ components:
         state:
           type: string
           enum: ["off", error, up_to_date, available, waiting_for_maintenance_window, updating, succeeded, failed, rolled_back, rollback_failed]
-        message: { type: string }
+        message: { type: string, description: English text (kept for older clients and logs) }
+        message_code:
+          type: string
+          description: "Stable code of message for translation; absent for free text and in documents of older updaters. Known: mode_off, update_available, update_available_notify, waiting_for_window, updated, rolled_back, rollback_failed, failed_before_change, up_to_date_newest, up_to_date_no_eligible"
+        message_params:
+          type: object
+          additionalProperties: { type: string }
+          description: "Parameters of message_code: version, from, to, channel, details (English)"
         error: { type: string }
         current_version: { type: string }
         target_version: { type: string }
@@ -5953,13 +6813,28 @@ components:
 
     InvitationLookup:
       type: object
-      required: [organization_name, email, role, expires_at, user_exists]
+      required: [organization_name, email, role, expires_at, user_exists, sso]
       properties:
         organization_name: { type: string }
         email: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         expires_at: { $ref: "#/components/schemas/Timestamp" }
         user_exists: { type: boolean, description: "true: sign in with the existing password to accept" }
+        sso:
+          description: >-
+            Claimed-domain redirection (D-089): the invitation must be accepted with single sign-on — the e-mail domain is
+            verified by an organization with an enabled connection (the inviting one, `same_organization`, or another one
+            that does not allow external invitations). Password acceptance answers 409.
+          oneOf:
+            - type: object
+              required: [required, organization_name, connection_name, protocol, same_organization]
+              properties:
+                required: { type: boolean }
+                organization_name: { type: string }
+                connection_name: { type: string }
+                protocol: { type: string, enum: [oidc, saml] }
+                same_organization: { type: boolean }
+            - { type: "null" }
 
     LicenseKey:
       type: object
@@ -7072,6 +7947,11 @@ components:
         from: { type: string, description: RFC3339 or unix ms; overrides SINCE (requires to) }
         to: { type: string, description: RFC3339 or unix ms; overrides UNTIL (requires from) }
         variables: { $ref: "#/components/schemas/OqlVariables" }
+        filters:
+          type: array
+          maxItems: 10
+          description: Dashboard cross-widget filters (oql.md §7), applied where the event type has the attribute
+          items: { $ref: "#/components/schemas/DashboardFilter" }
 
     OqlColumn:
       type: object
@@ -7142,6 +8022,7 @@ components:
         facet_limit: { type: integer }
         truncated: { type: boolean }
         warnings: { type: array, items: { type: string } }
+        ignored_filters: { type: array, items: { type: string }, description: Dashboard filters (attributes) that do not apply to the event type; omitted when none }
 
     OqlResult:
       type: object
@@ -7391,3 +8272,256 @@ components:
         - type: object
           properties:
             visibility: { $ref: "#/components/schemas/DashboardVisibility" }
+
+    # ---- Dashboard filters, versions, sharing and reports (D-086, D-087) ----
+
+    DashboardFilter:
+      type: object
+      required: [attribute, value]
+      properties:
+        attribute: { type: string, description: "OQL attribute: host.name, attributes['k'], resource['k']" }
+        value: { type: string, maxLength: 4096 }
+        event_type: { type: string, description: Event type of the widget the filter was taken from (implicit attributes apply only to it) }
+
+    DashboardSettings:
+      type: object
+      required: [share_links_enabled, report_domains, updated_at, can_edit]
+      properties:
+        share_links_enabled: { type: boolean }
+        report_domains: { type: array, items: { type: string } }
+        updated_at: { type: [string, "null"] }
+        can_edit: { type: boolean }
+
+    DashboardSettingsInput:
+      type: object
+      required: [share_links_enabled]
+      properties:
+        share_links_enabled: { type: boolean }
+        report_domains: { type: array, maxItems: 20, items: { type: string } }
+
+    DashboardVersion:
+      type: object
+      required: [version, author_user_id, author_email, created_at, restored_from, page_count, widget_count]
+      properties:
+        version: { type: integer }
+        author_user_id: { type: [string, "null"] }
+        author_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        restored_from: { type: [integer, "null"] }
+        page_count: { type: integer }
+        widget_count: { type: integer }
+
+    DashboardVersionList:
+      type: object
+      required: [versions, current_version, can_restore]
+      properties:
+        versions: { type: array, items: { $ref: "#/components/schemas/DashboardVersion" } }
+        current_version: { type: integer }
+        can_restore: { type: boolean }
+
+    DashboardPageRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+
+    DashboardWidgetRef:
+      type: object
+      required: [id, title, page]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        page: { type: string, description: Page name }
+        fields:
+          type: array
+          items: { type: string, enum: [title, visualization, layout, query, markdown, unit, thresholds, options, page] }
+
+    DashboardDiff:
+      type: object
+      required: [name, description, visibility, variables, pages_added, pages_removed, pages_renamed, widgets_added, widgets_removed, widgets_changed]
+      properties:
+        name: { type: boolean }
+        description: { type: boolean }
+        visibility: { type: boolean }
+        variables: { type: boolean }
+        pages_added: { type: array, items: { $ref: "#/components/schemas/DashboardPageRef" } }
+        pages_removed: { type: array, items: { $ref: "#/components/schemas/DashboardPageRef" } }
+        pages_renamed: { type: array, items: { $ref: "#/components/schemas/DashboardPageRef" } }
+        widgets_added: { type: array, items: { $ref: "#/components/schemas/DashboardWidgetRef" } }
+        widgets_removed: { type: array, items: { $ref: "#/components/schemas/DashboardWidgetRef" } }
+        widgets_changed: { type: array, items: { $ref: "#/components/schemas/DashboardWidgetRef" } }
+
+    DashboardVersionDetail:
+      allOf:
+        - { $ref: "#/components/schemas/DashboardVersion" }
+        - type: object
+          required: [document, current_version, previous_version, changes, differences_from_current]
+          properties:
+            document:
+              type: object
+              required: [name, description, visibility, variables, pages]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                visibility: { $ref: "#/components/schemas/DashboardVisibility" }
+                variables: { type: array, items: { $ref: "#/components/schemas/DashboardVariable" } }
+                pages: { type: array, items: { $ref: "#/components/schemas/DashboardPage" } }
+            current_version: { type: integer }
+            previous_version: { type: [integer, "null"] }
+            changes:
+              oneOf:
+                - { $ref: "#/components/schemas/DashboardDiff" }
+                - { type: "null" }
+            differences_from_current: { $ref: "#/components/schemas/DashboardDiff" }
+
+    DashboardRestore:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, description: The current version of the dashboard that was read }
+
+    DashboardLockedVariables:
+      type: object
+      description: Locked variable values by variable name
+      additionalProperties: { type: array, items: { type: string } }
+
+    DashboardShareInput:
+      type: object
+      required: [expires_at]
+      properties:
+        label: { type: string, maxLength: 100 }
+        expires_at: { type: string, format: date-time, description: 5 minutes to 90 days ahead }
+        range: { type: string, pattern: "^[1-9][0-9]{0,3}[mhd]$", description: Relative range (1 minute to 31 days); or from and to }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        variables: { $ref: "#/components/schemas/DashboardLockedVariables" }
+
+    DashboardShare:
+      type: object
+      required: [id, label, range, from, to, variables, created_by_email, created_at, expires_at, revoked_at, last_used_at, use_count, active]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        range: { type: [string, "null"] }
+        from: { type: [string, "null"] }
+        to: { type: [string, "null"] }
+        variables: { $ref: "#/components/schemas/DashboardLockedVariables" }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+        revoked_at: { type: [string, "null"] }
+        last_used_at: { type: [string, "null"] }
+        use_count: { type: integer }
+        active: { type: boolean }
+
+    DashboardShareCreated:
+      allOf:
+        - { $ref: "#/components/schemas/DashboardShare" }
+        - type: object
+          required: [token, path]
+          properties:
+            token: { type: string, description: Returned only when the link is created }
+            path: { type: string, description: "Web UI page of the link: /shared/dashboards/{token}" }
+
+    DashboardReportFrequency:
+      type: string
+      enum: [daily, weekly]
+
+    DashboardReportInput:
+      type: object
+      required: [frequency, hour, recipients]
+      properties:
+        name: { type: string, maxLength: 100 }
+        frequency: { $ref: "#/components/schemas/DashboardReportFrequency" }
+        weekday: { type: integer, minimum: 0, maximum: 6, description: 0 = Sunday (weekly) }
+        hour: { type: integer, minimum: 0, maximum: 23 }
+        minute: { type: integer, minimum: 0, maximum: 59 }
+        timezone: { type: string, description: IANA time zone (default UTC) }
+        recipients: { type: array, minItems: 1, maxItems: 20, items: { type: string } }
+        language: { type: string, enum: [en, tr] }
+        range: { type: string, description: Relative range (default 24h daily, 7d weekly) }
+        variables: { $ref: "#/components/schemas/DashboardLockedVariables" }
+        enabled: { type: boolean }
+
+    DashboardReportRun:
+      type: object
+      required: [period, status, error, recipients, started_at, finished_at]
+      properties:
+        period: { type: string, description: Local date YYYY-MM-DD }
+        status: { type: string, enum: [running, sent, partial, failed, skipped] }
+        error: { type: string }
+        recipients: { type: integer }
+        started_at: { $ref: "#/components/schemas/Timestamp" }
+        finished_at: { type: [string, "null"] }
+
+    DashboardReport:
+      type: object
+      required: [id, name, frequency, weekday, hour, minute, timezone, recipients, language, range, variables, enabled, created_by_email, created_at, updated_at, next_run_at, last_run]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        frequency: { $ref: "#/components/schemas/DashboardReportFrequency" }
+        weekday: { type: integer }
+        hour: { type: integer }
+        minute: { type: integer }
+        timezone: { type: string }
+        recipients: { type: array, items: { type: string } }
+        language: { type: string, enum: [en, tr] }
+        range: { type: string }
+        variables: { $ref: "#/components/schemas/DashboardLockedVariables" }
+        enabled: { type: boolean }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        next_run_at: { type: [string, "null"] }
+        last_run:
+          oneOf:
+            - { $ref: "#/components/schemas/DashboardReportRun" }
+            - { type: "null" }
+
+    SharedDashboardWidget:
+      type: object
+      required: [id, title, visualization, layout, markdown, unit, thresholds, options]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        visualization: { $ref: "#/components/schemas/DashboardVisualization" }
+        layout: { $ref: "#/components/schemas/DashboardWidgetLayout" }
+        markdown: { type: string }
+        unit: { $ref: "#/components/schemas/DashboardUnit" }
+        thresholds: { type: array, items: { $ref: "#/components/schemas/DashboardThreshold" } }
+        options: { $ref: "#/components/schemas/DashboardWidgetOptions" }
+
+    SharedDashboard:
+      type: object
+      required: [name, description, pages, variables, time_range, expires_at]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        pages:
+          type: array
+          items:
+            type: object
+            required: [id, name, widgets]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              widgets: { type: array, items: { $ref: "#/components/schemas/SharedDashboardWidget" } }
+        variables:
+          type: array
+          items:
+            type: object
+            required: [name, label, values]
+            properties:
+              name: { type: string }
+              label: { type: string }
+              values: { type: array, items: { type: string }, description: Locked values (empty = All) }
+        time_range:
+          type: object
+          required: [range, from, to]
+          properties:
+            range: { type: [string, "null"] }
+            from: { type: [string, "null"] }
+            to: { type: [string, "null"] }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }

@@ -51,6 +51,30 @@ containerSecurityContext:
 # Extra env vars appended to every openlog container (list of EnvVar).
 extraEnv: []
 
+# Settings (docs/contracts/config.md) rendered as env into every openlog component: ingest, processor, api, alert,
+# sampler and migrate. A component's own `config` wins for the same name; "" keeps the documented default. Secrets
+# never go here (see auth.*, alert.* and bootstrap.* for Secret-backed values). internal/config/envcoverage_test.go
+# fails when a configuration variable is not settable through this chart.
+config:
+  # Usage, plans and quotas (docs/contracts/usage.md, docs/operations/saas.md). SaaS mode must match on ingest, api
+  # and migrate.
+  OPENLOG_SAAS_MODE: "false"
+  # Plan catalog JSON, or a file mounted through extraVolumes/extraEnv.
+  OPENLOG_PLANS: ""
+  OPENLOG_PLANS_FILE: ""
+  OPENLOG_DEFAULT_PLAN: ""
+  # "" = OPENLOG_SAAS_MODE.
+  OPENLOG_QUOTA_RETENTION_ENABLED: ""
+  # Agent fleet release catalog (ingest and api).
+  OPENLOG_RELEASE_CATALOG_REFRESH: "15m"
+  OPENLOG_RELEASE_MIRROR_DIR: ""
+  OPENLOG_RELEASE_SERVE_MIRROR: "false"
+  OPENLOG_RELEASE_MIRROR_BASE_URL: ""
+  # Late-span APM re-link (processor enqueues, api re-links; apm.md §6). "" after = OPENLOG_APM_LINK_LOOKBACK.
+  OPENLOG_APM_RELINK_ENABLED: "true"
+  OPENLOG_APM_RELINK_AFTER: ""
+  OPENLOG_APM_RELINK_MAX_AGE: "168h"
+
 # Default scheduling policy for ingest / processor / api / envoy pods.
 scheduling:
   # soft | hard | none. Ignored for a component that sets its own `affinity`.
@@ -120,6 +144,21 @@ auth:
     ttl: 60s
     negativeTTL: 10s
     maxStale: 15m
+  # OPENLOG_KEY_HASH_SECRET(_PREVIOUS) of ingest, api and the bootstrap Job (D-044; >= 32 bytes, `openssl rand -base64
+  # 48`, same value everywhere, keep it with your backups). Stored in the chart Secret, or read from auth.existingSecret
+  # under the *Key names.
+  keyHashSecret: ""
+  keyHashSecretKey: key-hash-secret
+  keyHashSecretPrevious: ""
+  keyHashSecretPreviousKey: key-hash-secret-previous
+  # OPENLOG_SSO_SECRET_KEY(_PREVIOUS) of the api (>= 32 bytes; empty = derived from keyHashSecret).
+  ssoSecretKey: ""
+  ssoSecretKeyKey: sso-secret-key
+  ssoSecretKeyPrevious: ""
+  ssoSecretKeyPreviousKey: sso-secret-key-previous
+  # OPENLOG_SIGNUP_CAPTCHA_SECRET of the api (provider and site key: api.config).
+  captchaSecret: ""
+  captchaSecretKey: signup-captcha-secret
 
 # -----------------------------------------------------------------------------
 # PostgreSQL (auth.mode=postgres; docs/contracts/postgres.md)
@@ -165,6 +204,9 @@ postgres:
     resources:
       requests: {cpu: 250m, memory: 512Mi}
       limits: {memory: 1Gi}
+    # spec.smartShutdownTimeout: seconds a stopping instance waits for clients before a fast shutdown. openlog pods keep
+    # pooled connections, so the CNPG default (180) delayed the failover after deleting/draining the primary by ~3 min.
+    smartShutdownTimeout: 15
     # spec.postgresql.parameters, e.g. {max_connections: "300"}
     parameters: {}
     # spec.affinity (default: soft anti-affinity on kubernetes.io/hostname).
@@ -413,6 +455,18 @@ clickhouse:
       # Remove the plaintext native and HTTP ports (cluster insecure: "no"). The operator itself uses
       # HTTP 8123: configure its access (scheme https, port 8443) in the operator config first.
       disableInsecure: false
+      # Keeper TLS (D-093): ClickHouse -> Keeper on securePort (<secure>1</secure>) and Raft between Keeper nodes over
+      # TLS, with the same Secret; the certificate must also carry keeper-<chk name>.<namespace>.svc and the Raft hosts
+      # chk-<chk name>-keeper-0-<n>. With disableInsecure the plaintext Keeper client port 2181 is removed.
+      keeper:
+        enabled: true
+        securePort: 9281
+      # Replication (part fetches between replicas) over HTTPS on this port instead of HTTP 9009 (D-093).
+      # ClickHouse accepts only one of the two ports; the certificate must carry the interserver host
+      # chi-<chi name>-<cluster>-<shard>-<replica>.
+      interserverHTTPS:
+        enabled: true
+        port: 9010
 
   # Used only when dependencies.mode=operators (Altinity clickhouse-operator >= 0.24).
   altinity:
@@ -472,6 +526,15 @@ ingest:
     OPENLOG_INGEST_PRODUCE_TIMEOUT: "10s"
     # CORS for browser OTLP senders, e.g. "https://app.example.com,https://*.example.com" ("" = off).
     OPENLOG_INGEST_CORS_ALLOWED_ORIGINS: ""
+    # Agent fleet sync (releases-updates.md §3-4).
+    OPENLOG_FLEET_SYNC_INTERVAL: "300s"
+    OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL: "60s"
+    OPENLOG_FLEET_POLICY_CACHE_TTL: "15s"
+    OPENLOG_FLEET_REPORT_QUEUE_SIZE: "10000"
+    # SaaS mode quota enforcement (usage.md §4.4).
+    OPENLOG_QUOTA_REFRESH_INTERVAL: "30s"
+    OPENLOG_QUOTA_INGEST_PODS: "0"
+    OPENLOG_QUOTA_BLOCKED_RETRY_AFTER: "5m"
   extraEnv: []
   resources:
     requests: {cpu: "1", memory: 1Gi}
@@ -539,6 +602,14 @@ processor:
     OPENLOG_PROCESSOR_BATCH_ROWS: "50000"
     OPENLOG_PROCESSOR_FLUSH_INTERVAL: "2s"
     OPENLOG_PROCESSOR_INSERT_TIMEOUT: "30s"
+    OPENLOG_PROCESSOR_BATCH_BYTES: "8388608"
+    # Memory ~ this + INSERT_CONCURRENCY x BATCH_BYTES x 10 + Kafka fetch buffer; keep resources.limits in line.
+    OPENLOG_PROCESSOR_MAX_BUFFERED_BYTES: "134217728"
+    OPENLOG_PROCESSOR_INSERT_CONCURRENCY: "4"
+    # direct (shard *_local tables, D-018) | distributed
+    OPENLOG_PROCESSOR_INSERT_MODE: direct
+    OPENLOG_PROCESSOR_TOPOLOGY_REFRESH: "1m"
+    OPENLOG_PROCESSOR_INSERT_QUORUM: "0"
   extraEnv: []
   resources:
     requests: {cpu: "1", memory: 2Gi}
@@ -594,6 +665,8 @@ tailSampling:
   decisionCacheTTL: "10m"
   decisionCacheSize: 500000
   policyRefresh: "30s"
+  group: openlog-sampler
+  produceTimeout: "10s"
   # JSON policy for organizations without a saved one (empty: keep everything), e.g.
   # '{"enabled":true,"baseline_ratio":0.1,"max_spans_per_second":0,"rules":[{"name":"errors","type":"error"}]}'
   defaultPolicy: ""
@@ -660,6 +733,54 @@ api:
     OPENLOG_API_HTTP_ADDR: ":8080"
     OPENLOG_API_QUERY_TIMEOUT: "30s"
     OPENLOG_API_MAX_ROWS: "10000"
+    OPENLOG_API_UI_ENABLED: "true"
+    # Release check (GET /api/v1/version) and fleet rollout controller (api leader).
+    OPENLOG_UPDATE_CHECK: enabled
+    OPENLOG_UPDATE_CHECK_INTERVAL: "24h"
+    OPENLOG_FLEET_CONTROLLER_INTERVAL: "30s"
+    OPENLOG_FLEET_HOST_STALE_AFTER: "24h"
+    # "Add data" install commands; "" = derived from the request.
+    OPENLOG_INGEST_PUBLIC_URL: ""
+    OPENLOG_INGEST_PUBLIC_GRPC_URL: ""
+    # APM edge linking (apm.md §4, §6).
+    OPENLOG_APM_DEFAULT_APDEX_T: "500ms"
+    OPENLOG_APM_LINK_ENABLED: "true"
+    OPENLOG_APM_LINK_INTERVAL: "1m"
+    OPENLOG_APM_LINK_LOOKBACK: "10m"
+    OPENLOG_APM_LINK_DELAY: "1m"
+    OPENLOG_APM_LINK_CATCHUP_ENABLED: "true"
+    OPENLOG_APM_LINK_CATCHUP_AT: "03:00"
+    OPENLOG_APM_LINK_CATCHUP_BATCH: "1h"
+    OPENLOG_APM_RELINK_INTERVAL: "5m"
+    OPENLOG_APM_RELINK_MAX_MINUTES: "120"
+    OPENLOG_ALERT_MAX_RULES_PER_ORG: "1000"
+    # Sign-up protection (auth.signupEnabled); CAPTCHA secret: auth.captchaSecret. "" verification = automatic.
+    OPENLOG_SIGNUP_REQUIRE_VERIFICATION: ""
+    OPENLOG_EMAIL_VERIFICATION_TTL: "48h"
+    OPENLOG_SIGNUP_MAX_PER_IP: "10"
+    OPENLOG_SIGNUP_MAX_PER_EMAIL: "5"
+    OPENLOG_SIGNUP_RATE_WINDOW: "1h"
+    OPENLOG_SIGNUP_BLOCKED_EMAIL_DOMAINS: ""
+    OPENLOG_SIGNUP_BLOCKED_EMAIL_DOMAINS_FILE: ""
+    # turnstile | hcaptcha
+    OPENLOG_SIGNUP_CAPTCHA_PROVIDER: ""
+    OPENLOG_SIGNUP_CAPTCHA_SITE_KEY: ""
+    # Single sign-on and SCIM (D-077, D-078); secret key: auth.ssoSecretKey. "" private networks = automatic.
+    OPENLOG_SSO_ENABLED: "true"
+    OPENLOG_SSO_ALLOW_PRIVATE_NETWORKS: ""
+    OPENLOG_SSO_LOGIN_TTL: "10m"
+    OPENLOG_SSO_CLOCK_SKEW: "2m"
+    OPENLOG_SSO_HTTP_TIMEOUT: "10s"
+    OPENLOG_SCIM_ENABLED: "true"
+    # Usage, quotas and billing (api leader; usage.md). Shared plan settings: top-level config.
+    OPENLOG_SUPERADMIN_EMAILS: ""
+    OPENLOG_USAGE_EVALUATION_INTERVAL: "1m"
+    OPENLOG_USAGE_QUERY_COLLECTION_ENABLED: "true"
+    OPENLOG_USAGE_NOTIFY_THRESHOLDS: "80,100"
+    OPENLOG_QUOTA_RETENTION_MAX_MUTATIONS: "20"
+    # none | noop
+    OPENLOG_BILLING_PROVIDER: none
+    OPENLOG_BILLING_PUSH_AT: "02:00"
   extraEnv: []
   resources:
     requests: {cpu: 500m, memory: 512Mi}
@@ -731,6 +852,10 @@ alert:
     from: ""
     tls: starttls
     insecureSkipVerify: false
+    # OPENLOG_SMTP_PASSWORD: from passwordSecret when its name is set, else `password` stored in the chart Secret (or
+    # auth.existingSecret under passwordKey).
+    password: ""
+    passwordKey: smtp-password
     passwordSecret:
       name: ""
       key: password
@@ -745,6 +870,8 @@ alert:
     OPENLOG_ALERT_DISPATCH_WORKERS: "4"
     OPENLOG_ALERT_DELIVERY_TIMEOUT: "10s"
     OPENLOG_ALERT_DELIVERY_MAX_ATTEMPTS: "10"
+    OPENLOG_ALERT_MAX_SERIES_PER_RULE: "1000"
+    OPENLOG_ALERT_EVALUATION_HISTORY: "true"
   extraEnv: []
   resources:
     requests: {cpu: 200m, memory: 256Mi}
@@ -789,7 +916,9 @@ migrate:
   backoffLimit: 10
   activeDeadlineSeconds: 1800
   logLevel: ""
-  config: {}
+  config:
+    # TTL of the APM tables (apm.md §8), applied by the migrations.
+    OPENLOG_APM_RETENTION_DAYS: "30"
   extraEnv: []
   resources:
     requests: {cpu: 100m, memory: 128Mi}
@@ -816,6 +945,10 @@ bootstrap:
   # Optional plaintext ingest license key to ensure (development). Prefer creating keys in the UI.
   licenseKey: ""
   licenseKeyKey: bootstrap-license-key
+  ownerName: ""
+  # Optional plaintext read-only API key to ensure (chart Secret key bootstrap-api-key, or apiKeyKey of existingSecret).
+  apiKey: ""
+  apiKeyKey: bootstrap-api-key
   hookDeletePolicy: before-hook-creation,hook-succeeded
   backoffLimit: 10
   activeDeadlineSeconds: 1800

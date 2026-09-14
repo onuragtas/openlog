@@ -5,13 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
-	"html"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/onuragtas/openlog/internal/auth"
+	mailtemplates "github.com/onuragtas/openlog/internal/mail/templates"
 )
 
 const (
@@ -131,7 +130,7 @@ func (s *Service) getDomain(ctx context.Context, p *auth.Principal, id string) (
 	return d, nil
 }
 
-// DeleteDomain removes a claim (admin+). The last verified domain cannot be removed while SSO is enforced.
+// DeleteDomain removes a claim (admin+). The last verified domain of an enforcing connection cannot be removed.
 func (s *Service) DeleteDomain(ctx context.Context, p *auth.Principal, id string, meta auth.ClientMeta) error {
 	if err := s.gate(p, auth.RoleAdmin); err != nil {
 		return err
@@ -140,32 +139,100 @@ func (s *Service) DeleteDomain(ctx context.Context, p *auth.Principal, id string
 	if err != nil {
 		return err
 	}
-	if d.VerifiedAt != nil {
-		c, err := s.store.GetConnection(ctx, p.OrgID)
-		if err != nil && !errors.Is(err, auth.ErrNotFound) {
-			return s.fail(err)
-		}
-		if err == nil && c.Enforce {
-			ds, err := s.store.ListDomains(ctx, p.OrgID)
-			if err != nil {
-				return s.fail(err)
-			}
-			verified := 0
-			for _, x := range ds {
-				if x.VerifiedAt != nil {
-					verified++
-				}
-			}
-			if verified <= 1 {
-				return precondition("turn off single sign-on enforcement before removing the last verified domain")
-			}
-		}
+	if err := s.keepEnforcedDomain(ctx, p.OrgID, d, "removing"); err != nil {
+		return err
 	}
 	if _, err := s.store.DeleteDomain(ctx, p.OrgID, id); err != nil {
 		return s.fail(err)
 	}
 	s.auth.Audit(ctx, p, meta, "sso.domain.remove", "domain", d.ID, map[string]any{"domain": d.Domain, "verified": d.VerifiedAt != nil})
 	return nil
+}
+
+// keepEnforcedDomain refuses to take verified domain d away from an enforcing connection when it is the last
+// verified domain routed to it.
+func (s *Service) keepEnforcedDomain(ctx context.Context, orgID string, d Domain, verb string) error {
+	if d.VerifiedAt == nil {
+		return nil
+	}
+	conns, err := s.store.ListConnections(ctx, orgID)
+	if err != nil {
+		return s.fail(err)
+	}
+	ds, err := s.store.ListDomains(ctx, orgID)
+	if err != nil {
+		return s.fail(err)
+	}
+	for _, c := range conns {
+		if !c.Enforce || !routesTo(d, conns, c.ID) {
+			continue
+		}
+		verified := 0
+		for _, x := range ds {
+			if x.VerifiedAt != nil && routesTo(x, conns, c.ID) {
+				verified++
+			}
+		}
+		if verified <= 1 {
+			return precondition("turn off single sign-on enforcement of %q before %s its last verified domain", connectionLabel(c), verb)
+		}
+	}
+	return nil
+}
+
+func connectionLabel(c Connection) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return string(c.Protocol) + " " + c.ID
+}
+
+// AssignDomain routes a domain's sign-ins to a connection of the organization; connectionID "" = the default
+// connection (admin+).
+func (s *Service) AssignDomain(ctx context.Context, p *auth.Principal, id, connectionID string, meta auth.ClientMeta) (Domain, error) {
+	if err := s.gate(p, auth.RoleAdmin); err != nil {
+		return Domain{}, err
+	}
+	d, err := s.getDomain(ctx, p, id)
+	if err != nil {
+		return Domain{}, err
+	}
+	if d.ConnectionID == connectionID {
+		return d, nil
+	}
+	if connectionID != "" {
+		if _, err := s.GetConnection(ctx, p, connectionID); err != nil {
+			return Domain{}, err
+		}
+	}
+	conns, err := s.store.ListConnections(ctx, p.OrgID)
+	if err != nil {
+		return Domain{}, s.fail(err)
+	}
+	moved := d
+	moved.ConnectionID = connectionID
+	for _, c := range conns {
+		changes := routesTo(d, conns, c.ID) != routesTo(moved, conns, c.ID)
+		// Moving a verified domain into or out of an enforcing connection changes who must use SSO: owner only,
+		// like the enforcement setting itself.
+		if c.Enforce && changes && d.VerifiedAt != nil && p.Role != auth.RoleOwner {
+			return Domain{}, denied("only owners can move a verified domain into or out of a connection that enforces single sign-on")
+		}
+		if c.Enforce && routesTo(d, conns, c.ID) && !routesTo(moved, conns, c.ID) {
+			if err := s.keepEnforcedDomain(ctx, p.OrgID, d, "moving"); err != nil {
+				return Domain{}, err
+			}
+		}
+	}
+	out, err := s.store.SetDomainConnection(ctx, p.OrgID, id, connectionID)
+	if errors.Is(err, auth.ErrNotFound) {
+		return Domain{}, notFound("domain or connection not found")
+	}
+	if err != nil {
+		return Domain{}, s.fail(err)
+	}
+	s.auth.Audit(ctx, p, meta, "sso.domain.assign", "domain", d.ID, map[string]any{"domain": d.Domain, "from": d.ConnectionID, "to": connectionID})
+	return out, nil
 }
 
 // DNSRecord returns the TXT record name and value that verifies d.
@@ -259,16 +326,12 @@ func (s *Service) SendDomainVerificationEmail(ctx context.Context, p *auth.Princ
 		return Domain{}, s.fail(err)
 	}
 	link := s.cfg.PublicURL + "/sso/verify-domain#token=" + token
-	text := fmt.Sprintf("%s asked to verify that the domain %s belongs to the organization %q on openlog.\r\n\r\n"+
-		"Members with addresses at this domain will be able to sign in through the organization's single sign-on.\r\n\r\n"+
-		"Open this link within 24 hours to confirm, or ignore this e-mail:\r\n\r\n%s\r\n", p.Email, d.Domain, org.Name, link)
-	htmlBody := `<!doctype html><html><body style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5"><p>` +
-		html.EscapeString(fmt.Sprintf("%s asked to verify that the domain %s belongs to the organization %q on openlog.", p.Email, d.Domain, org.Name)) +
-		`</p><p>Members with addresses at this domain will be able to sign in through the organization's single sign-on.</p><p><a href="` +
-		html.EscapeString(link) + `">Verify ` + html.EscapeString(d.Domain) + `</a></p><p style="color:#666;font-size:12px">The link expires in 24 hours. If you did not expect this e-mail, ignore it.</p></body></html>`
+	// Language of the requesting admin's browser (internal/mail/templates).
+	msg := mailtemplates.DomainVerification(meta.Locale, mailtemplates.DomainVerificationData{Requester: p.Email, Domain: d.Domain,
+		OrgName: org.Name, Link: link})
 	mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
-	if err := s.cfg.Mailer.Send(mctx, auth.Mail{To: address, Subject: "[openlog] Verify the domain " + d.Domain, Text: text, HTML: htmlBody}); err != nil {
+	if err := s.cfg.Mailer.Send(mctx, auth.Mail{To: address, Subject: msg.Subject, Text: msg.Text, HTML: msg.HTML}); err != nil {
 		s.log.Warn("cannot send domain verification e-mail", "domain", d.Domain, "err", err)
 		return Domain{}, &auth.Error{Code: auth.CodeUnavailable, Message: "the verification e-mail could not be sent; try again later"}
 	}
