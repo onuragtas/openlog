@@ -4,6 +4,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -78,6 +79,9 @@ func setStat(t *testing.T, root string, pid int, utime int, rss int) {
 }
 
 func TestProcessTopOnFixture(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	files := maps.Clone(testfixtures.ServiceHost())
 	fs := hostfstest.Build(t, files)
 	root := fs.Root()
@@ -263,6 +267,9 @@ func TestContainerStatusWithDockerMetadata(t *testing.T) {
 }
 
 func TestFilesystemExcludesFileMountsAndAgentDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	isDir := func(mp string) bool { return !strings.HasPrefix(mp, "/etc/") }
 	mounts := FilesystemMounts([]procfs.Mount{
 		{MountPoint: "/", FSType: "ext4", Device: "/dev/vda1", MajorMinor: "253:1"},

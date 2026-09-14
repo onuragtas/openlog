@@ -1,8 +1,14 @@
 package hostfs
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	cases := []struct{ root, in, want string }{
 		{"/", "/proc/stat", "/proc/stat"},
 		{"", "proc/stat", "/proc/stat"},

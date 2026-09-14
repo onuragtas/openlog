@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -117,6 +118,9 @@ func (e *mgrEnv) setRemote(m *Manager, r Remote) {
 func (e *mgrEnv) ops() map[selfmon.PHPAgentOp]uint64 { return e.stats.Snapshot().PHPAgentOps }
 
 func TestManagerInstallsWhenTheFleetSaysAuto(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newMgrEnv(t)
 	m := e.manager()
 	ctx := context.Background()
@@ -190,6 +194,9 @@ func TestManagerInstallsWhenTheFleetSaysAuto(t *testing.T) {
 }
 
 func TestManagerHealthCheckFailureRequestsRollback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newMgrEnv(t)
 	m := e.manager()
 	ctx := context.Background()
@@ -235,6 +242,9 @@ func TestManagerHealthCheckFailureRequestsRollback(t *testing.T) {
 }
 
 func TestManagerModeOffUninstallsFleetInstallation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newMgrEnv(t)
 	ctx := context.Background()
 	m := e.manager()
@@ -298,6 +308,9 @@ func TestManagerLeavesPackageInstallationsAlone(t *testing.T) {
 }
 
 func TestManagerFailuresBeforeTheRestart(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	cases := map[string]struct {
 		remote func(e *mgrEnv) Remote
 		opts   func(*Options)

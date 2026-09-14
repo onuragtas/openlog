@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -105,6 +106,9 @@ func quote(s string) string {
 }
 
 func TestContainerJSONFileLogs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h, rs := containerHarness(t)
 	logPath := "/var/lib/docker/containers/" + ctrID + "/" + ctrID + "-json.log"
 	if err := os.MkdirAll(filepath.Dir(h.path(logPath)), 0o755); err != nil {
@@ -225,6 +229,9 @@ func waitStreams(t *testing.T, m *Manager) {
 }
 
 func TestContainerAPIStreamLogs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h, rs := containerHarness(t)
 	c := containers.Container{ID: ctrID, Name: "cache", Runtime: "docker", Image: "redis:7-alpine", State: "running", Labels: map[string]string{}}
 	c.Apply(containers.Details{LogDriver: "local"})

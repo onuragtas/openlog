@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -192,6 +193,9 @@ func TestParseCRIListAndStatus(t *testing.T) {
 }
 
 func TestSourceCRI(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	root := shortTempDir(t)
 	// crio.sock is configured under /var/run and served at /run; Docker's containerd has no CRI service.
 	f := serveCRI(t, filepath.Join(root, "run/crio/crio.sock"), "cri-o", false)
@@ -241,6 +245,9 @@ func TestSourceCRI(t *testing.T) {
 }
 
 func TestSourceCRIPermission(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses socket permissions")
 	}

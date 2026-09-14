@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,9 @@ func (e *applyEnv) want(st *Status, result, version string) {
 }
 
 func TestApplyInstallUpgradeRollbackUninstall(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newApplyEnv(t)
 
 	e.stage("0.9.1", goodSO, "")
@@ -166,6 +170,9 @@ func TestApplyInstallUpgradeRollbackUninstall(t *testing.T) {
 }
 
 func TestApplyBrokenFirstInstallRemovesEverything(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newApplyEnv(t)
 	e.stage("0.9.1", badSO, "")
 	e.request(ActionInstall, "0.9.1")
@@ -234,6 +241,9 @@ func TestApplyRejects(t *testing.T) {
 }
 
 func TestApplyDowngradeRespectsRollbackFloor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newApplyEnv(t)
 	e.stage("0.9.5", goodSO, "0.9.3")
 	e.request(ActionInstall, "0.9.5")
@@ -251,6 +261,9 @@ func TestApplyDowngradeRespectsRollbackFloor(t *testing.T) {
 }
 
 func TestApplyExcludeBins(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	e := newApplyEnv(t)
 	e.stage("0.9.1", goodSO, "")
 	e.request(ActionInstall, "0.9.1", func(r *Request) { r.ExcludeBins = []string{filepath.Dir(e.cli) + "/php8*"}; r.Reload = "" })

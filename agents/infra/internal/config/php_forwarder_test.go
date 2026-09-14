@@ -8,7 +8,7 @@ import (
 
 func TestPHPForwarderConfig(t *testing.T) {
 	d := DefaultFor("linux").PHPForwarder
-	if d.Enabled != nil || d.Socket != DefaultPHPSocket || d.SocketGroup != "auto" || d.Mode() != 0o660 ||
+	if d.Enabled != nil || d.Socket != "/run/openlog-infra-agent/php.sock" || d.SocketGroup != "auto" || d.Mode() != 0o660 ||
 		d.MaxPendingTraces != 10000 || d.ReassemblyTimeout.D() != 5*time.Second || d.UDPListen != "" {
 		t.Errorf("defaults = %+v", d)
 	}
@@ -17,7 +17,7 @@ func TestPHPForwarderConfig(t *testing.T) {
 	if err := Parse([]byte("php_forwarder:\n  enabled: false\n  socket_mode: \"0666\"\n  udp_listen: 127.0.0.1:18127\n"), cfg); err != nil {
 		t.Fatal(err)
 	}
-	if p := cfg.PHPForwarder; p.Enabled == nil || *p.Enabled || p.Mode() != 0o666 || p.UDPListen != "127.0.0.1:18127" || p.Socket != DefaultPHPSocket {
+	if p := cfg.PHPForwarder; p.Enabled == nil || *p.Enabled || p.Mode() != 0o666 || p.UDPListen != "127.0.0.1:18127" || p.Socket != "/run/openlog-infra-agent/php.sock" {
 		t.Errorf("parsed = %+v", p)
 	}
 	if err := cfg.Validate(false); err != nil {
@@ -35,7 +35,7 @@ func TestPHPForwarderConfig(t *testing.T) {
 		"socket: \"\"\n  udp_listen: 127.0.0.1:1": "",
 	}
 	for yml, want := range cases {
-		cfg := Default()
+		cfg := DefaultFor("linux")
 		if err := Parse([]byte("php_forwarder:\n  "+yml+"\n"), cfg); err != nil {
 			t.Fatalf("%s: %v", yml, err)
 		}

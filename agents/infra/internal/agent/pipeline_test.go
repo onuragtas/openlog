@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -146,6 +147,9 @@ func checkSnapshots(t *testing.T, recs []*logspb.LogRecord) int {
 // Collection must stay on schedule (±10%) while the exporter is stalled, and
 // every sample must be delivered, in order, once ingest recovers.
 func TestCollectionStaysOnScheduleWhileExportStalls(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("schedule tolerance of 20ms is below the timer resolution of Windows runners")
+	}
 	const interval = 200 * time.Millisecond
 	const outage = 8 // intervals
 

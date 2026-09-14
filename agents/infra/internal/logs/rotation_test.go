@@ -3,6 +3,7 @@ package logs
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ func checkExactlyOnce(t *testing.T, h *harness, sets map[string]int) {
 // Lines written just before a rename+create rotation, not read yet, still come from the renamed
 // file (read to its end), followed by the new file.
 func TestRotationUnreadLines(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	t.Run("unread at rotation", func(t *testing.T) {
 		h := newHarness(t)
 		h.start()

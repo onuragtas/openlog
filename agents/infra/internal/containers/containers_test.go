@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -227,6 +228,9 @@ func serveDocker(t *testing.T, sock string) {
 }
 
 func TestSourceList(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	root := shortTempDir(t)
 	// Socket only at /run/docker.sock: the /var/run path falls back to it.
 	serveDocker(t, filepath.Join(root, "run/docker.sock"))
@@ -278,6 +282,9 @@ func TestSourceList(t *testing.T) {
 }
 
 func TestSourcePermission(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses socket permissions")
 	}

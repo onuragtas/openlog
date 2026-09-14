@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -222,7 +221,7 @@ func (s InstanceSettings) validate(id, prefix string) []error {
 	if q := s.QueryStats; q != nil && (q.TopN < 0 || q.TopN > 100 || q.MinCalls < 0) {
 		add("query_stats: top_n must be 0..100 and min_calls >= 0")
 	}
-	if s.TLS != nil && s.TLS.CAFile != "" && !filepath.IsAbs(s.TLS.CAFile) {
+	if s.TLS != nil && s.TLS.CAFile != "" && !isAbsPath(s.TLS.CAFile) {
 		add("tls.ca_file must be an absolute path")
 	}
 	if e := s.Endpoint; e != "" {
@@ -233,7 +232,7 @@ func (s InstanceSettings) validate(id, prefix string) []error {
 				add("endpoint must be the http(s) URL of the stub_status page (got %q)", e)
 			}
 		case strings.HasPrefix(e, "unix:"):
-			if !filepath.IsAbs(strings.TrimPrefix(e, "unix:")) {
+			if !isAbsPath(strings.TrimPrefix(e, "unix:")) {
 				add("endpoint unix:<path> needs an absolute path")
 			}
 		default:
@@ -357,7 +356,7 @@ func (s Secret) validate() error {
 			return errors.New("env: needs a variable name")
 		}
 	case strings.HasPrefix(v, "file:"):
-		if !filepath.IsAbs(strings.TrimPrefix(v, "file:")) {
+		if !isAbsPath(strings.TrimPrefix(v, "file:")) {
 			return errors.New("file: needs an absolute path")
 		}
 	}

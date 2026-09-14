@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -63,6 +64,9 @@ user = root
 }
 
 func TestUnitForPoolDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	cases := map[string][2]string{
 		"/etc/php/8.2/fpm/pool.d":                 {"php8.2-fpm.service", "8.2"},
 		"/etc/php/7.2/fpm/pool.d/":                {"php7.2-fpm.service", "7.2"},
@@ -86,6 +90,9 @@ func TestUnitForPoolDir(t *testing.T) {
 }
 
 func TestDiscoverPoolsLayouts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	root := t.TempDir()
 	write(t, root, "/etc/php/7.2/fpm/pool.d/example.com.conf", "[example.com]\nuser = admin\n[shop]\nuser = semihyurudu\n")
 	write(t, root, "/etc/php/8.2/fpm/pool.d/www.conf", "[www]\nuser = www-data\n")
@@ -164,6 +171,9 @@ func TestWebServerPresent(t *testing.T) {
 }
 
 func TestBuildReport(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	root := accountsFixture(t)
 	if BuildReport(ReportInput{Root: root, AgentUser: "openlog-agent"}) != nil {
 		t.Fatal("report without pools")

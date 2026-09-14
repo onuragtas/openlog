@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,9 @@ func TestParseCRILine(t *testing.T) {
 }
 
 func TestContainerCRIFileLogs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h, rs := containerHarness(t)
 	logPath := "/var/log/pods/prod_web-7d9_uid/app/0.log"
 	if err := os.MkdirAll(filepath.Dir(h.path(logPath)), 0o755); err != nil {
@@ -73,6 +77,9 @@ func TestContainerCRIFileLogs(t *testing.T) {
 }
 
 func TestContainerMultilineFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h, rs := containerHarness(t)
 	h.cfg.MaxLineBytes = 256
 	h.cfg.Containers.Include = []config.ContainerMatch{{Name: "billing", MultilineStart: `^\d{4}-\d{2}-\d{2} `}, {Name: "*"}}
@@ -178,6 +185,9 @@ func TestContainerMultilinePrecedence(t *testing.T) {
 }
 
 func TestContainerMultilineAPIStream(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h, rs := containerHarness(t)
 	c := containers.Container{ID: ctrID, Name: "worker", Runtime: "docker", State: "running", Labels: map[string]string{LabelMultiline: `^\S`}}
 	c.Apply(containers.Details{LogDriver: "local"})

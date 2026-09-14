@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -102,6 +103,9 @@ func (f *fixture) versions() []string {
 }
 
 func TestUpgradeConfirmAndPrune(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	f := newFixture(t)
 	installVersion(t, f.root, "0.8.0", "exit 0", nil)
 	installVersion(t, f.root, "0.9.0", "exit 0", manifestFor(t, "0.9.0", "https://x", []byte("a"), nil, nil))
@@ -335,6 +339,9 @@ func TestRollbackImpossibleWithoutPrevious(t *testing.T) {
 }
 
 func TestHandleRejections(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	f := newFixture(t)
 	installVersion(t, f.root, "0.9.1", "exit 0", manifestFor(t, "0.9.1", "https://x", []byte("a"), map[string]string{"rollback_floor": "0.9.0"}, nil))
 	if err := SwitchCurrent(f.root, "0.9.1"); err != nil {
@@ -435,6 +442,9 @@ func TestHandleRejections(t *testing.T) {
 }
 
 func TestRollbackAction(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	f := newFixture(t)
 	installVersion(t, f.root, "0.9.1", "exit 0", manifestFor(t, "0.9.1", "https://x", []byte("a"), map[string]string{"rollback_floor": "0.9.0"}, nil))
 	if err := SwitchCurrent(f.root, "0.9.1"); err != nil {

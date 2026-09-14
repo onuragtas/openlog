@@ -86,7 +86,7 @@ func TestParseErrors(t *testing.T) {
 
 func TestUpdateConfig(t *testing.T) {
 	cfg := Default()
-	if !cfg.Update.Enabled || cfg.Update.InstallRoot != "/opt/openlog/infra-agent" || cfg.Release.TrustedKeysFile != "" {
+	if !cfg.Update.Enabled || cfg.Update.InstallRoot != DefaultInstallRoot || cfg.Release.TrustedKeysFile != "" {
 		t.Fatalf("defaults: %+v %+v", cfg.Update, cfg.Release)
 	}
 	err := Parse([]byte("update:\n  enabled: false\n  install_root: /srv/agent\nrelease:\n  trusted_keys_file: /etc/openlog-infra-agent/release-keys\n"), cfg)

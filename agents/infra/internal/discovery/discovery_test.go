@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -250,6 +251,9 @@ func TestPlainHostMatchesNoDatabases(t *testing.T) {
 
 // End-to-end: fixture host tree → inventory → discovery → snapshot items.
 func TestServiceHostEndToEnd(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	fs := hostfstest.Build(t, testfixtures.ServiceHost())
 	d := (&inventory.Collector{FS: fs, InterfaceAddrs: func(string) []string { return nil }}).Collect()
 	got := NewEngine(embedded(t)).Discover(d)

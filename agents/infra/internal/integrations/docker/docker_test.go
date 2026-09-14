@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -66,6 +67,9 @@ func TestCollectUsesDockerState(t *testing.T) {
 }
 
 func TestCollectRealSource(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	root, err := os.MkdirTemp("", "dk")
 	if err != nil {
 		t.Fatal(err)

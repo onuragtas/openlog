@@ -1,6 +1,7 @@
 package config
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -36,10 +37,14 @@ func TestPlatformDefaults(t *testing.T) {
 }
 
 func TestIsAbsPath(t *testing.T) {
-	for p, want := range map[string]bool{
+	cases := map[string]bool{
 		"/var/log/x.log": true, `C:\logs\*.log`: true, "C:/inetpub/logs/*.log": true, "d:\\x": true,
-		"relative.log": false, `\\no-drive`: false, "C:relative": false, "": false,
-	} {
+		"relative.log": false, "C:relative": false, "": false,
+	}
+	if runtime.GOOS != "windows" {
+		cases[`\\no-drive`] = false // a UNC path on Windows
+	}
+	for p, want := range cases {
 		if got := isAbsPath(p); got != want {
 			t.Errorf("isAbsPath(%q) = %v, want %v", p, got, want)
 		}

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -217,6 +218,9 @@ func TestTickBufferAndReplay(t *testing.T) {
 // Log files are tailed while the agent runs, sent as plain OTLP logs (not
 // inventory events) and their offsets are persisted on shutdown.
 func TestRunTailsLogFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	fixture := testfixtures.ServiceHost()
 	fixture["/var/log/app/app.log"] = "before start\n"
 	fs := hostfstest.Build(t, fixture)

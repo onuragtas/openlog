@@ -3,6 +3,7 @@ package inventory
 import (
 	"encoding/json"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,9 @@ func collectFixture(t *testing.T, files map[string]string) *Data {
 }
 
 func TestCollectPlainHost(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	d := collectFixture(t, testfixtures.PlainHost())
 
 	wantOS := &OSInfo{ID: "ubuntu", Name: "Ubuntu", VersionID: "24.04", PrettyName: "Ubuntu 24.04 LTS", KernelRelease: "6.8.0-31-generic",

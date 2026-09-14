@@ -97,7 +97,7 @@ func (p *PHPForwarder) validate() []error {
 	var errs []error
 	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
 	if p.Socket != "" {
-		if !filepath.IsAbs(p.Socket) {
+		if !isAbsPath(p.Socket) {
 			add("php_forwarder.socket must be an absolute path")
 		}
 		if len(p.Socket) > 107 {
@@ -410,10 +410,10 @@ func (c *Config) Validate(requireExport bool) error {
 			add("containers.cri_sockets[%d] must be an absolute path", i)
 		}
 	}
-	if !filepath.IsAbs(c.Update.InstallRoot) {
+	if !isAbsPath(c.Update.InstallRoot) {
 		add("update.install_root must be an absolute path")
 	}
-	if c.Release.TrustedKeysFile != "" && !filepath.IsAbs(c.Release.TrustedKeysFile) {
+	if c.Release.TrustedKeysFile != "" && !isAbsPath(c.Release.TrustedKeysFile) {
 		add("release.trusted_keys_file must be an absolute path")
 	}
 	errs = append(errs, c.Logs.validate()...)

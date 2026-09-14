@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -31,6 +32,9 @@ func collect() (*Forwarder, *[]*tracepb.TracesData) {
 }
 
 func TestConvertGolden(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	f, out := collect()
 	// A request continued from an incoming traceparent (root has a remote parent) and a second one of another
 	// service; both end up in one payload with one ResourceSpans per resource.

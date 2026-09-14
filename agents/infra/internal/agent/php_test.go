@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,6 +41,9 @@ func phpMessage(i int) []byte {
 // PHP spans go through the agent pipeline: during an ingest outage they are buffered (memory queue spills to disk)
 // and delivered after recovery, with the agent's host.id.
 func TestPHPSpansSurviveOutage(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	f := &fakeSender{}
 	f.down.Store(true)
 	fs := hostfstest.Build(t, testfixtures.ServiceHost())
@@ -132,6 +136,9 @@ func waitUntil(t *testing.T, what string, cond func() bool) {
 }
 
 func TestPHPModuleEnableDecision(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	dir := phpSocketDir(t)
 	newModule := func(enabled *bool, name string) *phpModule {
 		return &phpModule{

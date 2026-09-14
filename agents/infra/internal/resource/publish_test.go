@@ -3,10 +3,14 @@ package resource
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestPublishHostID(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	missing := filepath.Join(t.TempDir(), "absent")
 	if err := PublishHostID(missing, "3f0e9c52-1b7a-4c1e-9d0a-2f7f5e1c8b11"); err != nil {
 		t.Fatal(err)

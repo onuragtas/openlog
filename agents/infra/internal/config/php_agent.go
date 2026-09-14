@@ -78,7 +78,7 @@ func (p *PHPAgentConfig) validate() []error {
 	if p.HealthCheckAfter.D() < 10*time.Second {
 		add("php_agent.health_check_after must be at least 10s")
 	}
-	if !filepath.IsAbs(p.InstallRoot) || filepath.Clean(p.InstallRoot) == "/" {
+	if !isAbsPath(p.InstallRoot) || filepath.ToSlash(filepath.Clean(p.InstallRoot)) == "/" {
 		add("php_agent.install_root must be an absolute path other than /")
 	}
 	return errs

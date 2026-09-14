@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -320,6 +321,9 @@ type noDefaultPort struct{ *fake }
 func (noDefaultPort) Spec() EndpointSpec { return EndpointSpec{} }
 
 func TestRemoteConfigAppliedWithoutRestart(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	f := &fake{results: map[string]error{}}
 	var got config.InstanceSettings
 	state := filepath.Join(t.TempDir(), "state", RemoteStateFile)

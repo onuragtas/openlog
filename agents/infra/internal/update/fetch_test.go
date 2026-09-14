@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -16,6 +17,9 @@ import (
 )
 
 func TestExtractTarGz(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	const top = "openlog-infra-agent_1.0.0_linux_amd64"
 	big := strings.Repeat("x", 600)
 	cases := []struct {
@@ -212,6 +216,9 @@ func TestSwitchCurrentAndPrune(t *testing.T) {
 }
 
 func TestRunSelfTest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	dir := t.TempDir()
 	write := func(name, script string) string {
 		p := filepath.Join(dir, name)

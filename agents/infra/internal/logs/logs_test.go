@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,6 +164,9 @@ func (h *harness) savedOffsets() map[string]int64 {
 }
 
 func TestTailBasicsAndAttributes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h := newHarness(t)
 	h.write("var/log/app/a.log", "2024/01/01 10:00:00 [error] 12#0: upstream timed out\r\nplain line\n")
 	h.write("var/log/app/x.debug.log", "excluded\n")
@@ -246,6 +250,9 @@ func TestStartAtEndAndResume(t *testing.T) {
 }
 
 func TestRotationRenameCreate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h := newHarness(t)
 	h.start()
 	h.write("var/log/app/a.log", "1\n2\n")
@@ -279,6 +286,9 @@ func TestRotationRenameCreate(t *testing.T) {
 }
 
 func TestCopyTruncate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h := newHarness(t)
 	h.start()
 	h.write("var/log/app/a.log", "a long first generation line\nsecond\n")
@@ -423,6 +433,9 @@ func TestPausedKeepsDataAtSource(t *testing.T) {
 }
 
 func TestDiscoveryDriven(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	h := newHarness(t)
 	h.cfg.Files = nil
 	h.cfg.AutoFromDiscovery = true

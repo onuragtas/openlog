@@ -3,11 +3,15 @@ package update
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestDetectInstall(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	type setup struct {
 		dockerenv, containerenv bool
 		cgroup                  string
@@ -108,6 +112,9 @@ func TestDetectInstall(t *testing.T) {
 }
 
 func TestVersionDirOf(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	for _, c := range []struct{ exe, want string }{
 		{"/opt/o/versions/0.9.0/openlog-infra-agent", "0.9.0"},
 		{"/opt/o/versions/0.9.0/other", ""},

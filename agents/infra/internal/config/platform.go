@@ -53,6 +53,11 @@ func isAbsPath(p string) bool {
 // applyPlatformDefaults adjusts Default() for the OS the agent runs on (goos = runtime.GOOS).
 func applyPlatformDefaults(c *Config, goos string) {
 	switch goos {
+	case "linux":
+		// DefaultPHPSocket is empty in a Windows build; keep DefaultFor("linux") valid there (tests, config tooling).
+		if c.PHPForwarder.Socket == "" {
+			c.PHPForwarder.Socket = "/run/openlog-infra-agent/php.sock"
+		}
 	case "darwin":
 		c.Containers.CRISockets = []string{}                            // no containerd/CRI-O hosts
 		c.PHPForwarder.Socket = "/var/run/openlog-infra-agent/php.sock" // macOS has no /run

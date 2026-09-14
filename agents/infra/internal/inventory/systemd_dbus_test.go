@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -143,6 +144,9 @@ func collectFixtureUnits(t *testing.T) []SystemdUnit {
 }
 
 func TestSystemdDBusFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux fixture (POSIX paths, file modes, unix sockets or shell scripts); not portable to Windows")
+	}
 	units := []SystemdUnit{{Name: "a.service", EnabledState: "enabled"}}
 	// Missing socket: file data, errNoBus (not logged).
 	got, err := collectUnitStates(context.Background(), filepath.Join(t.TempDir(), "absent.sock"), units, dialSystemBus)
