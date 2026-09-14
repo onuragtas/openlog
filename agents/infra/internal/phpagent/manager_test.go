@@ -241,9 +241,12 @@ func TestManagerModeOffUninstallsFleetInstallation(t *testing.T) {
 	e.setRemote(m, e.release("0.9.1", goodSO))
 	m.Evaluate(ctx)
 	Apply(ctx, ApplyOptions{Sys: testSys(), StateDir: e.stateDir, StatusDir: e.status, Config: config.PHPAgentConfig{InstallRoot: e.root, RemoteConfig: true},
-		Trusted: []ed25519.PublicKey{e.key.pub}, OS: "linux", Arch: testArch, Run: e.host.run})
+		Trusted: []ed25519.PublicKey{e.key.pub}, OS: "linux", Arch: testArch, Run: e.host.run, Now: func() time.Time { return e.now }})
 	m = e.manager()
 	m.Startup()
+	// Past the health check of the install, on the test clock (Apply must not use the wall clock: the test failed
+	// once the real time passed the fixed test time).
+	e.now = e.now.Add(6 * time.Minute)
 
 	e.setRemote(m, Remote{Mode: config.PHPAgentModeOff})
 	m.canRestartOnce(e, false)
@@ -260,7 +263,7 @@ func TestManagerModeOffUninstallsFleetInstallation(t *testing.T) {
 		t.Fatalf("update = %+v", u)
 	}
 	Apply(ctx, ApplyOptions{Sys: testSys(), StateDir: e.stateDir, StatusDir: e.status, Config: config.PHPAgentConfig{InstallRoot: e.root, RemoteConfig: true},
-		Trusted: []ed25519.PublicKey{e.key.pub}, OS: "linux", Arch: testArch, Run: e.host.run})
+		Trusted: []ed25519.PublicKey{e.key.pub}, OS: "linux", Arch: testArch, Run: e.host.run, Now: func() time.Time { return e.now }})
 	m = e.manager()
 	m.Startup()
 	m.Evaluate(ctx)
