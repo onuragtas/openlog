@@ -87,7 +87,10 @@ export function FleetHostsTable({
   });
   const clear = useMutation({ mutationFn: clearHostOverride, onSettled: invalidate });
   const phpMode = useMutation({
-    mutationFn: (p: { hostId: string; mode: FleetPHPAgentMode | "" }) => (p.mode === "" ? clearHostPHPAgentMode(p.hostId) : setHostPHPAgentMode(p.hostId, p.mode)),
+    mutationFn: async (p: { hostId: string; mode: FleetPHPAgentMode | "" }) => {
+      if (p.mode === "") await clearHostPHPAgentMode(p.hostId);
+      else await setHostPHPAgentMode(p.hostId, p.mode);
+    },
     onSettled: invalidate,
   });
 
@@ -431,13 +434,15 @@ function PHPCell({
           </span>
         </Badge>
         {p.update && p.update.state !== "applied" && (
-          <Badge variant={phpStateTone(p.update.state)} title={p.update.error || undefined}>
-            {translateOptional(`fleet.phpState.${p.update.state}`, p.update.state)} {p.update.version}
+          <Badge variant={phpStateTone(p.update.state)} title={p.update.error || undefined} className="max-w-full">
+            <span className="truncate">
+              {translateOptional(`fleet.phpState.${p.update.state}`, p.update.state)} {p.update.version}
+            </span>
           </Badge>
         )}
       </span>
       {p.update?.error && (
-        <span className="max-w-full truncate text-destructive-text" title={p.update.error}>
+        <span className="w-full max-w-full truncate text-destructive-text" title={p.update.error}>
           {t("fleet.hosts.error", { message: p.update.error })}
         </span>
       )}
@@ -448,7 +453,7 @@ function PHPCell({
           </label>
           <NativeSelect
             id={`${id}-php`}
-            className="h-7 text-xs"
+            className="h-7 w-full max-w-full min-w-0 text-xs"
             value={p.override?.mode ?? ""}
             disabled={busy}
             onChange={(e) => onMode(e.target.value as FleetPHPAgentMode | "")}

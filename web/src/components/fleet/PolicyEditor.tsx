@@ -139,7 +139,8 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
         {!canManage && <p className="mt-1 text-xs text-muted-foreground">{t("fleet.readOnly")}</p>}
       </div>
 
-      <fieldset disabled={!canManage || save.isPending} className="flex flex-col gap-5">
+      {/* min-w-0: a fieldset is at least as wide as its content by default (long select options on phones). */}
+      <fieldset disabled={!canManage || save.isPending} className="flex min-w-0 flex-col gap-5">
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-medium">{t("fleet.policy.mode")}</legend>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -309,15 +310,15 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
           </div>
         </fieldset>
 
-        <fieldset className="flex flex-col gap-3 border-t pt-4" aria-describedby={`${id}-php-desc`}>
+        <fieldset className="flex min-w-0 flex-col gap-3 border-t pt-4" aria-describedby={`${id}-php-desc`}>
           <legend className="text-sm font-medium">{t("fleet.policy.php.title")}</legend>
           <p id={`${id}-php-desc`} className="text-xs text-muted-foreground">
             {t("fleet.policy.php.description")}
           </p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex min-w-0 flex-col gap-1.5">
               <Label htmlFor={`${id}-php-mode`}>{t("fleet.policy.php.mode")}</Label>
-              <NativeSelect id={`${id}-php-mode`} value={form.phpMode} aria-describedby={`${id}-php-mode-help`} onChange={(e) => set("phpMode", e.target.value as FleetPHPAgentMode)}>
+              <NativeSelect id={`${id}-php-mode`} className="w-full min-w-0" value={form.phpMode} aria-describedby={`${id}-php-mode-help`} onChange={(e) => set("phpMode", e.target.value as FleetPHPAgentMode)}>
                 {PHP_MODES.map((m) => (
                   <option key={m} value={m}>
                     {t(`fleet.policy.php.modes.${m}`)}
@@ -344,7 +345,7 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-php-reload`}>{t("fleet.policy.php.reload")}</Label>
-              <NativeSelect id={`${id}-php-reload`} value={form.phpReload} onChange={(e) => set("phpReload", e.target.value as FormState["phpReload"])}>
+              <NativeSelect id={`${id}-php-reload`} className="w-full min-w-0" value={form.phpReload} onChange={(e) => set("phpReload", e.target.value as FormState["phpReload"])}>
                 <option value="none">{t("fleet.policy.php.reloads.none")}</option>
                 <option value="graceful">{t("fleet.policy.php.reloads.graceful")}</option>
               </NativeSelect>
