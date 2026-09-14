@@ -390,6 +390,7 @@ delete their row on graceful shutdown; `openlog-migrate` uses the rows to gate c
 Compose: `OPENLOG_UPDATER_SERVICES` (`openlog`), `OPENLOG_UPDATER_HEALTH_URLS` (`http://openlog:9464/readyz`),
 `OPENLOG_UPDATER_POSTGRES_SERVICE` (`postgres`), `OPENLOG_UPDATER_PGDUMP_USER` / `_DATABASE` (`openlog`),
 `OPENLOG_UPDATER_BACKUP_DIR` (`/backups`), `OPENLOG_UPDATER_BACKUP_KEEP` (`5`), `OPENLOG_UPDATER_ENV_FILE`,
+`OPENLOG_UPDATER_COMPOSE_DIR` (directory of the env file), `OPENLOG_UPDATER_COMPOSE_SYNC` (`auto` | `off`),
 `OPENLOG_UPDATER_COMPOSE_PROJECT` (detected), `DOCKER_HOST` (`unix:///var/run/docker.sock`);
 Kubernetes: `OPENLOG_UPDATER_K8S_DEPLOYMENTS`, `OPENLOG_UPDATER_K8S_MIGRATE_TEMPLATE`, `OPENLOG_UPDATER_VERSION_URL`,
 `OPENLOG_UPDATER_ROLLOUT_TIMEOUT` (`15m`), `OPENLOG_UPDATER_MIGRATE_TIMEOUT` (`30m`), plus the release variables
@@ -511,7 +512,7 @@ when the export has no keys of its own, `OPENLOG_S3_REGION`, `OPENLOG_S3_ACCESS_
 | `OPENLOG_ORG_DELETION_GRACE` | `168h` | api | Grace period of an organization deletion in which an owner can cancel it (0–2160h); operators may delete immediately |
 | `OPENLOG_DATA_EXPORT_ENABLED` | `true` | api | Offer organization and personal data exports |
 | `OPENLOG_DATA_EXPORT_STORAGE` | `auto` | api | `auto` (S3 when an S3 URL is known, else local), `local` or `s3`. Use S3 with more than one api pod: the leader writes the archive, any pod serves the download |
-| `OPENLOG_DATA_EXPORT_LOCAL_PATH` | `/tmp/openlog-exports` | api | Absolute directory of local archives and of the temporary archive file while an export is built (also with S3) |
+| `OPENLOG_DATA_EXPORT_LOCAL_PATH` | `/tmp/openlog-exports` | api | Absolute directory of local archives and of the temporary archive file while an export is built (also with S3). Compose: `/var/lib/openlog/exports`, the volume `data-exports` (the image creates it owned by uid 10001); Helm: `/tmp/openlog-exports` on the pod's `emptyDir` (use S3 with more than one api replica) |
 | `OPENLOG_DATA_EXPORT_S3_URL` | empty | api | Object base URL with bucket and prefix, ending with `/` (path-style `https://s3.example.com/bucket/exports/` or virtual-hosted `https://bucket.s3.eu-west-1.amazonaws.com/exports/`) |
 | `OPENLOG_DATA_EXPORT_S3_REGION` | `OPENLOG_S3_REGION`, else `us-east-1` | api | Signing region (AWS Signature Version 4) |
 | `OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID` / `OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY` | `OPENLOG_S3_ACCESS_KEY_ID` / `OPENLOG_S3_SECRET_ACCESS_KEY` | api | Static credentials (set together); empty = unsigned requests |

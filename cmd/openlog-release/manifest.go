@@ -31,6 +31,7 @@ import (
 //	openlog-node-<v>.tgz                                      component node-agent, os/arch "any", format tgz (npm pack)
 //	openlog_agent-<pep440 v>-py3-none-any.whl                 component python-agent, os/arch "any", format whl
 //	OpenLog.Agent.<v>.nupkg                                   component dotnet-agent, os/arch "any", format nupkg
+//	openlog-compose-<v>.tar.gz                                component compose, os/arch "any", format tar.gz (deploy/compose)
 //
 // The Python sdist (openlog_agent-<pep440 v>.tar.gz) and the .sha256 files are published with the GitHub release but
 // are not manifest artifacts.
@@ -77,6 +78,8 @@ func classify(name, version string) (a lib.Artifact, ok bool) {
 		return anyPlatform(lib.ComponentPythonAgent, lib.FormatWheel)
 	case lib.DotnetAgentPackageName(version):
 		return anyPlatform(lib.ComponentDotnetAgent, lib.FormatNupkg)
+	case lib.ComposeBundleName(version):
+		return anyPlatform(lib.ComponentCompose, lib.FormatTarGz)
 	}
 	for _, format := range artifactFormats {
 		base, found := strings.CutSuffix(name, "."+format)

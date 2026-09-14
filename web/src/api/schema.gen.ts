@@ -5591,7 +5591,7 @@ export interface components {
             finished_at?: string;
             backup_file?: string;
             steps?: {
-                /** @description backup, pull, migrate, recreate / rollout, health, rollback, cleanup, contract-migrate */
+                /** @description backup, pull, compose-bundle, migrate, recreate / rollout, health, rollback, cleanup, contract-migrate */
                 name: string;
                 /** @enum {string} */
                 status: "running" | "ok" | "failed";
@@ -5610,6 +5610,27 @@ export interface components {
                 /** Format: date-time */
                 at: string;
             }[];
+            /** @description Installation hints refreshed on every updater run (Compose; D-111). Codes: compose_outdated {files_version, running_version} (compose files not managed by install-server.sh are older than the running version), compose_outdated_bundle {files_version, running_version} (re-run install-server.sh), compose_changes_pending {version, services} (compose changes the updater does not apply). */
+            notices?: {
+                code: string;
+                /** @description English text */
+                message: string;
+                params?: {
+                    [key: string]: string;
+                };
+            }[];
+            /** @description Compose changes of an installed bundle that wait for `docker compose up -d` or a restart (Compose). */
+            compose_changes?: {
+                version: string;
+                /** Format: date-time */
+                installed_at: string;
+                services: {
+                    service: string;
+                    /** @enum {string} */
+                    reason: "definition" | "files";
+                    config_hash?: string;
+                }[];
+            };
         };
         OrgRef: {
             id: string;

@@ -64,11 +64,17 @@ export const tr: Messages = {
       request_outside_window: "Bakım penceresinin dışındasınız. Hemen güncellemek için pencere dışında kurmayı onaylayın.",
       request_interrupted: "Yarıda kaldı: istek işlenirken openlog-updater yeniden başladı.",
       request_expired: "İstek 15 dakika içinde hiçbir güncelleyici tarafından alınmadı (istek desteği olan bir güncelleyici çalışıyor mu?).",
+      compose_outdated:
+        "Compose dosyaları ({{files_version}}) çalışan {{running_version}} sürümünden eski: o zamandan beri eklenen ayarlar ve volume'lar konteynerlere ulaşmıyor. Dosyaları güncelleyin (git checkout v{{running_version}}, ardından docker compose up -d) ya da install-server.sh kurulumuna geçin.",
+      compose_outdated_bundle: "Compose dosyaları ({{files_version}}) çalışan {{running_version}} sürümünden eski: install-server.sh betiğini yeniden çalıştırın.",
+      compose_changes_pending:
+        "{{version}} compose dosyaları {{services}} için güncelleyicinin uygulamadığı değişiklikler içeriyor (volume, port, bağlanan dosyalar): install-server.sh betiğini yeniden çalıştırın ya da docker compose up -d kullanın.",
       withError: "{{message}} Hata: {{error}}",
     },
     steps: {
       backup: "Yedekleme",
       pull: "İmaj indirme",
+      "compose-bundle": "Compose dosyaları",
       migrate: "Migration",
       recreate: "Yeniden oluşturma",
       rollout: "Dağıtım",

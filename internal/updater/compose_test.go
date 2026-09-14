@@ -345,7 +345,8 @@ func TestComposeUpdateAndRollback(t *testing.T) {
 	if len(migrates) != 2 || len(apps) != 1 {
 		t.Fatalf("created migrate=%d app=%d", len(migrates), len(apps))
 	}
-	if env := toStrings(migrates[0].Config["Env"]); !slices.Equal(env, []string{"OPENLOG_POSTGRES_DSN=postgres://openlog@postgres/openlog"}) {
+	// The fixture container has no compose file labels: only OPENLOG_* settings of .env it lacks are added (no images).
+	if env := toStrings(migrates[0].Config["Env"]); !slices.Equal(env, []string{"OPENLOG_POSTGRES_DSN=postgres://openlog@postgres/openlog", "OPENLOG_LOG_LEVEL=info"}) {
 		t.Errorf("migrate env %v", env)
 	}
 	if migrates[0].HostConfig["NetworkMode"] != "proj_default" || migrates[0].Config["Image"] != img091 {
@@ -363,7 +364,7 @@ func TestComposeUpdateAndRollback(t *testing.T) {
 		t.Errorf("old image label kept: %v", labels)
 	case app.Config["Hostname"] != nil || app.Config["Entrypoint"] != nil:
 		t.Errorf("hostname/entrypoint from old container kept: %v", app.Config)
-	case !slices.Equal(toStrings(app.Config["Env"]), []string{"OPENLOG_POSTGRES_DSN=postgres://openlog@postgres/openlog"}):
+	case !slices.Equal(toStrings(app.Config["Env"]), []string{"OPENLOG_POSTGRES_DSN=postgres://openlog@postgres/openlog", "OPENLOG_LOG_LEVEL=info"}):
 		t.Errorf("env %v", app.Config["Env"])
 	case !slices.Equal(toStrings(app.HostConfig["Binds"]), []string{"/srv/openlog:/data:rw"}) || app.HostConfig["PortBindings"] == nil:
 		t.Errorf("host config %v", app.HostConfig)
@@ -476,7 +477,7 @@ func TestComposeRecover(t *testing.T) {
 	f := newComposeFixture(t)
 	ctx := context.Background()
 	// Simulate a crash after the new container was started but before it was verified.
-	if _, err := f.engine.recreate(ctx, f.oldID, img091); err != nil {
+	if _, err := f.engine.recreate(ctx, f.oldID, img091, nil); err != nil {
 		t.Fatal(err)
 	}
 	if f.docker.byName("proj-openlog-1"+preUpdateSuffix) == nil {

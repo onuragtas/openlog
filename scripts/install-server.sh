@@ -19,7 +19,9 @@
 #   --cors-origins LIST   browser OTLP origins for ingest :4318, e.g. https://app.example.com
 #   --project NAME        docker compose project (default openlog)
 #   --index-url URL       release index                                 [OPENLOG_RELEASE_INDEX_URL]
-#   --bundle-url URL      tar.gz containing deploy/compose (default: the GitHub source archive of v<version>)
+#   --bundle-url URL      tar.gz with the compose files: openlog-compose-<v>/ or deploy/compose/ (default: the release
+#                         asset openlog-compose-<v>.tar.gz, sha256 checked against manifest.json; releases without
+#                         it: the GitHub source archive of v<version>)
 #   --install-docker      install Docker Engine with https://get.docker.com when it is missing
 #   --no-start            write the files, do not pull or start anything
 #
@@ -57,7 +59,7 @@ die() {
 	log "error: $*"
 	exit 1
 }
-usage() { sed -n '2,30s/^# \{0,1\}//p' "$0" 2>/dev/null | grep . || echo "see $GITHUB#install-on-a-server-docker-compose-single-machine"; }
+usage() { sed -n '2,32s/^# \{0,1\}//p' "$0" 2>/dev/null | grep . || echo "see $GITHUB#install-on-a-server-docker-compose-single-machine"; }
 
 cleanup() {
 	[ -z "$tmpdir" ] || rm -rf "$tmpdir"
@@ -164,6 +166,79 @@ fetch() { # url dest
 	else
 		die "curl or wget is required"
 	fi
+}
+
+try_fetch() { # url dest (fails quietly)
+	if have curl; then
+		curl -fsSL --retry 3 --proto '=https,http' -o "$2" "$1" 2>/dev/null
+	elif have wget; then
+		wget -q -O "$2" "$1" 2>/dev/null
+	else
+		return 1
+	fi
+}
+
+sha256_of() { # file
+	if have sha256sum; then
+		sha256sum "$1" | cut -d' ' -f1
+	elif have shasum; then
+		shasum -a 256 "$1" | cut -d' ' -f1
+	elif have openssl; then
+		openssl dgst -sha256 "$1" | sed 's/.*= *//'
+	else
+		return 1
+	fi
+}
+
+# port_parts VALUE DEFAULT prints "HOST PORT" ("-" = all interfaces) of an OPENLOG_*_PORT value. Compose publishes
+# "${OPENLOG_API_PORT:-8080}:8080", so a value is PORT, HOST:PORT or [IPv6]:PORT.
+port_parts() {
+	pp_v=${1:-$2}
+	case $pp_v in
+	\[*\]:*)
+		pp_h=${pp_v%%\]:*}
+		pp_h=${pp_h#\[}
+		pp_p=${pp_v##*\]:}
+		;;
+	*:*:*) return 1 ;;
+	*:*)
+		pp_h=${pp_v%:*}
+		pp_p=${pp_v##*:}
+		;;
+	*)
+		pp_h=
+		pp_p=$pp_v
+		;;
+	esac
+	case $pp_p in "" | *[!0-9]*) return 1 ;; esac
+	[ "$pp_p" -ge 1 ] && [ "$pp_p" -le 65535 ] || return 1
+	case $pp_h in *[!0-9A-Za-z.:-]*) return 1 ;; esac
+	printf '%s %s\n' "${pp_h:--}" "$pp_p"
+}
+
+# local_host BIND_HOST prints the address local checks connect to (URL form).
+local_host() {
+	case $1 in
+	"" | - | 0.0.0.0 | ::) printf '127.0.0.1' ;;
+	*:*) printf '[%s]' "$1" ;;
+	*) printf '%s' "$1" ;;
+	esac
+}
+
+# is_loopback BIND_HOST: published on the loopback interface only (reachable through a local reverse proxy).
+is_loopback() {
+	case $1 in
+	127.* | ::1 | localhost) return 0 ;;
+	esac
+	return 1
+}
+
+# env_port VARIABLE DEFAULT prints "HOST PORT" of a port setting in .env (HOST "-" = all interfaces); a malformed
+# value stops the installer (callers: x=$(env_port ...) under set -e).
+env_port() {
+	ep_raw=
+	[ ! -f "$env_file" ] || ep_raw=$(env_get "$1")
+	port_parts "$ep_raw" "$2" || die "$1='$ep_raw' in $env_file: want PORT, HOST:PORT or [IPv6]:PORT"
 }
 
 http_get() { # url (prints the body, fails quietly)
@@ -343,11 +418,12 @@ fresh=1
 dc() { docker compose -p "$project" -f "$dir/docker-compose.yml" --env-file "$env_file" "$@"; }
 
 running=$(docker ps -q --filter "label=com.docker.compose.project=$project" 2>/dev/null | head -n 1)
-admin_port=9464
-[ "$fresh" = 1 ] || admin_port=$(env_get OPENLOG_ADMIN_PORT)
+admin=$(env_port OPENLOG_ADMIN_PORT 9464)
+admin_host=${admin% *}
+admin_port=${admin#* }
 running_version=
 if [ -n "$running" ]; then
-	running_version=$(json_str "$(http_get "http://127.0.0.1:${admin_port:-9464}/readyz" | tr -d ' \t\r\n')" version)
+	running_version=$(json_str "$(http_get "http://$(local_host "$admin_host"):$admin_port/readyz" | tr -d ' \t\r\n')" version)
 fi
 
 # --- resolve the release ------------------------------------------------------------------------
@@ -372,6 +448,7 @@ if [ -z "$version" ]; then
 	done
 	[ -n "$version" ] || die "no $channel release found in $index_url"
 fi
+index_entries=${entries:-}
 case $running_version in
 "" | 0.0.0-dev*) ;;
 *)
@@ -387,26 +464,66 @@ esac
 log "openlog $version, install directory $dir, compose project $project"
 
 # --- compose bundle -----------------------------------------------------------------------------
-# deploy/compose of the release tag: docker-compose.yml, .env.example and the ClickHouse config it mounts.
-[ -n "$bundle_url" ] || bundle_url=$GITHUB/archive/refs/tags/v$version.tar.gz
+# The release's compose files: docker-compose.yml, .env.example and the ClickHouse config it mounts. Default: the
+# release asset openlog-compose-<v>.tar.gz, its sha256 checked against the release's manifest.json (openlog-updater
+# later verifies the manifest signature and keeps these files at the running version). Releases without the asset:
+# deploy/compose of the tag's source archive.
 have tar || die "tar is required"
-log "downloading the compose files from $bundle_url"
-fetch "$bundle_url" "$tmpdir/bundle.tar.gz"
 mkdir -p "$tmpdir/src"
-tar -xzf "$tmpdir/bundle.tar.gz" -C "$tmpdir/src" || die "cannot extract $bundle_url"
 compose_src=
-for f in "$tmpdir"/src/deploy/compose/docker-compose.yml "$tmpdir"/src/*/deploy/compose/docker-compose.yml; do
-	if [ -f "$f" ]; then
-		compose_src=${f%/docker-compose.yml}
-		break
+if [ -z "$bundle_url" ]; then
+	asset=openlog-compose-$version.tar.gz
+	manifest_url=$GITHUB/releases/download/v$version/manifest.json
+	for e in $(printf '%s' "$index_entries" | tr '}' '\n'); do
+		[ "$(json_str "$e" version)" = "$version" ] || continue
+		m=$(json_str "$e" manifest_url)
+		[ -z "$m" ] || manifest_url=$m
+	done
+	asset_url=
+	asset_sum=
+	if try_fetch "$manifest_url" "$tmpdir/manifest.json"; then
+		asset_re=$(printf '%s' "$asset" | sed 's/[.]/\\./g')
+		entry=$(tr -d ' \t\r\n' <"$tmpdir/manifest.json" |
+			sed -n "s|.*\"name\":\"$asset_re\",\"url\":\"\([^\"]*\)\",\"sha256\":\"\([0-9a-f]\{64\}\)\".*|\1 \2|p")
+		asset_url=${entry% *}
+		asset_sum=${entry#* }
 	fi
-done
-[ -n "$compose_src" ] || die "$bundle_url contains no deploy/compose/docker-compose.yml"
-[ -f "$compose_src/.env.example" ] || die "$bundle_url contains no deploy/compose/.env.example"
+	if [ -n "$asset_url" ] && [ -n "$asset_sum" ]; then
+		log "downloading the compose files from $asset_url"
+		fetch "$asset_url" "$tmpdir/bundle.tar.gz"
+		got=$(sha256_of "$tmpdir/bundle.tar.gz") || die "sha256sum, shasum or openssl is required to verify $asset"
+		[ "$got" = "$asset_sum" ] || die "$asset: sha256 $got does not match $manifest_url ($asset_sum)"
+		tar -xzf "$tmpdir/bundle.tar.gz" -C "$tmpdir/src" || die "cannot extract $asset"
+		[ -f "$tmpdir/src/openlog-compose-$version/docker-compose.yml" ] || die "$asset contains no openlog-compose-$version/docker-compose.yml"
+		compose_src=$tmpdir/src/openlog-compose-$version
+		log "compose files verified (sha256 $asset_sum from manifest.json)"
+	else
+		bundle_url=$GITHUB/archive/refs/tags/v$version.tar.gz
+		log "release $version has no compose bundle asset; using deploy/compose of the source archive"
+	fi
+fi
+if [ -z "$compose_src" ]; then
+	log "downloading the compose files from $bundle_url"
+	fetch "$bundle_url" "$tmpdir/bundle.tar.gz"
+	tar -xzf "$tmpdir/bundle.tar.gz" -C "$tmpdir/src" || die "cannot extract $bundle_url"
+	for f in "$tmpdir"/src/openlog-compose-*/docker-compose.yml "$tmpdir"/src/deploy/compose/docker-compose.yml "$tmpdir"/src/*/deploy/compose/docker-compose.yml; do
+		if [ -f "$f" ]; then
+			compose_src=${f%/docker-compose.yml}
+			break
+		fi
+	done
+	[ -n "$compose_src" ] || die "$bundle_url contains no openlog-compose-*/ or deploy/compose/ docker-compose.yml"
+fi
+[ -f "$compose_src/.env.example" ] || die "the compose files contain no .env.example"
 rm -f "$compose_src/.env"
 cp -R "$compose_src/." "$dir/"
+# These files replace any compose bundle openlog-updater staged or was replacing (it would otherwise restore it).
+rm -rf "$dir/.bundle-staging" "$dir/.bundle-swap.json"
 mkdir -p "$dir/backups" "$dir/releases"
 printf '%s\n' "$version" >"$dir/.bundle-version"
+if [ -f "$dir/docker-compose.override.yml" ]; then
+	warn "$dir/docker-compose.override.yml is ignored: install-server.sh and openlog-updater use only docker-compose.yml and .env (put settings in .env; data exports have the volume data-exports). Move its settings to .env and remove it"
+fi
 
 # --- .env ---------------------------------------------------------------------------------------
 if [ "$fresh" = 1 ]; then
@@ -474,8 +591,18 @@ fi
 env_set OPENLOG_IMAGE "$IMAGE_REPO:$version"
 
 ip=$(server_ip)
-api_port=$(env_get OPENLOG_API_PORT)
-api_port=${api_port:-8080}
+# Port settings may be HOST:PORT: checks connect to the bound address, URLs use the port only.
+api=$(env_port OPENLOG_API_PORT 8080)
+otlp=$(env_port OPENLOG_OTLP_HTTP_PORT 4318)
+grpc=$(env_port OPENLOG_OTLP_GRPC_PORT 4317)
+admin=$(env_port OPENLOG_ADMIN_PORT 9464)
+api_host=${api% *} api_port=${api#* }
+otlp_host=${otlp% *} otlp_port=${otlp#* }
+grpc_host=${grpc% *} grpc_port=${grpc#* }
+admin_host=${admin% *} admin_port=${admin#* }
+if is_loopback "$api_host" && [ -z "$domain" ]; then
+	warn "OPENLOG_API_PORT publishes the UI on $api_host only: put a reverse proxy in front and re-run with --domain"
+fi
 if [ -n "$domain" ]; then
 	env_set OPENLOG_PUBLIC_URL "$public_scheme://$domain"
 	if [ "$public_scheme" = https ]; then env_set OPENLOG_COOKIE_SECURE true; else env_set OPENLOG_COOKIE_SECURE false; fi
@@ -494,8 +621,7 @@ if [ "$start" = 0 ]; then
 fi
 
 if [ -z "$running" ]; then
-	for p in "$(env_get OPENLOG_OTLP_GRPC_PORT)" "$(env_get OPENLOG_OTLP_HTTP_PORT)" "$api_port" "$(env_get OPENLOG_ADMIN_PORT)"; do
-		[ -n "$p" ] || continue
+	for p in "$grpc_port" "$otlp_port" "$api_port" "$admin_port"; do
 		! port_in_use "$p" || warn "port $p is already in use; set it in $env_file (OPENLOG_*_PORT) if the start fails"
 	done
 fi
@@ -513,27 +639,28 @@ else
 	dc --profile updater up -d --wait --wait-timeout 120 openlog-updater || die "openlog-updater did not start"
 fi
 
-admin_port=$(env_get OPENLOG_ADMIN_PORT)
+readyz_url="http://$(local_host "$admin_host"):$admin_port/readyz"
 ready=
 i=0
 while [ $i -lt 60 ]; do
-	ready=$(http_get "http://127.0.0.1:${admin_port:-9464}/readyz" | tr -d ' \t\r\n') && [ -n "$ready" ] && break
+	ready=$(http_get "$readyz_url" | tr -d ' \t\r\n') && [ -n "$ready" ] && break
 	i=$((i + 1))
 	sleep 2
 done
-[ -n "$ready" ] || die "http://127.0.0.1:${admin_port:-9464}/readyz does not answer"
+[ -n "$ready" ] || die "$readyz_url does not answer"
 log "ready: $ready"
 
 # --- summary ------------------------------------------------------------------------------------
 ui_url=$(env_get OPENLOG_PUBLIC_URL)
-otlp_port=$(env_get OPENLOG_OTLP_HTTP_PORT)
 dc_cmd="docker compose -p $project -f $dir/docker-compose.yml --env-file $env_file"
+direct="http://$ip:$api_port"
+if is_loopback "$api_host"; then direct="http://$(local_host "$api_host"):$api_port on this server only"; fi
 cat <<EOF
 
 ================================================================================================
  openlog $(json_str "$ready" version) is running
 ================================================================================================
- UI:            $ui_url   (direct: http://$ip:$api_port)
+ UI:            $ui_url   (direct: $direct)
  Owner:         $(env_get OPENLOG_BOOTSTRAP_OWNER_EMAIL)
 EOF
 if [ "$password_generated" = 1 ]; then
@@ -545,7 +672,7 @@ cat <<EOF
 
  Install the infra agent on each host:
    curl -fsSL $GITHUB/releases/latest/download/install.sh |
-     sudo sh -s -- --license-key $(env_get OPENLOG_BOOTSTRAP_LICENSE_KEY) --endpoint http://$ip:${otlp_port:-4318}
+     sudo sh -s -- --license-key $(env_get OPENLOG_BOOTSTRAP_LICENSE_KEY) --endpoint http://$ip:$otlp_port
 
  Updates:       openlog-updater mode '$updater'.
 EOF
@@ -561,24 +688,32 @@ cat <<EOF
                 (the updater also keeps dumps in $dir/backups)
  Manage:        $dc_cmd ps | logs -f openlog | down (keeps data)
 EOF
+api_upstream="$(local_host "$api_host"):$api_port"
+otlp_upstream="$(local_host "$otlp_host"):$otlp_port"
 if [ -n "$domain" ] && [ "$public_scheme" = https ]; then
 	cat <<EOF
 
- HTTPS: point a TLS reverse proxy for $domain at 127.0.0.1:$api_port, and optionally an ingest host at
- 127.0.0.1:${otlp_port:-4318} for agents (then use --endpoint https://<ingest host>). Caddy example (/etc/caddy/Caddyfile):
+ HTTPS: point a TLS reverse proxy for $domain at $api_upstream, and optionally an ingest host at
+ $otlp_upstream for agents (then use --endpoint https://<ingest host>). Caddy example (/etc/caddy/Caddyfile):
    $domain {
-     reverse_proxy 127.0.0.1:$api_port
+     reverse_proxy $api_upstream
    }
    ingest.$domain {
-     reverse_proxy 127.0.0.1:${otlp_port:-4318}
+     reverse_proxy $otlp_upstream
    }
  The session cookie is Secure: sign in through https://$domain, not the direct URL.
 EOF
 else
 	cat <<EOF
 
- HTTPS: put a reverse proxy (Caddy, nginx) in front of $api_port and ${otlp_port:-4318}, then re-run with
+ HTTPS: put a reverse proxy (Caddy, nginx) in front of $api_upstream and $otlp_upstream, then re-run with
  --domain <host> (sets OPENLOG_PUBLIC_URL and OPENLOG_COOKIE_SECURE=true).
 EOF
 fi
-echo " Firewall:      expose $api_port to users and 4317/${otlp_port:-4318} to monitored hosts; keep ${admin_port:-9464} internal."
+expose_users=$api_port
+if is_loopback "$api_host"; then expose_users="nothing directly ($api_port is bound to $api_host: users reach the UI through the reverse proxy)"; fi
+expose_hosts=
+is_loopback "$grpc_host" || expose_hosts=$grpc_port
+is_loopback "$otlp_host" || expose_hosts="$expose_hosts${expose_hosts:+/}$otlp_port"
+[ -n "$expose_hosts" ] || expose_hosts="nothing directly (OTLP ports are bound to the loopback interface: use the reverse proxy)"
+echo " Firewall:      expose $expose_users to users and $expose_hosts to monitored hosts; keep $admin_port internal."

@@ -272,6 +272,7 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 		return fail(fmt.Errorf("current version: %w", err))
 	}
 	st.CurrentVersion = cur
+	r.refreshNotices(ctx, &st, cur)
 	curV, err := lib.ParseVersion(cur)
 	if err != nil {
 		return fail(fmt.Errorf("current version %q: %w", cur, err))
@@ -359,6 +360,7 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	h := HistoryEntry{From: cur, To: st.TargetVersion, At: finished}
 	if err == nil {
 		st.State, st.CurrentVersion = StateSucceeded, st.TargetVersion
+		r.refreshNotices(actx, &st, st.TargetVersion)
 		st.setMessage(updatemsg.Updated, updatemsg.Params{"from": cur, "to": st.TargetVersion})
 		h.Result = StateSucceeded
 		st.addHistory(h)
@@ -389,6 +391,15 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	r.audit(actx, "updater.update_"+st.State, map[string]any{"from": cur, "to": st.TargetVersion, "error": st.Error})
 	save()
 	return st, err
+}
+
+// refreshNotices replaces st.Notices with the engine's notices for the running version (engines without notices:
+// none).
+func (r *Runner) refreshNotices(ctx context.Context, st *Status, running string) {
+	st.Notices = nil
+	if n, ok := r.Engine.(Noticer); ok {
+		st.Notices = n.Notices(ctx, running, st)
+	}
 }
 
 // errStep wraps a step failure.

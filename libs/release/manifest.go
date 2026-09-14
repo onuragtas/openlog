@@ -32,6 +32,10 @@ const (
 	ComponentPythonAgent = "python-agent"
 	// ComponentDotnetAgent is the NuGet package OpenLog.Agent.<v>.nupkg (agents/dotnet).
 	ComponentDotnetAgent = "dotnet-agent"
+	// ComponentCompose is the Docker Compose bundle openlog-compose-<v>.tar.gz (deploy/compose of the release: one top
+	// directory openlog-compose-<v>/ with docker-compose.yml, .env.example and clickhouse/). os/arch PlatformAny,
+	// format tar.gz. install-server.sh installs it and openlog-updater keeps such installations in sync (D-111).
+	ComponentCompose = "compose"
 
 	FormatTarGz = "tar.gz"
 	FormatDeb   = "deb"

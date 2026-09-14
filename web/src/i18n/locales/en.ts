@@ -63,11 +63,17 @@ export const en = {
       request_outside_window: "Outside the maintenance window. Confirm installing outside the window to update now.",
       request_interrupted: "Interrupted: openlog-updater restarted while handling the request.",
       request_expired: "No updater picked the request up within 15 minutes (is an updater with request support running?).",
+      compose_outdated:
+        "The compose files ({{files_version}}) are older than the running version {{running_version}}: settings and volumes added since then do not reach the containers. Update them (git checkout v{{running_version}}, then docker compose up -d) or migrate to install-server.sh.",
+      compose_outdated_bundle: "The compose files ({{files_version}}) are older than the running version {{running_version}}: re-run install-server.sh.",
+      compose_changes_pending:
+        "The compose files of {{version}} change {{services}} in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d.",
       withError: "{{message}} Error: {{error}}",
     },
     steps: {
       backup: "Backup",
       pull: "Pull image",
+      "compose-bundle": "Compose files",
       migrate: "Migrate",
       recreate: "Recreate",
       rollout: "Rollout",

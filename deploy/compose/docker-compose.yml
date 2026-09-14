@@ -6,8 +6,13 @@
 #   cp .env.example .env && docker compose up -d --build --wait
 name: openlog
 
+# Release these files belong to (`make release-prepare` stamps it). openlog-updater compares it with the running
+# version and reports older compose files (settings and volumes added later do not reach the containers).
+x-openlog-compose-version: "0.1.21"
+
 # Every other setting of docs/contracts/config.md, passed through from .env (empty = the documented default), merged
-# into `openlog` and `openlog-alert`. internal/config/envcoverage_test.go fails when a variable is missing here.
+# into `openlog` and `openlog-alert`. internal/config/envcoverage_test.go fails when a variable read by the backend is
+# not an environment key of `openlog`.
 x-openlog-settings: &openlog-settings
   # Services
   OPENLOG_API_QUERY_TIMEOUT: ${OPENLOG_API_QUERY_TIMEOUT:-}
@@ -136,12 +141,12 @@ x-openlog-settings: &openlog-settings
   OPENLOG_SAAS_ABUSE_NEW_ORG_DAYS: ${OPENLOG_SAAS_ABUSE_NEW_ORG_DAYS:-}
   OPENLOG_SAAS_ABUSE_NEW_ORG_HOSTS: ${OPENLOG_SAAS_ABUSE_NEW_ORG_HOSTS:-}
   OPENLOG_SAAS_ABUSE_SOURCE_IPS: ${OPENLOG_SAAS_ABUSE_SOURCE_IPS:-}
-  # Data subject requests and the public status page (docs/operations/saas.md §12-§13). Local archives live in the
-  # container unless OPENLOG_DATA_EXPORT_LOCAL_PATH is a mounted volume; with tiered storage the export reuses its bucket.
+  # Data subject requests and the public status page (docs/operations/saas.md §12-§13). Local archives are kept in the
+  # volume `data-exports` of `openlog` (mounted at /var/lib/openlog/exports).
   OPENLOG_ORG_DELETION_GRACE: ${OPENLOG_ORG_DELETION_GRACE:-}
   OPENLOG_DATA_EXPORT_ENABLED: ${OPENLOG_DATA_EXPORT_ENABLED:-}
   OPENLOG_DATA_EXPORT_STORAGE: ${OPENLOG_DATA_EXPORT_STORAGE:-}
-  OPENLOG_DATA_EXPORT_LOCAL_PATH: ${OPENLOG_DATA_EXPORT_LOCAL_PATH:-}
+  OPENLOG_DATA_EXPORT_LOCAL_PATH: ${OPENLOG_DATA_EXPORT_LOCAL_PATH:-/var/lib/openlog/exports}
   OPENLOG_DATA_EXPORT_S3_URL: ${OPENLOG_DATA_EXPORT_S3_URL:-}
   OPENLOG_DATA_EXPORT_S3_REGION: ${OPENLOG_DATA_EXPORT_S3_REGION:-}
   OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID: ${OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID:-}
@@ -373,6 +378,8 @@ services:
     volumes:
       # Release mirror and trusted keys files (read-only). Empty unless you put releases there.
       - ${OPENLOG_RELEASE_HOST_DIR:-./releases}:/releases:ro
+      # Data export archives (OPENLOG_DATA_EXPORT_LOCAL_PATH); kept across container recreation.
+      - data-exports:/var/lib/openlog/exports
     ports:
       - "${OPENLOG_OTLP_GRPC_PORT:-4317}:4317"
       - "${OPENLOG_OTLP_HTTP_PORT:-4318}:4318"
@@ -475,12 +482,17 @@ services:
       OPENLOG_UPDATER_HEALTH_TIMEOUT: ${OPENLOG_UPDATER_HEALTH_TIMEOUT:-5m}
       OPENLOG_UPDATER_BACKUP_KEEP: ${OPENLOG_UPDATER_BACKUP_KEEP:-5}
       OPENLOG_UPDATER_ENV_FILE: /compose/.env
+      # auto: an install-server.sh installation (.bundle-version) gets the verified compose files of the installed
+      # version; off: the compose files are never changed. Other installations are never changed (a notice reports
+      # compose files older than the running version).
+      OPENLOG_UPDATER_COMPOSE_SYNC: ${OPENLOG_UPDATER_COMPOSE_SYNC:-auto}
       OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
       OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${OPENLOG_UPDATER_BACKUP_DIR:-./backups}:/backups
-      # The project directory, so OPENLOG_IMAGE in .env follows the running version.
+      # The project directory: OPENLOG_IMAGE in .env follows the running version, the recreated containers get the
+      # settings of .env, and install-server.sh installations get the compose files of the running version.
       - ./:/compose
       # Same path as in `openlog`, so OPENLOG_RELEASE_TRUSTED_KEYS_FILE=/releases/... works for both.
       - ${OPENLOG_RELEASE_HOST_DIR:-./releases}:/releases:ro
@@ -581,3 +593,4 @@ volumes:
   clickhouse-warm:
   postgres-data:
   minio-data:
+  data-exports:

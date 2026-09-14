@@ -108,9 +108,15 @@ docker compose --profile updater up -d openlog-updater
 In `auto` mode it backs up PostgreSQL to `./backups` (`pg_dump -Fc`, newest 5 kept), pulls the image digest from the
 signed release manifest, runs `openlog-migrate` with it, recreates `openlog` through the Docker Engine API (same
 config, only the image changes), waits for `/readyz` to report the new version and otherwise restores the previous
-container. `OPENLOG_IMAGE` in `.env` follows the running version. Status: `GET /api/v1/version` (`updater`) and the
-audit log. It mounts `/var/run/docker.sock` and runs as root. Manual upgrades, restore and troubleshooting:
+container. `OPENLOG_IMAGE` in `.env` follows the running version, and recreated containers get the settings of `.env`
+even when this compose file predates them. Files in this directory are never changed by the updater: when
+`x-openlog-compose-version` is older than the running version, Settings → Version and updates shows it (update the
+files, e.g. `git checkout v<version>`, and run `docker compose up -d`). install-server.sh installations get the compose
+files of each installed version automatically. Status: `GET /api/v1/version` (`updater`) and the audit log. It mounts
+`/var/run/docker.sock` and runs as root. Manual upgrades, restore and troubleshooting:
 [docs/operations/upgrading.md](../../docs/operations/upgrading.md).
+
+Data export archives (`OPENLOG_DATA_EXPORT_LOCAL_PATH`) are kept in the volume `data-exports`.
 
 ## Tiered storage (S3)
 

@@ -83,7 +83,10 @@ ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/openlog-renderer"]
 FROM alpine:3.22
 # wget (busybox) is used by container health checks.
 RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S -g 10001 openlog && adduser -S -D -H -u 10001 -G openlog openlog
+    && addgroup -S -g 10001 openlog && adduser -S -D -H -u 10001 -G openlog openlog \
+    # Mount point of the Compose volume `data-exports` (OPENLOG_DATA_EXPORT_LOCAL_PATH): a new named volume takes
+    # this owner, so the non-root process can write archives.
+    && mkdir -p /var/lib/openlog/exports && chown -R 10001:10001 /var/lib/openlog
 COPY --from=build /out/ /usr/local/bin/
 USER 10001:10001
 EXPOSE 4317 4318 8080 9464

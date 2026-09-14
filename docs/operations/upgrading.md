@@ -125,7 +125,9 @@ docker compose logs -f openlog-updater
 | `OPENLOG_UPDATER_HEALTH_URLS` | `http://openlog:9464/readyz` | must return 200 with the target version |
 | `OPENLOG_UPDATER_POSTGRES_SERVICE` / `_PGDUMP_USER` / `_PGDUMP_DATABASE` | `postgres` / `openlog` / `openlog` | backup source |
 | `OPENLOG_UPDATER_BACKUP_DIR` / `_BACKUP_KEEP` | `./backups` (mounted at `/backups`) / `5` | `pg_dump -Fc` files `openlog-<UTC time>-<from version>.dump` |
-| `OPENLOG_UPDATER_ENV_FILE` | `/compose/.env` | `OPENLOG_IMAGE=` is rewritten after a verified update |
+| `OPENLOG_UPDATER_ENV_FILE` | `/compose/.env` | settings of recreated containers ([below](#settings-from-env)); `OPENLOG_IMAGE=` is rewritten after a verified update |
+| `OPENLOG_UPDATER_COMPOSE_DIR` | directory of `OPENLOG_UPDATER_ENV_FILE` (`/compose`) | the compose project directory as mounted in the updater |
+| `OPENLOG_UPDATER_COMPOSE_SYNC` | `auto` | `auto`: install-server.sh installations get the verified compose files of each installed version ([below](#compose-files)); `off`: compose files are never changed |
 | `OPENLOG_UPDATER_IMAGE_REPOSITORY` | – | pull the manifest digest from a mirror repository |
 | `OPENLOG_UPDATER_COMPOSE_PROJECT` | detected from the updater container | |
 
@@ -135,16 +137,105 @@ mode, inside the maintenance window:
 
 1. **backup** — `pg_dump -Fc` via `docker exec` in the postgres container into `/backups`; keep the newest N. A failed backup aborts.
 2. **pull** — the image **by digest** from the signed manifest (a tag cannot be swapped under it).
-3. **migrate** — a one-off container of the new image runs `openlog-migrate` with the environment and network of the running `openlog` container. Only expand (and eligible contract) migrations run, so the running release keeps working even if this fails.
-4. **recreate** — for each service container: stop it (its stop timeout), rename it to `<name>-pre-update`, create a new container with the same config, env, labels, mounts, port bindings, restart policy, networks and aliases and only the image replaced, start it.
-5. **health** — every health URL must answer 200 with the target version before `OPENLOG_UPDATER_HEALTH_TIMEOUT`; a container that exits without a restart policy fails immediately.
-6. **success** — remove the `-pre-update` containers, rewrite `OPENLOG_IMAGE` in `.env`, run `openlog-migrate` again for contract migrations that were waiting for the old containers.
-7. **failure after step 3** — remove the new containers, rename and start the previous ones, wait until they report the previous version: state `rolled_back` (or `rollback_failed`). The version is recorded in `failed_versions` and not retried; a newer release is.
+3. **compose-bundle** (install-server.sh installations only) — download `openlog-compose-<v>.tar.gz` listed in the signed manifest, check size and sha256, extract it into `.bundle-staging/` (regular files only, no `.env`). A failure here stops the update before anything changed ([Compose files](#compose-files)).
+4. **migrate** — a one-off container of the new image runs `openlog-migrate` with the network and the (refreshed, [below](#settings-from-env)) environment of the running `openlog` container. Only expand (and eligible contract) migrations run, so the running release keeps working even if this fails.
+5. **recreate** — for each service container: stop it (its stop timeout), rename it to `<name>-pre-update`, create a new container with the same config, labels, mounts, port bindings, restart policy, networks and aliases, the image replaced and the environment refreshed from `.env` and the compose files, start it. The step detail lists the refreshed variable names (never values).
+6. **health** — every health URL must answer 200 with the target version before `OPENLOG_UPDATER_HEALTH_TIMEOUT`; a container that exits without a restart policy fails immediately.
+7. **success** (step `cleanup`) — remove the `-pre-update` containers, install the staged compose bundle, rewrite `OPENLOG_IMAGE` in `.env`, then (step `contract-migrate`) run `openlog-migrate` again for contract migrations that were waiting for the old containers.
+8. **failure after step 4** — remove the new containers, rename and start the previous ones, wait until they report the previous version: state `rolled_back` (or `rollback_failed`). The staged compose bundle is deleted; the compose files were never touched. The version is recorded in `failed_versions` and not retried; a newer release is.
 
 The status is kept in `/backups/updater-status.json` and in PostgreSQL (shown as `updater` in
 `GET /api/v1/version`); events go to the audit log (`updater.update_started`, `…_succeeded`,
 `…_rolled_back`, `…_failed`, `…_available`, actor `openlog-updater`). If the updater dies mid-update,
-it finds the `-pre-update` container on its next start and restores it.
+it finds the `-pre-update` container on its next start and restores it (and an interrupted compose file replacement,
+see below).
+
+### Settings from `.env`
+
+A container created from an older compose file does not have the settings that file did not list (for example
+`OPENLOG_SAAS_MODE` in `.env` with a compose file from before that setting: the image was updated, the setting never
+reached the container). The updater therefore refreshes the environment of every container it recreates from `.env`
+and the compose files the container was created from (labels `com.docker.compose.project.config_files` and
+`working_dir`, mapped into `/compose`; for install-server.sh installations the new bundle's `docker-compose.yml`),
+with the precedence of `docker compose up`:
+
+| # | Variable | Value in the recreated container |
+|---|---|---|
+| 1 | in the service's `environment`, every referenced variable set in `.env` (or a literal) | computed like compose: `${VAR:-default}` with the `.env` value, literals as written (a compose literal wins over `.env`) |
+| 2 | in the service's `environment`, a referenced variable **not** in `.env` | the container's current value (it came from the shell or another env file when the container was created) |
+| 3 | not in the service's `environment`, set in `.env` | set when the compose files are older than the installed version (their `x-openlog-compose-version` / `.bundle-version`; none = older) **and** do not reference the variable at all — the settings those files predate. Never image, `OPENLOG_UPDATER_*`, listen address (`*_ADDR`) or bundled-dependency TLS/SASL variables. With current compose files such variables are intentionally not passed. |
+| 4 | anything else in the container (a `docker-compose.override.yml` value, …) | kept |
+
+Values are parsed with compose's `.env` rules (quotes, `export`, `#` comments, `${VAR}` references). When the
+compose files cannot be read (a file outside the project directory, a YAML error, a service using `extends`), only
+`OPENLOG_*` variables of `.env` that the container lacks or has empty are added. An unreadable or unparsable `.env`
+never blocks an update: the environment is then left as it was and the `recreate` step says so. Shell variables that
+were exported when `docker compose up` ran are invisible to the updater: keep settings in `.env`.
+
+The compose file passes every backend setting explicitly (the `x-openlog-settings` anchor, enforced by
+`internal/config/envcoverage_test.go`); it deliberately has no `env_file: .env`, which would also hand PostgreSQL,
+bootstrap and S3 credentials of other services to `openlog` (and switch data exports to the tiered storage bucket).
+
+### Compose files
+
+**install-server.sh installations** (`/opt/openlog-server/.bundle-version` exists) are kept at the running version:
+
+- Every release has the asset `openlog-compose-<v>.tar.gz` (manifest component `compose`,
+  [releases-updates.md §2](../contracts/releases-updates.md)): `docker-compose.yml` (with
+  `x-openlog-compose-version: "<v>"`), `.env.example`, `clickhouse/`, `README.md`.
+- It is verified and staged before `migrate` and installed only after the new version is healthy: the files it
+  replaces (and `.bundle-version`) are copied to `.bundle-previous/`, a journal `.bundle-swap.json` is written, each
+  file is renamed into place, settings that `.env` lacks are appended from the new `.env.example` (same rule as
+  install-server.sh: active lines only, never credentials or `OPENLOG_IMAGE`; `.env` keeps its mode 0600), and
+  `.bundle-version` is written last. On any error the previous files are restored from `.bundle-previous/` and the
+  error is shown in the `cleanup` step; the updater restores them also when it finds the journal at start.
+- Manual rollback of the compose files: `cp -R /opt/openlog-server/.bundle-previous/. /opt/openlog-server/`
+  (restores the files and `.bundle-version`; settings appended to `.env` stay, they are defaults).
+- The containers are recreated through the Docker API, so only the image and the environment change. Changes the
+  updater does not apply — new or changed volumes, ports, networks, new services, or a changed mounted file such as
+  `clickhouse/*.xml` — are reported as the notice `compose_changes_pending` ("… re-run install-server.sh or
+  docker compose up -d") in Settings → Organization → Version and updates and in the updater log, until the service
+  was recreated by compose (its `com.docker.compose.config-hash` changed) or, for mounted files, restarted.
+  Re-running install-server.sh applies them (`docker compose up -d` with the new files). The updater does not run
+  the compose CLI itself: that would need the compose plugin in the image and the project mounted at its host path
+  (compose resolves relative bind mounts on the host), and it would recreate the updater's own container.
+- A release without the asset (older than 0.1.22) or `OPENLOG_UPDATER_COMPOSE_SYNC=off`: the files stay, the step
+  says why, and the notice `compose_outdated_bundle` asks to re-run install-server.sh.
+
+**Other installations** (a git clone, your own directory): the updater never changes files. When the compose file's
+`x-openlog-compose-version` (none: a file older than the updater's release) is older than the running version, it logs a
+warning and shows the notice `compose_outdated`: "the compose files (0.1.21) are older than the running version
+0.1.22: … update them (git checkout v0.1.22, then docker compose up -d) or migrate to install-server.sh". Settings
+added to `.env` still reach recreated containers (rule 3 above), but volumes and new services do not until the files
+are updated — or [migrate to install-server.sh](#migrating-from-a-git-clone-installation).
+
+The first update that brings this behaviour is still performed by the updater container you run now (it is not updated
+automatically, see below): run `install-server.sh` once (or `docker compose --profile updater up -d openlog-updater`
+with the new files) so later updates use it.
+
+### Migrating from a git clone installation
+
+A stack started from a clone (`/opt/openlog/deploy/compose`, project `openlog`) moves to the install-server.sh layout
+without data loss: the named volumes (`openlog_postgres-data`, `openlog_clickhouse-data`, `openlog_kafka-data`, …)
+belong to the project name, not to the directory.
+
+```sh
+sudo mkdir -p /opt/openlog-server/releases
+sudo cp /opt/openlog/deploy/compose/.env /opt/openlog-server/.env && sudo chmod 600 /opt/openlog-server/.env
+sudo cp /opt/openlog/deploy/compose/releases/plans.json /opt/openlog-server/releases/ 2>/dev/null || true   # if you use a plan catalog
+# optional: keep the updater's dumps
+sudo cp -R /opt/openlog/deploy/compose/backups /opt/openlog-server/ 2>/dev/null || true
+curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install-server.sh |
+  sudo sh -s -- --project openlog --dir /opt/openlog-server
+docker compose -p openlog -f /opt/openlog-server/docker-compose.yml --env-file /opt/openlog-server/.env ps
+```
+
+The installer keeps the copied `.env` (secrets are never regenerated; missing settings are appended), writes the
+compose files of the running or newer release, recreates the containers from them in the same project and starts the
+updater from the new directory. Settings from a `docker-compose.override.yml` must be moved into `.env` first
+(install-server.sh and the updater use only `docker-compose.yml` and `.env`; data exports have the volume
+`data-exports`, so no override is needed for them). Check the UI and `ps` (all services healthy), then remove the old
+directory (`sudo rm -rf /opt/openlog` — never `docker compose down -v`, which deletes the volumes).
 
 **Why the Docker Engine API instead of `docker compose up`.** The updater talks to `/var/run/docker.sock`
 with plain HTTP and recreates containers from their own inspect data. This needs no compose CLI or
@@ -161,7 +252,8 @@ images whose digest is in a manifest signed by a trusted key are ever run. Regis
 supported (public images or a mirror reachable without auth).
 
 **Not updated automatically:** the `openlog-updater` container itself (it runs the image from `.env` on
-the next `docker compose up -d`), `bootstrap`, `loadgen`, and third-party images (Kafka, ClickHouse, PostgreSQL).
+the next `docker compose up -d` or install-server.sh run), `bootstrap`, `loadgen`, and third-party images (Kafka,
+ClickHouse, PostgreSQL).
 
 ## 4. Kubernetes (Helm)
 
@@ -252,6 +344,10 @@ of the newer release run again on the next upgrade.
 | `up_to_date` but a newer release exists | `message` lists skipped releases: failed before (remove from `failed_versions` by deleting `/backups/updater-status.json` and `DELETE FROM system_state WHERE key='updater'`), `min_upgrade_from`, missing image. |
 | `rolled_back` | `steps[]` shows the failing step; `docker compose logs openlog-updater` includes the tail of the failed container's log. The previous version keeps running. |
 | `rollback_failed` | Manual action: `docker ps -a` — start `<name>-pre-update` after renaming it back, or restore from backup. |
+| A setting in `.env` has no effect | `docker inspect <container> --format '{{json .Config.Env}}'`; the notice `compose_outdated` / `compose_outdated_bundle` means the compose files predate the setting: update them (install-server.sh, or `git checkout v<running version>` + `docker compose up -d`). The next updater run adds unreferenced settings ([Settings from .env](#settings-from-env)). |
+| `compose_changes_pending` | Re-run install-server.sh (or `docker compose -p openlog -f … --env-file … up -d`); for a changed mounted file a restart of the named service is enough. |
+| `compose-bundle` step failed | Download or sha256 of `openlog-compose-<v>.tar.gz` (network, mirror without the asset: `OPENLOG_UPDATER_COMPOSE_SYNC=off` and re-run install-server.sh for each version). Nothing was changed. |
+| `cleanup` step: compose files restored | The update itself succeeded; the files stayed at the previous version (notice `compose_outdated_bundle`): re-run install-server.sh. |
 | Contract migration never runs | `openlog-migrate -plan` names the old instance; stop it, or wait 5 minutes after it died without a graceful shutdown. |
 | UI keeps asking to reload | A load balancer still sends some requests to an older pod; finish the rollout. |
 | Acceptance tests | `make mixed-version` (N and N+1 side by side, contract gating), `make updater-acceptance` (Compose 0.9.0 → 0.9.1 with test expand + contract migrations → broken 0.9.2 rolled back; see below). |

@@ -160,6 +160,11 @@ export function VersionSettings() {
               </span>
               {u.message && <span className="text-muted-foreground">{updateMessage(u.message, u.message_code, u.message_params)}</span>}
               {u.error && <span className="text-destructive-text">{u.error}</span>}
+              {(u.notices ?? []).map((n) => (
+                <span key={n.code} role="note" className="text-warning-text" data-testid="updater-notice">
+                  {updateMessage(n.message, n.code, n.params)}
+                </span>
+              ))}
               {steps.length > 0 && (
                 <ol className="flex flex-wrap gap-1" aria-label={t("update.info.steps")}>
                   {steps.map((s, i) => (

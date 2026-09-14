@@ -110,6 +110,11 @@ func DotnetAgentPackageName(v string) string {
 	return "OpenLog.Agent." + strings.TrimPrefix(v, "v") + ".nupkg"
 }
 
+// ComposeBundleName is the Docker Compose bundle of release v (component compose).
+func ComposeBundleName(v string) string {
+	return "openlog-compose-" + strings.TrimPrefix(v, "v") + ".tar.gz"
+}
+
 // IsPrerelease reports whether the version has pre-release identifiers.
 func (v Version) IsPrerelease() bool { return len(v.Pre) > 0 }
 

@@ -718,6 +718,8 @@ jobs:
           for a in darwin_amd64.tar.gz darwin_arm64.tar.gz windows_amd64.zip windows_amd64.msi windows_arm64.zip; do
             grep -q "\"name\": \"openlog-infra-agent_${VERSION}_$a\"" "dist/v$VERSION/manifest.json" || { echo "::error::infra agent $a missing from the manifest"; exit 1; }
           done
+          # install-server.sh and openlog-updater install the compose bundle of the release (D-111).
+          grep -q "\"name\": \"openlog-compose-${VERSION}.tar.gz\"" "dist/v$VERSION/manifest.json" || { echo "::error::compose bundle missing from the manifest"; exit 1; }
           head -c 1500 "dist/v$VERSION/manifest.json"
 
       - name: deb/rpm install test (amd64)

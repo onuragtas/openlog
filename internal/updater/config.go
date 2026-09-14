@@ -8,6 +8,7 @@ package updater
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,12 @@ const (
 	ModeOff    = "off"
 	ModeNotify = "notify"
 	ModeAuto   = "auto"
+)
+
+// Compose bundle sync (OPENLOG_UPDATER_COMPOSE_SYNC).
+const (
+	ComposeSyncAuto = "auto"
+	ComposeSyncOff  = "off"
 )
 
 // Config is parsed from OPENLOG_UPDATER_* (and the shared release variables).
@@ -48,6 +55,12 @@ type Config struct {
 	HealthURLs      []string
 	EnvFile         string
 	MigrateCommand  []string
+	// ComposeDir is the compose project directory as mounted in the updater (default: the directory of EnvFile).
+	// Its docker-compose.yml and .env describe the environment of recreated containers; with a .bundle-version
+	// file (install-server.sh) its compose files are kept at the running version.
+	ComposeDir string
+	// ComposeSync is auto (replace the compose bundle of install-server.sh installations on update) or off.
+	ComposeSync string
 
 	// Kubernetes engine.
 	Deployments     []string
@@ -107,6 +120,8 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		HealthURLs:      list("OPENLOG_UPDATER_HEALTH_URLS", "http://openlog:9464/readyz"),
 		EnvFile:         str("OPENLOG_UPDATER_ENV_FILE", ""),
 		MigrateCommand:  []string{"/usr/local/bin/openlog-migrate"},
+		ComposeDir:      str("OPENLOG_UPDATER_COMPOSE_DIR", ""),
+		ComposeSync:     str("OPENLOG_UPDATER_COMPOSE_SYNC", ComposeSyncAuto),
 
 		Deployments:     list("OPENLOG_UPDATER_K8S_DEPLOYMENTS", ""),
 		MigrateTemplate: str("OPENLOG_UPDATER_K8S_MIGRATE_TEMPLATE", ""),
@@ -130,6 +145,14 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	case "stable", "beta":
 	default:
 		errs = append(errs, fmt.Errorf("OPENLOG_UPDATE_CHANNEL: must be stable or beta, got %q", c.Channel))
+	}
+	switch c.ComposeSync {
+	case ComposeSyncAuto, ComposeSyncOff:
+	default:
+		errs = append(errs, fmt.Errorf("OPENLOG_UPDATER_COMPOSE_SYNC: must be auto or off, got %q", c.ComposeSync))
+	}
+	if c.ComposeDir == "" && c.EnvFile != "" {
+		c.ComposeDir = filepath.Dir(c.EnvFile)
 	}
 	if c.MaintenanceWindows, err = ParseWindows(getenv("OPENLOG_UPDATER_MAINTENANCE_WINDOW")); err != nil {
 		errs = append(errs, fmt.Errorf("OPENLOG_UPDATER_MAINTENANCE_WINDOW: %w", err))

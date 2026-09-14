@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Every variable Load reads must be documented in docs/contracts/config.md (the source of truth), passed through by
@@ -28,10 +30,39 @@ var notInCompose = map[string]string{
 // without TLS or SASL; use the Helm chart (or your own Compose file with mounted certificates) for secured dependencies.
 var notInComposePrefixes = []string{"OPENLOG_KAFKA_TLS_", "OPENLOG_KAFKA_SASL_", "OPENLOG_CLICKHOUSE_TLS_", "OPENLOG_POSTGRES_TLS_"}
 
+// composeOwnService: variables read by internal/config that the Compose stack passes to another service than openlog.
+var composeOwnService = map[string]string{
+	"OPENLOG_BOOTSTRAP_": "bootstrap",        // openlog-admin bootstrap (first organization, owner, keys)
+	"OPENLOG_RENDERER_":  "openlog-renderer", // renderer process settings; openlog gets URL/token/TLS through the anchor
+	"OPENLOG_S3_":        "clickhouse",       // tiered storage credentials stay in ClickHouse; exports use OPENLOG_DATA_EXPORT_S3_*
+}
+
 // notInHelm: variables of the single-process profile only.
 var notInHelm = map[string]string{
 	"OPENLOG_ALERT_ENABLED":    "openlog-allinone only; the chart runs openlog-alert as its own Deployment (alert.enabled)",
 	"OPENLOG_MIGRATE_ON_START": "openlog-allinone only; the chart runs openlog-migrate as a hook Job",
+}
+
+// composeServiceEnvKeys returns the environment keys of a Compose service (map syntax; anchors and merge keys resolved).
+func composeServiceEnvKeys(t *testing.T, compose, service string) map[string]bool {
+	t.Helper()
+	var doc struct {
+		Services map[string]struct {
+			Environment map[string]any `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(compose), &doc); err != nil {
+		t.Fatalf("docker-compose.yml: %v", err)
+	}
+	svc, ok := doc.Services[service]
+	if !ok || len(svc.Environment) == 0 {
+		t.Fatalf("docker-compose.yml: service %s has no environment map", service)
+	}
+	keys := map[string]bool{}
+	for k := range svc.Environment {
+		keys[k] = true
+	}
+	return keys
 }
 
 func loadedEnvNames(t *testing.T) []string {
@@ -150,6 +181,36 @@ func TestEnvVarCoverage(t *testing.T) {
 			t.Errorf("%s does not mention %d variable(s) read by internal/config (add them, or allowlist them in envcoverage_test.go with a reason):\n  %s",
 				where, len(missing[where]), strings.Join(missing[where], "\n  "))
 		}
+	}
+	// A mention anywhere in the Compose file (a comment) does not reach a process: every variable must be an environment
+	// key of `openlog` (the settings anchor or an explicit entry), or of the service it belongs to, so a setting in .env
+	// is never silently ignored (D-111).
+	var notPassed []string
+	for _, n := range names {
+		skip := false
+		if _, ok := notInCompose[n]; ok {
+			skip = true
+		}
+		for _, p := range notInComposePrefixes {
+			skip = skip || strings.HasPrefix(n, p)
+		}
+		services := []string{"openlog"}
+		for prefix, svc := range composeOwnService {
+			if strings.HasPrefix(n, prefix) {
+				services = append(services, svc)
+			}
+		}
+		passed := false
+		for _, svc := range services {
+			passed = passed || composeServiceEnvKeys(t, compose, svc)[n]
+		}
+		if !skip && !passed {
+			notPassed = append(notPassed, n+" ("+strings.Join(services, " or ")+")")
+		}
+	}
+	if len(notPassed) > 0 {
+		t.Errorf("deploy/compose/docker-compose.yml does not pass %d variable(s) to their service (openlog: add them to x-openlog-settings):\n  %s",
+			len(notPassed), strings.Join(notPassed, "\n  "))
 	}
 	// Allowlist entries must still exist, so stale exceptions are removed.
 	known := map[string]bool{}

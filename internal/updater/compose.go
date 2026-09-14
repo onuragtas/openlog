@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	lib "github.com/onuragtas/openlog/libs/release"
+
 	"github.com/onuragtas/openlog/internal/version"
 )
 
@@ -47,6 +49,11 @@ type ComposeEngine struct {
 	Now    func() time.Time
 	// Poll is the health polling interval.
 	Poll time.Duration
+	// HTTP downloads the compose bundle (default: 2 min timeout).
+	HTTP *http.Client
+	// SelfVersion is the updater's own version (default version.Version); compose files without a version marker
+	// predate it.
+	SelfVersion string
 }
 
 // Name implements Engine.
@@ -150,7 +157,95 @@ func (e *ComposeEngine) targets(ctx context.Context) ([]ContainerSummary, error)
 }
 
 type recreated struct {
-	name, oldID, newID string
+	name, service, oldID, newID string
+	// envChanged are the variables refreshed from .env and the compose files (names only).
+	envChanged  []string
+	envFallback bool
+}
+
+// envFunc refreshes the environment of a recreated container of service (composeenv.go).
+type envFunc func(service string, env []string) envMerge
+
+// envPlanner reads .env (plus the settings a staged bundle adds) and the compose files the template container was
+// created from (the staged docker-compose.yml replacing the current one). It never fails an update: without a usable
+// .env the environment is left unchanged, and with unusable compose files only missing OPENLOG_* variables are added.
+func (e *ComposeEngine) envPlanner(template *Container, b *composeBundle, target lib.Version) (envFunc, string) {
+	if e.Cfg.EnvFile == "" {
+		return nil, "environment unchanged (OPENLOG_UPDATER_ENV_FILE is not set)"
+	}
+	data, err := os.ReadFile(e.Cfg.EnvFile)
+	if err != nil {
+		e.Log.Warn("cannot read .env: the container environment is not refreshed", "file", e.Cfg.EnvFile, "err", err)
+		return nil, "environment unchanged: " + err.Error()
+	}
+	if b != nil && len(b.EnvAdditions) > 0 {
+		if len(data) > 0 && data[len(data)-1] != '\n' {
+			data = append(data, '\n')
+		}
+		data = append(data, strings.Join(b.EnvAdditions, "\n")+"\n"...)
+	}
+	dot, err := parseDotenv(data)
+	if err != nil {
+		e.Log.Warn("cannot parse .env: the container environment is not refreshed", "file", e.Cfg.EnvFile, "err", err)
+		return nil, fmt.Sprintf("environment unchanged: %s: %v", e.Cfg.EnvFile, err)
+	}
+	replace := map[string]string{}
+	if b != nil {
+		replace["docker-compose.yml"] = filepath.Join(b.Dir, "docker-compose.yml")
+	}
+	labels, _ := template.Config["Labels"].(map[string]any)
+	var proj *composeProject
+	paths, err := composeFilePaths(labels, e.Cfg.ComposeDir, replace)
+	if err == nil {
+		proj, err = loadComposeProject(paths)
+	}
+	if err != nil {
+		e.Log.Warn("compose files not usable for the container environment: only OPENLOG_* variables that the containers lack are added from .env", "err", err)
+	}
+	// The files the containers are recreated from: the staged bundle (the target's own files) or the files on disk.
+	stale := true
+	if b != nil {
+		stale = false
+	} else if fv := e.composeFilesVersion(); fv != "" {
+		if v, err := lib.ParseVersion(fv); err == nil && lib.Compare(v, target) >= 0 {
+			stale = false
+		}
+	}
+	return func(service string, env []string) envMerge { return mergeServiceEnv(env, service, proj, dot, stale) }, ""
+}
+
+// composeFilesVersion is the version of the compose files on disk: .bundle-version, else the
+// x-openlog-compose-version marker of docker-compose.yml ("" when unknown).
+func (e *ComposeEngine) composeFilesVersion() string {
+	if v, err := e.installedBundleVersion(); err == nil && v != "" {
+		return v
+	}
+	if e.Cfg.ComposeDir == "" {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(e.Cfg.ComposeDir, "docker-compose.yml"))
+	if err != nil {
+		return ""
+	}
+	if m := composeVersionRe.FindSubmatch(b); m != nil {
+		return string(m[1])
+	}
+	return ""
+}
+
+// presentServices returns the services of the project that have containers.
+func (e *ComposeEngine) presentServices(ctx context.Context) map[string]bool {
+	out := map[string]bool{}
+	cs, err := e.Docker.ListContainers(ctx, map[string]string{labelProject: e.Cfg.Project})
+	if err != nil {
+		return out
+	}
+	for _, c := range cs {
+		if s := c.Labels[labelService]; s != "" && c.Labels[labelOneoff] != "True" {
+			out[s] = true
+		}
+	}
+	return out
 }
 
 // Apply implements Engine.
@@ -187,25 +282,64 @@ func (e *ComposeEngine) Apply(ctx context.Context, t *Target, st *Status, save f
 		st.State = StateFailed
 		return err
 	}
-	if err := step("migrate", func() (string, error) { return e.runMigrate(ctx, template, t.Image, "expand") }); err != nil {
+	// install-server.sh installations (.bundle-version): the compose bundle of the target is verified and staged now;
+	// the files are replaced only after the new version is healthy.
+	var bundle *composeBundle
+	installed, verr := e.installedBundleVersion()
+	if verr != nil {
+		e.Log.Warn("cannot read the compose bundle version", "err", verr)
+	}
+	if installed != "" {
+		if err := step("compose-bundle", func() (string, error) {
+			b, detail, err := e.prepareBundle(ctx, t, installed, e.presentServices(ctx))
+			bundle = b
+			return detail, err
+		}); err != nil {
+			st.State = StateFailed
+			return err
+		}
+	}
+	discardBundle := func() {
+		if bundle != nil {
+			_ = os.RemoveAll(bundle.Dir)
+		}
+	}
+	envFor, envNote := e.envPlanner(template, bundle, t.Version)
+	if err := step("migrate", func() (string, error) { return e.runMigrate(ctx, template, t.Image, "expand", envFor) }); err != nil {
 		// Migrations are expand-only for running releases: the current containers are untouched
 		// and keep working with whatever part of the migration was applied.
+		discardBundle()
 		st.State = StateFailed
 		return err
 	}
 
 	var done []recreated
 	applyErr := step("recreate", func() (string, error) {
+		changed := map[string]bool{}
+		fallback := false
 		for _, c := range targets {
-			r, err := e.recreate(ctx, c.ID, t.Image)
+			r, err := e.recreate(ctx, c.ID, t.Image, envFor)
 			if r.oldID != "" {
 				done = append(done, r)
 			}
+			for _, k := range r.envChanged {
+				changed[k] = true
+			}
+			fallback = fallback || r.envFallback
 			if err != nil {
 				return "", fmt.Errorf("%s: %w", c.Name(), err)
 			}
 		}
-		return fmt.Sprintf("%d container(s)", len(done)), nil
+		detail := fmt.Sprintf("%d container(s)", len(done))
+		switch {
+		case envNote != "":
+			detail += "; " + envNote
+		case len(changed) > 0 && fallback:
+			detail += "; added from .env (compose files not usable): " + strings.Join(sortedKeys(changed), ", ")
+		case len(changed) > 0:
+			detail += "; environment from .env and the compose files: " + strings.Join(sortedKeys(changed), ", ")
+		}
+		return detail, nil
 	})
 	if applyErr == nil {
 		applyErr = step("health", func() (string, error) {
@@ -213,6 +347,8 @@ func (e *ComposeEngine) Apply(ctx context.Context, t *Target, st *Status, save f
 		})
 	}
 	if applyErr != nil {
+		// The compose files were not touched; the staged bundle is dropped.
+		discardBundle()
 		rbErr := step("rollback", func() (string, error) {
 			if err := e.rollback(ctx, done); err != nil {
 				return "", err
@@ -229,9 +365,23 @@ func (e *ComposeEngine) Apply(ctx context.Context, t *Target, st *Status, save f
 
 	_ = step("cleanup", func() (string, error) {
 		var errs []error
+		var details []string
 		for _, r := range done {
 			if err := e.Docker.RemoveContainer(ctx, r.oldID); err != nil {
 				errs = append(errs, err)
+			}
+		}
+		if bundle != nil {
+			if err := e.installBundle(bundle, installed); err != nil {
+				e.Log.Error("installing the compose bundle failed; the compose files stay at the previous version (re-run install-server.sh)",
+					"version", bundle.Version, "previous", installed, "err", err)
+				errs = append(errs, fmt.Errorf("compose files %s: %w", bundle.Version, err))
+			} else {
+				details = append(details, fmt.Sprintf("compose files %s → %s (previous in %s)", installed, bundle.Version, bundlePreviousDir))
+				if len(bundle.EnvAdditions) > 0 {
+					details = append(details, fmt.Sprintf("%d setting(s) added to .env", len(bundle.EnvAdditions)))
+				}
+				e.recordPending(ctx, st, bundle)
 			}
 		}
 		if e.Cfg.EnvFile != "" {
@@ -239,7 +389,7 @@ func (e *ComposeEngine) Apply(ctx context.Context, t *Target, st *Status, save f
 				errs = append(errs, fmt.Errorf("update %s: %w", e.Cfg.EnvFile, err))
 			}
 		}
-		return "", errors.Join(errs...)
+		return strings.Join(details, "; "), errors.Join(errs...)
 	})
 	// Contract migrations need every old instance gone; the old containers are stopped now.
 	// Failure is not an update failure: the next openlog-migrate run retries.
@@ -248,7 +398,7 @@ func (e *ComposeEngine) Apply(ctx context.Context, t *Target, st *Status, save f
 		if err != nil {
 			return "", err
 		}
-		return e.runMigrate(ctx, cur, t.Image, "contract")
+		return e.runMigrate(ctx, cur, t.Image, "contract", nil)
 	})
 	return nil
 }
@@ -320,10 +470,15 @@ func (e *ComposeEngine) pruneBackups() {
 }
 
 // runMigrate runs openlog-migrate from image as a one-off container with the environment and
-// networks of template (a running openlog container).
-func (e *ComposeEngine) runMigrate(ctx context.Context, template *Container, image, label string) (string, error) {
+// networks of template (a running openlog container), refreshed by envFor when set.
+func (e *ComposeEngine) runMigrate(ctx context.Context, template *Container, image, label string, envFor envFunc) (string, error) {
 	oldImg, _ := e.Docker.InspectImage(ctx, template.Image)
 	env := stripImageDefaults(toStrings(template.Config["Env"]), oldImg, "Env")
+	if envFor != nil {
+		labels, _ := template.Config["Labels"].(map[string]any)
+		svc, _ := labels[labelService].(string)
+		env = envFor(svc, env).env
+	}
 	nets, order := endpointSettings(template, false)
 	spec := ContainerSpec{
 		Name: fmt.Sprintf("%s-updater-migrate-%d", e.Cfg.Project, e.now().UnixNano()),
@@ -356,9 +511,9 @@ func (e *ComposeEngine) runMigrate(ctx context.Context, template *Container, ima
 	return label + " migrations applied", nil
 }
 
-// recreate replaces container id by one running image. The old container is stopped and renamed
-// "<name>-pre-update"; on any error it is restored before returning.
-func (e *ComposeEngine) recreate(ctx context.Context, id, image string) (recreated, error) {
+// recreate replaces container id by one running image, with the environment refreshed by envFor (nil: unchanged).
+// The old container is stopped and renamed "<name>-pre-update"; on any error it is restored before returning.
+func (e *ComposeEngine) recreate(ctx context.Context, id, image string, envFor envFunc) (recreated, error) {
 	old, err := e.Docker.InspectContainer(ctx, id)
 	if err != nil {
 		return recreated{}, err
@@ -373,11 +528,22 @@ func (e *ComposeEngine) recreate(ctx context.Context, id, image string) (recreat
 		return recreated{}, err
 	}
 	spec := buildSpec(old, name, image, newImg.ID, oldImg)
+	labels, _ := old.Config["Labels"].(map[string]any)
+	service, _ := labels[labelService].(string)
+	var merged envMerge
+	if envFor != nil {
+		merged = envFor(service, toStrings(spec.Config["Env"]))
+		spec.Config["Env"] = merged.env
+		if len(merged.changed) > 0 {
+			e.Log.Info("container environment refreshed from .env and the compose files", "name", name,
+				"variables", merged.changed, "compose_files_usable", !merged.fallback)
+		}
+	}
 
 	if err := e.Docker.StopContainer(ctx, old.ID, stopTimeout(old)); err != nil {
 		return recreated{}, fmt.Errorf("stop: %w", err)
 	}
-	r := recreated{name: name, oldID: old.ID}
+	r := recreated{name: name, service: service, oldID: old.ID, envChanged: merged.changed, envFallback: merged.fallback}
 	if err := e.Docker.RenameContainer(ctx, old.ID, name+preUpdateSuffix); err != nil {
 		_ = e.Docker.StartContainer(context.WithoutCancel(ctx), old.ID)
 		return recreated{}, fmt.Errorf("rename: %w", err)
@@ -445,7 +611,18 @@ func (e *ComposeEngine) Recover(ctx context.Context) error {
 		e.Log.Warn("found an unverified update; restoring the previous container", "name", name)
 		done = append(done, r)
 	}
-	return e.rollback(ctx, done)
+	err = e.rollback(ctx, done)
+	if e.Cfg.ComposeDir != "" {
+		if _, jerr := os.Stat(filepath.Join(e.Cfg.ComposeDir, bundleJournalFile)); jerr == nil {
+			e.Log.Warn("found an interrupted compose bundle replacement; restoring the previous compose files", "dir", e.Cfg.ComposeDir)
+			if rerr := e.restoreBundle(); rerr != nil {
+				err = errors.Join(err, fmt.Errorf("restore compose files: %w", rerr))
+			}
+		} else {
+			_ = os.RemoveAll(filepath.Join(e.Cfg.ComposeDir, bundleStagingDir))
+		}
+	}
+	return err
 }
 
 // waitHealthy waits until every health URL is ready and reports want, failing early when a
@@ -640,31 +817,47 @@ func lastLines(s string, n int) string {
 // rewriteEnvFile sets key=value in a compose .env file (appending when missing), so a later
 // `docker compose up -d` keeps the updated image.
 func rewriteEnvFile(path, key, value string) error {
+	return editEnvFile(path, map[string]string{key: value}, nil)
+}
+
+// editEnvFile sets variables (appending the missing ones after "# set by openlog-updater") and appends lines. The
+// file's mode and owner are kept (.env holds secrets: install-server.sh creates it with mode 0600).
+func editEnvFile(path string, set map[string]string, appendLines []string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	lines := strings.Split(string(b), "\n")
-	found := false
+	found := map[string]bool{}
 	for i, l := range lines {
-		if strings.HasPrefix(strings.TrimSpace(l), key+"=") {
-			lines[i], found = key+"="+value, true
+		for key, value := range set {
+			if strings.HasPrefix(strings.TrimSpace(l), key+"=") {
+				lines[i], found[key] = key+"="+value, true
+			}
 		}
 	}
-	if !found {
-		if n := len(lines); n > 0 && lines[n-1] == "" {
-			lines = lines[:n-1]
-		}
-		lines = append(lines, "# set by openlog-updater", key+"="+value, "")
+	if n := len(lines); n > 0 && lines[n-1] == "" {
+		lines = lines[:n-1]
 	}
-	out := []byte(strings.Join(lines, "\n"))
-	tmp := path + ".updater-tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err == nil {
-		if err := os.Rename(tmp, path); err == nil {
-			return nil
+	lines = append(lines, appendLines...)
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		if !found[k] {
+			keys = append(keys, k)
 		}
-		_ = os.Remove(tmp)
 	}
-	// A single bind-mounted file cannot be replaced by rename: write in place.
-	return os.WriteFile(path, out, 0o644)
+	sort.Strings(keys)
+	for _, k := range keys {
+		lines = append(lines, "# set by openlog-updater", k+"="+set[k])
+	}
+	out := []byte(strings.Join(append(lines, ""), "\n"))
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if err := writeFileAtomic(path, out, fi.Mode().Perm()); err == nil {
+		return nil
+	}
+	// A single bind-mounted file cannot be replaced by rename: write in place (the mode is kept).
+	return os.WriteFile(path, out, fi.Mode().Perm())
 }

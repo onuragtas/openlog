@@ -79,6 +79,11 @@ type Status struct {
 	Steps           []StepRecord      `json:"steps,omitempty"`
 	FailedVersions  []string          `json:"failed_versions,omitempty"`
 	History         []HistoryEntry    `json:"history,omitempty"`
+	// Notices are installation hints refreshed on every run (compose files older than the running version, compose
+	// changes waiting for `docker compose up -d`); empty when there is nothing to do.
+	Notices []Notice `json:"notices,omitempty"`
+	// ComposeChanges are compose changes of an installed bundle that the updater could not apply (D-111).
+	ComposeChanges *ComposeChanges `json:"compose_changes,omitempty"`
 }
 
 const maxHistory = 10

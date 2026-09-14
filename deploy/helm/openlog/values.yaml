@@ -803,6 +803,8 @@ api:
     OPENLOG_DATA_EXPORT_ENABLED: "true"
     # auto | local | s3
     OPENLOG_DATA_EXPORT_STORAGE: auto
+    # On the api pod's /tmp emptyDir: local archives do not survive a pod restart and are not shared between replicas
+    # (a ReadWriteOnce PVC could not be shared either). Keep local only for a single replica; otherwise use S3.
     OPENLOG_DATA_EXPORT_LOCAL_PATH: /tmp/openlog-exports
     OPENLOG_DATA_EXPORT_S3_URL: ""
     OPENLOG_DATA_EXPORT_S3_REGION: ""

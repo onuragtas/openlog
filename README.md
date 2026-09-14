@@ -25,15 +25,22 @@ It runs the signed release image `ghcr.io/onuragtas/openlog:<version>` with **au
 (`openlog-updater` in `auto` mode: PostgreSQL backup, migrations, health check, rollback on failure). Steps:
 
 1. checks Docker, Compose v2, RAM, disk and free ports (warnings only for RAM, disk and ports);
-2. resolves the latest stable release (or `--version`) and downloads that tag's `deploy/compose` files (no git);
+2. resolves the latest stable release (or `--version`) and downloads its compose files `openlog-compose-<version>.tar.gz`
+   (sha256 checked against the release manifest; older releases: `deploy/compose` of the tag's source archive; no git);
 3. creates `/opt/openlog-server/.env` (mode 0600) with random PostgreSQL/ClickHouse passwords,
    `OPENLOG_SECRETS_KEY`, an `olk_…` license key and your owner login;
 4. starts the stack and the updater (`docker compose -p openlog …`) and waits until `/readyz` answers;
 5. prints the UI URL, the license key, the agent install command and backup instructions.
 
 Asked on the terminal when not given: the owner email and password (empty = generate one, printed once).
-Re-running is safe: `.env` and all secrets are kept, the compose files are replaced by the requested/latest
-release and the stack is updated.
+Re-running is safe: `.env` and all secrets are kept, missing settings are added, the compose files are replaced by the
+requested/latest release and the stack is updated. The updater keeps the compose files at the running version (it
+installs each release's verified compose bundle; changes it cannot apply, such as new volumes, are shown in
+Settings → Organization → Version and updates with "re-run install-server.sh"). Put every setting in
+`/opt/openlog-server/.env`: a `docker-compose.override.yml` is not used by the installer or the updater.
+
+Running a stack from a git clone? [Migrate it to this layout](docs/operations/upgrading.md#migrating-from-a-git-clone-installation)
+(same project `openlog`, volumes and data are kept).
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -41,11 +48,13 @@ release and the stack is updated.
 | `--password PASS` | prompt, else generated | owner password, 8–256 characters (env `OPENLOG_OWNER_PASSWORD` keeps it out of `ps`) |
 | `--version X.Y.Z` | latest on the channel | release to install; an older version than the running one is refused |
 | `--channel stable\|beta` | `stable` | release channel |
-| `--dir DIR` | `/opt/openlog-server` | installation directory (`docker-compose.yml`, `.env`, `backups/`) |
+| `--dir DIR` | `/opt/openlog-server` | installation directory (`docker-compose.yml`, `.env`, `backups/`, `releases/`, `.bundle-version`) |
 | `--updater auto\|notify\|off` | `auto` | `notify` only reports new releases in the UI |
 | `--domain HOST` | – | public address behind your TLS reverse proxy: sets `OPENLOG_PUBLIC_URL=https://HOST` and `OPENLOG_COOKIE_SECURE=true` and prints a Caddy example (`http://HOST` keeps plain HTTP) |
 | `--cors-origins LIST` | – | browser OTLP origins for ingest `:4318` |
 | `--project NAME` | `openlog` | compose project name |
+| `--index-url URL` | GitHub `index.json` | release index (mirror) |
+| `--bundle-url URL` | the release's compose bundle | `tar.gz` with `openlog-compose-<v>/` or `deploy/compose/` (mirror) |
 | `--install-docker` | off | install Docker with `get.docker.com` when missing |
 | `--no-start` | off | only write the files |
 
@@ -176,7 +185,10 @@ docker compose -p openlog -f deploy/compose/docker-compose.yml --env-file deploy
 ```
 
 The updater backs up PostgreSQL, runs migrations, recreates the containers on the new image and rolls back if the
-health check fails. Agents installed from a release update themselves following the fleet policy (Fleet page).
+health check fails. It never changes the files of a git clone: when `deploy/compose` is older than the running version
+the Version page says so — `git checkout v<version>` and run `docker compose … up -d` again, or
+[migrate to install-server.sh](docs/operations/upgrading.md#migrating-from-a-git-clone-installation), which keeps the
+compose files in sync automatically. Agents installed from a release update themselves following the fleet policy (Fleet page).
 A source build (`--build`) also trusts the official release key (`release-public-keys.txt`), so version checks and
 agent updates work, and the updater moves it to the release image on the next version.
 

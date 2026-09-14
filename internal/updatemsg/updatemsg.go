@@ -44,6 +44,14 @@ const (
 	RequestInterrupted = "request_interrupted"
 	// RequestExpired: no updater picked the request up. No parameters.
 	RequestExpired = "request_expired"
+
+	// Notices (UpdaterStatus.notices, D-111).
+	// ComposeOutdated: {files_version, running_version}; compose files not managed by install-server.sh.
+	ComposeOutdated = "compose_outdated"
+	// ComposeOutdatedBundle: {files_version, running_version}; an install-server.sh installation.
+	ComposeOutdatedBundle = "compose_outdated_bundle"
+	// ComposeChangesPending: {version, services}.
+	ComposeChangesPending = "compose_changes_pending"
 )
 
 // ParamError is the parameter holding the English error appended to a failed request's message
@@ -82,6 +90,9 @@ var defs = func() []*def {
 		{RequestInterrupted, "interrupted: openlog-updater restarted while handling the request"},
 		{RequestExpired, "not picked up by openlog-updater within 15m (is an updater with request support running?)"},
 		{UpToDateNoEligible, "no eligible release newer than {version}: {details}"},
+		{ComposeOutdated, "the compose files ({files_version}) are older than the running version {running_version}: settings and volumes added since then do not reach the containers; update them (git checkout v{running_version}, then docker compose up -d) or migrate to install-server.sh"},
+		{ComposeOutdatedBundle, "the compose files ({files_version}) are older than the running version {running_version}: re-run install-server.sh"},
+		{ComposeChangesPending, "the compose files of {version} change {services} in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d"},
 	}
 	out := make([]*def, 0, len(list))
 	for _, l := range list {

@@ -7998,7 +7998,7 @@ components:
             type: object
             required: [name, status, started_at]
             properties:
-              name: { type: string, description: "backup, pull, migrate, recreate / rollout, health, rollback, cleanup, contract-migrate" }
+              name: { type: string, description: "backup, pull, compose-bundle, migrate, recreate / rollout, health, rollback, cleanup, contract-migrate" }
               status: { type: string, enum: [running, ok, failed] }
               detail: { type: string }
               started_at: { type: string, format: date-time }
@@ -8015,6 +8015,36 @@ components:
               result: { type: string }
               error: { type: string }
               at: { type: string, format: date-time }
+        notices:
+          type: array
+          description: >-
+            Installation hints refreshed on every updater run (Compose; D-111). Codes: compose_outdated
+            {files_version, running_version} (compose files not managed by install-server.sh are older than the running
+            version), compose_outdated_bundle {files_version, running_version} (re-run install-server.sh),
+            compose_changes_pending {version, services} (compose changes the updater does not apply).
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string, description: English text }
+              params: { type: object, additionalProperties: { type: string } }
+        compose_changes:
+          description: Compose changes of an installed bundle that wait for `docker compose up -d` or a restart (Compose).
+          type: object
+          required: [version, installed_at, services]
+          properties:
+            version: { type: string }
+            installed_at: { type: string, format: date-time }
+            services:
+              type: array
+              items:
+                type: object
+                required: [service, reason]
+                properties:
+                  service: { type: string }
+                  reason: { type: string, enum: [definition, files] }
+                  config_hash: { type: string }
 
     OrgRef:
       type: object

@@ -62,10 +62,11 @@ type Container struct {
 		Networks map[string]map[string]any `json:"Networks"`
 	} `json:"NetworkSettings"`
 	State struct {
-		Status   string `json:"Status"`
-		Running  bool   `json:"Running"`
-		ExitCode int    `json:"ExitCode"`
-		Health   *struct {
+		Status    string `json:"Status"`
+		Running   bool   `json:"Running"`
+		ExitCode  int    `json:"ExitCode"`
+		StartedAt string `json:"StartedAt"`
+		Health    *struct {
 			Status string `json:"Status"`
 		} `json:"Health"`
 	} `json:"State"`

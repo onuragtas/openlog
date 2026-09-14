@@ -155,7 +155,7 @@ RELEASE_MANIFEST_ARGS = --version $(VERSION) --released-at $(DATE) \
 	--migrations postgres=migrations/postgres --migrations clickhouse=schema/clickhouse
 
 .PHONY: release-local release-tool release-testkeys release-check release-agent release-packages \
-	release-backend release-helm release-manifest release-index release-serve release-clean
+	release-backend release-helm release-compose release-manifest release-index release-serve release-clean
 
 # Go agent modules (docs/operations/releasing.md "Go agent modules"). Before tagging vX.Y.Z:
 #   make release-prepare VERSION=X.Y.Z   bumps agents/go/version.go + in-repo requires; commit the result
@@ -171,7 +171,7 @@ go-agent-release-check:
 go-agent-verify:
 	scripts/go-agent-release.sh verify
 
-release-local: release-check release-agent release-packages release-backend release-helm release-manifest release-index
+release-local: release-check release-agent release-packages release-backend release-helm release-compose release-manifest release-index
 	@rm -rf $(RELEASE_STAGE)
 	@echo "release $(VERSION) ready in $(RELEASE_DIR)"; ls -l $(RELEASE_DIR)
 
@@ -290,6 +290,20 @@ release-helm:
 		rm -f "$$out/$$chart-$(VERSION).tgz"; \
 		"$${helm[@]}" package "deploy/helm/$$chart" --version $(VERSION) --app-version $(VERSION) --destination "$$dest"; \
 	done
+
+# Compose bundle openlog-compose-<v>.tar.gz (manifest component compose, D-111): the git-tracked files of deploy/compose
+# (docker-compose.yml, .env.example, clickhouse/, README.md; never .env, backups/ or releases/) in one top directory,
+# with x-openlog-compose-version stamped to $(VERSION). install-server.sh installs it; openlog-updater keeps it in sync.
+release-compose: release-tool
+	@set -euo pipefail; name=openlog-compose-$(VERSION); stage="$(RELEASE_STAGE)/$$name"; \
+	rm -rf "$$stage"; mkdir -p "$$stage" $(RELEASE_DIR); \
+	git ls-files -z deploy/compose | while IFS= read -r -d '' f; do \
+		rel="$${f#deploy/compose/}"; mkdir -p "$$stage/$$(dirname "$$rel")"; cp "$$f" "$$stage/$$rel"; \
+	done; \
+	[ -f "$$stage/docker-compose.yml" ] && [ -f "$$stage/.env.example" ] || { echo "deploy/compose files missing from git"; exit 1; }; \
+	sed -E 's/^x-openlog-compose-version: .*/x-openlog-compose-version: "$(VERSION)"/' deploy/compose/docker-compose.yml > "$$stage/docker-compose.yml"; \
+	grep -q '^x-openlog-compose-version: "$(VERSION)"$$' "$$stage/docker-compose.yml" || { echo "docker-compose.yml: version marker not stamped"; exit 1; }; \
+	$(RELEASE_TOOL) archive --out "$(RELEASE_DIR)/$$name.tar.gz" --prefix "$$name" "$$stage"
 
 release-manifest: release-tool
 	@set -euo pipefail; \

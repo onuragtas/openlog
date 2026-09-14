@@ -27,4 +27,7 @@ func TestLanguageAgentPackageNames(t *testing.T) {
 	if got := DotnetAgentPackageName("1.2.0-beta.3"); got != "OpenLog.Agent.1.2.0-beta.3.nupkg" {
 		t.Errorf("nupkg: %s", got)
 	}
+	if got := ComposeBundleName("v0.9.1-beta.1"); got != "openlog-compose-0.9.1-beta.1.tar.gz" {
+		t.Errorf("compose bundle: %s", got)
+	}
 }

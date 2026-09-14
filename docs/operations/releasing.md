@@ -34,6 +34,7 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `OpenLog.Agent.<v>.nupkg` + `.sha256` (.NET agent) | `component=dotnet-agent`, `os`/`arch` `any`, `format=nupkg` |
 | `openlog-<v>.tgz` (Helm chart `deploy/helm/openlog`, `version` = `appVersion` = `<v>`) | `helm_charts.openlog` (and `helm_chart`) |
 | `openlog-agent-<v>.tgz` (Helm chart `deploy/helm/openlog-agent`, `version` = `appVersion` = `<v>`) | `helm_charts.openlog-agent` |
+| `openlog-compose-<v>.tar.gz` (git-tracked `deploy/compose`, `x-openlog-compose-version` stamped; `make release-compose`) | `component=compose`, `os`/`arch` `any`, `format=tar.gz` |
 | `ghcr.io/onuragtas/openlog:<v>` (not a file) | `images.openlog` = `…@sha256:<digest>` |
 | `manifest.json`, `manifest.json.sig` | signed |
 | `index.json`, `index.json.sig` | signed; all releases, newest first |
@@ -547,13 +548,20 @@ Installs the `single` Compose profile in `/opt/openlog-server` with `OPENLOG_IMA
 and `openlog-updater` in `auto` mode (flags: README "Quick install"). `make release-local` copies it next to
 `install.sh`; like `install.sh` it is not in the manifest.
 
-The compose files are **not** a release asset: the script downloads the GitHub source archive of the tag
-(`https://github.com/onuragtas/openlog/archive/refs/tags/v<v>.tar.gz`, ~2 MB) and uses its `deploy/compose/`
-(`docker-compose.yml`, `.env.example`, `clickhouse/`). This works for every published release without a new
-artifact, and the files always match the image of the same tag. `--bundle-url` points it at a mirror (any
-`tar.gz` containing `deploy/compose/`). Trust: HTTPS only for this bootstrap; later updates are verified by
-`openlog-updater` against the signed manifest. The `build:` section of the compose file is unused (the release
-image is pulled, never built).
+The compose files come from the release asset `openlog-compose-<v>.tar.gz` (manifest component `compose`, built by
+`make release-compose` from the git-tracked `deploy/compose` with `x-openlog-compose-version` stamped): the script reads
+the release's `manifest.json` (the index entry's `manifest_url`, else `…/releases/download/v<v>/manifest.json`), downloads
+the asset from its `url` and checks the `sha256`. A release without the asset (older than 0.1.22) falls back to
+`deploy/compose/` of the tag's source archive (`https://github.com/onuragtas/openlog/archive/refs/tags/v<v>.tar.gz`).
+`--bundle-url` points it at a mirror (a `tar.gz` containing `openlog-compose-<v>/` or `deploy/compose/`). Trust: HTTPS
+for this bootstrap (the manifest signature is not checked by the shell script); `openlog-updater` verifies the signed
+manifest and keeps the files at the installed version (`.bundle-version`, docs/operations/upgrading.md "Compose
+files"). `make release-prepare` also stamps `x-openlog-compose-version` in the repository, and `go-agent-release.sh
+check` requires it, so a clone of the tag reports its version too. The `build:` section of the compose file is unused
+(the release image is pulled, never built).
+
+Port settings in `.env` may be `HOST:PORT` (`OPENLOG_ADMIN_PORT=127.0.0.1:9464`): readiness and port checks connect to
+the bound address, URLs use the port only. `packaging/test/install-server-ports.sh` checks these helpers without Docker.
 
 Test: `packaging/test/install-server.sh [VERSION]` runs it in a privileged `docker:28-dind` container against
 the published release (fresh install, login, idempotent re-run, upgrade to the latest release, refused

@@ -95,6 +95,8 @@ func TestClassify(t *testing.T) {
 		"OpenLog.Agent.0.4.0.nupkg":                     {Component: "dotnet-agent", OS: "any", Arch: "any", Format: "nupkg"},
 		"OpenLog.Agent.0.4.0.snupkg":                    nil,
 		"OpenLog.Agent.0.3.0.nupkg":                     nil,
+		"openlog-compose-0.4.0.tar.gz":                  {Component: "compose", OS: "any", Arch: "any", Format: "tar.gz"},
+		"openlog-compose-0.3.0.tar.gz":                  nil,
 	}
 	for name, want := range cases {
 		got, ok := classify(name, "0.4.0")

@@ -60,10 +60,20 @@ version_go() {
   sed -n -E 's/^const Version = "(.*)"$/\1/p' "$ROOT/$AGENT/version.go"
 }
 
+# x-openlog-compose-version of deploy/compose/docker-compose.yml: openlog-updater reports compose files older than
+# the running version (docs/operations/upgrading.md). Not a Go module, stamped here because release-tag runs prepare.
+COMPOSE_FILE=deploy/compose/docker-compose.yml
+compose_version() {
+  sed -n -E 's/^x-openlog-compose-version: "?([^"]*)"?$/\1/p' "$ROOT/$COMPOSE_FILE"
+}
+
 cmd_prepare() {
   local v="${1:-}"
   check_version_arg "$v"
   make -s -C "$ROOT/$AGENT" set-version VERSION="$v"
+  grep -q '^x-openlog-compose-version: ' "$ROOT/$COMPOSE_FILE" || die "$COMPOSE_FILE has no x-openlog-compose-version line"
+  sed -E "s/^x-openlog-compose-version: .*/x-openlog-compose-version: \"$v\"/" "$ROOT/$COMPOSE_FILE" >"$ROOT/$COMPOSE_FILE.tmp"
+  cat "$ROOT/$COMPOSE_FILE.tmp" >"$ROOT/$COMPOSE_FILE" && rm -f "$ROOT/$COMPOSE_FILE.tmp"
   local gomod path ver
   while read -r gomod; do
     while read -r path ver; do
@@ -73,8 +83,8 @@ cmd_prepare() {
     done < <(internal_requires "$ROOT/$gomod")
   done < <(submodule_gomods)
   cmd_check "$v"
-  echo "prepared Go agent modules for v$v; review and commit:"
-  (cd "$ROOT" && git status --short -- "$AGENT" 2>/dev/null || true)
+  echo "prepared Go agent modules and $COMPOSE_FILE for v$v; review and commit:"
+  (cd "$ROOT" && git status --short -- "$AGENT" "$COMPOSE_FILE" 2>/dev/null || true)
 }
 
 cmd_check() {
@@ -84,6 +94,11 @@ cmd_check() {
   got="$(version_go)"
   if [ "$got" != "$v" ]; then
     echo "$AGENT/version.go: Version = \"$got\", want \"$v\" (run: make release-prepare VERSION=$v)" >&2
+    failed=1
+  fi
+  got="$(compose_version)"
+  if [ "$got" != "$v" ]; then
+    echo "$COMPOSE_FILE: x-openlog-compose-version \"$got\", want \"$v\" (run: make release-prepare VERSION=$v)" >&2
     failed=1
   fi
   while read -r gomod; do
