@@ -167,7 +167,7 @@ func TestReconcileDockerAccess(t *testing.T) {
 		f := newReconcileFixture(t)
 		f.sys.env[DockerAccessEnv] = "0"
 		st, _ := f.run()
-		if st.Docker != DockerOptOut || f.sys.ran("usermod") {
+		if st.Docker != DockerOptOut || f.sys.ran("usermod -aG docker") {
 			t.Fatalf("%+v runs %v", st, f.sys.runs)
 		}
 		if _, err := os.Stat(filepath.Join(filepath.Dir(f.config), DockerOptOutFile)); err != nil {
@@ -175,14 +175,14 @@ func TestReconcileDockerAccess(t *testing.T) {
 		}
 		// Kept on later runs without the variable.
 		delete(f.sys.env, DockerAccessEnv)
-		if st, _ := f.run(); st.Docker != DockerOptOut || f.sys.ran("usermod") {
+		if st, _ := f.run(); st.Docker != DockerOptOut || f.sys.ran("usermod -aG docker") {
 			t.Fatalf("opt-out file ignored: %+v", st)
 		}
 	})
 	t.Run("no docker group", func(t *testing.T) {
 		f := newReconcileFixture(t)
 		f.sys.write("/etc/group", AgentUser+":x:1:\n")
-		if st, _ := f.run(); st.Docker != DockerNoGroup || f.sys.ran("usermod") {
+		if st, _ := f.run(); st.Docker != DockerNoGroup || f.sys.ran("usermod -aG docker") {
 			t.Fatalf("%+v", st)
 		}
 	})

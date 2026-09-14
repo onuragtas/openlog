@@ -48,13 +48,26 @@ func TestReconcilePHPAccessGrantsPoolUsers(t *testing.T) {
 	if !slices.Equal(p.Added, want) {
 		t.Errorf("added %v, want %v", p.Added, want)
 	}
-	if got := members(f.sys, phpaccess.Group); !slices.Equal(got, want) {
+	if got := members(f.sys, phpaccess.Group); !slices.Equal(got, append([]string{AgentUser}, want...)) {
 		t.Errorf("group members %v", got)
 	}
-	for _, u := range []string{"root", "nobody-here", AgentUser} {
+	for _, u := range []string{"root", "nobody-here"} {
 		if f.sys.ran("usermod -aG " + phpaccess.Group + " " + u) {
 			t.Errorf("%s must not be added", u)
 		}
+	}
+	// The agent user joins the group once to set the socket group; it is never a pool grant.
+	if p.Agent != PHPAdded || slices.Contains(p.Added, AgentUser) {
+		t.Errorf("agent membership %+v", p)
+	}
+	agentRuns := 0
+	for _, c := range f.sys.runs {
+		if c == "usermod -aG "+phpaccess.Group+" "+AgentUser {
+			agentRuns++
+		}
+	}
+	if agentRuns != 1 {
+		t.Errorf("agent added %d times: %v", agentRuns, f.sys.runs)
 	}
 	// No www-data reload: apache2 is not installed (nginx runs no PHP); FPM units derived from the pool directories.
 	if !slices.Equal(p.Reloaded, []string{"php7.2-fpm.service", "php8.2-fpm.service"}) || !f.sys.ran("systemctl is-active --quiet php7.2-fpm.service") {

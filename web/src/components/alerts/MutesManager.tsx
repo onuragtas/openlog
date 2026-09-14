@@ -444,7 +444,9 @@ export function MutesManager() {
               {mutes.data.map((m) => {
                 const s = parse(m.starts_at);
                 const e = parse(m.ends_at);
-                const status = m.schedule ? (m.active ? "active" : now < e ? "scheduled" : "ended") : now < s ? "scheduled" : now < e ? "active" : "ended";
+                // The server's `active` wins: `now` refreshes every 30 s, so a mute created in a later minute than the last
+                // refresh would otherwise show as scheduled until the next tick.
+                const status = m.active ? "active" : m.schedule ? (now < e ? "scheduled" : "ended") : now < s ? "scheduled" : now < e ? "active" : "ended";
                 const scope = [
                   m.rule_ids.length ? m.rule_ids.map((id) => ruleName.get(id) ?? id).join(", ") : t("alerts.mutes.allRules"),
                   ...m.matchers.map((x) => `${x.label} ${t(`alerts.mutes.ops.${x.op}`)} ${x.value}`),

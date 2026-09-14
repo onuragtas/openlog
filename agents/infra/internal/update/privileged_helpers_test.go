@@ -86,11 +86,33 @@ func (fs *fakeSys) run(_ context.Context, name string, args ...string) error {
 	case "usermod": // -aG group user
 		fs.addMember(args[1], args[2])
 	case "groupadd":
-		fs.write("/etc/group", fs.read("/etc/group")+fmt.Sprintf("%s:x:%d:\n", args[len(args)-1], os.Getgid()))
+		// A free gid, like groupadd: reusing the test process gid made fixture users whose primary gid happened to be
+		// the same (e.g. 1001 for the CI runner) count as members of the new group.
+		fs.write("/etc/group", fs.read("/etc/group")+fmt.Sprintf("%s:x:%d:\n", args[len(args)-1], fs.freeGID()))
 	case "useradd":
 		fs.write("/etc/passwd", fs.read("/etc/passwd")+fmt.Sprintf("%s:x:%d:%d::/x:/bin/false\n", args[len(args)-1], os.Getuid(), os.Getgid()))
 	}
 	return nil
+}
+
+// freeGID returns a gid used neither by a group nor as a primary gid in the fixture's /etc files.
+func (fs *fakeSys) freeGID() int {
+	used := map[string]bool{}
+	for _, line := range strings.Split(fs.read("/etc/group"), "\n") {
+		if f := strings.Split(line, ":"); len(f) > 2 {
+			used[f[2]] = true
+		}
+	}
+	for _, line := range strings.Split(fs.read("/etc/passwd"), "\n") {
+		if f := strings.Split(line, ":"); len(f) > 3 {
+			used[f[3]] = true
+		}
+	}
+	gid := 60000
+	for used[fmt.Sprint(gid)] {
+		gid++
+	}
+	return gid
 }
 
 func (fs *fakeSys) addMember(group, user string) {
