@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -82,8 +84,9 @@ func New(cfg Config) (*Sender, error) {
 	return &Sender{cfg: cfg, from: from, dial: d.DialContext, now: time.Now}, nil
 }
 
-// Message renders an RFC 5322 multipart/alternative message.
-func Message(from, to, subject, text, htmlBody string, now time.Time) []byte {
+// Message renders an RFC 5322 multipart/alternative message. With inline images the HTML alternative is a
+// multipart/related part holding the HTML and the images (Content-ID, base64); invalid images are left out.
+func Message(from, to, subject, text, htmlBody string, now time.Time, inline ...auth.InlineImage) []byte {
 	var b bytes.Buffer
 	h := func(k, v string) { b.WriteString(k + ": " + v + "\r\n") }
 	boundary := random("openlog-")
@@ -96,19 +99,61 @@ func Message(from, to, subject, text, htmlBody string, now time.Time) []byte {
 	h("Auto-Submitted", "auto-generated")
 	h("Content-Type", `multipart/alternative; boundary="`+boundary+`"`)
 	b.WriteString("\r\n")
-	part := func(ctype, body string) {
-		b.WriteString("--" + boundary + "\r\nContent-Type: " + ctype + "; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n")
+	textPart := func(ctype, body string) {
+		b.WriteString("Content-Type: " + ctype + "; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n")
 		w := quotedprintable.NewWriter(&b)
 		_, _ = w.Write([]byte(body))
 		_ = w.Close()
 		b.WriteString("\r\n")
 	}
-	part("text/plain", text)
+	b.WriteString("--" + boundary + "\r\n")
+	textPart("text/plain", text)
 	if htmlBody != "" {
-		part("text/html", htmlBody)
+		b.WriteString("--" + boundary + "\r\n")
+		var images []auth.InlineImage
+		for _, img := range inline {
+			if validInline(img) {
+				images = append(images, img)
+			}
+		}
+		if len(images) == 0 {
+			textPart("text/html", htmlBody)
+		} else {
+			related := random("openlog-rel-")
+			b.WriteString(`Content-Type: multipart/related; type="text/html"; boundary="` + related + "\"\r\n\r\n")
+			b.WriteString("--" + related + "\r\n")
+			textPart("text/html", htmlBody)
+			for _, img := range images {
+				b.WriteString("--" + related + "\r\n")
+				b.WriteString("Content-Type: " + img.ContentType + "\r\nContent-Transfer-Encoding: base64\r\n")
+				b.WriteString("Content-ID: <" + img.ContentID + ">\r\n")
+				b.WriteString(`Content-Disposition: inline; filename="` + img.Filename + "\"\r\n\r\n")
+				enc := base64.StdEncoding.EncodeToString(img.Data)
+				for len(enc) > 76 {
+					b.WriteString(enc[:76] + "\r\n")
+					enc = enc[76:]
+				}
+				b.WriteString(enc + "\r\n")
+			}
+			b.WriteString("--" + related + "--\r\n")
+		}
 	}
 	b.WriteString("--" + boundary + "--\r\n")
 	return b.Bytes()
+}
+
+var (
+	contentIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}@[A-Za-z0-9.-]{1,64}$`)
+	filenameRe  = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+)
+
+func validInline(img auth.InlineImage) bool {
+	switch img.ContentType {
+	case "image/png", "image/jpeg", "image/gif":
+	default:
+		return false
+	}
+	return len(img.Data) > 0 && contentIDRe.MatchString(img.ContentID) && filenameRe.MatchString(img.Filename)
 }
 
 func random(prefix string) string {
@@ -123,7 +168,7 @@ func (s *Sender) Send(ctx context.Context, m auth.Mail) error {
 	if err != nil || strings.ContainsAny(m.To, "\r\n") {
 		return fmt.Errorf("invalid recipient %q", m.To)
 	}
-	msg := Message(s.from.String(), rcpt.Address, m.Subject, m.Text, m.HTML, s.now())
+	msg := Message(s.from.String(), rcpt.Address, m.Subject, m.Text, m.HTML, s.now(), m.Inline...)
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
 	defer cancel()
 

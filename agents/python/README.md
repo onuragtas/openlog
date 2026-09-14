@@ -16,6 +16,18 @@ a service is linked to the host it runs on. Sampling decisions interoperate with
 pip install openlog-agent
 ```
 
+When a release is not on PyPI (registry publishing is optional for openlog releases), install the wheel attached to
+every GitHub release; the "Add data" page shows whichever works for your server's version. Pre-releases use the PEP 440
+version in the file name (`X.Y.Z-beta.N` → `X.Y.ZbN`):
+
+```sh
+pip install https://github.com/onuragtas/openlog/releases/download/vX.Y.Z/openlog_agent-X.Y.Z-py3-none-any.whl
+```
+
+The release also carries the sdist (`openlog_agent-X.Y.Z.tar.gz`) and a `sha256sum` file for each; the wheel is listed in
+the release's signed `manifest.json`. In a requirements file, pin the URL with `--hash`-checking or
+`openlog-agent @ <wheel URL>`.
+
 Zero code changes: prefix the command that starts the application.
 
 ```sh

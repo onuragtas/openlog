@@ -93,6 +93,8 @@ export function connectionInput(c: SsoConnection, patch: Partial<SsoConnectionIn
       ? {
           saml: {
             idp_metadata_url: c.saml.idp_metadata_url,
+            // The pinned metadata signing certificate is kept when omitted; the unsigned choice must be repeated (D-098).
+            allow_unsigned_metadata: c.saml.allow_unsigned_metadata,
             allow_idp_initiated: c.saml.allow_idp_initiated,
             relay_state_allowlist: c.saml.relay_state_allowlist,
             sign_authn_requests: c.saml.sign_authn_requests,
@@ -135,6 +137,11 @@ export async function startSsoTestById(id: string): Promise<string> {
 /** Fetches the IdP documents of a connection now; the returned connection carries the updated health. */
 export async function refreshSsoConnection(id: string): Promise<SsoState> {
   return unwrap(await api.POST("/api/v1/sso/connections/{id}/refresh", { params: { path: { id } } }));
+}
+
+/** Confirms the pending IdP metadata change of a SAML connection (`saml.pending_metadata.digest`, D-098). */
+export async function acceptSsoMetadata(id: string, digest: string): Promise<SsoState> {
+  return unwrap(await api.POST("/api/v1/sso/connections/{id}/metadata/accept", { params: { path: { id } }, body: { digest } }));
 }
 
 export async function updateSsoConnectionEnforcement(id: string, enforce: boolean, breakGlassUserIds: string[]): Promise<SsoState> {

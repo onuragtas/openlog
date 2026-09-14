@@ -8,13 +8,13 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/dashboard"
 	"github.com/onuragtas/openlog/internal/oql"
+	"github.com/onuragtas/openlog/internal/ratelimit"
 )
 
 // Public read-only dashboard share links (docs/contracts/api.md "Dashboards" › "Share links", D-087).
@@ -25,63 +25,42 @@ import (
 // ranges): they run with the organization's tenant scope and query limits, the share's time range and its locked
 // variable values. Responses carry no organization, user or dashboard identifiers other than widget and page ids,
 // no query text and no execution statistics. Requests are rate limited per client IP and per token, and failed token
-// lookups per IP. Every response is no-store and carries a restrictive CSP.
+// lookups per IP (cluster-wide sliding windows in PostgreSQL, internal/ratelimit, D-096). Every response is no-store and carries a restrictive CSP.
 
 type shareLimits struct {
 	perIP, perToken, missesPerIP int
-	window                       time.Duration
 }
 
-var defaultShareLimits = shareLimits{perIP: 600, perToken: 1200, missesPerIP: 30, window: time.Minute}
+var defaultShareLimits = shareLimits{perIP: 600, perToken: 1200, missesPerIP: 30}
 
-// shareLimiter is a fixed-window counter per key (process-local: limits apply per api pod).
+// shareLimitPurpose prefixes the rate limit keys of share links (ratelimit.NewKey).
+const shareLimitPurpose = "dashboard-share"
+
+// shareLimiter applies the per-minute limits with a sliding window (internal/ratelimit): shared by all api pods through
+// PostgreSQL when the server has a shared limiter (SetShareRateLimiter, D-096), per pod otherwise.
 type shareLimiter struct {
-	mu      sync.Mutex
-	limits  shareLimits
-	windows map[string]*limitWindow
-	now     func() time.Time
-}
-
-type limitWindow struct {
-	start time.Time
-	n     int
+	limits shareLimits
+	l      *ratelimit.Limiter
 }
 
 func newShareLimiter(l shareLimits) *shareLimiter {
-	return &shareLimiter{limits: l, windows: map[string]*limitWindow{}, now: time.Now}
-}
-
-func (l *shareLimiter) window(key string) *limitWindow {
-	now := l.now()
-	w, ok := l.windows[key]
-	if !ok || now.Sub(w.start) >= l.limits.window {
-		if len(l.windows) >= 50000 {
-			for k, x := range l.windows {
-				if now.Sub(x.start) >= l.limits.window {
-					delete(l.windows, k)
-				}
-			}
-		}
-		w = &limitWindow{start: now}
-		l.windows[key] = w
-	}
-	return w
+	return &shareLimiter{limits: l, l: ratelimit.New(ratelimit.Options{})}
 }
 
 // take counts a request and reports whether it is within limit.
-func (l *shareLimiter) take(key string, limit int) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	w := l.window(key)
-	w.n++
-	return w.n <= limit
+func (l *shareLimiter) take(ctx context.Context, key string, limit int) bool {
+	return l.l.Allow(ctx, ratelimit.NewKey(shareLimitPurpose, key), limit)
 }
 
-// exceeded reports whether key already reached limit in the current window.
+// exceeded reports whether key already reached limit in the window.
 func (l *shareLimiter) exceeded(key string, limit int) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.window(key).n >= limit
+	return l.l.Exceeded(ratelimit.NewKey(shareLimitPurpose, key), limit)
+}
+
+// SetShareRateLimiter makes the public share link limits cluster-wide (a limiter with a PostgreSQL store whose Run
+// the caller starts). Must be called before Run.
+func (s *Server) SetShareRateLimiter(l *ratelimit.Limiter) {
+	s.publicShares = &shareLimiter{limits: defaultShareLimits, l: l}
 }
 
 func publicShareHeaders(w http.ResponseWriter) {
@@ -129,20 +108,20 @@ func (s *Server) sharedHandler(route string, h sharedFunc) func(rec *statusRecor
 		publicShareHeaders(rec)
 		lim := s.publicShares
 		ip := s.clientIP(r)
-		if !lim.take("ip:"+ip, lim.limits.perIP) || lim.exceeded("miss:"+ip, lim.limits.missesPerIP) {
+		if lim.exceeded("miss:"+ip, lim.limits.missesPerIP) || !lim.take(r.Context(), "ip:"+ip, lim.limits.perIP) {
 			writeError(rec, tooMany)
 			return
 		}
 		token := r.PathValue("token")
 		sum := sha256.Sum256([]byte(token))
-		if !lim.take("token:"+hex.EncodeToString(sum[:12]), lim.limits.perToken) {
+		if !lim.take(r.Context(), "token:"+hex.EncodeToString(sum[:12]), lim.limits.perToken) {
 			writeError(rec, tooMany)
 			return
 		}
 		sd, err := s.dashboards.OpenShare(r.Context(), token)
 		if err != nil {
 			if errors.Is(err, dashboard.ErrNotFound) {
-				lim.take("miss:"+ip, lim.limits.missesPerIP)
+				lim.take(r.Context(), "miss:"+ip, lim.limits.missesPerIP)
 				writeError(rec, &apiError{http.StatusNotFound, "not_found", "this share link does not exist or is no longer valid"})
 				return
 			}

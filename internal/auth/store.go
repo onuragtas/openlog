@@ -13,6 +13,8 @@ type Organization struct {
 	TenantID  string
 	Name      string
 	CreatedAt time.Time
+	// Locale is the organization's default e-mail language ("" = none, "en", "tr"; 0060_language_preferences, D-095).
+	Locale string
 }
 
 // User is an account. PasswordHash is never serialized to clients.
@@ -27,9 +29,18 @@ type User struct {
 	// EmailVerifiedAt is nil only for self-service sign-ups that have not confirmed their address yet
 	// (OPENLOG_SIGNUP_REQUIRE_VERIFICATION); every other way of creating a user sets it.
 	EmailVerifiedAt *time.Time
-	// Locale is the e-mail language preferred when the user was created (Accept-Language; "" = English). Written on
-	// insert only; used for notifications sent without a request (usage e-mails).
-	Locale string
+	// Locale is the e-mail language preferred when the user was created (Accept-Language; "" = English), or, with
+	// LocaleExplicit, the language the user chose in their profile (D-095).
+	Locale         string
+	LocaleExplicit bool
+}
+
+// Preference returns the user's chosen language ("" = none: automatic).
+func (u User) Preference() string {
+	if u.LocaleExplicit {
+		return u.Locale
+	}
+	return ""
 }
 
 // EmailVerification is a one-time e-mail address confirmation token. TokenHash = sha256(token).
@@ -199,6 +210,8 @@ type Store interface {
 	GetOrganization(ctx context.Context, id string) (Organization, error)
 	GetOrganizationByTenant(ctx context.Context, tenantID string) (Organization, error)
 	UpdateOrganizationName(ctx context.Context, id, name string) error
+	// SetOrganizationLocale sets the organization's default e-mail language ("" = none).
+	SetOrganizationLocale(ctx context.Context, id, locale string) error
 
 	CreateUser(ctx context.Context, u *User) error
 	GetUser(ctx context.Context, id string) (User, error)
@@ -208,13 +221,15 @@ type Store interface {
 	// SetUserEmail changes a user's (normalized) e-mail address; ErrAlreadyExists when another account uses it
 	// (SCIM e-mail change, D-089).
 	SetUserEmail(ctx context.Context, userID, email string) error
+	// SetUserLocale stores the user's language; explicit=false (automatic) keeps locale only as the request language.
+	SetUserLocale(ctx context.Context, userID, locale string, explicit bool) error
 
 	AddMember(ctx context.Context, orgID, userID string, role Role) error
 	GetMembership(ctx context.Context, orgID, userID string) (Membership, error)
 	ListMemberships(ctx context.Context, userID string) ([]Membership, error) // oldest first
 	ListMembers(ctx context.Context, orgID string) ([]Member, error)
 	UpdateMemberRole(ctx context.Context, orgID, userID string, role Role) error // ErrLastOwner
-	RemoveMember(ctx context.Context, orgID, userID string) error                // ErrLastOwner
+	RemoveMember(ctx context.Context, orgID, userID string) error                // ErrLastOwner; see MemberRemover
 
 	CreateSession(ctx context.Context, s *Session) error
 	GetSessionByTokenHash(ctx context.Context, hash []byte) (Session, User, error)

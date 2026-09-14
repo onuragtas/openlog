@@ -1,6 +1,6 @@
 // Package report sends scheduled dashboard reports by e-mail (api.md "Dashboards" › "Scheduled reports", D-087):
 // every widget query runs server-side for the report period and its values are rendered as simple HTML tables with a
-// link to the dashboard. No screenshots are rendered (see docs/contracts/api.md for the planned PNG rendering).
+// link to the dashboard. With a renderer (D-097, images.go) widgets are shown as inline PNG images instead.
 package report
 
 import (
@@ -36,6 +36,8 @@ type Content struct {
 	Link      string // "" when OPENLOG_PUBLIC_URL is not set
 	Widgets   []WidgetResult
 	Skipped   int // widgets beyond the report's widget limit
+	// Images are PNG renderings by widget id (images.go, D-097); widgets without one are shown as tables.
+	Images map[string]Image
 }
 
 type messages struct {
@@ -77,14 +79,15 @@ type Table struct {
 	Rows      [][]string
 	Truncated bool
 	Empty     bool
+	Image     *TableImage // shown instead of the table in the HTML body (images.go)
 }
 
 // Tables renders the widget results as tables.
 func Tables(c Content) []Table {
 	m := textsFor(c.Report.Language)
 	out := make([]Table, 0, len(c.Widgets))
-	for _, w := range c.Widgets {
-		t := Table{Title: w.Widget.Title, Page: w.Page}
+	for i, w := range c.Widgets {
+		t := Table{Title: w.Widget.Title, Page: w.Page, Image: tableImage(c, i)}
 		if t.Title == "" {
 			t.Title = w.Widget.Query
 		}
@@ -252,7 +255,8 @@ var mailTemplate = template.Must(template.New("report").Parse(`<!doctype html>
 {{if not .Tables}}<p style="color:#4b5563">{{.EmptyText}}</p>{{end}}
 {{range .Tables}}
 <h2 style="margin:20px 0 6px;font-size:15px">{{.Title}}{{if $.MultiPage}} <span style="color:#6b7280;font-weight:normal">· {{.Page}}</span>{{end}}</h2>
-{{if .Error}}<p style="margin:0;color:#b91c1c;font-size:13px">{{.Error}}</p>
+{{if .Image}}<img src="{{.Image.Src}}" width="{{.Image.Width}}" height="{{.Image.Height}}" alt="{{.Title}}" style="display:block;width:100%;max-width:{{.Image.Width}}px;height:auto;border:0">
+{{else if .Error}}<p style="margin:0;color:#b91c1c;font-size:13px">{{.Error}}</p>
 {{else if .Empty}}<p style="margin:0;color:#6b7280;font-size:13px">{{$.NoData}}</p>
 {{else}}<table style="border-collapse:collapse;width:100%;font-size:13px">
 {{if .Head}}<tr>{{range .Head}}<th style="text-align:left;border-bottom:1px solid #e5e7eb;padding:4px 6px;color:#374151">{{.}}</th>{{end}}</tr>{{end}}

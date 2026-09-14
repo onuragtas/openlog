@@ -71,6 +71,7 @@ rules but may be as short as 8 characters, so development defaults such as `dev-
 | `tenant_id` | text UNIQUE | `^[a-z0-9][a-z0-9_-]{0,62}$`; ClickHouse tenant key; immutable. Generated as `t` + 20 hex chars on sign-up, chosen by the operator for bootstrap/`create-owner` |
 | `name` | text | 1–200 chars |
 | `created_at`, `updated_at` | timestamptz | |
+| `locale` | text | `0060_language_preferences`: default e-mail language (`''` = none, `en`, `tr`; CHECK), set by admins/owners; used for organization e-mails when the recipient has no preference (D-095) |
 
 ### `users`
 | Column | Type | Notes |
@@ -82,7 +83,8 @@ rules but may be as short as 8 characters, so development defaults such as `dev-
 | `created_at`, `updated_at`, `last_login_at` | timestamptz | |
 | `disabled_at` | timestamptz NULL | disabled users cannot sign in; their sessions stop working |
 | `email_verified_at` | timestamptz NULL | `0011_email_verification`: NULL only for self-service sign-ups that have not confirmed their address (`OPENLOG_SIGNUP_REQUIRE_VERIFICATION`); they cannot create license/API keys or invite. Existing rows were backfilled with `created_at`; the column default `now()` keeps users created by older binaries verified |
-| `locale` | text | `0050_email_locale`: e-mail language preferred when the user was created (sign-up, invitation acceptance; `Accept-Language` reduced to a supported language: `en`, `tr`), `''` = English. Used for usage notifications to owners |
+| `locale` | text | `0050_email_locale`: e-mail language preferred when the user was created (sign-up, invitation acceptance; `Accept-Language` reduced to a supported language: `en`, `tr`), `''` = English. Used for usage notifications to owners. With `locale_explicit` it is the language the user chose (Settings → Profile) |
+| `locale_explicit` | boolean | `0060_language_preferences`: `true` = `locale` is the user's preference (web UI and e-mails to the user); `false` = automatic (D-095) |
 
 ### `email_verifications` (`0011_email_verification`)
 `id`, `user_id`, `email`, `token_hash` (UNIQUE), `created_at`, `expires_at` (`OPENLOG_EMAIL_VERIFICATION_TTL`),
@@ -134,8 +136,10 @@ it (`''`: the resending admin's language).
 
 | Action | Target |
 |---|---|
-| `org.create`, `org.rename`, `bootstrap` | organization |
-| `member.role_change` (`details.from`/`to`), `member.remove` (`details.role`, `details.revoked_api_keys` when the removed user's API keys were revoked) | user |
+| `org.create`, `org.rename`, `org.language_change` (`details.from`/`to`), `bootstrap` | organization |
+| `member.role_change` (`details.from`/`to`), `member.remove` (`details.role`, `details.revoked_api_keys` when the removed user's API keys were revoked, `details.report_recipient_removed`) | user |
+| `dashboard.report.recipient_remove` (`details.user_id`, `details.reports`, `details.disabled_reports`, `details.via`; written with a member removal that changed report recipient lists, D-096) | user |
+| `user.language_change` (`details.from`/`to`; no organization) | user |
 | `invitation.create`, `invitation.resend` (`details.email_sent`), `invitation.revoke`, `invitation.accept` | invitation |
 | `user.email_verified`, `user.verification_resend` (no organization) | user |
 | `license_key.create`, `license_key.revoke` | license_key (`details.name`, `details.prefix`; `details.custom = true` for an imported value) |
@@ -153,6 +157,15 @@ it (`''`: the resending admin's language).
 Audit writes are best effort: a failed write is logged (`cannot write audit log`) and does not fail the
 operation.
 
+### `rate_limit_counters` (`0061_rate_limit_counters`)
+UNLOGGED. `key` (bytea, 16 bytes = sha256(purpose, subject); client IPs and tokens are not stored), `bucket`
+(timestamptz, minute start), `n`; PK `(key, bucket)`, index on `bucket`. Cluster-wide sliding-window counters of the
+public dashboard share link endpoints (api.md "Public share link endpoints", `internal/ratelimit`, D-096): every api pod
+adds its counts with one `INSERT … SELECT FROM unnest(…) ON CONFLICT (key, bucket) DO UPDATE SET n = n + excluded.n`
+per second (keys sorted, ≤ 1000 per statement) or per request near a limit, and reads the current and previous bucket in
+the same statement. The api leader (task `rate-limit-prune`) deletes buckets older than the previous minute every
+minute. Being UNLOGGED, the counters start from zero after a crash or failover and are not on standbys.
+
 ### `login_failures`
 `key_hash = sha256(lower(email) + "|" + client IP)`, `attempted_at`. Sign-in (and password checks
 during invitation acceptance and password change) is refused with `429 resource_exhausted` after
@@ -165,7 +178,7 @@ organization and per invited address, and verification e-mails per user (windows
 Listing (`GET /audit-log`) filters by `actor_email` substring, `action` prefix (`starts_with`) and time, newest
 first with a keyset cursor on `(created_at, id)`, served by `audit_log_org_idx`.
 
-## Single sign-on and SCIM (`0030_sso`, `0056_sso_connections_slo`)
+## Single sign-on and SCIM (`0030_sso`, `0056_sso_connections_slo`, `0063_sso_sessions_index`)
 
 OIDC/SAML connections, claimed domains, role mappings, sign-in and logout states, the SAML replay cache, single
 logout session data and SCIM provisioning ([api.md](api.md#single-sign-on), D-077, D-078, D-088, D-089, code
@@ -176,8 +189,11 @@ logout session data and SCIM provisioning ([api.md](api.md#single-sign-on), D-07
 connections, enforced by the api; the oldest is the **default connection**), `protocol` (`oidc`·`saml`),
 `name`, `enabled`, `config` (jsonb `{"oidc": {issuer, client_id, scopes, require_email_verified}}` or
 `{"saml": {idp_metadata_url, idp_metadata_xml, idp_entity_id, idp_sso_url, idp_certificates, idp_cert_not_after,
-allow_idp_initiated, relay_state_allowlist, sign_authn_requests, sp_certificate_pem, idp_slo_url, idp_slo_binding}}` plus
-`logout_redirect_allowlist`), `secret_enc`, `sp_key_enc`
+allow_idp_initiated, relay_state_allowlist, sign_authn_requests, sp_certificate_pem, idp_slo_url, idp_slo_binding,
+metadata_signing_certificates, allow_unsigned_metadata, pending_metadata}}` plus `logout_redirect_allowlist`; the
+metadata trust fields of D-098 — pinned PEM certificates, the unsigned choice and a refreshed change awaiting
+confirmation `{digest, reason, detected_at, idp_certificates, idp_sso_url, idp_slo_url, signer_certificate}` — need no
+migration: older api binaries ignore them and refresh unsigned metadata as before), `secret_enc`, `sp_key_enc`
 (sealed, see "Secrets"), `email_attribute`, `name_attribute`, `groups_attribute` (empty = defaults), `jit_enabled`,
 `default_role` (admin·member·viewer), `session_max_age_seconds` (0 = session TTL), `enforce`
 (CHECK: only when `enabled`), `break_glass_user_ids uuid[]`, `config_version` (incremented by every settings save),
@@ -226,7 +242,9 @@ The IdP session of an SSO session: `session_id` (PK, FK `sessions`, cascade), `c
 `session_index` (SAML SessionIndex / OIDC `sid`), `id_token_enc` (OIDC ID token for `id_token_hint`, sealed like
 client secrets with AAD `oidc-id-token:<session id>`), `created_at`. Index `(connection_id, subject)`: an IdP
 LogoutRequest lists the active sessions (joined with `sessions`: not revoked, not expired) of the connection with the
-NameID; index `user_id`. The rows of LogoutRequest IDs share the replay cache (`sso_saml_assertions`, `slo:<id>`).
+NameID; index `user_id`; `0063`: partial index `(connection_id, session_index) WHERE session_index <> ''` for OIDC
+back-channel/front-channel logout by `sid` (D-098). The rows of LogoutRequest IDs and OIDC logout token `jti`s share the
+replay cache (`sso_saml_assertions`, `slo:<id>`, `oidc-logout:<jti>`).
 
 ### `scim_tokens`
 Like `api_keys`: `id`, `org_id`, `name`, `key_prefix`, `key_hash` (UNIQUE, HMAC/SHA-256 per D-044; rehashed on lookup),
@@ -419,7 +437,7 @@ Version history, sharing and scheduled reports (`0053_dashboard_versions`, `0054
 | `dashboard_versions` | `(dashboard_id, version)` | `dashboard_id` (cascade), `document` (jsonb `{name, description, visibility, variables, pages}` with page and widget ids), `author_id` (SET NULL), `restored_from`, `created_at`. The newest 50 per dashboard are kept (pruned in the saving transaction); 0053 backfills the current version of every existing dashboard |
 | `dashboard_org_settings` | `org_id` | `shares_enabled` (default false), `report_domains` (text[] ≤ 20), `updated_by` (SET NULL), `updated_at`. No row = defaults |
 | `dashboard_shares` | `id` | `org_id`, `dashboard_id` (both cascade), `token_hash` (SHA-256 of the token, unique), `label` (≤ 100), `time_range` (relative) or `range_from`/`range_to` (fixed; CHECK exactly one), `variables` (jsonb), `created_by`/`revoked_by` (SET NULL), `created_at`, `expires_at`, `revoked_at`, `last_used_at`, `use_count`. Index `(dashboard_id, created_at DESC)` |
-| `dashboard_reports` | `id` | `org_id`, `dashboard_id` (both cascade), `name` (≤ 100), `frequency` (`daily`·`weekly`), `weekday` (0 = Sunday), `hour`, `minute`, `timezone`, `recipients` (text[] 1–20), `language` (`en`·`tr`), `time_range`, `variables` (jsonb), `enabled`, `created_by` (SET NULL), timestamps. Partial index on enabled |
+| `dashboard_reports` | `id` | `org_id`, `dashboard_id` (both cascade), `name` (≤ 100), `frequency` (`daily`·`weekly`), `weekday` (0 = Sunday), `hour`, `minute`, `timezone`, `recipients` (text[] ≤ 20; `0062_report_recipients_cleanup` allows an empty list, the API requires 1–20), `language` (`en`·`tr`), `time_range`, `variables` (jsonb), `enabled`, `created_by` (SET NULL), timestamps. Partial index on enabled. Removing a member (`internal/store/postgres` `RemoveMemberWithCleanup`, API and SCIM) runs `array_remove` of the user's address in the membership's transaction and disables reports left empty (D-096) |
 | `dashboard_report_runs` | `(report_id, period)` | `report_id` (cascade), `period` (local date `YYYY-MM-DD`), `status` (`running`·`sent`·`partial`·`failed`·`skipped`), `error` (≤ 1000), `recipients` (sent count), `started_at`, `finished_at`; runs older than 90 days are deleted when a new run of the report is claimed |
 
 Every save inserts its version row in the same transaction as the document. A share link lookup joins the organization

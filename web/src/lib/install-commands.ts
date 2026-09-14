@@ -187,6 +187,19 @@ export interface OnboardingInfo {
   agent_version: string | null;
   cors_enabled: boolean;
   features?: { fleet_php_install?: boolean };
+  /** Registry availability and GitHub release assets of the language agent packages (absent on older servers). */
+  agent_packages?: { node: AgentPackageInfo; python: AgentPackageInfo; dotnet: AgentPackageInfo } | null;
+}
+
+/** GET /api/v1/onboarding agent_packages.<lang>. */
+export interface AgentPackageInfo {
+  name: string;
+  version: string;
+  /** available: the registry serves agent_version; missing: it does not; unknown: not checked or unreachable. */
+  registry: "available" | "missing" | "unknown";
+  registry_url: string;
+  release_asset_url: string;
+  release_asset_sha256_url: string;
 }
 
 export type BlockLang = "sh" | "yaml" | "go" | "js" | "csharp" | "dockerfile" | "sql" | "nginx" | "ini";
@@ -234,6 +247,10 @@ export interface CommandBlock {
 export type NoteKey =
   | "placeholderKey"
   | "versionUnknown"
+  | "packageRegistry"
+  | "packageRelease"
+  | "packageReleaseUnchecked"
+  | "dotnetLocalSource"
   | "distroAuto"
   | "archAuto"
   | "dockerGroup"
@@ -438,8 +455,45 @@ function apmGo(c: Ctx) {
   note(c, "goStart");
 }
 
+/** Python packages carry the PEP 440 form of the product version (libs/release PythonVersion): 1.2.0-beta.3 → 1.2.0b3. */
+export function pythonVersion(version: string): string {
+  const m = /^(\d+\.\d+\.\d+)-(alpha|beta|rc)\.(\d+)$/.exec(version);
+  if (!m) return version;
+  const short = { alpha: "a", beta: "b", rc: "rc" }[m[2] as "alpha" | "beta" | "rc"];
+  return `${m[1]}${short}${m[3]}`;
+}
+
+type PackageLang = "node" | "python" | "dotnet";
+
+/** Package files attached to every GitHub release (docs/operations/releasing.md "Language agent packages"). */
+const PACKAGE_FILES: Record<PackageLang, (v: string) => string> = {
+  node: (v) => `openlog-node-${v}.tgz`,
+  python: (v) => `openlog_agent-${pythonVersion(v)}-py3-none-any.whl`,
+  dotnet: (v) => `OpenLog.Agent.${v}.nupkg`,
+};
+
+/**
+ * Where a language agent installs from: the registry only when the server found this release there
+ * (GET /api/v1/onboarding agent_packages.<lang>.registry = available); otherwise the file attached to the GitHub
+ * release, which exists for every release even when registry publishing is not configured.
+ */
+function agentPackage(c: Ctx, lang: PackageLang): { registry: true } | { registry: false; version: string; file: string; url: string } {
+  const info = c.info.agent_packages?.[lang];
+  if (c.version && info?.registry === "available") {
+    note(c, "packageRegistry");
+    return { registry: true };
+  }
+  const version = c.version ?? "X.Y.Z";
+  const url = c.version && info?.release_asset_url ? info.release_asset_url : `${RELEASES}/download/v${version}/${PACKAGE_FILES[lang](version)}`;
+  const file = url.slice(url.lastIndexOf("/") + 1);
+  if (!c.version) note(c, "versionUnknown");
+  note(c, info?.registry === "missing" ? "packageRelease" : "packageReleaseUnchecked");
+  return { registry: false, version, file, url };
+}
+
 function apmNode(c: Ctx) {
-  add(c, "install", "sh", "npm install @openlog/node");
+  const pkg = agentPackage(c, "node");
+  add(c, "install", "sh", pkg.registry ? "npm install @openlog/node" : `npm install ${pkg.url}`);
   const run = c.o.nodeModules === "esm" ? "node --import @openlog/node/register server.mjs" : "node --require @openlog/node/register server.js";
   add(c, "run", "sh", `${openlogEnv(c)}\n${run}`);
   if (c.o.nodeModules === "esm") note(c, "nodeEsm");
@@ -454,7 +508,8 @@ const PYTHON_RUN: Record<InstallOptions["pythonLauncher"], string> = {
 };
 
 function apmPython(c: Ctx) {
-  add(c, "install", "sh", "pip install openlog-agent");
+  const pkg = agentPackage(c, "python");
+  add(c, "install", "sh", pkg.registry ? "pip install openlog-agent" : `pip install ${pkg.url}`);
   add(c, "run", "sh", `${openlogEnv(c)}\n${PYTHON_RUN[c.o.pythonLauncher]}`);
   if (c.o.pythonLauncher !== "python") note(c, "pythonModules");
 }
@@ -495,7 +550,22 @@ function apmJava(c: Ctx) {
 }
 
 function apmDotnet(c: Ctx) {
-  add(c, "install", "sh", "dotnet add package OpenLog.Agent");
+  const pkg = agentPackage(c, "dotnet");
+  if (pkg.registry) {
+    add(c, "install", "sh", "dotnet add package OpenLog.Agent");
+  } else {
+    // A local folder source: `dotnet add package --source` would restrict the restore to it and lose the
+    // OpenTelemetry dependencies from nuget.org, so the folder is added to the NuGet configuration instead.
+    const dir = '"$HOME/.openlog/nuget"';
+    add(
+      c,
+      "download",
+      "sh",
+      [`mkdir -p ${dir}`, `(cd ${dir} && curl -fsSLO ${pkg.url} && curl -fsSLO ${pkg.url}.sha256 && sha256sum -c ${pkg.file}.sha256)`].join("\n"),
+    );
+    add(c, "install", "sh", [`dotnet nuget add source ${dir} -n openlog-local`, `dotnet add package OpenLog.Agent --version ${pkg.version}`].join("\n"));
+    note(c, "dotnetLocalSource");
+  }
   const code =
     c.o.dotnetApp === "console"
       ? ["using OpenLog.Agent;", "", `using var agent = OpenLogAgent.Start(o => o.ServiceName = ${codeString(c.service)}); // flushes on Dispose`].join("\n")

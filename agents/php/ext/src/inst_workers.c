@@ -8,6 +8,12 @@
  *   Swoole / OpenSwoole HTTP servers      the callable registered with Server::on('request') or
  *                                         Coroutine\Http\Server::handle() starts (observed userland callback);
  *                                         Response::end/redirect/sendfile ends; Response::status() sets the status
+ *   FrankenPHP worker mode                the callable passed to frankenphp_handle_request() is the request: its call
+ *                                         (observed, below the internal function's frame) starts, its return ends.
+ *                                         FrankenPHP has already reset $_SERVER and SG(request_info) for the request,
+ *                                         so the request is described like a SAPI request (ol_reqinfo_sapi); the
+ *                                         status is SG(sapi_headers).http_response_code when the callback returns.
+ *                                         FrankenPHP classic mode is a regular SAPI request (RINIT/RSHUTDOWN).
  *
  * The first worker request ends the process's own CLI transaction without sending it (it would last as long as the
  * worker). Between requests nothing is recorded and no header is propagated. Connection and statement attributes
@@ -19,13 +25,16 @@
  * only ("light" transaction); all of them carry openlog.php.concurrent=true. This lasts until no request is in
  * progress. Outgoing traceparent headers use the context of the request whose handler frame is on the current
  * coroutine's call stack; code that belongs to none of them propagates nothing. No span is ever attached to another
- * request. Not supported: openlog.userland_hooks=0 (callbacks and framework hooks are userland), FrankenPHP workers.
+ * request. FrankenPHP runs one request per thread (ZTS), so its workers are never concurrent within one PHP request.
+ * Not supported: openlog.userland_hooks=0 (callbacks and framework hooks are userland); a request callable that was
+ * already called before it is passed to frankenphp_handle_request() / Server::on() (the observer decision is cached).
  */
 #include "ol.h"
 
 #define OL_WKEY_OCTANE ((zend_ulong) 1 << 52)
 #define OL_WKEY_RR     ((zend_ulong) 2 << 52)
 #define OL_WKEY_OBJ    ((zend_ulong) 4 << 52) /* | Swoole response object handle */
+#define OL_WKEY_FPHP   ((zend_ulong) 8 << 52)
 #define OL_WTX_MAX_AGE_NS (300ULL * 1000000000ULL)
 
 /* ---------------- request descriptions ---------------- */
@@ -447,16 +456,15 @@ static void rr_respond_end(zend_execute_data *ex, zval *rv, const ol_hook *h)
 
 /* ---------------- Swoole / OpenSwoole ---------------- */
 
-/* Server::on(string $event, callable $callback) (arg 0) / Coroutine\Http\Server::handle(string $pattern, callable) (arg 1) */
-static void swoole_on_begin(zend_execute_data *ex, const ol_hook *h)
+/* Remembers a userland request callable so that the fcall observer (ol_hooks.c) watches its calls. */
+static void ol_worker_register_callable(zval *cb)
 {
-	zval *ev = ol_arg(ex, 1), *cb = ol_arg(ex, 2);
 	zend_fcall_info_cache fcc;
 	char *err = NULL;
 	zend_function *fn;
 	uint32_t i;
 
-	if (cb == NULL || (h->arg == 0 && (ev == NULL || Z_TYPE_P(ev) != IS_STRING || !OL_ZSTR_EQ_CI(Z_STR_P(ev), "request")))) {
+	if (cb == NULL) {
 		return;
 	}
 	memset(&fcc, 0, sizeof(fcc));
@@ -487,6 +495,16 @@ static void swoole_on_begin(zend_execute_data *ex, const ol_hook *h)
 	OLG(worker_cbs)[OLG(nworker_cbs)++] = fn->op_array.opcodes;
 }
 
+/* Server::on(string $event, callable $callback) (arg 0) / Coroutine\Http\Server::handle(string $pattern, callable) (arg 1) */
+static void swoole_on_begin(zend_execute_data *ex, const ol_hook *h)
+{
+	zval *ev = ol_arg(ex, 1), *cb = ol_arg(ex, 2);
+	if (h->arg == 0 && (ev == NULL || Z_TYPE_P(ev) != IS_STRING || !OL_ZSTR_EQ_CI(Z_STR_P(ev), "request"))) {
+		return;
+	}
+	ol_worker_register_callable(cb);
+}
+
 bool ol_worker_callback(zend_function *fn)
 {
 	uint32_t i;
@@ -507,12 +525,85 @@ static bool swoole_request_class(zend_object *obj)
 	return ZSTR_LEN(n) >= 12 && ol_ascii_ncaseeq(ZSTR_VAL(n) + ZSTR_LEN(n) - 12, "http\\request", 12);
 }
 
-/* the observed request callback (Request $request, Response $response) */
+/* ---------------- FrankenPHP worker mode ---------------- */
+
+/* the frame is the callable called by frankenphp_handle_request() (zend_call_function below the internal frame) */
+static bool fphp_request_frame(zend_execute_data *ex)
+{
+	zend_execute_data *prev = ex->prev_execute_data;
+	zend_function *pf = prev ? prev->func : NULL;
+	return pf && pf->type == ZEND_INTERNAL_FUNCTION && pf->common.scope == NULL &&
+		OL_ZSTR_EQ_CI(pf->common.function_name, "frankenphp_handle_request");
+}
+
+/* frankenphp_handle_request(callable $callback): waits for a request, then calls $callback for it */
+static void fphp_handle_begin(zend_execute_data *ex, const ol_hook *h)
+{
+	if (!OLG(worker_mode)) {
+		/* the worker script's own transaction (boot, waiting between requests) is not a request: never sent */
+		OLG(worker_mode) = true;
+		ol_txn_finish(false);
+	}
+	if (OLG(wprimary) && OLG(wkey) == OL_WKEY_FPHP) {
+		ol_worker_end(OL_WKEY_FPHP, 0); /* the previous request's end was never seen */
+	}
+	ol_worker_register_callable(ol_arg(ex, 1));
+}
+
+/* frankenphp_handle_request() returned: a request still open (callback end not observed) ends now */
+static void fphp_handle_end(zend_execute_data *ex, zval *rv, const ol_hook *h)
+{
+	if (OLG(wprimary) && OLG(wkey) == OL_WKEY_FPHP) {
+		ol_worker_end(OL_WKEY_FPHP, 0);
+	}
+}
+
+static void fphp_callback_begin(zend_execute_data *ex)
+{
+	ol_reqinfo ri;
+	char *owned[12];
+	size_t n, i;
+	n = ol_reqinfo_sapi(&ri, owned, sizeof(owned) / sizeof(owned[0]));
+	ol_worker_begin(ex, &ri, OL_WKEY_FPHP);
+	for (i = 0; i < n; i++) {
+		efree(owned[i]);
+	}
+}
+
+static void fphp_callback_end(zend_execute_data *ex)
+{
+	zend_object *e = OL_EXCEPTION();
+	zend_long code = SG(sapi_headers).http_response_code;
+	if (!(OLG(wprimary) && OLG(wkey) == OL_WKEY_FPHP && OLG(wframe) == ex)) {
+		return;
+	}
+	if (e) {
+		ol_uncaught_exception(e);
+		/* FrankenPHP reports the exception as a fatal error after the callback: php_error_cb answers 500 then */
+		if (code == 200 && !PG(display_errors) && !SG(headers_sent)) {
+			code = 500;
+		}
+	}
+	ol_worker_end(OL_WKEY_FPHP, code > 0 ? code : 200);
+}
+
+/* ---------------- observed request callbacks ---------------- */
+
+/* the observed request callback: FrankenPHP (no arguments or its callback argument), Swoole (Request, Response) */
 void ol_worker_callback_begin(zend_execute_data *ex)
 {
-	zval *req = ol_arg(ex, 1), *resp = ol_arg(ex, 2);
+	zval *req, *resp;
 	ol_reqinfo ri;
-	if (OLG(in_call) || req == NULL || resp == NULL || Z_TYPE_P(req) != IS_OBJECT || Z_TYPE_P(resp) != IS_OBJECT ||
+	if (OLG(in_call)) {
+		return;
+	}
+	if (fphp_request_frame(ex)) {
+		fphp_callback_begin(ex);
+		return;
+	}
+	req = ol_arg(ex, 1);
+	resp = ol_arg(ex, 2);
+	if (req == NULL || resp == NULL || Z_TYPE_P(req) != IS_OBJECT || Z_TYPE_P(resp) != IS_OBJECT ||
 			!swoole_request_class(Z_OBJ_P(req))) {
 		return;
 	}
@@ -524,6 +615,10 @@ void ol_worker_callback_begin(zend_execute_data *ex)
 void ol_worker_callback_end(zend_execute_data *ex)
 {
 	uint32_t i;
+	if (OLG(wprimary) && OLG(wkey) == OL_WKEY_FPHP) {
+		fphp_callback_end(ex);
+		return;
+	}
 	if (OLG(wprimary) && OLG(wframe) == ex) {
 		ol_worker_end(OLG(wkey), OL_EXCEPTION() ? 500 : 200);
 		return;
@@ -593,5 +688,6 @@ const ol_hook ol_hooks_workers[] = {
 	{"openswoole\\http\\response::end", NULL, swoole_end_end, 0, OL_WF},
 	{"openswoole\\http\\response::redirect", swoole_redirect_begin, swoole_end_end, 0, OL_WF},
 	{"openswoole\\http\\response::sendfile", NULL, swoole_end_end, 0, OL_WF},
+	{"frankenphp_handle_request", fphp_handle_begin, fphp_handle_end, 0, OL_WF},
 	{NULL, NULL, NULL, 0, 0}
 };

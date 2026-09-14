@@ -214,62 +214,45 @@ func (s *Service) refreshOIDC(ctx context.Context, c Connection) (*IdPCache, tim
 	return &IdPCache{FetchedAt: &now, Issuer: c.OIDC.Issuer, OIDCDiscovery: disc, OIDCJWKS: jwks}, oidcRefreshEvery, nil
 }
 
-// refreshSAML re-fetches the metadata URL (or re-validates pasted metadata) and stores changed metadata.
+// refreshSAML re-fetches the metadata URL (or re-validates pasted metadata) and stores changed metadata the trust
+// settings accept (metadatatrust.go); other changes wait for an administrator.
 func (s *Service) refreshSAML(ctx context.Context, c Connection) (*IdPCache, time.Duration, error) {
 	if c.SAML == nil {
 		return nil, 0, errors.New("not a SAML connection")
 	}
 	now := s.now()
-	data := []byte(c.SAML.IdPMetadataXML)
-	if c.SAML.IdPMetadataURL != "" {
-		u, err := ParseIdPURL(c.SAML.IdPMetadataURL, s.cfg.AllowPrivateNetworks)
+	if c.SAML.IdPMetadataURL == "" {
+		md, info, err := idpMetadataInfo([]byte(c.SAML.IdPMetadataXML), now)
 		if err != nil {
-			return nil, 0, fmt.Errorf("idp_metadata_url: %w", err)
+			return nil, 0, err
 		}
-		if data, err = fetch(ctx, s.client, u.String()); err != nil {
-			return nil, 0, fmt.Errorf("cannot fetch the IdP metadata: %w", err)
+		if err := checkMetadataTimes(md, info, now); err != nil {
+			return nil, 0, err
 		}
+		cache, next := samlSchedule(md, now)
+		return cache, next, nil
 	}
-	md, info, err := idpMetadataInfo(data, now)
+	u, err := ParseIdPURL(c.SAML.IdPMetadataURL, s.cfg.AllowPrivateNetworks)
+	if err != nil {
+		return nil, 0, fmt.Errorf("idp_metadata_url: %w", err)
+	}
+	data, err := fetch(ctx, s.client, u.String())
+	if err != nil {
+		return nil, 0, fmt.Errorf("cannot fetch the IdP metadata: %w", err)
+	}
+	rm, err := s.checkRefreshedMetadata(c, data, now)
+	if rm != nil && rm.pending != nil {
+		s.recordPendingMetadata(ctx, c, rm.pending)
+		return nil, 0, err
+	}
 	if err != nil {
 		return nil, 0, err
 	}
-	if info.IdPEntityID != c.SAML.IdPEntityID {
-		return nil, 0, fmt.Errorf("the IdP entity ID changed to %q; save the connection to accept it", truncate(info.IdPEntityID, 200))
+	// auth.ErrNotFound: saved meanwhile, the next refresh uses the new settings.
+	if err := s.applyRefreshedMetadata(ctx, c, data, rm, false); err != nil && !errors.Is(err, auth.ErrNotFound) {
+		return nil, 0, err
 	}
-	if !md.ValidUntil.IsZero() && !md.ValidUntil.After(now) {
-		return nil, 0, fmt.Errorf("the IdP metadata expired at %s", md.ValidUntil.UTC().Format(time.RFC3339))
-	}
-	if t, err := time.Parse(time.RFC3339, info.IdPCertNotAfter); err == nil && !t.After(now) {
-		return nil, 0, fmt.Errorf("the IdP signing certificate expired at %s", info.IdPCertNotAfter)
-	}
-	if string(data) != c.SAML.IdPMetadataXML {
-		cfg := *c.SAML
-		cfg.IdPMetadataXML, cfg.IdPSSOURL, cfg.IdPSLOURL, cfg.IdPSLOBinding = string(data), info.IdPSSOURL, info.IdPSLOURL, info.IdPSLOBinding
-		cfg.IdPCertificates, cfg.IdPCertNotAfter = info.IdPCertificates, info.IdPCertNotAfter
-		switch err := s.store.UpdateSAMLMetadata(ctx, c.ID, c.ConfigVersion, cfg); {
-		case errors.Is(err, auth.ErrNotFound):
-			// Saved meanwhile: the next refresh uses the new settings.
-		case err != nil:
-			return nil, 0, err
-		case !slices.Equal(cfg.IdPCertificates, c.SAML.IdPCertificates) || cfg.IdPSSOURL != c.SAML.IdPSSOURL || cfg.IdPSLOURL != c.SAML.IdPSLOURL:
-			s.audit(ctx, c.OrgID, "", "sso-refresh", "", "sso.connection.metadata_refresh", "sso_connection", c.ID, map[string]any{
-				"idp_certificates_before": c.SAML.IdPCertificates, "idp_certificates_after": cfg.IdPCertificates,
-				"idp_sso_url": cfg.IdPSSOURL, "idp_slo_url": cfg.IdPSLOURL})
-		}
-	}
-	next := samlRefreshDefault
-	if md.CacheDuration > 0 {
-		next = min(max(md.CacheDuration/2, samlRefreshMin), samlRefreshMax)
-	}
-	cache := &IdPCache{FetchedAt: &now}
-	if !md.ValidUntil.IsZero() {
-		vu := md.ValidUntil.UTC()
-		cache.SAMLValidUntil = &vu
-		if half := vu.Sub(now) / 2; half < next {
-			next = max(half, samlRefreshMin)
-		}
-	}
+	cache, next := samlSchedule(rm.md, now)
 	return cache, next, nil
 }
 
@@ -303,6 +286,9 @@ func (s *Service) ConnectionHealth(c Connection) Health {
 		h.Status, h.Message = "warning", c.Refresh.Error
 	}
 	if c.SAML != nil {
+		if p := c.SAML.PendingMetadata; p != nil {
+			warn("an IdP metadata change awaits confirmation (" + p.Reason + ")")
+		}
 		if t, err := time.Parse(time.RFC3339, c.SAML.IdPCertNotAfter); err == nil {
 			switch {
 			case !t.After(now):

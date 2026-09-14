@@ -126,11 +126,11 @@ func (s *Store) CreateOrganization(ctx context.Context, org *auth.Organization, 
 	})
 }
 
-const orgCols = `id::text, tenant_id, name, created_at`
+const orgCols = `id::text, tenant_id, name, created_at, locale`
 
 func scanOrg(row pgx.Row) (auth.Organization, error) {
 	var o auth.Organization
-	err := row.Scan(&o.ID, &o.TenantID, &o.Name, &o.CreatedAt)
+	err := row.Scan(&o.ID, &o.TenantID, &o.Name, &o.CreatedAt, &o.Locale)
 	return o, mapErr(err)
 }
 
@@ -152,15 +152,31 @@ func (s *Store) UpdateOrganizationName(ctx context.Context, id, name string) err
 	return affected(s.pool.Exec(ctx, `UPDATE organizations SET name = $2, updated_at = now() WHERE id = $1`, id, name))
 }
 
+// SetOrganizationLocale sets the default e-mail language (0060_language_preferences).
+func (s *Store) SetOrganizationLocale(ctx context.Context, id, locale string) error {
+	if !validID(id) {
+		return auth.ErrNotFound
+	}
+	return affected(s.pool.Exec(ctx, `UPDATE organizations SET locale = $2, updated_at = now() WHERE id = $1`, id, locale))
+}
+
+// SetUserLocale stores the user's language (0060_language_preferences).
+func (s *Store) SetUserLocale(ctx context.Context, userID, locale string, explicit bool) error {
+	if !validID(userID) {
+		return auth.ErrNotFound
+	}
+	return affected(s.pool.Exec(ctx, `UPDATE users SET locale = $2, locale_explicit = $3, updated_at = now() WHERE id = $1`, userID, locale, explicit))
+}
+
 func (s *Store) CreateUser(ctx context.Context, u *auth.User) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error { return insertUser(ctx, tx, u) })
 }
 
-const userCols = `id::text, email, name, coalesce(password_hash, ''), created_at, last_login_at, disabled_at, email_verified_at`
+const userCols = `id::text, email, name, coalesce(password_hash, ''), created_at, last_login_at, disabled_at, email_verified_at, locale, locale_explicit`
 
 func scanUser(row pgx.Row) (auth.User, error) {
 	var u auth.User
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.CreatedAt, &u.LastLoginAt, &u.DisabledAt, &u.EmailVerifiedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.CreatedAt, &u.LastLoginAt, &u.DisabledAt, &u.EmailVerifiedAt, &u.Locale, &u.LocaleExplicit)
 	return u, mapErr(err)
 }
 
@@ -294,10 +310,21 @@ func (s *Store) UpdateMemberRole(ctx context.Context, orgID, userID string, role
 }
 
 func (s *Store) RemoveMember(ctx context.Context, orgID, userID string) error {
+	_, err := s.RemoveMemberWithCleanup(ctx, orgID, userID)
+	return err
+}
+
+var _ auth.MemberRemover = (*Store)(nil)
+
+// RemoveMemberWithCleanup deletes the membership and, in the same transaction, removes the user's address from the
+// organization's dashboard report recipient lists; reports left without recipients are disabled (0062, D-096).
+func (s *Store) RemoveMemberWithCleanup(ctx context.Context, orgID, userID string) (auth.MemberCleanup, error) {
+	var out auth.MemberCleanup
 	if !validID(orgID, userID) {
-		return auth.ErrNotFound
+		return out, auth.ErrNotFound
 	}
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		out = auth.MemberCleanup{}
 		owners, err := lockOwners(ctx, tx, orgID)
 		if err != nil {
 			return err
@@ -305,8 +332,38 @@ func (s *Store) RemoveMember(ctx context.Context, orgID, userID string) error {
 		if owners[userID] && len(owners) <= 1 {
 			return auth.ErrLastOwner
 		}
-		return affected(tx.Exec(ctx, `DELETE FROM memberships WHERE org_id = $1 AND user_id = $2`, orgID, userID))
+		if err := affected(tx.Exec(ctx, `DELETE FROM memberships WHERE org_id = $1 AND user_id = $2`, orgID, userID)); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			UPDATE dashboard_reports r
+			SET recipients = array_remove(r.recipients, lower(u.email)),
+			    enabled = r.enabled AND cardinality(array_remove(r.recipients, lower(u.email))) > 0,
+			    updated_at = now()
+			FROM users u
+			WHERE u.id = $2 AND r.org_id = $1 AND lower(u.email) = ANY (r.recipients)
+			RETURNING r.id::text, cardinality(r.recipients) = 0`, orgID, userID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			var empty bool
+			if err := rows.Scan(&id, &empty); err != nil {
+				return err
+			}
+			out.ReportsUpdated = append(out.ReportsUpdated, id)
+			if empty {
+				out.ReportsDisabled = append(out.ReportsDisabled, id)
+			}
+		}
+		return rows.Err()
 	})
+	if err != nil {
+		return auth.MemberCleanup{}, err
+	}
+	return out, nil
 }
 
 // ---- sessions ----
@@ -338,9 +395,10 @@ func scanSession(r pgx.Row, extra ...any) (auth.Session, error) {
 
 func (s *Store) GetSessionByTokenHash(ctx context.Context, hash []byte) (auth.Session, auth.User, error) {
 	var u auth.User
-	sess, err := scanSession(s.pool.QueryRow(ctx, `SELECT `+sessionCols+`, u.id::text, u.email, u.name, u.created_at, u.last_login_at, u.disabled_at, u.email_verified_at
+	sess, err := scanSession(s.pool.QueryRow(ctx, `SELECT `+sessionCols+`, u.id::text, u.email, u.name, u.created_at, u.last_login_at, u.disabled_at, u.email_verified_at,
+		       u.locale, u.locale_explicit
 		FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1`, hash),
-		&u.ID, &u.Email, &u.Name, &u.CreatedAt, &u.LastLoginAt, &u.DisabledAt, &u.EmailVerifiedAt)
+		&u.ID, &u.Email, &u.Name, &u.CreatedAt, &u.LastLoginAt, &u.DisabledAt, &u.EmailVerifiedAt, &u.Locale, &u.LocaleExplicit)
 	return sess, u, mapErr(err)
 }
 

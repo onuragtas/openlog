@@ -15,6 +15,21 @@ dotnet add package OpenLog.Agent
 export OPENLOG_LICENSE_KEY=dev-license-key OPENLOG_ENDPOINT=http://localhost:4318 OPENLOG_SERVICE_NAME=checkout
 ```
 
+When a release is not on nuget.org (registry publishing is optional for openlog releases), use the package attached to
+every GitHub release as a local NuGet source; the "Add data" page shows whichever works for your server's version:
+
+```sh
+mkdir -p "$HOME/.openlog/nuget"
+(cd "$HOME/.openlog/nuget" && curl -fsSLO https://github.com/onuragtas/openlog/releases/download/vX.Y.Z/OpenLog.Agent.X.Y.Z.nupkg \
+  && curl -fsSLO https://github.com/onuragtas/openlog/releases/download/vX.Y.Z/OpenLog.Agent.X.Y.Z.nupkg.sha256 \
+  && sha256sum -c OpenLog.Agent.X.Y.Z.nupkg.sha256)
+dotnet nuget add source "$HOME/.openlog/nuget" -n openlog-local   # once per user
+dotnet add package OpenLog.Agent --version X.Y.Z
+```
+
+Do not pass `--source` to `dotnet add package`: it limits the restore to that source, and the OpenTelemetry
+dependencies come from nuget.org. The `.nupkg` is listed in the release's signed `manifest.json`.
+
 ASP.NET Core and generic-host applications (worker services):
 
 ```csharp
@@ -155,7 +170,17 @@ MassTransit 9 is commercially licensed; the tests use MassTransit 8 (Apache-2.0)
 `Application_Start` with `ConfigureTracing = b => b.AddAspNetInstrumentation()`
 ([samples/OpenLog.AspNetFramework.Sample](samples/OpenLog.AspNetFramework.Sample): `Global` + `Web.config.sample`). CI
 compiles that sample for `net48` against the `netstandard2.0` agent build (`make build-netfx`, reference assemblies from
-`Microsoft.NETFramework.ReferenceAssemblies`), but it is not run: IIS and .NET Framework need a Windows runner.
+`Microsoft.NETFramework.ReferenceAssemblies`), and the Windows job `dotnet-agent-netfx` runs it:
+[test/netfx/run-iis.ps1](test/netfx/run-iis.ps1) builds the sample with its dependencies and generated binding
+redirects, lays out a site (`Global.asax`, a `web.config` from `test/netfx/Web.config.template` with
+`TelemetryHttpModule` and `OPENLOG_*` appSettings, which `Global.Application_Start` copies into the environment),
+hosts it under IIS Express (or full IIS, enabled with DISM, when IIS Express is missing) and runs
+[test/OpenLog.NetFx.SmokeTest](test/OpenLog.NetFx.SmokeTest) — the integration tests' OTLP capture server as a console
+app — which sends requests and asserts the SERVER span (continued `traceparent`, `url.path`, status, ASP.NET scope,
+`service.name`, `telemetry.distro.name`, `.NET Framework` runtime) and the license header. On failure it prints
+`web.config`, `bin/`, server logs and Windows event log entries. `pwsh test/netfx/run-iis.ps1 -BinDir <build output>
+-LayoutOnly` checks the layout on Linux/macOS; the IIS Express / IIS part can only run on Windows, so the job's first CI
+run is what validates it.
 
 **Transaction names.** The APM backend names a web transaction `<METHOD> <http.route>`
 ([apm.md §2.1](../../docs/contracts/apm.md)). ASP.NET Core puts the endpoint's route template on the server span. When
@@ -266,6 +291,7 @@ make test                         # unit + end-to-end tests without databases (.
 make test-integration             # + PostgreSQL, MySQL, Redis, RabbitMQ, Kafka, SQL Server (compose project openlog-m4-dotnet-test, removed afterwards)
 make test-autoinstrumentation     # plugin under the pinned OpenTelemetry .NET automatic instrumentation
 make build-netfx                  # .NET Framework 4.8 / ASP.NET 4.x sample, compile only
+pwsh test/netfx/run-iis.ps1       # Windows only: the sample under IIS Express / IIS + smoke test (-Server iis, -LayoutOnly)
 make bench                        # overhead benchmark
 make pack VERSION=0.1.9           # artifacts/nupkg/OpenLog.Agent.0.1.9.nupkg
 ```
@@ -277,7 +303,8 @@ headers, propagation, ingest outage, `OpenLogAgent.Start`, MassTransit/Kafka/SQL
 automatic instrumentation plugin in `AutoInstrumentationTests`), `test/OpenLog.AutoInstrumentation.TestApp` (no
 OpenTelemetry reference), `samples/OpenLog.SampleApp` (ASP.NET Core minimal API + MVC + gRPC + HttpClient + Npgsql/EF
 Core + MySqlConnector + StackExchange.Redis + SqlClient + MassTransit + Confluent.Kafka),
-`samples/OpenLog.AspNetFramework.Sample` (net48, compile only), `bench/OpenLog.Agent.Bench`. SQL Server has no arm64
+`samples/OpenLog.AspNetFramework.Sample` (net48; run under IIS by `test/netfx/run-iis.ps1` with
+`test/OpenLog.NetFx.SmokeTest`), `bench/OpenLog.Agent.Bench`. SQL Server has no arm64
 `mssql/server` image: the Makefile picks `mcr.microsoft.com/azure-sql-edge` on arm64 (retired by Microsoft but still
 pullable; the SqlClient test passes against it) and CI (amd64) uses `mcr.microsoft.com/mssql/server:2022-latest`. The
 release flow is described in [releasing.md](../../docs/operations/releasing.md#net-agent-package).

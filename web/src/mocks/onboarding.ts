@@ -51,6 +51,11 @@ export function onboardingHosts(now: number): Host[] {
   }));
 }
 
+const mockPackage = (name: string, version: string, file: string, registryUrl: string) => {
+  const url = `https://github.com/onuragtas/openlog/releases/download/v0.9.1/${file}`;
+  return { name, version, registry: "missing", registry_url: registryUrl, release_asset_url: url, release_asset_sha256_url: `${url}.sha256` };
+};
+
 export const onboardingHandlers = [
   http.get(`${API}/onboarding`, ({ request }) => {
     const ctx = authenticate(request);
@@ -77,6 +82,12 @@ export const onboardingHandlers = [
         can_list_license_keys: session && ctx.role !== "viewer",
         fleet_php_install: true,
         tail_sampling: false,
+      },
+      // Like a release whose registry publishing is not configured: the commands use the GitHub release assets.
+      agent_packages: {
+        node: mockPackage("@openlog/node", "0.9.1", "openlog-node-0.9.1.tgz", "https://www.npmjs.com/package/@openlog/node/v/0.9.1"),
+        python: mockPackage("openlog-agent", "0.9.1", "openlog_agent-0.9.1-py3-none-any.whl", "https://pypi.org/project/openlog-agent/0.9.1/"),
+        dotnet: mockPackage("OpenLog.Agent", "0.9.1", "OpenLog.Agent.0.9.1.nupkg", "https://www.nuget.org/packages/OpenLog.Agent/0.9.1"),
       },
     });
   }),

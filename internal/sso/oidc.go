@@ -28,6 +28,7 @@ const providerTTL = time.Hour
 type oidcClient struct {
 	provider *oidc.Provider
 	verifier *oidc.IDTokenVerifier
+	keys     oidc.KeySet
 	algs     []string
 	meta     oidcMetadata
 	created  time.Time
@@ -106,14 +107,13 @@ func (s *Service) oidcClient(ctx context.Context, c Connection) (*oidcClient, er
 		// exp is checked against now − skew (tolerates a slightly fast IdP clock); iat is checked below.
 		Now: func() time.Time { return s.now().Add(-skew) },
 	}
-	var verifier *oidc.IDTokenVerifier
+	// One key set for ID tokens and logout tokens (oidclogout.go).
+	var keys oidc.KeySet = oidc.NewRemoteKeySet(s.clientContext(context.Background()), meta.JWKSURL)
 	if static != nil {
-		remote := oidc.NewRemoteKeySet(s.clientContext(context.Background()), meta.JWKSURL)
-		verifier = oidc.NewVerifier(meta.Issuer, cachedKeySet{static: static, remote: remote}, vcfg)
-	} else {
-		verifier = provider.VerifierContext(s.clientContext(context.Background()), vcfg)
+		keys = cachedKeySet{static: static, remote: keys}
 	}
-	oc = &oidcClient{provider: provider, verifier: verifier, algs: algs, meta: meta, created: now}
+	verifier := oidc.NewVerifier(meta.Issuer, keys, vcfg)
+	oc = &oidcClient{provider: provider, verifier: verifier, keys: keys, algs: algs, meta: meta, created: now}
 	s.mu.Lock()
 	for k := range s.providers { // drop older versions of this connection
 		if strings.HasPrefix(k, c.ID+"|") {

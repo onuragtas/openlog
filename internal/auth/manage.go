@@ -107,12 +107,18 @@ func (s *Service) RemoveMember(ctx context.Context, p *Principal, userID string,
 			return denied("only owners can remove an owner")
 		}
 	}
-	if err := s.store.RemoveMember(ctx, p.OrgID, userID); err != nil {
+	// Dashboard report recipient lists lose the member's address in the same transaction (D-096).
+	cleanup, err := RemoveMembership(ctx, s.store, p.OrgID, userID)
+	if err != nil {
 		return s.fail(err)
 	}
 	// The removed user's sessions lose this organization on their next request (membership is not cached).
 	// API keys they created would keep reading the organization's data, so they are revoked too (D-046).
 	details := map[string]any{"role": cur.Role}
+	if rd := map[string]any{"user_id": userID}; cleanup.Details(rd) {
+		details["report_recipient_removed"] = len(cleanup.ReportsUpdated)
+		s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "dashboard.report.recipient_remove", "user", userID, rd)
+	}
 	if n, err := s.store.RevokeAPIKeysCreatedBy(ctx, p.OrgID, userID, p.UserID, s.now()); err != nil {
 		s.log.Error("cannot revoke API keys of a removed member", "org_id", p.OrgID, "user_id", userID, "err", err)
 	} else if n > 0 {

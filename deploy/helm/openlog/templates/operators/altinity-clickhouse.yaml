@@ -26,6 +26,12 @@ spec:
   configuration:
     clusters:
       - name: keeper
+        {{- if and $keeperTLS $tls.server.disableInsecure }}
+        # Operator >= 0.27.3: secure=yes takes tcp_port_secure from the settings below, insecure=no removes the plaintext
+        # client port 2181 (common config) and switches the liveness probe from `ruok` on 2181 to pgrep.
+        secure: "yes"
+        insecure: "no"
+        {{- end }}
         layout:
           replicasCount: {{ $k.replicas }}
     settings:
@@ -220,7 +226,8 @@ spec:
                   {{- end }}
                   <cold>
                     <disk>openlog_s3_cache</disk>
-                    <volume_priority>3</volume_priority>
+                    <!-- Priorities must be 1..N without gaps: ClickHouse refuses to start otherwise. -->
+                    <volume_priority>{{ ternary 3 2 $warm }}</volume_priority>
                     <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
                   </cold>
                 </volumes>

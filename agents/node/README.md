@@ -13,6 +13,16 @@ interoperate with the Go agent through W3C `tracestate`.
 npm install @openlog/node
 ```
 
+When a release is not on npm (registry publishing is optional for openlog releases), install the package file attached
+to every GitHub release; the "Add data" page shows whichever works for your server's version:
+
+```sh
+npm install https://github.com/onuragtas/openlog/releases/download/vX.Y.Z/openlog-node-X.Y.Z.tgz
+```
+
+npm records the URL and the tarball's integrity in `package.json` and `package-lock.json`; `openlog-node-X.Y.Z.tgz.sha256`
+next to it is the `sha256sum` checksum, and the tarball is listed in the release's signed `manifest.json`.
+
 Zero code changes:
 
 ```sh
@@ -99,7 +109,7 @@ simply not instrumented.
 | `express` | `express` | 4, 5 | middleware/handler spans, route → server span name `GET /users/:id` |
 | `fastify` | `fastify` (`@fastify/otel`) | 4.x, 5.x | hook/handler spans, route |
 | `koa` | `koa` + `@koa/router` | koa 2–3 | middleware/router spans, route |
-| `nestjs` | `@nestjs/core` | 4 – 11 | request context and handler spans, route (NestJS 12 is ESM-only and not yet covered by the OTel instrumentation; its HTTP spans are still named by the express/fastify route) |
+| `nestjs` | `@nestjs/core` | 4 – 11 (OTel); 12 via openlog, see [NestJS 12](#nestjs-12) | 4 – 11: request context and handler spans, route. 12: server span named by the express/fastify route; optional `OpenLogNestInterceptor` adds `nestjs.controller`/`nestjs.callback` and names routes without a platform instrumentation; no Nest handler spans |
 | `pg` | `pg`, `pg-pool` | 8.x | CLIENT spans, `db.query.text` sanitized |
 | `mysql2` | `mysql2` | 1.4 – 3 | CLIENT spans, values masked + sanitized |
 | `redis` | `redis`, `@redis/client` | 2 – 5 | CLIENT spans, `db.query.text` = `GET ?` |
@@ -113,13 +123,40 @@ simply not instrumented.
 | (`OPENLOG_LOGS_CONSOLE`) | `console` | built-in | OTLP log export correlated with the active span |
 
 Exact version ranges are those of the pinned instrumentation packages; the CI suite runs express 5, fastify 5, koa 3,
-NestJS 11, pg 8, mysql2 3, redis 6, ioredis 6, pino 10 and winston 3 on Node.js 20 and 22.
+NestJS 11 and 12 (ESM, express and fastify platforms), pg 8, mysql2 3, redis 6, ioredis 6, pino 10 and winston 3 on
+Node.js 20 and 22.
 
 **Transaction names.** The APM backend names a web transaction `<METHOD> <http.route>` ([apm.md §2.1](../../docs/contracts/apm.md)).
 Express, Koa and Fastify pass the matched route to the HTTP server span. For frameworks that only put `http.route` on
 their own spans (NestJS on other platforms, custom routers), the agent copies the longest route seen below the entry
 span onto it before it ends. Requests without a route (404s, plain `http` servers) are grouped by the backend's path
 normalization.
+
+### NestJS 12
+
+NestJS 12 is ESM-only and outside the range of `@opentelemetry/instrumentation-nestjs-core` (`< 12`), so there are no
+Nest request-context/handler spans. Transactions are still route-named with no code change: start the application with
+`node --import @openlog/node/register main.js`. The express and fastify instrumentations then patch the platform
+Nest 12 loads, and the SERVER span is `GET /users/:id` with `http.route` equal to the full registered path
+(URI version included, e.g. `/v2/orders/:orderId`). Verified with `@nestjs/*` 12.0.1 on express 5
+and fastify 5 (`test/e2e/nest12.test.ts`). With `--require`, ES module imports are not patched and routes stay unnamed.
+
+Optionally, register the openlog interceptor (no dependency on `@nestjs/*`; works on NestJS 8–12):
+
+```js
+import { OpenLogNestInterceptor } from '@openlog/node/nest';   // require('@openlog/node/nest')
+
+app.useGlobalInterceptors(new OpenLogNestInterceptor());
+// or in a module: providers: [{ provide: APP_INTERCEPTOR, useClass: OpenLogNestInterceptor }]
+```
+
+It reads the matched route from the platform request (`req.route.path` on express, `request.routeOptions.url` on
+fastify), sets `http.route` on the entry SERVER span (through the HTTP instrumentation's RPC metadata, as the
+framework instrumentations do), renames it `<METHOD> <route>` and adds `nestjs.controller` and `nestjs.callback`.
+Routes are then named even with `OPENLOG_INSTRUMENTATIONS_DISABLED=express` (or `fastify`), which also removes the
+per-middleware spans. Not covered: requests that never reach an interceptor (guard rejections, 404s, errors thrown in
+middleware) keep the platform instrumentation's name (or none); GraphQL, microservice and WebSocket contexts are
+ignored; no Nest handler/guard/pipe spans.
 
 **Database statements.** With `OPENLOG_DB_QUERY_TEXT=sanitized` (default) SQL is normalized exactly like the Go agent
 (`openlogsql.Sanitize`, shared test cases): string, numeric, hex and dollar-quoted literals → `?`, `IN (…)` and
@@ -228,7 +265,7 @@ Local Node tooling on iCloud Drive may hang; run everything in a container:
 ```sh
 docker volume create openlog-node-agent-nm
 docker run --rm -v "$PWD":/src -v openlog-node-agent-nm:/src/node_modules -w /src node:22-alpine \
-  sh -c 'npm ci && npm run lint && npm run typecheck && npm test'
+  sh -c 'npm ci && npm run test:apps:install && npm run lint && npm run typecheck && npm test'
 # real PostgreSQL/MySQL/Redis
 docker compose -p openlog-nodeagent-test -f test/integration/docker-compose.yml --profile runner run --rm runner
 docker compose -p openlog-nodeagent-test -f test/integration/docker-compose.yml down -v
@@ -239,5 +276,7 @@ scripts/gen-go-fixtures.sh        # regenerate the Go sampler fixtures (needs Go
 `npm test` builds the package (`dist/cjs` with tsc plus an ES module facade in `dist/esm` that re-exports the same
 instance), compiles the tests and runs unit tests plus end-to-end tests that start real Express, Fastify, Koa, NestJS
 and plain `http` applications with `--require`/`--import` against an OTLP capture server (spans, metrics, logs,
-resource, headers, SIGTERM flush, ingest outage). The release flow is described in
+resource, headers, SIGTERM flush, ingest outage). The NestJS 12 suite needs Node.js 20+ and the separately pinned app
+in `test/apps/nest12` (`npm run test:apps:install`, i.e. `npm ci --prefix test/apps/nest12`); without it the suite is
+skipped with that hint. The release flow is described in
 [releasing.md](../../docs/operations/releasing.md#nodejs-agent-package).

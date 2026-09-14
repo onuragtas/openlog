@@ -5,6 +5,7 @@ import { can, type Permission } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
 
 const TABS = [
+  { to: "/settings/profile", label: "settings.tabs.profile", permission: null },
   { to: "/settings/organization", label: "settings.tabs.organization", permission: null },
   { to: "/settings/members", label: "settings.tabs.members", permission: null },
   { to: "/settings/license-keys", label: "settings.tabs.licenseKeys", permission: "license_keys.list" },

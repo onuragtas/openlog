@@ -477,6 +477,32 @@ operator guide [docs/operations/saas.md](../operations/saas.md), D-079–D-081. 
 
 Owner e-mails use `OPENLOG_SMTP_*` and link to `OPENLOG_PUBLIC_URL`.
 
+## Report chart images (`openlog-renderer`, api, allinone; D-097)
+
+Optional PNG widget images in scheduled report e-mails ([operations/reports.md](../operations/reports.md)). Without
+`OPENLOG_RENDERER_URL` reports keep their HTML tables and no render endpoint exists. `openlog-renderer` ships as its own
+image (`ghcr.io/onuragtas/openlog-renderer`, headless Chromium); it needs no Kafka, ClickHouse or PostgreSQL.
+
+| Variable | Default | Service | Description |
+|---|---|---|---|
+| `OPENLOG_RENDERER_URL` | `` | api | Render API base URL, e.g. `http://openlog-renderer:8090` (`https://` with TLS). Requires `OPENLOG_RENDERER_TOKEN` and `OPENLOG_KEY_HASH_SECRET` or `OPENLOG_SECRETS_KEY` (render tokens are signed with a key derived from them; same value on every api pod) |
+| `OPENLOG_RENDERER_TOKEN` | `` | api, renderer | Shared secret of the render API (≥ 32 characters, `openssl rand -hex 32`); required by `openlog-renderer` |
+| `OPENLOG_RENDERER_TIMEOUT` | `2m` | api | Bound for rendering the images of one report (≥ 5s); on timeout or any renderer error the e-mail is sent with tables |
+| `OPENLOG_RENDERER_TLS_CERT_FILE` / `OPENLOG_RENDERER_TLS_KEY_FILE` | `` | api, renderer | Optional PEM files: the renderer's server certificate on `openlog-renderer`, the api's client certificate on api (set together) |
+| `OPENLOG_RENDERER_TLS_CA_FILE` | `` | api, renderer | On `openlog-renderer`: CA of accepted client certificates (client certificates become required: mTLS; needs the server certificate). On api: CA that verifies the renderer |
+| `OPENLOG_RENDERER_ADDR` | `:8090` | renderer | Listen address of the render API |
+| `OPENLOG_RENDERER_UI_ORIGIN` | `` | renderer | Required. Web UI origin the browser loads the print view from, e.g. `http://openlog-api:8080` (scheme, host, port only). Every request of the page to another origin is refused, DNS resolves only this host |
+| `OPENLOG_RENDERER_MAX_CONCURRENCY` | `2` | renderer | Simultaneous renders (1–64); each runs its own Chromium process (≈ 200–400 MiB) |
+| `OPENLOG_RENDERER_QUEUE_TIMEOUT` | `30s` | renderer | How long a request waits for a free slot before `429` |
+| `OPENLOG_RENDERER_RENDER_TIMEOUT` | `60s` | renderer | Bound for one render: browser start, page load, captures (≥ 5s); then `502` and the browser is killed |
+| `OPENLOG_RENDERER_MAX_IMAGE_BYTES` | `1048576` | renderer | Largest PNG per widget (16 KiB–16 MiB); larger captures are reported as element errors. The api additionally embeds ≤ 1 MiB per image and ≤ 10 MiB per e-mail |
+| `OPENLOG_RENDERER_CHROMIUM_PATH` | `` | renderer | Chromium binary; empty = `chromium`, `chromium-browser`, `google-chrome` or `headless-shell` from `PATH` (the image sets `/usr/bin/chromium`) |
+| `OPENLOG_RENDERER_CHROMIUM_NO_SANDBOX` | `false` | renderer | Run Chromium with `--no-sandbox`. Only in a locked-down container (non-root, read-only root filesystem, no capabilities, no new privileges, egress to the UI origin only); the Compose profile and the Helm chart set `true` with those restrictions because default seccomp profiles refuse the sandbox's user namespaces |
+
+`openlog-renderer` endpoints: `POST /v1/render` (render API, [operations/reports.md](../operations/reports.md)) and the
+admin port (`OPENLOG_ADMIN_ADDR`: `/healthz`, `/readyz` with checks `listener` and `chromium`, `/metrics` with
+`openlog_renderer_renders_total{result}` and `openlog_renderer_render_duration_seconds`).
+
 ## Ports summary
 
 | Port | Service |
@@ -484,6 +510,7 @@ Owner e-mails use `OPENLOG_SMTP_*` and link to `OPENLOG_PUBLIC_URL`.
 | 4317 | ingest OTLP/gRPC |
 | 4318 | ingest OTLP/HTTP |
 | 8080 | api |
+| 8090 | openlog-renderer render API (internal only) |
 | 9464 | admin (health, readiness, metrics) |
 
 ## Not yet specified

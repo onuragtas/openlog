@@ -116,6 +116,9 @@ jobs:
           # AddressSanitizer + UBSan debug PHP built from source (~3 min image build); sanitizer reports fail the job
           - runner: ubuntu-24.04
             php: "8.3-asan"
+          # official FrankenPHP image (ZTS PHP 8.4): full suite + a real FrankenPHP server in worker and classic mode
+          - runner: ubuntu-24.04
+            php: "8.4-frankenphp"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: build openlog.so + phpt (NTS/ZTS, glibc/musl; amd64 and arm64 native runners)
@@ -190,7 +193,9 @@ jobs:
         if: matrix.node == '22'
         run: npm run lint
       - run: npm run typecheck
-      - name: unit + end-to-end tests (Go sampler fixtures, OTLP capture, express/fastify/koa/nest/http, ESM)
+      - name: install the NestJS 12 (ESM) e2e app
+        run: npm ci --prefix test/apps/nest12 --no-audit --no-fund
+      - name: unit + end-to-end tests (Go sampler fixtures, OTLP capture, express/fastify/koa/nest/NestJS 12/http, ESM)
         run: npm test
       - name: instrumentation tests against PostgreSQL, MySQL and Redis
         if: matrix.node == '22'
@@ -344,6 +349,27 @@ jobs:
         if: matrix.dotnet == '9.0'
         run: dotnet pack src/OpenLog.Agent/OpenLog.Agent.csproj -c Release -o "$RUNNER_TEMP/nupkg"
 
+  dotnet-agent-netfx:
+    name: dotnet-agent-netfx (.NET Framework 4.8, ASP.NET 4.x under IIS Express / IIS)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agents/dotnet
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - name: run the net48 sample with TelemetryHttpModule + OpenLog.Agent and assert exported spans (OTLP capture)
+        run: ./test/netfx/run-iis.ps1
+
   helm:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -394,6 +420,23 @@ jobs:
           cache: gradle
       - name: Java agent jar (component java-agent, like release.yml)
         run: JAVA_BUILD=local agents/java/scripts/release-jar.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+      - name: language agent packages (components node-agent, python-agent, dotnet-agent, like release.yml)
+        env:
+          # the node-agent, python-agent and dotnet-agent jobs run the tests
+          RUN_TESTS: "0"
+        run: |
+          NODE_BUILD=local agents/node/scripts/release-pack.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
+          PY_BUILD=local agents/python/scripts/release-dist.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
+          DOTNET_BUILD=local agents/dotnet/scripts/release-nupkg.sh "$DRYRUN_VERSION" "dist/v$DRYRUN_VERSION"
       - name: signed local release
         run: |
           make release-testkeys
@@ -405,6 +448,9 @@ jobs:
           bin/openlog-release verify --keys dist/testkeys/public.key dist/index.json
           grep -q '"component": "php-agent"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "php-agent artifacts missing from the manifest"; exit 1; }
           grep -q '"name": "openlog-javaagent-'"$DRYRUN_VERSION"'.jar"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "java-agent jar missing from the manifest"; exit 1; }
+          for c in node-agent python-agent dotnet-agent; do
+            grep -q '"component": "'"$c"'"' "dist/v$DRYRUN_VERSION/manifest.json" || { echo "$c package missing from the manifest"; exit 1; }
+          done
       - name: PHP agent deb/apk install
         run: agents/php/packaging/test.sh "dist/v$DRYRUN_VERSION" "$DRYRUN_VERSION" deb apk
       - name: deb/rpm install

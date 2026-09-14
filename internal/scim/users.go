@@ -300,10 +300,16 @@ func (h *Handler) deprovision(ctx context.Context, q *request, userID string) (m
 	if m.Role == auth.RoleOwner {
 		return nil, errMutability("owners are managed in openlog and cannot be deactivated through SCIM")
 	}
-	if err := users.RemoveMember(ctx, q.org.ID, userID); err != nil && !errors.Is(err, auth.ErrNotFound) {
+	// Dashboard report recipient lists lose the member's address in the same transaction (D-096).
+	cleanup, err := auth.RemoveMembership(ctx, users, q.org.ID, userID)
+	if err != nil && !errors.Is(err, auth.ErrNotFound) {
 		return nil, err
 	}
 	details["role"] = m.Role
+	if rd := map[string]any{"user_id": userID, "via": "scim"}; cleanup.Details(rd) {
+		details["report_recipient_removed"] = len(cleanup.ReportsUpdated)
+		h.audit(ctx, q, "dashboard.report.recipient_remove", "user", userID, rd)
+	}
 	if n, err := h.sso.RevokeOrgSessions(ctx, q.org.ID, userID); err != nil {
 		h.log.Error("cannot revoke sessions of a deprovisioned user", "org_id", q.org.ID, "user_id", userID, "err", err)
 	} else if n > 0 {

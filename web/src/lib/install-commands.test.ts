@@ -10,6 +10,8 @@ import {
   shQuote,
   targetNeedsKey,
   yamlQuote,
+  pythonVersion,
+  type AgentPackageInfo,
   type InstallOptions,
   type OnboardingInfo,
   type TargetId,
@@ -23,6 +25,25 @@ const INFO: OnboardingInfo = {
   cors_enabled: false,
   features: { fleet_php_install: true },
 };
+
+const REL = "https://github.com/onuragtas/openlog/releases/download";
+const pkgInfo = (registry: AgentPackageInfo["registry"], name: string, version: string, file: string): AgentPackageInfo => ({
+  name,
+  version,
+  registry,
+  registry_url: `https://registry.example/${name}`,
+  release_asset_url: `${REL}/v0.9.1/${file}`,
+  release_asset_sha256_url: `${REL}/v0.9.1/${file}.sha256`,
+});
+const packages = (registry: AgentPackageInfo["registry"]): Partial<OnboardingInfo> => ({
+  agent_packages: {
+    node: pkgInfo(registry, "@openlog/node", "0.9.1", "openlog-node-0.9.1.tgz"),
+    python: pkgInfo(registry, "openlog-agent", "0.9.1", "openlog_agent-0.9.1-py3-none-any.whl"),
+    dotnet: pkgInfo(registry, "OpenLog.Agent", "0.9.1", "OpenLog.Agent.0.9.1.nupkg"),
+  },
+});
+/** The server found agent_version on npm, PyPI and nuget.org. */
+const onRegistry = packages("available");
 
 const opts = (patch: Partial<InstallOptions> = {}): InstallOptions => ({ ...DEFAULT_OPTIONS, licenseKey: KEY, ...patch });
 const build = (target: TargetId, patch: Partial<InstallOptions> = {}, info: Partial<OnboardingInfo> = {}) =>
@@ -141,7 +162,7 @@ describe("APM agents", () => {
   });
 
   it("Node.js: CommonJS --require and ES modules --import", () => {
-    expect(block("apm/node", "install").code).toBe("npm install @openlog/node");
+    expect(block("apm/node", "install", {}, onRegistry).code).toBe("npm install @openlog/node");
     expect(block("apm/node", "run", { serviceName: "checkout" }).code).toMatch(/export OPENLOG_SERVICE_NAME=checkout\nnode --require @openlog\/node\/register server\.js$/);
     const esm = build("apm/node", { nodeModules: "esm" });
     expect(esm.blocks.find((b) => b.id === "run")!.code).toMatch(/\nnode --import @openlog\/node\/register server\.mjs$/);
@@ -149,7 +170,7 @@ describe("APM agents", () => {
   });
 
   it("Python: openlog-agent with openlog-instrument", () => {
-    expect(block("apm/python", "install").code).toBe("pip install openlog-agent");
+    expect(block("apm/python", "install", {}, onRegistry).code).toBe("pip install openlog-agent");
     expect(block("apm/python", "run").code).toMatch(/\nopenlog-instrument python app\.py$/);
     expect(block("apm/python", "run", { pythonLauncher: "gunicorn" }).code).toMatch(/\nopenlog-instrument gunicorn -w 4 -b 0\.0\.0\.0:8000 myproject\.wsgi:application$/);
   });
@@ -178,9 +199,56 @@ describe("APM agents", () => {
   });
 
   it(".NET: OpenLog.Agent with AddOpenLog or OpenLogAgent.Start", () => {
-    expect(block("apm/dotnet", "install").code).toBe("dotnet add package OpenLog.Agent");
+    expect(block("apm/dotnet", "install", {}, onRegistry).code).toBe("dotnet add package OpenLog.Agent");
+    expect(build("apm/dotnet", {}, onRegistry).blocks.map((b) => b.id)).toEqual(["install", "code", "run"]);
     expect(block("apm/dotnet", "code").code).toContain("builder.Services.AddOpenLog();");
     expect(block("apm/dotnet", "code", { dotnetApp: "console", serviceName: "invoice-job" }).code).toContain('OpenLogAgent.Start(o => o.ServiceName = "invoice-job")');
+  });
+
+  describe("language agent package source", () => {
+    it("registry commands only when the server found the version on the registry", () => {
+      for (const target of ["apm/node", "apm/python", "apm/dotnet"] as const) {
+        const r = build(target, {}, onRegistry);
+        expect(r.notes).toContain("packageRegistry");
+        expect(r.notes).not.toContain("packageRelease");
+        expect(r.blocks.map((b) => b.code).join("\n")).not.toContain("releases/download");
+      }
+    });
+
+    it("GitHub release assets when the registry does not have the version", () => {
+      const missing = packages("missing");
+      expect(block("apm/node", "install", {}, missing).code).toBe(`npm install ${REL}/v0.9.1/openlog-node-0.9.1.tgz`);
+      expect(block("apm/python", "install", {}, missing).code).toBe(`pip install ${REL}/v0.9.1/openlog_agent-0.9.1-py3-none-any.whl`);
+      const dotnet = build("apm/dotnet", {}, missing);
+      expect(dotnet.blocks.map((b) => b.id)).toEqual(["download", "install", "code", "run"]);
+      expect(dotnet.blocks[0]!.code).toBe(
+        'mkdir -p "$HOME/.openlog/nuget"\n' +
+          `(cd "$HOME/.openlog/nuget" && curl -fsSLO ${REL}/v0.9.1/OpenLog.Agent.0.9.1.nupkg && curl -fsSLO ${REL}/v0.9.1/OpenLog.Agent.0.9.1.nupkg.sha256 && sha256sum -c OpenLog.Agent.0.9.1.nupkg.sha256)`,
+      );
+      expect(dotnet.blocks[1]!.code).toBe('dotnet nuget add source "$HOME/.openlog/nuget" -n openlog-local\ndotnet add package OpenLog.Agent --version 0.9.1');
+      expect(dotnet.notes).toEqual(expect.arrayContaining(["packageRelease", "dotnetLocalSource"]));
+      for (const target of ["apm/node", "apm/python", "apm/dotnet"] as const) {
+        expect(build(target, {}, missing).notes).not.toContain("packageRegistry");
+      }
+    });
+
+    it("unknown availability or an older server without agent_packages: GitHub release, derived URLs", () => {
+      for (const info of [packages("unknown"), {}]) {
+        expect(block("apm/node", "install", {}, info).code).toBe(`npm install ${REL}/v0.9.1/openlog-node-0.9.1.tgz`);
+        expect(build("apm/python", {}, info).notes).toContain("packageReleaseUnchecked");
+      }
+    });
+
+    it("pre-releases use the PEP 440 wheel name; dev builds use X.Y.Z", () => {
+      expect(pythonVersion("1.2.0-beta.3")).toBe("1.2.0b3");
+      expect(pythonVersion("1.2.0-rc.1")).toBe("1.2.0rc1");
+      expect(pythonVersion("1.2.0")).toBe("1.2.0");
+      expect(block("apm/python", "install", {}, { agent_version: "1.2.0-beta.3" }).code).toBe(`pip install ${REL}/v1.2.0-beta.3/openlog_agent-1.2.0b3-py3-none-any.whl`);
+      const dev = build("apm/dotnet", {}, { agent_version: null, ...packages("available") });
+      expect(dev.blocks[1]!.code).toContain("dotnet add package OpenLog.Agent --version X.Y.Z");
+      expect(dev.blocks[0]!.code).toContain(`${REL}/vX.Y.Z/OpenLog.Agent.X.Y.Z.nupkg`);
+      expect(dev.notes).toEqual(expect.arrayContaining(["versionUnknown", "packageReleaseUnchecked"]));
+    });
   });
 
   it("PHP: release package + openlog-php-install, or the fleet", () => {

@@ -85,7 +85,22 @@ function migrate(raw: Partial<SsoDb> & { connection?: SsoConnection | null }): S
   return {
     ...base,
     ...raw,
-    connections: connections.map((c) => ({ ...defaultConnection(c.protocol, c.id), ...c })),
+    connections: connections.map((c) => {
+      // Metadata trust fields (D-098) of connections stored by an older mock.
+      const old = c.saml as Partial<NonNullable<SsoConnection["saml"]>> | null;
+      return {
+        ...defaultConnection(c.protocol, c.id),
+        ...c,
+        saml: c.saml
+          ? {
+              ...c.saml,
+              metadata_signing_certificates: old?.metadata_signing_certificates ?? [],
+              allow_unsigned_metadata: old?.allow_unsigned_metadata ?? !!c.saml.idp_metadata_url,
+              pending_metadata: old?.pending_metadata ?? null,
+            }
+          : null,
+      };
+    }),
     domains: (raw.domains ?? base.domains).map((d) => ({ ...d, connection_id: d.connection_id ?? null })),
     connectionMappings: raw.connectionMappings ?? {},
   };
@@ -186,6 +201,9 @@ function state(c: SsoConnection | null): SsoState {
       scim_base_url: `${origin()}/api/scim/v2`,
       saml_entity_id: saml ? entity : null, saml_acs_url: saml && c ? `${origin()}/api/v1/sso/saml/${c.id}/acs` : null,
       saml_slo_url: saml && c ? `${origin()}/api/v1/sso/saml/${c.id}/slo` : null,
+      saml_slo_soap_url: saml && c ? `${origin()}/api/v1/sso/saml/${c.id}/slo/soap` : null,
+      oidc_backchannel_logout_uri: c?.protocol === "oidc" ? `${origin()}/api/v1/sso/oidc/${c.id}/backchannel-logout` : null,
+      oidc_frontchannel_logout_uri: c?.protocol === "oidc" ? `${origin()}/api/v1/sso/oidc/${c.id}/frontchannel-logout` : null,
       saml_metadata_url: saml ? entity : null, saml_certificate_pem: saml ? db.spCertificate : null,
     },
     connection: c ? { ...c, default: db.connections[0]?.id === c.id } : null,
@@ -265,7 +283,15 @@ interface ConnectionBody {
   logout_redirect_allowlist: string[];
   allow_external_invitations: boolean;
   oidc: { issuer?: string; client_id?: string; client_secret?: string | null; scopes?: string[]; require_email_verified?: boolean };
-  saml: { idp_metadata_url?: string; idp_metadata_xml?: string; allow_idp_initiated?: boolean; relay_state_allowlist?: string[]; sign_authn_requests?: boolean };
+  saml: {
+    idp_metadata_url?: string;
+    idp_metadata_xml?: string;
+    metadata_signing_certificate_pem?: string | null;
+    allow_unsigned_metadata?: boolean;
+    allow_idp_initiated?: boolean;
+    relay_state_allowlist?: string[];
+    sign_authn_requests?: boolean;
+  };
 }
 
 /** Validates a connection input and applies it to prev (null = a new connection). */
@@ -294,7 +320,21 @@ function applyInput(prev: SsoConnection | null, b: Partial<ConnectionBody>): Sso
     if (xml && !xml.includes("IDPSSODescriptor")) return fail("invalid_argument", "the metadata has no IDPSSODescriptor");
     // Mock metadata: only metadata that mentions SingleLogoutService (or a URL containing "slo") has an IdP SLO endpoint.
     const slo = xml ? xml.includes("SingleLogoutService") : url ? url.includes("slo") : (prev?.saml?.idp_slo_url ?? null) !== null;
+    // Mock metadata trust (internal/sso/metadatatrust.go): a URL containing "signed" serves signed metadata, whose signer
+    // is pinned; any other URL needs an entered certificate or the explicit unsigned choice.
+    const pem = (b.saml?.metadata_signing_certificate_pem ?? "").trim();
+    const keptPins = b.saml?.metadata_signing_certificate_pem == null && prev?.saml?.idp_metadata_url === url ? (prev?.saml?.metadata_signing_certificates ?? []) : [];
+    let pins: string[] = [];
+    if (url) {
+      if (pem || keptPins.length > 0 || url.includes("signed")) {
+        if (!url.includes("signed")) return fail("invalid_argument", "the IdP metadata is not signed, but a metadata signing certificate is set");
+        pins = keptPins.length > 0 && !pem ? keptPins : ["5E1D0C2B3A495867768594A3B2C1D0E0F1E2D3C4B5A69788796A5B4C3D2E1F00"];
+      } else if (!b.saml?.allow_unsigned_metadata) {
+        return fail("invalid_argument", "the IdP metadata from idp_metadata_url is not signed: enter its metadata signing certificate, or allow unsigned metadata");
+      }
+    }
     next.saml = {
+      metadata_signing_certificates: pins, allow_unsigned_metadata: !!url && !!b.saml?.allow_unsigned_metadata, pending_metadata: null,
       idp_metadata_url: url, idp_entity_id: "https://idp.example.com/metadata", idp_sso_url: "https://idp.example.com/sso",
       idp_slo_url: slo ? "https://idp.example.com/slo" : null,
       idp_certificates: ["3A1F9C427B00DEADBEEF112233445566778899AABBCCDDEEFF00112233445566"], idp_cert_not_after: formatTs(Date.now() + 365 * 86_400_000),
@@ -513,6 +553,28 @@ export const ssoHandlers = [
       ? { ...okHealth(), status: "warning", message: `GET ${source}: connection refused`, failures: c.health.failures + 1 }
       : okHealth();
     const next = { ...c, health };
+    replaceConnection(next);
+    return persist(HttpResponse.json(state(next)));
+  }),
+
+  // Mock confirmation of a pending IdP metadata change (D-098).
+  http.post(`${API}/sso/connections/:id/metadata/accept`, async ({ request, params }) => {
+    const ctx = gate(request, "admin");
+    if (ctx instanceof Response) return ctx;
+    const c = findConnection(param(params, "id"));
+    if (!c) return connectionNotFound();
+    const pending = c.saml?.pending_metadata;
+    const { digest } = await body<{ digest: string }>(request);
+    if (!c.saml || !pending) return fail("failed_precondition", "no IdP metadata change awaits confirmation");
+    if (digest !== pending.digest) return fail("failed_precondition", "the pending IdP metadata change is a different one; reload the connection and compare it again");
+    const next: SsoConnection = {
+      ...c,
+      health: okHealth(),
+      saml: {
+        ...c.saml, idp_certificates: pending.idp_certificates, idp_sso_url: pending.idp_sso_url, idp_slo_url: pending.idp_slo_url, pending_metadata: null,
+        metadata_signing_certificates: pending.signer_certificate ? [pending.signer_certificate] : c.saml.metadata_signing_certificates,
+      },
+    };
     replaceConnection(next);
     return persist(HttpResponse.json(state(next)));
   }),

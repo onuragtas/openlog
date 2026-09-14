@@ -76,6 +76,40 @@ func (v Version) String() string {
 	return s
 }
 
+// PythonVersion converts a product version to the PEP 440 version the Python agent is built with (release.yml
+// python-agent-package): X.Y.Z-alpha.N → X.Y.ZaN, -beta.N → bN, -rc.N → rcN; anything else stays unchanged.
+func PythonVersion(v string) string {
+	v = strings.TrimPrefix(v, "v")
+	base, pre, found := strings.Cut(v, "-")
+	if !found {
+		return v
+	}
+	for label, short := range map[string]string{"alpha": "a", "beta": "b", "rc": "rc"} {
+		if n, ok := strings.CutPrefix(pre, label+"."); ok && isNumeric(n) {
+			return base + short + n
+		}
+	}
+	return v
+}
+
+// Language agent package file names of release v, attached to every GitHub release (docs/operations/releasing.md).
+func NodeAgentPackageName(v string) string {
+	return "openlog-node-" + strings.TrimPrefix(v, "v") + ".tgz"
+}
+
+// PythonAgentWheelName is the pure Python wheel of openlog-agent (PEP 440 version).
+func PythonAgentWheelName(v string) string {
+	return "openlog_agent-" + PythonVersion(v) + "-py3-none-any.whl"
+}
+
+// PythonAgentSdistName is the source distribution of openlog-agent (PEP 440 version).
+func PythonAgentSdistName(v string) string { return "openlog_agent-" + PythonVersion(v) + ".tar.gz" }
+
+// DotnetAgentPackageName is the NuGet package of OpenLog.Agent.
+func DotnetAgentPackageName(v string) string {
+	return "OpenLog.Agent." + strings.TrimPrefix(v, "v") + ".nupkg"
+}
+
 // IsPrerelease reports whether the version has pre-release identifiers.
 func (v Version) IsPrerelease() bool { return len(v.Pre) > 0 }
 

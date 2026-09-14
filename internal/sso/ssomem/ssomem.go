@@ -330,6 +330,32 @@ func (s *Store) ListSSOSessions(ctx context.Context, connectionID, subject, user
 	return out, nil
 }
 
+func (s *Store) ListSSOSessionsByIndex(ctx context.Context, connectionID, sessionIndex string, now time.Time) ([]sso.SSOSession, error) {
+	if sessionIndex == "" {
+		return []sso.SSOSession{}, nil
+	}
+	s.mu.Lock()
+	var cand []sso.SSOSession
+	for _, x := range s.sessions {
+		if x.ConnectionID == connectionID && x.SessionIndex == sessionIndex {
+			cand = append(cand, x)
+		}
+	}
+	s.mu.Unlock()
+	out := []sso.SSOSession{}
+	for _, x := range cand {
+		active, err := s.users.ListSessions(ctx, x.UserID, now)
+		if err != nil {
+			return nil, err
+		}
+		if slices.ContainsFunc(active, func(a auth.Session) bool { return a.ID == x.SessionID }) {
+			out = append(out, x)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+
 func (s *Store) CreateDomain(_ context.Context, d *sso.Domain) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

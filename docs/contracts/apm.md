@@ -493,7 +493,7 @@ produce what §1–§7 and §11 need without configuration; all follow the same 
 |---|---|---|
 | Service identity (§1) | `service.name/version/namespace`, `deployment.environment.name` from `OPENLOG_*` | same variables |
 | Host and container linkage (§1) | `host.id`: `/run/openlog-infra-agent/host-id` → machine-id files → infra agent state → platform id → generated (semantic-conventions §1); `container.id` from `/proc/self/cgroup`, else `/proc/self/mountinfo` | same chain and sources |
-| Entry spans and transaction names (§2) | `openloghttp` sets `http.route` from ServeMux patterns; chi/gin/echo modules | express, koa and `@fastify/otel` set `http.route` on the HTTP server span; otherwise (NestJS, custom routers) the agent copies the longest `http.route` of a local descendant onto the entry server span and renames it `<METHOD> <route>` |
+| Entry spans and transaction names (§2) | `openloghttp` sets `http.route` from ServeMux patterns; chi/gin/echo modules | express, koa and `@fastify/otel` set `http.route` on the HTTP server span; otherwise (NestJS, custom routers) the agent copies the longest `http.route` of a local descendant onto the entry server span and renames it `<METHOD> <route>`. NestJS 4–11: OpenTelemetry Nest instrumentation (request context and handler spans); NestJS 12 (ESM-only, not covered upstream): the express/fastify instrumentation names the entry span when the app starts with `--import @openlog/node/register`, and the optional `OpenLogNestInterceptor` (`@openlog/node/nest`) sets `http.route` from the matched route itself and adds `nestjs.controller`/`nestjs.callback` (no Nest handler spans on 12) |
 | Errors (§3) | `exception` events from instrumentations | `exception` events from instrumentations (Node stack format) |
 | Sampling weight (§4) | parent-based consistent probability sampling: sampled roots write tracestate `ot=th:<T>` and `sampling.ratio`; local entry spans of sampled remote parents get `sampling.ratio` from `ot=th`/`ot=p`; W3C random flag; optional `ot=rv` (`OPENLOG_SAMPLING_RV`) | identical; verified against fixtures generated from the Go sampler (D-061) |
 | DB queries (§7) | `db.query.text` sanitized (`openlogsql.Sanitize`; `OPENLOG_DB_QUERY_TEXT` = `sanitized`, `raw` or `off`) | same algorithm and variable for `db.query.text`/`db.statement`; Redis/Memcached `CMD ? ?`; capped at 4096 characters |
@@ -527,6 +527,9 @@ application's log scopes. MassTransit and Confluent.Kafka (through its OpenTelem
 the request trace into PRODUCER and consumer-side spans with `messaging.*` attributes. Applications that cannot be
 recompiled use the OpenTelemetry .NET automatic instrumentation with the agent's plugin, which applies the same resource,
 sampler, propagator, processors and license header (tested against a pinned automatic instrumentation release).
+On .NET Framework 4.8 (ASP.NET 4.x) the `netstandard2.0` build runs with OpenTelemetry's `TelemetryHttpModule`, which
+creates the SERVER span of every managed request; CI job `dotnet-agent-netfx` (Windows, IIS Express or IIS) runs the
+sample and checks the exported span (trace continuation, `url.path`, status, resource, license header).
 
 The **Python agent** (`agents/python`, PyPI `openlog-agent`, D-073) is a distribution of the OpenTelemetry Python SDK
 and contrib instrumentations (`openlog-instrument <command>` or `openlog_agent.start()`) with the same `OPENLOG_*`

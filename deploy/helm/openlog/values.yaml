@@ -1057,3 +1057,65 @@ updater:
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
+
+# -----------------------------------------------------------------------------
+# openlog-renderer (optional, D-097): PNG widget images in scheduled report e-mails
+# (docs/operations/reports.md). Headless Chromium in its own image; reachable only from api pods
+# (ClusterIP + NetworkPolicy) and allowed to connect only to the api Service (and DNS).
+# Render tokens are signed with the key hash secret or alert.secretsKey (one must be set).
+# Sets on api pods: OPENLOG_RENDERER_URL, OPENLOG_RENDERER_TOKEN, OPENLOG_RENDERER_TIMEOUT and, with
+# tls.secretName, OPENLOG_RENDERER_TLS_CERT_FILE / OPENLOG_RENDERER_TLS_KEY_FILE / OPENLOG_RENDERER_TLS_CA_FILE.
+# -----------------------------------------------------------------------------
+renderer:
+  enabled: false
+  image:
+    repository: ghcr.io/onuragtas/openlog-renderer
+    # Defaults to the chart appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  logLevel: ""
+  # OPENLOG_RENDERER_TOKEN (>= 32 characters, `openssl rand -hex 32`), stored in the Secret <fullname>-renderer;
+  # or existingSecret.name/key.
+  token: ""
+  existingSecret:
+    name: ""
+    key: token
+  port: 8090
+  # api side: bound for rendering one report (OPENLOG_RENDERER_TIMEOUT).
+  timeout: 2m
+  # OPENLOG_RENDERER_MAX_CONCURRENCY (Chromium processes per pod), OPENLOG_RENDERER_RENDER_TIMEOUT,
+  # OPENLOG_RENDERER_QUEUE_TIMEOUT, OPENLOG_RENDERER_MAX_IMAGE_BYTES.
+  maxConcurrency: 2
+  renderTimeout: 60s
+  queueTimeout: 30s
+  maxImageBytes: 1048576
+  # OPENLOG_RENDERER_CHROMIUM_PATH ("" = the image's /usr/bin/chromium).
+  chromiumPath: ""
+  # OPENLOG_RENDERER_CHROMIUM_NO_SANDBOX: Chromium's namespace sandbox needs unprivileged user namespaces, which
+  # RuntimeDefault seccomp profiles usually refuse. The pod is locked down instead (non-root, read-only root
+  # filesystem, all capabilities dropped, no service account token, NetworkPolicy egress to the api only). Set
+  # false on nodes/profiles that allow the sandbox (e.g. a seccomp profile permitting clone/unshare of user namespaces).
+  chromiumNoSandbox: true
+  # OPENLOG_RENDERER_UI_ORIGIN: the origin the browser loads; "" = http://<api Service>:<api.service.port>.
+  uiOrigin: ""
+  # Optional mTLS: a kubernetes.io/tls Secret with tls.crt, tls.key and ca.crt, mounted into renderer and api pods
+  # (the certificate must be valid for the renderer Service name and usable as client certificate).
+  tls:
+    secretName: ""
+  networkPolicy:
+    enabled: true
+    # Extra ingress peers for the metrics port 9464 (e.g. the Prometheus namespace); empty = any pod.
+    metricsFrom: []
+    # Extra egress rules (list of NetworkPolicyEgressRule).
+    extraEgress: []
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {memory: 1536Mi}
+  # /dev/shm for Chromium (memory-backed emptyDir) and /tmp (profiles).
+  shmSizeLimit: 256Mi
+  tmpSizeLimit: 512Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

@@ -76,6 +76,16 @@ func TestClassify(t *testing.T) {
 		"openlog-javaagent-0.4.0.jar":                  {Component: "java-agent", OS: "any", Arch: "any", Format: "jar"},
 		"openlog-javaagent-0.3.0.jar":                  nil,
 		"openlog-javaagent-0.4.0.jar.sha256":           nil,
+		"openlog-node-0.4.0.tgz":                       {Component: "node-agent", OS: "any", Arch: "any", Format: "tgz"},
+		"openlog-node-0.3.0.tgz":                       nil,
+		"openlog-node-0.4.0.tgz.sha256":                nil,
+		"openlog-agent-0.4.0.tgz":                      nil, // Helm chart, not the Node.js agent
+		"openlog_agent-0.4.0-py3-none-any.whl":         {Component: "python-agent", OS: "any", Arch: "any", Format: "whl"},
+		"openlog_agent-0.4.0.tar.gz":                   nil, // sdist: release asset only
+		"openlog_agent-0.3.0-py3-none-any.whl":         nil,
+		"OpenLog.Agent.0.4.0.nupkg":                    {Component: "dotnet-agent", OS: "any", Arch: "any", Format: "nupkg"},
+		"OpenLog.Agent.0.4.0.snupkg":                   nil,
+		"OpenLog.Agent.0.3.0.nupkg":                    nil,
 	}
 	for name, want := range cases {
 		got, ok := classify(name, "0.4.0")
@@ -89,6 +99,19 @@ func TestClassify(t *testing.T) {
 		if !ok || got != *want {
 			t.Errorf("%s: got %+v %v, want %+v", name, got, ok, *want)
 		}
+	}
+	// Pre-releases: the wheel carries the PEP 440 version, npm and NuGet the SemVer one.
+	for name, component := range map[string]string{
+		"openlog_agent-1.0.0b2-py3-none-any.whl": "python-agent",
+		"openlog-node-1.0.0-beta.2.tgz":          "node-agent",
+		"OpenLog.Agent.1.0.0-beta.2.nupkg":       "dotnet-agent",
+	} {
+		if got, ok := classify(name, "1.0.0-beta.2"); !ok || got.Component != component {
+			t.Errorf("%s (1.0.0-beta.2): got %+v %v, want %s", name, got, ok, component)
+		}
+	}
+	if got, ok := classify("openlog_agent-1.0.0-beta.2-py3-none-any.whl", "1.0.0-beta.2"); ok {
+		t.Errorf("SemVer-named wheel classified: %+v", got)
 	}
 }
 

@@ -677,6 +677,9 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
 {{- end }}
 {{- end }}
 {{- end }}
+{{- if eq $c "api" }}
+{{- include "openlog.renderer.apiEnv" $root }}{{- /* renderer.yaml: PNG report images (D-097) */}}
+{{- end }}
 {{- /* Component config wins over the top-level config for the same name (explicit sets: sprig merge would let a
      boolean false lose). */}}
 {{- $cfg := dict }}

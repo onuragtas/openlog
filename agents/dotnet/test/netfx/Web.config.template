@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- web.config of the IIS Express / IIS smoke test of samples/OpenLog.AspNetFramework.Sample. run-iis.ps1 sets the
+     appSettings values (OTLP capture server of test/OpenLog.NetFx.SmokeTest) and replaces <runtime> with the binding
+     redirects the build generated into OpenLog.AspNetFramework.Sample.dll.config. -->
+<configuration>
+  <appSettings>
+    <!-- copied into the environment by Global.Application_Start before OpenLogAgent.Start -->
+    <add key="OPENLOG_ENDPOINT" value="set-by-run-iis.ps1" />
+    <add key="OPENLOG_LICENSE_KEY" value="set-by-run-iis.ps1" />
+  </appSettings>
+  <system.web>
+    <compilation debug="false" targetFramework="4.8">
+      <assemblies>
+        <!-- bin/ holds netstandard2.0 assemblies (OpenLog.Agent, OpenTelemetry): ASP.NET compiles Global.asax against them -->
+        <add assembly="netstandard, Version=2.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
+      </assemblies>
+    </compilation>
+    <httpRuntime targetFramework="4.8" />
+    <customErrors mode="Off" />
+  </system.web>
+  <system.webServer>
+    <modules>
+      <add name="TelemetryHttpModule" type="OpenTelemetry.Instrumentation.AspNet.TelemetryHttpModule, OpenTelemetry.Instrumentation.AspNet.TelemetryHttpModule" preCondition="integratedMode,managedHandler" />
+    </modules>
+    <handlers>
+      <add name="Users" path="users" verb="GET" type="OpenLog.AspNetFramework.Sample.UsersHandler, OpenLog.AspNetFramework.Sample" preCondition="integratedMode" />
+    </handlers>
+    <httpErrors errorMode="Detailed" />
+  </system.webServer>
+  <runtime />
+</configuration>

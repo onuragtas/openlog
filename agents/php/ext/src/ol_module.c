@@ -186,6 +186,18 @@ PHP_RINIT_FUNCTION(openlog)
 	for (i = 0; i < n; i++) {
 		efree(owned[i]);
 	}
+	if (strcmp(sapi_module.name, "frankenphp") == 0) {
+		/* a FrankenPHP worker script: its requests are the frankenphp_handle_request() callbacks (inst_workers.c);
+		 * the script's own run (boot, waiting) is never sent, even when it ends before handling a request */
+		char *w = ol_server_var(ZEND_STRL("FRANKENPHP_WORKER"));
+		if (w) {
+			if (*w && strcmp(w, "0") != 0) {
+				OLG(worker_mode) = true;
+				ol_txn_finish(false);
+			}
+			efree(w);
+		}
+	}
 	return SUCCESS;
 }
 

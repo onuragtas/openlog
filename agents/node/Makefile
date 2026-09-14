@@ -13,7 +13,7 @@ endif
 .PHONY: install build lint typecheck test test-integration bench fixtures clean
 
 install:
-	$(RUN) 'npm ci --no-audit --no-fund'
+	$(RUN) 'npm ci --no-audit --no-fund && npm run test:apps:install'
 
 build:
 	$(RUN) 'npm run build'

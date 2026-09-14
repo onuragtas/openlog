@@ -467,11 +467,12 @@ public sealed class OtlpCaptureServer : IAsyncDisposable
     public IReadOnlyCollection<LogData> Logs => logs.ToArray();
     public IReadOnlyCollection<(string Path, string? LicenseKey, string? Encoding, string? UserAgent)> Requests => requests.ToArray();
 
-    public static async Task<OtlpCaptureServer> StartAsync()
+    /// <param name="port">0: a random free port; a fixed port for out-of-process agents (test/OpenLog.NetFx.SmokeTest).</param>
+    public static async Task<OtlpCaptureServer> StartAsync(int port = 0)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
-        builder.WebHost.UseKestrel(o => o.Listen(IPAddress.Loopback, 0));
+        builder.WebHost.UseKestrel(o => o.Listen(IPAddress.Loopback, port));
         var app = builder.Build();
         var server = new OtlpCaptureServer(app);
         app.MapPost("/v1/{signal}", async (HttpContext ctx, string signal) =>

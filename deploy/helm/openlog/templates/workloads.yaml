@@ -94,10 +94,16 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "openlog.tls.volumeMounts" $ | nindent 12 }}
+            {{- if eq $component "api" }}
+            {{- include "openlog.renderer.apiVolumeMounts" $ | nindent 12 }}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
         {{- include "openlog.tls.volumes" $ | nindent 8 }}
+        {{- if eq $component "api" }}
+        {{- include "openlog.renderer.apiVolumes" $ | nindent 8 }}
+        {{- end }}
 {{- end }}
 {{- end }}

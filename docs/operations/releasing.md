@@ -27,6 +27,11 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `openlog-infra-agent_<v>_linux_{amd64,arm64}.{deb,rpm}` | `format=deb` / `rpm` |
 | `openlog_<v>_linux_{amd64,arm64}.tar.gz` (all backend binaries) | `component=backend` |
 | `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP agent: 36 modules, `openlog-php-install`; [php-agent.md](../contracts/php-agent.md) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
+| `openlog-javaagent-<v>.jar` + `.sha256` (Java agent, [below](#java-agent-jar)) | `component=java-agent`, `os`/`arch` `any`, `format=jar` (the `.sha256` is not in the manifest) |
+| `openlog-node-<v>.tgz` + `.sha256` (`npm pack` of `@openlog/node`, [below](#language-agent-packages-github-release)) | `component=node-agent`, `os`/`arch` `any`, `format=tgz` |
+| `openlog_agent-<pep440 v>-py3-none-any.whl` + `.sha256` (Python agent wheel) | `component=python-agent`, `os`/`arch` `any`, `format=whl` |
+| `openlog_agent-<pep440 v>.tar.gz` + `.sha256` (Python agent sdist) | not in the manifest |
+| `OpenLog.Agent.<v>.nupkg` + `.sha256` (.NET agent) | `component=dotnet-agent`, `os`/`arch` `any`, `format=nupkg` |
 | `openlog-<v>.tgz` (Helm chart `deploy/helm/openlog`, `version` = `appVersion` = `<v>`) | `helm_charts.openlog` (and `helm_chart`) |
 | `openlog-agent-<v>.tgz` (Helm chart `deploy/helm/openlog-agent`, `version` = `appVersion` = `<v>`) | `helm_charts.openlog-agent` |
 | `ghcr.io/onuragtas/openlog:<v>` (not a file) | `images.openlog` = `…@sha256:<digest>` |
@@ -147,15 +152,19 @@ git push origin v0.4.0
 5. `go-agent-tags` – after the GitHub release is published, pushes the Go module tags on the tagged
    commit (atomic push; see below), then asks `proxy.golang.org` for them (best effort).
 
-6. `node-agent-npm` – after the GitHub release is published, sets `agents/node` to the tag version, runs the
-   Node.js agent tests and publishes `@openlog/node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
+6. `node-agent-npm` – after the GitHub release is published, publishes the `openlog-node-<v>.tgz` built by
+   `node-agent-package` (the release asset) as `@openlog/node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
 
-- `python-agent-pypi` – after the GitHub release is published, sets `agents/python` to the tag version (PEP 440),
-  runs the Python agent tests, builds the wheel/sdist and publishes `openlog-agent==<v>` to PyPI with trusted
-  publishing (see [Python agent package](#python-agent-package)).
+- `python-agent-pypi` – after the GitHub release is published, publishes the wheel and sdist built by
+  `python-agent-package` (the release assets) as `openlog-agent==<v>` to PyPI with trusted publishing (see
+  [Python agent package](#python-agent-package)).
 
-7. `dotnet-agent-nuget` – after the GitHub release is published, runs the .NET agent unit tests, packs
-   `OpenLog.Agent` at the tag version and pushes it to nuget.org (see [.NET agent package](#net-agent-package)).
+7. `dotnet-agent-nuget` – after the GitHub release is published, pushes the `OpenLog.Agent.<v>.nupkg` built by
+   `dotnet-agent-package` (the release asset, with its `.snupkg`) to nuget.org (see [.NET agent package](#net-agent-package)).
+
+The three registry jobs are optional. `node-agent-package`, `python-agent-package` and `dotnet-agent-package` run before
+`release` in every release (tests included) and their files are always attached to the GitHub release, so the agents
+install without npm, PyPI or nuget.org ([Language agent packages](#language-agent-packages-github-release)).
 
 - `helm-oci` – optional (repository variable `HELM_OCI_PUSH` = `true`, otherwise skipped with a warning): after the
   GitHub release is published, downloads `openlog-<v>.tgz` and `openlog-agent-<v>.tgz` from it, checks their sha256
@@ -212,6 +221,32 @@ Consumers: `go get github.com/onuragtas/openlog/agents/go@vX.Y.Z` (+ `…/instru
 
 Between releases, `agents/go/version.go` keeps the last prepared version, so `go get …@master`
 pseudo-versions report it as `telemetry.distro.version`.
+
+### Language agent packages (GitHub release)
+
+Every release attaches the Node.js, Python and .NET agent packages to the GitHub release, whether or not the registry
+jobs below have credentials, so users never depend on npm, PyPI or nuget.org accounts of the project:
+
+| Asset | Built by (`release.yml` job, script) | Manifest | Install without the registry |
+|---|---|---|---|
+| `openlog-node-<v>.tgz` + `.sha256` | `node-agent-package`: `agents/node/scripts/release-pack.sh` (`npm version`, `npm ci`, `npm test`, `npm pack`) | `node-agent` / `tgz` | `npm install https://github.com/onuragtas/openlog/releases/download/v<v>/openlog-node-<v>.tgz` |
+| `openlog_agent-<pep440 v>-py3-none-any.whl` + sdist `openlog_agent-<pep440 v>.tar.gz`, each + `.sha256` | `python-agent-package`: `agents/python/scripts/release-dist.sh` (PEP 440 version, tests, `python -m build`, `twine check --strict`) | `python-agent` / `whl` (sdist: not in the manifest) | `pip install https://github.com/onuragtas/openlog/releases/download/v<v>/openlog_agent-<pep440 v>-py3-none-any.whl` |
+| `OpenLog.Agent.<v>.nupkg` + `.sha256` | `dotnet-agent-package`: `agents/dotnet/scripts/release-nupkg.sh` (unit tests, `dotnet pack`) | `dotnet-agent` / `nupkg` | download into a folder, `sha256sum -c`, `dotnet nuget add source <folder> -n openlog-local`, `dotnet add package OpenLog.Agent --version <v>` (no `--source`: it would limit the restore to the folder and lose the OpenTelemetry dependencies) |
+
+The three jobs run in parallel with `image`, before `release`, which downloads their workflow artifacts into
+`dist/v<v>/`; `build-manifest` lists the tgz, whl and nupkg (`os`/`arch` `any`), so they are signed and checked by
+`verify --check-artifacts` like the Java jar. The `.snupkg` symbols package stays a workflow artifact
+(`dotnet-agent-symbols`) for the NuGet push. The registry jobs publish exactly these files (after `sha256sum -c`), so
+the registry and the release serve the same bytes.
+
+The Add data page (`web/src/lib/install-commands.ts`) installs from the registry only when `GET /api/v1/onboarding`
+reports `agent_packages.<lang>.registry = available` (the API asks npm, PyPI and the nuget.org flat container, 3 s
+timeout, cached for an hour; unreachable registries are `unknown`), and from these release assets otherwise.
+
+Locally: `make release-language-agents VERSION=X.Y.Z` (node:22-alpine, python:3.12-slim, dotnet/sdk:8.0; `RUN_TESTS=0`
+skips the tests; `NODE_BUILD=local` / `PY_BUILD=local` / `DOTNET_BUILD=local` use host toolchains) before
+`make release-local VERSION=X.Y.Z …`. The CI job `release dry run` builds the three packages and fails unless they are in
+the dry-run manifest.
 
 ### Node.js agent package
 

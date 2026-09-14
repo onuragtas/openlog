@@ -59,6 +59,8 @@ type Server struct {
 	sso ssoService
 	// public endpoints and flags of GET /api/v1/onboarding ("Add data" page, onboarding.go); nil: derived from requests
 	onboarding *OnboardingConfig
+	// render token signing key of the internal report render endpoints (dashboard_render.go, D-097); nil: none
+	renderKey []byte
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.

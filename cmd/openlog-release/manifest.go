@@ -26,6 +26,12 @@ import (
 //	openlog-<v>.tgz                                           Helm chart (manifest.helm_chart and helm_charts.openlog)
 //	openlog-agent-<v>.tgz                                     Helm chart (manifest.helm_charts.openlog-agent)
 //	openlog-javaagent-<v>.jar                                 component java-agent, os/arch "any", format jar
+//	openlog-node-<v>.tgz                                      component node-agent, os/arch "any", format tgz (npm pack)
+//	openlog_agent-<pep440 v>-py3-none-any.whl                 component python-agent, os/arch "any", format whl
+//	OpenLog.Agent.<v>.nupkg                                   component dotnet-agent, os/arch "any", format nupkg
+//
+// The Python sdist (openlog_agent-<pep440 v>.tar.gz) and the .sha256 files are published with the GitHub release but
+// are not manifest artifacts.
 var componentPrefixes = map[string]string{
 	"openlog-infra-agent": lib.ComponentInfraAgent,
 	"openlog-php-agent":   lib.ComponentPHPAgent,
@@ -50,8 +56,18 @@ func helmChartName(name, version string) (string, bool) {
 // classify maps a file name of a release directory to an artifact. ok is false for files that are
 // not release artifacts (manifest, signatures, install.sh, …).
 func classify(name, version string) (a lib.Artifact, ok bool) {
-	if name == "openlog-javaagent-"+version+"."+lib.FormatJar {
-		return lib.Artifact{Component: lib.ComponentJavaAgent, OS: lib.PlatformAny, Arch: lib.PlatformAny, Format: lib.FormatJar, Name: name}, true
+	anyPlatform := func(component, format string) (lib.Artifact, bool) {
+		return lib.Artifact{Component: component, OS: lib.PlatformAny, Arch: lib.PlatformAny, Format: format, Name: name}, true
+	}
+	switch name {
+	case "openlog-javaagent-" + version + "." + lib.FormatJar:
+		return anyPlatform(lib.ComponentJavaAgent, lib.FormatJar)
+	case lib.NodeAgentPackageName(version):
+		return anyPlatform(lib.ComponentNodeAgent, lib.FormatTgz)
+	case lib.PythonAgentWheelName(version):
+		return anyPlatform(lib.ComponentPythonAgent, lib.FormatWheel)
+	case lib.DotnetAgentPackageName(version):
+		return anyPlatform(lib.ComponentDotnetAgent, lib.FormatNupkg)
 	}
 	for _, format := range artifactFormats {
 		base, found := strings.CutSuffix(name, "."+format)

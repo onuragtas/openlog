@@ -31,6 +31,10 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
       - "127.0.0.1:${SSOTEST_KEYCLOAK_PORT:-18080}:8080"
+    # Back-channel logout (OIDC logout tokens, SAML SOAP) calls the test server on the host (D-098):
+    # OPENLOG_TEST_CALLBACK_HOST=host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./realm-openlog.json:/opt/keycloak/data/import/realm-openlog.json:ro
     healthcheck:

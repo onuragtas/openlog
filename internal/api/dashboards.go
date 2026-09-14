@@ -66,6 +66,7 @@ func (s *Server) dashboardRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/dashboards/{id}/export", s.exportDashboard)
 	s.dashboardSharingRoutes(route) // dashboard_sharing.go: versions, settings, share links, reports (D-086, D-087)
 	s.publicDashboardRoutes(mux)    // dashboard_public.go: unauthenticated share link endpoints
+	s.renderDashboardRoutes(mux)    // dashboard_render.go: report print view for openlog-renderer (D-097)
 }
 
 func (s *Server) writeDashboardError(w http.ResponseWriter, route string, p *auth.Principal, err error) {

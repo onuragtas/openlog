@@ -205,7 +205,7 @@ func TestDashboardSharingEndpoints(t *testing.T) {
 	if rec := do("", "GET", pub, ""); rec.Code != 404 || rec.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("revoked link: %d", rec.Code)
 	}
-	s.publicShares = newShareLimiter(shareLimits{perIP: 1000, perToken: 1000, missesPerIP: 2, window: time.Minute})
+	s.publicShares = newShareLimiter(shareLimits{perIP: 1000, perToken: 1000, missesPerIP: 2})
 	codes := []int{}
 	for i := 0; i < 3; i++ {
 		codes = append(codes, do("", "GET", "/api/v1/public/dashboards/olds_unknown", "").Code)

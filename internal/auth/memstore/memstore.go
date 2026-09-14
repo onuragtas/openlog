@@ -156,6 +156,34 @@ func (s *Store) UpdateOrganizationName(_ context.Context, id, name string) error
 	return nil
 }
 
+func (s *Store) SetOrganizationLocale(_ context.Context, id, locale string) error {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return err
+	}
+	o, ok := s.orgs[id]
+	if !ok {
+		return auth.ErrNotFound
+	}
+	o.Locale = locale
+	s.orgs[id] = o
+	return nil
+}
+
+func (s *Store) SetUserLocale(_ context.Context, userID, locale string, explicit bool) error {
+	defer s.mu.Unlock()
+	if err := s.lock(); err != nil {
+		return err
+	}
+	u, ok := s.users[userID]
+	if !ok {
+		return auth.ErrNotFound
+	}
+	u.Locale, u.LocaleExplicit = locale, explicit
+	s.users[userID] = u
+	return nil
+}
+
 func (s *Store) CreateUser(_ context.Context, u *auth.User) error {
 	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {

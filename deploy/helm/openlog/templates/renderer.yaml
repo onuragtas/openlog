@@ -1,0 +1,267 @@
+{{- /* openlog-renderer (D-097, docs/operations/reports.md): PNG widget images of scheduled reports. */ -}}
+{{- if .Values.renderer.enabled }}
+{{- $r := .Values.renderer }}
+{{- $ctx := dict "root" . "component" "renderer" "values" $r }}
+{{- $apiCtx := dict "root" . "component" "api" }}
+{{- if not (or $r.token $r.existingSecret.name) }}
+{{- fail "renderer.enabled requires renderer.token (>= 32 characters) or renderer.existingSecret.name" }}
+{{- end }}
+{{- if and $r.token (lt (len $r.token) 32) }}
+{{- fail "renderer.token must be at least 32 characters" }}
+{{- end }}
+{{- if not $r.existingSecret.name }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "openlog.fullname" . }}-renderer
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+type: Opaque
+data:
+  token: {{ $r.token | b64enc | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $r.replicaCount }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "openlog.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openlog.selectorLabels" $ctx | nindent 8 }}
+        app.kubernetes.io/part-of: openlog
+      annotations:
+        checksum/token: {{ $r.token | sha256sum }}
+        {{- if .Values.metrics.podAnnotations }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /metrics
+        {{- end }}
+        {{- with $r.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "openlog.podSecurity" . | nindent 6 }}
+      {{- with $r.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $r.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $r.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 75
+      containers:
+        - name: renderer
+          image: {{ printf "%s:%s" $r.image.repository (default .Chart.AppVersion $r.image.tag | toString) }}
+          imagePullPolicy: {{ $r.image.pullPolicy }}
+          ports:
+            - name: http-render
+              containerPort: {{ $r.port }}
+              protocol: TCP
+            - name: admin
+              containerPort: 9464
+              protocol: TCP
+          env:
+            - name: OPENLOG_LOG_LEVEL
+              value: {{ default .Values.logLevel $r.logLevel | quote }}
+            - name: OPENLOG_ADMIN_ADDR
+              value: ":9464"
+            - name: GOMEMLIMIT
+              value: "256MiB"
+            - name: OPENLOG_RENDERER_ADDR
+              value: {{ printf ":%d" (int $r.port) | quote }}
+            - name: OPENLOG_RENDERER_UI_ORIGIN
+              value: {{ default (printf "http://%s:%d" (include "openlog.componentName" $apiCtx) (int .Values.api.service.port)) $r.uiOrigin | quote }}
+            - name: OPENLOG_RENDERER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-renderer" (include "openlog.fullname" .)) $r.existingSecret.name }}
+                  key: {{ ternary $r.existingSecret.key "token" (not (empty $r.existingSecret.name)) }}
+            - name: OPENLOG_RENDERER_MAX_CONCURRENCY
+              value: {{ include "openlog.envValue" $r.maxConcurrency }}
+            - name: OPENLOG_RENDERER_RENDER_TIMEOUT
+              value: {{ $r.renderTimeout | quote }}
+            - name: OPENLOG_RENDERER_QUEUE_TIMEOUT
+              value: {{ $r.queueTimeout | quote }}
+            - name: OPENLOG_RENDERER_MAX_IMAGE_BYTES
+              value: {{ include "openlog.envValue" $r.maxImageBytes }}
+            - name: OPENLOG_RENDERER_CHROMIUM_NO_SANDBOX
+              value: {{ $r.chromiumNoSandbox | toString | quote }}
+            {{- with $r.chromiumPath }}
+            - name: OPENLOG_RENDERER_CHROMIUM_PATH
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if $r.tls.secretName }}
+            - name: OPENLOG_RENDERER_TLS_CERT_FILE
+              value: /etc/openlog/renderer-tls/tls.crt
+            - name: OPENLOG_RENDERER_TLS_KEY_FILE
+              value: /etc/openlog/renderer-tls/tls.key
+            - name: OPENLOG_RENDERER_TLS_CA_FILE
+              value: /etc/openlog/renderer-tls/ca.crt
+            {{- end }}
+          startupProbe:
+            httpGet: {path: /healthz, port: admin}
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: {path: /healthz, port: admin}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: admin}
+            periodSeconds: 5
+          resources:
+            {{- toYaml $r.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: dshm
+              mountPath: /dev/shm
+            {{- if $r.tls.secretName }}
+            - name: renderer-tls
+              mountPath: /etc/openlog/renderer-tls
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ $r.tmpSizeLimit }}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ $r.shmSizeLimit }}
+        {{- if $r.tls.secretName }}
+        - name: renderer-tls
+          secret:
+            secretName: {{ $r.tls.secretName }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+    openlog.io/metrics: "true"
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "openlog.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http-render
+      port: {{ $r.port }}
+      targetPort: http-render
+      protocol: TCP
+    - name: admin
+      port: 9464
+      targetPort: admin
+      protocol: TCP
+{{- if $r.networkPolicy.enabled }}
+---
+# Only api pods may call the render API; the renderer may only reach the api pods (the UI origin) and DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openlog.componentName" $ctx }}
+  labels:
+    {{- include "openlog.componentLabels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openlog.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "openlog.selectorLabels" $apiCtx | nindent 14 }}
+      ports:
+        - port: http-render
+          protocol: TCP
+    - ports:
+        - port: admin
+          protocol: TCP
+      {{- with $r.networkPolicy.metricsFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "openlog.selectorLabels" $apiCtx | nindent 14 }}
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- with $r.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
+{{- /* api pod env for the renderer (included by openlog.env for the api component). */ -}}
+{{- define "openlog.renderer.apiEnv" -}}
+{{- $r := .Values.renderer -}}
+{{- if $r.enabled }}
+{{- $ctx := dict "root" . "component" "renderer" }}
+- name: OPENLOG_RENDERER_URL
+  value: {{ printf "%s://%s:%d" (ternary "https" "http" (not (empty $r.tls.secretName))) (include "openlog.componentName" $ctx) (int $r.port) | quote }}
+- name: OPENLOG_RENDERER_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ default (printf "%s-renderer" (include "openlog.fullname" .)) $r.existingSecret.name }}
+      key: {{ ternary $r.existingSecret.key "token" (not (empty $r.existingSecret.name)) }}
+- name: OPENLOG_RENDERER_TIMEOUT
+  value: {{ $r.timeout | quote }}
+{{- if $r.tls.secretName }}
+- name: OPENLOG_RENDERER_TLS_CERT_FILE
+  value: /etc/openlog/renderer-tls/tls.crt
+- name: OPENLOG_RENDERER_TLS_KEY_FILE
+  value: /etc/openlog/renderer-tls/tls.key
+- name: OPENLOG_RENDERER_TLS_CA_FILE
+  value: /etc/openlog/renderer-tls/ca.crt
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "openlog.renderer.apiVolumeMounts" -}}
+{{- if and .Values.renderer.enabled .Values.renderer.tls.secretName }}
+- name: renderer-tls
+  mountPath: /etc/openlog/renderer-tls
+  readOnly: true
+{{- end }}
+{{- end -}}
+
+{{- define "openlog.renderer.apiVolumes" -}}
+{{- if and .Values.renderer.enabled .Values.renderer.tls.secretName }}
+- name: renderer-tls
+  secret:
+    secretName: {{ .Values.renderer.tls.secretName }}
+{{- end }}
+{{- end -}}

@@ -9,6 +9,9 @@
 #   VERSIONS="" EXTRA="8.3-xdebug 8.3-ddtrace 8.3-newrelic 8.3-jit" build/run-matrix.sh
 #       compatibility: Xdebug (develop,coverage), Datadog ddtrace, New Relic, OPcache JIT (Dockerfile.compat; needs
 #       network access to pecl / GitHub / download.newrelic.com)
+#   VERSIONS="" EXTRA="8.4-frankenphp" build/run-matrix.sh
+#       the suite in the official FrankenPHP image (ZTS PHP + the frankenphp binary): tests/044-frankenphp.phpt runs a
+#       real FrankenPHP server in worker and classic mode
 #   PARALLEL=3 (default) versions at a time; PLATFORM=linux/amd64 for QEMU builds
 #
 # Datastore tests (mysqli, pgsql, phpredis) run against MariaDB / PostgreSQL / Redis containers on a private
@@ -66,6 +69,7 @@ run_one() {
   case "$tag" in
     *-asan) image="php:${tag%-asan}-cli"; dockerfile=Dockerfile.asan ;;
     *-xdebug|*-ddtrace|*-newrelic|*-jit|*-swoole) flavor=${tag##*-}; base=${tag%-*}; image="php:$base-cli" ;;
+    *-frankenphp) image="dunglas/frankenphp:1-php${tag%-frankenphp}-bookworm" ;;
     *-*) image="php:$tag" ;;
     *) image="php:$tag-cli" ;;
   esac

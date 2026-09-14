@@ -533,11 +533,20 @@ func (s *Service) readLogoutMessage(sp *saml.ServiceProvider, in SLOInput, param
 		return msg, nil
 	}
 	raw := in.Form.Get(param)
-	msg.relay = in.Form.Get("RelayState")
 	doc, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(raw), ""))
 	if err != nil || len(doc) == 0 {
 		return msg, fmt.Errorf("%s is missing or not base64", param)
 	}
+	msg, err = verifyEnvelopedLogout(certs, doc, rootTag)
+	msg.relay = in.Form.Get("RelayState")
+	return msg, err
+}
+
+// verifyEnvelopedLogout checks the structure of a logout message document (HTTP-POST or SOAP binding) and its one
+// enveloped signature by a certificate of certs.
+func verifyEnvelopedLogout(certs []*x509.Certificate, doc []byte, rootTag string) (samlMessage, error) {
+	var msg samlMessage
+	var err error
 	if msg.root, err = checkLogoutDocument(doc, rootTag); err != nil {
 		return msg, err
 	}
@@ -551,12 +560,13 @@ func (s *Service) readLogoutMessage(sp *saml.ServiceProvider, in SLOInput, param
 	return msg, nil
 }
 
-// checkLogoutHeader validates issuer, destination and issue time of a verified logout message.
-func (s *Service) checkLogoutHeader(sp *saml.ServiceProvider, issuer *saml.Issuer, destination string, issued time.Time, required bool) error {
+// checkLogoutHeader validates issuer, destination (the SLO URL or one of alsoAllowed) and issue time of a verified
+// logout message.
+func (s *Service) checkLogoutHeader(sp *saml.ServiceProvider, issuer *saml.Issuer, destination string, issued time.Time, required bool, alsoAllowed ...string) error {
 	if issuer == nil || issuer.Value != sp.IDPMetadata.EntityID {
 		return errors.New("issuer does not match the IdP entity ID")
 	}
-	if (required || destination != "") && destination != sp.SloURL.String() {
+	if (required || destination != "") && destination != sp.SloURL.String() && !slices.Contains(alsoAllowed, destination) {
 		return fmt.Errorf("destination %q is not the SLO URL", truncate(destination, 200))
 	}
 	now := s.now()
@@ -629,35 +639,55 @@ func (s *Service) SAMLSLO(ctx context.Context, connectionID string, in SLOInput,
 	if err != nil {
 		return fail(&c, ErrCodeInvalidRequest, err)
 	}
-	var req saml.LogoutRequest
+	req, status, code, err := s.acceptLogoutRequest(ctx, c, sp, msg, "idp", meta)
+	if err != nil {
+		return fail(&c, code, err)
+	}
+	out, err := s.logoutResponse(sp, req.ID, status, msg.relay)
+	if err != nil {
+		return fail(&c, ErrCodeUnavailable, err)
+	}
+	return out
+}
+
+// acceptLogoutRequest validates a signature-verified IdP LogoutRequest — ID, version, issuer, destination (the SLO
+// URL; via "idp_soap": optional, the SOAP or the SLO URL), IssueInstant, NotOnOrAfter, NameID or EncryptedID, replay
+// cache — and ends the matching sessions. status is the LogoutResponse status; code names a rejection.
+func (s *Service) acceptLogoutRequest(ctx context.Context, c Connection, sp *saml.ServiceProvider, msg samlMessage, via string,
+	meta auth.ClientMeta) (req saml.LogoutRequest, status, code string, err error) {
 	if err := xml.Unmarshal(msg.doc, &req); err != nil {
-		return fail(&c, ErrCodeInvalidRequest, err)
+		return req, "", ErrCodeInvalidRequest, err
 	}
 	if req.ID == "" || len(req.ID) > maxSLOIDLen || req.Version != "2.0" {
-		return fail(&c, ErrCodeInvalidRequest, errors.New("invalid LogoutRequest ID or version"))
+		return req, "", ErrCodeInvalidRequest, errors.New("invalid LogoutRequest ID or version")
 	}
-	if err := s.checkLogoutHeader(sp, req.Issuer, req.Destination, req.IssueInstant, true); err != nil {
-		return fail(&c, ErrCodeInvalidRequest, err)
+	soap := via == "idp_soap"
+	var alsoAllowed []string
+	if soap {
+		alsoAllowed = []string{s.SAMLSOAPLogoutURL(c.ID)}
+	}
+	if err := s.checkLogoutHeader(sp, req.Issuer, req.Destination, req.IssueInstant, !soap, alsoAllowed...); err != nil {
+		return req, "", ErrCodeInvalidRequest, err
 	}
 	now := s.now()
 	if req.NotOnOrAfter != nil && !now.Before(req.NotOnOrAfter.Add(s.cfg.ClockSkew)) {
-		return fail(&c, ErrCodeExpired, errors.New("LogoutRequest expired"))
+		return req, "", ErrCodeExpired, errors.New("LogoutRequest expired")
 	}
 	nameID := req.NameID
 	if nameID == nil {
 		if nameID, err = s.decryptNameID(sp, msg.root); err != nil {
-			return fail(&c, ErrCodeInvalidRequest, err)
+			return req, "", ErrCodeInvalidRequest, err
 		}
 	}
 	if strings.TrimSpace(nameID.Value) == "" {
-		return fail(&c, ErrCodeInvalidRequest, errors.New("LogoutRequest has no NameID"))
+		return req, "", ErrCodeInvalidRequest, errors.New("LogoutRequest has no NameID")
 	}
 	fresh, err := s.store.RecordAssertion(ctx, c.ID, "slo:"+req.ID, now.Add(minAssertionTTL))
 	if err != nil {
-		return fail(&c, ErrCodeUnavailable, err)
+		return req, "", ErrCodeUnavailable, err
 	}
 	if !fresh {
-		return fail(&c, ErrCodeReplay, errors.New("LogoutRequest "+truncate(req.ID, 80)+" was already used"))
+		return req, "", ErrCodeReplay, errors.New("LogoutRequest " + truncate(req.ID, 80) + " was already used")
 	}
 	var indexes []string
 	for _, ch := range msg.root.ChildElements() {
@@ -666,17 +696,13 @@ func (s *Service) SAMLSLO(ctx context.Context, connectionID string, in SLOInput,
 		}
 	}
 	revoked, failed := s.endIdPSessions(ctx, c, strings.TrimSpace(nameID.Value), indexes, now)
-	s.audit(ctx, c.OrgID, "", "", meta.IP, "sso.logout", "sso_connection", c.ID, map[string]any{"protocol": c.Protocol, "via": "idp",
+	s.audit(ctx, c.OrgID, "", "", meta.IP, "sso.logout", "sso_connection", c.ID, map[string]any{"protocol": c.Protocol, "via": via,
 		"subject": truncate(nameID.Value, 256), "session_indexes": len(indexes), "revoked_sessions": revoked, "failed": failed})
-	status := saml.StatusSuccess
+	status = saml.StatusSuccess
 	if failed > 0 {
 		status = statusResponder
 	}
-	out, err := s.logoutResponse(sp, req.ID, status, msg.relay)
-	if err != nil {
-		return fail(&c, ErrCodeUnavailable, err)
-	}
-	return out
+	return req, status, "", nil
 }
 
 // endIdPSessions revokes the active sessions of a connection with the NameID (and one of the session indexes, when
@@ -687,18 +713,9 @@ func (s *Service) endIdPSessions(ctx context.Context, c Connection, subject stri
 		s.log.Error("cannot list SSO sessions for single logout", "connection_id", c.ID, "err", err)
 		return 0, 1
 	}
-	for _, l := range links {
-		if len(indexes) > 0 && l.SessionIndex != "" && !slices.Contains(indexes, l.SessionIndex) {
-			continue
-		}
-		if err := s.users.RevokeSession(ctx, l.UserID, l.SessionID, now); err != nil && !errors.Is(err, auth.ErrNotFound) {
-			s.log.Error("cannot revoke session for single logout", "session_id", l.SessionID, "err", err)
-			failed++
-			continue
-		}
-		revoked++
-	}
-	return revoked, failed
+	return s.revokeSSOSessions(ctx, links, func(l SSOSession) bool {
+		return len(indexes) == 0 || l.SessionIndex == "" || slices.Contains(indexes, l.SessionIndex)
+	}, now)
 }
 
 // decryptNameID decrypts the EncryptedID of a verified LogoutRequest with the SP key.

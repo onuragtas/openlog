@@ -284,6 +284,44 @@ services:
     depends_on: [python-shop]
     restart: unless-stopped
 
+  dotnet-shop:
+    # .NET (OpenLog.Agent, agents/dotnet/samples/OpenLog.SampleApp on ASP.NET Core 8) -> orders-db, redis;
+    # http://localhost:${LOCALAGENTS_DOTNET_PORT:-33900}. Build/update only these:
+    #   docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps dotnet-shop dotnet-shop-loadgen
+    build:
+      context: dotnet-shop
+      additional_contexts: {dotnetagent: ../../agents/dotnet}
+    image: openlog-localagents/dotnet-shop:1
+    hostname: dotnet-shop
+    environment:
+      OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
+      OPENLOG_ENDPOINT: http://openlog:4318
+      OPENLOG_SERVICE_NAME: dotnet-shop
+      OTEL_RESOURCE_ATTRIBUTES: *apm-resource
+      OPENLOG_METRIC_EXPORT_INTERVAL: 30s
+      PG_CONNECTION: Host=orders-db;Username=orders;Password=orders;Database=orders
+      REDIS_CONNECTION: redis:6379
+    ports: ["${LOCALAGENTS_DOTNET_PORT:-33900}:9080"]
+    depends_on:
+      orders-db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  dotnet-shop-loadgen:
+    image: curlimages/curl:8.16.0
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          for p in /users/$$((RANDOM % 50 + 1)) /db/pg /db/redis /db/ef /error; do
+            curl -s -o /dev/null http://dotnet-shop:9080$$p
+          done
+          sleep 1
+        done
+    depends_on: [dotnet-shop]
+    restart: unless-stopped
+
 networks:
   default:
     name: openlog_default

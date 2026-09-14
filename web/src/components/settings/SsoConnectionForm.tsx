@@ -3,6 +3,7 @@ import { CheckCircle2, ExternalLink, X, XCircle } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  acceptSsoMetadata,
   createSsoConnection,
   SSO_TEST_CONNECTION_KEY,
   ssoConnectionLabel,
@@ -38,6 +39,8 @@ interface Draft {
   scopes: string;
   requireEmailVerified: boolean;
   metadataUrl: string;
+  metadataSigningCert: string;
+  allowUnsignedMetadata: boolean;
   metadataXml: string;
   allowIdpInitiated: boolean;
   relayStates: string;
@@ -75,6 +78,9 @@ function draftFrom(c: SsoConnection | null): Draft {
     requireEmailVerified: c?.oidc?.require_email_verified ?? true,
     metadataUrl: c?.saml?.idp_metadata_url ?? "",
     metadataXml: "",
+    // Empty keeps the pinned certificate (D-098).
+    metadataSigningCert: "",
+    allowUnsignedMetadata: c?.saml?.allow_unsigned_metadata ?? false,
     allowIdpInitiated: c?.saml?.allow_idp_initiated ?? false,
     relayStates: (c?.saml?.relay_state_allowlist ?? []).join("\n"),
     signRequests: c?.saml?.sign_authn_requests ?? false,
@@ -122,6 +128,8 @@ function toInput(d: Draft, stored: SsoConnection | null): SsoConnectionInput {
     saml: {
       idp_metadata_url: d.metadataUrl.trim(),
       idp_metadata_xml: d.metadataXml.trim(),
+      ...(d.metadataSigningCert.trim() !== "" ? { metadata_signing_certificate_pem: d.metadataSigningCert.trim() } : {}),
+      allow_unsigned_metadata: d.allowUnsignedMetadata,
       allow_idp_initiated: d.allowIdpInitiated,
       relay_state_allowlist: d.allowIdpInitiated ? lines(d.relayStates) : [],
       sign_authn_requests: d.signRequests,
@@ -205,6 +213,10 @@ export function SsoConnectionForm({
       window.location.assign(url);
     },
   });
+  const acceptMetadata = useMutation({
+    mutationFn: (digest: string) => acceptSsoMetadata(stored!.id, digest),
+    onSuccess: (res) => storeSsoState(qc, res),
+  });
 
   const steps = [t("sso.connection.stepProtocol"), t("sso.connection.stepServiceProvider"), t("sso.connection.stepIdentityProvider"), t("sso.connection.stepUsers")];
   const sp = (stored && detail.data?.connection?.id === stored.id ? detail.data : state).service_provider;
@@ -282,12 +294,22 @@ export function SsoConnectionForm({
               <>
                 <SsoCopyField label={t("sso.connection.redirectUri")} value={sp.oidc_redirect_uri} />
                 <SsoCopyField label={t("sso.connection.postLogoutRedirectUri")} value={sp.oidc_post_logout_redirect_uri} />
+                {stored?.protocol === "oidc" && sp.oidc_backchannel_logout_uri && sp.oidc_frontchannel_logout_uri ? (
+                  <>
+                    <SsoCopyField label={t("sso.connection.backchannelLogoutUri")} value={sp.oidc_backchannel_logout_uri} />
+                    <SsoCopyField label={t("sso.connection.frontchannelLogoutUri")} value={sp.oidc_frontchannel_logout_uri} />
+                    <p className="text-xs text-muted-foreground">{t("sso.connection.logoutUrisHint")}</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("sso.connection.logoutUrisSaveFirst")}</p>
+                )}
               </>
             ) : samlSaved ? (
               <>
                 <SsoCopyField label={t("sso.connection.entityId")} value={sp.saml_entity_id!} />
                 <SsoCopyField label={t("sso.connection.acsUrl")} value={sp.saml_acs_url!} />
                 {sp.saml_slo_url && <SsoCopyField label={t("sso.connection.sloUrl")} value={sp.saml_slo_url} />}
+                {sp.saml_slo_soap_url && <SsoCopyField label={t("sso.connection.sloSoapUrl")} value={sp.saml_slo_soap_url} />}
                 <SsoCopyField label={t("sso.connection.metadataUrl")} value={sp.saml_metadata_url!} />
                 {sp.saml_certificate_pem && <SsoCopyField label={t("sso.connection.certificate")} value={sp.saml_certificate_pem} multiline />}
               </>
@@ -330,6 +352,27 @@ export function SsoConnectionForm({
             <Field id={`${id}-mdurl`} label={t("sso.connection.metadataUrlLabel")}>
               <Input id={`${id}-mdurl`} type="url" value={draft.metadataUrl} autoComplete="off" onChange={(e) => set("metadataUrl", e.target.value)} />
             </Field>
+            {draft.metadataUrl.trim() !== "" && (
+              <>
+                <Field id={`${id}-mdcert`} label={t("sso.connection.metadataSigningCert")} hint={t("sso.connection.metadataSigningCertHint")}>
+                  <textarea
+                    id={`${id}-mdcert`}
+                    className={textareaClass}
+                    value={draft.metadataSigningCert}
+                    spellCheck={false}
+                    placeholder="-----BEGIN CERTIFICATE-----"
+                    onChange={(e) => set("metadataSigningCert", e.target.value)}
+                  />
+                </Field>
+                <Checkbox
+                  id={`${id}-unsigned`}
+                  checked={draft.allowUnsignedMetadata}
+                  onChange={(v) => set("allowUnsignedMetadata", v)}
+                  label={t("sso.connection.allowUnsignedMetadata")}
+                  hint={t("sso.connection.allowUnsignedMetadataHint")}
+                />
+              </>
+            )}
             <Field id={`${id}-mdxml`} label={t("sso.connection.metadataXml")}>
               <textarea id={`${id}-mdxml`} className={textareaClass} value={draft.metadataXml} spellCheck={false} onChange={(e) => set("metadataXml", e.target.value)} />
             </Field>
@@ -355,8 +398,57 @@ export function SsoConnectionForm({
                       </span>
                     )}
                   </dd>
+                  {stored.saml.metadata_signing_certificates.length > 0 && (
+                    <>
+                      <dt className="text-muted-foreground">{t("sso.connection.metadataSigningPinned")}</dt>
+                      <dd className="font-mono text-xs break-all">{stored.saml.metadata_signing_certificates.join(", ")}</dd>
+                    </>
+                  )}
                 </dl>
                 {!stored.saml.idp_slo_url && <p className="text-xs text-muted-foreground">{t("sso.connection.idpNoSlo")}</p>}
+                {stored.saml.pending_metadata && (
+                  <div role="alert" className="flex flex-col gap-2 rounded-lg border border-warning p-3 text-sm" data-testid="sso-pending-metadata">
+                    <p className="font-medium">{t("sso.connection.pendingTitle")}</p>
+                    <p className="text-muted-foreground">
+                      {stored.saml.pending_metadata.reason === "signer_changed" ? t("sso.connection.pendingSignerChanged") : t("sso.connection.pendingChanged")}
+                    </p>
+                    <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[max-content_1fr]">
+                      <dt className="text-muted-foreground">{t("sso.connection.idpCert")}</dt>
+                      <dd className="font-mono text-xs break-all">{stored.saml.pending_metadata.idp_certificates.join(", ")}</dd>
+                      <dt className="text-muted-foreground">{t("sso.connection.idpSsoUrl")}</dt>
+                      <dd className="font-mono text-xs break-all">{stored.saml.pending_metadata.idp_sso_url}</dd>
+                      {stored.saml.pending_metadata.idp_slo_url && (
+                        <>
+                          <dt className="text-muted-foreground">{t("sso.connection.idpSloUrl")}</dt>
+                          <dd className="font-mono text-xs break-all">{stored.saml.pending_metadata.idp_slo_url}</dd>
+                        </>
+                      )}
+                      {stored.saml.pending_metadata.signer_certificate && (
+                        <>
+                          <dt className="text-muted-foreground">{t("sso.connection.pendingSigner")}</dt>
+                          <dd className="font-mono text-xs break-all">{stored.saml.pending_metadata.signer_certificate}</dd>
+                        </>
+                      )}
+                    </dl>
+                    <div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={acceptMetadata.isPending}
+                        onClick={() => acceptMetadata.mutate(stored.saml!.pending_metadata!.digest)}
+                      >
+                        {t("sso.connection.pendingConfirm")}
+                      </Button>
+                    </div>
+                    <FormError error={acceptMetadata.error} />
+                  </div>
+                )}
+                {acceptMetadata.isSuccess && (
+                  <p role="status" className="text-sm text-success">
+                    {t("sso.connection.pendingConfirmed")}
+                  </p>
+                )}
               </>
             )}
             <Checkbox id={`${id}-signreq`} checked={draft.signRequests} onChange={(v) => set("signRequests", v)} label={t("sso.connection.signRequests")} />

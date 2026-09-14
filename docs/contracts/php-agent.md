@@ -97,14 +97,20 @@ One JSON object (UTF-8) per datagram; all IDs lowercase hex; times unix nanoseco
   handled by Laravel Octane (`Worker::handle`, status from the client's `respond`), RoadRunner
   (`Spiral\RoadRunner\Http\HttpWorker::waitRequest` … `respond`/`respondStream`, also below PSR7Worker and Octane on
   RoadRunner) and Swoole/OpenSwoole HTTP servers (the callable registered with `Server::on('request')` or
-  `Coroutine\Http\Server::handle` … `Response::end`/`redirect`/`sendfile`, status from `Response::status`). The worker
+  `Coroutine\Http\Server::handle` … `Response::end`/`redirect`/`sendfile`, status from `Response::status`) and
+  FrankenPHP worker mode (the callable passed to `frankenphp_handle_request()`: its call starts the transaction, its
+  return ends it; method, path, host, client, user agent, `traceparent` come from the per-request `$_SERVER` /
+  `SG(request_info)` FrankenPHP has already reset, the status from `http_response_code` when the callback returns, an
+  exception escaping the callback is recorded; `exit()` in a request and worker restarts are handled, the worker
+  script's own run is never sent). FrankenPHP classic mode is a regular SAPI request. The worker
   process's own CLI transaction is dropped when the first request starts; between requests nothing is recorded and no
   header is propagated; connection attributes survive requests. Requests overlapping in one process (Swoole
   coroutines) are never mixed: while more than one is in progress, child spans, route names and the function tracer
   stop for all of them, every request still gets its root span with `openlog.php.concurrent=true`, and outgoing
   `traceparent` headers (and `openlog\traceparent()`) carry the context of the request whose handler is on the
-  current coroutine's call stack — none when no handler is. Not covered: FrankenPHP worker mode,
-  `openlog.userland_hooks=0`.
+  current coroutine's call stack — none when no handler is. Not covered: `openlog.userland_hooks=0` (the request
+  callables are observed userland functions), a request callable that already ran before it was passed to
+  `frankenphp_handle_request()` / `Server::on()`.
 
 ### 2.3 Splitting
 

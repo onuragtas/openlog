@@ -25,15 +25,20 @@ const esm = join(root, 'dist', 'esm');
 mkdirSync(esm, { recursive: true });
 writeFileSync(join(esm, 'package.json'), JSON.stringify({ type: 'module' }) + '\n');
 const require = createRequire(import.meta.url);
-const names = Object.keys(require(join(root, 'dist', 'cjs', 'index.js'))).filter((n) => /^[A-Za-z_$][\w$]*$/.test(n) && n !== 'default');
-writeFileSync(
-  join(esm, 'index.js'),
-  `// ES module facade over the CommonJS build (one shared agent instance).\n` +
-    `import agent from '../cjs/index.js';\n\n` +
-    `export const { ${names.join(', ')} } = agent;\n` +
-    `export default agent;\n`,
-);
-writeFileSync(join(esm, 'index.d.ts'), `export * from '../cjs/index.js';\n`);
+let names = [];
+// index: the agent API; nest: the NestJS interceptor (@openlog/node/nest).
+for (const mod of ['index', 'nest']) {
+  const exported = Object.keys(require(join(root, 'dist', 'cjs', `${mod}.js`))).filter((n) => /^[A-Za-z_$][\w$]*$/.test(n) && n !== 'default');
+  if (mod === 'index') names = exported;
+  writeFileSync(
+    join(esm, `${mod}.js`),
+    `// ES module facade over the CommonJS build (one shared agent instance).\n` +
+      `import cjs from '../cjs/${mod}.js';\n\n` +
+      `export const { ${exported.join(', ')} } = cjs;\n` +
+      `export default cjs;\n`,
+  );
+  writeFileSync(join(esm, `${mod}.d.ts`), `export * from '../cjs/${mod}.js';\n`);
+}
 writeFileSync(
   join(esm, 'register.js'),
   `// node --import @openlog/node/register app.mjs\n` +

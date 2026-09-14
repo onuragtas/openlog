@@ -1609,6 +1609,28 @@ paths:
               schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [auth]
+      operationId: updateMe
+      description: Signed-in users change their own preferences (D-095). Audit user.language_change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [language]
+              properties:
+                language: { $ref: "#/components/schemas/UserLanguage" }
+      responses:
+        "200":
+          description: The caller with the new preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /api/v1/auth/logout:
     post:
@@ -1831,6 +1853,108 @@ paths:
             text/html:
               schema: { type: string }
         "303": { description: Redirect to the IdP or the UI }
+
+  /api/v1/sso/saml/{connection_id}/slo/soap:
+    post:
+      tags: [sso]
+      operationId: samlSLOSoap
+      security: []
+      description: >-
+        SAML single logout service, SOAP 1.1 binding (back-channel, D-098). The body is a SOAP envelope with exactly one
+        `samlp:LogoutRequest` (no DTD, no `mustUnderstand` header) carrying one enveloped signature by an IdP metadata
+        certificate (RSA/ECDSA SHA-256/384/512); issuer, `Destination` (optional: this URL or the SLO URL),
+        IssueInstant, NotOnOrAfter and the replay cache are checked like the front-channel LogoutRequest. The matching
+        sessions end and the answer is a LogoutResponse signed with the SP key (`Success`, `Responder` when a
+        revocation failed) in the SOAP body. Refused requests → 500 SOAP fault without details (audit
+        `sso.logout_failed`); 60 refused requests per client address per 10 min.
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          text/xml:
+            schema: { type: string }
+      responses:
+        "200":
+          description: SOAP envelope with the signed LogoutResponse
+          content:
+            text/xml:
+              schema: { type: string }
+        "500":
+          description: SOAP fault
+          content:
+            text/xml:
+              schema: { type: string }
+
+  /api/v1/sso/oidc/{connection_id}/backchannel-logout:
+    post:
+      tags: [sso]
+      operationId: oidcBackchannelLogout
+      security: []
+      description: >-
+        OpenID Connect Back-Channel Logout 1.0 (D-098). `logout_token` is a JWT signed with a key of the provider's
+        JWKS (asymmetric algorithms only) with `iss` = the connection's issuer, `aud` containing its client ID, `iat`
+        within 5 min plus clock skew (and `exp`, when present, not passed), `events` with the member
+        `http://schemas.openid.net/event/backchannel-logout`, no `nonce`, a `jti` (kept in the replay cache) and `sub`
+        and/or `sid`. With `sid` the active sessions of that IdP session end (also matching `sub` when both are given);
+        with `sub` only all sessions of the subject on the connection. 60 refused tokens per client address per 10 min.
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [logout_token]
+              properties:
+                logout_token: { type: string }
+      responses:
+        "200": { description: Accepted; the matching sessions ended (also when none matched) }
+        "400":
+          description: Refused token or request
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, error_description]
+                properties:
+                  error: { type: string, enum: [invalid_request] }
+                  error_description: { type: string }
+        "503":
+          description: The sessions could not be ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, error_description]
+                properties:
+                  error: { type: string, enum: [temporarily_unavailable] }
+                  error_description: { type: string }
+
+  /api/v1/sso/oidc/{connection_id}/frontchannel-logout:
+    get:
+      tags: [sso]
+      operationId: oidcFrontchannelLogout
+      security: []
+      description: >-
+        OpenID Connect Front-Channel Logout 1.0 (D-098), loaded by the provider in an iframe. `iss` must equal the
+        connection's issuer and `sid` is required (register the URI with "session required"): the active sessions of
+        that IdP session end. The answer is an empty HTML page with `Cache-Control: no-cache, no-store` and
+        `Content-Security-Policy: default-src 'none'; …; frame-ancestors <issuer origin>` (no X-Frame-Options).
+      parameters:
+        - { name: connection_id, in: path, required: true, schema: { type: string } }
+        - { name: iss, in: query, required: true, schema: { type: string } }
+        - { name: sid, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done (also when the sessions had already ended)
+          content:
+            text/html:
+              schema: { type: string }
+        "400": { description: "iss or sid missing, or iss is not the connection's issuer" }
+        "404": { description: No such OIDC connection }
+        "429": { description: Too many refused requests from this address }
 
   /api/v1/sso/oidc/callback:
     get:
@@ -2177,6 +2301,39 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /api/v1/sso/connections/{id}/metadata/accept:
+    post:
+      tags: [sso]
+      operationId: acceptSSOConnectionMetadata
+      description: >-
+        admin, owner (D-098). Confirms the pending IdP metadata change of a SAML connection with a metadata URL
+        (`saml.pending_metadata`): the metadata is fetched again and must still carry the change named by `digest`;
+        it replaces the stored copy without a new `config_version`, a new metadata signing certificate is pinned, and
+        the refresh health is reset. `409` when there is no such pending change (anymore) or the connection was saved
+        meanwhile. Shares the refresh limit (30 per connection per 10 min).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [digest]
+              properties:
+                digest: { type: string, description: "saml.pending_metadata.digest" }
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOState" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /api/v1/sso/connections/{id}/enforcement:
     put:
       tags: [sso]
@@ -2478,15 +2635,16 @@ paths:
     patch:
       tags: [organization]
       operationId: renameCurrentOrg
+      description: Admins and owners change the name and/or the default e-mail language (at least one field).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [name]
               properties:
                 name: { type: string, minLength: 1, maxLength: 200 }
+                language: { $ref: "#/components/schemas/OrgLanguage" }
       responses:
         "200":
           description: OK
@@ -4364,6 +4522,56 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504":
+          description: Query timed out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/v1/render/dashboard:
+    get:
+      tags: [dashboards]
+      operationId: getRenderDashboard
+      summary: Report print view dashboard for openlog-renderer (render token only; exists with OPENLOG_RENDERER_URL, D-097)
+      description: |
+        Authorization: Bearer olrt_… render token signed by the api leader (≤ 10 minutes, bound to one enabled scheduled
+        report and its period). Sessions, API keys and share tokens are refused. Same document as a share link, with the
+        report period as from/to.
+      security: []
+      parameters:
+        - { name: Authorization, in: header, required: true, schema: { type: string }, description: "Bearer olrt_…" }
+      responses:
+        "200":
+          description: Dashboard of the report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SharedDashboard" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/render/dashboard/widgets/{widget_id}/result:
+    parameters:
+      - { name: widget_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [dashboards]
+      operationId: getRenderWidgetResult
+      summary: Result of a report widget's stored query for the report period (render token only, D-097)
+      security: []
+      parameters:
+        - { name: Authorization, in: header, required: true, schema: { type: string }, description: "Bearer olrt_…" }
+      responses:
+        "200":
+          description: OQL result (execution statistics blanked)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OqlResult" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: The widget's stored query cannot be run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "504":
           description: Query timed out
           content:
@@ -6300,10 +6508,14 @@ components:
         service_provider:
           type: object
           description: Values to register at the identity provider. SAML values are those of the addressed SAML connection.
-          required: [oidc_redirect_uri, oidc_post_logout_redirect_uri, scim_base_url, saml_entity_id, saml_acs_url, saml_slo_url, saml_metadata_url, saml_certificate_pem]
+          required: [oidc_redirect_uri, oidc_post_logout_redirect_uri, oidc_backchannel_logout_uri, oidc_frontchannel_logout_uri, scim_base_url,
+            saml_entity_id, saml_acs_url, saml_slo_url, saml_slo_soap_url, saml_metadata_url, saml_certificate_pem]
           properties:
             oidc_redirect_uri: { type: string }
             oidc_post_logout_redirect_uri: { type: string, description: "Register as a valid post logout redirect URI (RP-initiated logout)" }
+            oidc_backchannel_logout_uri: { type: [string, "null"], description: "Back-channel logout URI of the addressed OIDC connection (register with sid required)" }
+            oidc_frontchannel_logout_uri: { type: [string, "null"], description: "Front-channel logout URI of the addressed OIDC connection (register with session required)" }
+            saml_slo_soap_url: { type: [string, "null"], description: "SOAP single logout service of the addressed SAML connection (back-channel), also in the SP metadata" }
             scim_base_url: { type: string }
             saml_entity_id: { type: [string, "null"] }
             saml_acs_url: { type: [string, "null"] }
@@ -6393,7 +6605,8 @@ components:
         saml:
           oneOf:
             - type: object
-              required: [idp_metadata_url, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificates, idp_cert_not_after, allow_idp_initiated, relay_state_allowlist, sign_authn_requests]
+              required: [idp_metadata_url, idp_entity_id, idp_sso_url, idp_slo_url, idp_certificates, idp_cert_not_after, allow_idp_initiated, relay_state_allowlist, sign_authn_requests,
+                metadata_signing_certificates, allow_unsigned_metadata, pending_metadata]
               properties:
                 idp_metadata_url: { type: string, description: "Re-fetched by the background refresh" }
                 idp_entity_id: { type: string }
@@ -6404,6 +6617,25 @@ components:
                 allow_idp_initiated: { type: boolean }
                 relay_state_allowlist: { type: array, items: { type: string } }
                 sign_authn_requests: { type: boolean }
+                metadata_signing_certificates:
+                  type: array
+                  items: { type: string }
+                  description: "SHA-256 fingerprints of the pinned metadata signing certificates (D-098); empty = unsigned metadata"
+                allow_unsigned_metadata: { type: boolean, description: "The administrator allowed unsigned metadata from idp_metadata_url" }
+                pending_metadata:
+                  description: "A refreshed metadata change that waits for POST …/metadata/accept (null: none)"
+                  oneOf:
+                    - type: object
+                      required: [digest, reason, detected_at, idp_certificates, idp_sso_url, idp_slo_url, signer_certificate]
+                      properties:
+                        digest: { type: string }
+                        reason: { type: string, enum: [changed, signer_changed], description: "changed: unsigned metadata with other certificates or endpoints; signer_changed: signed by a certificate that is not pinned" }
+                        detected_at: { $ref: "#/components/schemas/Timestamp" }
+                        idp_certificates: { type: array, items: { type: string } }
+                        idp_sso_url: { type: string }
+                        idp_slo_url: { type: [string, "null"] }
+                        signer_certificate: { type: [string, "null"], description: "SHA-256 fingerprint of the new metadata signing certificate" }
+                    - { type: "null" }
             - { type: "null" }
         email_attribute: { type: string, description: "Empty = default (OIDC email; SAML email/mail/… or an e-mail NameID)" }
         name_attribute: { type: string }
@@ -6453,6 +6685,12 @@ components:
           properties:
             idp_metadata_url: { type: string, description: Fetched when saved }
             idp_metadata_xml: { type: string }
+            metadata_signing_certificate_pem:
+              type: [string, "null"]
+              description: >-
+                With idp_metadata_url: PEM certificate(s) (≤ 5) the metadata must be signed with. Omitted or null keeps the
+                pinned certificates of an unchanged URL, otherwise the signer of signed metadata is pinned; "" removes them
+            allow_unsigned_metadata: { type: boolean, description: "With idp_metadata_url: accept unsigned metadata (changed certificates or endpoints then wait for confirmation); required when the metadata is unsigned and no certificate is set" }
             allow_idp_initiated: { type: boolean }
             relay_state_allowlist: { type: array, items: { type: string } }
             sign_authn_requests: { type: boolean }
@@ -6554,12 +6792,23 @@ components:
 
     User:
       type: object
-      required: [id, email, name, email_verified]
+      required: [id, email, name, email_verified, language]
       properties:
         id: { type: string }
         email: { type: string }
         name: { type: string }
         email_verified: { type: boolean, description: "false only for sign-ups that have not confirmed their address" }
+        language: { $ref: "#/components/schemas/UserLanguage" }
+
+    UserLanguage:
+      type: string
+      enum: [auto, en, tr]
+      description: The user's language for the web UI and e-mails sent to them; auto = the browser's (D-095).
+
+    OrgLanguage:
+      type: string
+      enum: ["", en, tr]
+      description: Default e-mail language of the organization, used when a recipient has no preference; "" = none (D-095).
 
     VersionInfo:
       type: object
@@ -6684,6 +6933,33 @@ components:
             can_list_license_keys: { type: boolean, description: The caller is a signed-in member or higher }
             fleet_php_install: { type: boolean, description: The fleet can install the PHP agent (php-agent.md §7.3) }
             tail_sampling: { type: boolean, description: OPENLOG_TAILSAMPLING_ENABLED }
+        agent_packages:
+          description: >-
+            Node.js, Python and .NET agent packages of agent_version: whether npm, PyPI and nuget.org serve that version
+            (checked by the server, cached for an hour) and the files attached to the GitHub release. Null when
+            agent_version is null. Commands install from the registry only when registry is "available".
+          oneOf:
+            - type: object
+              required: [node, python, dotnet]
+              properties:
+                node: { $ref: "#/components/schemas/OnboardingAgentPackage" }
+                python: { $ref: "#/components/schemas/OnboardingAgentPackage" }
+                dotnet: { $ref: "#/components/schemas/OnboardingAgentPackage" }
+            - { type: "null" }
+
+    OnboardingAgentPackage:
+      type: object
+      required: [name, version, registry, registry_url, release_asset_url, release_asset_sha256_url]
+      properties:
+        name: { type: string, example: "@openlog/node" }
+        version: { type: string, description: agent_version (PEP 440 form for Python), example: "0.9.2" }
+        registry:
+          type: string
+          enum: [available, missing, unknown]
+          description: "available: the registry answered 200; missing: 404; unknown: not checked, offline, timeout or another answer"
+        registry_url: { type: string }
+        release_asset_url: { type: string, example: "https://github.com/onuragtas/openlog/releases/download/v0.9.2/openlog-node-0.9.2.tgz" }
+        release_asset_sha256_url: { type: string, description: sha256sum file of the release asset }
 
     AvailableRelease:
       type: object
@@ -6779,13 +7055,14 @@ components:
 
     Organization:
       type: object
-      required: [id, tenant_id, name, role, created_at]
+      required: [id, tenant_id, name, role, created_at, language]
       properties:
         id: { type: string }
         tenant_id: { type: string }
         name: { type: string }
         role: { $ref: "#/components/schemas/Role" }
         created_at: { $ref: "#/components/schemas/Timestamp" }
+        language: { $ref: "#/components/schemas/OrgLanguage" }
 
     Member:
       type: object

@@ -1015,7 +1015,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Signed-in users change their own preferences (D-095). Audit user.language_change. */
+        patch: operations["updateMe"];
         trace?: never;
     };
     "/api/v1/auth/logout": {
@@ -1182,6 +1183,57 @@ export interface paths {
         put?: never;
         /** @description SAML single logout service, HTTP-POST binding (enveloped signature required). Same semantics as GET. */
         post: operations["samlSLOPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/saml/{connection_id}/slo/soap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description SAML single logout service, SOAP 1.1 binding (back-channel, D-098). The body is a SOAP envelope with exactly one `samlp:LogoutRequest` (no DTD, no `mustUnderstand` header) carrying one enveloped signature by an IdP metadata certificate (RSA/ECDSA SHA-256/384/512); issuer, `Destination` (optional: this URL or the SLO URL), IssueInstant, NotOnOrAfter and the replay cache are checked like the front-channel LogoutRequest. The matching sessions end and the answer is a LogoutResponse signed with the SP key (`Success`, `Responder` when a revocation failed) in the SOAP body. Refused requests → 500 SOAP fault without details (audit `sso.logout_failed`); 60 refused requests per client address per 10 min. */
+        post: operations["samlSLOSoap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/oidc/{connection_id}/backchannel-logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description OpenID Connect Back-Channel Logout 1.0 (D-098). `logout_token` is a JWT signed with a key of the provider's JWKS (asymmetric algorithms only) with `iss` = the connection's issuer, `aud` containing its client ID, `iat` within 5 min plus clock skew (and `exp`, when present, not passed), `events` with the member `http://schemas.openid.net/event/backchannel-logout`, no `nonce`, a `jti` (kept in the replay cache) and `sub` and/or `sid`. With `sid` the active sessions of that IdP session end (also matching `sub` when both are given); with `sub` only all sessions of the subject on the connection. 60 refused tokens per client address per 10 min. */
+        post: operations["oidcBackchannelLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/oidc/{connection_id}/frontchannel-logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description OpenID Connect Front-Channel Logout 1.0 (D-098), loaded by the provider in an iframe. `iss` must equal the connection's issuer and `sid` is required (register the URI with "session required"): the active sessions of that IdP session end. The answer is an empty HTML page with `Cache-Control: no-cache, no-store` and `Content-Security-Policy: default-src 'none'; …; frame-ancestors <issuer origin>` (no X-Frame-Options). */
+        get: operations["oidcFrontchannelLogout"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1432,6 +1484,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sso/connections/{id}/metadata/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description admin, owner (D-098). Confirms the pending IdP metadata change of a SAML connection with a metadata URL (`saml.pending_metadata`): the metadata is fetched again and must still carry the change named by `digest`; it replaces the stored copy without a new `config_version`, a new metadata signing certificate is pinned, and the refresh health is reset. `409` when there is no such pending change (anymore) or the connection was saved meanwhile. Shares the refresh limit (30 per connection per 10 min). */
+        post: operations["acceptSSOConnectionMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sso/connections/{id}/enforcement": {
         parameters: {
             query?: never;
@@ -1604,6 +1673,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Admins and owners change the name and/or the default e-mail language (at least one field). */
         patch: operations["renameCurrentOrg"];
         trace?: never;
     };
@@ -2807,6 +2877,47 @@ export interface paths {
         };
         /** Result of a shared widget's stored query for the link's range and variables (no authentication) */
         get: operations["getSharedWidgetResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report print view dashboard for openlog-renderer (render token only; exists with OPENLOG_RENDERER_URL, D-097)
+         * @description Authorization: Bearer olrt_… render token signed by the api leader (≤ 10 minutes, bound to one enabled scheduled
+         *     report and its period). Sessions, API keys and share tokens are refused. Same document as a share link, with the
+         *     report period as from/to.
+         */
+        get: operations["getRenderDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render/dashboard/widgets/{widget_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                widget_id: string;
+            };
+            cookie?: never;
+        };
+        /** Result of a report widget's stored query for the report period (render token only, D-097) */
+        get: operations["getRenderWidgetResult"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4226,6 +4337,12 @@ export interface components {
                 oidc_redirect_uri: string;
                 /** @description Register as a valid post logout redirect URI (RP-initiated logout) */
                 oidc_post_logout_redirect_uri: string;
+                /** @description Back-channel logout URI of the addressed OIDC connection (register with sid required) */
+                oidc_backchannel_logout_uri: string | null;
+                /** @description Front-channel logout URI of the addressed OIDC connection (register with session required) */
+                oidc_frontchannel_logout_uri: string | null;
+                /** @description SOAP single logout service of the addressed SAML connection (back-channel), also in the SP metadata */
+                saml_slo_soap_url: string | null;
                 scim_base_url: string;
                 saml_entity_id: string | null;
                 saml_acs_url: string | null;
@@ -4308,6 +4425,25 @@ export interface components {
                 allow_idp_initiated: boolean;
                 relay_state_allowlist: string[];
                 sign_authn_requests: boolean;
+                /** @description SHA-256 fingerprints of the pinned metadata signing certificates (D-098); empty = unsigned metadata */
+                metadata_signing_certificates: string[];
+                /** @description The administrator allowed unsigned metadata from idp_metadata_url */
+                allow_unsigned_metadata: boolean;
+                /** @description A refreshed metadata change that waits for POST …/metadata/accept (null: none) */
+                pending_metadata: {
+                    digest: string;
+                    /**
+                     * @description changed: unsigned metadata with other certificates or endpoints; signer_changed: signed by a certificate that is not pinned
+                     * @enum {string}
+                     */
+                    reason: "changed" | "signer_changed";
+                    detected_at: components["schemas"]["Timestamp"];
+                    idp_certificates: string[];
+                    idp_sso_url: string;
+                    idp_slo_url: string | null;
+                    /** @description SHA-256 fingerprint of the new metadata signing certificate */
+                    signer_certificate: string | null;
+                } | null;
             } | null;
             /** @description Empty = default (OIDC email; SAML email/mail/… or an e-mail NameID) */
             email_attribute: string;
@@ -4361,6 +4497,10 @@ export interface components {
                 /** @description Fetched when saved */
                 idp_metadata_url?: string;
                 idp_metadata_xml?: string;
+                /** @description With idp_metadata_url: PEM certificate(s) (≤ 5) the metadata must be signed with. Omitted or null keeps the pinned certificates of an unchanged URL, otherwise the signer of signed metadata is pinned; "" removes them */
+                metadata_signing_certificate_pem?: string | null;
+                /** @description With idp_metadata_url: accept unsigned metadata (changed certificates or endpoints then wait for confirmation); required when the metadata is unsigned and no certificate is set */
+                allow_unsigned_metadata?: boolean;
                 allow_idp_initiated?: boolean;
                 relay_state_allowlist?: string[];
                 sign_authn_requests?: boolean;
@@ -4453,7 +4593,18 @@ export interface components {
             name: string;
             /** @description false only for sign-ups that have not confirmed their address */
             email_verified: boolean;
+            language: components["schemas"]["UserLanguage"];
         };
+        /**
+         * @description The user's language for the web UI and e-mails sent to them; auto = the browser's (D-095).
+         * @enum {string}
+         */
+        UserLanguage: "auto" | "en" | "tr";
+        /**
+         * @description Default e-mail language of the organization, used when a recipient has no preference; "" = none (D-095).
+         * @enum {string}
+         */
+        OrgLanguage: "" | "en" | "tr";
         VersionInfo: {
             /** @description "Check now" / "Update now" channel to openlog-updater; null in OPENLOG_AUTH_MODE=static. */
             update_requests: components["schemas"]["UpdateRequests"] | null;
@@ -4560,6 +4711,31 @@ export interface components {
                 /** @description OPENLOG_TAILSAMPLING_ENABLED */
                 tail_sampling: boolean;
             };
+            /** @description Node.js, Python and .NET agent packages of agent_version: whether npm, PyPI and nuget.org serve that version (checked by the server, cached for an hour) and the files attached to the GitHub release. Null when agent_version is null. Commands install from the registry only when registry is "available". */
+            agent_packages?: {
+                node: components["schemas"]["OnboardingAgentPackage"];
+                python: components["schemas"]["OnboardingAgentPackage"];
+                dotnet: components["schemas"]["OnboardingAgentPackage"];
+            } | null;
+        };
+        OnboardingAgentPackage: {
+            /** @example @openlog/node */
+            name: string;
+            /**
+             * @description agent_version (PEP 440 form for Python)
+             * @example 0.9.2
+             */
+            version: string;
+            /**
+             * @description available: the registry answered 200; missing: 404; unknown: not checked, offline, timeout or another answer
+             * @enum {string}
+             */
+            registry: "available" | "missing" | "unknown";
+            registry_url: string;
+            /** @example https://github.com/onuragtas/openlog/releases/download/v0.9.2/openlog-node-0.9.2.tgz */
+            release_asset_url: string;
+            /** @description sha256sum file of the release asset */
+            release_asset_sha256_url: string;
         };
         AvailableRelease: {
             /** @example 0.9.2 */
@@ -4639,6 +4815,7 @@ export interface components {
             name: string;
             role: components["schemas"]["Role"];
             created_at: components["schemas"]["Timestamp"];
+            language: components["schemas"]["OrgLanguage"];
         };
         Member: {
             user_id: string;
@@ -8118,6 +8295,35 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    language: components["schemas"]["UserLanguage"];
+                };
+            };
+        };
+        responses: {
+            /** @description The caller with the new preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     logout: {
         parameters: {
             query?: never;
@@ -8411,6 +8617,139 @@ export interface operations {
             };
             /** @description Redirect to the IdP or the UI */
             303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    samlSLOSoap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/xml": string;
+            };
+        };
+        responses: {
+            /** @description SOAP envelope with the signed LogoutResponse */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/xml": string;
+                };
+            };
+            /** @description SOAP fault */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/xml": string;
+                };
+            };
+        };
+    };
+    oidcBackchannelLogout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    logout_token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted; the matching sessions ended (also when none matched) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refused token or request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "invalid_request";
+                        error_description: string;
+                    };
+                };
+            };
+            /** @description The sessions could not be ended */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        error: "temporarily_unavailable";
+                        error_description: string;
+                    };
+                };
+            };
+        };
+    };
+    oidcFrontchannelLogout: {
+        parameters: {
+            query: {
+                iss: string;
+                sid: string;
+            };
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Done (also when the sessions had already ended) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description iss or sid missing, or iss is not the connection's issuer */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such OIDC connection */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many refused requests from this address */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8927,6 +9266,40 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    acceptSSOConnectionMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description saml.pending_metadata.digest */
+                    digest: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOState"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     updateSSOConnectionEnforcement: {
         parameters: {
             query?: never;
@@ -9341,7 +9714,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    name: string;
+                    name?: string;
+                    language?: components["schemas"]["OrgLanguage"];
                 };
             };
         };
@@ -12000,6 +12374,76 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+            /** @description Query timed out */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getRenderDashboard: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Bearer olrt_… */
+                Authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dashboard of the report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDashboard"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRenderWidgetResult: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Bearer olrt_… */
+                Authorization: string;
+            };
+            path: {
+                widget_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OQL result (execution statistics blanked) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OqlResult"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The widget's stored query cannot be run */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Query timed out */
             504: {
                 headers: {

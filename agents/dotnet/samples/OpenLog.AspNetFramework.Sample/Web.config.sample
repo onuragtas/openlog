@@ -1,17 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- IIS integrated pipeline: the OpenTelemetry HTTP module creates the SERVER span of every ASP.NET 4.x request.
-     (The OpenTelemetry.Instrumentation.AspNet package adds this entry on install in classic projects.) -->
+     (The OpenTelemetry.Instrumentation.AspNet package adds this entry on install in classic projects.)
+     The tested variant is test/netfx/Web.config.template, completed by test/netfx/run-iis.ps1 with the binding
+     redirects the build generates (AutoGenerateBindingRedirects). -->
 <configuration>
   <appSettings>
+    <!-- Global.Application_Start copies OPENLOG_* appSettings into the environment (environment variables win) -->
     <add key="OPENLOG_LICENSE_KEY" value="dev-license-key" />
     <add key="OPENLOG_ENDPOINT" value="http://localhost:4318" />
   </appSettings>
+  <system.web>
+    <compilation targetFramework="4.8">
+      <assemblies>
+        <!-- OpenLog.Agent and OpenTelemetry are netstandard2.0 assemblies -->
+        <add assembly="netstandard, Version=2.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
+      </assemblies>
+    </compilation>
+    <httpRuntime targetFramework="4.8" />
+  </system.web>
   <system.webServer>
     <modules>
       <add name="TelemetryHttpModule" type="OpenTelemetry.Instrumentation.AspNet.TelemetryHttpModule, OpenTelemetry.Instrumentation.AspNet.TelemetryHttpModule" preCondition="integratedMode,managedHandler" />
     </modules>
     <handlers>
-      <add name="Users" path="users" verb="GET" type="OpenLog.AspNetFramework.Sample.UsersHandler, OpenLog.AspNetFramework.Sample" />
+      <add name="Users" path="users" verb="GET" type="OpenLog.AspNetFramework.Sample.UsersHandler, OpenLog.AspNetFramework.Sample" preCondition="integratedMode" />
     </handlers>
   </system.webServer>
+  <!-- + <runtime><assemblyBinding> redirects from bin/OpenLog.AspNetFramework.Sample.dll.config -->
 </configuration>

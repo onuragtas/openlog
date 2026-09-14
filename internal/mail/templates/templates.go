@@ -52,6 +52,21 @@ func Normalize(locale string) string {
 	return English
 }
 
+// Resolve returns the first candidate that names a supported language ("tr", "tr-TR"), English when none does. Callers
+// pass the sources in precedence order: user preference, organization default, stored request language (D-095).
+func Resolve(candidates ...string) string {
+	for _, c := range candidates {
+		base, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(c)), "-")
+		base, _, _ = strings.Cut(base, "_")
+		for _, l := range Supported {
+			if base == l {
+				return l
+			}
+		}
+	}
+	return English
+}
+
 // FromAcceptLanguage returns the supported language the client prefers most (RFC 9110 Accept-Language with q-values),
 // or "" when it names none of them (the caller then falls back, e.g. to English).
 func FromAcceptLanguage(header string) string {

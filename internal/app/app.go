@@ -299,6 +299,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	if err != nil {
 		return err
 	}
+	// sharelimit.go: cluster-wide share link rate limits (D-096)
+	dashboardTasks = append(dashboardTasks, startShareRateLimit(ctx, pgPool, srv, log)...)
 	if pgPool != nil { // tail sampling policies (D-075); static mode serves the read-only default
 		srv.SetTailSampling(tailsampling.PGStore{Pool: pgPool}, cfg.TailSampling.Enabled)
 	} else {
@@ -307,6 +309,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	srv.SetOnboarding(api.OnboardingConfig{ // GET /api/v1/onboarding: "Add data" install commands
 		PublicURL: cfg.Alert.PublicURL, IngestPublicURL: cfg.Onboarding.IngestPublicURL, IngestPublicGRPCURL: cfg.Onboarding.IngestPublicGRPCURL,
 		CORSAllowedOrigins: cfg.Ingest.CORSAllowedOrigins, Channel: cfg.UpdateCheck.Channel,
+		// npm/PyPI/nuget.org availability of the language agent packages (cached; offline: GitHub release commands)
+		PackageRegistries: api.NewPackageRegistryChecker(nil),
 	})
 	usageTasks, err := startUsageAPI(ctx, cfg, pgPool, conn, db, srv, adm.Registry(), log) // usage.go (D-079..D-081)
 	if err != nil {

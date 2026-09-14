@@ -6,7 +6,8 @@ import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
 import { logout, useMe } from "@/api/account";
 import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
-import { LanguageSwitch } from "@/components/LanguageSwitch";
+import { AccountLanguageSwitch } from "@/components/LanguageSwitch";
+import { UserLanguageSync } from "@/components/UserLanguageSync";
 import { OrgSwitcher } from "@/components/settings/OrgSwitcher";
 import { UsageBanner } from "@/components/settings/UsageBanner";
 import { SsoSignOutButton } from "@/components/SsoSignOutButton";
@@ -135,7 +136,7 @@ function MoreMenu() {
           )}
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t("language.label")}</span>
-            <LanguageSwitch />
+            <AccountLanguageSwitch />
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t("theme.label")}</span>
@@ -190,11 +191,12 @@ export function AppShell() {
           <AddDataButton />
           {showRange && <UrlTimeRangePicker />}
           <div className="hidden items-center gap-2 md:flex">
-            <LanguageSwitch />
+            <AccountLanguageSwitch />
             <ThemeToggle />
           </div>
           <MoreMenu />
         </header>
+        <UserLanguageSync />
         <UpdateBanner />
         <EmailVerificationBanner />
         <UsageBanner />

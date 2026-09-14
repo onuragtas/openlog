@@ -107,6 +107,7 @@ describe("SsoSettings", () => {
       saml: {
         idp_metadata_url: "https://idp.example.com/metadata", idp_entity_id: "https://idp.example.com/metadata", idp_sso_url: "https://idp.example.com/sso",
         idp_slo_url: null, idp_certificates: ["AB"], idp_cert_not_after: null, allow_idp_initiated: false, relay_state_allowlist: [], sign_authn_requests: false,
+        metadata_signing_certificates: [], allow_unsigned_metadata: true, pending_metadata: null,
       },
     });
     await login(MOCK_EMAIL, MOCK_PASSWORD);

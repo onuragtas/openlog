@@ -50,6 +50,7 @@ const AlertsMutesPage = lazyRouteComponent(() => import("@/routes/alerts"), "Ale
 const AlertsTemplatesPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsTemplatesPage");
 const SettingsLayout = lazyRouteComponent(() => import("@/routes/settings"), "SettingsLayout");
 const OrganizationSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "OrganizationSettingsPage");
+const ProfileSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "ProfileSettingsPage");
 const MembersSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "MembersSettingsPage");
 const LicenseKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "LicenseKeysSettingsPage");
 const ApiKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "ApiKeysSettingsPage");
@@ -707,6 +708,7 @@ const settingsIndexRoute = createRoute({
   },
 });
 const settingsOrganizationRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/organization", component: OrganizationSettingsPage });
+const settingsProfileRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/profile", component: ProfileSettingsPage });
 const settingsMembersRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/members", component: MembersSettingsPage });
 const settingsLicenseKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/license-keys", component: LicenseKeysSettingsPage });
 const settingsApiKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/api-keys", component: ApiKeysSettingsPage });
@@ -734,6 +736,12 @@ const sharedDashboardRoute = createRoute({
   path: "/shared/dashboards/$token",
   component: lazyRouteComponent(() => import("@/routes/shared-dashboard"), "SharedDashboardPage"),
 });
+// Report print view for openlog-renderer: render token in the URL fragment, no session (routes/print-dashboard.tsx, D-097).
+const printDashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/print/dashboard",
+  component: lazyRouteComponent(() => import("@/routes/print-dashboard"), "PrintDashboardPage"),
+});
 
 export const routeTree = rootRoute.addChildren([
   loginRoute,
@@ -742,6 +750,7 @@ export const routeTree = rootRoute.addChildren([
   verifyEmailRoute,
   ssoVerifyDomainRoute,
   sharedDashboardRoute,
+  printDashboardRoute,
   appRoute.addChildren([
     indexRoute,
     hostsRoute,
@@ -782,6 +791,7 @@ export const routeTree = rootRoute.addChildren([
     ]),
     settingsRoute.addChildren([
       settingsIndexRoute,
+      settingsProfileRoute,
       settingsOrganizationRoute,
       settingsMembersRoute,
       settingsLicenseKeysRoute,

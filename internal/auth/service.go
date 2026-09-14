@@ -191,7 +191,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 	// Membership and role are read from the store on every request (no cache), so removals and role changes
 	// apply to the next request on every API pod (D-046).
 	p := &Principal{Kind: KindSession, UserID: user.ID, Email: user.Email, Name: user.Name, SessionID: sess.ID, CSRFToken: sess.CSRFToken,
-		EmailVerified: user.EmailVerifiedAt != nil}
+		EmailVerified: user.EmailVerifiedAt != nil, Language: user.Preference()}
 	// With a SessionPolicy (single sign-on) the organization must also be allowed for this session (external.go).
 	if err := s.selectSessionOrg(ctx, p, sess, user, strings.TrimSpace(r.Header.Get(HeaderOrg)), now); err != nil {
 		return nil, err

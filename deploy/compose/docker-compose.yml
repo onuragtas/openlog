@@ -124,6 +124,13 @@ x-openlog-settings: &openlog-settings
   OPENLOG_QUOTA_RETENTION_MAX_MUTATIONS: ${OPENLOG_QUOTA_RETENTION_MAX_MUTATIONS:-}
   OPENLOG_BILLING_PROVIDER: ${OPENLOG_BILLING_PROVIDER:-}
   OPENLOG_BILLING_PUSH_AT: ${OPENLOG_BILLING_PUSH_AT:-}
+  # PNG widget images in scheduled report e-mails (docs/operations/reports.md, D-097; profile `renderer` below)
+  OPENLOG_RENDERER_URL: ${OPENLOG_RENDERER_URL:-}
+  OPENLOG_RENDERER_TOKEN: ${OPENLOG_RENDERER_TOKEN:-}
+  OPENLOG_RENDERER_TIMEOUT: ${OPENLOG_RENDERER_TIMEOUT:-}
+  OPENLOG_RENDERER_TLS_CERT_FILE: ${OPENLOG_RENDERER_TLS_CERT_FILE:-}
+  OPENLOG_RENDERER_TLS_KEY_FILE: ${OPENLOG_RENDERER_TLS_KEY_FILE:-}
+  OPENLOG_RENDERER_TLS_CA_FILE: ${OPENLOG_RENDERER_TLS_CA_FILE:-}
 
 services:
   postgres:
@@ -255,6 +262,8 @@ services:
       context: ../..
       dockerfile: Dockerfile
     image: ${OPENLOG_IMAGE:-openlog:dev}
+    # `renderer`: internal network shared only with openlog-renderer (profile renderer, D-097).
+    networks: [default, renderer]
     environment:
       <<: *openlog-settings
       OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
@@ -485,6 +494,58 @@ services:
       minio:
         condition: service_healthy
     restart: "no"
+
+  # Optional PNG widget images in scheduled report e-mails (docs/operations/reports.md, D-097):
+  #   docker compose --profile renderer up -d --build openlog-renderer
+  # then set OPENLOG_RENDERER_URL=http://openlog-renderer:8090 and OPENLOG_RENDERER_TOKEN in .env and recreate
+  # `openlog` (render tokens are signed with OPENLOG_KEY_HASH_SECRET or OPENLOG_SECRETS_KEY). Headless Chromium runs
+  # without its namespace sandbox, so the container is locked down: non-root, read-only, no capabilities, no new
+  # privileges, memory/pids limits, and only the internal `renderer` network (no route to the internet or other
+  # services; it reaches `openlog` only).
+  openlog-renderer:
+    profiles: ["renderer"]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: renderer
+    image: ${OPENLOG_RENDERER_IMAGE:-openlog-renderer:dev}
+    networks: [renderer]
+    environment:
+      OPENLOG_LOG_LEVEL: ${OPENLOG_LOG_LEVEL:-info}
+      OPENLOG_RENDERER_ADDR: ":8090"
+      OPENLOG_RENDERER_UI_ORIGIN: http://openlog:8080
+      OPENLOG_RENDERER_TOKEN: ${OPENLOG_RENDERER_TOKEN:-}
+      OPENLOG_RENDERER_MAX_CONCURRENCY: ${OPENLOG_RENDERER_MAX_CONCURRENCY:-2}
+      OPENLOG_RENDERER_RENDER_TIMEOUT: ${OPENLOG_RENDERER_RENDER_TIMEOUT:-60s}
+      OPENLOG_RENDERER_QUEUE_TIMEOUT: ${OPENLOG_RENDERER_QUEUE_TIMEOUT:-30s}
+      OPENLOG_RENDERER_MAX_IMAGE_BYTES: ${OPENLOG_RENDERER_MAX_IMAGE_BYTES:-1048576}
+      OPENLOG_RENDERER_CHROMIUM_PATH: ${OPENLOG_RENDERER_CHROMIUM_PATH:-}
+      OPENLOG_RENDERER_CHROMIUM_NO_SANDBOX: ${OPENLOG_RENDERER_CHROMIUM_NO_SANDBOX:-true}
+      OPENLOG_RENDERER_TLS_CERT_FILE: ${OPENLOG_RENDERER_TLS_CERT_FILE:-}
+      OPENLOG_RENDERER_TLS_KEY_FILE: ${OPENLOG_RENDERER_TLS_KEY_FILE:-}
+      OPENLOG_RENDERER_TLS_CA_FILE: ${OPENLOG_RENDERER_TLS_CA_FILE:-}
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    shm_size: 256m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1536m
+    pids_limit: 512
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9464/readyz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 70s
+    restart: unless-stopped
+
+networks:
+  default:
+  # No external connectivity: openlog <-> openlog-renderer only.
+  renderer:
+    internal: true
 
 volumes:
   kafka-data:

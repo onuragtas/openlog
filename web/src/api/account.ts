@@ -112,6 +112,19 @@ export async function renameOrg(name: string): Promise<Organization> {
   return unwrap(await api.PATCH("/api/v1/orgs/current", { body: { name } }));
 }
 
+export type UserLanguage = S["UserLanguage"];
+export type OrgLanguage = S["OrgLanguage"];
+
+/** Default e-mail language of the organization ("" = none; admins and owners, D-095). */
+export async function setOrgLanguage(language: OrgLanguage): Promise<Organization> {
+  return unwrap(await api.PATCH("/api/v1/orgs/current", { body: { language } }));
+}
+
+/** The signed-in user's language for the UI and e-mails ("auto" = the browser's, D-095). */
+export async function setMyLanguage(language: UserLanguage): Promise<Me> {
+  return remember(unwrap(await api.PATCH("/api/v1/auth/me", { body: { language } })));
+}
+
 export async function updateMemberRole(userId: string, role: Role): Promise<void> {
   expectOk(await api.PATCH("/api/v1/members/{user_id}", { params: { path: { user_id: userId } }, body: { role } }));
 }

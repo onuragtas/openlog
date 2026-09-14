@@ -174,11 +174,23 @@ func TestSSOStoreConnectionsAndLogout(t *testing.T) {
 	if ls, _ := st.ListSSOSessions(ctx, c1.ID, "owner@ssom.example", "", now); len(ls) != 0 {
 		t.Fatalf("other connection = %v", ls)
 	}
+	// By session index (OIDC sid, 0063_sso_sessions_index).
+	if ls, err := st.ListSSOSessionsByIndex(ctx, c2.ID, "idx-1", now); err != nil || len(ls) != 1 || ls[0].SessionID != sess.ID {
+		t.Fatalf("by session index = %v, %v", ls, err)
+	}
+	for _, x := range []struct{ conn, index string }{{c2.ID, "idx-2"}, {c1.ID, "idx-1"}, {c2.ID, ""}, {"not-a-uuid", "idx-1"}} {
+		if ls, err := st.ListSSOSessionsByIndex(ctx, x.conn, x.index, now); err != nil || len(ls) != 0 {
+			t.Fatalf("by session index %v = %v, %v", x, ls, err)
+		}
+	}
 	if err := users.RevokeSession(ctx, ownerA.P.UserID, sess.ID, now); err != nil {
 		t.Fatal(err)
 	}
 	if ls, _ := st.ListSSOSessions(ctx, c2.ID, "owner@ssom.example", "", now); len(ls) != 0 {
 		t.Fatalf("revoked session listed = %v", ls)
+	}
+	if ls, _ := st.ListSSOSessionsByIndex(ctx, c2.ID, "idx-1", now); len(ls) != 0 {
+		t.Fatalf("revoked session listed by index = %v", ls)
 	}
 	// Logout states.
 	ls := sso.LoginState{StateHash: auth.HashSecret("ssom-logout-" + domain), OrgID: orgA.ID, ConnectionID: c2.ID, Purpose: sso.PurposeLogout,

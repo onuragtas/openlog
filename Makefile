@@ -192,6 +192,15 @@ release-php-agent:
 release-java-agent:
 	agents/java/scripts/release-jar.sh "$(VERSION)" "$(RELEASE_DIR)"
 
+# Language agent packages into $(RELEASE_DIR) before release-local: openlog-node-<v>.tgz (component node-agent),
+# openlog_agent-<pep440>-py3-none-any.whl + sdist (python-agent), OpenLog.Agent.<v>.nupkg (dotnet-agent), each + .sha256.
+# Builds run in node:22-alpine, python:3.12-slim and dotnet/sdk:8.0; RUN_TESTS=0 skips the agents' tests.
+.PHONY: release-language-agents
+release-language-agents:
+	agents/node/scripts/release-pack.sh "$(VERSION)" "$(RELEASE_DIR)"
+	agents/python/scripts/release-dist.sh "$(VERSION)" "$(RELEASE_DIR)"
+	agents/dotnet/scripts/release-nupkg.sh "$(VERSION)" "$(RELEASE_DIR)"
+
 release-tool:
 	@mkdir -p $(BIN)
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(VERSION_LDFLAGS)" -o $(RELEASE_TOOL) ./cmd/openlog-release
@@ -317,7 +326,8 @@ stack-demo:
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 KUBECONFORM_IMAGE ?= ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
-SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh
+SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh \
+	agents/node/scripts/release-pack.sh agents/python/scripts/release-dist.sh agents/dotnet/scripts/release-nupkg.sh
 
 .PHONY: shellcheck actionlint helm-lint package-test install-test
 shellcheck:

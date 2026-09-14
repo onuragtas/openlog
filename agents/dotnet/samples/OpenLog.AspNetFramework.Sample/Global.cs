@@ -1,4 +1,5 @@
 using System;
+using System.Configuration;
 using System.Web;
 using OpenLog.Agent;
 using OpenTelemetry.Trace;
@@ -16,6 +17,15 @@ namespace OpenLog.AspNetFramework.Sample
 
         protected void Application_Start(object sender, EventArgs e)
         {
+            // OpenLog.Agent reads OPENLOG_* from the environment: copy them from web.config appSettings (a variable
+            // already set in the worker process environment wins).
+            foreach (var key in ConfigurationManager.AppSettings.AllKeys)
+            {
+                if (key != null && key.StartsWith("OPENLOG_", StringComparison.Ordinal) && string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+                {
+                    Environment.SetEnvironmentVariable(key, ConfigurationManager.AppSettings[key]);
+                }
+            }
             agent = OpenLogAgent.Start(o =>
             {
                 o.ServiceName = "legacy-web";

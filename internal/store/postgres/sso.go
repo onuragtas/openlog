@@ -307,6 +307,22 @@ func (s *SSOStore) ListSSOSessions(ctx context.Context, connectionID, subject, u
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (sso.SSOSession, error) { return scanSSOSession(r) })
 }
 
+// ListSSOSessionsByIndex lists the active sessions of an IdP session (OIDC sid, SAML SessionIndex) through the
+// partial index of 0063_sso_sessions_index.
+func (s *SSOStore) ListSSOSessionsByIndex(ctx context.Context, connectionID, sessionIndex string, now time.Time) ([]sso.SSOSession, error) {
+	if !validID(connectionID) || sessionIndex == "" {
+		return []sso.SSOSession{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT `+ssoSessionCols+` FROM sso_sessions x JOIN sessions s ON s.id = x.session_id
+		WHERE x.connection_id = $1 AND x.session_index = $2 AND x.session_index <> ''
+		  AND s.revoked_at IS NULL AND s.expires_at > $3
+		ORDER BY x.created_at`, connectionID, sessionIndex, now)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (sso.SSOSession, error) { return scanSSOSession(r) })
+}
+
 // ---- domains ----
 
 const domainCols = `id::text, org_id::text, domain, dns_token, email_token_hash, email_address, email_expires_at, verified_at,

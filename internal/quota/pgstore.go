@@ -173,9 +173,12 @@ func (s PGStore) MemberCounts(ctx context.Context) (map[string]int64, error) {
 	return out, rows.Err()
 }
 
-// Owners returns the e-mail addresses and e-mail languages of the organization's enabled owners.
+// Owners returns the e-mail addresses and e-mail languages of the organization's enabled owners. Language: the owner's
+// preference, the organization's default, the language stored when the account was created (D-095).
 func (s PGStore) Owners(ctx context.Context, orgID string) ([]Owner, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT u.email, u.locale FROM memberships m JOIN users u ON u.id = m.user_id
+	rows, err := s.Pool.Query(ctx, `SELECT u.email,
+		       CASE WHEN u.locale_explicit AND u.locale <> '' THEN u.locale WHEN o.locale <> '' THEN o.locale ELSE u.locale END
+		FROM memberships m JOIN users u ON u.id = m.user_id JOIN organizations o ON o.id = m.org_id
 		WHERE m.org_id = $1::uuid AND m.role = 'owner' AND u.disabled_at IS NULL ORDER BY u.email`, orgID)
 	if err != nil {
 		return nil, err

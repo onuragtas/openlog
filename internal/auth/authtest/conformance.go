@@ -185,6 +185,7 @@ func Run(t *testing.T, newStore func(t *testing.T) auth.Store) {
 		{"sessions", nil, sessions},
 		{"signup_disabled", nil, signupDisabled},
 		{"signup", func(c *auth.Config) { c.SignupEnabled = true }, signup},
+		{"language", nil, language}, // language.go (D-095)
 	}
 	for _, sc := range scenarios {
 		t.Run(sc.name, func(t *testing.T) {

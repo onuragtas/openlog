@@ -2,6 +2,7 @@ package sso
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"slices"
 	"strings"
@@ -35,11 +36,15 @@ type ConnectionInput struct {
 	RequireEmailVerified *bool // nil = true
 
 	// SAML. With IdPMetadataURL the metadata is fetched now; otherwise IdPMetadataXML is required.
-	IdPMetadataURL      string
-	IdPMetadataXML      string
-	AllowIdPInitiated   bool
-	RelayStateAllowlist []string
-	SignAuthnRequests   bool
+	IdPMetadataURL string
+	IdPMetadataXML string
+	// Metadata trust (D-098), only with IdPMetadataURL. MetadataSigningCertificatePEM: nil keeps the pinned
+	// certificates of an unchanged URL (else the signer of signed metadata is pinned), "" removes them.
+	MetadataSigningCertificatePEM *string
+	AllowUnsignedMetadata         bool
+	AllowIdPInitiated             bool
+	RelayStateAllowlist           []string
+	SignAuthnRequests             bool
 
 	EmailAttribute  string
 	NameAttribute   string
@@ -331,13 +336,28 @@ func (s *Service) applySAML(ctx context.Context, c *Connection, existing Connect
 	if err != nil {
 		return invalid("%v", err)
 	}
+	var pins []*x509.Certificate
+	if metaURL != "" {
+		switch pemIn := in.MetadataSigningCertificatePEM; {
+		case pemIn != nil && strings.TrimSpace(*pemIn) != "":
+			if pins, err = parseCertificatesPEM(*pemIn); err != nil {
+				return invalid("metadata_signing_certificate_pem: %v", err)
+			}
+		case pemIn == nil && !isNew && existing.SAML != nil && existing.SAML.IdPMetadataURL == metaURL:
+			pins, _ = parseStoredCerts(existing.SAML.MetadataSigningCerts)
+		}
+		if pins, err = metadataTrustOnSave([]byte(xmlData), pins, in.AllowUnsignedMetadata, now); err != nil {
+			return invalid("%v", err)
+		}
+	}
 	allow, err := cleanPaths(in.RelayStateAllowlist, "relay_state_allowlist")
 	if err != nil {
 		return err
 	}
 	cfg := &SAMLConfig{IdPMetadataURL: metaURL, IdPMetadataXML: xmlData, IdPEntityID: info.IdPEntityID, IdPSSOURL: info.IdPSSOURL,
 		IdPSLOURL: info.IdPSLOURL, IdPSLOBinding: info.IdPSLOBinding, IdPCertificates: info.IdPCertificates, IdPCertNotAfter: info.IdPCertNotAfter,
-		AllowIdPInitiated: in.AllowIdPInitiated, RelayStateAllowlist: allow, SignAuthnRequests: in.SignAuthnRequests}
+		AllowIdPInitiated: in.AllowIdPInitiated, RelayStateAllowlist: allow, SignAuthnRequests: in.SignAuthnRequests,
+		MetadataSigningCerts: certPEMs(pins), AllowUnsignedMetadata: metaURL != "" && in.AllowUnsignedMetadata}
 	if !isNew && existing.SAML != nil && len(existing.SPKeyEnc) > 0 {
 		cfg.SPCertificatePEM, c.SPKeyEnc = existing.SAML.SPCertificatePEM, existing.SPKeyEnc
 	} else {

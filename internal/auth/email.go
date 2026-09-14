@@ -16,6 +16,16 @@ type Mail struct {
 	Subject string
 	Text    string
 	HTML    string
+	// Inline are images the HTML body references as cid:<ContentID> (scheduled report charts, D-097).
+	Inline []InlineImage
+}
+
+// InlineImage is an image part of a multipart/related HTML body.
+type InlineImage struct {
+	ContentID   string // without angle brackets, e.g. "widget-1@openlog"
+	ContentType string // image/png
+	Filename    string
+	Data        []byte
 }
 
 // Mailer delivers transactional e-mail (internal/mail over OPENLOG_SMTP_*). Nil in Config disables e-mail:
@@ -110,10 +120,9 @@ func (s *Service) mailInvitation(ctx context.Context, p *Principal, inv Invitati
 			return nil
 		}
 	}
-	locale := inv.Locale
-	if locale == "" {
-		locale = fallbackLocale
-	}
+	// The invitee's preference (existing user), the organization's default, the inviter's stored language, the current
+	// request's language (D-095).
+	locale := s.mailLanguage(ctx, inv.OrgID, inv.Email, inv.Locale, fallbackLocale)
 	if err := s.send(ctx, s.invitationMail(inv, p.OrgName, p.Email, token, locale)); err != nil {
 		s.log.Warn("cannot send invitation e-mail", "org_id", inv.OrgID, "invitation_id", inv.ID, "err", err)
 		return nil
@@ -124,16 +133,15 @@ func (s *Service) mailInvitation(ctx context.Context, p *Principal, inv Invitati
 	return &now
 }
 
-// startVerification creates a verification token for u and e-mails it in locale (fallback: the user's) (best effort;
-// logged).
+// startVerification creates a verification token for u and e-mails it (best effort; logged).
 func (s *Service) startVerification(ctx context.Context, u User, locale string) error {
 	token, err := NewSecret(PrefixVerification)
 	if err != nil {
 		return err
 	}
-	if locale == "" {
-		locale = u.Locale
-	}
+	// The user's preference, then the request's language, then the language stored with the account (D-095). Not an
+	// organization e-mail: organization defaults do not apply.
+	locale = mailtemplates.Resolve(u.Preference(), locale, u.Locale)
 	now := s.now()
 	v := EmailVerification{UserID: u.ID, Email: u.Email, TokenHash: HashSecret(token), CreatedAt: now, ExpiresAt: now.Add(s.cfg.VerificationTTL),
 		Locale: locale}

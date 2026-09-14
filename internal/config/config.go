@@ -170,6 +170,8 @@ type Config struct {
 	Usage Usage
 	// Onboarding holds the public ingest URLs shown in the UI's install commands (onboarding.go).
 	Onboarding Onboarding
+	// Renderer configures PNG widget images in report e-mails and openlog-renderer (renderer.go, D-097).
+	Renderer Renderer
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -309,6 +311,7 @@ func Load(getenv func(string) string) (Config, error) {
 		TailSampling: loadTailSampling(&p),
 		Usage:        loadUsage(&p),
 		Onboarding:   loadOnboarding(&p), // onboarding.go
+		Renderer:     loadRenderer(&p),   // renderer.go
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
@@ -367,6 +370,7 @@ func (c Config) validate(getenv func(string) string) error {
 	errs = append(errs, c.TailSampling.validate()...)
 	errs = append(errs, c.validateUsage()...)
 	errs = append(errs, c.Onboarding.validate()...) // onboarding.go
+	errs = append(errs, c.validateRenderer()...)    // renderer.go
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))
 	}

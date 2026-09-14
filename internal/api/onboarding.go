@@ -37,6 +37,9 @@ type OnboardingConfig struct {
 	IngestPublicGRPCURL string   // OPENLOG_INGEST_PUBLIC_GRPC_URL (OTLP/gRPC)
 	CORSAllowedOrigins  []string // OPENLOG_INGEST_CORS_ALLOWED_ORIGINS (browser OTLP senders)
 	Channel             string   // OPENLOG_UPDATE_CHANNEL
+	// PackageRegistries checks whether npm, PyPI and nuget.org serve the language agent packages (agentpackages.go);
+	// nil reports "unknown" without network access, so the commands install from the GitHub release.
+	PackageRegistries *PackageRegistryChecker
 }
 
 // SetOnboarding configures GET /api/v1/onboarding. Without it the endpoint derives everything from the request.
@@ -83,6 +86,9 @@ type onboardingJSON struct {
 	Organization   onboardingOrgJSON      `json:"organization"`
 	Role           string                 `json:"role"`
 	Features       onboardingFeaturesJSON `json:"features"`
+	// AgentPackages: Node.js, Python and .NET agent packages of agent_version (registry availability, release
+	// assets); null when agent_version is null.
+	AgentPackages *onboardingPackagesJSON `json:"agent_packages"`
 }
 
 func (s *Server) onboardingRoutes(mux *http.ServeMux) {
@@ -122,10 +128,12 @@ func (s *Server) onboardingInfo(r *http.Request, p *auth.Principal) onboardingJS
 		authMode = "postgres"
 	}
 	session := p.Kind == auth.KindSession
+	agentVersion := s.onboardingAgentVersion(r.Context())
 	return onboardingJSON{
 		UIURL: ui, OTLPHTTP: httpEP, OTLPGRPC: grpcEP,
 		ServerVersion:  version.String(),
-		AgentVersion:   s.onboardingAgentVersion(r.Context()),
+		AgentVersion:   agentVersion,
+		AgentPackages:  agentPackages(r.Context(), c.PackageRegistries, agentVersion),
 		ReleaseChannel: channel,
 		CORSEnabled:    len(origins) > 0,
 		CORSOrigins:    origins,

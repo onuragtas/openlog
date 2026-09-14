@@ -73,6 +73,10 @@ func (s *Server) ssoRoutes(mux *http.ServeMux) {
 	public("POST /api/v1/sso/saml/{connection_id}/acs", s.ssoSAMLACS)
 	public("GET /api/v1/sso/saml/{connection_id}/slo", s.ssoSAMLSLO)
 	public("POST /api/v1/sso/saml/{connection_id}/slo", s.ssoSAMLSLO)
+	// Back-channel and front-channel logout from the identity provider (D-098).
+	public("POST /api/v1/sso/saml/{connection_id}/slo/soap", s.ssoSAMLSOAPLogout)
+	public("POST /api/v1/sso/oidc/{connection_id}/backchannel-logout", s.ssoOIDCBackchannelLogout)
+	public("GET /api/v1/sso/oidc/{connection_id}/frontchannel-logout", s.ssoOIDCFrontchannelLogout)
 	public("GET /api/v1/sso/saml/complete", s.ssoSAMLComplete)
 	public("POST /api/v1/sso/domains/verify-email", s.ssoVerifyDomainEmail)
 
@@ -98,6 +102,7 @@ func (s *Server) ssoRoutes(mux *http.ServeMux) {
 	authed("POST /api/v1/sso/connections/{id}/test", s.ssoTestConnection)
 	authed("POST /api/v1/sso/connections/{id}/test/start", s.ssoStartTest)
 	authed("POST /api/v1/sso/connections/{id}/refresh", s.ssoRefreshConnection)
+	authed("POST /api/v1/sso/connections/{id}/metadata/accept", s.ssoAcceptMetadata)
 	authed("PUT /api/v1/sso/connections/{id}/enforcement", s.ssoEnforcement)
 	authed("GET /api/v1/sso/connections/{id}/role-mappings", s.ssoListRoleMappings)
 	authed("PUT /api/v1/sso/connections/{id}/role-mappings", s.ssoReplaceRoleMappings)
@@ -135,6 +140,20 @@ type ssoSAMLJSON struct {
 	AllowIdPInitiated   bool     `json:"allow_idp_initiated"`
 	RelayStateAllowlist []string `json:"relay_state_allowlist"`
 	SignAuthnRequests   bool     `json:"sign_authn_requests"`
+	// Metadata trust (D-098).
+	MetadataSigningCertificates []string                `json:"metadata_signing_certificates"`
+	AllowUnsignedMetadata       bool                    `json:"allow_unsigned_metadata"`
+	PendingMetadata             *ssoPendingMetadataJSON `json:"pending_metadata"`
+}
+
+type ssoPendingMetadataJSON struct {
+	Digest            string   `json:"digest"`
+	Reason            string   `json:"reason"`
+	DetectedAt        string   `json:"detected_at"`
+	IdPCertificates   []string `json:"idp_certificates"`
+	IdPSSOURL         string   `json:"idp_sso_url"`
+	IdPSLOURL         *string  `json:"idp_slo_url"`
+	SignerCertificate *string  `json:"signer_certificate"`
 }
 
 type ssoTestJSON struct {
@@ -204,7 +223,13 @@ func (s *Server) ssoConnectionResponse(c sso.Connection, isDefault bool) *ssoCon
 	if c.SAML != nil {
 		out.SAML = &ssoSAMLJSON{IdPMetadataURL: c.SAML.IdPMetadataURL, IdPEntityID: c.SAML.IdPEntityID, IdPSSOURL: c.SAML.IdPSSOURL,
 			IdPSLOURL: ssoOptString(c.SAML.IdPSLOURL), IdPCertificates: nonNilStrings(c.SAML.IdPCertificates), AllowIdPInitiated: c.SAML.AllowIdPInitiated,
-			RelayStateAllowlist: nonNilStrings(c.SAML.RelayStateAllowlist), SignAuthnRequests: c.SAML.SignAuthnRequests}
+			RelayStateAllowlist: nonNilStrings(c.SAML.RelayStateAllowlist), SignAuthnRequests: c.SAML.SignAuthnRequests,
+			MetadataSigningCertificates: sso.CertificateFingerprints(c.SAML.MetadataSigningCerts), AllowUnsignedMetadata: c.SAML.AllowUnsignedMetadata}
+		if pm := c.SAML.PendingMetadata; pm != nil {
+			out.SAML.PendingMetadata = &ssoPendingMetadataJSON{Digest: pm.Digest, Reason: pm.Reason, DetectedAt: formatTime(pm.DetectedAt),
+				IdPCertificates: nonNilStrings(pm.IdPCertificates), IdPSSOURL: pm.IdPSSOURL, IdPSLOURL: ssoOptString(pm.IdPSLOURL),
+				SignerCertificate: ssoOptString(pm.SignerCertificate)}
+		}
 		if c.SAML.IdPCertNotAfter != "" {
 			v := c.SAML.IdPCertNotAfter
 			out.SAML.IdPCertNotAfter = &v
@@ -230,7 +255,7 @@ func (s *Server) writeSSOState(w http.ResponseWriter, r *http.Request, p *auth.P
 	}
 	sp := map[string]any{"oidc_redirect_uri": s.sso.OIDCRedirectURL(), "oidc_post_logout_redirect_uri": s.sso.OIDCPostLogoutRedirectURL(),
 		"scim_base_url": s.sso.SCIMBaseURL(), "saml_entity_id": nil, "saml_acs_url": nil, "saml_slo_url": nil, "saml_metadata_url": nil,
-		"saml_certificate_pem": nil}
+		"saml_certificate_pem": nil, "saml_slo_soap_url": nil, "oidc_backchannel_logout_uri": nil, "oidc_frontchannel_logout_uri": nil}
 	var conn *ssoConnectionJSON
 	list := make([]*ssoConnectionJSON, 0, len(conns))
 	for i, x := range conns {
@@ -242,6 +267,10 @@ func (s *Server) writeSSOState(w http.ResponseWriter, r *http.Request, p *auth.P
 		if c.Protocol == sso.ProtocolSAML && c.SAML != nil {
 			sp["saml_entity_id"], sp["saml_acs_url"], sp["saml_slo_url"] = s.sso.SAMLEntityID(c.ID), s.sso.SAMLACSURL(c.ID), s.sso.SAMLSLOURL(c.ID)
 			sp["saml_metadata_url"], sp["saml_certificate_pem"] = s.sso.SAMLEntityID(c.ID), c.SAML.SPCertificatePEM
+			sp["saml_slo_soap_url"] = s.sso.SAMLSOAPLogoutURL(c.ID)
+		}
+		if c.Protocol == sso.ProtocolOIDC {
+			sp["oidc_backchannel_logout_uri"], sp["oidc_frontchannel_logout_uri"] = s.sso.OIDCBackchannelLogoutURL(c.ID), s.sso.OIDCFrontchannelLogoutURL(c.ID)
 		}
 	}
 	cfg := s.sso.Config()
@@ -286,6 +315,9 @@ func parseConnectionInput(r *http.Request) (sso.ConnectionInput, error) {
 			AllowIdPInitiated   bool     `json:"allow_idp_initiated"`
 			RelayStateAllowlist []string `json:"relay_state_allowlist"`
 			SignAuthnRequests   bool     `json:"sign_authn_requests"`
+			// Metadata trust (D-098): omitted certificate keeps the pinned one of an unchanged URL, "" removes it.
+			MetadataSigningCertificatePEM *string `json:"metadata_signing_certificate_pem"`
+			AllowUnsignedMetadata         bool    `json:"allow_unsigned_metadata"`
 		} `json:"saml"`
 		EmailAttribute           string   `json:"email_attribute"`
 		NameAttribute            string   `json:"name_attribute"`
@@ -319,6 +351,7 @@ func parseConnectionInput(r *http.Request) (sso.ConnectionInput, error) {
 		}
 		ci.IdPMetadataURL, ci.IdPMetadataXML, ci.AllowIdPInitiated, ci.RelayStateAllowlist, ci.SignAuthnRequests =
 			in.SAML.IdPMetadataURL, in.SAML.IdPMetadataXML, in.SAML.AllowIdPInitiated, in.SAML.RelayStateAllowlist, in.SAML.SignAuthnRequests
+		ci.MetadataSigningCertificatePEM, ci.AllowUnsignedMetadata = in.SAML.MetadataSigningCertificatePEM, in.SAML.AllowUnsignedMetadata
 	}
 	return ci, nil
 }
@@ -399,6 +432,20 @@ func (s *Server) ssoStartTest(w http.ResponseWriter, r *http.Request, p *auth.Pr
 
 func (s *Server) ssoRefreshConnection(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
 	c, err := s.sso.RefreshNow(r.Context(), p, r.PathValue("id"), s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	return s.writeSSOState(w, r, p, &c, http.StatusOK)
+}
+
+func (s *Server) ssoAcceptMetadata(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Digest string `json:"digest"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	c, err := s.sso.AcceptMetadata(r.Context(), p, r.PathValue("id"), in.Digest, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
@@ -752,6 +799,67 @@ func (s *Server) ssoSAMLSLO(w http.ResponseWriter, r *http.Request) error {
 	default:
 		s.ssoRedirect(w, sso.Outcome{Redirect: o.Redirect})
 	}
+	return nil
+}
+
+// maxLogoutBody bounds the form of an OIDC back-channel logout.
+const maxLogoutBody = 64 << 10
+
+// ssoOIDCBackchannelLogout is the OIDC back-channel logout URI: 200 when the logout_token was accepted, 400
+// {"error", "error_description"} when not, 503 when the sessions could not be ended.
+func (s *Server) ssoOIDCBackchannelLogout(w http.ResponseWriter, r *http.Request) error {
+	w.Header().Set("Cache-Control", "no-store")
+	fail := func(status int, code, desc string) error {
+		writeJSON(w, status, map[string]string{"error": code, "error_description": desc})
+		return nil
+	}
+	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "application/x-www-form-urlencoded" {
+		return fail(http.StatusBadRequest, "invalid_request", "Content-Type must be application/x-www-form-urlencoded")
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLogoutBody)
+	if err := r.ParseForm(); err != nil {
+		return fail(http.StatusBadRequest, "invalid_request", "invalid form body")
+	}
+	err := s.sso.OIDCBackchannelLogout(r.Context(), r.PathValue("connection_id"), r.PostForm.Get("logout_token"), s.accounts.Meta(r))
+	var rejected *sso.LogoutRejectedError
+	switch {
+	case err == nil:
+		w.WriteHeader(http.StatusOK)
+		return nil
+	case errors.As(err, &rejected):
+		return fail(http.StatusBadRequest, "invalid_request", rejected.Reason)
+	default:
+		return fail(http.StatusServiceUnavailable, "temporarily_unavailable", "single logout is temporarily unavailable")
+	}
+}
+
+// ssoOIDCFrontchannelLogout is the OIDC front-channel logout URI, loaded by the provider in an iframe: an empty page
+// that only the issuer's origin may frame (Content-Security-Policy frame-ancestors, no X-Frame-Options).
+func (s *Server) ssoOIDCFrontchannelLogout(w http.ResponseWriter, r *http.Request) error {
+	q := r.URL.Query()
+	o := s.sso.OIDCFrontchannelLogout(r.Context(), r.PathValue("connection_id"), q.Get("iss"), q.Get("sid"), s.accounts.Meta(r))
+	h := w.Header()
+	h.Set("Cache-Control", "no-cache, no-store")
+	h.Set("Pragma", "no-cache")
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Security-Policy", o.CSP)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	w.WriteHeader(o.Status)
+	_, _ = w.Write(o.HTML)
+	return nil
+}
+
+// ssoSAMLSOAPLogout is the SAML SOAP single logout service (back-channel LogoutRequest from the IdP).
+func (s *Server) ssoSAMLSOAPLogout(w http.ResponseWriter, r *http.Request) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxACSBody)
+	o := sso.SOAPFault("Client", "invalid request body")
+	if body, err := io.ReadAll(r.Body); err == nil {
+		o = s.sso.SAMLSOAPLogout(r.Context(), r.PathValue("connection_id"), body, s.accounts.Meta(r))
+	}
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	w.WriteHeader(o.Status)
+	_, _ = w.Write(o.Body)
 	return nil
 }
 

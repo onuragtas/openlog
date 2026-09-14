@@ -2,6 +2,7 @@ package sso_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -91,8 +92,13 @@ func TestRefreshSAMLMetadata(t *testing.T) {
 		_, _ = w.Write([]byte(served))
 	}))
 	defer srv.Close()
+	// Unsigned metadata from a URL needs the administrator's explicit choice (D-098).
+	if _, err := env.sso.SaveConnection(ctx, env.ownerPrincipal(), sso.ConnectionInput{Protocol: sso.ProtocolSAML, Enabled: true,
+		IdPMetadataURL: srv.URL + "/metadata"}, auth.ClientMeta{}); !errors.Is(err, auth.ErrInvalidArgument) || !strings.Contains(err.Error(), "not signed") {
+		t.Fatalf("unsigned metadata URL without a trust decision: %v", err)
+	}
 	c, err := env.sso.SaveConnection(ctx, env.ownerPrincipal(), sso.ConnectionInput{Protocol: sso.ProtocolSAML, Enabled: true,
-		IdPMetadataURL: srv.URL + "/metadata"}, auth.ClientMeta{})
+		IdPMetadataURL: srv.URL + "/metadata", AllowUnsignedMetadata: true}, auth.ClientMeta{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +109,8 @@ func TestRefreshSAMLMetadata(t *testing.T) {
 		t.Fatalf("first refresh = %+v", c.Refresh)
 	}
 
-	// Certificate rollover at the IdP: the refreshed metadata replaces the stored copy without a new config version.
+	// Certificate rollover at the IdP: unsigned metadata is not trusted to change the signing certificate, the change
+	// waits for an administrator.
 	rolled := newTestIdP(t, idpEntityID)
 	mu.Lock()
 	served = rolled.metadataXML(t)
@@ -116,18 +123,36 @@ func TestRefreshSAMLMetadata(t *testing.T) {
 	if c, err = env.sso.RefreshNow(ctx, env.ownerPrincipal(), c.ID, auth.ClientMeta{}); err != nil {
 		t.Fatal(err)
 	}
-	if c.SAML.IdPCertificates[0] == before || c.ConfigVersion != version || !*c.Refresh.OK {
+	pending := c.SAML.PendingMetadata
+	if c.SAML.IdPCertificates[0] != before || *c.Refresh.OK || !strings.Contains(c.Refresh.Error, "confirm") || pending == nil ||
+		pending.Reason != sso.PendingMetadataChanged || pending.IdPCertificates[0] == before {
+		t.Fatalf("unconfirmed rollover: certs %v refresh %+v pending %+v", c.SAML.IdPCertificates, c.Refresh, pending)
+	}
+	resp := rolled.makeResponse(t, respOpts{requestID: "r1", audience: env.sso.SAMLEntityID(c.ID), recipient: env.sso.SAMLACSURL(c.ID), email: "a@example.com"})
+	if _, _, err := env.sso.SAMLAssertionForTest(c, resp, []string{"r1"}); err == nil {
+		t.Fatal("assertion signed with the unconfirmed key accepted")
+	}
+	if _, err := env.sso.AcceptMetadata(ctx, env.ownerPrincipal(), c.ID, "another-change", auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
+		t.Fatalf("accept with a wrong digest: %v", err)
+	}
+	// The administrator confirms: the refreshed metadata replaces the stored copy without a new config version.
+	if c, err = env.sso.AcceptMetadata(ctx, env.ownerPrincipal(), c.ID, pending.Digest, auth.ClientMeta{}); err != nil {
+		t.Fatal(err)
+	}
+	if c.SAML.IdPCertificates[0] == before || c.ConfigVersion != version || !*c.Refresh.OK || c.SAML.PendingMetadata != nil {
 		t.Fatalf("after rollover: certs %v version %d/%d refresh %+v", c.SAML.IdPCertificates, c.ConfigVersion, version, c.Refresh)
 	}
-	audited := false
+	audited := map[string]bool{}
 	for _, e := range env.users.AuditEvents() {
-		audited = audited || e.Action == "sso.connection.metadata_refresh"
+		audited[e.Action] = true
 	}
-	if !audited {
-		t.Fatal("metadata refresh not audited")
+	if !audited["sso.connection.metadata_pending"] || !audited["sso.connection.metadata_accept"] {
+		t.Fatalf("metadata change not audited: %v", audited)
+	}
+	if _, err := env.sso.AcceptMetadata(ctx, env.ownerPrincipal(), c.ID, pending.Digest, auth.ClientMeta{}); !errors.Is(err, auth.ErrFailedPrecondition) {
+		t.Fatalf("accept without a pending change: %v", err)
 	}
 	// Assertions of the new key are accepted now.
-	resp := rolled.makeResponse(t, respOpts{requestID: "r1", audience: env.sso.SAMLEntityID(c.ID), recipient: env.sso.SAMLACSURL(c.ID), email: "a@example.com"})
 	if _, _, err := env.sso.SAMLAssertionForTest(c, resp, []string{"r1"}); err != nil {
 		t.Fatalf("assertion signed with the rolled key: %v", err)
 	}

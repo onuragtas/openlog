@@ -98,12 +98,19 @@ verified or e-mail is not configured, `429` after 5 e-mails per hour, `503` when
 ### `GET /api/v1/auth/me`
 **Me** object:
 ```json
-{"auth": "session", "user": {"id": "…", "email": "ada@example.com", "name": "Ada", "email_verified": true},
+{"auth": "session", "user": {"id": "…", "email": "ada@example.com", "name": "Ada", "email_verified": true, "language": "auto"},
  "organization": {"id": "…", "tenant_id": "default", "name": "Default"}, "role": "owner",
  "organizations": [{"id": "…", "tenant_id": "default", "name": "Default", "role": "owner"}],
  "csrf_token": "…"}
 ```
 For API keys: `"auth": "api_key"`, `user`/`csrf_token` `null`, `organizations: []`, `role: "viewer"`.
+`user.language` is the user's language preference: `"auto"` (the browser's) or `"en"`/`"tr"` (D-095).
+
+### `PATCH /api/v1/auth/me` `{"language": "auto" | "en" | "tr"}`
+Signed-in users set their own language for the web UI and for e-mails sent to them → `200` **Me**. The web UI starts in
+that language instead of the browser's (Settings → Profile; with a preference set, the header language switch updates
+it too). `"auto"` removes the preference and keeps the request's `Accept-Language` as the account's stored language.
+Other values → `400`; API keys → `403`. Audit `user.language_change` (`details.from`/`to`, no organization).
 
 ### `POST /api/v1/auth/logout`
 Revokes the session and clears the cookie → `204`.
@@ -113,8 +120,10 @@ Body `{"current_password", "new_password"}` → `204`; revokes the user's other 
 
 ## Organization and members
 
-### `GET /api/v1/orgs/current` · `PATCH /api/v1/orgs/current` `{"name"}`
-`{"id", "tenant_id", "name", "role", "created_at"}` (`role` = caller's role).
+### `GET /api/v1/orgs/current` · `PATCH /api/v1/orgs/current` `{"name"?, "language"?}`
+`{"id", "tenant_id", "name", "role", "created_at", "language"}` (`role` = caller's role). `language` is the organization's
+default e-mail language: `""` (none), `"en"` or `"tr"` (D-095). `PATCH` (admin, owner) needs at least one field; audit
+`org.rename`, `org.language_change` (`details.from`/`to`).
 
 ### `GET /api/v1/members`
 `{"members": [{"user_id", "email", "name", "role", "joined_at"}]}`
@@ -127,7 +136,10 @@ session and the membership/role of the selected organization from PostgreSQL —
 with that organization gets `403` (without `X-Openlog-Org-Id` their next oldest membership is used, or none), and a
 demoted user acts with the new role at once. Removing a member also revokes the API keys they created in that
 organization (`details.revoked_api_keys` in the `member.remove` audit event). Their sessions stay valid for their
-other organizations.
+other organizations. In the same transaction as the membership (also for SCIM deactivation and deletion) their address
+is removed from the organization's scheduled report recipient lists; a report left without recipients is disabled
+(D-096). Audit `dashboard.report.recipient_remove` (`details.user_id`, `details.reports`, `details.disabled_reports`;
+`details.via = "scim"`) and `details.report_recipient_removed` (count) on `member.remove`.
 
 ## Invitations
 
@@ -137,11 +149,15 @@ invitee from `OPENLOG_SMTP_FROM`; `email_sent` in the response says whether that
 e-mail never fails the request). Limits: 100 invitation e-mails per organization and 5 per invited address per hour.
 
 **E-mail language.** Transactional e-mails (invitation, sign-up verification, SSO domain verification, usage
-notifications) are rendered from `internal/mail/templates` as plain text + HTML in English or Turkish. There is no
-organization or user language setting: the language is the supported one the request's `Accept-Language` prefers most
-(`q` values honoured; none supported = English) — the inviter's for invitations (stored with the invitation and kept on
-resend), the new user's for verification links, the requesting admin's for domain verification, and for usage
-notifications the language each owner had when their account was created (`users.locale`, postgres.md).
+notifications) are rendered from `internal/mail/templates` as plain text + HTML in English or Turkish (D-085, D-095).
+The language is the first of: (1) the recipient's language preference (`PATCH /auth/me`, when the address belongs to a
+user), (2) the organization's default language (`PATCH /orgs/current`; organization e-mails only: invitations, domain
+verification, usage notifications), (3) the stored request language — the supported language the `Accept-Language` of
+the creating request prefers most (`q` values honoured): the inviter's for invitations (kept on resend, then the
+resending admin's), the current request's for verification links and domain verification, and the account's language
+at creation for usage notifications (`users.locale`, postgres.md) — and (4) English. Verification links are not
+organization e-mails (preference, request language, account language). Scheduled dashboard reports use the report's
+own `language`.
 
 ### `GET /api/v1/invitations?include_expired=` · `POST /api/v1/invitations` `{"email", "role"}` · `DELETE /api/v1/invitations/{id}`
 List: `{"invitations": [{"id", "email", "role", "invited_by_email", "created_at", "expires_at", "expired", "last_sent_at", "send_count"}]}`
@@ -283,6 +299,33 @@ ends the IdP session:
 - `redirect` must be `/login` or one of the connection's `logout_redirect_allowlist` paths (else `/login`). Without an
   IdP logout endpoint only the openlog sessions end (`redirect_url` and `post` null).
 
+**Logout from the identity provider without the browser round trip (D-098).** Per connection (URIs in
+`service_provider` of the addressed connection; refused requests are audited as `sso.logout_failed` and limited to 60
+per client address per 10 min, valid ones are audited as `sso.logout` with `via`):
+- SAML SOAP binding `POST /sso/saml/{connection_id}/slo/soap` (also in the SP metadata): a SOAP 1.1 envelope with
+  exactly one `LogoutRequest` with one enveloped signature, checked like the front-channel request above (`Destination`
+  optional: the SOAP or the SLO URL); answer `200` with a signed `LogoutResponse` in the SOAP body, else a `500` SOAP
+  fault without details (`via` `idp_soap`).
+- OIDC Back-Channel Logout 1.0 `POST /sso/oidc/{connection_id}/backchannel-logout` (form `logout_token`): a JWT
+  signed with a key of the provider's JWKS (asymmetric algorithms), `iss` = issuer, `aud` ∋ client ID, `iat` within
+  5 min plus clock skew, `exp` (when present) not passed, `events` with
+  `http://schemas.openid.net/event/backchannel-logout`, no `nonce`, a `jti` (replay cache, `oidc-logout:<jti>`) and
+  `sub` and/or `sid`. With `sid` the sessions of that IdP session end (and of `sub` when both are given), with `sub`
+  only every session of the subject on the connection → `200`; refused → `400 {"error": "invalid_request",
+  "error_description"}`; `503 temporarily_unavailable` when sessions could not be ended (`via` `oidc_backchannel`).
+- OIDC Front-Channel Logout 1.0 `GET /sso/oidc/{connection_id}/frontchannel-logout?iss=…&sid=…` (register it with
+  "session required"): `iss` must be the issuer and `sid` is required (the `SameSite=Strict` session cookie never
+  reaches the provider's iframe); the sessions of `sid` end. An empty HTML page with `Cache-Control: no-cache,
+  no-store` and `Content-Security-Policy … frame-ancestors <issuer origin>` (no `X-Frame-Options`); `400` without
+  `iss`/`sid` or with another issuer (`via` `oidc_frontchannel`).
+
+**IdP metadata trust (D-098).** Saving a SAML connection with `idp_metadata_url` needs a trust decision: metadata
+signed by `metadata_signing_certificate_pem` (omitted: the pinned certificates of an unchanged URL; signed metadata
+without a certificate pins its signer — compare `saml.metadata_signing_certificates`), or `allow_unsigned_metadata`
+for unsigned metadata (else `400`). Signed metadata must carry exactly one enveloped signature on its root
+(`EntityDescriptor`/`EntitiesDescriptor` with an `ID`, reference `#ID`, RSA/ECDSA SHA-256+, a pinned certificate valid
+now), so wrapped or altered documents are refused.
+
 **Claimed domains (D-089).** An address whose verified domain routes to an **enabled** connection does not create
 password accounts: `POST /auth/signup` answers `409 failed_precondition` ("… uses single sign-on of the organization
 …"; `/auth/sso/discover` names it), and `POST /invitations/accept` answers the same `409` for invitations of that
@@ -295,8 +338,12 @@ pending invitation of the connection's organization with the invited role (also 
 every 30 min (stored in `sso_connections.idp_cache` and used by every pod for up to an hour, unknown key ids still fetch
 the JWKS) and the SAML metadata of `idp_metadata_url` at half its `cacheDuration`/remaining `validUntil` (15 min –
 24 h, default 6 h). Changed metadata with the same entity ID replaces the stored copy without a new `config_version`
-(audit `sso.connection.metadata_refresh`); a changed entity ID, expired metadata or an expired signing certificate
-fails the refresh. Failures back off 5 min → 1 h. `connection.health` reports `ok`, `warning` (1–2 failures, certificate
+(audit `sso.connection.metadata_refresh`) only when it is signed by a pinned metadata signing certificate; unsigned
+metadata with other signing certificates or endpoints, or metadata signed by a certificate that is not pinned, fails
+the refresh and is kept as `saml.pending_metadata` (`reason` `changed`/`signer_changed`, audit
+`sso.connection.metadata_pending`) until an administrator confirms it with `POST /sso/connections/{id}/metadata/accept`
+(audit `sso.connection.metadata_accept`; a new signer is pinned). An invalid or missing signature on metadata with a
+pinned certificate, a changed entity ID, expired metadata or an expired signing certificate fails the refresh. Failures back off 5 min → 1 h. `connection.health` reports `ok`, `warning` (1–2 failures, certificate
 expiring within 30 days, metadata valid for less than 7 days), `error` (3 failures, expired certificate) or `unknown`.
 Metrics: `openlog_sso_idp_refresh_total{protocol,result}`, `openlog_sso_idp_refresh_duration_seconds{protocol}`,
 `openlog_sso_idp_refresh_failing_connections`.
@@ -317,12 +364,14 @@ disabled or deleted, and its last verified domain can be neither removed nor rou
 | `GET /sso/oidc/callback` · `POST /sso/saml/{connection_id}/acs` · `GET /sso/saml/complete` | public | See above; always `303` |
 | `GET /sso/saml/{connection_id}/metadata` | public | SP metadata (`application/samlmetadata+xml`); the URL is the SP entity ID. Lists the ACS, the SLO service (both bindings), the signing certificate and the accepted encryption algorithms |
 | `GET\|POST /sso/saml/{connection_id}/slo` · `GET /sso/oidc/logout/callback` | public | Single logout, see above; `303` or an HTML form |
+| `POST /sso/saml/{connection_id}/slo/soap` · `POST /sso/oidc/{connection_id}/backchannel-logout` · `GET /sso/oidc/{connection_id}/frontchannel-logout` | public (identity provider) | Logout from the IdP, see above (D-098) |
 | `GET /auth/sso/session` | signed-in user | `{"sso", "protocol", "connection_id", "connection_name", "idp_logout"}` |
 | `POST /auth/sso/logout` `{"redirect"?}` | signed-in user | `{"protocol", "redirect_url", "post": {"url", "fields"}\|null, "revoked_sessions"}`; clears the session cookie |
-| `GET /sso/connections` · `POST /sso/connections` `SSOConnectionInput` | admin, owner | SSOState `{"available", "secrets_encrypted", "scim_enabled", "email_verification_available", "domain_email_local_parts", "service_provider": {"oidc_redirect_uri", "oidc_post_logout_redirect_uri", "scim_base_url", "saml_entity_id", "saml_acs_url", "saml_slo_url", "saml_metadata_url", "saml_certificate_pem"}, "connection": SSOConnection\|null, "connections": [SSOConnection]}`; `POST` → `201` with the new connection; ≤ 10 per organization |
+| `GET /sso/connections` · `POST /sso/connections` `SSOConnectionInput` | admin, owner | SSOState `{"available", "secrets_encrypted", "scim_enabled", "email_verification_available", "domain_email_local_parts", "service_provider": {"oidc_redirect_uri", "oidc_post_logout_redirect_uri", "oidc_backchannel_logout_uri", "oidc_frontchannel_logout_uri", "scim_base_url", "saml_entity_id", "saml_acs_url", "saml_slo_url", "saml_slo_soap_url", "saml_metadata_url", "saml_certificate_pem"}, "connection": SSOConnection\|null, "connections": [SSOConnection]}`; `POST` → `201` with the new connection; ≤ 10 per organization |
 | `GET\|PUT\|DELETE /sso/connections/{id}` · `POST /sso/connections/{id}/test` · `POST /sso/connections/{id}/test/start` · `PUT /sso/connections/{id}/enforcement` · `GET\|PUT /sso/connections/{id}/role-mappings` | admin, owner (enforcement: owner) | As the single-connection endpoints below, for one connection; `service_provider` holds its SAML values. `DELETE` ends its sessions and routes its domains to the default connection |
 | `POST /sso/connections/{id}/refresh` | admin, owner | Refresh now; SSOState with the new `health`; 30 per connection per 10 min |
-| `GET /sso/connection` · `PUT /sso/connection` · `DELETE /sso/connection` | admin, owner | Single-connection API (D-077) on the **default** connection; `PUT` creates it when there is none. `client_secret` omitted = keep, `""` = remove; SAML metadata is fetched from `idp_metadata_url` now (or pasted `idp_metadata_xml`); each save increments `config_version`. SSOConnection adds `default`, `logout_redirect_allowlist`, `allow_external_invitations`, `saml.idp_slo_url` and `health` |
+| `POST /sso/connections/{id}/metadata/accept` `{"digest"}` | admin, owner | Confirms `saml.pending_metadata` (the metadata is fetched again and must still carry that change); SSOState; `409` without that pending change; shares the refresh limit |
+| `GET /sso/connection` · `PUT /sso/connection` · `DELETE /sso/connection` | admin, owner | Single-connection API (D-077) on the **default** connection; `PUT` creates it when there is none. `client_secret` omitted = keep, `""` = remove; SAML metadata is fetched from `idp_metadata_url` now (or pasted `idp_metadata_xml`); each save increments `config_version`. SSOConnection adds `default`, `logout_redirect_allowlist`, `allow_external_invitations`, `saml.idp_slo_url`, `saml.metadata_signing_certificates` (fingerprints), `saml.allow_unsigned_metadata`, `saml.pending_metadata` and `health`; SSOConnectionInput `saml.metadata_signing_certificate_pem` and `saml.allow_unsigned_metadata` (D-098) |
 | `POST /sso/connection/test` | admin, owner | Server-side checks `{"ok", "checks": [{"name", "ok", "message"}]}` |
 | `POST /sso/connection/test/start` | admin, owner | `{"redirect_url"}`; a real sign-in at the IdP that only records `last_test` (email, groups, resulting role) |
 | `PUT /sso/enforcement` `{"enforce", "break_glass_user_ids"}` | owner | Safeguards above |
@@ -332,9 +381,9 @@ disabled or deleted, and its last verified domain can be neither removed nor rou
 | `POST /sso/domains/verify-email` `{"token"}` | public | Token of the link `/sso/verify-domain#token=oldv_…` |
 | `GET /scim/tokens` · `POST /scim/tokens` `{"name", "expires_at"?}` · `DELETE /scim/tokens/{id}` | admin, owner | `POST` returns `{"token", "secret"}` once (`ols_` + 48 hex); ≤ 20 active |
 
-Audit actions: `sso.connection.create|update|delete|test|test_start|test_login|refresh|metadata_refresh`,
+Audit actions: `sso.connection.create|update|delete|test|test_start|test_login|refresh|metadata_refresh|metadata_pending|metadata_accept`,
 `sso.enforcement.update`, `sso.role_mappings.update`, `sso.domain.add|verify|remove|assign|verification_email`,
-`sso.login`, `sso.login_failed` (reason), `sso.logout` (`via` `user`/`idp`, revoked sessions), `sso.logout_complete`,
+`sso.login`, `sso.login_failed` (reason), `sso.logout` (`via` `user`/`idp`/`idp_soap`/`oidc_backchannel`/`oidc_frontchannel`, revoked sessions), `sso.logout_complete`,
 `sso.logout_failed`, `user.login_refused` (password sign-in refused by enforcement), `invitation.accept` with `via`
 `sso`, `member.add` / `member.role_change` with `via` `sso_jit`, `sso_groups`, `scim`, `scim_groups`, and the SCIM
 actions below.
@@ -423,7 +472,14 @@ are only returned once by `POST /api/v1/license-keys`, and a key the user pastes
  "cors_enabled": false, "cors_allowed_origins": [], "auth_mode": "postgres",
  "organization": {"id": "…", "tenant_id": "default", "name": "Default"}, "role": "admin",
  "features": {"license_keys": true, "can_create_license_keys": true, "can_list_license_keys": true,
-              "fleet_php_install": true, "tail_sampling": false}}
+              "fleet_php_install": true, "tail_sampling": false},
+ "agent_packages": {
+   "node": {"name": "@openlog/node", "version": "0.9.2", "registry": "missing",
+            "registry_url": "https://www.npmjs.com/package/@openlog/node/v/0.9.2",
+            "release_asset_url": "https://github.com/onuragtas/openlog/releases/download/v0.9.2/openlog-node-0.9.2.tgz",
+            "release_asset_sha256_url": "https://github.com/onuragtas/openlog/releases/download/v0.9.2/openlog-node-0.9.2.tgz.sha256"},
+   "python": {"name": "openlog-agent", "version": "0.9.2", "registry": "unknown", …},
+   "dotnet": {"name": "OpenLog.Agent", "version": "0.9.2", "registry": "available", …}}}
 ```
 
 - `source`: `configured` (`OPENLOG_PUBLIC_URL`, `OPENLOG_INGEST_PUBLIC_URL`, `OPENLOG_INGEST_PUBLIC_GRPC_URL`),
@@ -1256,9 +1312,15 @@ addresses, dashboard or organization ids or names are returned.
 query limits and timeout; `metadata.table`, `rows_read` and `bytes_read` are blanked and `warnings` is empty. The request
 takes no parameters: clients cannot run other queries or change the range, variables or filters. Markdown or unknown
 widget → `404`; a stored query that no longer validates → `422`.
-Unknown, expired, revoked or disabled links → `404 not_found` with one message for all cases. Rate limits (per api pod):
-600 requests per minute per client IP, 1200 per link, and after 30 failed lookups from an IP within a minute every request
-of that IP is refused for the rest of the minute → `429 resource_exhausted` with `Retry-After`. Every response carries
+Unknown, expired, revoked or disabled links → `404 not_found` with one message for all cases. Rate limits (cluster-wide,
+D-096): 600 requests per minute per client IP, 1200 per link, and once an IP has 30 failed lookups within a minute every
+request of that IP is refused → `429 resource_exhausted` with `Retry-After`. The windows slide (previous minute weighted
+by its unelapsed share + current minute) and are shared by all api pods through PostgreSQL (`rate_limit_counters`,
+postgres.md): each pod decides requests far from a limit locally and writes its counts once a second, and writes
+synchronously (exact enforcement) once its unwritten share reaches 1/8 of the remaining headroom — so with up to 8 pods
+the limits are not exceeded, beyond that by at most (pods/8 − 1) × the remaining headroom. Failed lookups counted on
+another pod are seen within about a second. When PostgreSQL is unreachable each pod counts on its own for 5 seconds
+before retrying (limits then apply per pod); static auth mode (no PostgreSQL) always counts per pod. Every response carries
 `Cache-Control: no-store`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none';
 form-action 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex, nofollow`,
 `X-Content-Type-Options: nosniff` and `Cross-Origin-Resource-Policy: same-origin`; no CORS headers. The web UI page
@@ -1280,16 +1342,28 @@ dashboard only go to its creator (`400` otherwise). ≤ 10 reports per dashboard
 Sending (api leader, job `dashboard-reports`, checked every minute): a report is due when its latest scheduled local time
 passed within the last 6 hours and after the report was created or last changed. The period (local date) is claimed in
 `dashboard_report_runs` before anything is sent, so a period is sent at most once, also across leader changes (a crash
-while sending is not retried). Recipients are checked again before sending (members who left and removed domains are
+while sending is not retried). Removing a member removes their address from recipient lists at once (D-096). Recipients are checked again before sending (members who left and removed domains are
 skipped). The stored queries of up to 50 widgets (markdown widgets are skipped) run server-side for
 `[scheduled time − range, scheduled time)` with the organization's tenant scope, query limits and the report's variables.
 The e-mail (subject, text and HTML in the report's language) shows single values, facet tables, and average/min/max/last
 per timeseries series as simple HTML tables (≤ 20 rows per widget) with a link to the dashboard for that period
 (`OPENLOG_PUBLIC_URL`). Without `OPENLOG_SMTP_HOST` runs are recorded as `failed`.
-Not implemented — PNG chart renderings: they need a headless browser or a server-side chart renderer. The planned design is
-an optional renderer service outside the api image that opens the read-only share view through a short-lived internal
-link, screenshots each widget and returns PNGs embedded in the e-mail as inline `Content-ID` parts; the HTML tables stay
-as the text fallback.
+PNG chart images (D-097, [operations/reports.md](../operations/reports.md)): with `OPENLOG_RENDERER_URL` the leader signs
+a render token for the report period and asks `openlog-renderer` (separate image, headless Chromium) for the images of
+the web app's print view `/print/dashboard`. Widgets that got an image are shown as inline `image/png` parts
+(`multipart/related`, `Content-ID: <widget-N@openlog>`, ≤ 1 MiB each, ≤ 10 MiB per e-mail) instead of their table; the
+plain text part always carries the tables. A renderer error or timeout (`OPENLOG_RENDERER_TIMEOUT`), a widget whose query
+failed or an image over the caps falls back to the table; the run is still `sent`.
+
+### Report print view: `GET /api/v1/render/dashboard` · `GET /api/v1/render/dashboard/widgets/{widget_id}/result`
+Internal endpoints for `openlog-renderer`; they exist only with `OPENLOG_RENDERER_URL`. Authentication:
+`Authorization: Bearer olrt_…` render token only (sessions, API keys and share tokens are refused; the render token is
+refused by every other endpoint). A token is `olrt_` + base64url(JSON claims) + `.` + base64url(HMAC-SHA256), signed with
+a key derived from `OPENLOG_KEY_HASH_SECRET` (else `OPENLOG_SECRETS_KEY`), valid ≤ 10 minutes (the job uses 5), bound to
+one organization and its tenant, one dashboard, one enabled scheduled report and the report period. Responses are those of
+the share link endpoints (`SharedDashboard` with `time_range.from`/`to` = the report period, `expires_at` = token expiry;
+the redacted OQL result) with the same headers. Invalid, expired or forged token → `401 unauthenticated`; deleted
+dashboard, deleted or disabled report → `404`.
 
 ## Usage and plans
 

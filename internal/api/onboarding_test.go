@@ -75,9 +75,12 @@ func TestOnboardingEndpoint(t *testing.T) {
 	if body.AgentVersion != nil { // test binaries are dev builds
 		t.Errorf("agent_version = %q, want null for a dev build", *body.AgentVersion)
 	}
+	if body.AgentPackages != nil {
+		t.Errorf("agent_packages = %+v, want null without agent_version", body.AgentPackages)
+	}
 	var raw map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &raw)
-	for _, k := range []string{"agent_version", "cors_allowed_origins", "features", "server_version"} {
+	for _, k := range []string{"agent_version", "agent_packages", "cors_allowed_origins", "features", "server_version"} {
 		if _, ok := raw[k]; !ok {
 			t.Errorf("response has no %q: %s", k, rec.Body)
 		}
@@ -118,6 +121,11 @@ func TestOnboardingEndpoint(t *testing.T) {
 	}
 	if body.AgentVersion == nil || *body.AgentVersion != "0.9.2" {
 		t.Errorf("agent_version = %v, want 0.9.2", body.AgentVersion)
+	}
+	// No registry checker configured: unknown, and the release assets of agent_version.
+	if p := body.AgentPackages; p == nil || p.Node.Registry != registryUnknown || p.Python.Registry != registryUnknown ||
+		p.Dotnet.ReleaseAssetURL != "https://github.com/onuragtas/openlog/releases/download/v0.9.2/OpenLog.Agent.0.9.2.nupkg" {
+		t.Errorf("agent_packages = %+v", p)
 	}
 	if !body.Features.TailSampling || body.Features.CanCreateLicenseKeys || body.Features.FleetPHPInstall {
 		t.Errorf("features = %+v", body.Features)

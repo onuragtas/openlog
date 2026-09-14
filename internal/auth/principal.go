@@ -36,6 +36,8 @@ type Principal struct {
 	APIKeyID  string
 	// EmailVerified is false only for session users who signed up and have not confirmed their address.
 	EmailVerified bool
+	// Language is the session user's chosen language ("" = automatic: the browser's; D-095).
+	Language string
 
 	// Organization context. Empty for a user without memberships.
 	OrgID    string

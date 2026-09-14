@@ -64,6 +64,8 @@ Values openlog shows for your IdP:
 |---|---|---|
 | Redirect / ACS URL | `https://openlog.example.com/api/v1/sso/oidc/callback` | `https://openlog.example.com/api/v1/sso/saml/<connection id>/acs` |
 | Logout URL | post logout redirect URI `https://openlog.example.com/api/v1/sso/oidc/logout/callback` | single logout service `https://openlog.example.com/api/v1/sso/saml/<connection id>/slo` (HTTP-Redirect and HTTP-POST, in the metadata) |
+| Logout from the IdP (back-channel) | back-channel logout URI `https://openlog.example.com/api/v1/sso/oidc/<connection id>/backchannel-logout` (session/`sid` required) | SOAP single logout service `https://openlog.example.com/api/v1/sso/saml/<connection id>/slo/soap` (in the metadata) |
+| Logout from the IdP (front-channel) | front-channel logout URI `https://openlog.example.com/api/v1/sso/oidc/<connection id>/frontchannel-logout` (session required) | the single logout service above |
 | Entity ID / audience | client ID | `https://openlog.example.com/api/v1/sso/saml/<connection id>/metadata` (also the metadata URL) |
 | Sign-in initiated by | openlog (authorization code + PKCE S256, state, nonce) | openlog (HTTP-Redirect AuthnRequest), optionally IdP |
 | NameID | – | e-mail address (or unspecified with an `email` attribute) |
@@ -71,7 +73,19 @@ Values openlog shows for your IdP:
 | Encryption | – | Optional encrypted assertions with the SP certificate: AES-256/192/128-GCM or -CBC, RSA-OAEP (2001 MGF1P or xmlenc 1.1 with MGF1-SHA-256/…); RSA PKCS#1 v1.5 and 3DES are refused |
 
 The SAML entity ID and ACS URL are generated when a SAML connection is first saved (paste the IdP metadata URL or
-XML, save, then copy the SP values or give the IdP the metadata URL).
+XML, save, then copy the SP values or give the IdP the metadata URL). The OIDC back-channel and front-channel logout
+URIs contain the connection id as well and appear after the first save.
+
+**Metadata URL trust.** With an IdP metadata URL openlog must know whether to trust what that URL serves later
+(section 7). Choose one when saving:
+- **Signed metadata** (Entra ID federation metadata, ADFS, Shibboleth/federations): paste the IdP's *metadata signing
+  certificate* (PEM). If you leave it empty and the metadata is signed, openlog pins the certificate the metadata was
+  signed with — compare the fingerprint shown under the IdP values with the one your IdP publishes.
+- **Unsigned metadata** (Keycloak's descriptor, Okta, Google): tick *Allow unsigned metadata*. Refreshed metadata with
+  new signing certificates or endpoints then waits for your confirmation.
+
+Saving with an unsigned metadata URL without that choice, or with metadata that does not verify with the entered
+certificate, is refused.
 
 Attributes (defaults work for most IdPs; override on the last step):
 
@@ -90,7 +104,13 @@ Attributes (defaults work for most IdPs; override on the last step):
   `groups` if your authorization server requires it.
 - **SAML:** Create App Integration → SAML 2.0. Single sign-on URL = ACS URL, Audience URI = entity ID, Name ID
   format EmailAddress, Application username Email. Attribute statement `email` → `user.email`; group attribute
-  statement `groups` (filter). Copy "Metadata URL" into openlog.
+  statement `groups` (filter). Copy "Metadata URL" into openlog and tick *Allow unsigned metadata* (Okta's metadata
+  URL is not signed).
+- **Logout:** SAML apps: *Enable Single Logout* with Single Logout URL = openlog's single logout service, SP Issuer =
+  entity ID and openlog's SP certificate as signature certificate (front-channel; Okta does not call a SOAP endpoint).
+  OIDC apps: Okta does not call back-channel or front-channel logout URIs of app integrations; openlog's
+  "Sign out everywhere" (RP-initiated logout, sign-out redirect URI) still ends the Okta session. If your Okta org
+  offers OIDC back-channel logout for the app, register the back-channel logout URI with the session (`sid`) option.
 - **SCIM:** use a SCIM-enabled app (App Integration Wizard → SAML 2.0 or OIDC + Provisioning → SCIM). SCIM
   connector base URL = openlog's SCIM base URL, unique identifier `userName`, actions Push New Users, Push Profile
   Updates, Push Groups; authentication "HTTP Header" with the SCIM token (`ols_…`).
@@ -105,7 +125,13 @@ Attributes (defaults work for most IdPs; override on the last step):
   `preferred_username`/`upn` when that is the user's address.
 - **SAML:** Enterprise applications → New application → Create your own → Non-gallery. Single sign-on → SAML:
   Identifier = entity ID, Reply URL = ACS URL. Attributes: keep `emailaddress` (user.mail) and add a group claim.
-  Copy "App Federation Metadata Url" into openlog.
+  Copy "App Federation Metadata Url" into openlog; it is signed with the application's SAML signing certificate —
+  openlog pins it on save (compare the thumbprint). When Entra rolls that certificate the metadata is signed by the new
+  one: confirm the change under the connection's health (section 7). Logout URL (optional) = openlog's single logout
+  service (front-channel; Entra does not send SOAP logout requests).
+- **Logout (OIDC):** Authentication → *Front-channel logout URL* = openlog's front-channel logout URI. openlog only acts
+  on requests with `iss` and `sid` (add the optional ID token claim `sid`); requests without them are answered `400` and
+  only "Sign out everywhere" ends sessions. Entra ID does not send OIDC back-channel logout tokens.
 - **SCIM:** the enterprise application → Provisioning → Automatic; Tenant URL = SCIM base URL, Secret Token = SCIM
   token. Entra sends `PATCH active "False"` on unassignment — openlog removes the membership immediately.
 
@@ -130,12 +156,23 @@ no SCIM push to custom apps.
   "Sign authentication requests" in openlog (the SP certificate comes from the metadata), Front channel logout ON with
   the Logout service redirect/POST binding URL = openlog's single logout service. Mappers:
   *User Property* `email` → attribute `email`; *Group list* → attribute `groups`, full path OFF. IdP metadata URL:
-  `https://keycloak.example.com/realms/<realm>/protocol/saml/descriptor`. IdP-initiated: set *IDP-Initiated SSO URL
-  name* and *relay state* (e.g. `/hosts`) on the client and allow IdP-initiated sign-in with that path in openlog.
+  `https://keycloak.example.com/realms/<realm>/protocol/saml/descriptor` (unsigned: tick *Allow unsigned metadata*).
+  IdP-initiated: set *IDP-Initiated SSO URL name* and *relay state* (e.g. `/hosts`) on the client and allow
+  IdP-initiated sign-in with that path in openlog.
+- **Logout from Keycloak (OIDC):** client → Settings → *Logout settings*: either *Front channel logout* ON with
+  *Front-channel logout URL* = openlog's front-channel logout URI and *Front-channel logout session required* ON
+  (attributes `frontchannel.logout.url`, `frontchannel.logout.session.required`), or *Front channel logout* OFF with
+  *Backchannel logout URL* = openlog's back-channel logout URI and *Backchannel logout session required* ON
+  (`backchannel.logout.url`, `backchannel.logout.session.required`). Back-channel also covers sessions ended by an
+  administrator or by session expiry at Keycloak, without a browser; openlog must be reachable from Keycloak.
+- **Logout from Keycloak (SAML, SOAP):** *Front channel logout* OFF and Advanced → *Logout Service SOAP Binding URL* =
+  openlog's SOAP single logout service (`saml_single_logout_service_url_soap`). Keycloak then posts the signed
+  LogoutRequest server to server.
 
 The end-to-end test in `test/sso` runs both flows against Keycloak 26 — an OIDC default connection and a SAML
-connection with encrypted assertions routed by domain, single logout in both directions, OIDC RP-initiated logout —
-(see `test/integration/sso/docker-compose.yml`).
+connection with encrypted assertions routed by domain, single logout in both directions, OIDC RP-initiated logout, and
+(with `OPENLOG_TEST_CALLBACK_HOST=host.docker.internal`) OIDC back-channel and front-channel logout and SAML SOAP
+logout initiated by Keycloak — (see `test/integration/sso/docker-compose.yml`).
 
 ## 4. Users and roles
 
@@ -166,15 +203,28 @@ of the same connection and then the session at the identity provider:
 - **IdP-initiated SAML logout:** when the user signs out at the IdP (or another application of the same IdP session),
   the IdP sends a LogoutRequest through the browser (front-channel) to the single logout service. openlog accepts it
   only when it is signed by the IdP certificate, addressed to this connection, current and not replayed, ends the
-  sessions of that NameID (and SessionIndex) and answers with a signed LogoutResponse. SOAP back-channel logout is not
-  supported: enable front-channel logout at the IdP.
+  sessions of that NameID (and SessionIndex) and answers with a signed LogoutResponse.
+- **SAML SOAP back-channel logout:** an IdP that ends sessions without a browser (administrator logout, session
+  expiry) posts the LogoutRequest to the SOAP single logout service. The same checks apply (signature by the IdP
+  certificate, issuer, destination = the SOAP or SLO URL when present, age, replay); openlog answers with a signed
+  LogoutResponse in the SOAP body, or a SOAP fault without details.
 - **OIDC:** openlog redirects to the provider's `end_session_endpoint` with `id_token_hint` and the post logout
   redirect URI; register that URI at the provider (Keycloak "Valid post logout redirect URIs", Okta "Sign-out redirect
-  URIs", Entra ID "Front-channel logout URL" is not needed). OIDC back-channel logout from the provider is not
-  supported.
+  URIs").
+- **OIDC back-channel logout (from the provider):** the provider posts a signed `logout_token` to the connection's
+  back-channel logout URI. openlog verifies it with the provider's JWKS (issuer, audience = client ID, issued within
+  5 minutes, back-channel logout event, no nonce, `jti` not seen before) and ends the sessions of its `sid` — or all
+  sessions of its `sub` on the connection when the token has no `sid`. Register the URI with "session required".
+- **OIDC front-channel logout (from the provider):** the provider's logout page loads the connection's front-channel
+  logout URI in a hidden iframe with `iss` and `sid`; openlog ends the sessions of that `sid`. The page may only be
+  framed by the issuer's origin. openlog's session cookie is `SameSite=Strict` and never reaches that iframe, so requests
+  without `sid` are refused — prefer back-channel logout where the provider offers it (it also works when the browser
+  blocks third-party iframes).
 - **Return path:** `/login`, or a path listed under "Logout redirect paths" on the last wizard step.
 
-Every logout is audited (`sso.logout` with `via` `user` or `idp` and the number of revoked sessions).
+Every logout is audited (`sso.logout` with `via` `user`, `idp`, `idp_soap`, `oidc_backchannel` or
+`oidc_frontchannel` and the number of revoked sessions); refused IdP requests as `sso.logout_failed` (60 per client
+address per 10 minutes, then refused without checking).
 
 ## 6. Enforce single sign-on
 
@@ -211,10 +261,24 @@ UPDATE sso_connections SET enforce = false WHERE org_id = (SELECT id FROM organi
 The api leader refreshes the IdP documents of enabled connections in the background: OIDC discovery and JWKS every
 30 minutes (every api pod uses the refreshed copy for up to an hour, so a key rotation or a slow discovery endpoint does
 not delay sign-ins), SAML metadata from the metadata URL at half its `cacheDuration` or remaining `validUntil` (between
-15 minutes and 24 hours, 6 hours without either). Refreshed SAML metadata with the same entity ID replaces the stored
-copy (new signing certificates, SSO/SLO URLs) without invalidating the test sign-in; the change is audited
-(`sso.connection.metadata_refresh`). A changed entity ID, expired metadata or an expired signing certificate is
-reported instead — save the connection to accept a new entity ID. Pasted metadata is re-validated only.
+15 minutes and 24 hours, 6 hours without either). Pasted metadata is re-validated only. Refreshed SAML metadata never
+changes the configuration version (the test sign-in stays valid); what it may change depends on the metadata trust
+(section 3):
+
+- **Signed metadata:** the document must carry exactly one XML signature on its root by the pinned certificate
+  (SHA-256 or stronger, referencing the whole document). New IdP signing certificates and SSO/SLO URLs apply
+  automatically (`sso.connection.metadata_refresh`). A missing or invalid signature — tampered or "wrapped" documents —
+  fails the refresh and changes nothing. Metadata signed by **another certificate** (the IdP rolled its metadata
+  signing key) fails the refresh too and is shown as a pending change with the new certificate's fingerprint.
+- **Unsigned metadata:** the same signing certificates and endpoints refresh silently; **new signing certificates or
+  endpoints** are shown as a pending change instead of being applied — anyone who can alter the metadata URL's answer
+  could otherwise take over sign-ins.
+
+A pending change (`sso.connection.metadata_pending`) keeps the connection on its last accepted metadata; health shows
+the reason. **Confirm change** re-fetches the metadata, applies it if it still contains exactly that change and pins the
+new metadata signing certificate (`sso.connection.metadata_accept`). Verify the certificates with your IdP before
+confirming. A changed entity ID, expired metadata or an expired signing certificate is reported as before — save the
+connection to accept a new entity ID.
 
 Each connection shows its health: **OK**, **Warning** (one or two failed refreshes, certificate expiring within 30
 days, metadata valid for less than 7 days), **Error** (three failed refreshes in a row, expired certificate) or
@@ -262,5 +326,9 @@ reason; the details are only visible to administrators). Successful ones log `ss
 | `domain_not_verified` after adding a connection | The domain signs in through another connection: check its **Connection** column |
 | `invalid_request` at `/login` after an IdP logout | The IdP LogoutRequest was unsigned, not addressed to this connection's SLO URL, too old or signed with SHA-1 — check the IdP's signing and front-channel logout settings |
 | `?sso_logout=partial` | The IdP did not confirm the logout (unsigned or failed LogoutResponse); openlog sessions ended anyway |
+| Logout at the IdP leaves openlog signed in | Back-channel/front-channel logout is not registered, openlog is not reachable from the IdP (back-channel), the front-channel request has no `sid` (enable "session required") or the browser blocks third-party iframes — check `sso.logout_failed` in the audit log |
+| `sso.logout_failed` with `via` `oidc_backchannel` | The logout token failed a check (issuer, audience = client ID, expired or older than 5 minutes — compare clocks, replayed `jti`, missing event) |
+| Health: "not pinned" / "changed … confirm" | The IdP metadata changed (new metadata signing certificate, or new certificates/endpoints in unsigned metadata): verify with the IdP and **Confirm change** |
+| Health: "signature is not valid" / "not signed" | The metadata URL returned altered, unsigned or wrongly signed metadata while a signing certificate is pinned; nothing was applied |
 
 **Check configuration** shows discovery/JWKS/PKCE (OIDC) or metadata/certificate expiry (SAML) problems directly.

@@ -26,14 +26,23 @@ const (
 	// ComponentJavaAgent is openlog-javaagent-<v>.jar (agents/java, D-072). The jar runs on every platform, so its
 	// os and arch are PlatformAny.
 	ComponentJavaAgent = "java-agent"
+	// ComponentNodeAgent is the npm package tarball openlog-node-<v>.tgz of @openlog/node (agents/node, `npm pack`).
+	ComponentNodeAgent = "node-agent"
+	// ComponentPythonAgent is the wheel openlog_agent-<pep440 v>-py3-none-any.whl of openlog-agent (agents/python).
+	ComponentPythonAgent = "python-agent"
+	// ComponentDotnetAgent is the NuGet package OpenLog.Agent.<v>.nupkg (agents/dotnet).
+	ComponentDotnetAgent = "dotnet-agent"
 
 	FormatTarGz = "tar.gz"
 	FormatDeb   = "deb"
 	FormatRPM   = "rpm"
 	FormatAPK   = "apk"
 	FormatJar   = "jar"
+	FormatTgz   = "tgz"   // npm package tarball
+	FormatWheel = "whl"   // Python wheel
+	FormatNupkg = "nupkg" // NuGet package
 
-	// PlatformAny is the os and arch of platform-independent artifacts (the Java agent jar).
+	// PlatformAny is the os and arch of platform-independent artifacts (the Java agent jar, language agent packages).
 	PlatformAny = "any"
 )
 

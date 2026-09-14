@@ -37,6 +37,16 @@
         "default": "./dist/cjs/index.js"
       }
     },
+    "./nest": {
+      "import": {
+        "types": "./dist/esm/nest.d.ts",
+        "default": "./dist/esm/nest.js"
+      },
+      "require": {
+        "types": "./dist/cjs/nest.d.ts",
+        "default": "./dist/cjs/nest.js"
+      }
+    },
     "./register": {
       "import": "./dist/esm/register.js",
       "require": "./dist/cjs/register.js",
@@ -58,6 +68,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
     "test": "npm run build && tsc -p tsconfig.test.json && node scripts/run-tests.mjs unit",
+    "test:apps:install": "npm ci --prefix test/apps/nest12 --no-audit --no-fund",
     "test:integration": "npm run build && tsc -p tsconfig.test.json && node scripts/run-tests.mjs integration",
     "bench": "npm run build && tsc -p tsconfig.test.json && node .test-build/test/bench/overhead.js",
     "prepack": "npm run build"

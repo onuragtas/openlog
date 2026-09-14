@@ -55,6 +55,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	public("POST /api/v1/auth/verify-email", s.verifyEmail)               // account_email.go
 	authed("POST /api/v1/auth/verify-email/resend", s.resendVerification) // account_email.go
 	authed("POST /api/v1/invitations/{id}/resend", s.resendInvitation)    // account_email.go
+	authed("PATCH /api/v1/auth/me", s.updateMe)
 	authed("POST /api/v1/auth/logout", s.logout)
 	authed("POST /api/v1/auth/password", s.changePassword)
 	authed("GET /api/v1/orgs/current", s.currentOrg)
@@ -117,6 +118,8 @@ type userJSON struct {
 	Name  string `json:"name"`
 	// EmailVerified is false only for sign-ups that have not confirmed their address yet.
 	EmailVerified bool `json:"email_verified"`
+	// Language is the user's chosen language: "auto" (browser) or "en"/"tr" (D-095).
+	Language string `json:"language"`
 }
 
 type orgJSON struct {
@@ -125,6 +128,13 @@ type orgJSON struct {
 	Name      string  `json:"name"`
 	Role      string  `json:"role,omitempty"`
 	CreatedAt *string `json:"created_at,omitempty"`
+	// Language is the default e-mail language ("" = none; GET/PATCH /orgs/current only, D-095).
+	Language *string `json:"language,omitempty"`
+}
+
+func currentOrgJSON(org auth.Organization, p *auth.Principal) orgJSON {
+	created, lang := formatTime(org.CreatedAt), org.Locale
+	return orgJSON{ID: org.ID, TenantID: org.TenantID, Name: org.Name, Role: string(p.Role), CreatedAt: &created, Language: &lang}
 }
 
 type meJSON struct {
@@ -139,7 +149,10 @@ type meJSON struct {
 func meResponse(p *auth.Principal, ms []auth.Membership) meJSON {
 	out := meJSON{Auth: string(p.Kind), Organizations: []orgJSON{}}
 	if p.Kind == auth.KindSession {
-		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name, EmailVerified: p.EmailVerified}
+		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name, EmailVerified: p.EmailVerified, Language: auth.LanguageAuto}
+		if p.Language != "" {
+			out.User.Language = p.Language
+		}
 		tok := p.CSRFToken
 		out.CSRFToken = &tok
 	}
@@ -187,12 +200,29 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, p *auth.Principal) e
 	return nil
 }
 
+// updateMe changes the signed-in user's preferences: {"language": "auto" | "en" | "tr"} (D-095).
+func (s *Server) updateMe(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+	var in struct {
+		Language *string `json:"language"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	if in.Language == nil {
+		return &auth.Error{Code: auth.CodeInvalidArgument, Message: "language is required"}
+	}
+	if err := s.accounts.SetLanguage(r.Context(), p, *in.Language, s.accounts.Meta(r)); err != nil {
+		return err
+	}
+	return s.me(w, r, p)
+}
+
 // startSession sets the session cookie and answers with the /auth/me shape
 // for the new session (organization: the user's default one).
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, res auth.LoginResult, status int) error {
 	http.SetCookie(w, s.accounts.SessionCookie(res.Token, res.Session.ExpiresAt))
 	p := &auth.Principal{Kind: auth.KindSession, UserID: res.User.ID, Email: res.User.Email, Name: res.User.Name,
-		SessionID: res.Session.ID, CSRFToken: res.Session.CSRFToken, EmailVerified: res.User.EmailVerifiedAt != nil}
+		SessionID: res.Session.ID, CSRFToken: res.Session.CSRFToken, EmailVerified: res.User.EmailVerifiedAt != nil, Language: res.User.Preference()}
 	me, err := s.accounts.Me(r.Context(), p)
 	if err != nil {
 		return err
@@ -270,24 +300,37 @@ func (s *Server) currentOrg(w http.ResponseWriter, r *http.Request, p *auth.Prin
 	if err != nil {
 		return err
 	}
-	created := formatTime(org.CreatedAt)
-	writeJSON(w, http.StatusOK, orgJSON{ID: org.ID, TenantID: org.TenantID, Name: org.Name, Role: string(p.Role), CreatedAt: &created})
+	writeJSON(w, http.StatusOK, currentOrgJSON(org, p))
 	return nil
 }
 
+// renameOrg changes the organization's name and/or default e-mail language: {"name"?, "language"?: "" | "en" | "tr"}.
 func (s *Server) renameOrg(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
 	var in struct {
-		Name string `json:"name"`
+		Name     *string `json:"name"`
+		Language *string `json:"language"`
 	}
 	if err := decodeJSON(r, &in); err != nil {
 		return err
 	}
-	org, err := s.accounts.RenameOrg(r.Context(), p, in.Name, s.accounts.Meta(r))
-	if err != nil {
-		return err
+	if in.Name == nil && in.Language == nil {
+		return &auth.Error{Code: auth.CodeInvalidArgument, Message: "name or language is required"}
 	}
-	created := formatTime(org.CreatedAt)
-	writeJSON(w, http.StatusOK, orgJSON{ID: org.ID, TenantID: org.TenantID, Name: org.Name, Role: string(p.Role), CreatedAt: &created})
+	var (
+		org auth.Organization
+		err error
+	)
+	if in.Name != nil {
+		if org, err = s.accounts.RenameOrg(r.Context(), p, *in.Name, s.accounts.Meta(r)); err != nil {
+			return err
+		}
+	}
+	if in.Language != nil {
+		if org, err = s.accounts.SetOrgLanguage(r.Context(), p, *in.Language, s.accounts.Meta(r)); err != nil {
+			return err
+		}
+	}
+	writeJSON(w, http.StatusOK, currentOrgJSON(org, p))
 	return nil
 }
 

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Smoke test of the .NET Framework 4.8 / ASP.NET 4.x sample running under IIS Express or IIS (test/netfx/run-iis.ps1,
+       CI job dotnet-agent-netfx): an OTLP capture server on a fixed port, requests to the site, span assertions.
+       Reuses the capture server of the integration tests. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>OpenLog.NetFx.SmokeTest</RootNamespace>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- OtlpCapture.cs's UninstrumentedHandler uses OpenTelemetry.SuppressInstrumentationScope -->
+    <PackageReference Include="OpenTelemetry" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../OpenLog.Agent.IntegrationTests/OtlpCapture.cs" Link="OtlpCapture.cs" />
+  </ItemGroup>
+
+</Project>

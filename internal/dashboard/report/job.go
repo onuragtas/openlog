@@ -37,6 +37,10 @@ type Options struct {
 	// MaxWidgets bounds the widgets queried per report (default 50); QueryTimeout bounds one widget query (default 30 s).
 	MaxWidgets   int
 	QueryTimeout time.Duration
+	// Images renders PNG widget images (OPENLOG_RENDERER_URL, D-097; images.go); nil = HTML tables only.
+	// ImageTimeout bounds the whole rendering of one report (default 2 minutes).
+	Images       Imager
+	ImageTimeout time.Duration
 	Log          *slog.Logger
 	Now          func() time.Time
 }
@@ -57,6 +61,9 @@ func NewJob(o Options) *Job {
 	}
 	if o.QueryTimeout <= 0 {
 		o.QueryTimeout = 30 * time.Second
+	}
+	if o.ImageTimeout <= 0 {
+		o.ImageTimeout = 2 * time.Minute
 	}
 	if o.Log == nil {
 		o.Log = slog.New(slog.DiscardHandler)
@@ -151,11 +158,13 @@ func (j *Job) send(ctx context.Context, sr *dashboard.ScheduledReport, at time.T
 	}
 
 	content := j.Content(ctx, sr, d, at)
+	j.attachImages(ctx, sr, &content) // images.go: PNG widget images when a renderer is configured (D-097)
 	subject, text, htmlBody := Render(content)
+	inline := Inline(content)
 	sent := 0
 	var lastErr error
 	for _, to := range recipients {
-		if err := j.o.Mailer.Send(ctx, auth.Mail{To: to, Subject: subject, Text: text, HTML: htmlBody}); err != nil {
+		if err := j.o.Mailer.Send(ctx, auth.Mail{To: to, Subject: subject, Text: text, HTML: htmlBody, Inline: inline}); err != nil {
 			lastErr = err
 			continue
 		}

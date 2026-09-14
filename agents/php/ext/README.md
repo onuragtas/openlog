@@ -138,6 +138,7 @@ Development helpers (copy the source to a scratch directory, build inside the of
 | `build/run-matrix.sh` | full matrix: 7.1…8.4 NTS glibc + 7.4/8.3 ZTS and musl, with MariaDB/PostgreSQL/Redis containers (network `openlog-php-test`) |
 | `VERSIONS="" EXTRA="8.3-asan" build/run-matrix.sh` | AddressSanitizer + UBSan debug PHP built from source (`build/Dockerfile.asan`), openlog.so with the same sanitizers; any sanitizer report fails (`make -C agents/php ext-asan`) |
 | `VERSIONS="" EXTRA="8.3-xdebug 8.3-ddtrace 8.3-newrelic 8.3-jit 8.3-swoole" build/run-matrix.sh` | full suite with another agent / debugger / JIT / Swoole loaded (`build/Dockerfile.compat`, downloads from pecl, GitHub, download.newrelic.com) |
+| `VERSIONS="" EXTRA="8.4-frankenphp" build/run-matrix.sh` | full suite in the official FrankenPHP image (ZTS PHP 8.4), including a real FrankenPHP server in worker and classic mode (`tests/044-frankenphp.phpt`) |
 | `fuzz/run.sh` | libFuzzer + ASan/UBSan on `src/ol_text.c` (`FUZZ_SECONDS`, default 60) |
 | `../bench/ext/micro/run.sh` | per-request cost: `php-cgi -T` timing + callgrind instructions, plain PHP and Laravel; `SRC_A=<older ext>` for A/B |
 | `../bench/ext/http/run.sh` | PHP-FPM + nginx + wrk: RPS, latency, PHP CPU per request; base / off / on / lean (+ A/B) |
@@ -223,14 +224,23 @@ failed.
 request, for Laravel Octane (`Laravel\Octane\Worker::handle`; status from `SwooleClient`/`RoadRunnerClient::respond`),
 RoadRunner (`Spiral\RoadRunner\Http\HttpWorker::waitRequest` … `respond`/`respondStream`; covers PSR7Worker and Octane
 on RoadRunner) and Swoole/OpenSwoole HTTP servers (the callable registered with `Server::on('request', …)` or
-`Coroutine\Http\Server::handle()` … `Response::end`/`redirect`/`sendfile`, status from `Response::status`). The worker
+`Coroutine\Http\Server::handle()` … `Response::end`/`redirect`/`sendfile`, status from `Response::status`) and
+FrankenPHP worker mode (the callable passed to `frankenphp_handle_request()` is the request: call → return; request
+attributes from the per-request `$_SERVER` FrankenPHP resets, status from `http_response_code()` when the callback
+returns, 500 for an escaping exception when `display_errors` is off — what FrankenPHP answers — and the exception
+event; `exit()` inside a request and worker restarts after N requests work; the worker script's boot and waiting are
+never sent, detected through `FRANKENPHP_WORKER`). FrankenPHP classic mode needs nothing special (regular SAPI
+request, `sapi_module.name` `frankenphp`). The worker
 process's own CLI transaction is dropped at the first request, nothing is recorded or propagated between requests, and
 connection attributes (DSN, host, database) survive requests. When requests overlap in one process (Swoole coroutines)
 they are never mixed: while more than one is in progress, child spans, route names and the function tracer stop for
 all of them and each request is recorded with its root span only (`openlog.php.concurrent=true`); outgoing
 `traceparent` headers and `openlog\traceparent()` use the request whose handler is on the current coroutine's stack,
-and nothing when none is. Not covered: FrankenPHP worker mode, lean mode. Tests: `tests/041-workers.phpt` (Octane and
-RoadRunner classes), `tests/042-swoole.phpt` (real Swoole server, 4 concurrent requests; image `8.3-swoole`).
+and nothing when none is. Not covered: lean mode (request callables are observed userland functions), a request
+callable that already ran before it was passed to `frankenphp_handle_request()` / `Server::on()`. Tests:
+`tests/041-workers.phpt` (Octane and RoadRunner classes), `tests/042-swoole.phpt` (real Swoole server, 4 concurrent
+requests; image `8.3-swoole`), `tests/044-frankenphp.phpt` (real FrankenPHP 1.x server, worker mode with restart and
+`exit()`, classic mode; tag `8.4-frankenphp`, official `dunglas/frankenphp` image).
 
 ## Architecture
 
@@ -287,7 +297,8 @@ Tested together (full phpt suite with the other extension loaded first, PHP 8.3 
   stop inside its buffer), numbers, SQL sanitizing and operation extraction, path/route normalization, traceparent
   parse/format round trip. 60 s local run: 6.7 M executions, 12 405 corpus units, no finding.
 - **Soak** (`../bench/ext/soak/run.sh`): see "Overhead".
-- **Swoole / RoadRunner / Octane**: one transaction per handled request, see "Long-running workers".
+- **Swoole / RoadRunner / Octane / FrankenPHP worker mode**: one transaction per handled request, see "Long-running
+  workers".
 
 ## Troubleshooting
 

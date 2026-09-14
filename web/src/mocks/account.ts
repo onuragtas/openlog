@@ -114,13 +114,14 @@ interface MockOrg {
   name: string;
   role: Role;
   created_at: string;
+  language: "" | "en" | "tr";
 }
 
 function seed() {
   const now = Date.now();
   const ago = (ms: number) => formatTs(now - ms);
   const day = 86_400_000;
-  const user = { id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000001", email: MOCK_EMAIL, name: "Ada Admin", email_verified: true };
+  const user = { id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000001", email: MOCK_EMAIL, name: "Ada Admin", email_verified: true, language: "auto" as "auto" | "en" | "tr" };
   const actions = ["license_key.create", "member.role_change", "invitation.create", "api_key.revoke", "user.login", "fleet.policy.update"];
   const audit: AuditEvent[] = Array.from({ length: 60 }, (_, i) => ({
     id: 60 - i,
@@ -135,8 +136,8 @@ function seed() {
   return {
     user,
     orgs: [
-      { id: MOCK_DEFAULT_ORG_ID, tenant_id: "default", name: "Default", role: "owner", created_at: ago(40 * day) },
-      { id: MOCK_STAGING_ORG_ID, tenant_id: "staging", name: "Staging", role: "viewer", created_at: ago(12 * day) },
+      { id: MOCK_DEFAULT_ORG_ID, tenant_id: "default", name: "Default", role: "owner", created_at: ago(40 * day), language: "" },
+      { id: MOCK_STAGING_ORG_ID, tenant_id: "staging", name: "Staging", role: "viewer", created_at: ago(12 * day), language: "" },
     ] as MockOrg[],
     members: [
       { user_id: user.id, email: user.email, name: user.name, role: "owner", joined_at: ago(40 * day) },
@@ -374,10 +375,25 @@ export const accountHandlers = [
   http.get(`${API}/orgs/current`, authed(null, (ctx) => HttpResponse.json({ ...ctx.org, role: ctx.role }))),
 
   http.patch(`${API}/orgs/current`, authed("admin", async (ctx, { request }) => {
-    const name = (await body<{ name: string }>(request)).name?.trim();
-    if (!name) return fail("invalid_argument", "name is required");
-    ctx.org.name = name;
+    const b = await body<{ name?: string; language?: string }>(request);
+    if (b.name === undefined && b.language === undefined) return fail("invalid_argument", "name or language is required");
+    if (b.name !== undefined) {
+      const name = b.name.trim();
+      if (!name) return fail("invalid_argument", "name is required");
+      ctx.org.name = name;
+    }
+    if (b.language !== undefined) {
+      if (!["", "en", "tr"].includes(b.language)) return fail("invalid_argument", 'language must be one of "", en, tr');
+      ctx.org.language = b.language as MockOrg["language"];
+    }
     return HttpResponse.json({ ...ctx.org, role: ctx.role });
+  })),
+
+  http.patch(`${API}/auth/me`, sessionOnly(async (ctx, { request }) => {
+    const language = (await body<{ language?: string }>(request)).language;
+    if (language !== "auto" && language !== "en" && language !== "tr") return fail("invalid_argument", 'language must be one of "auto", en, tr');
+    db.user.language = language;
+    return HttpResponse.json(me(ctx));
   })),
 
   http.get(`${API}/members`, sessionOnly(() => HttpResponse.json({ members: db.members }))),

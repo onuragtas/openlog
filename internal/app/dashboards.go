@@ -37,8 +37,13 @@ func startDashboardAPI(cfg config.Config, pool *pgxpool.Pool, db *query.DB, srv 
 	} else {
 		log.Info("OPENLOG_SMTP_HOST is not set: scheduled dashboard reports cannot be sent")
 	}
+	images, err := reportImages(cfg, srv, log) // renderer.go: PNG widget images (D-097)
+	if err != nil {
+		return nil, err
+	}
 	job := report.NewJob(report.Options{
 		Store: store, Mailer: mailer, PublicURL: cfg.Alert.PublicURL, Log: log.With("job", "dashboard-reports"),
+		Images: images, ImageTimeout: cfg.Renderer.Timeout,
 		// Widget queries run with the organization's tenant scope and its query limits, like API queries.
 		Run: func(ctx context.Context, tenantID string, p *oql.Plan) (*oql.Result, error) {
 			sc, err := db.Scope(tenantID)

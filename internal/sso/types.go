@@ -49,6 +49,34 @@ type SAMLConfig struct {
 	RelayStateAllowlist []string `json:"relay_state_allowlist,omitempty"` // relative UI paths for IdP-initiated sign-in
 	SignAuthnRequests   bool     `json:"sign_authn_requests"`
 	SPCertificatePEM    string   `json:"sp_certificate_pem"`
+
+	// Metadata trust (D-098, metadatatrust.go). MetadataSigningCerts are the pinned PEM certificates the metadata
+	// fetched from IdPMetadataURL must be signed with: changed IdP certificates or endpoints in metadata signed by them
+	// apply automatically. Without pinned certificates the metadata is unsigned (AllowUnsignedMetadata, or a connection
+	// saved before D-098) and a refresh never applies changed signing certificates or endpoints on its own: the change
+	// waits in PendingMetadata for an administrator, like metadata signed by a new certificate.
+	MetadataSigningCerts  []string         `json:"metadata_signing_certificates,omitempty"`
+	AllowUnsignedMetadata bool             `json:"allow_unsigned_metadata,omitempty"`
+	PendingMetadata       *PendingMetadata `json:"pending_metadata,omitempty"`
+}
+
+// Reasons of a pending IdP metadata change.
+const (
+	PendingMetadataChanged       = "changed"        // unsigned metadata with other signing certificates or endpoints
+	PendingMetadataSignerChanged = "signer_changed" // metadata signed by a certificate that is not pinned
+)
+
+// PendingMetadata is a refreshed IdP metadata change that needs an administrator's confirmation.
+type PendingMetadata struct {
+	// Digest identifies the change (entity ID, certificates, endpoints, signer); the confirmation must name it.
+	Digest          string    `json:"digest"`
+	Reason          string    `json:"reason"`
+	DetectedAt      time.Time `json:"detected_at"`
+	IdPCertificates []string  `json:"idp_certificates"`
+	IdPSSOURL       string    `json:"idp_sso_url"`
+	IdPSLOURL       string    `json:"idp_slo_url,omitempty"`
+	// SignerCertificate is the SHA-256 fingerprint of the new metadata signing certificate (signer_changed).
+	SignerCertificate string `json:"signer_certificate,omitempty"`
 }
 
 // Connection is an SSO connection of an organization. The oldest connection of an organization is its default
@@ -306,6 +334,9 @@ type Store interface {
 	// ListSSOSessions returns the active (not revoked, not expired) sessions of a connection with subject
 	// (subject "" and userID != "": all active sessions of the user on the connection).
 	ListSSOSessions(ctx context.Context, connectionID, subject, userID string, now time.Time) ([]SSOSession, error)
+	// ListSSOSessionsByIndex returns the active sessions of a connection with session index sessionIndex (SAML
+	// SessionIndex, OIDC sid; "" returns none).
+	ListSSOSessionsByIndex(ctx context.Context, connectionID, sessionIndex string, now time.Time) ([]SSOSession, error)
 
 	CreateDomain(ctx context.Context, d *Domain) error // ErrAlreadyExists for (org, domain)
 	ListDomains(ctx context.Context, orgID string) ([]Domain, error)

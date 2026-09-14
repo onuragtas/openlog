@@ -3,11 +3,17 @@
 // End-to-end single sign-on test against a real Keycloak (OIDC and SAML), PostgreSQL and the api HTTP handlers
 // (D-077, D-078, D-088, D-089): two connections of one organization routed by domain, encrypted SAML assertions,
 // SAML single logout in both directions, OIDC RP-initiated logout, claimed-domain invitations and SCIM e-mail
-// changes. See test/integration/sso/docker-compose.yml:
+// changes, and — with OPENLOG_TEST_CALLBACK_HOST (the host name under which the Keycloak container reaches the test
+// server, e.g. host.docker.internal) — logout initiated by Keycloak through OIDC back-channel and front-channel logout
+// and SAML SOAP back-channel logout (D-098). See test/integration/sso/docker-compose.yml:
 //
 //	docker compose -f test/integration/sso/docker-compose.yml up -d --wait
 //	OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55440/openlog?sslmode=disable \
-//	OPENLOG_TEST_KEYCLOAK_URL=http://127.0.0.1:18080 go test -tags ssoe2e -count=1 -v ./test/sso
+//	OPENLOG_TEST_KEYCLOAK_URL=http://127.0.0.1:18080 OPENLOG_TEST_CALLBACK_HOST=host.docker.internal \
+//	go test -tags ssoe2e -count=1 -v ./test/sso
+//
+// OPENLOG_TEST_LISTEN_ADDR (default 127.0.0.1:0) sets the test server's listen address (0.0.0.0:0 where the container
+// cannot reach the host's loopback, e.g. Linux).
 package sso_test
 
 import (
@@ -57,6 +63,15 @@ type harness struct {
 	resolver txtResolver
 	orgID    string
 	ownerID  string
+	// callback: Keycloak reaches base (OPENLOG_TEST_CALLBACK_HOST), so logout initiated by Keycloak can be tested.
+	callback bool
+}
+
+// frame is an iframe of Keycloak's front-channel logout page loaded by the browser.
+type frame struct {
+	url    string
+	status int
+	csp    string
 }
 
 // browser is an HTTP client with a cookie jar that follows redirects by hand, like a browser would.
@@ -72,6 +87,8 @@ type browser struct {
 	loginForms int
 	// idpPage lets browse end on an identity provider page (after an IdP-initiated logout) and returns "idp-page".
 	idpPage bool
+	// frames are the front-channel logout iframes loaded on identity provider pages (idpPage).
+	frames []frame
 }
 
 func (h *harness) newBrowser() *browser {
@@ -149,6 +166,8 @@ var (
 	// Keycloak's "Do you want to log out?" page of the OIDC logout endpoint.
 	logoutFormRe  = regexp.MustCompile(`(?s)<form[^>]*?action="([^"]*logout-confirm[^"]*)"`)
 	sessionCodeRe = regexp.MustCompile(`name="session_code"\s+value="([^"]*)"`)
+	// Keycloak's front-channel logout page loads the clients' logout URIs in iframes.
+	iframeRe = regexp.MustCompile(`(?s)<iframe[^>]*?src="([^"]+)"`)
 )
 
 // browse follows a navigation starting at target: redirects are followed; Keycloak's login form is submitted
@@ -213,6 +232,18 @@ func (b *browser) browse(target, username, password string) string {
 			continue
 		}
 		if b.idpPage && strings.HasPrefix(target, b.h.kc) && res.StatusCode == http.StatusOK {
+			for _, m := range iframeRe.FindAllStringSubmatch(page, -1) {
+				src, err := res.Request.URL.Parse(html.UnescapeString(m[1]))
+				if err != nil {
+					b.t.Fatal(err)
+				}
+				fr, err := b.c.Get(src.String())
+				if err != nil {
+					b.t.Fatalf("front-channel logout iframe %s: %v", src, err)
+				}
+				fr.Body.Close()
+				b.frames = append(b.frames, frame{url: src.String(), status: fr.StatusCode, csp: fr.Header.Get("Content-Security-Policy")})
+			}
 			return "idp-page"
 		}
 		b.t.Fatalf("unexpected page at %s (%d): %.1500s", target, res.StatusCode, page)
@@ -367,6 +398,86 @@ func (h *harness) registerSAMLClient(metadata []byte, spCertPEM, sloURL string) 
 	}
 }
 
+// updateClient changes the first Keycloak client match accepts.
+func (h *harness) updateClient(match func(client map[string]any) bool, mutate func(client, attrs map[string]any)) {
+	h.t.Helper()
+	token := h.keycloakAdminToken()
+	list, _ := h.keycloakAdmin(token, http.MethodGet, "/clients", "", nil)
+	var clients []map[string]any
+	_ = json.Unmarshal(list, &clients)
+	for _, c := range clients {
+		if !match(c) {
+			continue
+		}
+		attrs, _ := c["attributes"].(map[string]any)
+		if attrs == nil {
+			attrs = map[string]any{}
+		}
+		mutate(c, attrs)
+		c["attributes"] = attrs
+		body, _ := json.Marshal(c)
+		if out, code := h.keycloakAdmin(token, http.MethodPut, "/clients/"+c["id"].(string), "application/json", body); code != http.StatusNoContent {
+			h.t.Fatalf("update client: %d %s", code, out)
+		}
+		return
+	}
+	h.t.Fatal("Keycloak client not found")
+}
+
+func oidcClient(c map[string]any) bool { return c["clientId"] == "openlog" }
+func samlClient(c map[string]any) bool { return c["protocol"] == "saml" }
+
+// logoutAtKeycloak ends a user's Keycloak sessions over the admin API; Keycloak notifies the clients through their
+// back-channel logout URLs.
+func (h *harness) logoutAtKeycloak(username string) {
+	h.t.Helper()
+	token := h.keycloakAdminToken()
+	data, _ := h.keycloakAdmin(token, http.MethodGet, "/users?exact=true&username="+url.QueryEscape(username), "", nil)
+	var users []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &users); err != nil || len(users) != 1 {
+		h.t.Fatalf("keycloak user %s: %s", username, data)
+	}
+	if out, code := h.keycloakAdmin(token, http.MethodPost, "/users/"+users[0].ID+"/logout", "", nil); code != http.StatusNoContent {
+		h.t.Fatalf("keycloak logout of %s: %d %s", username, code, out)
+	}
+}
+
+// waitSignedOut polls the browser's session until it is gone.
+func (b *browser) waitSignedOut(d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if code, _ := b.me(); code == http.StatusUnauthorized {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// logoutVias returns the via values of the organization's audit events of action.
+func logoutVias(t *testing.T, owner *browser, action string) map[string]bool {
+	t.Helper()
+	var audit struct {
+		Events []struct {
+			Details map[string]any `json:"details"`
+		} `json:"events"`
+	}
+	if code := owner.apiJSON(http.MethodGet, "/api/v1/audit-log?limit=500&action="+action, nil, &audit); code != http.StatusOK {
+		t.Fatalf("audit: %d", code)
+	}
+	via := map[string]bool{}
+	for _, e := range audit.Events {
+		if v, _ := e.Details["via"].(string); v != "" {
+			via[v] = true
+		}
+	}
+	return via
+}
+
 func TestKeycloakSSO(t *testing.T) {
 	dsn, kc := os.Getenv("OPENLOG_TEST_POSTGRES_DSN"), strings.TrimRight(os.Getenv("OPENLOG_TEST_KEYCLOAK_URL"), "/")
 	if dsn == "" || kc == "" {
@@ -396,11 +507,29 @@ func TestKeycloakSSO(t *testing.T) {
 		}
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	listen := "127.0.0.1:0"
+	if v := os.Getenv("OPENLOG_TEST_LISTEN_ADDR"); v != "" {
+		listen = v
+	}
+	ln, err := net.Listen("tcp", listen)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{t: t, base: "http://" + ln.Addr().String(), kc: kc, resolver: txtResolver{}}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	base := "http://127.0.0.1:" + port
+	callbackHost := strings.TrimSpace(os.Getenv("OPENLOG_TEST_CALLBACK_HOST"))
+	if callbackHost != "" {
+		// openlog's public URL uses the host Keycloak's container reaches; the test's own clients dial the loopback.
+		base = "http://" + net.JoinHostPort(callbackHost, port)
+		dialer := &net.Dialer{Timeout: 10 * time.Second}
+		http.DefaultTransport.(*http.Transport).DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if host, p, err := net.SplitHostPort(addr); err == nil && host == callbackHost {
+				addr = net.JoinHostPort("127.0.0.1", p)
+			}
+			return dialer.DialContext(ctx, network, addr)
+		}
+	}
+	h := &harness{t: t, base: base, kc: kc, resolver: txtResolver{}, callback: callbackHost != ""}
 	users := postgres.NewStore(pool)
 	authSvc := auth.NewService(users, auth.Config{CookieSecure: false}, log)
 	tenantID, _ := auth.NewTenantID()
@@ -479,6 +608,10 @@ func TestKeycloakSSO(t *testing.T) {
 	}
 	if code := owner.apiJSON(http.MethodPut, "/api/v1/sso/connection", oidcBody, &state); code != http.StatusOK {
 		t.Fatalf("save OIDC connection: %d", code)
+	}
+	oidcID := state.Connection.ID
+	if bcl, _ := state.ServiceProvider["oidc_backchannel_logout_uri"].(string); bcl != h.base+"/api/v1/sso/oidc/"+oidcID+"/backchannel-logout" {
+		t.Fatalf("oidc_backchannel_logout_uri = %q", bcl)
 	}
 	var checks struct {
 		OK     bool             `json:"ok"`
@@ -628,11 +761,82 @@ func TestKeycloakSSO(t *testing.T) {
 		}
 	})
 
+	t.Run("OIDC back-channel logout from Keycloak", func(t *testing.T) {
+		if !h.callback {
+			t.Skip("OPENLOG_TEST_CALLBACK_HOST is required: Keycloak calls openlog")
+		}
+		h.updateClient(oidcClient, func(c, attrs map[string]any) {
+			c["frontchannelLogout"] = false
+			attrs["backchannel.logout.url"] = h.base + "/api/v1/sso/oidc/" + oidcID + "/backchannel-logout"
+			attrs["backchannel.logout.session.required"] = "true"
+			attrs["frontchannel.logout.url"] = ""
+		})
+		alice := h.newBrowser()
+		alice.t = t
+		if landing := alice.ssoLogin("alice@acme.test", "alice", "alice-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("alice landed on %s", landing)
+		}
+		if code, _ := alice.me(); code != http.StatusOK {
+			t.Fatalf("alice before the Keycloak logout: %d", code)
+		}
+		h.logoutAtKeycloak("alice")
+		if !alice.waitSignedOut(15 * time.Second) {
+			t.Fatal("alice's openlog session survived the back-channel logout")
+		}
+		owner.t = t
+		if via := logoutVias(t, owner, "sso.logout"); !via["oidc_backchannel"] {
+			t.Fatalf("sso.logout audit events by via = %v", via)
+		}
+	})
+
+	t.Run("OIDC front-channel logout from Keycloak", func(t *testing.T) {
+		if !h.callback {
+			t.Skip("OPENLOG_TEST_CALLBACK_HOST is required: the logout URI is registered at Keycloak")
+		}
+		h.updateClient(oidcClient, func(c, attrs map[string]any) {
+			c["frontchannelLogout"] = true
+			attrs["backchannel.logout.url"] = ""
+			attrs["frontchannel.logout.url"] = h.base + "/api/v1/sso/oidc/" + oidcID + "/frontchannel-logout"
+			attrs["frontchannel.logout.session.required"] = "true"
+		})
+		defer h.updateClient(oidcClient, func(_, attrs map[string]any) { attrs["frontchannel.logout.url"] = "" })
+		alice := h.newBrowser()
+		alice.t = t
+		if landing := alice.ssoLogin("alice@acme.test", "alice", "alice-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("alice landed on %s", landing)
+		}
+		if code, _ := alice.me(); code != http.StatusOK {
+			t.Fatalf("alice before the Keycloak logout: %d", code)
+		}
+		// The user signs out at Keycloak; its logout page loads openlog's front-channel logout URI in an iframe.
+		alice.idpPage = true
+		if landing := alice.browse(kc+"/realms/"+realm+"/protocol/openid-connect/logout", "", ""); landing != "idp-page" {
+			t.Fatalf("Keycloak logout landed on %s", landing)
+		}
+		var ours *frame
+		for i := range alice.frames {
+			if strings.HasPrefix(alice.frames[i].url, h.base+"/api/v1/sso/oidc/"+oidcID+"/frontchannel-logout?") {
+				ours = &alice.frames[i]
+			}
+		}
+		if ours == nil || ours.status != http.StatusOK || !strings.HasSuffix(ours.csp, "frame-ancestors "+kc) {
+			t.Fatalf("front-channel logout iframes = %+v", alice.frames)
+		}
+		if code, _ := alice.me(); code != http.StatusUnauthorized {
+			t.Fatalf("alice after the front-channel logout: %d", code)
+		}
+		owner.t = t
+		if via := logoutVias(t, owner, "sso.logout"); !via["oidc_frontchannel"] {
+			t.Fatalf("sso.logout audit events by via = %v", via)
+		}
+	})
+
 	var samlID string
 	t.Run("second SAML connection with encrypted assertions, IdP-initiated sign-in, replay and SCIM deprovisioning", func(t *testing.T) {
 		owner.t = t
 		samlBody := map[string]any{"protocol": "saml", "name": "Keycloak SAML", "enabled": true, "default_role": "member",
-			"saml": map[string]any{"idp_metadata_url": kc + "/realms/" + realm + "/protocol/saml/descriptor", "allow_idp_initiated": true,
+			// Keycloak's descriptor is unsigned: an explicit choice (D-098).
+			"saml": map[string]any{"idp_metadata_url": kc + "/realms/" + realm + "/protocol/saml/descriptor", "allow_unsigned_metadata": true, "allow_idp_initiated": true,
 				"relay_state_allowlist": []string{"/hosts"}, "sign_authn_requests": true}}
 		if code := owner.apiJSON(http.MethodPost, "/api/v1/sso/connections", samlBody, &state); code != http.StatusCreated {
 			t.Fatalf("create SAML connection: %d", code)
@@ -833,6 +1037,32 @@ func TestKeycloakSSO(t *testing.T) {
 			}
 		}
 		if !via["idp"] || !via["user"] {
+			t.Fatalf("sso.logout audit events by via = %v", via)
+		}
+	})
+
+	t.Run("SAML SOAP back-channel logout from Keycloak", func(t *testing.T) {
+		if samlID == "" || !h.callback {
+			t.Skip("SAML connection and OPENLOG_TEST_CALLBACK_HOST are required")
+		}
+		h.updateClient(samlClient, func(c, attrs map[string]any) {
+			c["frontchannelLogout"] = false
+			attrs["saml_single_logout_service_url_soap"] = h.base + "/api/v1/sso/saml/" + samlID + "/slo/soap"
+		})
+		dave := h.newBrowser()
+		dave.t = t
+		if landing := dave.ssoLogin("dave@acme.test", "dave", "dave-password", "/hosts"); landing != "/hosts" {
+			t.Fatalf("dave landed on %s", landing)
+		}
+		if code, _ := dave.me(); code != http.StatusOK {
+			t.Fatalf("dave before the Keycloak logout: %d", code)
+		}
+		h.logoutAtKeycloak("dave")
+		if !dave.waitSignedOut(15 * time.Second) {
+			t.Fatal("dave's openlog session survived the SOAP back-channel logout")
+		}
+		owner.t = t
+		if via := logoutVias(t, owner, "sso.logout"); !via["idp_soap"] {
 			t.Fatalf("sso.logout audit events by via = %v", via)
 		}
 	})

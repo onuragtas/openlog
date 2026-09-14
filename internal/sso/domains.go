@@ -326,8 +326,8 @@ func (s *Service) SendDomainVerificationEmail(ctx context.Context, p *auth.Princ
 		return Domain{}, s.fail(err)
 	}
 	link := s.cfg.PublicURL + "/sso/verify-domain#token=" + token
-	// Language of the requesting admin's browser (internal/mail/templates).
-	msg := mailtemplates.DomainVerification(meta.Locale, mailtemplates.DomainVerificationData{Requester: p.Email, Domain: d.Domain,
+	// The organization's default language, else the requesting admin's browser language (internal/mail/templates, D-095).
+	msg := mailtemplates.DomainVerification(mailtemplates.Resolve(org.Locale, meta.Locale), mailtemplates.DomainVerificationData{Requester: p.Email, Domain: d.Domain,
 		OrgName: org.Name, Link: link})
 	mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()

@@ -336,6 +336,8 @@ func (s *Service) SAMLMetadata(c Connection) ([]byte, error) {
 					{Algorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"}}
 			}
 		}
+		// SOAP back-channel logout (samlsoap.go) besides the HTTP-Redirect and HTTP-POST single logout service.
+		d.SingleLogoutServices = append(d.SingleLogoutServices, saml.Endpoint{Binding: saml.SOAPBinding, Location: s.SAMLSOAPLogoutURL(c.ID)})
 		if !hasSigning && sp.Certificate != nil {
 			d.KeyDescriptors = append(d.KeyDescriptors, saml.KeyDescriptor{Use: "signing", KeyInfo: saml.KeyInfo{X509Data: saml.X509Data{
 				X509Certificates: []saml.X509Certificate{{Data: base64.StdEncoding.EncodeToString(sp.Certificate.Raw)}}}}})
