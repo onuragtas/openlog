@@ -371,7 +371,7 @@ stack-demo:
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 KUBECONFORM_IMAGE ?= ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
-SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/integration/run.sh test/stackdemo/run.shtest/stackdemo/host/entrypoint.sh \
+SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/integration/run.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh \
 	agents/node/scripts/release-pack.sh agents/python/scripts/release-dist.sh agents/dotnet/scripts/release-nupkg.sh
 
 .PHONY: shellcheck actionlint helm-lint package-test install-test
