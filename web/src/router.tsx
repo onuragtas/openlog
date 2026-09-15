@@ -333,10 +333,16 @@ const kubernetesPodRoute = createRoute({
 
 // ---- Integrations (routes/integrations.tsx) ----
 
+export interface HostIntegrationSearch {
+  /** IIS site (`iis.site`) the panel's charts are filtered to; all sites when absent. */
+  site?: string;
+}
+
 /** Panel of one integration instance: `$instance` is the discovered service instance (URL-encoded). */
 const hostIntegrationRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/hosts/$hostId/integrations/$discoveryId/$instance",
+  validateSearch: (s: Record<string, unknown>): HostIntegrationSearch => ({ site: str(s.site) }),
   component: HostIntegrationPage,
 });
 

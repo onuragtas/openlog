@@ -8,6 +8,7 @@ import { login } from "@/api/account";
 import i18n from "@/i18n";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
 import { OS_HOST_IDS } from "@/mocks/fixtures";
+import { resetMockOperator, setMockOrgSuspended } from "@/mocks/operator";
 import { server } from "@/mocks/server";
 import { ApmHintFooter, type ApmHint } from "./ApmHintFooter";
 
@@ -65,6 +66,24 @@ describe("ApmHintFooter", { timeout: 20_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Install via fleet on this host" }));
     expect(await screen.findByText(/PHP agent mode set to auto for this host/)).toBeInTheDocument();
     expect(putBody).toEqual({ host: HOST, mode: "auto" });
+  });
+
+  it("suspended organization: the fleet install stays visible but disabled with the reason", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    setMockOrgSuspended("default", true);
+    const user = userEvent.setup();
+    try {
+      renderHint({ language: "php", agent: "openlog-agent-php", status: "not_installed" });
+      await user.click(await screen.findByRole("button", { name: "Install openlog-php-agent" }));
+      // The button re-renders inside the guard once the organization state has loaded: query it again.
+      const fleet = () => screen.getByRole("button", { name: "Install via fleet on this host" });
+      await waitFor(() => expect(fleet()).toBeDisabled());
+      expect(fleet().closest("[data-testid=read-only-guard]")).toHaveAttribute("title", expect.stringContaining("suspended"));
+      // The manual setup guide is not a change and stays available.
+      expect(screen.getByTestId("apm-hint-setup")).toBeInTheDocument();
+    } finally {
+      resetMockOperator();
+    }
   });
 
   it("active: links to the APM service of the host instead of an install prompt", async () => {

@@ -1572,6 +1572,9 @@ export const tr: Messages = {
       iisNetworkIo: "Gönderilen ve alınan veri",
       iisFiles: "Gönderilen ve alınan dosya/sn",
       iisNotFound: "Bulunamayan (404) istek/sn",
+      iisRequestsBySite: "Siteye göre istek/sn",
+      iisNotFoundBySite: "Siteye göre bulunamayan (404) istek/sn",
+      iisBytesBySite: "Siteye göre veri/sn (gönderilen + alınan)",
     },
     series: {
       requests: "istek",
@@ -1618,6 +1621,29 @@ export const tr: Messages = {
       attempts: "denemeler",
       anonymous: "anonim kullanıcılar",
       notFound: "bulunamayan",
+      site: "site",
+    },
+    iis: {
+      site: "Site",
+      allSites: "Tüm siteler",
+      pools: {
+        title: "Uygulama havuzları",
+        description: "Her IIS uygulama havuzunun (WAS) en son bildirilen durumu.",
+        pool: "Havuz",
+        state: "Durum",
+        lastSeen: "Son görülme",
+        empty: "Bu aralıkta uygulama havuzu durumu yok.",
+      },
+      poolStates: {
+        uninitialized: "Başlatılmamış",
+        initialized: "Başlatıldı",
+        running: "Çalışıyor",
+        disabling: "Devre dışı bırakılıyor",
+        disabled: "Devre dışı",
+        shutdownPending: "Kapanma bekliyor",
+        deletePending: "Silinme bekliyor",
+        unknown: "Bilinmiyor",
+      },
     },
     topTables: {
       title: "En büyük tablolar",
@@ -1673,6 +1699,7 @@ export const tr: Messages = {
       deadlocks: "Deadlock/sn",
       notFound: "404/sn",
       bytesSent: "Gönderilen veri/sn",
+      poolsNotRunning: "Çalışmayan uygulama havuzu",
     },
     alerts: {
       title: "Önerilen alarmlar",

@@ -1,14 +1,29 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, BellPlus, CircleAlert, Container, Info, LineChart, Search, Settings2 } from "lucide-react";
+import { ArrowLeft, BellPlus, CircleAlert, CircleCheck, CircleMinus, CircleX, Container, Info, LineChart, Search, Settings2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { hostQuery, inventorySearchQuery, metricQuery, servicesQuery, type MetricRequest } from "@/api/queries";
+import { can } from "@/api/roles";
 import { hostOsOf } from "@/lib/host-os";
 import { PageHeader } from "@/components/AppShell";
 import { KPIS, type KpiSpec } from "@/components/integrations/kpis";
-import { PANELS, PG_DATABASE, PG_QUERY_ID, PG_QUERY_TEXT, PG_TABLE, type PanelChart } from "@/components/integrations/panels";
+import {
+  IIS_APP_POOL,
+  IIS_POOLS_QUERY,
+  IIS_SITE,
+  IIS_SITES_QUERY,
+  panelCharts,
+  panelResource,
+  PG_DATABASE,
+  PG_QUERY_ID,
+  PG_QUERY_TEXT,
+  PG_TABLE,
+  type PanelChart,
+} from "@/components/integrations/panels";
+import { WriteGuardLink } from "@/components/ReadOnly";
+import { Badge } from "@/components/ui/badge";
 import { TemplateGallery } from "@/components/alerts/TemplateGallery";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ApplyNotice, HostIntegrationToggle, IntegrationConfigPanel, useApplyState } from "@/components/integrations/IntegrationConfig";
@@ -21,9 +36,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DiscoveredService } from "@/api/types";
-import { formatBytes, formatNumber, formatValue } from "@/lib/format";
+import { formatBytes, formatDateTime, formatNumber, formatRelative, formatValue } from "@/lib/format";
 import {
+  attributeValues,
   filterIntegrationRows,
+  iisPoolRows,
   INTEGRATION_IDS,
   INTEGRATION_STATUSES,
   instanceAlertSearch,
@@ -77,11 +94,26 @@ function Notice({ tone, children, testId }: { tone: "info" | "warning"; children
   );
 }
 
-function PanelChartCard({ chart, inst, range, hostName, canAlert }: { chart: PanelChart; inst: InstanceRef; range: RangeSpec; hostName: string; canAlert: boolean }) {
+function PanelChartCard({
+  chart,
+  inst,
+  resource,
+  range,
+  hostName,
+  canAlert,
+}: {
+  chart: PanelChart;
+  inst: InstanceRef;
+  /** Resource filters of the queries (panelResource: the instance, or one IIS site of it). */
+  resource: Record<string, string>;
+  range: RangeSpec;
+  hostName: string;
+  /** The role may create alerts; in a read-only organization the shortcut is disabled with the reason. */
+  canAlert: boolean;
+}) {
   const { t, i18n } = useTranslation();
   const title = t(`integrations.charts.${chart.id}`);
   const keys = Object.keys(chart.queries);
-  const resource = instanceResourceFilter(inst);
   const results = useQueries({
     queries: keys.map((k) => {
       const q = chart.queries[k]!;
@@ -109,15 +141,23 @@ function PanelChartCard({ chart, inst, range, hostName, canAlert }: { chart: Pan
           <h3>{title}</h3>
         </CardTitle>
         {canAlert && alertQuery && (
-          <Link
-            to="/alerts/rules/new"
-            search={instanceAlertSearch({ metric: alertQuery.name, agg: alertQuery.agg, ref: inst, hostName, name: `${alertQuery.name} on ${hostName}` }) as never}
-            aria-label={`${t("integrations.alerts.fromChart")}: ${title}`}
-            title={t("integrations.alerts.fromChart")}
-            className={buttonVariants({ variant: "ghost", size: "icon", className: "-my-3 size-10" })}
+          <WriteGuardLink
+            disabled={
+              <Button type="button" variant="ghost" size="icon" className="-my-3 size-10" aria-label={`${t("integrations.alerts.fromChart")}: ${title}`}>
+                <BellPlus aria-hidden="true" />
+              </Button>
+            }
           >
-            <BellPlus aria-hidden="true" />
-          </Link>
+            <Link
+              to="/alerts/rules/new"
+              search={instanceAlertSearch({ metric: alertQuery.name, agg: alertQuery.agg, ref: inst, hostName, name: `${alertQuery.name} on ${hostName}` }) as never}
+              aria-label={`${t("integrations.alerts.fromChart")}: ${title}`}
+              title={t("integrations.alerts.fromChart")}
+              className={buttonVariants({ variant: "ghost", size: "icon", className: "-my-3 size-10" })}
+            >
+              <BellPlus aria-hidden="true" />
+            </Link>
+          </WriteGuardLink>
         )}
       </CardHeader>
       <CardContent>
@@ -246,6 +286,92 @@ function TopQueriesCard({ inst, range }: { inst: InstanceRef; range: RangeSpec }
   );
 }
 
+/** IIS site filter of the panel: all sites, or one site found in the instance's metrics (group_by=resource.iis.site). */
+export function IisSiteSelector({ inst, range, value, onChange }: { inst: InstanceRef; range: RangeSpec; value?: string; onChange: (site: string | undefined) => void }) {
+  const { t } = useTranslation();
+  const uid = useId();
+  const q = useQuery(metricQuery({ hostId: inst.hostId, ...IIS_SITES_QUERY, range, resource: instanceResourceFilter(inst) }));
+  const sites = useMemo(() => {
+    const names = attributeValues(q.data?.series ?? [], IIS_SITE);
+    // A site from the URL stays selectable while loading or when it reported nothing in this range.
+    return value && !names.includes(value) ? [...names, value].sort((a, b) => a.localeCompare(b)) : names;
+  }, [q.data, value]);
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2" data-testid="iis-site-selector">
+      <label htmlFor={uid} className="text-sm font-medium">
+        {t("integrations.iis.site")}
+      </label>
+      <NativeSelect id={uid} className="max-w-full min-w-0 sm:max-w-sm" value={value ?? ""} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">{t("integrations.iis.allSites")}</option>
+        {sites.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </NativeSelect>
+    </div>
+  );
+}
+
+const POOL_ICON = { success: CircleCheck, warning: CircleAlert, destructive: CircleX, muted: CircleMinus } as const;
+
+/** Latest state of every IIS application pool of the instance (group_by=resource.iis.application_pool, agg last). */
+export function IisAppPoolsCard({ inst, range }: { inst: InstanceRef; range: RangeSpec }) {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.resolvedLanguage ?? "en";
+  const q = useQuery(metricQuery({ hostId: inst.hostId, ...IIS_POOLS_QUERY, range, resource: instanceResourceFilter(inst) }));
+  const rows = useMemo(() => iisPoolRows(q.data?.series ?? [], IIS_APP_POOL), [q.data]);
+  return (
+    <Card className="min-w-0 gap-2 lg:col-span-2" data-testid="iis-app-pools">
+      <CardHeader>
+        <CardTitle>
+          <h3>{t("integrations.iis.pools.title")}</h3>
+        </CardTitle>
+        <CardDescription>{t("integrations.iis.pools.description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {q.isPending ? (
+          <LoadingState />
+        ) : q.isError ? (
+          <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState>{t("integrations.iis.pools.empty")}</EmptyState>
+        ) : (
+          <Table mobile="stack">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("integrations.iis.pools.pool")}</TableHead>
+                <TableHead>{t("integrations.iis.pools.state")}</TableHead>
+                <TableHead className="text-right">{t("integrations.iis.pools.lastSeen")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => {
+                const Icon = POOL_ICON[r.tone];
+                const name = t(`integrations.iis.poolStates.${r.state}`);
+                return (
+                  <TableRow key={r.pool} data-testid="iis-app-pool">
+                    <TableCell className="font-mono text-xs break-all whitespace-normal">{r.pool}</TableCell>
+                    <TableCell label={t("integrations.iis.pools.state")}>
+                      <Badge variant={r.tone} data-state={r.state}>
+                        <Icon aria-hidden="true" />
+                        {r.state === "unknown" && r.value !== null ? `${name} (${r.value})` : name}
+                      </Badge>
+                    </TableCell>
+                    <TableCell label={t("integrations.iis.pools.lastSeen")} className="text-right tabular-nums">
+                      {r.lastSeen === null ? "–" : <time dateTime={new Date(r.lastSeen).toISOString()} title={formatDateTime(r.lastSeen, lang)}>{formatRelative(r.lastSeen, Math.max(q.dataUpdatedAt, r.lastSeen), lang)}</time>}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function RecommendedAlerts({ id, inst, hostName, instanceName }: { id: IntegrationId; inst: InstanceRef; hostName: string; instanceName: string }) {
   const { t } = useTranslation();
   const titleId = useId();
@@ -294,7 +420,8 @@ function InstanceSelector({ integration, current }: { integration: string; curre
         value={key(current)}
         onChange={(e) => {
           const r = rows.find((x) => key(x) === e.target.value);
-          if (r) void navigate({ to: "/hosts/$hostId/integrations/$discoveryId/$instance", params: { hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }, search: (prev) => prev as never });
+          // The IIS site filter belongs to one instance.
+          if (r) void navigate({ to: "/hosts/$hostId/integrations/$discoveryId/$instance", params: { hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }, search: (prev) => ({ ...prev, site: undefined }) as never });
         }}
       >
         {rows.map((r) => (
@@ -343,9 +470,11 @@ export function HostIntegrationPage() {
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const host = useQuery(hostQuery(hostId));
   const services = useQuery(servicesQuery(hostId));
+  const navigate = useNavigate({ from: "/hosts/$hostId/integrations/$discoveryId/$instance" });
   const role = useMe().data?.role;
   const perms = usePermissions();
-  const canAlert = perms.can("alerts.write");
+  // Shown for roles that may create alerts; a read-only organization disables the shortcut (WriteGuardLink).
+  const canAlert = can(role, "alerts.write");
   // Every role reads alert templates (writes are checked in the gallery).
   const canReadAlerts = !!role;
   const canManage = perms.can("fleet.manage");
@@ -366,6 +495,7 @@ export function HostIntegrationPage() {
   const name = svc?.name || discoveryId;
   const status: IntegrationStatus = item ? integ.status : "not_available";
   const showCharts = !!id && (!item || integ.status === "enabled");
+  const site = id === "iis" ? search.site : undefined;
   // Process name first (e.g. redis-server); the executable path (/usr/bin/redis-check-rdb) stays secondary.
   const label = instanceLabel({ command: svc?.command, instance, displayInstance: svc?.display_instance });
 
@@ -459,11 +589,15 @@ export function HostIntegrationPage() {
 
       {showCharts && id && (
         <>
+          {id === "iis" && (
+            <IisSiteSelector inst={inst} range={range} value={site} onChange={(s) => void navigate({ search: (prev) => ({ ...prev, site: s }), replace: true })} />
+          )}
           {/* 1 column on phones/tablets, 2 columns from 1024px. */}
           <section aria-label={t("integrations.panel.metrics")} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {PANELS[id].map((chart) => (
-              <PanelChartCard key={chart.id} chart={chart} inst={inst} range={range} hostName={hostName} canAlert={canAlert} />
+            {panelCharts(id, site).map((chart) => (
+              <PanelChartCard key={chart.id} chart={chart} inst={inst} resource={panelResource(id, inst, site)} range={range} hostName={hostName} canAlert={canAlert} />
             ))}
+            {id === "iis" && <IisAppPoolsCard inst={inst} range={range} />}
             {id === "postgresql" && <TopTablesCard inst={inst} range={range} />}
             {id === "postgresql" && <TopQueriesCard inst={inst} range={range} />}
           </section>

@@ -9,6 +9,7 @@ import { fleetHostQuery, setHostPHPAgentMode } from "@/api/fleet";
 import { onboardingQuery } from "@/api/onboarding";
 import { hostQuery } from "@/api/queries";
 import { can } from "@/api/roles";
+import { WriteGuard } from "@/components/ReadOnly";
 import { FormError } from "@/components/settings/common";
 import { hostHasPhpForwarder, hostHasPhpInstall, hostOsOf } from "@/lib/host-os";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -104,10 +105,13 @@ export function ApmHintFooter({ hint, hostId, serviceName, language }: { hint: A
               </p>
             ) : (
               <>
-                <Button type="button" variant="outline" size="sm" className="min-h-10" disabled={fleet.isPending} onClick={() => fleet.mutate()}>
-                  {fleet.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Rocket aria-hidden="true" />}
-                  {t("services.apmFleet")}
-                </Button>
+                {/* Changes the host's fleet settings: disabled with the reason in a read-only organization. */}
+                <WriteGuard block>
+                  <Button type="button" variant="outline" size="sm" className="min-h-10 w-full" disabled={fleet.isPending} onClick={() => fleet.mutate()}>
+                    {fleet.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Rocket aria-hidden="true" />}
+                    {t("services.apmFleet")}
+                  </Button>
+                </WriteGuard>
                 <p className="text-muted-foreground">{t("services.apmFleetHelp")}</p>
               </>
             ))}

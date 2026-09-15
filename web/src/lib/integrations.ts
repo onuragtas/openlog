@@ -170,6 +170,65 @@ export function topByLast(series: MetricSeries[], n: number): RankedRow[] {
     .slice(0, n);
 }
 
+/** Top n series by the sum of their points in the range, descending (per-site breakdown charts keep a readable legend). */
+export function topSeries(series: MetricSeries[], n: number): MetricSeries[] {
+  const total = (s: MetricSeries) => s.points.reduce((acc, [, v]) => (Number.isFinite(v) ? acc + v : acc), 0);
+  return series
+    .filter((s) => s.points.length > 0)
+    .map((s) => ({ s, total: total(s) }))
+    .sort((a, b) => b.total - a.total || JSON.stringify(a.s.attributes).localeCompare(JSON.stringify(b.s.attributes)))
+    .slice(0, n)
+    .map((x) => x.s);
+}
+
+// ---- IIS (semantic-conventions §6.8) ----
+
+/** `iis.application_pool.state` values: WAS CurrentApplicationPoolState (agents/infra/internal/integrations/iis). */
+export const IIS_POOL_STATES: Record<number, IisPoolState> = {
+  1: "uninitialized",
+  2: "initialized",
+  3: "running",
+  4: "disabling",
+  5: "disabled",
+  6: "shutdownPending",
+  7: "deletePending",
+};
+export type IisPoolState = "uninitialized" | "initialized" | "running" | "disabling" | "disabled" | "shutdownPending" | "deletePending" | "unknown";
+export type IisPoolTone = "success" | "warning" | "destructive" | "muted";
+
+/** State name and badge tone of an application pool state value (unknown values keep the number for display). */
+export function iisPoolState(value: number | null | undefined): { state: IisPoolState; tone: IisPoolTone } {
+  const state = value === null || value === undefined ? "unknown" : (IIS_POOL_STATES[value] ?? "unknown");
+  const tone: IisPoolTone =
+    state === "running" ? "success" : state === "disabled" ? "destructive" : state === "disabling" || state === "shutdownPending" || state === "deletePending" ? "warning" : "muted";
+  return { state, tone };
+}
+
+export interface IisPoolRow {
+  pool: string;
+  value: number | null;
+  state: IisPoolState;
+  tone: IisPoolTone;
+  /** Timestamp (ms) of the latest state point. */
+  lastSeen: number | null;
+}
+
+/** Application pool rows from `iis.application_pool.state` (agg last) grouped by the pool resource attribute `key`, by name. */
+export function iisPoolRows(series: MetricSeries[], key: string): IisPoolRow[] {
+  return series
+    .filter((s) => (s.attributes[key] ?? "") !== "" && s.points.length > 0)
+    .map((s) => {
+      const last = s.points[s.points.length - 1]!;
+      return { pool: s.attributes[key]!, value: last[1], lastSeen: last[0], ...iisPoolState(last[1]) };
+    })
+    .sort((a, b) => a.pool.localeCompare(b.pool));
+}
+
+/** Distinct non-empty values of attribute `key` across series, sorted (e.g. IIS site names). */
+export function attributeValues(series: MetricSeries[], key: string): string[] {
+  return [...new Set(series.map((s) => s.attributes[key] ?? "").filter((v) => v !== ""))].sort((a, b) => a.localeCompare(b));
+}
+
 // ---- overview ----
 
 export interface IntegrationRow {

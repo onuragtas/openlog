@@ -2,7 +2,18 @@
 // more metrics filtered to the instance and combines them with the pure helpers of lib/integrations.ts.
 import type { Aggregation, MetricSeries } from "@/api/types";
 import type { UnitKind } from "@/lib/format";
-import { differencePoints, hitRatio, pgCacheHitRatio, pickSeries, sumSeries, type IntegrationId, type Points } from "@/lib/integrations";
+import {
+  differencePoints,
+  hitRatio,
+  instanceResourceFilter,
+  pgCacheHitRatio,
+  pickSeries,
+  sumSeries,
+  topSeries,
+  type InstanceRef,
+  type IntegrationId,
+  type Points,
+} from "@/lib/integrations";
 import { seriesLabel, type ChartSeriesInput } from "@/lib/series";
 
 export type SeriesLabelKey =
@@ -49,7 +60,8 @@ export type SeriesLabelKey =
   | "received"
   | "attempts"
   | "anonymous"
-  | "notFound";
+  | "notFound"
+  | "site";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -94,7 +106,10 @@ export type PanelChartId =
   | "iisConnectionAttempts"
   | "iisNetworkIo"
   | "iisFiles"
-  | "iisNotFound";
+  | "iisNotFound"
+  | "iisRequestsBySite"
+  | "iisNotFoundBySite"
+  | "iisBytesBySite";
 
 export interface PanelQuery {
   name: string;
@@ -115,6 +130,8 @@ export interface PanelChart {
   optional?: boolean;
   /** Query key whose metric the chart's "create alert" shortcut uses. */
   alert?: string;
+  /** Breakdown by IIS site: shown for all sites, hidden when one site is selected. */
+  siteBreakdown?: boolean;
   build: (d: PanelData, label: (k: SeriesLabelKey) => string) => ChartSeriesInput[];
 }
 
@@ -127,6 +144,27 @@ export const PG_QUERY_TEXT = "resource.db.query.text";
 /** SQL Server data point attributes (semantic-conventions §6.7). */
 export const MSSQL_DATABASE = "sqlserver.database.name";
 export const MSSQL_WAIT_TYPE = "wait.type";
+/** IIS site and application pool resource attributes (semantic-conventions §6.8). */
+export const IIS_SITE_KEY = "iis.site";
+export const IIS_SITE = `resource.${IIS_SITE_KEY}`;
+export const IIS_APP_POOL = "resource.iis.application_pool";
+/** Sites shown in the per-site breakdown charts (largest first). */
+export const IIS_TOP_SITES = 8;
+/** Site names of an instance: one series per site. */
+export const IIS_SITES_QUERY: PanelQuery = { name: "iis.connection.active", agg: "last", groupBy: [IIS_SITE] };
+/** Latest state per application pool. */
+export const IIS_POOLS_QUERY: PanelQuery = { name: "iis.application_pool.state", agg: "last", groupBy: [IIS_APP_POOL] };
+
+/** Resource filters of an instance's panel queries, narrowed to one IIS site when a site is selected. */
+export function panelResource(id: IntegrationId, inst: Pick<InstanceRef, "discoveryId" | "instance">, site?: string): Record<string, string> {
+  const base = instanceResourceFilter(inst);
+  return id === "iis" && site ? { ...base, [IIS_SITE_KEY]: site } : base;
+}
+
+/** Charts of an integration panel: per-site breakdowns only while all IIS sites are shown. */
+export function panelCharts(id: IntegrationId, site?: string): PanelChart[] {
+  return PANELS[id].filter((c) => !(id === "iis" && site && c.siteBreakdown));
+}
 
 /** `sqlserver.page.buffer_cache.hit_ratio` is reported in % (0–100); charts and KPIs use ratios (0–1). */
 export function percentToRatio(points: Points): Points {
@@ -442,8 +480,33 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
       build: (d, L) => by(get(d, "w"), [MSSQL_WAIT_TYPE], L("waitTime")),
     },
   ],
-  // IIS (§6.8): one resource per site; the charts sum all sites of the instance.
+  // IIS (§6.8): one resource per site; the charts sum all sites of the instance, or show the selected site
+  // (panelResource). The breakdown charts group by the site resource attribute.
   iis: [
+    {
+      id: "iisRequestsBySite",
+      queries: { r: { name: "iis.request.count", agg: "rate", groupBy: [IIS_SITE] } },
+      unit: "number",
+      siteBreakdown: true,
+      alert: "r",
+      build: (d, L) => by(topSeries(get(d, "r"), IIS_TOP_SITES), [IIS_SITE], L("site")),
+    },
+    {
+      id: "iisNotFoundBySite",
+      queries: { n: { name: "iis.request.not_found.count", agg: "rate", groupBy: [IIS_SITE] } },
+      unit: "number",
+      siteBreakdown: true,
+      alert: "n",
+      build: (d, L) => by(topSeries(get(d, "n"), IIS_TOP_SITES), [IIS_SITE], L("site")),
+    },
+    {
+      id: "iisBytesBySite",
+      // Sent and received summed per site.
+      queries: { b: { name: "iis.network.io", agg: "rate", groupBy: [IIS_SITE] } },
+      unit: "bytesPerSec",
+      siteBreakdown: true,
+      build: (d, L) => by(topSeries(get(d, "b"), IIS_TOP_SITES), [IIS_SITE], L("site")),
+    },
     {
       id: "iisRequests",
       queries: { r: { name: "iis.request.count", agg: "rate", groupBy: ["request"] } },

@@ -5,7 +5,9 @@ import { useId, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { createLicenseKey, licenseKeysQuery } from "@/api/account";
 import type { Onboarding } from "@/api/onboarding";
+import { WriteGuard } from "@/components/ReadOnly";
 import { FormError } from "@/components/settings/common";
+import { useOrgWritable } from "@/lib/org-writable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,7 +82,10 @@ export function LicenseKeyStep({
   const { t } = useTranslation();
   const id = useId();
   const qc = useQueryClient();
-  const canCreate = onboarding.features.can_create_license_keys;
+  // Creating a key is a change: a read-only organization (suspended, support view) disables it with the reason.
+  const { writable, reason } = useOrgWritable();
+  const canCreate = onboarding.features.can_create_license_keys && writable;
+  const createHelp = canCreate ? t("addData.key.createHelp") : onboarding.features.can_create_license_keys ? (reason ?? "") : t("addData.key.createDisabled");
   const canList = onboarding.features.can_list_license_keys;
   const keys = useQuery({ ...licenseKeysQuery(), enabled: needed && canList });
   const active = (keys.data ?? []).filter((k) => !k.revoked_at);
@@ -119,7 +124,7 @@ export function LicenseKeyStep({
           current={value.mode}
           disabled={!canCreate}
           label={t("addData.key.create")}
-          help={canCreate ? t("addData.key.createHelp") : t("addData.key.createDisabled")}
+          help={createHelp}
           onSelect={select}
         >
           {value.created ? (
@@ -128,22 +133,24 @@ export function LicenseKeyStep({
               <span>{t("addData.key.created", { name: value.created.name })}</span>
             </div>
           ) : (
-            <form
-              className="flex flex-wrap items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (name.trim()) create.mutate(name.trim());
-              }}
-            >
-              <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1.5">
-                <Label htmlFor={`${id}-name`}>{t("addData.key.name")}</Label>
-                <Input id={`${id}-name`} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <Button type="submit" className="max-sm:w-full" disabled={create.isPending || !name.trim()}>
-                {create.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                {t("addData.key.createButton")}
-              </Button>
-            </form>
+            <WriteGuard block>
+              <form
+                className="flex flex-wrap items-end gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (canCreate && name.trim()) create.mutate(name.trim());
+                }}
+              >
+                <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1.5">
+                  <Label htmlFor={`${id}-name`}>{t("addData.key.name")}</Label>
+                  <Input id={`${id}-name`} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <Button type="submit" className="max-sm:w-full" disabled={!canCreate || create.isPending || !name.trim()}>
+                  {create.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
+                  {t("addData.key.createButton")}
+                </Button>
+              </form>
+            </WriteGuard>
           )}
           <FormError error={create.error} />
         </Choice>

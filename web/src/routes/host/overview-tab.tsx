@@ -8,7 +8,8 @@ import { fleetHostQuery } from "@/api/fleet";
 import { hostQuery, metricQuery } from "@/api/queries";
 import { PHPAccessNotice } from "@/components/onboarding/PHPAccessNotice";
 import { can } from "@/api/roles";
-import { buttonVariants } from "@/components/ui/button";
+import { WriteGuard, WriteGuardLink } from "@/components/ReadOnly";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { createAlertSearch } from "@/lib/alerts";
 import type { Aggregation } from "@/api/types";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
@@ -97,7 +98,8 @@ export const OVERVIEW_CHARTS: ChartDef[] = [
   },
 ];
 
-function MetricChartCard({ hostId, range, def, canAlert }: { hostId: string; range: RangeSpec; def: ChartDef; canAlert: boolean }) {
+/** One host metric chart; `canAlert` (role) shows the alert and dashboard shortcuts, disabled in a read-only organization. */
+export function MetricChartCard({ hostId, range, def, canAlert }: { hostId: string; range: RangeSpec; def: ChartDef; canAlert: boolean }) {
   const { t } = useTranslation();
   const title = t(def.titleKey);
   const hostName = useQuery({ ...hostQuery(hostId), enabled: canAlert }).data?.host_name;
@@ -126,17 +128,29 @@ function MetricChartCard({ hostId, range, def, canAlert }: { hostId: string; ran
         <CardTitle>
           <h2>{title}</h2>
         </CardTitle>
-        {canAlert && <AddToDashboardButton className="ml-auto" query={hostMetricOql(alertMetric.name, hostId, alertMetric.groupBy)} title={title} />}
         {canAlert && (
-          <Link
-            to="/alerts/rules/new"
-            search={createAlertSearch({ metric: alertMetric.name, hostId, hostName, agg: alertMetric.agg }) as never}
-            aria-label={`${t("charts.createAlert")}: ${title}`}
-            title={t("charts.createAlert")}
-            className={buttonVariants({ variant: "ghost", size: "icon", className: "-my-2 size-7" })}
+          <WriteGuard className="ml-auto">
+            <AddToDashboardButton className="ml-auto" query={hostMetricOql(alertMetric.name, hostId, alertMetric.groupBy)} title={title} />
+          </WriteGuard>
+        )}
+        {canAlert && (
+          <WriteGuardLink
+            disabled={
+              <Button type="button" variant="ghost" size="icon" className="-my-2 size-7" aria-label={`${t("charts.createAlert")}: ${title}`}>
+                <BellPlus aria-hidden="true" />
+              </Button>
+            }
           >
-            <BellPlus aria-hidden="true" />
-          </Link>
+            <Link
+              to="/alerts/rules/new"
+              search={createAlertSearch({ metric: alertMetric.name, hostId, hostName, agg: alertMetric.agg }) as never}
+              aria-label={`${t("charts.createAlert")}: ${title}`}
+              title={t("charts.createAlert")}
+              className={buttonVariants({ variant: "ghost", size: "icon", className: "-my-2 size-7" })}
+            >
+              <BellPlus aria-hidden="true" />
+            </Link>
+          </WriteGuardLink>
         )}
       </CardHeader>
       <CardContent>

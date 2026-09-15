@@ -25,6 +25,16 @@ export function WriteGuard({ children, className, block = false }: { children: R
   );
 }
 
+/**
+ * A link that starts a change (e.g. "create alert" from a chart): links cannot be disabled, so in a read-only organization
+ * `disabled` (a look-alike button) is rendered inside WriteGuard instead, disabled with the explanation.
+ */
+export function WriteGuardLink({ children, disabled, className }: { children: ReactNode; disabled: ReactNode; className?: string }) {
+  const { writable } = useOrgWritable();
+  if (writable) return <>{children}</>;
+  return <WriteGuard className={className}>{disabled}</WriteGuard>;
+}
+
 /** Notice at the top of a page whose changes are hidden or disabled in a read-only organization. */
 export function ReadOnlyNotice({ className }: { className?: string }) {
   const { writable, reason } = useOrgWritable();

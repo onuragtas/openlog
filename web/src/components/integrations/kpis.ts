@@ -1,8 +1,8 @@
 // Key figures per integration for the fleet dashboard on the Integrations page (metric names: semantic-conventions
 // §6.3–§6.5). Each KPI fetches a few metrics of one instance and reduces them to the latest value.
 import type { UnitKind } from "@/lib/format";
-import { hitRatio, lastValue, latestMax, pgCacheHitRatio, pickSeries, sumSeries, type IntegrationId } from "@/lib/integrations";
-import { percentToRatio, PG_DATABASE, type PanelData, type PanelQuery } from "./panels";
+import { hitRatio, iisPoolRows, lastValue, latestMax, pgCacheHitRatio, pickSeries, sumSeries, type IntegrationId } from "@/lib/integrations";
+import { IIS_APP_POOL, IIS_POOLS_QUERY, percentToRatio, PG_DATABASE, type PanelData, type PanelQuery } from "./panels";
 
 export type KpiId =
   | "requests"
@@ -22,7 +22,8 @@ export type KpiId =
   | "batchRequests"
   | "deadlocks"
   | "notFound"
-  | "bytesSent";
+  | "bytesSent"
+  | "poolsNotRunning";
 
 export interface KpiSpec {
   id: KpiId;
@@ -110,6 +111,15 @@ export const KPIS: Record<IntegrationId, KpiSpec[]> = {
       queries: { n: { name: "iis.network.io", agg: "rate", groupBy: ["direction"] } },
       unit: "bytesPerSec",
       compute: (d) => lastValue(sumSeries(pickSeries(get(d, "n"), "direction", ["sent"]))),
+    },
+    {
+      id: "poolsNotRunning",
+      queries: { p: IIS_POOLS_QUERY },
+      unit: "number",
+      compute: (d) => {
+        const rows = iisPoolRows(get(d, "p"), IIS_APP_POOL);
+        return rows.length === 0 ? null : rows.filter((r) => r.state !== "running").length;
+      },
     },
   ],
 };

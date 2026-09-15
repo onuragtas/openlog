@@ -1571,6 +1571,9 @@ export const en = {
       iisNetworkIo: "Bytes sent and received",
       iisFiles: "Files sent and received/s",
       iisNotFound: "Not found (404) requests/s",
+      iisRequestsBySite: "Requests/s by site",
+      iisNotFoundBySite: "Not found (404) requests/s by site",
+      iisBytesBySite: "Bytes/s by site (sent + received)",
     },
     series: {
       requests: "requests",
@@ -1617,6 +1620,29 @@ export const en = {
       attempts: "attempts",
       anonymous: "anonymous users",
       notFound: "not found",
+      site: "site",
+    },
+    iis: {
+      site: "Site",
+      allSites: "All sites",
+      pools: {
+        title: "Application pools",
+        description: "Latest reported state of each IIS application pool (WAS).",
+        pool: "Pool",
+        state: "State",
+        lastSeen: "Last seen",
+        empty: "No application pool state in this range.",
+      },
+      poolStates: {
+        uninitialized: "Uninitialized",
+        initialized: "Initialized",
+        running: "Running",
+        disabling: "Disabling",
+        disabled: "Disabled",
+        shutdownPending: "Shutdown pending",
+        deletePending: "Delete pending",
+        unknown: "Unknown",
+      },
     },
     topTables: {
       title: "Largest tables",
@@ -1672,6 +1698,7 @@ export const en = {
       deadlocks: "Deadlocks/s",
       notFound: "404s/s",
       bytesSent: "Bytes sent/s",
+      poolsNotRunning: "App pools not running",
     },
     alerts: {
       title: "Recommended alerts",

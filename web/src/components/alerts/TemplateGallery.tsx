@@ -5,6 +5,8 @@ import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { alertPreviewQuery, alertTemplateRenderQuery, alertTemplatesQuery, createAlertRule, type AlertRule, type AlertTemplate, type AlertTemplateParam } from "@/api/alerts";
 import { hostsQuery } from "@/api/queries";
+import { can } from "@/api/roles";
+import { WriteGuard } from "@/components/ReadOnly";
 import { FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -97,7 +99,10 @@ function ParamInput({ p, value, error, onChange, hostOptions }: { p: AlertTempla
 function TemplateSetup({ template, target, onCreated }: { template: AlertTemplate; target: TemplateTarget; onCreated?: (rule: AlertRule) => void }) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const canWrite = usePermissions().can("alerts.write");
+  const perms = usePermissions();
+  const canWrite = perms.can("alerts.write");
+  // The role may create alerts but the organization is read-only: the create button stays, disabled with the reason.
+  const roleCanWrite = can(perms.role, "alerts.write");
   const params = useMemo(() => editableParams(template, target), [template, target]);
   const [values, setValues] = useState(() => initialValues(params));
   const [created, setCreated] = useState<AlertRule | null>(null);
@@ -173,11 +178,13 @@ function TemplateSetup({ template, target, onCreated }: { template: AlertTemplat
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        {canWrite && !created && (
-          <Button type="button" size="sm" className="min-h-10" disabled={!rule || create.isPending || render.isFetching} onClick={() => create.mutate()}>
-            <BellPlus aria-hidden="true" />
-            {t("alerts.templates.create")}
-          </Button>
+        {roleCanWrite && !created && (
+          <WriteGuard>
+            <Button type="button" size="sm" className="min-h-10" disabled={!rule || create.isPending || render.isFetching} onClick={() => create.mutate()}>
+              <BellPlus aria-hidden="true" />
+              {t("alerts.templates.create")}
+            </Button>
+          </WriteGuard>
         )}
         {canWrite && valid && debounced && (
           <Link

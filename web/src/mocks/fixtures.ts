@@ -384,6 +384,7 @@ export interface MetricDef {
 export const METRIC_RESOURCE_KEYS = [
   "openlog.discovery.id", "openlog.discovery.instance", "openlog.integration.id", "service.instance.id", "server.address", "server.port",
   "postgresql.database.name", "postgresql.table.name", "postgresql.index.name", "postgresql.queryid", "postgresql.rolname", "db.query.text",
+  "iis.site", "iis.application_pool",
 ];
 
 const wave = (t: number, period: number, phase = 0) => (Math.sin((t / period) * Math.PI * 2 + phase) + 1) / 2;
@@ -571,6 +572,10 @@ function integrationMetrics(): Record<string, MetricDef> {
     "iis.request.not_found.count": mono("{requests}", sites.map(([name, share]) => counter(site(name), {}, (t) => 0.8 * share * load(t, 65)))),
     "iis.network.io": mono("By", sites.flatMap(([name, share]) => ([["sent", 1.8e6], ["received", 2.2e5]] as const).map(([direction, r]) => counter(site(name), { direction }, (t) => r * share * load(t, 66))))),
     "iis.network.file.count": mono("{files}", sites.flatMap(([name, share]) => ([["sent", 42], ["received", 0.4]] as const).map(([direction, r]) => counter(site(name), { direction }, (t) => r * share * load(t, 67))))),
-    "iis.application_pool.state": { type: "gauge", unit: "{state}", series: [gauge({ ...I, "iis.application_pool": "DefaultAppPool" }, {}, () => 3), gauge({ ...I, "iis.application_pool": "api" }, {}, () => 3)] },
+    // Three pools in different states: 3 Running, 6 Shutdown Pending, 5 Disabled.
+    "iis.application_pool.state": {
+      type: "gauge", unit: "{state}",
+      series: ([["DefaultAppPool", 3], ["api", 6], ["legacy-reports", 5]] as const).map(([pool, state]) => gauge({ ...I, "iis.application_pool": pool }, {}, () => state)),
+    },
   };
 }

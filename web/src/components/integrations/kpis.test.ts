@@ -28,6 +28,13 @@ describe("integration KPIs", () => {
     expect(kpi("iis", "requests").compute({ r: [s({}, [[1, 7]])] })).toBe(7);
   });
 
+  it("counts IIS application pools that are not running", () => {
+    const pool = (name: string, state: number) => s({ "resource.iis.application_pool": name }, [[1, 3], [2, state]]);
+    expect(kpi("iis", "poolsNotRunning").queries.p).toEqual({ name: "iis.application_pool.state", agg: "last", groupBy: ["resource.iis.application_pool"] });
+    expect(kpi("iis", "poolsNotRunning").compute({ p: [pool("DefaultAppPool", 3), pool("api", 6), pool("legacy", 5)] })).toBe(2);
+    expect(kpi("iis", "poolsNotRunning").compute({ p: [] })).toBeNull();
+  });
+
   it("computes PostgreSQL connection usage and transactions", () => {
     const backends = [s({ "resource.postgresql.database.name": "a" }, [[1, 10]]), s({ "resource.postgresql.database.name": "b" }, [[1, 30]])];
     expect(kpi("postgresql", "connectionUsage").compute({ b: backends, m: [s({}, [[1, 100]])] })).toBe(0.4);
