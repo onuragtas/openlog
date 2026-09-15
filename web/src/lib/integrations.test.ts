@@ -59,6 +59,10 @@ describe("instance identity", () => {
     expect(hasPanel({ integration: { status: "not_available" } })).toBe(false);
     expect(integrationForRule("mariadb")).toBe("mysql");
     expect(integrationForRule("postgresql")).toBe("postgresql");
+    expect(integrationForRule("mssql")).toBe("mssql");
+    expect(integrationForRule("iis")).toBe("iis");
+    expect(hasPanel({ integration: { id: "iis", status: "enabled" } })).toBe(true);
+    expect(hasPanel({ integration: { id: "mssql", status: "needs_configuration" } })).toBe(true);
     expect(integrationForRule("sshd")).toBeUndefined();
   });
 });
@@ -131,6 +135,27 @@ describe("panel charts", () => {
       L as never,
     );
     expect(out.map((s) => s.label)).toEqual(["app", "maxConnections"]);
+  });
+
+  it("SQL Server buffer cache hit ratio turns % into a ratio; database sizes are labelled by database", () => {
+    const cache = PANELS.mssql.find((c) => c.id === "mssqlBufferCache")!;
+    expect(cache.queries.h).toEqual({ name: "sqlserver.page.buffer_cache.hit_ratio", agg: "avg" });
+    expect(cache.build({ h: [{ attributes: {}, points: [[1, 99.5]] }] }, L as never)[0]!.points).toEqual([[1, 0.995]]);
+    const size = PANELS.mssql.find((c) => c.id === "mssqlDbSize")!;
+    expect(size.queries.s!.groupBy).toEqual(["sqlserver.database.name"]);
+    expect(size.build({ s: [{ attributes: { "sqlserver.database.name": "Sales" }, points: [[1, 5]] }] }, L as never).map((s) => s.label)).toEqual(["Sales"]);
+  });
+
+  it("IIS network io splits sent and received; every panel uses its integration's metric prefix", () => {
+    const io = PANELS.iis.find((c) => c.id === "iisNetworkIo")!;
+    const out = io.build(
+      { n: [{ attributes: { direction: "received" }, points: [[1, 2]] }, { attributes: { direction: "sent" }, points: [[1, 9]] }] },
+      L as never,
+    );
+    expect(out.map((s) => [s.label, s.points])).toEqual([["sent", [[1, 9]]], ["received", [[1, 2]]]]);
+    for (const [id, prefix] of [["mssql", "sqlserver."], ["iis", "iis."]] as const) {
+      for (const chart of PANELS[id]) for (const q of Object.values(chart.queries)) expect(q.name.startsWith(prefix), `${chart.id} ${q.name}`).toBe(true);
+    }
   });
 });
 

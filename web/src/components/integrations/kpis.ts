@@ -2,7 +2,7 @@
 // §6.3–§6.5). Each KPI fetches a few metrics of one instance and reduces them to the latest value.
 import type { UnitKind } from "@/lib/format";
 import { hitRatio, lastValue, latestMax, pgCacheHitRatio, pickSeries, sumSeries, type IntegrationId } from "@/lib/integrations";
-import { PG_DATABASE, type PanelData, type PanelQuery } from "./panels";
+import { percentToRatio, PG_DATABASE, type PanelData, type PanelQuery } from "./panels";
 
 export type KpiId =
   | "requests"
@@ -18,7 +18,11 @@ export type KpiId =
   | "backends"
   | "connectionUsage"
   | "tps"
-  | "cacheHit";
+  | "cacheHit"
+  | "batchRequests"
+  | "deadlocks"
+  | "notFound"
+  | "bytesSent";
 
 export interface KpiSpec {
   id: KpiId;
@@ -85,5 +89,27 @@ export const KPIS: Record<IntegrationId, KpiSpec[]> = {
       },
     },
     { id: "cacheHit", queries: { b: { name: "postgresql.blocks_read", agg: "rate", groupBy: ["source"] } }, unit: "percent", compute: (d) => lastValue(pgCacheHitRatio(get(d, "b"))) },
+  ],
+  mssql: [
+    { id: "connections", queries: { c: { name: "sqlserver.user.connection.count", agg: "last" } }, unit: "number", compute: (d) => last(d, "c") },
+    { id: "batchRequests", queries: { b: { name: "sqlserver.batch.request.rate", agg: "avg" } }, unit: "number", compute: (d) => last(d, "b") },
+    {
+      id: "cacheHit",
+      queries: { h: { name: "sqlserver.page.buffer_cache.hit_ratio", agg: "avg" } },
+      unit: "percent",
+      compute: (d) => lastValue(percentToRatio(sumSeries(get(d, "h")))),
+    },
+    { id: "deadlocks", queries: { d: { name: "sqlserver.deadlock.count", agg: "rate" } }, unit: "number", compute: (d) => last(d, "d") },
+  ],
+  iis: [
+    { id: "requests", queries: { r: { name: "iis.request.count", agg: "rate" } }, unit: "number", compute: (d) => last(d, "r") },
+    { id: "activeConnections", queries: { c: { name: "iis.connection.active", agg: "last" } }, unit: "number", compute: (d) => last(d, "c") },
+    { id: "notFound", queries: { n: { name: "iis.request.not_found.count", agg: "rate" } }, unit: "number", compute: (d) => last(d, "n") },
+    {
+      id: "bytesSent",
+      queries: { n: { name: "iis.network.io", agg: "rate", groupBy: ["direction"] } },
+      unit: "bytesPerSec",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "n"), "direction", ["sent"]))),
+    },
   ],
 };

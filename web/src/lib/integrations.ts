@@ -4,7 +4,7 @@
 import type { DiscoveredService, MetricSeries } from "@/api/types";
 import type { RuleEditorSearch } from "@/lib/alerts";
 
-export const INTEGRATION_IDS = ["nginx", "redis", "mysql", "postgresql"] as const;
+export const INTEGRATION_IDS = ["nginx", "redis", "mysql", "postgresql", "mssql", "iis"] as const;
 export type IntegrationId = (typeof INTEGRATION_IDS)[number];
 
 export const INTEGRATION_STATUSES = ["enabled", "needs_configuration", "error", "not_available"] as const;

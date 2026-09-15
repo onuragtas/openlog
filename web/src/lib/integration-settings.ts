@@ -5,13 +5,15 @@ import type { IntegrationName, IntegrationSetting, IntegrationSettingInput, Inte
 
 export type ConfigField = "endpoint" | "username" | "password" | "database";
 
-/** Fields per integration (semantic-conventions §6.2; docker has none besides enabled). */
+/** Fields per integration (semantic-conventions §6.2; docker and iis have none besides enabled). */
 export const CONFIG_FIELDS: Record<IntegrationName, readonly ConfigField[]> = {
   nginx: ["endpoint"],
   redis: ["endpoint", "username", "password"],
   mysql: ["endpoint", "username", "password"],
   postgresql: ["endpoint", "username", "password", "database"],
   docker: [],
+  mssql: ["endpoint", "username", "password"],
+  iis: [],
 };
 
 export function isConfigurable(id: string | undefined): id is IntegrationName {
@@ -24,6 +26,8 @@ export const ENDPOINT_PLACEHOLDER: Record<IntegrationName, string> = {
   mysql: "127.0.0.1:3306",
   postgresql: "127.0.0.1:5432",
   docker: "",
+  mssql: "127.0.0.1:1433",
+  iis: "",
 };
 
 export type EndpointError = "url" | "hostPort";

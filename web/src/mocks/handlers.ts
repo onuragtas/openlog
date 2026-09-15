@@ -129,7 +129,8 @@ export const handlers = [
     if (step % unit) step += unit - (step % unit);
 
     const baseDef = fx.METRICS[name];
-    const known = Object.values(fx.HOST_IDS).includes(params.hostId as never) && params.hostId !== fx.HOST_IDS.worker;
+    // win-iis-1 has SQL Server and IIS integration metrics (its resource filters select only those series).
+    const known = (Object.values(fx.HOST_IDS).includes(params.hostId as never) && params.hostId !== fx.HOST_IDS.worker) || params.hostId === fx.OS_HOST_IDS.win;
     const matching = baseDef?.series.filter((s) => resFilters.every(([k, v]) => (s.resource ?? {})[k] === v)) ?? [];
     const def = baseDef && matching.length > 0 ? { ...baseDef, series: matching } : undefined;
     if (!def || !known) {
@@ -175,7 +176,8 @@ export const handlers = [
   })),
 
   http.get(`${API}/hosts/:hostId/services`, authed(({ params }) => {
-    const h = fx.hosts(Date.now()).find((x) => x.host_id === params.hostId);
+    // The Windows host's services (IIS, SQL Server) resolve here too; it stays out of lists and inventory search.
+    const h = [...fx.hosts(Date.now()), ...fx.osHosts(Date.now()).filter((x) => x.host_id === fx.OS_HOST_IDS.win)].find((x) => x.host_id === params.hostId);
     if (!h || !fx.hasSnapshot(h.host_id)) return HttpResponse.json({ snapshot_id: "", snapshot_time: null, items: [] });
     const items = fx.inventory(h).filter((it) => it.category === "discovered_service");
     return HttpResponse.json({ snapshot_id: "0191e0a4-7b7e-7c3a-9d52-5f0c8e7a1b2c", snapshot_time: fx.formatTs(Date.now() - 20 * 60_000), items });

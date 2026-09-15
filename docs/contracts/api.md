@@ -717,10 +717,11 @@ Pod logs: `GET /api/v1/logs?k8s_pod_uid=…` (see Logs).
 Ranges longer than 6h read from the 1-minute rollup table, except requests with `resource.*` filters or groupings
 (the rollup has no resource attributes), which read raw data points (30-day retention).
 
-Allowed `resource.<key>` keys — integration instance identity and PostgreSQL entities (semantic-conventions §6.1, §6.5):
-`openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`, `service.instance.id`, `server.address`,
-`server.port`, `postgresql.database.name`, `postgresql.table.name`, `postgresql.index.name`, and for pg_stat_statements
-query resources `postgresql.queryid`, `postgresql.rolname`, `db.query.text`. Any other key, an empty or
+Allowed `resource.<key>` keys — integration instance identity, PostgreSQL entities and IIS sites/application pools
+(semantic-conventions §6.1, §6.5, §6.8): `openlog.discovery.id`, `openlog.discovery.instance`, `openlog.integration.id`,
+`service.instance.id`, `server.address`, `server.port`, `postgresql.database.name`, `postgresql.table.name`,
+`postgresql.index.name`, for pg_stat_statements query resources `postgresql.queryid`, `postgresql.rolname`,
+`db.query.text`, and `iis.site`, `iis.application_pool`. Any other key, an empty or
 repeated value, or a value longer than 1024 bytes → `400 invalid_argument` (reported before the host check). Values are
 bound query parameters. Integration panels select one instance with
 `?resource.openlog.discovery.id=redis&resource.openlog.discovery.instance=/usr/bin/redis-server`.
@@ -1219,7 +1220,7 @@ back from; a newer release does.
 
 ## Integration settings
 
-Endpoints and credentials of infra agent integrations (`nginx`, `redis`, `mysql`, `postgresql`, `docker`) for all hosts
+Endpoints and credentials of infra agent integrations (`nginx`, `redis`, `mysql`, `postgresql`, `docker`, `mssql`, `iis`) for all hosts
 of the caller's organization or for one host, delivered to agents through sync ([releases-updates.md](releases-updates.md)
 §3, table: [postgres.md](postgres.md#integration-settings-0008_integration_settings)). Same permissions as Fleet: reads
 need any role (API keys too); changes need a signed-in admin or owner (`403` otherwise, CSRF as usual). Not available with

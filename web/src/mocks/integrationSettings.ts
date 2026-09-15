@@ -15,6 +15,8 @@ const FIELDS: Record<string, string[]> = {
   mysql: ["endpoint", "username", "password"],
   postgresql: ["endpoint", "username", "password", "database", "databases"],
   docker: [],
+  mssql: ["endpoint", "username", "password"],
+  iis: [],
 };
 
 type Code = "invalid_argument" | "permission_denied" | "not_found" | "already_exists";
@@ -75,7 +77,7 @@ function write(fn: (info: Parameters<HttpResponseResolver>[0]) => Response | Pro
 }
 
 function validate(in_: Partial<IntegrationSettingInput>): string | null {
-  if (!in_.integration || !(in_.integration in FIELDS)) return "integration must be one of nginx, redis, mysql, postgresql, docker";
+  if (!in_.integration || !(in_.integration in FIELDS)) return "integration must be one of docker, iis, mssql, mysql, nginx, postgresql, redis";
   const allowed = FIELDS[in_.integration]!;
   for (const f of ["endpoint", "username", "password", "database"] as const) {
     if (in_[f] && !allowed.includes(f)) return `${f} is not supported by the ${in_.integration} integration`;

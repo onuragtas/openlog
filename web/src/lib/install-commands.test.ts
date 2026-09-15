@@ -198,13 +198,15 @@ describe("macOS and Windows hosts", () => {
   it("host OS requirements: integrations and host logs on any infra host, containers and PHP on Linux", () => {
     expect(findTarget("windows")?.verify).toBe("host");
     expect(findTarget("macos")?.docs).toBe("https://github.com/onuragtas/openlog/blob/master/agents/infra/README.md");
-    for (const id of ["integrations/nginx", "integrations/redis", "integrations/mysql", "integrations/postgresql", "logs/host"] as const) {
+    for (const id of ["integrations/nginx", "integrations/redis", "integrations/mysql", "integrations/postgresql", "integrations/mssql", "logs/host"] as const) {
       expect(findTarget(id)?.requires, id).toEqual(["linux", "macos", "windows"]);
     }
     for (const id of ["logs/containers", "apm/php"] as const) expect(findTarget(id)?.requires, id).toEqual(["linux"]);
-    for (const id of ["integrations/nginx", "integrations/redis", "integrations/mysql", "integrations/postgresql", "logs/host"] as const) {
+    for (const id of ["integrations/nginx", "integrations/redis", "integrations/mysql", "integrations/postgresql", "integrations/mssql", "logs/host"] as const) {
       expect(findTarget(id)?.options, id).toContain("hostOs");
     }
+    // IIS: Windows only, so there is no host OS to choose.
+    expect(findTarget("integrations/iis")).toMatchObject({ requires: ["windows"], options: [], integration: "iis", verify: "integration" });
   });
 
   it("integrations follow the host OS: password file, config path and restart", () => {
@@ -466,6 +468,40 @@ describe("integrations", () => {
     );
     expect(r.blocks.some((b) => b.containsKey)).toBe(false);
     expect(r.notes).not.toContain("placeholderKey");
+  });
+
+  it("SQL Server: monitoring login, password file and agent config per host OS", () => {
+    const r = build("integrations/mssql");
+    expect(r.blocks.map((b) => b.id)).toEqual(["sqlUser", "passwordFile", "agentConfig", "restart"]);
+    expect(r.blocks[0]).toMatchObject({ lang: "sql" });
+    expect(r.blocks[0]!.code).toContain("CREATE LOGIN openlog_monitor WITH PASSWORD = '<password>'");
+    expect(r.blocks[0]!.code).toContain("GRANT VIEW SERVER STATE TO openlog_monitor;");
+    expect(r.blocks[0]!.code).toContain("GRANT VIEW ANY DEFINITION TO openlog_monitor;");
+    expect(r.blocks[1]!.code).toBe(
+      "sudo install -m 0600 -o openlog-agent -g openlog-agent /dev/null /etc/openlog-infra-agent/mssql.password\nsudoedit /etc/openlog-infra-agent/mssql.password",
+    );
+    expect(r.blocks[2]!.code).toContain("integrations:\n  mssql:\n    username: openlog_monitor\n    password: file:/etc/openlog-infra-agent/mssql.password\n    # endpoint: sql.example.internal:1433");
+    expect(r.notes).toEqual(expect.arrayContaining(["integrationUi", "passwordPlaceholder", "mssqlAuth", "mssqlRemote", "mergeConfig"]));
+    expect(r.notes).not.toContain("placeholderKey");
+
+    const win = build("integrations/mssql", { hostOs: "windows" });
+    const byId = Object.fromEntries(win.blocks.map((b) => [b.id, b]));
+    expect(byId.passwordFile).toMatchObject({ lang: "powershell" });
+    expect(byId.passwordFile!.code).toContain("$f = 'C:\\ProgramData\\openlog\\infra-agent\\mssql.password'");
+    expect(byId.agentConfig!.code).toContain("# C:\\ProgramData\\openlog\\infra-agent\\config.yaml\nintegrations:\n  mssql:\n    username: openlog_monitor\n    password: 'file:C:\\ProgramData\\openlog\\infra-agent\\mssql.password'");
+    expect(byId.restart).toMatchObject({ lang: "powershell", code: "Restart-Service openlog-infra-agent" });
+    for (const b of win.blocks) expect(b.code, b.id).not.toMatch(/sudo|systemctl|\/etc\//);
+    expect(build("integrations/mssql", { hostOs: "darwin" }).notes).toContain("macosRoot");
+  });
+
+  it("IIS: Windows-only counter check, no credentials and no host OS variants", () => {
+    for (const hostOs of ["linux", "darwin", "windows"] as const) {
+      const r = build("integrations/iis", { hostOs });
+      expect(r.blocks.map((b) => [b.id, b.lang])).toEqual([["iisCheck", "powershell"]]);
+      expect(r.blocks[0]!.code).toContain("Get-Service W3SVC");
+      expect(r.blocks[0]!.code).toContain("Win32_PerfRawData_W3SVC_WebService");
+      expect(r.notes).toEqual(["iisNoCredentials", "iisDiscovery"]);
+    }
   });
 
   it("PostgreSQL, Redis and nginx", () => {

@@ -35,7 +35,21 @@ export type SeriesLabelKey =
   | "slotsOk"
   | "slotsPfail"
   | "slotsFail"
-  | "locks";
+  | "locks"
+  | "blockedProcesses"
+  | "batchRequests"
+  | "compilations"
+  | "recompilations"
+  | "transactions"
+  | "pageSplits"
+  | "lockWaits"
+  | "pageLife"
+  | "waitTime"
+  | "sent"
+  | "received"
+  | "attempts"
+  | "anonymous"
+  | "notFound";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -65,7 +79,22 @@ export type PanelChartId =
   | "nginxStatus"
   | "nginxUpstreams"
   | "redisCluster"
-  | "pgLocks";
+  | "pgLocks"
+  | "mssqlConnections"
+  | "mssqlBatchRequests"
+  | "mssqlTransactions"
+  | "mssqlLockWaits"
+  | "mssqlDeadlocks"
+  | "mssqlBufferCache"
+  | "mssqlPageLife"
+  | "mssqlDbSize"
+  | "mssqlWaits"
+  | "iisRequests"
+  | "iisConnections"
+  | "iisConnectionAttempts"
+  | "iisNetworkIo"
+  | "iisFiles"
+  | "iisNotFound";
 
 export interface PanelQuery {
   name: string;
@@ -95,8 +124,16 @@ export const PG_TABLE = "resource.postgresql.table.name";
 /** pg_stat_statements query resources (semantic-conventions §6.5). */
 export const PG_QUERY_ID = "resource.postgresql.queryid";
 export const PG_QUERY_TEXT = "resource.db.query.text";
+/** SQL Server data point attributes (semantic-conventions §6.7). */
+export const MSSQL_DATABASE = "sqlserver.database.name";
+export const MSSQL_WAIT_TYPE = "wait.type";
 
-const get = (d: PanelData, k: string): MetricSeries[] => d[k] ?? [];
+/** `sqlserver.page.buffer_cache.hit_ratio` is reported in % (0–100); charts and KPIs use ratios (0–1). */
+export function percentToRatio(points: Points): Points {
+  return points.map(([t, v]) => [t, v / 100]);
+}
+
+const get =(d: PanelData, k: string): MetricSeries[] => d[k] ?? [];
 const one = (label: string, points: Points): ChartSeriesInput[] => (points.length > 0 ? [{ label, points }] : []);
 const by = (series: MetricSeries[], keys: string[], fallback: string): ChartSeriesInput[] =>
   series.filter((s) => s.points.length > 0).map((s) => ({ label: seriesLabel(s.attributes, keys) || fallback, points: s.points }));
@@ -327,6 +364,133 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
       stacked: true,
       optional: true,
       build: (d, L) => by(get(d, "l"), ["mode"], L("locks")),
+    },
+  ],
+  // SQL Server (§6.7): `.rate` metrics are per-second gauges computed by the agent, so they are averaged, not rated.
+  mssql: [
+    {
+      id: "mssqlConnections",
+      queries: { c: { name: "sqlserver.user.connection.count", agg: "last" }, b: { name: "sqlserver.processes.blocked", agg: "last" } },
+      unit: "number",
+      alert: "c",
+      build: (d, L) => [...one(L("connections"), sumSeries(get(d, "c"))), ...one(L("blockedProcesses"), sumSeries(get(d, "b")))],
+    },
+    {
+      id: "mssqlBatchRequests",
+      queries: {
+        b: { name: "sqlserver.batch.request.rate", agg: "avg" },
+        c: { name: "sqlserver.batch.sql_compilation.rate", agg: "avg" },
+        r: { name: "sqlserver.batch.sql_recompilation.rate", agg: "avg" },
+      },
+      unit: "number",
+      alert: "b",
+      build: (d, L) => [...one(L("batchRequests"), sumSeries(get(d, "b"))), ...one(L("compilations"), sumSeries(get(d, "c"))), ...one(L("recompilations"), sumSeries(get(d, "r")))],
+    },
+    {
+      id: "mssqlTransactions",
+      queries: { t: { name: "sqlserver.transaction.rate", agg: "avg" }, p: { name: "sqlserver.page.split.rate", agg: "avg" } },
+      unit: "number",
+      alert: "t",
+      build: (d, L) => [...one(L("transactions"), sumSeries(get(d, "t"))), ...one(L("pageSplits"), sumSeries(get(d, "p")))],
+    },
+    {
+      id: "mssqlLockWaits",
+      queries: { l: { name: "sqlserver.lock.wait.rate", agg: "avg" } },
+      unit: "number",
+      alert: "l",
+      build: (d, L) => one(L("lockWaits"), sumSeries(get(d, "l"))),
+    },
+    {
+      id: "mssqlDeadlocks",
+      // The cumulative counter (openlog extension) loses no deadlock between collections, unlike sqlserver.deadlock.rate.
+      queries: { d: { name: "sqlserver.deadlock.count", agg: "rate" } },
+      unit: "number",
+      alert: "d",
+      build: (d, L) => one(L("deadlocks"), sumSeries(get(d, "d"))),
+    },
+    {
+      id: "mssqlBufferCache",
+      queries: { h: { name: "sqlserver.page.buffer_cache.hit_ratio", agg: "avg" } },
+      unit: "percent",
+      yMax: 1,
+      alert: "h",
+      build: (d, L) => one(L("hitRatio"), percentToRatio(sumSeries(get(d, "h")))),
+    },
+    {
+      id: "mssqlPageLife",
+      queries: { p: { name: "sqlserver.page.life_expectancy", agg: "last" } },
+      unit: "s",
+      alert: "p",
+      build: (d, L) => one(L("pageLife"), sumSeries(get(d, "p"))),
+    },
+    {
+      id: "mssqlDbSize",
+      // Rows, log, filestream and full-text files summed per database.
+      queries: { s: { name: "sqlserver.database.size", agg: "last", groupBy: [MSSQL_DATABASE] } },
+      unit: "bytes",
+      stacked: true,
+      alert: "s",
+      build: (d, L) => by(get(d, "s"), [MSSQL_DATABASE], L("used")),
+    },
+    {
+      id: "mssqlWaits",
+      // Seconds waited per second by wait type (top N wait types; needs VIEW SERVER STATE).
+      queries: { w: { name: "sqlserver.os.wait.duration", agg: "rate", groupBy: [MSSQL_WAIT_TYPE] } },
+      unit: "number",
+      stacked: true,
+      optional: true,
+      build: (d, L) => by(get(d, "w"), [MSSQL_WAIT_TYPE], L("waitTime")),
+    },
+  ],
+  // IIS (§6.8): one resource per site; the charts sum all sites of the instance.
+  iis: [
+    {
+      id: "iisRequests",
+      queries: { r: { name: "iis.request.count", agg: "rate", groupBy: ["request"] } },
+      unit: "number",
+      stacked: true,
+      order: ["get", "post", "put", "delete", "head", "options", "trace"],
+      alert: "r",
+      build: (d, L) => by(get(d, "r"), ["request"], L("requests")),
+    },
+    {
+      id: "iisConnections",
+      queries: { c: { name: "iis.connection.active", agg: "last" } },
+      unit: "number",
+      alert: "c",
+      build: (d, L) => one(L("connections"), sumSeries(get(d, "c"))),
+    },
+    {
+      id: "iisConnectionAttempts",
+      queries: { a: { name: "iis.connection.attempt.count", agg: "rate" }, n: { name: "iis.connection.anonymous", agg: "rate" } },
+      unit: "number",
+      build: (d, L) => [...one(L("attempts"), sumSeries(get(d, "a"))), ...one(L("anonymous"), sumSeries(get(d, "n")))],
+    },
+    {
+      id: "iisNetworkIo",
+      queries: { n: { name: "iis.network.io", agg: "rate", groupBy: ["direction"] } },
+      unit: "bytesPerSec",
+      order: ["sent", "received"],
+      build: (d, L) => [
+        ...one(L("sent"), sumSeries(pickSeries(get(d, "n"), "direction", ["sent"]))),
+        ...one(L("received"), sumSeries(pickSeries(get(d, "n"), "direction", ["received"]))),
+      ],
+    },
+    {
+      id: "iisFiles",
+      queries: { f: { name: "iis.network.file.count", agg: "rate", groupBy: ["direction"] } },
+      unit: "number",
+      build: (d, L) => [
+        ...one(L("sent"), sumSeries(pickSeries(get(d, "f"), "direction", ["sent"]))),
+        ...one(L("received"), sumSeries(pickSeries(get(d, "f"), "direction", ["received"]))),
+      ],
+    },
+    {
+      id: "iisNotFound",
+      queries: { n: { name: "iis.request.not_found.count", agg: "rate" } },
+      unit: "number",
+      alert: "n",
+      build: (d, L) => one(L("notFound"), sumSeries(get(d, "n"))),
     },
   ],
 };

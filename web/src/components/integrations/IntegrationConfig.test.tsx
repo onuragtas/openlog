@@ -133,6 +133,32 @@ describe("integration configuration from the UI", () => {
     expect(screen.getByText("Enter an http:// or https:// URL.")).toBeInTheDocument();
   });
 
+  it("SQL Server asks for a host:port endpoint (also remote) and credentials", async () => {
+    const user = userEvent.setup();
+    renderHarness({ integration: "mssql" });
+    const endpoint = await screen.findByLabelText("Endpoint");
+    expect(endpoint).toHaveAttribute("placeholder", "127.0.0.1:1433");
+    expect(screen.getByText("host:port of the SQL Server, which can also be a remote server. Leave empty to use the discovered endpoint.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Database")).not.toBeInTheDocument();
+    await user.type(endpoint, "sql.example.internal:1433");
+    await user.type(screen.getByLabelText("Username"), "openlog_monitor");
+    await user.type(screen.getByLabelText("Password"), "s3cret");
+    await user.click(screen.getByRole("button", { name: "Save and send to agent" }));
+    expect(await screen.findByText("Sent to the agent, waiting for it to apply the settings…")).toBeInTheDocument();
+    expect(mockStoredPassword("is-1")).toBe("s3cret");
+  });
+
+  it("IIS has no settings: no form, a no-configuration notice and the host switch", async () => {
+    renderHarness({ integration: "iis" });
+    expect(screen.getByTestId("integration-no-settings")).toHaveTextContent("No configuration needed: this integration has no settings.");
+    expect(screen.queryByLabelText("Endpoint")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save and send to agent" })).not.toBeInTheDocument();
+    const toggle = await screen.findByRole("switch", { name: "Collect Redis metrics on this host" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+  });
+
   it("is read-only below admin", async () => {
     renderHarness({ canManage: false });
     expect(await screen.findByLabelText("Endpoint")).toBeDisabled();

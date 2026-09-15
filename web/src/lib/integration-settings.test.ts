@@ -18,6 +18,9 @@ describe("endpointError", () => {
     expect(endpointError("redis", "127.0.0.1:6379")).toBeNull();
     expect(endpointError("redis", "[::1]:6379")).toBeNull();
     expect(endpointError("mysql", "unix:/run/mysqld/mysqld.sock")).toBeNull();
+    expect(endpointError("mssql", "sql.example.internal:1433")).toBeNull();
+    expect(endpointError("mssql", "sql.example.internal")).toBe("hostPort");
+    expect(endpointError("mssql", "http://sql:1433")).toBe("hostPort");
     expect(endpointError("mysql", "unix:relative.sock")).toBe("hostPort");
     expect(endpointError("postgresql", "db:99999")).toBe("hostPort");
     expect(endpointError("postgresql", "http://db:5432")).toBe("hostPort");
@@ -53,6 +56,11 @@ describe("settings of a panel", () => {
     expect(nginx).not.toHaveProperty("username");
     expect(nginx).not.toHaveProperty("password");
     expect(instanceInput("postgresql", "h1", "i", { ...d, database: "app" })).toMatchObject({ database: "app", databases: [] });
+    expect(instanceInput("mssql", "h1", "MSSQLSERVER", { ...d, endpoint: "10.0.0.9:1433", username: "openlog_monitor", password: "pw", database: "x" })).toEqual({
+      host_id: "h1", integration: "mssql", match: { instance: "MSSQLSERVER" }, enabled: true, endpoint: "10.0.0.9:1433", username: "openlog_monitor", password: "pw",
+    });
+    // IIS has no settings besides enabled.
+    expect(instanceInput("iis", "h1", "W3SVC", { ...d, endpoint: "x", username: "u", password: "p", enabled: false })).toEqual({ host_id: "h1", integration: "iis", match: { instance: "W3SVC" }, enabled: false });
   });
 });
 

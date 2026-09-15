@@ -27,6 +27,8 @@ export const TARGET_IDS = [
   "integrations/redis",
   "integrations/mysql",
   "integrations/postgresql",
+  "integrations/mssql",
+  "integrations/iis",
 ] as const;
 export type TargetId = (typeof TARGET_IDS)[number];
 
@@ -65,7 +67,7 @@ export interface InstallTarget {
   /** Options shown in the options step, in order. */
   options: OptionKey[];
   /** Integration id for integration targets (lib/integrations.ts ids). */
-  integration?: "nginx" | "redis" | "mysql" | "postgresql";
+  integration?: "nginx" | "redis" | "mysql" | "postgresql" | "mssql" | "iis";
   /** Documentation in the repository. */
   docs: string;
   /** Cards of which one must be set up first (e.g. the infra agent for PHP and host logs); several = any of them. */
@@ -101,6 +103,9 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  // SQL Server over TDS from any OS (also a remote server); IIS through Windows performance counters only.
+  { id: "integrations/mssql", group: "integrations", verify: "integration", integration: "mssql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/iis", group: "integrations", verify: "integration", integration: "iis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: ["windows"] },
 ];
 
 export function findTarget(id: string | undefined): InstallTarget | undefined {
@@ -247,6 +252,7 @@ export type BlockLabel =
   | "redisAcl"
   | "sqlUser"
   | "passwordFile"
+  | "iisCheck"
   | "verify";
 
 export interface CommandBlock {
@@ -303,7 +309,11 @@ export type NoteKey =
   | "integrationUi"
   | "integrationAuto"
   | "passwordPlaceholder"
-  | "redisAclOptional";
+  | "redisAclOptional"
+  | "mssqlAuth"
+  | "mssqlRemote"
+  | "iisNoCredentials"
+  | "iisDiscovery";
 
 export interface InstallCommands {
   blocks: CommandBlock[];
@@ -902,7 +912,34 @@ const NGINX_RELOAD: Record<HostOs, string> = {
   windows: "nginx -t; if ($LASTEXITCODE -eq 0) { nginx -s reload }",
 };
 
+/** `integrations.<name>` with a username, a password file and an optional endpoint line (a remote SQL Server). */
+function integrationConfigWithEndpoint(os: HostOs, name: string, username: string, endpointComment: string): string {
+  const file = os === "windows" ? `${AGENT_CONFIG_DIR.windows}\\${name}.password` : `${AGENT_CONFIG_DIR[os]}/${name}.password`;
+  return [
+    `# ${AGENT_CONFIG_PATH[os]}`,
+    "integrations:",
+    `  ${name}:`,
+    `    username: ${username}`,
+    `    password: ${os === "windows" ? yamlPath(`file:${file}`) : `file:${file}`}`,
+    `    # ${endpointComment}`,
+  ].join("\n");
+}
+
+/** Checks on Windows that W3SVC runs and the Web Service counters are readable (what the iis integration reads through WMI). */
+const IIS_CHECK = [
+  "Get-Service W3SVC",
+  "Get-CimInstance Win32_PerfRawData_W3SVC_WebService | Where-Object Name -ne '_Total' | Select-Object Name, CurrentConnections",
+  "# No rows: re-register the performance counters (lodctr /R) and restart W3SVC",
+].join("\n");
+
 function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
+  if (id === "iis") {
+    // Windows only, no credentials: the host OS option does not apply.
+    add(c, "iisCheck", "powershell", IIS_CHECK);
+    note(c, "iisNoCredentials");
+    note(c, "iisDiscovery");
+    return;
+  }
   const os = osOf(c);
   const shell = SHELL_LANG[os];
   note(c, "integrationUi");
@@ -962,6 +999,26 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
       add(c, "agentConfig", "yaml", integrationConfig(os, "postgresql"));
       restartAgent(c, os);
       note(c, "passwordPlaceholder");
+      break;
+    case "mssql":
+      add(
+        c,
+        "sqlUser",
+        "sql",
+        [
+          "-- SQL Server 2016+ with mixed-mode (SQL Server) authentication; run in master.",
+          "-- SQL Server 2022: VIEW SERVER PERFORMANCE STATE is enough instead of VIEW SERVER STATE.",
+          "CREATE LOGIN openlog_monitor WITH PASSWORD = '<password>', CHECK_POLICY = ON;",
+          "GRANT VIEW SERVER STATE TO openlog_monitor;",
+          "GRANT VIEW ANY DEFINITION TO openlog_monitor;   -- database sizes (sys.master_files)",
+        ].join("\n"),
+      );
+      add(c, "passwordFile", shell, passwordFile(os, "mssql"));
+      add(c, "agentConfig", "yaml", integrationConfigWithEndpoint(os, "mssql", "openlog_monitor", "endpoint: sql.example.internal:1433   # only for a remote server; local instances are discovered"));
+      restartAgent(c, os);
+      note(c, "passwordPlaceholder");
+      note(c, "mssqlAuth");
+      note(c, "mssqlRemote");
       break;
   }
   note(c, "mergeConfig");

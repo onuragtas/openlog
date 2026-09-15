@@ -153,7 +153,7 @@ journalctl -u openlog-infra-agent -f
 ```
 
 On the openlog server itself use `endpoint: http://127.0.0.1:4318`. The host appears under **Hosts** within about a
-minute, with metrics, inventory and discovered services. Integrations (nginx, Redis, MySQL, PostgreSQL) and log
+minute, with metrics, inventory and discovered services. Integrations (nginx, Redis, MySQL, PostgreSQL, SQL Server, IIS) and log
 collection are configured in the same file — see [agents/infra/README.md](agents/infra/README.md).
 A source-built agent has no release keys compiled in, so it does not update itself; release installs do.
 

@@ -115,6 +115,30 @@ function packages(host: string): InventoryItem[] {
 
 function services(host: string): InventoryItem[] {
   const svc = (s: DiscoveredService): InventoryItem => ({ category: "discovered_service", key: `${s.rule_id}:${s.instance}`, data: s });
+  // Windows host (semantic-conventions §6.7, §6.8): IIS collects, the default SQL Server instance collects, a named instance needs a login.
+  if (host === "win-iis-1") {
+    return [
+      svc({
+        rule_id: "iis", name: "IIS", category: "web", instance: "W3SVC", command: "w3wp", version: "10.0.20348.1",
+        matched_by: ["service", "process"], pids: [4120, 4388], ports: [{ protocol: "tcp", address: "0.0.0.0", port: 80 }, { protocol: "tcp", address: "0.0.0.0", port: 443 }],
+        integration: { id: "iis", status: "enabled" }, apm_hint: null,
+      }),
+      svc({
+        rule_id: "mssql", name: "Microsoft SQL Server", category: "database", instance: "MSSQLSERVER", command: "sqlservr", version: "16.0.4135.4",
+        matched_by: ["service", "process", "listening_port"], pids: [2984], ports: [{ protocol: "tcp", address: "0.0.0.0", port: 1433 }],
+        integration: { id: "mssql", status: "enabled", endpoint: "127.0.0.1:1433" }, apm_hint: null,
+      }),
+      svc({
+        rule_id: "mssql", name: "Microsoft SQL Server", category: "database", instance: "MSSQL$REPORTING", command: "sqlservr", version: "16.0.4135.4",
+        matched_by: ["service", "process", "listening_port"], pids: [3120], ports: [{ protocol: "tcp", address: "0.0.0.0", port: 1434 }],
+        integration: {
+          id: "mssql", status: "needs_configuration", error: "credentials required",
+          hint: "integrations:\n  mssql:\n    instances:\n      - match: {port: 1434}\n        # SQL login with VIEW SERVER STATE and VIEW ANY DEFINITION\n        username: openlog_monitor\n        password: 'file:C:\\ProgramData\\openlog\\infra-agent\\mssql.password'\n",
+        },
+        apm_hint: null,
+      }),
+    ];
+  }
   // Integration objects as the agent reports them (semantic-conventions §3.4): web-1's Redis collects,
   // db-1's Redis requires a password (needs_configuration + hint).
   const redisIntegration: DiscoveredService["integration"] =
@@ -436,13 +460,18 @@ function integrationResources() {
   redis: { "openlog.discovery.id": "redis", "openlog.discovery.instance": "/usr/bin/redis-check-rdb", "openlog.integration.id": "redis", "service.instance.id": "web-1:6379", "server.address": "127.0.0.1", "server.port": "6379", "redis.version": "7.0.15" },
   postgresql: { "openlog.discovery.id": "postgresql", "openlog.discovery.instance": "/usr/lib/postgresql/16/bin/postgres", "openlog.integration.id": "postgresql", "service.instance.id": "db-1:5432", "server.address": "127.0.0.1", "server.port": "5432" },
   mariadb: { "openlog.discovery.id": "mariadb", "openlog.discovery.instance": "/usr/sbin/mariadbd", "openlog.integration.id": "mysql", "service.instance.id": "5b0e1c52-7a41-5d8e-9c1f-2a3b4c5d6e7f", "server.address": "127.0.0.1", "server.port": "3306", "mysql.instance.endpoint": "127.0.0.1:3306" },
+  mssql: { "openlog.discovery.id": "mssql", "openlog.discovery.instance": "MSSQLSERVER", "openlog.integration.id": "mssql", "service.instance.id": "win-iis-1:1433", "server.address": "127.0.0.1", "server.port": "1433", "sqlserver.version": "16.0.4135.4", "sqlserver.instance.name": "MSSQLSERVER" },
+  // IIS has no endpoint; one resource per site.
+  iis: { "openlog.discovery.id": "iis", "openlog.discovery.instance": "W3SVC", "openlog.integration.id": "iis" },
   };
 }
 
 type MockSeries = MetricDef["series"][number];
 
 function integrationMetrics(): Record<string, MetricDef> {
-  const { nginx: N, redis: R, postgresql: P, mariadb: M } = integrationResources();
+  const { nginx: N, redis: R, postgresql: P, mariadb: M, mssql: S, iis: I } = integrationResources();
+  const site = (name: string) => ({ ...I, "iis.site": name });
+  const sites: [string, number][] = [["Default Web Site", 1], ["api", 0.45]];
   const epoch = 1_757_000_000;
   // Monotonic counters: `rate` → per-second rate, otherwise a growing cumulative value.
   const counter = (resource: Record<string, string>, attributes: Record<string, string>, perSec: (t: number) => number): MockSeries => ({
@@ -511,5 +540,37 @@ function integrationMetrics(): Record<string, MetricDef> {
       type: "gauge", unit: "s",
       series: ([["write", 0], ["flush", 0], ["replay", 1]] as const).map(([operation, base]) => gauge(P, { operation, replication_client: "10.0.1.31" }, (t) => Math.round(base * (1 + 3 * wave(t, 1800))))),
     },
+    // SQL Server (win-iis-1, MSSQLSERVER)
+    "sqlserver.user.connection.count": { type: "gauge", unit: "{connections}", series: [gauge(S, {}, (t) => Math.round(64 * load(t, 51)))] },
+    "sqlserver.processes.blocked": { type: "gauge", unit: "{processes}", series: [gauge(S, {}, (t) => Math.max(0, Math.round(3 * wave(t, 1500) - 1.5)))] },
+    "sqlserver.batch.request.rate": { type: "gauge", unit: "{requests}/s", series: [gauge(S, {}, (t) => 420 * load(t, 52))] },
+    "sqlserver.batch.sql_compilation.rate": { type: "gauge", unit: "{compilations}/s", series: [gauge(S, {}, (t) => 38 * load(t, 53))] },
+    "sqlserver.batch.sql_recompilation.rate": { type: "gauge", unit: "{compilations}/s", series: [gauge(S, {}, (t) => 2.5 * load(t, 54))] },
+    "sqlserver.transaction.rate": { type: "gauge", unit: "{transactions}/s", series: [gauge(S, {}, (t) => 180 * load(t, 55))] },
+    "sqlserver.page.split.rate": { type: "gauge", unit: "{pages}/s", series: [gauge(S, {}, (t) => 6 * load(t, 56))] },
+    "sqlserver.lock.wait.rate": { type: "gauge", unit: "{requests}/s", series: [gauge(S, {}, (t) => 1.2 * wave(t, 1200))] },
+    "sqlserver.deadlock.count": mono("{deadlocks}", [counter(S, {}, (t) => Math.max(0, 0.01 * wave(t, 3000) - 0.006))]),
+    "sqlserver.page.buffer_cache.hit_ratio": { type: "gauge", unit: "%", series: [gauge(S, {}, (t) => 99.2 + 0.7 * wave(t, 2400))] },
+    "sqlserver.page.life_expectancy": { type: "gauge", unit: "s", series: [gauge(S, { "performance_counter.object_name": "Buffer Manager" }, (t) => Math.round(1800 + (t % 3600)))] },
+    "sqlserver.database.size": {
+      type: "sum", unit: "By",
+      series: ([["Sales", "rows", 5.4e10], ["Sales", "log", 8.2e9], ["ReportServer", "rows", 1.1e9], ["ReportServer", "log", 2.6e8], ["master", "rows", 6.1e6], ["tempdb", "rows", 8.4e9]] as const).map(([db, file, size]) =>
+        gauge(S, { "sqlserver.database.name": db, file_type: file }, (t) => Math.round(size * (1 + 0.01 * wave(t, 86400))))),
+    },
+    "sqlserver.os.wait.duration": {
+      type: "sum", unit: "s", monotonic: true,
+      series: ([["PAGEIOLATCH_SH", "Buffer IO", 0.35], ["LCK_M_X", "Lock", 0.12], ["WRITELOG", "Tran Log IO", 0.2], ["CXPACKET", "Parallelism", 0.28], ["ASYNC_NETWORK_IO", "Network IO", 0.08]] as const).map(([type, category, r]) =>
+        counter(S, { "wait.type": type, "wait.category": category }, (t) => r * load(t, 57))),
+    },
+    // IIS (win-iis-1, two sites)
+    "iis.connection.active": { type: "sum", unit: "{connections}", series: sites.map(([name, share]) => gauge(site(name), {}, (t) => Math.round(120 * share * load(t, 61)))) },
+    "iis.connection.attempt.count": mono("{attempts}", sites.map(([name, share]) => counter(site(name), {}, (t) => 14 * share * load(t, 62)))),
+    "iis.connection.anonymous": mono("{connections}", sites.map(([name, share]) => counter(site(name), {}, (t) => 11 * share * load(t, 63)))),
+    "iis.request.count": mono("{requests}", sites.flatMap(([name, share]) =>
+      ([["get", 60], ["post", 14], ["put", 3], ["delete", 1], ["head", 2], ["options", 0.5], ["trace", 0]] as const).map(([request, r]) => counter(site(name), { request }, (t) => r * share * load(t, 64))))),
+    "iis.request.not_found.count": mono("{requests}", sites.map(([name, share]) => counter(site(name), {}, (t) => 0.8 * share * load(t, 65)))),
+    "iis.network.io": mono("By", sites.flatMap(([name, share]) => ([["sent", 1.8e6], ["received", 2.2e5]] as const).map(([direction, r]) => counter(site(name), { direction }, (t) => r * share * load(t, 66))))),
+    "iis.network.file.count": mono("{files}", sites.flatMap(([name, share]) => ([["sent", 42], ["received", 0.4]] as const).map(([direction, r]) => counter(site(name), { direction }, (t) => r * share * load(t, 67))))),
+    "iis.application_pool.state": { type: "gauge", unit: "{state}", series: [gauge({ ...I, "iis.application_pool": "DefaultAppPool" }, {}, () => 3), gauge({ ...I, "iis.application_pool": "api" }, {}, () => 3)] },
   };
 }

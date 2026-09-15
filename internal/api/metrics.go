@@ -283,6 +283,9 @@ var metricResourceKeys = map[string]bool{
 	"postgresql.queryid": true,
 	"postgresql.rolname": true,
 	"db.query.text":      true,
+	// IIS site and application pool resources (semantic-conventions §6.8)
+	"iis.site":             true,
+	"iis.application_pool": true,
 }
 
 const maxMetricResourceFilters = 4

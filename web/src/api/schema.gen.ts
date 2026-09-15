@@ -6154,7 +6154,7 @@ export interface components {
             created_at: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        IntegrationName: "nginx" | "redis" | "mysql" | "postgresql" | "docker";
+        IntegrationName: "nginx" | "redis" | "mysql" | "postgresql" | "docker" | "mssql" | "iis";
         IntegrationMatch: {
             port: number | null;
             container: string;

@@ -47,7 +47,7 @@ function tipsFor(target: InstallTarget): TipKey[] {
 /** OS of the agent the tips talk about: the host card itself, or the host OS option of host-scoped cards; PHP is Linux. */
 function tipOs(target: InstallTarget, options: InstallOptions): HostOs {
   if (target.id === "macos") return "darwin";
-  if (target.id === "windows") return "windows";
+  if (target.id === "windows" || target.id === "integrations/iis") return "windows";
   if (target.options.includes("hostOs")) return options.hostOs;
   return "linux";
 }

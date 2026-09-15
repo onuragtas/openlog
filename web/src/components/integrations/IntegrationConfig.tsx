@@ -99,6 +99,11 @@ export function IntegrationConfigPanel({ hostId, hostName, instance, integration
       </h2>
       {error && <p className="mt-2 font-mono text-sm break-words">{error}</p>}
 
+      {CONFIG_FIELDS[integration].length === 0 && (
+        <p className="mt-3 text-sm" data-testid="integration-no-settings">
+          {t("integrations.panel.config.noSettings")}
+        </p>
+      )}
       {CONFIG_FIELDS[integration].length > 0 && (
         <div className="mt-4 rounded-lg border bg-card p-3 sm:p-4">
           <h3 className="text-sm font-semibold">{t("integrations.panel.config.title")}</h3>
@@ -202,7 +207,9 @@ function ConfigForm({
                 ? t(`integrations.panel.config.errors.${epError}`)
                 : integration === "nginx"
                   ? t("integrations.panel.config.endpointHelpNginx")
-                  : t("integrations.panel.config.endpointHelp")}
+                  : integration === "mssql"
+                    ? t("integrations.panel.config.endpointHelpMssql")
+                    : t("integrations.panel.config.endpointHelp")}
             </p>
           </div>
         )}
