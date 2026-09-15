@@ -455,6 +455,9 @@ describe("OpenTelemetry", () => {
 
     const grpc = build("otel/collector", { protocol: "grpc" }, { otlp_grpc: { url: "http://10.0.0.5:4317" } });
     expect(grpc.blocks[1]!.code).toContain('  otlp/openlog:\n    endpoint: "10.0.0.5:4317"\n    tls:\n      insecure: true');
+    // The default https port is kept (URL drops it): the gRPC exporter needs host:port.
+    const tls = build("otel/collector", { protocol: "grpc" }, { otlp_grpc: { url: "https://apm.example.com:443" } });
+    expect(tls.blocks[1]!.code).toContain('  otlp/openlog:\n    endpoint: "apm.example.com:443"\n    headers:');
     expect(grpc.notes).toContain("grpcInsecure");
   });
 });

@@ -837,7 +837,8 @@ function collector(c: Ctx) {
     try {
       const u = new URL(c.grpc);
       insecure = u.protocol === "http:";
-      hostPort = u.host || c.grpc;
+      // URL drops the scheme's default port (https://host:443 → host), but the gRPC exporter needs host:port.
+      hostPort = u.hostname ? `${u.host}${u.port ? "" : insecure ? ":80" : ":443"}` : c.grpc;
     } catch {
       // keep the configured value
     }
