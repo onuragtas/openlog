@@ -122,7 +122,8 @@ function Panel({
           <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 break-words text-muted-foreground">
             {tipsFor(common.target).map((k) => (
               <li key={k}>
-                {tDynamic(t, `addData.verify.tips.${k}`, {
+                {/* No expected service name (OpenTelemetry Collector: any new service): a tip without a quoted name. */}
+                {tDynamic(t, `addData.verify.tips.${k === "serviceName" && !service ? "serviceNameAny" : k}`, {
                   endpoint: common.endpoint,
                   name: service ?? "",
                   command: k === "agentConfig" ? agentSelfTest(os).code : agentLog(os).code,

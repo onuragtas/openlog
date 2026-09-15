@@ -201,6 +201,21 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
     expect(link).toHaveAttribute("href", "/apm/services/billing");
   });
 
+  it("OpenTelemetry Collector card asks no service name and its tips quote none", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    server.use(http.get("*/api/v1/apm/services", () => HttpResponse.json({ step: "60s", services: [] })));
+    const user = userEvent.setup();
+    renderFlow("otel/collector", ONBOARDING, { intervalMs: 50, timeoutMs: 1 });
+    await user.click(await screen.findByRole("radio", { name: /Use a placeholder/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.queryByLabelText("Service name")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(await screen.findByRole("button", { name: "I ran the commands" }));
+    const tips = await screen.findByTestId("verify-tips");
+    expect(tips).toHaveTextContent("Your services must report a service.name and receive some traffic.");
+    expect(tips.textContent).not.toContain("“”");
+  });
+
   it("integration cards need no key and link to the integrations page", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();

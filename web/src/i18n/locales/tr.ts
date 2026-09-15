@@ -1431,6 +1431,7 @@ export const tr: Messages = {
         dockerLogs: "Agent logu: docker logs openlog-infra-agent",
         kubectlLogs: "Agent logu: kubectl -n openlog-agent logs ds/openlog-agent-openlog-agent-node",
         serviceName: "Servis service.name olarak “{{name}}” göndermeli ve biraz trafik almalı.",
+        serviceNameAny: "Servisleriniz bir service.name göndermeli ve biraz trafik almalı.",
         appLogs: "Gönderim hataları uygulamanın stderr çıktısına yazılır.",
         cors: "Tarayıcı konsolunda CORS hatalarına bakın: OPENLOG_INGEST_CORS_ALLOWED_ORIGINS sayfanın origin'ini içermeli.",
         agentConfig: "Yapılandırmayı kontrol edin: {{command}}",

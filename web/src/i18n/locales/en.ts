@@ -1430,6 +1430,7 @@ export const en = {
         dockerLogs: "Agent log: docker logs openlog-infra-agent",
         kubectlLogs: "Agent log: kubectl -n openlog-agent logs ds/openlog-agent-openlog-agent-node",
         serviceName: "The service must report service.name “{{name}}” and receive some traffic.",
+        serviceNameAny: "Your services must report a service.name and receive some traffic.",
         appLogs: "Export errors are printed on the application's stderr.",
         cors: "Check the browser console for CORS errors: OPENLOG_INGEST_CORS_ALLOWED_ORIGINS must contain the page origin.",
         agentConfig: "Check the configuration: {{command}}",
