@@ -131,6 +131,11 @@ export function InstallFlow({
                 ))}
               </dl>
             )}
+            {needsKey && target.options.includes("protocol") && options.protocol === "grpc" && (
+              <p className="rounded-lg border border-warning/60 bg-warning/10 p-3 text-sm" data-testid="grpc-http2-note">
+                {t("addData.install.grpcHttp2")}
+              </p>
+            )}
             {licenseKey && commands.blocks.some((b) => b.containsKey) && (
               <Button type="button" variant="outline" size="sm" className="w-fit" aria-pressed={revealed} onClick={() => setRevealed((r) => !r)}>
                 {revealed ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}

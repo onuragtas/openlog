@@ -216,6 +216,22 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
     expect(tips.textContent).not.toContain("“”");
   });
 
+  it("warns that gRPC needs HTTP/2 only when the gRPC protocol is chosen", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderFlow("otel/collector");
+    await user.click(await screen.findByRole("radio", { name: /Use a placeholder/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findAllByTestId("command-block");
+    expect(screen.queryByTestId("grpc-http2-note")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Options/ }));
+    await user.selectOptions(screen.getByLabelText("Protocol"), "grpc");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByTestId("grpc-http2-note")).toHaveTextContent("gRPC needs HTTP/2 end to end");
+  });
+
   it("OpenTelemetry Collector card succeeds on new logs alone and links to them", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     let logServices = [{ value: "java-app", count: 10 }];
