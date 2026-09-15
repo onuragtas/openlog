@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -18,7 +19,8 @@ func TestApplyInstallUpgradePrune(t *testing.T) {
 	if InstalledVersion(e.root) != "1.0.0" || e.linkTarget() != e.jarPath("1.0.0") {
 		t.Fatalf("current %q, link %q", InstalledVersion(e.root), e.linkTarget())
 	}
-	if fi, err := os.Stat(e.jarPath("1.0.0")); err != nil || fi.Mode().Perm() != 0o644 {
+	// Windows has no POSIX modes (ACLs protect the install root): only the existence is checked there.
+	if fi, err := os.Stat(e.jarPath("1.0.0")); err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o644) {
 		t.Fatalf("jar: %v %v", fi, err)
 	}
 	if _, err := os.Stat(filepath.Join(e.root, MarkerFile)); err != nil {
