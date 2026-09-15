@@ -479,6 +479,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: make shellcheck
       - run: make actionlint
+      - name: install-server.sh HOST:PORT parsing (no Docker)
+        run: sh packaging/test/install-server-ports.sh
 
   release-dryrun:
     name: release dry run (test keys, packages, install.sh)

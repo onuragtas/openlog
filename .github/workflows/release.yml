@@ -93,7 +93,7 @@ jobs:
             echo "prepared=true" >> "$GITHUB_OUTPUT"
           else
             echo "prepared=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Go agent modules are not prepared for v$VERSION; Go module tags are skipped (make release-prepare VERSION=$VERSION before the next tag)"
+            echo "::warning::the tagged commit is not prepared for v$VERSION (make release-prepare VERSION=$VERSION): Go module tags are skipped, and git clone installations of this tag report its compose files as older than v$VERSION (x-openlog-compose-version). The compose release asset is stamped correctly."
           fi
       - name: modules build without replace against the tagged requires
         if: steps.check.outputs.prepared == 'true'
