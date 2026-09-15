@@ -44,6 +44,7 @@ export const usageStatusQuery = () =>
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     retry: false,
+    meta: { autoRefresh: false },
   });
 
 export const plansQuery = () =>

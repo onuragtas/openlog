@@ -29,6 +29,7 @@ export const operatorMeQuery = () =>
     queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/operator/me", { signal })),
     staleTime: 5 * 60_000,
     retry: false,
+    meta: { autoRefresh: false },
   });
 
 export const operatorOrgsQuery = (f: OperatorOrgFilter) =>
@@ -63,6 +64,7 @@ export const orgSaaSStateQuery = () =>
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
     retry: false,
+    meta: { autoRefresh: false },
   });
 
 export type OperatorAction = "suspend" | "unsuspend" | "reset-quota-notifications" | "force-logout" | "resend-verification";

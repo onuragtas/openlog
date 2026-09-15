@@ -501,6 +501,15 @@ export const tr: Messages = {
     last: "Son {{range}}",
     editCustom: "Özel aralığı düzenle",
   },
+  autoRefresh: {
+    label: "Otomatik yenileme",
+    labelOff: "Otomatik yenileme: kapalı",
+    every: "{{interval}} aralıkla otomatik yenile",
+    off: "Kapalı",
+    refreshNow: "Şimdi yenile",
+    absoluteDisabled: "Otomatik yenileme göreli zaman aralıklarında çalışır (örneğin son 1 saat); özel aralık ilerlemez. Şimdi yenile verileri yine yükler.",
+    intervals: { "5s": "5 sn", "10s": "10 sn", "30s": "30 sn", "1m": "1 dk", "5m": "5 dk", "15m": "15 dk" },
+  },
   login: {
     title: "openlog'a giriş yap",
     description: "openlog hesabınızın e-posta adresini ve parolasını kullanın.",

@@ -500,6 +500,15 @@ export const en = {
     last: "Last {{range}}",
     editCustom: "Edit custom range",
   },
+  autoRefresh: {
+    label: "Auto-refresh",
+    labelOff: "Auto-refresh: off",
+    every: "Auto-refresh every {{interval}}",
+    off: "Off",
+    refreshNow: "Refresh now",
+    absoluteDisabled: "Auto-refresh works with relative time ranges (for example the last hour); a custom range does not move. Refresh now still reloads the data.",
+    intervals: { "5s": "5s", "10s": "10s", "30s": "30s", "1m": "1m", "5m": "5m", "15m": "15m" },
+  },
   login: {
     title: "Sign in to openlog",
     description: "Use the email address and password of your openlog account.",

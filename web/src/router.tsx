@@ -2,7 +2,7 @@
 // (`range`, `from`, `to`) from the root; screens add their own filters, so all
 // filters live in the URL.
 import type { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect } from "@tanstack/react-router";
+import { createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, retainSearchParams } from "@tanstack/react-router";
 import { meQuery } from "@/api/account";
 import { ApiError } from "@/api/client";
 import { SSO_ERROR_CODES, ssoLogoutStatus, type SsoErrorCode, type SsoLogoutStatus } from "@/api/sso";
@@ -11,6 +11,7 @@ import { LoadingState } from "@/components/StateViews";
 import { NotFoundPage } from "@/routes/not-found";
 import { LoginPage } from "@/routes/login";
 import { validateRangeSearch, type RangeSpec } from "@/lib/time";
+import { parseRefreshInterval, type RefreshInterval } from "@/lib/auto-refresh";
 import { sanitizeFiltersSearch, type DashboardFilter } from "@/lib/dashboard-filters";
 import { sanitizeVarsSearch } from "@/lib/dashboards";
 import { normalizeColumns } from "@/lib/logs-explorer";
@@ -93,8 +94,15 @@ const embeddedLogsSearch = (s: Record<string, unknown>): EmbeddedLogsSearch => (
   ltv: str(s.ltv)?.slice(0, 256),
 });
 
+/** Search params of every route: the time range and the auto-refresh interval (lib/auto-refresh.ts). */
+export interface RootSearch extends RangeSpec {
+  refresh?: RefreshInterval;
+}
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  validateSearch: (search: Record<string, unknown>): RangeSpec => validateRangeSearch(search),
+  validateSearch: (search: Record<string, unknown>): RootSearch => ({ ...validateRangeSearch(search), refresh: parseRefreshInterval(search.refresh) }),
+  // Links build `{ range, from, to }` explicitly; `refresh` is carried along unless a navigation sets it.
+  search: { middlewares: [retainSearchParams(["refresh"])] },
   component: Outlet,
   notFoundComponent: NotFoundPage,
 });

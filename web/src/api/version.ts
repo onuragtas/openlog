@@ -38,6 +38,7 @@ export const versionQuery = ({ followId = null }: { followId?: string | null } =
     queryKey: ["version"],
     queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/version", { signal })),
     staleTime: 15 * 60_000,
+    meta: { autoRefresh: false },
     refetchInterval: (q) =>
       followingRequest(q.state.data, followId, q.state.status !== "error") || updateInProgress(q.state.data)
         ? FOLLOW_REFRESH_MS

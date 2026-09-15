@@ -19,8 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { AutoRefreshControl } from "@/components/AutoRefreshControl";
+import { useAutoRefresh } from "@/lib/use-auto-refresh";
+import { autoRefreshMs, effectiveRefresh, parseRefreshInterval, readStoredRefresh, storeRefresh } from "@/lib/auto-refresh";
 import { useNavDrawer } from "@/lib/nav-drawer";
-import type { RangeSpec } from "@/lib/time";
+import { isCustomRange, type RangeSpec } from "@/lib/time";
+import { useState } from "react";
 
 const NAV = [
   { to: "/add-data", icon: PlusCircle, label: "addData.nav" },
@@ -54,6 +58,30 @@ export function UrlTimeRangePicker() {
           replace: false,
         } as never)
       }
+    />
+  );
+}
+
+/**
+ * Refresh now + auto-refresh interval bound to the URL (`refresh`, retained across navigations by the root route) with
+ * the browser's remembered choice as the default. Ticks only for relative ranges.
+ */
+export function UrlAutoRefreshControl() {
+  const search = useSearch({ strict: false }) as RangeSpec & { refresh?: string };
+  const navigate = useNavigate();
+  const [stored, setStored] = useState(readStoredRefresh);
+  const range = { range: search.range, from: search.from, to: search.to };
+  const value = effectiveRefresh(parseRefreshInterval(search.refresh), stored);
+  useAutoRefresh(autoRefreshMs(range, value));
+  return (
+    <AutoRefreshControl
+      value={value}
+      disabled={isCustomRange(range)}
+      onChange={(v) => {
+        storeRefresh(v);
+        setStored(v);
+        void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, refresh: v }), replace: true } as never);
+      }}
     />
   );
 }
@@ -195,6 +223,7 @@ export function AppShell() {
           <OrgSwitcher className="mr-auto" />
           <AddDataButton />
           {showRange && <UrlTimeRangePicker />}
+          {showRange && <UrlAutoRefreshControl />}
           <div className="hidden items-center gap-2 md:flex">
             <AccountLanguageSwitch />
             <ThemeToggle />

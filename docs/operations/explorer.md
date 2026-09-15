@@ -4,6 +4,23 @@ The **Logs** (`/logs`), **Traces** (`/traces`) and **Metrics** (`/metrics`) page
 metric of the organization with the same query builder (D-118, D-119, D-122). API:
 [api.md "Fields"](../contracts/api.md#fields), "Logs", "Traces", "Metrics", [“Saved views”](../contracts/api.md#saved-views).
 
+## Time range and auto-refresh
+
+The time range picker in the top bar (15 min … 7 days, or a custom from/to) applies to every page that shows data over
+time: explorers, APM, hosts and containers detail, Kubernetes, the query console and dashboards. Next to it:
+
+- **Refresh now** (circular arrow) reloads the data of the current page at once; with a relative range ("last 1 hour")
+  the window moves up to the current time. It spins while data is loading.
+- **Auto-refresh** menu: *Off*, 5s, 10s, 30s, 1m, 5m or 15m. The active interval shows on the button with a dot. On
+  phones both live in one icon menu.
+
+The interval is the `refresh` URL parameter (`?range=1h&refresh=30s`), so a copied link auto-refreshes too, and it stays
+while you move between pages. The last choice is remembered in the browser and used when a link has no `refresh`.
+Auto-refresh only runs for relative ranges; a custom from/to range does not move, so the menu is disabled there (Refresh
+now still works). It pauses while the browser tab is hidden and refreshes once when you come back, if an interval has
+passed, and skips a tick while the previous refresh is still loading. Pages without the time range picker (Hosts list,
+Inventory, Fleet, Alerts, Settings, trace detail) keep their own periodic updates.
+
 ## Query builder
 
 Type in the filter bar to pick a **key**, then an **operator**, then a **value**; suggestions come from the data of the

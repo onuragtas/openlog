@@ -38,6 +38,7 @@ export const meQuery = () =>
       return remember(unwrap(res));
     },
     staleTime: 5 * 60_000,
+    meta: { autoRefresh: false },
   });
 
 export function useMe() {
@@ -49,6 +50,7 @@ export const authConfigQuery = () =>
     queryKey: ["auth", "config"],
     queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/auth/config", { signal })),
     staleTime: Infinity,
+    meta: { autoRefresh: false },
   });
 
 export const currentOrgQuery = () =>
