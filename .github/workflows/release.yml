@@ -836,17 +836,16 @@ jobs:
           for a in darwin_amd64.tar.gz darwin_arm64.tar.gz darwin_amd64.pkg darwin_arm64.pkg windows_amd64.zip windows_amd64.msi windows_arm64.zip windows_arm64.msi; do
             grep -q "\"name\": \"openlog-infra-agent_${VERSION}_$a\"" "dist/v$VERSION/manifest.json" || { echo "::error::infra agent $a missing from the manifest"; exit 1; }
           done
-          # The manifests embedded in the MSI and pkg (D-113) must describe the same release as the published one; they
-          # differ only in artifacts (archives only) and images (not needed by the agent).
+          # The manifests embedded in the MSI and pkg (D-113) must describe the same release as the published one. Only the
+          # fields the agent reads are compared (every embedded artifact must equal its published entry); file lists the
+          # embedded manifest cannot contain yet (images, helm_chart(s), migrations, other components) are not.
           python3 - "dist/v$VERSION/manifest.json" "$RUNNER_TEMP"/embedded-manifests/*/manifest.json <<'EOF'
           import json, sys
           published = json.load(open(sys.argv[1]))
           names = {a["name"] for a in published["artifacts"]}
           for path in sys.argv[2:]:
               embedded = json.load(open(path))
-              for key in sorted(set(published) | set(embedded)):
-                  if key in ("artifacts", "images"):
-                      continue
+              for key in ("schema", "product", "version", "channel", "compatibility"):
                   if published.get(key) != embedded.get(key):
                       sys.exit(f"::error::{path}: {key} differs from the published manifest: {embedded.get(key)!r} != {published.get(key)!r}")
               for a in embedded["artifacts"]:
