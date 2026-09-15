@@ -387,6 +387,12 @@ func TestComposeUpdateAndRollback(t *testing.T) {
 	if migrates[0].HostConfig["NetworkMode"] != "proj_default" || migrates[0].Config["Image"] != img091 {
 		t.Errorf("migrate spec %+v", migrates[0])
 	}
+	// File mounts reach migrate (OPENLOG_PLANS_FILE=/releases/plans.json and similar settings point into them);
+	// ports and the restart policy of the app do not.
+	if hc := migrates[0].HostConfig; !slices.Equal(toStrings(hc["Binds"]), []string{"/srv/openlog:/data:rw"}) ||
+		hc["PortBindings"] != nil || hc["RestartPolicy"] != nil {
+		t.Errorf("migrate host config %v", hc)
+	}
 	// The recreated container keeps compose settings and drops old-image defaults.
 	app := apps[0]
 	labels := app.Config["Labels"].(map[string]any)

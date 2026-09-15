@@ -476,7 +476,35 @@ func (e *ComposeEngine) pruneBackups() {
 	}
 }
 
-// runMigrate runs openlog-migrate from image as a one-off container with the environment and
+// migrateHostConfigKeys are the HostConfig settings the one-off openlog-migrate container takes from the openlog
+// container: file mounts (settings such as OPENLOG_PLANS_FILE=/releases/plans.json or TLS certificate paths point
+// into them) and name resolution. Ports, restart policy, devices and resource limits are not copied.
+var migrateHostConfigKeys = []string{"NetworkMode", "Binds", "Mounts", "Tmpfs", "ExtraHosts", "Dns", "DnsOptions", "DnsSearch"}
+
+func migrateHostConfig(from map[string]any) map[string]any {
+	hc := map[string]any{}
+	for _, k := range migrateHostConfigKeys {
+		if v, ok := from[k]; ok && v != nil {
+			hc[k] = copyJSONValue(v)
+		}
+	}
+	return hc
+}
+
+// copyJSONValue deep-copies a value decoded from JSON (maps, slices, strings, numbers).
+func copyJSONValue(v any) any {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return v
+	}
+	var out any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return v
+	}
+	return out
+}
+
+// runMigrate runs openlog-migrate from image as a one-off container with the environment, file mounts and
 // networks of template (a running openlog container), refreshed by envFor when set.
 func (e *ComposeEngine) runMigrate(ctx context.Context, template *Container, image, label string, envFor envFunc) (string, error) {
 	oldImg, _ := e.Docker.InspectImage(ctx, template.Image)
@@ -493,7 +521,7 @@ func (e *ComposeEngine) runMigrate(ctx context.Context, template *Container, ima
 			"Image": image, "Entrypoint": e.Cfg.MigrateCommand, "Cmd": []string{}, "Env": env,
 			"Labels": map[string]string{labelUpdater: "migrate"},
 		},
-		HostConfig:   map[string]any{"NetworkMode": template.HostConfig["NetworkMode"]},
+		HostConfig:   migrateHostConfig(template.HostConfig),
 		Networks:     nets,
 		NetworkOrder: order,
 	}
