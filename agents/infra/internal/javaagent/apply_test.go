@@ -34,16 +34,23 @@ func TestApplyInstallUpgradePrune(t *testing.T) {
 		t.Fatalf("request handled twice: %+v", again)
 	}
 
-	old, _ := os.Open(e.link) // a running JVM keeps its open file across the switch
-	defer old.Close()
+	// A running JVM keeps its open file across the switch (Linux/macOS: link swap). On Windows an open jar blocks the
+	// copy + rename, which reports restart_pending instead (TestApplyWindowsCopy covers that path).
+	var old *os.File
+	if runtime.GOOS != "windows" {
+		old, _ = os.Open(e.link)
+		defer old.Close()
+	}
 	e.stage("1.1.0", "1.0.0")
 	st = e.apply(ActionInstall, "1.1.0")
 	if st.Result != ResultApplied || st.Operation != OpUpgrade || st.Previous != "1.0.0" || e.linkTarget() != e.jarPath("1.1.0") ||
 		len(st.Switches) != 2 || len(st.LinkSwitches) != 2 || st.LinkSwitches[0].Version != "1.1.0" {
 		t.Fatalf("upgrade = %+v", st)
 	}
-	if v := jarVersionOfFile(t, old); v != "1.0.0" {
-		t.Fatalf("the open jar changed under the JVM: %q", v)
+	if old != nil {
+		if v := jarVersionOfFile(t, old); v != "1.0.0" {
+			t.Fatalf("the open jar changed under the JVM: %q", v)
+		}
 	}
 
 	e.stage("1.2.0", "1.0.0")
