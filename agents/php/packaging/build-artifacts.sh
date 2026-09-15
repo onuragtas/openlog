@@ -44,6 +44,20 @@ mkdir -p "$STAGE/modules" "$STAGE/bin" "$WORK/src" "$WORK/logs"
 rsync -a --exclude modules --exclude '*.o' --exclude '*.lo' --exclude .libs --exclude autom4te.cache \
   --exclude tests --exclude fuzz --exclude build "$PHP_DIR/ext/" "$WORK/src/"
 
+# pull_image <image> [--platform <p>]: a local image is enough; otherwise up to four pulls with backoff, so a transient
+# registry or network error (Docker Hub token requests time out on CI runners) does not fail the whole release.
+pull_image() {
+  local img=$1 i
+  shift
+  docker image inspect "$img" >/dev/null 2>&1 && return 0
+  for i in 1 2 3; do
+    docker pull -q "$@" "$img" >/dev/null 2>&1 && return 0
+    echo "pull $img failed (attempt $i), retrying in $((i * 10))s" >&2
+    sleep $((i * 10))
+  done
+  docker pull -q "$@" "$img" >/dev/null
+}
+
 build_one() { # build_one <minor>-<nts|zts>-<libc>
   local t=$1 minor zts libc image log="$WORK/logs/$1.log" plat=()
   minor=${t%%-*}; zts=${t#*-}; zts=${zts%%-*}; libc=${t##*-}
@@ -52,10 +66,18 @@ build_one() { # build_one <minor>-<nts|zts>-<libc>
   mkdir -p "$out"
   if [ "$libc" = glibc ]; then
     image="openlog-php-build:$minor-$zts"
-    docker build "${plat[@]}" -q -t "$image" --build-arg "PHP_SRC_IMAGE=php:$minor-cli" --build-arg "ZTS=$zts" \
-      -f "$PKG_DIR/Dockerfile.glibc" "$PKG_DIR" >"$log" 2>&1 || { echo "$t: build image failed (see $log)"; cat "$log"; return 1; }
+    # docker build pulls its base images itself: retried like pull_image.
+    local attempt
+    for attempt in 1 2 3; do
+      docker build "${plat[@]}" -q -t "$image" --build-arg "PHP_SRC_IMAGE=php:$minor-cli" --build-arg "ZTS=$zts" \
+        -f "$PKG_DIR/Dockerfile.glibc" "$PKG_DIR" >"$log" 2>&1 && break
+      [ "$attempt" = 3 ] && { echo "$t: build image failed (see $log)"; cat "$log"; return 1; }
+      echo "$t: build image failed (attempt $attempt), retrying in $((attempt * 15))s" >&2
+      sleep $((attempt * 15))
+    done
   else
     image="php:$minor-$([ "$zts" = zts ] && echo zts || echo cli)-alpine"
+    pull_image "$image" "${plat[@]}" || { echo "$t: pull $image failed"; return 1; }
   fi
   docker run --rm "${plat[@]}" --name "openlog-php-build-$t-$$" -v "$WORK/src":/src:ro -v "$out":/out "$image" sh -ec '
     command -v apk >/dev/null && apk add --no-cache $PHPIZE_DEPS >/dev/null
@@ -81,6 +103,7 @@ build_one() { # build_one <minor>-<nts|zts>-<libc>
     image="php:$minor-$([ "$zts" = zts ] && echo zts || echo cli)"
   fi
   # load test in the official runtime image
+  pull_image "$image" "${plat[@]}" || { echo "$t: pull $image failed"; return 1; }
   docker run --rm "${plat[@]}" -v "$out":/m:ro "$image" php -d extension=/m/openlog.so -r '
     if (!extension_loaded("openlog")) { fwrite(STDERR, "not loaded\n"); exit(1); } echo PHP_VERSION, " ", PHP_ZTS ? "zts" : "nts", " ok\n";' >>"$log" 2>&1 \
     || { echo "$t: load test failed in $image"; tail -10 "$log"; return 1; }
