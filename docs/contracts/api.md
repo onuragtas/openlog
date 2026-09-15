@@ -58,7 +58,7 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 | OQL (`POST /query`, `POST /query/validate`, `GET /query/schema`), read dashboards (private ones: creator only), export | ✓ | ✓ | ✓ | ✓ |
 | Create, import and duplicate dashboards; change/delete **own** dashboards | | ✓ | ✓ | ✓ |
 | Change/delete any non-private dashboard | | | ✓ | ✓ |
-| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, deploy now, rollback), integration setting changes, any alert rule or mute, alert channels and test sends, `POST /version/check` and `POST /version/update` (signed-in users only; refused for everyone when `OPENLOG_SIGNUP_ENABLED=true`) | | | ✓ | ✓ |
+| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, deploy now, rollback), integration setting changes, any alert rule or mute, alert channels and test sends, `POST /version/check` and `POST /version/update` (signed-in users only; with `OPENLOG_SIGNUP_ENABLED=true` only superadmins, whatever their role) | | | ✓ | ✓ |
 | Grant or remove the owner role, invite owners, remove owners | | | | ✓ |
 
 An organization always keeps at least one owner (`409 failed_precondition`).
@@ -436,14 +436,21 @@ release of `OPENLOG_UPDATE_CHANNEL` when it is newer than the answering pod. `up
 `message` is a fixed updater message (plus `error` for an appended English error).
 `update_requests` (null in static mode): `{"can_request", "updater_listening", "updater_polled_at", "latest": UpdateRequest | null}`;
 `can_request` = the caller may use the two endpoints below; `latest.requested_by_email` only when `can_request`.
+`updater.notices[]` may carry `updater_outdated` / `updater_outdated_bundle` / `updater_outdated_kubernetes`
+`{updater_version, running_version}` and `updater_self_update_failed` `{version, reason}` (D-120); `updater.updater_version`
+is the updater's own version, `updater.self_update` its last self-update attempt. For a document without `updater_version`
+(an updater older than 0.1.26) the api itself adds `updater_outdated` (Compose) or `updater_outdated_kubernetes` with
+`updater_version: "< <running version>"`.
 Every API response (including errors and the UI) carries `X-Openlog-Version`.
 
 ### `POST /api/v1/version/check` (admin, owner; postgres auth mode)
 "Check now": queues an update request `action=check` for `openlog-updater` and runs the api release check
 immediately (`OPENLOG_UPDATE_CHECK=enabled`), then returns `200` with the `GET /version` body. At most one check
 request per 30 s for the whole installation: `429 resource_exhausted` with `Retry-After` (seconds). Audit
-`update.check_requested` (target `update_request`). API keys, lower roles, and every caller when
-`OPENLOG_SIGNUP_ENABLED=true` (organization admins are not server operators) → `403`.
+`update.check_requested` (target `update_request`). API keys and lower roles → `403`. With
+`OPENLOG_SIGNUP_ENABLED=true` organization admins and owners are not server operators: only superadmins (session users
+with a verified e-mail in `OPENLOG_SUPERADMIN_EMAILS`) may call it, whatever their role in the current organization;
+everyone else → `403`. Audit details of a superadmin request carry `"superadmin": true`.
 
 ### `POST /api/v1/version/update` `{"target_version", "ignore_maintenance_window"?: false}` (admin, owner)
 "Update now": `202` with the queued `UpdateRequest` `{"id", "action": "apply", "target_version",

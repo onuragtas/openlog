@@ -54,6 +54,13 @@ type ComposeEngine struct {
 	// SelfVersion is the updater's own version (default version.Version); compose files without a version marker
 	// predate it.
 	SelfVersion string
+	// Hostname identifies the updater's own container (default os.Hostname(): Docker sets the container id).
+	Hostname string
+	// HandoverTimeout bounds how long a new updater container has to pass its self-test during a self-update
+	// (default DefaultHandoverTimeout).
+	HandoverTimeout time.Duration
+	// Exit ends the process when a self-update handover misses its deadline (default os.Exit).
+	Exit func(code int)
 }
 
 // Name implements Engine.

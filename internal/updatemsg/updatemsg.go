@@ -52,7 +52,21 @@ const (
 	ComposeOutdatedBundle = "compose_outdated_bundle"
 	// ComposeChangesPending: {version, services}.
 	ComposeChangesPending = "compose_changes_pending"
+	// UpdaterOutdated: {updater_version, running_version}; the openlog-updater container of a Compose installation not
+	// managed by install-server.sh (or of an updater too old to report its version) is older than the running version.
+	UpdaterOutdated = "updater_outdated"
+	// UpdaterOutdatedBundle: {updater_version, running_version}; an install-server.sh installation.
+	UpdaterOutdatedBundle = "updater_outdated_bundle"
+	// UpdaterOutdatedKubernetes: {updater_version, running_version}; the Helm CronJob runs an older image.
+	UpdaterOutdatedKubernetes = "updater_outdated_kubernetes"
+	// UpdaterSelfUpdateFailed: {version, reason} (reason: English); the updater could not replace its own container.
+	UpdaterSelfUpdateFailed = "updater_self_update_failed"
 )
+
+// StepSelfUpdate is the update step in which the Compose updater replaces its own container (D-120). The other step
+// names (backup, pull, compose-bundle, migrate, recreate, rollout, health, rollback, cleanup, contract-migrate) are
+// literals of the engines.
+const StepSelfUpdate = "self-update"
 
 // ParamError is the parameter holding the English error appended to a failed request's message
 // ("<message>: <error>").
@@ -93,6 +107,10 @@ var defs = func() []*def {
 		{ComposeOutdated, "the compose files ({files_version}) are older than the running version {running_version}: settings and volumes added since then do not reach the containers; update them (git checkout v{running_version}, then docker compose up -d) or migrate to install-server.sh"},
 		{ComposeOutdatedBundle, "the compose files ({files_version}) are older than the running version {running_version}: re-run install-server.sh"},
 		{ComposeChangesPending, "the compose files of {version} change {services} in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d"},
+		{UpdaterOutdated, "openlog-updater {updater_version} is older than the running version {running_version}: improvements of the updater do not apply until its container is recreated: re-run install-server.sh, or run docker compose --profile updater up -d openlog-updater in the compose directory"},
+		{UpdaterOutdatedBundle, "openlog-updater {updater_version} is older than the running version {running_version}: re-run install-server.sh to recreate it"},
+		{UpdaterOutdatedKubernetes, "the openlog-updater CronJob {updater_version} is older than the running version {running_version}: upgrade the Helm release with image.tag={running_version}"},
+		{UpdaterSelfUpdateFailed, "openlog-updater could not replace itself with {version} and keeps running its previous version (re-run install-server.sh to update it): {reason}"},
 	}
 	out := make([]*def, 0, len(list))
 	for _, l := range list {

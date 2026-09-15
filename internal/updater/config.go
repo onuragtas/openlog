@@ -29,6 +29,13 @@ const (
 	ComposeSyncOff  = "off"
 )
 
+// Updater self-update (OPENLOG_UPDATER_SELF_UPDATE, Compose only).
+const (
+	SelfUpdateAuto = "auto"
+	SelfUpdateOn   = "on"
+	SelfUpdateOff  = "off"
+)
+
 // Config is parsed from OPENLOG_UPDATER_* (and the shared release variables).
 type Config struct {
 	Mode            string
@@ -61,6 +68,9 @@ type Config struct {
 	ComposeDir string
 	// ComposeSync is auto (replace the compose bundle of install-server.sh installations on update) or off.
 	ComposeSync string
+	// SelfUpdate is auto (after a successful update, install-server.sh installations replace the updater's own
+	// container with the installed image), on (every Compose installation) or off (notice only). D-120.
+	SelfUpdate string
 
 	// Kubernetes engine.
 	Deployments     []string
@@ -122,6 +132,7 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		MigrateCommand:  []string{"/usr/local/bin/openlog-migrate"},
 		ComposeDir:      str("OPENLOG_UPDATER_COMPOSE_DIR", ""),
 		ComposeSync:     str("OPENLOG_UPDATER_COMPOSE_SYNC", ComposeSyncAuto),
+		SelfUpdate:      str("OPENLOG_UPDATER_SELF_UPDATE", SelfUpdateAuto),
 
 		Deployments:     list("OPENLOG_UPDATER_K8S_DEPLOYMENTS", ""),
 		MigrateTemplate: str("OPENLOG_UPDATER_K8S_MIGRATE_TEMPLATE", ""),
@@ -150,6 +161,11 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	case ComposeSyncAuto, ComposeSyncOff:
 	default:
 		errs = append(errs, fmt.Errorf("OPENLOG_UPDATER_COMPOSE_SYNC: must be auto or off, got %q", c.ComposeSync))
+	}
+	switch c.SelfUpdate {
+	case SelfUpdateAuto, SelfUpdateOn, SelfUpdateOff:
+	default:
+		errs = append(errs, fmt.Errorf("OPENLOG_UPDATER_SELF_UPDATE: must be auto, on or off, got %q", c.SelfUpdate))
 	}
 	if c.ComposeDir == "" && c.EnvFile != "" {
 		c.ComposeDir = filepath.Dir(c.EnvFile)

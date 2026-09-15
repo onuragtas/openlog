@@ -487,6 +487,11 @@ services:
       # version; off: the compose files are never changed. Other installations are never changed (a notice reports
       # compose files older than the running version).
       OPENLOG_UPDATER_COMPOSE_SYNC: ${OPENLOG_UPDATER_COMPOSE_SYNC:-auto}
+      # After a successful update the updater replaces its own container with the installed image (verified handover,
+      # the previous updater stays until the new one took over; docs/operations/upgrading.md "Updater self-update").
+      # auto: install-server.sh installations (.bundle-version) only; on: every Compose installation; off: only the
+      # notice updater_outdated.
+      OPENLOG_UPDATER_SELF_UPDATE: ${OPENLOG_UPDATER_SELF_UPDATE:-auto}
       OPENLOG_POSTGRES_DSN: postgres://openlog@postgres:5432/openlog?sslmode=disable
       OPENLOG_POSTGRES_PASSWORD: ${OPENLOG_POSTGRES_PASSWORD:-openlog}
     volumes:

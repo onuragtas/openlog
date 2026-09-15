@@ -26,38 +26,61 @@ func (s *Server) SetUpdateRequests(q updatereq.Queue, checkNow func(ctx context.
 	s.srv.Handler = s.Handler()
 }
 
-// updateAllowed reports whether p may request checks and updates of this installation: a
-// signed-in admin or owner, and not on a multi-tenant installation (OPENLOG_SIGNUP_ENABLED=true),
-// where an organization's admins are not the operators of the server.
-func (s *Server) updateAllowed(p *auth.Principal) *apiError {
+// updateAllowed reports whether p may request checks and updates of this installation.
+//
+//   - Single-organization installations (OPENLOG_SIGNUP_ENABLED unset/false): a signed-in admin or owner.
+//   - Multi-tenant installations (OPENLOG_SIGNUP_ENABLED=true), where an organization's admins are not the operators of
+//     the server: only superadmins (a signed-in user with a verified e-mail in OPENLOG_SUPERADMIN_EMAILS), whatever
+//     their role in the current organization.
+//
+// superadmin reports that the permission comes from OPENLOG_SUPERADMIN_EMAILS (recorded in the audit entry).
+func (s *Server) updateAllowed(p *auth.Principal) (superadmin bool, ae *apiError) {
 	if p.Kind != auth.KindSession {
-		return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-	}
-	if !p.HasOrg() || !p.Role.Can(auth.ActRequestUpdate) {
-		return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+		return false, &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
 	}
 	if s.accounts.Config().SignupEnabled {
-		return &apiError{http.StatusForbidden, "permission_denied", "server updates cannot be requested from the UI when OPENLOG_SIGNUP_ENABLED=true"}
+		if s.isSuperadmin(p) {
+			return true, nil
+		}
+		return false, &apiError{http.StatusForbidden, "permission_denied",
+			"server updates can only be requested by superadmins (OPENLOG_SUPERADMIN_EMAILS, verified e-mail) when OPENLOG_SIGNUP_ENABLED=true"}
 	}
-	return nil
+	if !p.HasOrg() || !p.Role.Can(auth.ActRequestUpdate) {
+		return false, &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+	}
+	return false, nil
+}
+
+// updateAuditDetails adds the superadmin flag to the details of an update request audit entry (only when the
+// permission came from OPENLOG_SUPERADMIN_EMAILS, so entries of single-organization installations are unchanged).
+func updateAuditDetails(details map[string]any, superadmin bool) map[string]any {
+	if !superadmin {
+		return details
+	}
+	if details == nil {
+		details = map[string]any{}
+	}
+	details["superadmin"] = true
+	return details
 }
 
 func (s *Server) updateRoutes(mux *http.ServeMux) {
 	if s.updates == nil || s.accounts == nil {
 		return
 	}
-	route := func(pattern string, h fleetFunc) {
+	route := func(pattern string, h func(w http.ResponseWriter, r *http.Request, p *auth.Principal, superadmin bool) error) {
 		mux.Handle(pattern, s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {
 			noStore(rec)
 			p, r := s.authenticate(rec, r)
 			if p == nil {
 				return
 			}
-			if ae := s.updateAllowed(p); ae != nil {
+			superadmin, ae := s.updateAllowed(p)
+			if ae != nil {
 				writeError(rec, ae)
 				return
 			}
-			if err := h(rec, r, p); err != nil {
+			if err := h(rec, r, p, superadmin); err != nil {
 				s.writeUpdateError(rec, pattern, err)
 			}
 		}))
@@ -84,12 +107,12 @@ func (s *Server) writeUpdateError(w http.ResponseWriter, route string, err error
 	}
 }
 
-func (s *Server) requestUpdateCheck(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+func (s *Server) requestUpdateCheck(w http.ResponseWriter, r *http.Request, p *auth.Principal, superadmin bool) error {
 	req := updatereq.Request{Action: updatereq.ActionCheck, OrgID: p.OrgID, RequestedBy: p.UserID, RequestedByEmail: p.Email}
 	if err := s.updates.Enqueue(r.Context(), &req, updatereq.MinGap); err != nil {
 		return err
 	}
-	s.accounts.Audit(r.Context(), p, s.accounts.Meta(r), "update.check_requested", "update_request", req.ID, nil)
+	s.accounts.Audit(r.Context(), p, s.accounts.Meta(r), "update.check_requested", "update_request", req.ID, updateAuditDetails(nil, superadmin))
 	if s.checkNow != nil {
 		cctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		if err := s.checkNow(cctx); err != nil {
@@ -105,7 +128,7 @@ func (s *Server) requestUpdateCheck(w http.ResponseWriter, r *http.Request, p *a
 	return nil
 }
 
-func (s *Server) requestUpdateApply(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
+func (s *Server) requestUpdateApply(w http.ResponseWriter, r *http.Request, p *auth.Principal, superadmin bool) error {
 	var in struct {
 		TargetVersion           string `json:"target_version"`
 		IgnoreMaintenanceWindow bool   `json:"ignore_maintenance_window"`
@@ -147,9 +170,9 @@ func (s *Server) requestUpdateApply(w http.ResponseWriter, r *http.Request, p *a
 	if err := s.updates.Enqueue(r.Context(), &req, updatereq.MinGap); err != nil {
 		return err
 	}
-	s.accounts.Audit(r.Context(), p, s.accounts.Meta(r), "update.apply_requested", "update_request", req.ID, map[string]any{
+	s.accounts.Audit(r.Context(), p, s.accounts.Meta(r), "update.apply_requested", "update_request", req.ID, updateAuditDetails(map[string]any{
 		"from": version.String(), "to": req.TargetVersion, "ignore_maintenance_window": req.IgnoreMaintenanceWindow, "engine": up.Engine,
-	})
+	}, superadmin))
 	writeJSON(w, http.StatusAccepted, updateRequestResponse(&req, true))
 	return nil
 }
@@ -200,7 +223,8 @@ func (s *Server) updateRequestsInfo(ctx context.Context, p *auth.Principal) *upd
 	if s.updates == nil || s.accounts == nil {
 		return nil
 	}
-	out := &updateRequestsJSON{CanRequest: s.updateAllowed(p) == nil}
+	_, denied := s.updateAllowed(p)
+	out := &updateRequestsJSON{CanRequest: denied == nil}
 	lctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	if latest, err := s.updates.Latest(lctx); err == nil {

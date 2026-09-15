@@ -296,6 +296,14 @@ Stored in PostgreSQL (see [postgres.md](postgres.md), tables `agent_update_polic
 - Additive (D-111): `updater.notices[]` `{code, message, params}` — `compose_outdated`, `compose_outdated_bundle`
   `{files_version, running_version}`, `compose_changes_pending` `{version, services}` — and `updater.compose_changes`
   (docs/operations/upgrading.md "Compose files"). The UI shows the notices translated by code.
+- Additive (D-120): `updater.updater_version` (the updater's own version), `updater.self_update`
+  `{target_version, from_version, state: running|succeeded|failed, error, started_at, finished_at}`, the step
+  `self-update`, and the notices `updater_outdated` (Compose not installed by install-server.sh),
+  `updater_outdated_bundle` (install-server.sh), `updater_outdated_kubernetes` `{updater_version, running_version}` and
+  `updater_self_update_failed` `{version, reason}`. Documents without `updater_version` come from updaters older than
+  0.1.26; the api adds `updater_outdated` / `updater_outdated_kubernetes` (`updater_version: "< <running>"`) to them.
+  The Compose updater replaces its own container after a successful update (`OPENLOG_UPDATER_SELF_UPDATE`,
+  docs/operations/upgrading.md "Updater self-update"); the Kubernetes CronJob runs the chart image and never does.
 
 ### 5.1 Update requests ("Check now" / "Update now", D-041)
 
@@ -303,7 +311,8 @@ The UI does not talk to `openlog-updater` directly. The request channel is the P
 (migration `0009`, docs/contracts/postgres.md), which both updater engines already reach with the DSN they use for
 their status document:
 
-- `POST /api/v1/version/check` (admin/owner, not with `OPENLOG_SIGNUP_ENABLED=true`) inserts `action=check` and runs
+- `POST /api/v1/version/check` (admin/owner; with `OPENLOG_SIGNUP_ENABLED=true` only superadmins of
+  `OPENLOG_SUPERADMIN_EMAILS`, whatever their organization role, D-120) inserts `action=check` and runs
   the api release check synchronously (any pod; stored in `update_check`, so the leader's 24 h schedule restarts).
   `POST /api/v1/version/update {"target_version", "ignore_maintenance_window"}` inserts `action=apply`. Both are
   limited to one request per action per 30 s for the whole installation (`429` + `Retry-After`; a transaction-level

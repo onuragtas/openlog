@@ -84,6 +84,29 @@ type Status struct {
 	Notices []Notice `json:"notices,omitempty"`
 	// ComposeChanges are compose changes of an installed bundle that the updater could not apply (D-111).
 	ComposeChanges *ComposeChanges `json:"compose_changes,omitempty"`
+	// UpdaterVersion is the version of the openlog-updater that wrote this document (absent in documents of updaters
+	// before 0.1.26).
+	UpdaterVersion string `json:"updater_version,omitempty"`
+	// SelfUpdate is the last attempt of the Compose updater to replace its own container (D-120).
+	SelfUpdate *SelfUpdateRecord `json:"self_update,omitempty"`
+}
+
+// Self-update states (SelfUpdateRecord.State).
+const (
+	SelfUpdateRunning   = "running"
+	SelfUpdateSucceeded = "succeeded"
+	SelfUpdateFailed    = "failed"
+)
+
+// SelfUpdateRecord is one attempt to replace the updater's container with the image of TargetVersion. At most one
+// attempt is made per target version.
+type SelfUpdateRecord struct {
+	TargetVersion string     `json:"target_version"`
+	FromVersion   string     `json:"from_version"`
+	State         string     `json:"state"`
+	Error         string     `json:"error,omitempty"`
+	StartedAt     time.Time  `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
 }
 
 const maxHistory = 10
@@ -135,6 +158,9 @@ type StatusStore interface {
 	Load(ctx context.Context) (Status, bool, error)
 	Save(ctx context.Context, st Status) error
 }
+
+// StatusFileName is the FileStore file of the Compose updater in OPENLOG_UPDATER_BACKUP_DIR.
+const StatusFileName = "updater-status.json"
 
 // FileStore keeps Status in a JSON file (the compose updater's backup directory), so the state
 // survives while PostgreSQL is unreachable.

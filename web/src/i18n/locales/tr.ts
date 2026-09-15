@@ -69,9 +69,17 @@ export const tr: Messages = {
       compose_outdated_bundle: "Compose dosyaları ({{files_version}}) çalışan {{running_version}} sürümünden eski: install-server.sh betiğini yeniden çalıştırın.",
       compose_changes_pending:
         "{{version}} compose dosyaları {{services}} için güncelleyicinin uygulamadığı değişiklikler içeriyor (volume, port, bağlanan dosyalar): install-server.sh betiğini yeniden çalıştırın ya da docker compose up -d kullanın.",
+      updater_outdated:
+        "openlog-updater {{updater_version}}, çalışan {{running_version}} sürümünden eski: güncelleyicideki iyileştirmeler konteyneri yeniden oluşturulana kadar geçerli olmaz. install-server.sh betiğini yeniden çalıştırın ya da compose dizininde docker compose --profile updater up -d openlog-updater komutunu çalıştırın.",
+      updater_outdated_bundle: "openlog-updater {{updater_version}}, çalışan {{running_version}} sürümünden eski: yeniden oluşturmak için install-server.sh betiğini yeniden çalıştırın.",
+      updater_outdated_kubernetes:
+        "openlog-updater CronJob'u {{updater_version}}, çalışan {{running_version}} sürümünden eski: Helm sürümünü image.tag={{running_version}} ile yükseltin.",
+      updater_self_update_failed:
+        "openlog-updater kendini {{version}} ile değiştiremedi ve önceki sürümüyle çalışmaya devam ediyor (güncellemek için install-server.sh betiğini yeniden çalıştırın): {{reason}}",
       withError: "{{message}} Hata: {{error}}",
     },
     steps: {
+      "self-update": "Güncelleyicinin kendini güncellemesi",
       backup: "Yedekleme",
       pull: "İmaj indirme",
       "compose-bundle": "Compose dosyaları",

@@ -68,6 +68,12 @@ type updaterStatus struct {
 	History []struct {
 		From, To, Result, Error string
 	} `json:"history"`
+	UpdaterVersion string `json:"updater_version"`
+	SelfUpdate     *struct {
+		TargetVersion string `json:"target_version"`
+		State         string `json:"state"`
+		Error         string `json:"error"`
+	} `json:"self_update"`
 }
 
 // lastResult returns the result of the newest finished update to version to.
@@ -323,6 +329,26 @@ func TestComposeAutoUpdate(t *testing.T) {
 	if out, _ := stack.Run(ctx, "", nil, "docker", "inspect", "--format", "{{.Config.Image}}", "openlog-updtest-openlog-1"); strings.TrimSpace(out) != digests["0.9.1"] {
 		t.Errorf("openlog container image %q", out)
 	}
+	// 3b. The updater (FROM built from this tree, older than 0.9.1) replaces its own container with 0.9.1 (D-120) and
+	// the new updater performs step 4. A published FROM release predates the self-update; UPDTEST_UPDATER=to already
+	// runs 0.9.1.
+	if fromImage == "" && os.Getenv("UPDTEST_UPDATER") != "to" {
+		st = waitUpdater(ctx, t, api, 4*time.Minute, func(s updaterStatus, _ string) bool {
+			return s.SelfUpdate != nil && s.SelfUpdate.TargetVersion == "0.9.1" && s.SelfUpdate.State != "running"
+		})
+		logSteps(t, "self-update of openlog-updater", st)
+		if st.SelfUpdate.State != "succeeded" || stepStatus(st, "self-update") != "ok" || st.UpdaterVersion != "0.9.1" {
+			t.Fatalf("self-update %+v, step %q, updater_version %q", st.SelfUpdate, stepStatus(st, "self-update"), st.UpdaterVersion)
+		}
+		out, _ := stack.Run(ctx, "", nil, "docker", "inspect", "--format",
+			`{{.Config.Image}} {{.HostConfig.RestartPolicy.Name}} {{index .Config.Labels "com.docker.compose.service"}}`, "openlog-updtest-openlog-updater-1")
+		if got, want := strings.TrimSpace(out), digests["0.9.1"]+" unless-stopped openlog-updater"; got != want {
+			t.Errorf("updater container after the self-update: %q, want %q", got, want)
+		}
+		if out, _ := stack.Run(ctx, "", nil, "docker", "ps", "-a", "--filter", "name=self-update", "--format", "{{.Names}}"); strings.TrimSpace(out) != "" {
+			t.Errorf("leftover handover containers: %s", out)
+		}
+	}
 	rowsUpdated := telemetryRows(ctx, t, c)
 
 	// 4. Broken 0.9.2 (expand migration 9003 applied, never healthy) is rolled back to 0.9.1.
@@ -365,7 +391,7 @@ func TestComposeAutoUpdate(t *testing.T) {
 		}
 		return err
 	})
-	if out, _ := stack.Run(ctx, "", nil, "docker", "ps", "-a", "--filter", "label=com.docker.compose.project=openlog-updtest", "--format", "{{.Names}} {{.Image}} {{.Status}}"); strings.Contains(out, "pre-update") || strings.Contains(out, "updater-migrate") {
+	if out, _ := stack.Run(ctx, "", nil, "docker", "ps", "-a", "--filter", "label=com.docker.compose.project=openlog-updtest", "--format", "{{.Names}} {{.Image}} {{.Status}}"); strings.Contains(out, "pre-update") || strings.Contains(out, "updater-migrate") || strings.Contains(out, "self-update") {
 		t.Errorf("leftover containers:\n%s", out)
 	} else {
 		t.Logf("containers after rollback:\n%s", out)

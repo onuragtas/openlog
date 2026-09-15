@@ -267,6 +267,59 @@ describe("VersionSettings", () => {
     expect(screen.getByRole("button", { name: "Check now" })).toBeEnabled();
   });
 
+  it("shows updater notices, the self-update step and the hints for operators", async () => {
+    server.use(
+      http.get("*/api/v1/version", () =>
+        HttpResponse.json({
+          ...baseVersion,
+          updater: {
+            ...notifyUpdater,
+            state: "succeeded",
+            steps: [
+              { name: "health", status: "ok", started_at: "2026-09-13T10:00:00Z" },
+              { name: "self-update", status: "failed", detail: "self-test failed: docker: 403", started_at: "2026-09-13T10:01:00Z" },
+            ],
+            notices: [
+              {
+                code: "updater_self_update_failed",
+                message: "openlog-updater could not replace itself with 0.9.1 …",
+                params: { version: "0.9.1", reason: "self-test failed: docker: 403" },
+              },
+            ],
+          },
+          // can_request is what the API grants (superadmins on sign-up installations): the hints follow it.
+          update_requests: { ...baseVersion.update_requests, updater_listening: false, updater_polled_at: null },
+        }),
+      ),
+    );
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<VersionSettings />);
+    const updater = await screen.findByTestId("updater-status");
+    const steps = within(updater).getByRole("list", { name: "Update steps" });
+    expect(within(steps).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Health check", "Updater self-update"]);
+    expect(within(updater).getByTestId("updater-notice")).toHaveTextContent(
+      "openlog-updater could not replace itself with 0.9.1 and keeps running its previous version (re-run install-server.sh to update it): self-test failed: docker: 403",
+    );
+    expect(screen.getByText(/The updater is not polling for requests/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check now" })).toBeEnabled();
+  });
+
+  it("tells operators that the updater is off", async () => {
+    server.use(
+      http.get("*/api/v1/version", () =>
+        HttpResponse.json({
+          ...baseVersion,
+          updater: { ...notifyUpdater, mode: "off", state: "off", notices: [{ code: "updater_outdated_bundle", message: "x", params: { updater_version: "0.9.0", running_version: "0.9.1" } }] },
+        }),
+      ),
+    );
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<VersionSettings />);
+    expect(await screen.findByText("The updater runs with OPENLOG_UPDATER_MODE=off.")).toBeInTheDocument();
+    expect(screen.getByTestId("updater-notice")).toHaveTextContent("openlog-updater 0.9.0 is older than the running version 0.9.1: re-run install-server.sh to recreate it.");
+    expect(screen.queryByRole("button", { name: "Update now" })).not.toBeInTheDocument();
+  });
+
   it("has no buttons for members", async () => {
     server.use(
       http.get("*/api/v1/version", () =>

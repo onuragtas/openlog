@@ -27,6 +27,10 @@ type fakeDocker struct {
 	migrateExit int
 	execCode    int
 	pullErr     error
+	policyErr   error
+	// startErr fails StartContainer for matching containers; onStart runs (without the lock) after a start.
+	startErr func(c *Container) error
+	onStart  func(id string)
 }
 
 type fakeContainer struct {
@@ -159,16 +163,28 @@ func (f *fakeDocker) CreateContainer(_ context.Context, spec ContainerSpec) (str
 
 func (f *fakeDocker) StartContainer(_ context.Context, id string) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	fc := f.containers[id]
 	if fc == nil {
+		f.mu.Unlock()
 		return &DockerError{Status: 404}
 	}
 	if ep := toStrings(fc.c.Config["Entrypoint"]); len(ep) > 0 && strings.HasSuffix(ep[0], "openlog-migrate") {
 		fc.running = false // runs to completion immediately
+		f.mu.Unlock()
 		return nil
 	}
+	if f.startErr != nil {
+		if err := f.startErr(&fc.c); err != nil {
+			f.mu.Unlock()
+			return err
+		}
+	}
 	fc.running = true
+	hook := f.onStart
+	f.mu.Unlock()
+	if hook != nil {
+		hook(id)
+	}
 	return nil
 }
 
@@ -189,6 +205,25 @@ func (f *fakeDocker) RenameContainer(_ context.Context, id, name string) error {
 		return &DockerError{Status: 409, Message: "name in use"}
 	}
 	f.containers[id].c.Name = "/" + name
+	return nil
+}
+
+func (f *fakeDocker) UpdateRestartPolicy(_ context.Context, id string, policy map[string]any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fc := f.containers[id]
+	if fc == nil {
+		return &DockerError{Status: 404}
+	}
+	if f.policyErr != nil {
+		return f.policyErr
+	}
+	if fc.c.HostConfig == nil {
+		fc.c.HostConfig = map[string]any{}
+	}
+	var p map[string]any
+	roundTrip(policy, &p)
+	fc.c.HostConfig["RestartPolicy"] = p
 	return nil
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/onuragtas/openlog/internal/updatemsg"
 	"github.com/onuragtas/openlog/internal/updatereq"
+	"github.com/onuragtas/openlog/internal/version"
 )
 
 // Engine performs updates on one kind of installation.
@@ -46,8 +47,73 @@ type Runner struct {
 	RetryDelay time.Duration
 	// Requests is the UI request channel (update_requests); nil without PostgreSQL.
 	Requests updatereq.Poller
+	// SelfVersion is the updater's own version (default version.Version), reported as Status.UpdaterVersion and
+	// compared with the running version for the updater_outdated notices.
+	SelfVersion string
+	// SelfUpdate lets Loop complete a self-update handover at start and, after a successful update, let an engine
+	// implementing SelfUpdater replace the updater's own container (the long-running Compose updater, D-120).
+	SelfUpdate bool
 
 	lastHeartbeat time.Time
+	// selfUpdateTarget is the release installed by the last successful update, waiting for the self-update.
+	selfUpdateTarget *Target
+}
+
+// SelfUpdateHooks let an engine record a self-update in the status document and the audit log.
+type SelfUpdateHooks struct {
+	// Update loads the status, applies fn and saves it.
+	Update func(fn func(st *Status))
+	Audit  func(action string, details map[string]any)
+}
+
+// SelfUpdater is implemented by engines that can replace the updater's own container (Compose).
+type SelfUpdater interface {
+	// SelfUpdate replaces the running updater by one running t's image after the installation was updated to t (st:
+	// the status after that update). handedOver means this process must not act any more.
+	SelfUpdate(ctx context.Context, t *Target, st Status, h SelfUpdateHooks) (handedOver bool)
+	// Handover completes or undoes a handover recorded by a previous process. proceed=false: this process must exit
+	// without acting (err says why when it is a failure).
+	Handover(ctx context.Context, h SelfUpdateHooks) (proceed bool, err error)
+}
+
+func (r *Runner) selfVersion() string {
+	if r.SelfVersion != "" {
+		return r.SelfVersion
+	}
+	return version.Version
+}
+
+func (r *Runner) selfUpdateHooks(ctx context.Context) SelfUpdateHooks {
+	sctx := context.WithoutCancel(ctx)
+	return SelfUpdateHooks{
+		Update: func(fn func(st *Status)) {
+			st, _, err := r.Store.Load(sctx)
+			if err != nil {
+				r.Log.Debug("cannot load updater status", "err", err)
+			}
+			fn(&st)
+			st.UpdaterVersion = r.selfVersion()
+			if err := r.Store.Save(sctx, st); err != nil {
+				r.Log.Warn("cannot save updater status", "err", err)
+			}
+		},
+		Audit: func(action string, details map[string]any) { r.audit(sctx, action, details) },
+	}
+}
+
+// selfUpdate runs the pending self-update of the engine (nothing without one). stop: this process handed over.
+func (r *Runner) selfUpdate(ctx context.Context) (stop bool) {
+	t := r.selfUpdateTarget
+	r.selfUpdateTarget = nil
+	su, ok := r.Engine.(SelfUpdater)
+	if t == nil || !ok || !r.SelfUpdate || ctx.Err() != nil {
+		return false
+	}
+	st, _, err := r.Store.Load(ctx)
+	if err != nil {
+		r.Log.Debug("cannot load updater status", "err", err)
+	}
+	return su.SelfUpdate(ctx, t, st, r.selfUpdateHooks(ctx))
 }
 
 // DefaultRetryDelay bounds the wait after a failed run. A failure is often transient, e.g. the
@@ -78,8 +144,21 @@ func (r *Runner) audit(ctx context.Context, action string, details map[string]an
 
 // Loop recovers interrupted updates, then runs RunOnce every Cfg.Interval (after a failed run:
 // every retryDelay) until ctx is done. With Requests set it also polls update requests every
-// Cfg.RequestPoll; a handled request counts as a run.
-func (r *Runner) Loop(ctx context.Context) {
+// Cfg.RequestPoll; a handled request counts as a run. With SelfUpdate it first completes or undoes a self-update
+// handover and returns (nil, or the error that made this process give up) when this process must not act.
+func (r *Runner) Loop(ctx context.Context) error {
+	if su, ok := r.Engine.(SelfUpdater); ok && r.SelfUpdate {
+		proceed, err := su.Handover(ctx, r.selfUpdateHooks(ctx))
+		if !proceed {
+			if err != nil {
+				r.Log.Error("self-update handover: this updater exits without acting", "err", err)
+			}
+			return err
+		}
+		if err != nil {
+			r.Log.Warn("self-update handover", "err", err)
+		}
+	}
 	if err := r.Engine.Recover(ctx); err != nil {
 		r.Log.Error("recovering an interrupted update failed", "err", err)
 	}
@@ -92,18 +171,25 @@ func (r *Runner) Loop(ctx context.Context) {
 	for {
 		if !r.now().Before(next) {
 			next = r.now().Add(r.afterRun(ctx, r.RunOnce(ctx)))
+			if r.selfUpdate(ctx) {
+				return nil
+			}
 		}
 		sleep := next.Sub(r.now())
 		if r.Requests != nil {
 			if handled, err := r.pollRequest(ctx); handled {
 				next = r.now().Add(r.afterRun(ctx, err))
+				// The request result is stored before the updater may replace itself.
+				if r.selfUpdate(ctx) {
+					return nil
+				}
 				continue // look for the next request right away
 			}
 			sleep = min(sleep, r.requestPoll())
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-time.After(max(sleep, 0)):
 		}
 	}
@@ -244,7 +330,7 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 	if err != nil {
 		r.Log.Debug("cannot load updater status", "err", err)
 	}
-	st.Engine, st.Mode, st.CheckedAt = r.Engine.Name(), r.Cfg.Mode, r.now()
+	st.Engine, st.Mode, st.CheckedAt, st.UpdaterVersion = r.Engine.Name(), r.Cfg.Mode, r.now(), r.selfVersion()
 	save := func() {
 		if err := r.Store.Save(context.WithoutCancel(ctx), st); err != nil {
 			r.Log.Warn("cannot save updater status", "err", err)
@@ -367,6 +453,11 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 		r.Log.Info("update succeeded", "from", cur, "to", st.TargetVersion, "duration", finished.Sub(started).Round(time.Second))
 		r.audit(actx, "updater.update_succeeded", map[string]any{"from": cur, "to": st.TargetVersion, "backup": st.BackupFile})
 		save()
+		if r.SelfUpdate {
+			// Loop replaces the updater's container once this run (and its request) is recorded; never after a failure
+			// or rollback.
+			r.selfUpdateTarget = target
+		}
 		return st, nil
 	}
 	if st.State == StateUpdating {
@@ -394,11 +485,15 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 }
 
 // refreshNotices replaces st.Notices with the engine's notices for the running version (engines without notices:
-// none).
+// none) and the notice about the updater itself (updaternotice.go).
 func (r *Runner) refreshNotices(ctx context.Context, st *Status, running string) {
 	st.Notices = nil
 	if n, ok := r.Engine.(Noticer); ok {
 		st.Notices = n.Notices(ctx, running, st)
+	}
+	if n, ok := r.updaterNotice(st, running); ok {
+		st.Notices = append(st.Notices, n)
+		r.Log.Warn(n.Message, "engine", r.Engine.Name())
 	}
 }
 

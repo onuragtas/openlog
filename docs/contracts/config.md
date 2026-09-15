@@ -391,6 +391,8 @@ Compose: `OPENLOG_UPDATER_SERVICES` (`openlog`), `OPENLOG_UPDATER_HEALTH_URLS` (
 `OPENLOG_UPDATER_POSTGRES_SERVICE` (`postgres`), `OPENLOG_UPDATER_PGDUMP_USER` / `_DATABASE` (`openlog`),
 `OPENLOG_UPDATER_BACKUP_DIR` (`/backups`), `OPENLOG_UPDATER_BACKUP_KEEP` (`5`), `OPENLOG_UPDATER_ENV_FILE`,
 `OPENLOG_UPDATER_COMPOSE_DIR` (directory of the env file), `OPENLOG_UPDATER_COMPOSE_SYNC` (`auto` | `off`),
+`OPENLOG_UPDATER_SELF_UPDATE` (`auto`: after an update install-server.sh installations replace the updater container
+with the installed image; `on`: every Compose installation; `off`: notice only; D-120),
 `OPENLOG_UPDATER_COMPOSE_PROJECT` (detected), `DOCKER_HOST` (`unix:///var/run/docker.sock`);
 Kubernetes: `OPENLOG_UPDATER_K8S_DEPLOYMENTS`, `OPENLOG_UPDATER_K8S_MIGRATE_TEMPLATE`, `OPENLOG_UPDATER_VERSION_URL`,
 `OPENLOG_UPDATER_ROLLOUT_TIMEOUT` (`15m`), `OPENLOG_UPDATER_MIGRATE_TIMEOUT` (`30m`), plus the release variables

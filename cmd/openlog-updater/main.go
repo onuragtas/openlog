@@ -58,7 +58,7 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger, k8s, once boo
 	var audit updater.Auditor
 	var requests updatereq.Poller
 	if !k8s {
-		stores = append(stores, updater.FileStore{Path: filepath.Join(ucfg.BackupDir, "updater-status.json")})
+		stores = append(stores, updater.FileStore{Path: filepath.Join(ucfg.BackupDir, updater.StatusFileName)})
 	}
 	if strings.TrimSpace(cfg.Postgres.DSN) != "" {
 		pool, err := app.OpenPostgres(ctx, cfg, "openlog-updater")
@@ -112,6 +112,8 @@ func run(ctx context.Context, cfg config.Config, log *slog.Logger, k8s, once boo
 		}
 		return runner.RunOnce(ctx)
 	}
-	runner.Loop(ctx)
-	return nil
+	// The long-running Compose updater may replace its own container after an update (D-120); at start it completes
+	// or undoes such a handover before acting.
+	runner.SelfUpdate = !k8s
+	return runner.Loop(ctx)
 }

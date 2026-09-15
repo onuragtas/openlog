@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ type updatesEnv struct {
 	now      time.Time
 	checks   atomic.Int32
 	versions *fakeVersionsPtr
+	server   *Server
 }
 
 // fakeVersionsPtr lets a test change the updater document after the server was built.
@@ -45,7 +47,7 @@ func newUpdatesEnv(t *testing.T, authn func(svc *auth.Service) auth.Authenticato
 	conn := &recordingConn{}
 	s := New(config.API{QueryTimeout: time.Second, MaxRows: 1000}, query.New(conn, "openlog", time.Second), authn(svc), quietLog(), nil)
 	s.SetAccounts(svc)
-	e := &updatesEnv{accountEnv: &accountEnv{svc: svc, st: st, conn: conn}, now: time.Now().UTC()}
+	e := &updatesEnv{accountEnv: &accountEnv{svc: svc, st: st, conn: conn}, now: time.Now().UTC(), server: s}
 	e.queue = &updatereq.MemQueue{Now: func() time.Time { return e.now }}
 	e.versions = &fakeVersionsPtr{info: updatecheck.Info{UpdateCheck: updatecheck.StatusEnabled, Updater: json.RawMessage(notifyUpdater)}}
 	s.SetVersionSource(e.versions)
@@ -221,6 +223,81 @@ func TestUpdateRequestsPermissions(t *testing.T) {
 	}
 	if v := decode[versionBody](t, sc.do(http.MethodGet, "/api/v1/version", nil)); v.UpdateRequests.CanRequest {
 		t.Fatal("can_request with OPENLOG_SIGNUP_ENABLED=true")
+	}
+}
+
+// With OPENLOG_SIGNUP_ENABLED=true the operators (superadmins, OPENLOG_SUPERADMIN_EMAILS with a verified e-mail) may
+// request checks and updates whatever their organization role; everyone else keeps getting 403.
+func TestUpdateRequestsSuperadminWithSignup(t *testing.T) {
+	p := &auth.Principal{}
+	e := newUpdatesEnv(t, func(*auth.Service) auth.Authenticator { return stubAuthn{p} }, auth.Config{SignupEnabled: true})
+	e.server.SetUsage(UsageDeps{Superadmin: func(email string) bool { return email == "ops@example.com" }})
+	c := &client{t: t, h: e.server.srv.Handler}
+	ops := auth.Principal{Kind: auth.KindSession, UserID: "u-ops", Email: "ops@example.com", EmailVerified: true, OrgID: "org-a", TenantID: "tenant-a", Role: auth.RoleViewer}
+
+	for _, tc := range []struct {
+		name string
+		p    auth.Principal
+	}{
+		{"owner", auth.Principal{Kind: auth.KindSession, UserID: "u-owner", Email: "owner@example.com", EmailVerified: true, OrgID: "org-a", Role: auth.RoleOwner}},
+		{"unverified superadmin", func() auth.Principal { x := ops; x.EmailVerified = false; return x }()},
+		{"superadmin api key", func() auth.Principal { x := ops; x.Kind = auth.KindAPIKey; return x }()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			*p = tc.p
+			rec := c.do(http.MethodPost, "/api/v1/version/check", nil)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("check: %d %s", rec.Code, rec.Body)
+			}
+			if tc.p.Kind == auth.KindSession && !strings.Contains(rec.Body.String(), "superadmins") {
+				t.Errorf("message does not say who may: %s", rec.Body)
+			}
+			if rec := c.do(http.MethodPost, "/api/v1/version/update", map[string]any{"target_version": "0.9.1"}); rec.Code != http.StatusForbidden {
+				t.Fatalf("update: %d %s", rec.Code, rec.Body)
+			}
+			if v := decode[versionBody](t, c.do(http.MethodGet, "/api/v1/version", nil)); v.UpdateRequests.CanRequest {
+				t.Fatal("can_request")
+			}
+		})
+	}
+	if n := len(e.queue.All()); n != 0 {
+		t.Fatalf("refused callers queued %d request(s)", n)
+	}
+
+	// A superadmin with the viewer role in the current organization is an operator.
+	*p = ops
+	if v := decode[versionBody](t, c.do(http.MethodGet, "/api/v1/version", nil)); !v.UpdateRequests.CanRequest {
+		t.Fatal("superadmin: can_request = false")
+	}
+	if rec := c.do(http.MethodPost, "/api/v1/version/check", nil); rec.Code != http.StatusOK {
+		t.Fatalf("superadmin check: %d %s", rec.Code, rec.Body)
+	}
+	e.now = e.now.Add(time.Minute)
+	if rec := c.do(http.MethodPost, "/api/v1/version/update", map[string]any{"target_version": "0.9.1"}); rec.Code != http.StatusAccepted {
+		t.Fatalf("superadmin update: %d %s", rec.Code, rec.Body)
+	}
+	audit := e.audit(t, "org-a")
+	if ev, ok := audit["update.check_requested"]; !ok || ev.Details["superadmin"] != true || ev.ActorEmail != "ops@example.com" {
+		t.Fatalf("check audit = %+v", ev)
+	}
+	if ev, ok := audit["update.apply_requested"]; !ok || ev.Details["superadmin"] != true || ev.Details["to"] != "0.9.1" {
+		t.Fatalf("apply audit = %+v", ev)
+	}
+
+	// Without sign-up the role rule applies to superadmins too (no superadmin flag in the audit entry).
+	*p = ops
+	single := newUpdatesEnv(t, func(*auth.Service) auth.Authenticator { return stubAuthn{p} }, auth.Config{})
+	single.server.SetUsage(UsageDeps{Superadmin: func(email string) bool { return email == "ops@example.com" }})
+	sc := &client{t: t, h: single.server.srv.Handler}
+	if rec := sc.do(http.MethodPost, "/api/v1/version/check", nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer superadmin without signup: %d %s", rec.Code, rec.Body)
+	}
+	p.Role = auth.RoleAdmin
+	if rec := sc.do(http.MethodPost, "/api/v1/version/check", nil); rec.Code != http.StatusOK {
+		t.Fatalf("admin without signup: %d %s", rec.Code, rec.Body)
+	}
+	if ev := single.audit(t, "org-a")["update.check_requested"]; ev.Details["superadmin"] != nil {
+		t.Fatalf("superadmin flag without signup: %+v", ev.Details)
 	}
 }
 

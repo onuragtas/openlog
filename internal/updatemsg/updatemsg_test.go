@@ -28,6 +28,12 @@ func TestFormatParseRoundTrip(t *testing.T) {
 		{RequestOutsideWindow, Params{}, "outside the maintenance window (OPENLOG_UPDATER_MAINTENANCE_WINDOW): confirm installing outside the window to update now"},
 		{RequestInterrupted, Params{}, "interrupted: openlog-updater restarted while handling the request"},
 		{RequestExpired, Params{}, "not picked up by openlog-updater within 15m (is an updater with request support running?)"},
+		{UpdaterOutdatedBundle, Params{"updater_version": "0.1.21", "running_version": "0.1.25"},
+			"openlog-updater 0.1.21 is older than the running version 0.1.25: re-run install-server.sh to recreate it"},
+		{UpdaterOutdatedKubernetes, Params{"updater_version": "0.1.21", "running_version": "0.1.25"},
+			"the openlog-updater CronJob 0.1.21 is older than the running version 0.1.25: upgrade the Helm release with image.tag=0.1.25"},
+		{UpdaterSelfUpdateFailed, Params{"version": "0.1.25", "reason": "self-test failed: docker: 403"},
+			"openlog-updater could not replace itself with 0.1.25 and keeps running its previous version (re-run install-server.sh to update it): self-test failed: docker: 403"},
 		// A failed request: the status message with the error appended.
 		{RolledBack, Params{"to": "0.9.1", "from": "0.9.0", ParamError: "health: container exited: code 1"},
 			"update to 0.9.1 failed and was rolled back to 0.9.0: health: container exited: code 1"},

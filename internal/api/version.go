@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/updatecheck"
+	"github.com/onuragtas/openlog/internal/updatemsg"
 	"github.com/onuragtas/openlog/internal/version"
+	lib "github.com/onuragtas/openlog/libs/release"
 )
 
 // VersionSource reports update information for GET /api/v1/version.
@@ -52,9 +55,53 @@ func (s *Server) versionInfo(r *http.Request, p *auth.Principal) versionResponse
 		info := s.versions.Info(r.Context())
 		resp.LatestAvailable, resp.UpdateCheck = info.LatestAvailable, info.UpdateCheck
 		if len(info.Updater) > 0 {
-			resp.Updater = info.Updater
+			resp.Updater = withLegacyUpdaterNotice(info.Updater, version.String())
 		}
 	}
 	resp.UpdateRequests = s.updateRequestsInfo(r.Context(), p)
 	return resp
+}
+
+// withLegacyUpdaterNotice adds the notice updater_outdated (Compose) or updater_outdated_kubernetes to a status
+// document written by an updater older than updater_version (0.1.26): such an updater is older than this release build
+// and cannot report it itself. Documents of newer updaters (which compute the notice themselves), unreadable documents
+// and development builds are returned unchanged.
+func withLegacyUpdaterNotice(raw json.RawMessage, running string) json.RawMessage {
+	if strings.Contains(running, "dev") {
+		return raw
+	}
+	if _, err := lib.ParseVersion(running); err != nil {
+		return raw
+	}
+	var doc map[string]json.RawMessage
+	if json.Unmarshal(raw, &doc) != nil || doc == nil {
+		return raw
+	}
+	if _, ok := doc["updater_version"]; ok {
+		return raw
+	}
+	var engine string
+	if json.Unmarshal(doc["engine"], &engine) != nil || engine == "" {
+		return raw
+	}
+	var notices []map[string]any
+	if n, ok := doc["notices"]; ok && json.Unmarshal(n, &notices) != nil {
+		return raw
+	}
+	code := updatemsg.UpdaterOutdated
+	if engine == "kubernetes" {
+		code = updatemsg.UpdaterOutdatedKubernetes
+	}
+	params := updatemsg.Params{"updater_version": "< " + running, "running_version": running}
+	notices = append(notices, map[string]any{"code": code, "message": updatemsg.Format(code, params), "params": params})
+	b, err := json.Marshal(notices)
+	if err != nil {
+		return raw
+	}
+	doc["notices"] = b
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return raw
+	}
+	return out
 }

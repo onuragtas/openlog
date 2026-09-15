@@ -68,9 +68,17 @@ export const en = {
       compose_outdated_bundle: "The compose files ({{files_version}}) are older than the running version {{running_version}}: re-run install-server.sh.",
       compose_changes_pending:
         "The compose files of {{version}} change {{services}} in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d.",
+      updater_outdated:
+        "openlog-updater {{updater_version}} is older than the running version {{running_version}}: improvements of the updater do not apply until its container is recreated. Re-run install-server.sh, or run docker compose --profile updater up -d openlog-updater in the compose directory.",
+      updater_outdated_bundle: "openlog-updater {{updater_version}} is older than the running version {{running_version}}: re-run install-server.sh to recreate it.",
+      updater_outdated_kubernetes:
+        "The openlog-updater CronJob {{updater_version}} is older than the running version {{running_version}}: upgrade the Helm release with image.tag={{running_version}}.",
+      updater_self_update_failed:
+        "openlog-updater could not replace itself with {{version}} and keeps running its previous version (re-run install-server.sh to update it): {{reason}}",
       withError: "{{message}} Error: {{error}}",
     },
     steps: {
+      "self-update": "Updater self-update",
       backup: "Backup",
       pull: "Pull image",
       "compose-bundle": "Compose files",

@@ -27,6 +27,8 @@ type Docker interface {
 	StartContainer(ctx context.Context, id string) error
 	StopContainer(ctx context.Context, id string, timeout time.Duration) error
 	RenameContainer(ctx context.Context, id, name string) error
+	// UpdateRestartPolicy replaces the restart policy of a container ({"Name": "unless-stopped"}, …).
+	UpdateRestartPolicy(ctx context.Context, id string, policy map[string]any) error
 	RemoveContainer(ctx context.Context, id string) error
 	WaitContainer(ctx context.Context, id string) (int, error)
 	ContainerLogs(ctx context.Context, id string, tail int) (string, error)
@@ -292,6 +294,11 @@ func (c *DockerClient) StopContainer(ctx context.Context, id string, timeout tim
 // RenameContainer implements Docker.
 func (c *DockerClient) RenameContainer(ctx context.Context, id, name string) error {
 	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/rename", url.Values{"name": {name}}, nil, nil)
+}
+
+// UpdateRestartPolicy implements Docker (POST /containers/{id}/update).
+func (c *DockerClient) UpdateRestartPolicy(ctx context.Context, id string, policy map[string]any) error {
+	return c.call(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/update", nil, map[string]any{"RestartPolicy": policy}, nil)
 }
 
 // RemoveContainer force-removes a container (anonymous volumes are kept).

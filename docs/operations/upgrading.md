@@ -63,8 +63,12 @@ and stores the result in PostgreSQL. Every pod serves it in `GET /api/v1/version
 ```
 
 - Admins and owners see a banner "openlog 0.9.1 is available — Release notes" (dismissed per version in the browser).
-- **Settings → Organization → Version and updates** has two buttons for admins and owners (not on installations
-  with `OPENLOG_SIGNUP_ENABLED=true`):
+- **Settings → Organization → Version and updates** has two buttons for admins and owners. On multi-tenant
+  installations (`OPENLOG_SIGNUP_ENABLED=true`) the owners and admins of self-signup organizations are not server
+  operators: there the buttons are shown only to superadmins (`OPENLOG_SUPERADMIN_EMAILS`, signed in with a verified
+  e-mail), whatever their role in the organization they are signed in to; everyone else gets `403` (the audit entry of a
+  superadmin request has `superadmin: true`). The section itself, with the updater state and notices, is visible to
+  every member.
   - **Check now** runs the release check immediately and asks `openlog-updater` to check too (at most once per
     30 s); no need to wait for the daily check or `OPENLOG_UPDATER_INTERVAL`.
   - **Update now** (shown when a newer release is known and an updater reports) asks the updater to install that
@@ -128,6 +132,7 @@ docker compose logs -f openlog-updater
 | `OPENLOG_UPDATER_ENV_FILE` | `/compose/.env` | settings of recreated containers ([below](#settings-from-env)); `OPENLOG_IMAGE=` is rewritten after a verified update |
 | `OPENLOG_UPDATER_COMPOSE_DIR` | directory of `OPENLOG_UPDATER_ENV_FILE` (`/compose`) | the compose project directory as mounted in the updater |
 | `OPENLOG_UPDATER_COMPOSE_SYNC` | `auto` | `auto`: install-server.sh installations get the verified compose files of each installed version ([below](#compose-files)); `off`: compose files are never changed |
+| `OPENLOG_UPDATER_SELF_UPDATE` | `auto` | after a successful update the updater replaces its own container with the installed image ([below](#updater-self-update)): `auto` install-server.sh installations (`.bundle-version`), `on` every Compose installation, `off` never (the notice `updater_outdated*` remains) |
 | `OPENLOG_UPDATER_IMAGE_REPOSITORY` | – | pull the manifest digest from a mirror repository |
 | `OPENLOG_UPDATER_COMPOSE_PROJECT` | detected from the updater container | |
 
@@ -143,10 +148,13 @@ mode, inside the maintenance window:
 6. **health** — every health URL must answer 200 with the target version before `OPENLOG_UPDATER_HEALTH_TIMEOUT`; a container that exits without a restart policy fails immediately.
 7. **success** (step `cleanup`) — remove the `-pre-update` containers, install the staged compose bundle, rewrite `OPENLOG_IMAGE` in `.env`, then (step `contract-migrate`) run `openlog-migrate` again for contract migrations that were waiting for the old containers.
 8. **failure after step 4** — remove the new containers, rename and start the previous ones, wait until they report the previous version: state `rolled_back` (or `rollback_failed`). The staged compose bundle is deleted; the compose files were never touched. The version is recorded in `failed_versions` and not retried; a newer release is.
+9. **self-update** (only after success, once the result and a UI request are recorded; never after a failure or rollback) — an updater older than the installed release replaces its own container with that release's image ([Updater self-update](#updater-self-update)). A failure here does not change the result of the update.
 
 The status is kept in `/backups/updater-status.json` and in PostgreSQL (shown as `updater` in
 `GET /api/v1/version`); events go to the audit log (`updater.update_started`, `…_succeeded`,
-`…_rolled_back`, `…_failed`, `…_available`, actor `openlog-updater`). If the updater dies mid-update,
+`…_rolled_back`, `…_failed`, `…_available`, `updater.self_update_started` / `…_succeeded` / `…_failed`, actor
+`openlog-updater`). The document also carries `updater_version` (the updater's own version) and `self_update` (its last
+self-update attempt). If the updater dies mid-update,
 it finds the `-pre-update` container on its next start and restores it (and an interrupted compose file replacement,
 see below).
 
@@ -209,9 +217,84 @@ warning and shows the notice `compose_outdated`: "the compose files (0.1.21) are
 added to `.env` still reach recreated containers (rule 3 above), but volumes and new services do not until the files
 are updated — or [migrate to install-server.sh](#migrating-from-a-git-clone-installation).
 
-The first update that brings this behaviour is still performed by the updater container you run now (it is not updated
-automatically, see below): run `install-server.sh` once (or `docker compose --profile updater up -d openlog-updater`
-with the new files) so later updates use it.
+The first update that brings this behaviour is still performed by the updater container you run now: an updater older than
+0.1.26 neither updates itself nor reports that it is old (the api adds the notice `updater_outdated` for it). Run
+`install-server.sh` once (or `docker compose --profile updater up -d openlog-updater` with the new files) so later updates
+use the current updater, which then keeps itself current ([below](#updater-self-update)).
+
+### Notices
+
+Shown in Settings → Organization → Version and updates (translated), in `GET /api/v1/version` (`updater.notices[]`) and
+as warnings in the updater log; refreshed on every run.
+
+| Code | Meaning | Fix |
+|---|---|---|
+| `compose_outdated` | compose files of a git clone / own directory older than the running version | `git checkout v<running>` + `docker compose up -d`, or migrate to install-server.sh |
+| `compose_outdated_bundle` | install-server.sh compose files older than the running version (no bundle in the release, `OPENLOG_UPDATER_COMPOSE_SYNC=off`, failed install) | re-run install-server.sh |
+| `compose_changes_pending` | compose changes the updater cannot apply (volumes, ports, new services, mounted files) | re-run install-server.sh or `docker compose up -d` |
+| `updater_outdated_bundle` | the openlog-updater container (install-server.sh installation) is older than the running version: self-update off, failed or not yet possible | re-run install-server.sh |
+| `updater_outdated` | the same for other Compose installations — also added by the api for status documents of updaters older than 0.1.26 (`updater_version: "< <running>"`), which cannot report it | `docker compose --profile updater up -d openlog-updater` in the compose directory (git clone), or re-run install-server.sh |
+| `updater_outdated_kubernetes` | the updater CronJob runs an image older than the Deployments it updated | `helm upgrade … --set image.tag=<running version>` (§4) |
+| `updater_self_update_failed` | the self-update to `version` failed; the previous updater keeps running and it is not retried for that version | read `reason` and the updater log; re-run install-server.sh (or `docker compose --profile updater up -d openlog-updater`) |
+
+### Updater self-update
+
+The `openlog-updater` container runs the image `.env` selected when it was created
+(`OPENLOG_UPDATER_IMAGE`, default `OPENLOG_IMAGE`). Without help it would keep that image forever, so improvements of the
+updater itself would never reach an installation. After a successful update to `V` (health check passed, compose files
+installed, the UI request finished) an updater older than `V` therefore replaces its own container with `V`'s image — the
+image the update already pulled by its signed digest. `OPENLOG_UPDATER_SELF_UPDATE=auto` (default) does this for
+install-server.sh installations; `on` also for a git clone or your own directory (the container is recreated through the
+Docker API like `openlog`, so your compose file is not needed, but a `docker-compose.override.yml` setting that is not in
+the container stays as it is); `off` never (notice only). The Kubernetes CronJob runs the chart's image and never updates
+itself.
+
+The container name (e.g. `openlog-openlog-updater-1`) is the ownership token: Docker renames are atomic and names are
+unique, so only one container can hold it, and only the holder acts on the stack.
+
+1. The old updater writes `updater-handover.json` into the backup directory (mounted into both containers), rewrites
+   `OPENLOG_UPDATER_IMAGE` in `.env` when `.env` pins it to an image (not when the updater follows `OPENLOG_IMAGE`, which
+   the update already rewrote), and creates `<name>-self-update-new` from its own container: same labels (including
+   `com.docker.compose.*`, so compose still owns it), mounts, networks, user and entrypoint, the environment refreshed
+   from `.env` and the compose files like any recreated container, the new image — and **restart policy `no`**.
+2. The new updater starts, finds the marker with its own container id, and runs a self-test: it reports the expected
+   version, reaches Docker, reads the status file and the compose directory. It writes `updater-handover-ready.json` and
+   waits; it does nothing else.
+3. The old updater waits up to 2 minutes for that file. If the new container does not start, exits, fails the self-test or
+   stays silent, the old updater removes it, restores `.env`, deletes the marker, records the step `self-update` as failed
+   and the notice `updater_self_update_failed`, and keeps running. The self-update is not retried for `V` (the next
+   release tries again).
+4. On success the old updater renames itself `<name>-self-update-old` and stops acting for good.
+5. The new updater takes the canonical name, applies the old restart policy (`unless-stopped`) to itself — the commit —,
+   stops and removes the old container, deletes the marker, marks the step `self-update` ok (Settings shows
+   "Updater self-update") and starts its normal loop (first run immediately).
+
+Log lines to look for: `openlog-updater replaces its own container…`, `the new updater passed its self-test`, `handed
+over to the new updater container`, then in the new container `self-update: took over the container name` and
+`openlog-updater replaced its own container`.
+
+**Crash safety.** Every updater reads the marker at start, before it acts:
+
+| Interrupted | After a host or daemon restart | Result |
+|---|---|---|
+| before the old updater renamed itself | only the old container restarts (the new one has restart policy `no`); it still holds the name | it removes the new container, restores `.env`: failed, old updater runs |
+| after the rename, before the new updater took the name | only the old one restarts (named `…-self-update-old`); the new one is stopped | it removes the stopped, uncommitted new container and takes its name back: failed, old updater runs |
+| new updater took the name, not yet committed | same: the new container is stopped with policy `no` | as above |
+| after the commit | both restart; the old one sees a committed new updater and only waits | the new one removes the old container: succeeded |
+| the new updater hangs | — | it exits when the handover is 3 minutes old unless it holds the name; the old one then reclaims |
+| `docker compose up -d openlog-updater` during the handover | the container compose creates holds the name | it removes both handover containers and deletes the marker |
+
+The old updater reclaims the name only when the new container is gone, or stopped **and** still has restart policy `no`:
+a stopped container with that policy can never act again, and a committed one is never touched. So at most one updater
+acts at any time, and after any restart exactly one remains.
+
+**Disable:** `OPENLOG_UPDATER_SELF_UPDATE=off` in `.env`, then `docker compose --profile updater up -d openlog-updater`
+(or re-run install-server.sh).
+
+**Manual recovery** (should not be needed): `docker ps -a --filter name=self-update` lists leftovers. Keep the container
+named `<project>-openlog-updater-1` (rename one back with `docker rename`), `docker rm -f` the others, delete
+`backups/updater-handover.json` and `backups/updater-handover-ready.json`, and re-run install-server.sh (or
+`docker compose --profile updater up -d openlog-updater`).
 
 ### Migrating from a git clone installation
 
@@ -251,9 +334,14 @@ the old image (its `ENV`, `LABEL`, entrypoint) are dropped so the new image's de
 images whose digest is in a manifest signed by a trusted key are ever run. Registry credentials are not
 supported (public images or a mirror reachable without auth).
 
-**Not updated automatically:** the `openlog-updater` container itself (it runs the image from `.env` on
-the next `docker compose up -d` or install-server.sh run), `bootstrap`, `loadgen`, and third-party images (Kafka,
-ClickHouse, PostgreSQL).
+**Updated automatically:** the services in `OPENLOG_UPDATER_SERVICES` (`openlog`), `OPENLOG_IMAGE` in `.env`, the compose
+files of install-server.sh installations, and — since 0.1.26, with `OPENLOG_UPDATER_SELF_UPDATE` — the `openlog-updater`
+container itself ([Updater self-update](#updater-self-update)).
+
+**Not updated automatically:** `bootstrap`, `loadgen`, `openlog-renderer`, third-party images (Kafka, ClickHouse,
+PostgreSQL), the updater container with `OPENLOG_UPDATER_SELF_UPDATE=off` (or `auto` outside install-server.sh
+installations: notice `updater_outdated`), and updater containers older than 0.1.26 (run install-server.sh or
+`docker compose --profile updater up -d openlog-updater` once).
 
 ## 4. Kubernetes (Helm)
 
@@ -316,7 +404,8 @@ kubectl -n <namespace> create job --from=cronjob/<fullname>-updater openlog-upda
 
 Caveat: the updater changes Deployments outside Helm. The next `helm upgrade` sets the image from
 `image.tag` again — set it to the running version (or use GitOps, where the updater should stay in
-`notify` mode).
+`notify` mode). The CronJob itself keeps running the chart's `image.tag`, so after it updated the Deployments it reports
+the notice `updater_outdated_kubernetes` until the next `helm upgrade --set image.tag=<running version>`.
 
 ## 5. Backups and restore
 
@@ -348,6 +437,10 @@ of the newer release run again on the next upgrade.
 | `compose_changes_pending` | Re-run install-server.sh (or `docker compose -p openlog -f … --env-file … up -d`); for a changed mounted file a restart of the named service is enough. |
 | `compose-bundle` step failed | Download or sha256 of `openlog-compose-<v>.tar.gz` (network, mirror without the asset: `OPENLOG_UPDATER_COMPOSE_SYNC=off` and re-run install-server.sh for each version). Nothing was changed. |
 | `cleanup` step: compose files restored | The update itself succeeded; the files stayed at the previous version (notice `compose_outdated_bundle`): re-run install-server.sh. |
+| No "Check now" / "Update now" with `OPENLOG_SIGNUP_ENABLED=true` | Only superadmins see them: the e-mail must be in `OPENLOG_SUPERADMIN_EMAILS` of `openlog` and verified. |
+| `updater_outdated*` | The updater container is older than the running version ([Notices](#notices)); `docker inspect <project>-openlog-updater-1 --format '{{.Config.Image}}'`. |
+| `self-update` step failed / `updater_self_update_failed` | `reason` and `docker compose logs openlog-updater` (the tail of the new container's log is included). The previous updater keeps running; fix the cause and re-run install-server.sh. |
+| Containers `…-self-update-new` / `…-self-update-old` stay | A handover is in progress (up to ~3 min) or was left by a manual intervention: [manual recovery](#updater-self-update). |
 | Contract migration never runs | `openlog-migrate -plan` names the old instance; stop it, or wait 5 minutes after it died without a graceful shutdown. |
 | UI keeps asking to reload | A load balancer still sends some requests to an older pod; finish the rollout. |
 | Acceptance tests | `make mixed-version` (N and N+1 side by side, contract gating), `make updater-acceptance` (Compose 0.9.0 → 0.9.1 with test expand + contract migrations → broken 0.9.2 rolled back; see below). |
@@ -361,6 +454,10 @@ throwaway key) runs the real `deploy/compose` stack and `openlog-updater` in `au
    expand migration 9001 runs in the migrate step, the contract migration 9002 (`requires-all-at-least 0.9.1`) only in
    contract-migrate after the old container stopped; hosts, log/span/metric row counts, the logs and APM queries, the
    `pg_dump` backup and the rewritten `OPENLOG_IMAGE` are checked.
+   **Self-update** (`OPENLOG_UPDATER_SELF_UPDATE=on`; skipped with `UPDTEST_FROM_IMAGE` or `UPDTEST_UPDATER=to`): the 0.9.0
+   updater hands over to a 0.9.1 container — `self_update.state=succeeded`, step `self-update` ok, `updater_version`
+   0.9.1, `openlog-updtest-openlog-updater-1` runs the 0.9.1 digest with restart policy `unless-stopped` and its compose
+   service label, no `-self-update-` container is left — and that new updater performs step 2.
 2. **Broken 0.9.2** (a real build with one more expand migration, 9003, whose allinone never becomes ready): the migrate
    step applies 9003, health fails (`not healthy within …: connection refused`), the containers are rolled back to 0.9.1
    (`rolled_back`, recorded in `failed_versions` and the audit log). **The expand migration stays applied**: 0.9.1 serves

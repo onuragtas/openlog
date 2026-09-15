@@ -1079,7 +1079,9 @@ export interface paths {
         put?: never;
         /**
          * Check for a new release now
-         * @description Signed-in admins and owners (403 for API keys, lower roles, and when `OPENLOG_SIGNUP_ENABLED=true`).
+         * @description Signed-in admins and owners; with `OPENLOG_SIGNUP_ENABLED=true` only superadmins (`OPENLOG_SUPERADMIN_EMAILS`,
+         *     verified e-mail) whatever their organization role (403 for API keys, lower roles, and everyone else there).
+         *     The audit entry of a superadmin request has `details.superadmin: true`.
          *     Runs the api release check immediately and queues a `check` request for openlog-updater (picked up
          *     within `OPENLOG_UPDATER_REQUEST_POLL`, default 10 s). At most once per 30 s per installation (429 with
          *     `Retry-After`). Audit action `update.check_requested`. Returns the fresh version information.
@@ -1102,7 +1104,7 @@ export interface paths {
         put?: never;
         /**
          * Ask openlog-updater to install a release now
-         * @description Signed-in admins and owners (same rules as `/version/check`). Queues an `apply` request; the updater
+         * @description Same callers as `/version/check` (admins and owners; superadmins only with sign-up enabled). Queues an `apply` request; the updater
          *     installs `target_version` also in `notify` mode, only if it is still the release it would select, and
          *     outside `OPENLOG_UPDATER_MAINTENANCE_WINDOW` only with `ignore_maintenance_window: true`. Follow the
          *     progress in `GET /api/v1/version` (`update_requests.latest`, `updater.state`, `updater.steps`).
@@ -5857,7 +5859,7 @@ export interface components {
             updater: components["schemas"]["UpdaterStatus"] | null;
         };
         UpdateRequests: {
-            /** @description The caller may use POST /version/check and /version/update (signed-in admin or owner, signup disabled). */
+            /** @description The caller may use POST /version/check and /version/update (signed-in admin or owner; with OPENLOG_SIGNUP_ENABLED=true a superadmin of OPENLOG_SUPERADMIN_EMAILS instead). */
             can_request: boolean;
             /** @description A Compose updater polled update_requests recently (picks up requests within seconds). The Kubernetes CronJob never listens; it handles requests at its next scheduled run. */
             updater_listening: boolean;
@@ -6005,7 +6007,7 @@ export interface components {
             finished_at?: string;
             backup_file?: string;
             steps?: {
-                /** @description backup, pull, compose-bundle, migrate, recreate / rollout, health, rollback, cleanup, contract-migrate */
+                /** @description backup, pull, compose-bundle, migrate, recreate / rollout, health, rollback, cleanup, contract-migrate, self-update (Compose, D-120) */
                 name: string;
                 /** @enum {string} */
                 status: "running" | "ok" | "failed";
@@ -6024,7 +6026,7 @@ export interface components {
                 /** Format: date-time */
                 at: string;
             }[];
-            /** @description Installation hints refreshed on every updater run (Compose; D-111). Codes: compose_outdated {files_version, running_version} (compose files not managed by install-server.sh are older than the running version), compose_outdated_bundle {files_version, running_version} (re-run install-server.sh), compose_changes_pending {version, services} (compose changes the updater does not apply). */
+            /** @description Installation hints refreshed on every updater run (Compose; D-111). Codes: compose_outdated {files_version, running_version} (compose files not managed by install-server.sh are older than the running version), compose_outdated_bundle {files_version, running_version} (re-run install-server.sh), compose_changes_pending {version, services} (compose changes the updater does not apply); updater_outdated, updater_outdated_bundle, updater_outdated_kubernetes {updater_version, running_version} (the updater is older than the running version; the api adds updater_outdated / _kubernetes with updater_version "< <running>" to documents without updater_version), updater_self_update_failed {version, reason} (D-120). */
             notices?: {
                 code: string;
                 /** @description English text */
@@ -6033,6 +6035,20 @@ export interface components {
                     [key: string]: string;
                 };
             }[];
+            /** @description Version of the openlog-updater that wrote the document (absent in documents of updaters before 0.1.26) */
+            updater_version?: string;
+            /** @description Last attempt of the Compose updater to replace its own container with the installed release (D-120); one attempt per target version. */
+            self_update?: {
+                target_version: string;
+                from_version: string;
+                /** @enum {string} */
+                state: "running" | "succeeded" | "failed";
+                error?: string;
+                /** Format: date-time */
+                started_at: string;
+                /** Format: date-time */
+                finished_at?: string;
+            };
             /** @description Compose changes of an installed bundle that wait for `docker compose up -d` or a restart (Compose). */
             compose_changes?: {
                 version: string;
