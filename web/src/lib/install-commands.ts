@@ -36,7 +36,7 @@ export const TARGET_GROUPS = ["infrastructure", "apm", "logs", "opentelemetry", 
 export type TargetGroup = (typeof TARGET_GROUPS)[number];
 
 /** What the verification step waits for. */
-export type VerifyKind = "host" | "kubernetes" | "apm" | "logs" | "integration";
+export type VerifyKind = "host" | "kubernetes" | "apm" | "otel" | "logs" | "integration";
 
 export type OptionKey =
   | "hostName"
@@ -98,7 +98,7 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "logs/browser", group: "logs", verify: "logs", options: ["serviceName", "environment", "browserOrigin"], docs: blob("docs/contracts/config.md") },
   { id: "logs/otel", group: "logs", verify: "logs", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
   { id: "otel/sdk", group: "opentelemetry", verify: "apm", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
-  { id: "otel/collector", group: "opentelemetry", verify: "apm", options: ["protocol"], docs: blob("README.md") },
+  { id: "otel/collector", group: "opentelemetry", verify: "otel", options: ["protocol"], docs: blob("README.md") },
   { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },

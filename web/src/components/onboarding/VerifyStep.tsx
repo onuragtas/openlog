@@ -9,6 +9,8 @@ import {
   verifyHostsQuery,
   verifyKubernetesQuery,
   verifyLogsQuery,
+  verifyOtelQuery,
+  otelEntityKey,
   VERIFY_POLL_MS,
   VERIFY_TIMEOUT_MS,
   type VerifyLogsFilter,
@@ -65,9 +67,8 @@ export interface VerifyStepProps {
 
 type Common = Required<VerifyStepProps>;
 
-/** The service name APM verification waits for ("" = any new service). */
+/** The service name APM verification waits for. */
 function apmServiceName(target: InstallTarget, options: InstallOptions): string {
-  if (target.id === "otel/collector") return "";
   if (target.id === "apm/php" && !cleanName(options.serviceName)) return "php-app";
   return expectedServiceName(options);
 }
@@ -206,7 +207,7 @@ function ApmVerify({ common }: { common: Common }) {
       common={common}
       found={!!found}
       service={expected}
-      waiting={expected ? t("addData.verify.apm", { name: expected }) : t("addData.verify.apmAny")}
+      waiting={t("addData.verify.apm", { name: expected })}
       success={found ? t("addData.verify.successService", { name: found.service_name }) : ""}
       action={
         found && (
@@ -214,6 +215,60 @@ function ApmVerify({ common }: { common: Common }) {
             {t("addData.verify.openService")}
           </Link>
         )
+      }
+    />
+  );
+}
+
+/** OpenTelemetry Collector: the first APM service, log service or metric that was not reporting when the flow started. */
+function OtelVerify({ common }: { common: Common }) {
+  const { t } = useTranslation();
+  const base = useQuery(baselineQuery("otel", common.startedAt));
+  const live = useQuery({ ...verifyOtelQuery(common.intervalMs), enabled: base.isSuccess });
+  const known = new Set(base.data ?? []);
+  const found = base.isSuccess ? live.data?.find((e) => !known.has(otelEntityKey(e))) : undefined;
+  const success = !found
+    ? ""
+    : found.signal === "apm"
+      ? t("addData.verify.successService", { name: found.name })
+      : found.signal === "metrics"
+        ? t("addData.verify.successMetric", { name: found.name })
+        : found.name
+          ? t("addData.verify.successLogsService", { name: found.name })
+          : t("addData.verify.successLogs");
+  const range = (prev: Record<string, unknown>) => ({ range: prev.range, from: prev.from, to: prev.to });
+  return (
+    <Panel
+      common={common}
+      found={!!found}
+      service=""
+      waiting={t("addData.verify.otel")}
+      success={success}
+      action={
+        found &&
+        (found.signal === "apm" ? (
+          <Link to="/apm/services/$service" params={{ service: found.name }} className={buttonVariants({ size: "sm" })} data-testid="verify-open">
+            {t("addData.verify.openService")}
+          </Link>
+        ) : found.signal === "metrics" ? (
+          <Link
+            to="/metrics"
+            search={(prev: Record<string, unknown>) => ({ ...range(prev), mq: [{ i: "A", m: found.name }] }) as never}
+            className={buttonVariants({ size: "sm" })}
+            data-testid="verify-open"
+          >
+            {t("addData.verify.openMetric")}
+          </Link>
+        ) : (
+          <Link
+            to="/logs"
+            search={(prev: Record<string, unknown>) => ({ ...range(prev), service: found.name || undefined }) as never}
+            className={buttonVariants({ size: "sm" })}
+            data-testid="verify-open"
+          >
+            {t("addData.verify.openLogs")}
+          </Link>
+        ))
       }
     />
   );
@@ -286,6 +341,8 @@ export function VerifyStep({ intervalMs = VERIFY_POLL_MS, timeoutMs = VERIFY_TIM
       return <KubernetesVerify common={common} />;
     case "apm":
       return <ApmVerify common={common} />;
+    case "otel":
+      return <OtelVerify common={common} />;
     case "logs":
       return <LogsVerify common={common} />;
     default:

@@ -44,7 +44,7 @@ export function InstallFlow({
   const title = tDynamic(t, `addData.targets.${target.id}.title`);
 
   // Snapshot of what already reports, taken when the flow opens (VerifyStep reads the same query).
-  const baselineKind = target.verify === "host" || target.verify === "kubernetes" || target.verify === "apm" ? target.verify : null;
+  const baselineKind = target.verify === "host" || target.verify === "kubernetes" || target.verify === "apm" || target.verify === "otel" ? target.verify : null;
   useQuery({ ...baselineQuery(baselineKind ?? "host", startedAt), enabled: baselineKind !== null });
 
   const commands = useMemo(() => buildInstallCommands(target.id, { ...options, licenseKey }, onboarding), [target.id, options, licenseKey, onboarding]);

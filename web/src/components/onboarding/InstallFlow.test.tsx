@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -214,6 +214,28 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
     const tips = await screen.findByTestId("verify-tips");
     expect(tips).toHaveTextContent("Your services must report a service.name and receive some traffic.");
     expect(tips.textContent).not.toContain("“”");
+  });
+
+  it("OpenTelemetry Collector card succeeds on new logs alone and links to them", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    let logServices = [{ value: "java-app", count: 10 }];
+    server.use(
+      http.get("*/api/v1/apm/services", () => HttpResponse.json({ step: "60s", services: [] })),
+      http.get("*/api/v1/metrics", () => HttpResponse.json({ metrics: [], truncated: false })),
+      http.get("*/api/v1/fields/values", () => HttpResponse.json({ key: "service.name", type: "string", values: logServices, total: 10, sampled: false })),
+    );
+    const user = userEvent.setup();
+    renderFlow("otel/collector", ONBOARDING, { intervalMs: 50 });
+    await user.click(await screen.findByRole("radio", { name: /Use a placeholder/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(await screen.findByRole("button", { name: "I ran the commands" }));
+    expect(await screen.findByText("Waiting for new traces, logs or metrics…")).toBeInTheDocument();
+    // java-app was already reporting: only the collector's new service completes the step.
+    logServices = [...logServices, { value: "grpcurl-test", count: 1 }];
+    await waitFor(() => expect(screen.getByTestId("verify-status")).toHaveAttribute("data-state", "success"), { timeout: 3000 });
+    expect(screen.getByText("Logs from grpcurl-test are arriving.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open logs" }).getAttribute("href")).toContain("service=grpcurl-test");
   });
 
   it("integration cards need no key and link to the integrations page", async () => {

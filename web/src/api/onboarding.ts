@@ -23,13 +23,14 @@ export const VERIFY_TIMEOUT_MS = 5 * 60_000;
  * What already reported when the flow started (host ids, cluster uids or APM service names), so the verification step
  * recognizes the new entity. Fetched once per flow (`startedAt`).
  */
-export const baselineQuery = (kind: "host" | "kubernetes" | "apm", startedAt: number) =>
+export const baselineQuery = (kind: "host" | "kubernetes" | "apm" | "otel", startedAt: number) =>
   queryOptions({
     queryKey: ["onboarding", "baseline", kind, startedAt],
     queryFn: async ({ signal }): Promise<string[]> => {
       const to = Date.now();
       const from = String(to - 30 * 60_000);
       if (kind === "host") return unwrap(await api.GET("/api/v1/hosts", { params: { query: { limit: 1000 } }, signal })).hosts.map((h) => h.host_id);
+      if (kind === "otel") return (await otelEntities(signal)).map(otelEntityKey);
       if (kind === "kubernetes") {
         return unwrap(await api.GET("/api/v1/kubernetes/clusters", { params: { query: { from, to: String(to) } }, signal })).clusters.map((c) => c.cluster_uid);
       }
@@ -60,7 +61,41 @@ export const verifyApmServicesQuery = (intervalMs = VERIFY_POLL_MS) =>
     staleTime: 0,
   });
 
-export const verifyKubernetesQuery = (intervalMs = VERIFY_POLL_MS) =>
+/** Something an OpenTelemetry Collector reports: an APM service (traces), a log service.name or a metric name. */
+export interface OtelEntity {
+  signal: "apm" | "logs" | "metrics";
+  /** Service name (apm, logs; "" = log records without service.name) or metric name */
+  name: string;
+}
+
+export const otelEntityKey = (e: OtelEntity) => `${e.signal}:${e.name}`;
+
+/** APM services, log services and metric names of the last 30 minutes, in that order. */
+async function otelEntities(signal: AbortSignal): Promise<OtelEntity[]> {
+  const to = String(Date.now());
+  const from = String(Date.now() - 30 * 60_000);
+  const [apm, logs, metrics] = await Promise.all([
+    api.GET("/api/v1/apm/services", { params: { query: { from, to } }, signal }),
+    api.GET("/api/v1/fields/values", { params: { query: { signal: "logs", key: "service.name", from, to, limit: 1000 } }, signal }),
+    api.GET("/api/v1/metrics", { params: { query: { from, to } }, signal }),
+  ]);
+  return [
+    ...unwrap(apm).services.map((s): OtelEntity => ({ signal: "apm", name: s.service_name })),
+    ...unwrap(logs).values.map((v): OtelEntity => ({ signal: "logs", name: v.value })),
+    ...unwrap(metrics).metrics.map((m): OtelEntity => ({ signal: "metrics", name: m.name })),
+  ];
+}
+
+/** OpenTelemetry Collector verification: whatever it sends (traces, logs or metrics) counts. */
+export const verifyOtelQuery = (intervalMs = VERIFY_POLL_MS) =>
+  queryOptions({
+    queryKey: ["onboarding", "verify", "otel"],
+    queryFn: async ({ signal }) => otelEntities(signal),
+    refetchInterval: intervalMs,
+    staleTime: 0,
+  });
+
+export const verifyKubernetesQuery =(intervalMs = VERIFY_POLL_MS) =>
   queryOptions({
     queryKey: ["onboarding", "verify", "kubernetes"],
     queryFn: async ({ signal }) => {
