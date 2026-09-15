@@ -156,7 +156,20 @@ func (e *env) apply(action, version string, inUse ...string) *Status {
 }
 
 func (e *env) linkTarget() string {
-	e.t.Helper()
+	if runtime.GOOS == "windows" {
+		// link_path is a copy on Windows (apply: copy + rename): the version whose jar has the same content.
+		got, err := os.ReadFile(e.link)
+		if err != nil {
+			return ""
+		}
+		entries, _ := os.ReadDir(filepath.Join(e.root, "versions"))
+		for _, v := range entries {
+			if want, err := os.ReadFile(e.jarPath(v.Name())); err == nil && bytes.Equal(got, want) {
+				return e.jarPath(v.Name())
+			}
+		}
+		return ""
+	}
 	t, err := os.Readlink(e.link)
 	if err != nil {
 		e.t.Fatalf("link_path: %v", err)
