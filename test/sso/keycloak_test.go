@@ -8,7 +8,7 @@
 // and SAML SOAP back-channel logout (D-098). See test/integration/sso/docker-compose.yml:
 //
 //	docker compose -f test/integration/sso/docker-compose.yml up -d --wait
-//	OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55440/openlog?sslmode=disable \
+//	OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:27440/openlog?sslmode=disable \
 //	OPENLOG_TEST_KEYCLOAK_URL=http://127.0.0.1:18080 OPENLOG_TEST_CALLBACK_HOST=host.docker.internal \
 //	go test -tags ssoe2e -count=1 -v ./test/sso
 //

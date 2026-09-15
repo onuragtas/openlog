@@ -34,7 +34,7 @@ public class MicronautApp {
   @Produces(MediaType.TEXT_PLAIN)
   @ExecuteOn(TaskExecutors.BLOCKING)
   public String user(@PathVariable int id) throws Exception {
-    String url = "jdbc:postgresql://" + env("PG_HOST", "127.0.0.1") + ":" + env("PG_PORT", "55442") + "/openlog";
+    String url = "jdbc:postgresql://" + env("PG_HOST", "127.0.0.1") + ":" + env("PG_PORT", "23432") + "/openlog";
     // a literal statement on purpose: the agent must sanitize it
     try (Connection c = DriverManager.getConnection(url, "openlog", "openlog");
         Statement st = c.createStatement();

@@ -179,15 +179,15 @@ func TestKafkaClients(t *testing.T) {
 		return config.KafkaSASL{Mechanism: m, Username: "openlog", Password: pw}
 	}
 	cases := []kafkaCase{
-		{name: "SSL mutual TLS", addr: "localhost:39093", tls: mtls},
-		{name: "SASL_SSL PLAIN", addr: "localhost:39094", tls: ca, sasl: scram(config.SASLPlain, "openlog-plain-pw")},
-		{name: "SASL_SSL SCRAM-SHA-256", addr: "localhost:39094", tls: ca, sasl: scram(config.SASLScramSHA256, "openlog-scram-pw")},
-		{name: "SASL_SSL SCRAM-SHA-512", addr: "localhost:39094", tls: ca, sasl: scram(config.SASLScramSHA512, "openlog-scram-pw")},
-		{name: "SASL_SSL insecure_skip_verify with an unrelated CA (opt-in)", addr: "localhost:39094", tls: config.TLS{Enabled: true, CAFile: certs.WrongCA, InsecureSkipVerify: true}, sasl: scram(config.SASLScramSHA512, "openlog-scram-pw")},
-		{name: "wrong CA", addr: "localhost:39094", tls: wrongCA, sasl: scram(config.SASLScramSHA512, "openlog-scram-pw"), wantErr: "certificate signed by unknown authority"},
-		{name: "wrong SCRAM password", addr: "localhost:39094", tls: ca, sasl: scram(config.SASLScramSHA512, "nope"), wantErr: "SASL_AUTHENTICATION_FAILED"},
-		{name: "SSL listener without client certificate", addr: "localhost:39093", tls: ca, anyErrors: true},
-		{name: "plaintext client on a TLS listener", addr: "localhost:39094", anyErrors: true},
+		{name: "SSL mutual TLS", addr: "localhost:26093", tls: mtls},
+		{name: "SASL_SSL PLAIN", addr: "localhost:26094", tls: ca, sasl: scram(config.SASLPlain, "openlog-plain-pw")},
+		{name: "SASL_SSL SCRAM-SHA-256", addr: "localhost:26094", tls: ca, sasl: scram(config.SASLScramSHA256, "openlog-scram-pw")},
+		{name: "SASL_SSL SCRAM-SHA-512", addr: "localhost:26094", tls: ca, sasl: scram(config.SASLScramSHA512, "openlog-scram-pw")},
+		{name: "SASL_SSL insecure_skip_verify with an unrelated CA (opt-in)", addr: "localhost:26094", tls: config.TLS{Enabled: true, CAFile: certs.WrongCA, InsecureSkipVerify: true}, sasl: scram(config.SASLScramSHA512, "openlog-scram-pw")},
+		{name: "wrong CA", addr: "localhost:26094", tls: wrongCA, sasl: scram(config.SASLScramSHA512, "openlog-scram-pw"), wantErr: "certificate signed by unknown authority"},
+		{name: "wrong SCRAM password", addr: "localhost:26094", tls: ca, sasl: scram(config.SASLScramSHA512, "nope"), wantErr: "SASL_AUTHENTICATION_FAILED"},
+		{name: "SSL listener without client certificate", addr: "localhost:26093", tls: ca, anyErrors: true},
+		{name: "plaintext client on a TLS listener", addr: "localhost:26094", anyErrors: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -212,7 +212,7 @@ func TestKafkaClients(t *testing.T) {
 // ---- ClickHouse ----
 
 func TestClickHouseClients(t *testing.T) {
-	base := clickhouse.Options{Addr: []string{"127.0.0.1:39440"}, Database: "default", User: "openlog", Password: "openlog", MaxConns: 2}
+	base := clickhouse.Options{Addr: []string{"127.0.0.1:26440"}, Database: "default", User: "openlog", Password: "openlog", MaxConns: 2}
 	mtls := config.TLS{Enabled: true, CAFile: certs.CAFile, CertFile: certs.ClientCert, KeyFile: certs.ClientKey}
 	cases := []struct {
 		name    string
@@ -222,7 +222,7 @@ func TestClickHouseClients(t *testing.T) {
 		anyErr  bool
 	}{
 		{name: "mutual TLS", tls: mtls},
-		{name: "server name override", tls: config.TLS{Enabled: true, CAFile: certs.CAFile, CertFile: certs.ClientCert, KeyFile: certs.ClientKey, ServerName: "ch2"}, addr: "127.0.0.1:39441"},
+		{name: "server name override", tls: config.TLS{Enabled: true, CAFile: certs.CAFile, CertFile: certs.ClientCert, KeyFile: certs.ClientKey, ServerName: "ch2"}, addr: "127.0.0.1:26441"},
 		{name: "wrong CA", tls: config.TLS{Enabled: true, CAFile: certs.WrongCA, CertFile: certs.ClientCert, KeyFile: certs.ClientKey}, wantErr: "certificate signed by unknown authority"},
 		{name: "name mismatch", tls: config.TLS{Enabled: true, CAFile: certs.CAFile, CertFile: certs.ClientCert, KeyFile: certs.ClientKey, ServerName: "not-clickhouse"}, wantErr: "not-clickhouse"},
 		{name: "no client certificate", tls: config.TLS{Enabled: true, CAFile: certs.CAFile}, anyErr: true},
@@ -265,7 +265,7 @@ func TestClickHouseClients(t *testing.T) {
 // ---- PostgreSQL ----
 
 func TestPostgresClients(t *testing.T) {
-	const dsn = "postgres://openlog:openlog@localhost:35432/openlog?sslmode=verify-full&connect_timeout=5"
+	const dsn = "postgres://openlog:openlog@localhost:26432/openlog?sslmode=verify-full&connect_timeout=5"
 	ping := func(o postgres.Options) (bool, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -293,7 +293,7 @@ func TestPostgresClients(t *testing.T) {
 // ---- data flow through openlog-allinone over TLS ----
 
 func apiGet(path string, q url.Values, out any) error {
-	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:38080"+path+"?"+q.Encode(), nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:26080"+path+"?"+q.Encode(), nil)
 	req.Header.Set("Authorization", "Bearer ola_tls-api-key")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -350,7 +350,7 @@ func TestDataFlowsOverTLS(t *testing.T) {
 	})
 
 	eventually(t, 2*time.Minute, "direct inserts reached both shards (processor replica connections over TLS)", func() error {
-		for _, port := range []int{38123, 38124} {
+		for _, port := range []int{26123, 26124} {
 			n, err := chHTTP(port, "SELECT count() FROM openlog.metrics_local")
 			if err != nil {
 				return err
@@ -364,7 +364,7 @@ func TestDataFlowsOverTLS(t *testing.T) {
 	})
 
 	// Every native-protocol query of the openlog user was made over TLS (the plain tcp_port is disabled).
-	for _, port := range []int{38123, 38124} {
+	for _, port := range []int{26123, 26124} {
 		if _, err := chHTTP(port, "SYSTEM FLUSH LOGS"); err != nil {
 			t.Fatal(err)
 		}
@@ -386,7 +386,7 @@ func TestDataFlowsOverTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cl, err := kgo.NewClient(append([]kgo.Opt{kgo.SeedBrokers("localhost:39093")}, opts...)...)
+	cl, err := kgo.NewClient(append([]kgo.Opt{kgo.SeedBrokers("localhost:26093")}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestDataFlowsOverTLS(t *testing.T) {
 	// PostgreSQL: all openlog sessions use TLS.
 	pctx, pcancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer pcancel()
-	pool, err := postgres.Open(pctx, postgres.Options{DSN: "postgres://openlog:openlog@localhost:35432/openlog?sslmode=verify-full", TLSCAFile: certs.CAFile})
+	pool, err := postgres.Open(pctx, postgres.Options{DSN: "postgres://openlog:openlog@localhost:26432/openlog?sslmode=verify-full", TLSCAFile: certs.CAFile})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +457,7 @@ func TestWrongCAFailsClearly(t *testing.T) {
 		})
 	}
 	eventually(t, 90*time.Second, "badca-kafka (ingest) is not ready and names the TLS error", func() error {
-		resp, err := http.Get("http://127.0.0.1:39466/readyz")
+		resp, err := http.Get("http://127.0.0.1:26466/readyz")
 		if err != nil {
 			return err
 		}

@@ -1,7 +1,7 @@
 # Throwaway dependencies of the usage/quota integration tests (project openlog-m4-usage):
 #
 #   docker compose -p openlog-m4-usage -f internal/usage/testdata/docker-compose.yml up -d --wait
-#   OPENLOG_TEST_CLICKHOUSE_ADDR=127.0.0.1:19010 OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55441/openlog?sslmode=disable \
+#   OPENLOG_TEST_CLICKHOUSE_ADDR=127.0.0.1:19010 OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:27441/openlog?sslmode=disable \
 #     go test -tags integration -count=1 ./internal/usage ./internal/quota
 #   docker compose -p openlog-m4-usage -f internal/usage/testdata/docker-compose.yml down -v
 services:
@@ -32,7 +32,7 @@ services:
       POSTGRES_PASSWORD: openlog
       POSTGRES_DB: openlog
     ports:
-      - "127.0.0.1:55441:5432"
+      - "127.0.0.1:27441:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openlog"]
       interval: 2s

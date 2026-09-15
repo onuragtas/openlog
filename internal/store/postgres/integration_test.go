@@ -5,7 +5,7 @@
 //	go test -tags integration -count=1 ./internal/store/postgres
 //
 // Without OPENLOG_TEST_POSTGRES_DSN the test starts the compose project
-// openlog-pgtest (test/integration/postgres, host port PGTEST_PORT or 55432)
+// openlog-pgtest (test/integration/postgres, host port PGTEST_PORT or 27432)
 // and removes it afterwards (PGTEST_KEEP=1 keeps it).
 package postgres_test
 
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	if dsn == "" {
 		port := os.Getenv("PGTEST_PORT")
 		if port == "" {
-			port = "55432"
+			port = "27432"
 		}
 		if err := compose("up", "-d", "--wait"); err != nil {
 			fmt.Fprintln(os.Stderr, err)

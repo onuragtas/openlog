@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: openlog
       POSTGRES_DB: openlog
     ports:
-      - "127.0.0.1:${ALERTTEST_PORT:-55462}:5432"
+      - "127.0.0.1:${ALERTTEST_PORT:-27462}:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:

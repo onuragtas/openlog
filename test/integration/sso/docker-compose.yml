@@ -1,7 +1,7 @@
 # PostgreSQL and Keycloak for the single sign-on end-to-end test (test/sso, D-077):
 #
 #   docker compose -f test/integration/sso/docker-compose.yml up -d --wait
-#   OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55440/openlog?sslmode=disable \
+#   OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:27440/openlog?sslmode=disable \
 #   OPENLOG_TEST_KEYCLOAK_URL=http://127.0.0.1:18080 go test -tags ssoe2e -count=1 ./test/sso
 #   docker compose -f test/integration/sso/docker-compose.yml down -v
 name: openlog-ssotest
@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: openlog
       POSTGRES_DB: openlog
     ports:
-      - "127.0.0.1:${SSOTEST_PG_PORT:-55440}:5432"
+      - "127.0.0.1:${SSOTEST_PG_PORT:-27440}:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:

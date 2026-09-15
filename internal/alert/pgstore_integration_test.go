@@ -5,7 +5,7 @@
 //	go test -tags integration -count=1 ./internal/alert
 //
 // Without OPENLOG_TEST_POSTGRES_DSN the test starts the compose project openlog-alerttest
-// (test/integration/alert, host port ALERTTEST_PORT or 55462) and removes it afterwards (ALERTTEST_KEEP=1 keeps it).
+// (test/integration/alert, host port ALERTTEST_PORT or 27462) and removes it afterwards (ALERTTEST_KEEP=1 keeps it).
 package alert_test
 
 import (
@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 	if dsn == "" {
 		port := os.Getenv("ALERTTEST_PORT")
 		if port == "" {
-			port = "55462"
+			port = "27462"
 		}
 		if err := alertCompose("up", "-d", "--wait"); err != nil {
 			fmt.Fprintln(os.Stderr, err)

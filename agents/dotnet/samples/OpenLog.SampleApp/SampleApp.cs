@@ -38,7 +38,7 @@ public sealed class SampleSettings
     public string? MySql { get; set; }
     public string? Redis { get; set; }
     public string? SqlServer { get; set; }
-    /// <summary>MassTransit RabbitMQ host URI, e.g. amqp://openlog:openlog@127.0.0.1:45672/</summary>
+    /// <summary>MassTransit RabbitMQ host URI, e.g. amqp://openlog:openlog@127.0.0.1:24672/</summary>
     public string? RabbitMq { get; set; }
     public string? Kafka { get; set; }
     /// <summary>false: the agent is not registered (overhead baseline).</summary>

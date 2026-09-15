@@ -24,7 +24,7 @@ public class KafkaDemo {
   static final String TOPIC = "openlog-orders";
   private static final Logger log = LoggerFactory.getLogger(KafkaDemo.class);
 
-  private final String bootstrap = MvcApp.env("KAFKA_BOOTSTRAP", "127.0.0.1:59092");
+  private final String bootstrap = MvcApp.env("KAFKA_BOOTSTRAP", "127.0.0.1:23092");
   private volatile boolean running = true;
   private KafkaProducer<String, String> producer;
 

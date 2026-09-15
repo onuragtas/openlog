@@ -379,9 +379,9 @@ jobs:
       - name: instrumentation tests against PostgreSQL, MySQL and Redis
         if: matrix.node == '22'
         env:
-          PG_URL: postgres://openlog:openlog@127.0.0.1:55432/openlog
-          MYSQL_URL: mysql://openlog:openlog@127.0.0.1:53306/openlog
-          REDIS_URL: redis://127.0.0.1:56379
+          PG_URL: postgres://openlog:openlog@127.0.0.1:21432/openlog
+          MYSQL_URL: mysql://openlog:openlog@127.0.0.1:21306/openlog
+          REDIS_URL: redis://127.0.0.1:21379
         run: |
           $COMPOSE up -d --wait postgres mysql redis
           npm run test:integration
@@ -424,12 +424,12 @@ jobs:
       - name: instrumentation tests against PostgreSQL, MySQL, Redis, RabbitMQ and Kafka (psycopg2/3, asyncpg, PyMySQL, mysqlclient, SQLAlchemy, redis, Celery prefork, gRPC, aio-pika, confluent-kafka, kafka-python, aiokafka)
         if: matrix.python == '3.12'
         env:
-          PG_URL: postgresql://openlog:openlog@127.0.0.1:55433/openlog
+          PG_URL: postgresql://openlog:openlog@127.0.0.1:22432/openlog
           MYSQL_HOST: 127.0.0.1
-          MYSQL_PORT: "53307"
-          REDIS_URL: redis://127.0.0.1:56380/0
-          RABBITMQ_URL: amqp://openlog:openlog@127.0.0.1:55673/
-          KAFKA_BOOTSTRAP: 127.0.0.1:59092
+          MYSQL_PORT: "22306"
+          REDIS_URL: redis://127.0.0.1:22379/0
+          RABBITMQ_URL: amqp://openlog:openlog@127.0.0.1:22672/
+          KAFKA_BOOTSTRAP: 127.0.0.1:22092
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libmysqlclient-dev pkg-config
           python -m pip install -r tests/requirements-integration.txt
@@ -492,12 +492,12 @@ jobs:
       COMPOSE: docker compose -p openlog-m4-dotnet-test -f test/docker-compose.yml
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
-      PG_CONNECTION: Host=127.0.0.1;Port=45433;Username=openlog;Password=openlog;Database=openlog
-      MYSQL_CONNECTION: Server=127.0.0.1;Port=43307;User ID=openlog;Password=openlog;Database=openlog
-      REDIS_CONNECTION: 127.0.0.1:46380
-      RABBITMQ_CONNECTION: amqp://openlog:openlog@127.0.0.1:45672/
-      KAFKA_BOOTSTRAP: 127.0.0.1:49092
-      SQLSERVER_CONNECTION: Server=127.0.0.1,41433;User ID=sa;Password=Openlog-Test-1;TrustServerCertificate=true
+      PG_CONNECTION: Host=127.0.0.1;Port=24432;Username=openlog;Password=openlog;Database=openlog
+      MYSQL_CONNECTION: Server=127.0.0.1;Port=24306;User ID=openlog;Password=openlog;Database=openlog
+      REDIS_CONNECTION: 127.0.0.1:24379
+      RABBITMQ_CONNECTION: amqp://openlog:openlog@127.0.0.1:24672/
+      KAFKA_BOOTSTRAP: 127.0.0.1:24092
+      SQLSERVER_CONNECTION: Server=127.0.0.1,24433;User ID=sa;Password=Openlog-Test-1;TrustServerCertificate=true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

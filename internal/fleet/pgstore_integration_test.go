@@ -5,7 +5,7 @@
 //	go test -tags integration -count=1 ./internal/fleet
 //
 // Without OPENLOG_TEST_POSTGRES_DSN the test starts the compose project openlog-fleettest
-// (test/integration/fleet, host port FLEETTEST_PORT or 55442) and removes it afterwards
+// (test/integration/fleet, host port FLEETTEST_PORT or 27442) and removes it afterwards
 // (FLEETTEST_KEEP=1 keeps it).
 package fleet_test
 
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	if dsn == "" {
 		port := os.Getenv("FLEETTEST_PORT")
 		if port == "" {
-			port = "55442"
+			port = "27442"
 		}
 		if err := fleetCompose("up", "-d", "--wait"); err != nil {
 			fmt.Fprintln(os.Stderr, err)

@@ -65,7 +65,7 @@ services:
     volumes:
       - *certs
     ports:
-      - "127.0.0.1:35432:5432"
+      - "127.0.0.1:26432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"]
       interval: 3s
@@ -87,8 +87,8 @@ services:
       - *certs
       - ./kafka:/config:ro
     ports:
-      - "127.0.0.1:39093:39093"
-      - "127.0.0.1:39094:39094"
+      - "127.0.0.1:26093:26093"
+      - "127.0.0.1:26094:26094"
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:19093 --command-config /config/client-ssl.properties >/dev/null 2>&1"]
       interval: 10s
@@ -110,8 +110,8 @@ services:
       - ./clickhouse/tls.xml:/etc/clickhouse-server/config.d/openlog-tls.xml:ro
       - ./clickhouse/keeper.xml:/etc/clickhouse-server/config.d/openlog-keeper.xml:ro
     ports:
-      - "127.0.0.1:38123:8123"
-      - "127.0.0.1:39440:9440"
+      - "127.0.0.1:26123:8123"
+      - "127.0.0.1:26440:9440"
 
   ch2:
     <<: *clickhouse
@@ -126,8 +126,8 @@ services:
       - *certs
       - ./clickhouse/tls.xml:/etc/clickhouse-server/config.d/openlog-tls.xml:ro
     ports:
-      - "127.0.0.1:38124:8123"
-      - "127.0.0.1:39441:9440"
+      - "127.0.0.1:26124:8123"
+      - "127.0.0.1:26441:9440"
     depends_on:
       ch1:
         condition: service_healthy
@@ -161,9 +161,9 @@ services:
     volumes:
       - *certs
     ports:
-      - "127.0.0.1:34318:4318"
-      - "127.0.0.1:38080:8080"
-      - "127.0.0.1:39464:9464"
+      - "127.0.0.1:26318:4318"
+      - "127.0.0.1:26080:8080"
+      - "127.0.0.1:26464:9464"
     depends_on:
       kafka:
         condition: service_healthy
@@ -220,4 +220,4 @@ services:
     volumes:
       - *certs
     ports:
-      - "127.0.0.1:39466:9464"
+      - "127.0.0.1:26466:9464"

@@ -1,9 +1,9 @@
 # Real databases and brokers for the Python agent's instrumentation tests (compose project openlog-m4-python-test).
 #
 #   docker compose -p openlog-m4-python-test -f tests/integration/docker-compose.yml up -d --wait postgres mysql redis rabbitmq kafka
-#   PG_URL=postgresql://openlog:openlog@127.0.0.1:55433/openlog MYSQL_HOST=127.0.0.1 MYSQL_PORT=53307 \
-#     REDIS_URL=redis://127.0.0.1:56380/0 RABBITMQ_URL=amqp://openlog:openlog@127.0.0.1:55673/ \
-#     KAFKA_BOOTSTRAP=127.0.0.1:59092 python -m pytest tests/integration
+#   PG_URL=postgresql://openlog:openlog@127.0.0.1:22432/openlog MYSQL_HOST=127.0.0.1 MYSQL_PORT=22306 \
+#     REDIS_URL=redis://127.0.0.1:22379/0 RABBITMQ_URL=amqp://openlog:openlog@127.0.0.1:22672/ \
+#     KAFKA_BOOTSTRAP=127.0.0.1:22092 python -m pytest tests/integration
 #   docker compose -p openlog-m4-python-test -f tests/integration/docker-compose.yml down -v
 #
 # `runner` runs the suite inside the compose network (make -C agents/python test-integration):
@@ -14,30 +14,30 @@ services:
   postgres:
     image: postgres:16-alpine
     environment: {POSTGRES_DB: openlog, POSTGRES_USER: openlog, POSTGRES_PASSWORD: openlog}
-    ports: ["127.0.0.1:55433:5432"]
+    ports: ["127.0.0.1:22432:5432"]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U openlog -d openlog"], interval: 2s, timeout: 3s, retries: 30}
     tmpfs: [/var/lib/postgresql/data]
 
   mysql:
     image: mysql:8.4
     environment: {MYSQL_DATABASE: openlog, MYSQL_USER: openlog, MYSQL_PASSWORD: openlog, MYSQL_ROOT_PASSWORD: openlog}
-    ports: ["127.0.0.1:53307:3306"]
+    ports: ["127.0.0.1:22306:3306"]
     healthcheck: {test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uopenlog", "-popenlog"], interval: 2s, timeout: 3s, retries: 60}
     tmpfs: [/var/lib/mysql]
 
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
-    ports: ["127.0.0.1:56380:6379"]
+    ports: ["127.0.0.1:22379:6379"]
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 2s, timeout: 3s, retries: 30}
 
   rabbitmq:
     image: rabbitmq:4.1-alpine
     environment: {RABBITMQ_DEFAULT_USER: openlog, RABBITMQ_DEFAULT_PASS: openlog}
-    ports: ["127.0.0.1:55673:5672"]
+    ports: ["127.0.0.1:22672:5672"]
     healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 3s, timeout: 10s, retries: 40}
 
-  # Single-node KRaft broker. Listener PLAINTEXT (kafka:19092) for the compose network, HOST (127.0.0.1:59092) for tests
+  # Single-node KRaft broker. Listener PLAINTEXT (kafka:19092) for the compose network, HOST (127.0.0.1:22092) for tests
   # on the host; topics are created on first use.
   kafka:
     image: apache/kafka:4.1.0
@@ -45,7 +45,7 @@ services:
       KAFKA_NODE_ID: "1"
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:19092,HOST://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,HOST://127.0.0.1:59092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,HOST://127.0.0.1:22092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -56,7 +56,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
       KAFKA_NUM_PARTITIONS: "1"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    ports: ["127.0.0.1:59092:9092"]
+    ports: ["127.0.0.1:22092:9092"]
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
       interval: 3s

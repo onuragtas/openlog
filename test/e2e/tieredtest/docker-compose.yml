@@ -9,7 +9,7 @@
 #                  ch-s2r1  credentials file (zz-openlog-s3-credentials.xml) over wrong environment keys
 #                  ch-s2r2  static keys, OPENLOG_S3_REGION unset
 #
-# Host ports (ch-s1r1 only): 37000 native, 37123 HTTP. Distinct from the default, e2e and tlstest stacks.
+# Host ports (ch-s1r1 only): 29000 native, 29123 HTTP. Distinct from the default, e2e and tlstest stacks.
 name: openlog-tiered
 
 x-clickhouse: &clickhouse
@@ -80,8 +80,8 @@ services:
       - ch-s1r1:/var/lib/clickhouse
       - ch-s1r1-warm:/var/lib/clickhouse-warm
     ports:
-      - "127.0.0.1:37000:9000"
-      - "127.0.0.1:37123:8123"
+      - "127.0.0.1:29000:9000"
+      - "127.0.0.1:29123:8123"
 
   ch-s1r2:
     <<: *clickhouse

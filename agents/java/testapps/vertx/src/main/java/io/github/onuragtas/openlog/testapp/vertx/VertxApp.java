@@ -33,7 +33,7 @@ public final class VertxApp {
 
   /** A literal statement on purpose: the agent must sanitize it. */
   static int query(int id) throws Exception {
-    String url = "jdbc:postgresql://" + env("PG_HOST", "127.0.0.1") + ":" + env("PG_PORT", "55442") + "/openlog";
+    String url = "jdbc:postgresql://" + env("PG_HOST", "127.0.0.1") + ":" + env("PG_PORT", "23432") + "/openlog";
     try (Connection c = DriverManager.getConnection(url, "openlog", "openlog");
         Statement st = c.createStatement();
         ResultSet rs = st.executeQuery("SELECT 42 AS answer WHERE 'secret-" + id + "' = 'secret-" + id + "' AND 1 IN (1, 2)")) {

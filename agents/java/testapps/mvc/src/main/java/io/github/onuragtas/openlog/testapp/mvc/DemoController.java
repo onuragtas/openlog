@@ -57,7 +57,7 @@ public class DemoController {
   @GetMapping("/mysql/{id}")
   public Map<String, Object> mysql(@PathVariable("id") int id) throws Exception {
     String url =
-        "jdbc:mysql://" + MvcApp.env("MYSQL_HOST", "127.0.0.1") + ":" + MvcApp.env("MYSQL_PORT", "53316")
+        "jdbc:mysql://" + MvcApp.env("MYSQL_HOST", "127.0.0.1") + ":" + MvcApp.env("MYSQL_PORT", "23306")
             + "/openlog?useSSL=false&allowPublicKeyRetrieval=true";
     int count = 0;
     try (Connection c = DriverManager.getConnection(url, "openlog", "openlog");
@@ -78,7 +78,7 @@ public class DemoController {
     redis.opsForValue().set(key, "secret-value");
     String viaLettuce = redis.opsForValue().get(key);
     String viaJedis;
-    try (Jedis j = new Jedis(MvcApp.env("REDIS_HOST", "127.0.0.1"), Integer.parseInt(MvcApp.env("REDIS_PORT", "56389")))) {
+    try (Jedis j = new Jedis(MvcApp.env("REDIS_HOST", "127.0.0.1"), Integer.parseInt(MvcApp.env("REDIS_PORT", "23379")))) {
       j.set(key + ":jedis", "secret-value");
       viaJedis = j.get(key + ":jedis");
     }

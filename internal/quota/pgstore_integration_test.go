@@ -3,7 +3,7 @@
 // Integration tests of the quota and billing PostgreSQL stores against PostgreSQL 16 with all migrations applied
 // (internal/usage/testdata/docker-compose.yml):
 //
-//	OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:55441/openlog?sslmode=disable \
+//	OPENLOG_TEST_POSTGRES_DSN=postgres://openlog:openlog@127.0.0.1:27441/openlog?sslmode=disable \
 //	  go test -tags integration -count=1 ./internal/quota
 package quota_test
 

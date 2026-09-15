@@ -70,7 +70,7 @@ func connect(t *testing.T, ctx context.Context) clickhouse.Conn {
 	t.Helper()
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	conn, err := clickhouse.OpenRetry(cctx, clickhouse.Options{Addr: []string{"127.0.0.1:37000"}, Database: "default", User: "openlog", Password: "openlog"},
+	conn, err := clickhouse.OpenRetry(cctx, clickhouse.Options{Addr: []string{"127.0.0.1:29000"}, Database: "default", User: "openlog", Password: "openlog"},
 		func(err error) { t.Logf("waiting for clickhouse: %v", err) })
 	if err != nil {
 		t.Fatal(err)

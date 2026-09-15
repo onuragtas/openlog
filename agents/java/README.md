@@ -263,7 +263,7 @@ agents/java/test/run.sh                                  # ./gradlew check integ
 NO_SERVICES=1 agents/java/test/run.sh :extension:test :agentJar
 JAVA_TEST_JDK=17 agents/java/test/run.sh check
 agents/java/test/run.sh :integration-tests:integrationTest --tests '*QuarkusIT'   # one framework
-JAVA_TEST_PROJECT=my-prefix JAVA_TEST_KAFKA_PORT=59192 agents/java/test/run.sh   # other compose/volume names, Kafka host port
+JAVA_TEST_PROJECT=my-prefix JAVA_TEST_KAFKA_PORT=23192 agents/java/test/run.sh   # other compose/volume names, Kafka host port
 agents/java/test/run.sh bench                            # overhead micro-benchmark
 agents/java/test/run.sh down                             # remove containers and volumes
 ```

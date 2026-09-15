@@ -126,11 +126,11 @@ directory under `/tmp`, nothing committed) and starts compose project `openlog-t
 
 | Service | TLS setup | Host ports |
 |---|---|---|
-| `kafka` | KRaft, client listeners SSL (mTLS required) and SASL_SSL (PLAIN, SCRAM-SHA-256/512; SCRAM users added at storage format), no plaintext client listener | 39093 (SSL), 39094 (SASL_SSL) |
-| `ch1`, `ch2` | 2 shards; native protocol only on 9440 (`tcp_port` removed), client certificates required, `<secure>1</secure>` in `remote_servers` | 39440/39441 (native TLS), 38123/38124 (HTTP) |
-| `postgres` | `ssl=on` | 35432 |
-| `openlog`, `bootstrap`, `loadgen` | allinone with SASL_SSL SCRAM-SHA-512, ClickHouse mTLS (direct shard inserts), PostgreSQL `verify-full` | 38080 (API), 34318, 39464 |
-| `badca-*` (profile `badca`) | api / processor / ingest with the unrelated CA for PostgreSQL / ClickHouse / Kafka | 39466 (ingest admin) |
+| `kafka` | KRaft, client listeners SSL (mTLS required) and SASL_SSL (PLAIN, SCRAM-SHA-256/512; SCRAM users added at storage format), no plaintext client listener | 26093 (SSL), 26094 (SASL_SSL) |
+| `ch1`, `ch2` | 2 shards; native protocol only on 9440 (`tcp_port` removed), client certificates required, `<secure>1</secure>` in `remote_servers` | 26440/26441 (native TLS), 26123/26124 (HTTP) |
+| `postgres` | `ssl=on` | 26432 |
+| `openlog`, `bootstrap`, `loadgen` | allinone with SASL_SSL SCRAM-SHA-512, ClickHouse mTLS (direct shard inserts), PostgreSQL `verify-full` | 26080 (API), 26318, 26464 |
+| `badca-*` (profile `badca`) | api / processor / ingest with the unrelated CA for PostgreSQL / ClickHouse / Kafka | 26466 (ingest admin) |
 
 | Test | Assertions |
 |---|---|
@@ -145,7 +145,7 @@ directory (needed with `TLSTEST_KEEP=1` to reconnect). The stack is removed with
 
 ## Tiered storage test
 
-`make tieredtest` (`test/e2e/tieredtest`, compose project `openlog-tiered`, host ports 37000/37123, no openlog image)
+`make tieredtest` (`test/e2e/tieredtest`, compose project `openlog-tiered`, host ports 29000/29123, no openlog image)
 runs MinIO and a 2-shard × 2-replica ClickHouse cluster with the unchanged `deploy/compose/clickhouse/storage-tiered.xml`
 and `storage-tiered-warm.xml`, applies the schema and `migrate.ApplyTableTTLs` in-process and checks moves to warm and
 S3 on every replica, reads through Distributed tables after a cache drop and a restart of all servers, deletion of cold
