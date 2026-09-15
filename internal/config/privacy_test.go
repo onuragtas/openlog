@@ -26,6 +26,42 @@ func TestPrivacyDefaults(t *testing.T) {
 	}
 }
 
+func TestPrivacyS3Credentials(t *testing.T) {
+	load := func(env map[string]string) (DataExport, error) {
+		c, err := Load(func(n string) string { return env[n] })
+		return c.Privacy.Export, err
+	}
+	for _, tc := range []struct {
+		env  map[string]string
+		want string
+	}{
+		{nil, "auto"},
+		{map[string]string{"OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID": "ak", "OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY": "sk"}, "static"},
+		{map[string]string{"OPENLOG_S3_ACCESS_KEY_ID": "ak", "OPENLOG_S3_SECRET_ACCESS_KEY": "sk"}, "static"},
+		{map[string]string{"OPENLOG_DATA_EXPORT_S3_CREDENTIALS": "AUTO", "OPENLOG_S3_ACCESS_KEY_ID": "ak", "OPENLOG_S3_SECRET_ACCESS_KEY": "sk"}, "auto"},
+	} {
+		e, err := load(tc.env)
+		if err != nil || e.S3Credentials != tc.want {
+			t.Errorf("%v: %q %v, want %q", tc.env, e.S3Credentials, err, tc.want)
+		}
+		if tc.want == "auto" && e.S3AccessKeyID != "" {
+			t.Errorf("%v: auto must not borrow static keys", tc.env)
+		}
+	}
+	for _, tc := range []struct {
+		env  map[string]string
+		want string
+	}{
+		{map[string]string{"OPENLOG_DATA_EXPORT_S3_CREDENTIALS": "static"}, "CREDENTIALS=static requires"},
+		{map[string]string{"OPENLOG_DATA_EXPORT_S3_CREDENTIALS": "auto", "OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID": "ak", "OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY": "sk"}, "CREDENTIALS=auto uses"},
+		{map[string]string{"OPENLOG_DATA_EXPORT_S3_CREDENTIALS": "iam"}, "must be static or auto"},
+	} {
+		if _, err := load(tc.env); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%v: error %v, want %q", tc.env, err, tc.want)
+		}
+	}
+}
+
 func TestPrivacyTieredS3Fallback(t *testing.T) {
 	env := map[string]string{
 		"OPENLOG_STORAGE_TIERING_ENABLED": "true",

@@ -13,6 +13,7 @@ import { createAlertSearch } from "@/lib/alerts";
 import type { Aggregation } from "@/api/types";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { AddToDashboardButton } from "@/components/oql/AddToDashboardButton";
+import { hostOsOf } from "@/lib/host-os";
 import { hostMetricOql } from "@/lib/oql";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UnitKind } from "@/lib/format";
@@ -166,9 +167,10 @@ export function HostOverviewTab({ hostId }: { hostId: string }) {
   const canAlert = can(me?.role, "alerts.write");
   // PHP-FPM pools that cannot write the agent's socket lose their spans silently; show the fix on the host page too.
   const phpAccess = useQuery({ ...fleetHostQuery(hostId), enabled: !!me }).data?.php_access;
+  const os = hostOsOf(useQuery(hostQuery(hostId)).data);
   return (
     <div className="flex flex-col gap-4">
-      {phpAccess && <PHPAccessNotice access={phpAccess} />}
+      {phpAccess && <PHPAccessNotice access={phpAccess} os={os} />}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {OVERVIEW_CHARTS.map((def) => (
           <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} canAlert={canAlert} />

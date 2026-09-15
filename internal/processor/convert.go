@@ -291,6 +291,11 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 					ResourceAttributes: ri.attrs, ScopeName: scope, Temporality: "unspecified",
 				}
 				add := func(row MetricRow, attrs []*commonpb.KeyValue, start, ts uint64, flags uint32) {
+					if flags&uint32(metricspb.DataPointFlags_DATA_POINT_FLAGS_NO_RECORDED_VALUE_MASK) != 0 {
+						// Staleness marker without a value: storing it would read as a 0 data point.
+						r.Dropped["no_recorded_value"]++
+						return
+					}
 					row.Attributes = otlputil.AttrsToMap(attrs)
 					row.SeriesID = seriesID(tenant, row.MetricName, ri.seriesPrefix, row.Attributes)
 					row.StartTimestamp = tsOr(start, time.Unix(0, 0))
@@ -329,7 +334,8 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
 					}
 				case *metricspb.Metric_ExponentialHistogram:
-					// M0 keeps count/sum/mean and the positive bucket counts; scale and offset are not stored.
+					// Stored like explicit histograms: the negative, zero and positive buckets become explicit bounds
+					// (exponentialBuckets), so quantiles are computed the same way.
 					for _, dp := range d.ExponentialHistogram.GetDataPoints() {
 						row := base
 						row.MetricType = "exponential_histogram"
@@ -337,16 +343,22 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 						row.Count = dp.GetCount()
 						row.Sum = dp.GetSum()
 						row.Value = mean(row.Sum, row.Count)
-						row.BucketCounts = dp.GetPositive().GetBucketCounts()
+						row.ExplicitBounds, row.BucketCounts = exponentialBuckets(dp)
 						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
 					}
 				case *metricspb.Metric_Summary:
 					for _, dp := range d.Summary.GetDataPoints() {
 						row := base
 						row.MetricType = "summary"
+						// Summary count and sum are cumulative (OTLP metrics data model).
+						row.Temporality = "cumulative"
 						row.Count = dp.GetCount()
 						row.Sum = dp.GetSum()
 						row.Value = mean(row.Sum, row.Count)
+						for _, qv := range dp.GetQuantileValues() {
+							row.Quantiles = append(row.Quantiles, qv.GetQuantile())
+							row.QuantileValues = append(row.QuantileValues, qv.GetValue())
+						}
 						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
 					}
 				default:

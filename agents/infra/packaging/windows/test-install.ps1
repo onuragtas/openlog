@@ -8,6 +8,8 @@ CI smoke test for the Windows packaging (windows-latest, elevated). Installs and
 served as http://127.0.0.1:<port>/v<version>/. -Zip is copied into it when it is not there yet. When the release
 binary cannot verify the manifest signature (test-signed releases), pass -SkipRerun to skip the second install.ps1
 run (which verifies with -verify-release).
+-ExpectManifest: the MSI was built with -ManifestDir; versions\<v>\ must contain manifest.json(.sig), the installed agent
+must verify it with its compiled-in keys (-verify-release) and -reconcile must not report it as unusable.
 #>
 [CmdletBinding()]
 param(
@@ -17,7 +19,8 @@ param(
     [string]$ReleaseDir,
     [string]$InstallScript = (Join-Path $PSScriptRoot '..\..\..\..\scripts\install.ps1'),
     [int]$Port = 18473,
-    [switch]$SkipRerun
+    [switch]$SkipRerun,
+    [switch]$ExpectManifest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,6 +126,26 @@ if ($Msi) {
     $logText = Get-Content -LiteralPath $log -Raw
     if ($logText.Contains($LicenseKey)) { Fail "msi: the license key appears in $log" }
     Write-Step 'msi: InstallMethod=msi, license key not in the log'
+
+    if ($ExpectManifest) {
+        # The embedded manifest gives rule 5 the rollback_floor of this MSI-installed version (D-113).
+        $versionDir = Join-Path $Root "versions\$Version"
+        $embedded = Join-Path $versionDir 'manifest.json'
+        foreach ($f in @($embedded, "$embedded.sig")) {
+            if (-not (Test-Path -LiteralPath $f -PathType Leaf)) {
+                Get-ChildItem -LiteralPath $versionDir -Force -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize | Out-String | Write-Host
+                Fail "msi: $f is missing (MSI built without -ManifestDir?)"
+            }
+        }
+        $r = Invoke-Native (Join-Path $versionDir 'openlog-infra-agent.exe') @('-verify-release', $embedded)
+        if ($r.ExitCode -ne 0) { Fail "msi: the installed agent does not verify the embedded manifest (exit $($r.ExitCode)): $($r.Output)" }
+        $status = Join-Path $Root 'reconcile-status.json'
+        if ((Test-Path -LiteralPath $status) -and ((Get-Content -LiteralPath $status -Raw) -match 'manifest\.json')) {
+            Get-Content -LiteralPath $status -Raw | Write-Host
+            Fail 'msi: -reconcile reports the embedded manifest as missing or unusable'
+        }
+        Write-Step "msi: embedded manifest present and verified: $($r.Output.Trim())"
+    }
 
     $log = Join-Path (Get-Location) 'msi-uninstall.log'
     Write-Step "msiexec /x $Msi"

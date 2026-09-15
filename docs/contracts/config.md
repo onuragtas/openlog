@@ -505,7 +505,9 @@ installation; the api leader runs the export queue and the hard deletion job. E-
 `OPENLOG_PUBLIC_URL`. With tiered storage enabled (`OPENLOG_STORAGE_TIERING_ENABLED=true`) and no
 `OPENLOG_DATA_EXPORT_S3_URL`, the export reuses the bucket of `OPENLOG_S3_ENDPOINT` (prefix `openlog-exports/`) and,
 when the export has no keys of its own, `OPENLOG_S3_REGION`, `OPENLOG_S3_ACCESS_KEY_ID` and
-`OPENLOG_S3_SECRET_ACCESS_KEY` (static keys only; IAM credentials are not supported by the export client).
+`OPENLOG_S3_SECRET_ACCESS_KEY`. Without static keys the export client uses IAM credentials (D-116): the standard
+`AWS_*` variables of the process environment, EKS IRSA (`AWS_WEB_IDENTITY_TOKEN_FILE` + `AWS_ROLE_ARN`), ECS task roles
+and EKS Pod Identity (`AWS_CONTAINER_CREDENTIALS_*`) and the EC2 instance profile (IMDSv2).
 
 | Variable | Default | Services | Description |
 |---|---|---|---|
@@ -515,7 +517,8 @@ when the export has no keys of its own, `OPENLOG_S3_REGION`, `OPENLOG_S3_ACCESS_
 | `OPENLOG_DATA_EXPORT_LOCAL_PATH` | `/tmp/openlog-exports` | api | Absolute directory of local archives and of the temporary archive file while an export is built (also with S3). Compose: `/var/lib/openlog/exports`, the volume `data-exports` (the image creates it owned by uid 10001); Helm: `/tmp/openlog-exports` on the pod's `emptyDir` (use S3 with more than one api replica) |
 | `OPENLOG_DATA_EXPORT_S3_URL` | empty | api | Object base URL with bucket and prefix, ending with `/` (path-style `https://s3.example.com/bucket/exports/` or virtual-hosted `https://bucket.s3.eu-west-1.amazonaws.com/exports/`) |
 | `OPENLOG_DATA_EXPORT_S3_REGION` | `OPENLOG_S3_REGION`, else `us-east-1` | api | Signing region (AWS Signature Version 4) |
-| `OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID` / `OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY` | `OPENLOG_S3_ACCESS_KEY_ID` / `OPENLOG_S3_SECRET_ACCESS_KEY` | api | Static credentials (set together); empty = unsigned requests |
+| `OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID` / `OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY` | `OPENLOG_S3_ACCESS_KEY_ID` / `OPENLOG_S3_SECRET_ACCESS_KEY` | api | Static credentials (set together) of `OPENLOG_DATA_EXPORT_S3_CREDENTIALS=static` |
+| `OPENLOG_DATA_EXPORT_S3_CREDENTIALS` | `static` when static keys are set (own or `OPENLOG_S3_*`), else `auto` | api | `static`: the keys above (required). `auto`: AWS credential chain without the SDK, first found wins: environment (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) → web identity (`AWS_WEB_IDENTITY_TOKEN_FILE`, `AWS_ROLE_ARN`, `AWS_ROLE_SESSION_NAME`; STS endpoint from `AWS_REGION`/`AWS_DEFAULT_REGION`, else the signing region, and `AWS_STS_REGIONAL_ENDPOINTS`) → container (`AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`, or `AWS_CONTAINER_CREDENTIALS_FULL_URI` — https or a loopback/ECS/EKS link-local host — with `AWS_CONTAINER_AUTHORIZATION_TOKEN(_FILE)`) → EC2 instance profile via IMDSv2 (`AWS_EC2_METADATA_DISABLED=true` skips it). Temporary credentials are refreshed 5 minutes before they expire and sent with `X-Amz-Security-Token`; when no source has credentials, requests are unsigned (as before). Explicit `auto` does not borrow `OPENLOG_S3_*` keys and rejects `OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`. Shared config/credentials files, SSO and process credentials are not supported (D-116) |
 | `OPENLOG_DATA_EXPORT_TTL` | `168h` | api | How long an archive and its e-mailed download link stay available (1h–720h); expired archives are deleted |
 | `OPENLOG_DATA_EXPORT_MAX_BYTES` | `4294967296` | api | Archive size limit (1 MiB–5 GiB, one S3 PUT); telemetry stops (`truncated`) before it is reached |
 | `OPENLOG_DATA_EXPORT_MAX_ROWS` | `50000000` | api | Telemetry rows per export (≥ 1000) |

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  openlog infrastructure agent MSI (WiX Toolset v5, per-machine, x64). Build with build-msi.ps1:
+  openlog infrastructure agent MSI (WiX Toolset v5, per-machine, x64 or arm64). Build with build-msi.ps1:
 
-    wix build -arch x64 -ext WixToolset.Util.wixext/5.0.2 openlog-infra-agent.wxs -o openlog-infra-agent_<v>_windows_amd64.msi
+    wix build -arch x64|arm64 -ext WixToolset.Util.wixext/5.0.2 openlog-infra-agent.wxs -o openlog-infra-agent_<v>_windows_<amd64|arm64>.msi
       -d Version=<semver>        release version, names versions\<Version>\ (e.g. 0.5.0-beta.1)
       -d MsiVersion=<x.y.z>      numeric ProductVersion; defaults to Version, which then must be numeric.
                                  Windows Installer only accepts major.minor.build (255.255.65535), so a
@@ -10,13 +10,18 @@
                                  upgrades are allowed, so 0.5.0 replaces 0.5.0-beta.1.
       -d Exe=<path>              openlog-infra-agent.exe
       -d SourceDir=<dir>         extracted release top dir (LICENSE, README.md, packaging\config.example.yaml)
+      -d UtilCA=<name>           WiX util custom action binary of the architecture: Wix4UtilCA_X64 (default) or Wix4UtilCA_A64
+      -d ManifestDir=<dir>       optional: signed manifest.json + manifest.json.sig of Version listing the zip archives
+                                 (the published manifest cannot be embedded: it lists the MSI's own sha256). Installed
+                                 into versions\<Version>\; the agent reads rollback_floor from it (rule 5), so a
+                                 backend-ordered rollback from an MSI-installed version works. Release builds pass it.
 
   Properties: LICENSE_KEY (hidden from the log), ENDPOINT. msiexec /i openlog.msi /qn LICENSE_KEY=... ENDPOINT=https://...
 
   Layout (same as scripts/install.ps1): [ProgramFiles64Folder]openlog\infra-agent\versions\<Version>\ holds the
   files; the agent itself points current -> versions\<v> (-reconcile -reconcile-context package, which keeps a newer
   self-updated version), registers the service openlog-infra-agent and secures [CommonAppDataFolder]openlog\infra-agent.
-  The MSI cannot contain the release manifest.json (the manifest lists the MSI's own sha256).
+  The MSI cannot contain the published release manifest.json (it lists the MSI's own sha256); see ManifestDir.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
@@ -35,8 +40,11 @@
   <?endif?>
 
   <?define ConfigPath = "[CommonAppDataFolder]openlog\infra-agent\config.yaml"?>
-  <!-- WiX v5 has no sys.BUILDARCHSHORTNAME; the MSI is x64 only (build-msi.ps1 rejects other architectures). -->
-  <?define UtilCA = "Wix4UtilCA_X64"?>
+  <!-- WiX v5 has no sys.BUILDARCHSHORTNAME: build-msi.ps1 passes the util custom action binary of -arch. Both are
+       64-bit processes, so [ProgramFiles64Folder], [System64Folder] and Bitness="always64" are right for x64 and arm64. -->
+  <?ifndef UtilCA?>
+    <?define UtilCA = "Wix4UtilCA_X64"?>
+  <?endif?>
 
   <Package Name="openlog infrastructure agent"
            Manufacturer="openlog"
@@ -97,6 +105,15 @@
       <Component Id="AgentConfigExample" Directory="PACKAGINGDIR" Bitness="always64">
         <File Id="AgentConfigExample" Name="config.example.yaml" Source="$(var.SourceDir)\packaging\config.example.yaml" KeyPath="yes" />
       </Component>
+      <?ifdef ManifestDir?>
+      <!-- Signed manifest of this version (zip archives only); -reconcile -reconcile-context package verifies it. -->
+      <Component Id="AgentManifest" Directory="VERSIONDIR" Bitness="always64">
+        <File Id="AgentManifest" Name="manifest.json" Source="$(var.ManifestDir)\manifest.json" KeyPath="yes" />
+      </Component>
+      <Component Id="AgentManifestSig" Directory="VERSIONDIR" Bitness="always64">
+        <File Id="AgentManifestSig" Name="manifest.json.sig" Source="$(var.ManifestDir)\manifest.json.sig" KeyPath="yes" />
+      </Component>
+      <?endif?>
       <Component Id="AgentRegistry" Directory="INSTALLROOT" Bitness="always64">
         <RegistryKey Root="HKLM" Key="SOFTWARE\openlog\infra-agent">
           <RegistryValue Name="InstallMethod" Type="string" Value="msi" KeyPath="yes" />

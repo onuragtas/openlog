@@ -3,7 +3,6 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { can } from "@/api/roles";
 import {
   normalizePolicy,
   previewTailSampling,
@@ -20,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { usePermissions } from "@/lib/org-writable";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 
 const pct = (v: number, locale: string) => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(v);
@@ -32,7 +32,8 @@ export function TailSamplingSettings() {
   const qc = useQueryClient();
   const me = useMe().data;
   const state = useQuery(tailSamplingQuery());
-  const canEdit = me?.auth === "session" && can(me?.role, "org.update");
+  const perms = usePermissions();
+  const canEdit = me?.auth === "session" && perms.can("org.update");
   const [draft, setDraft] = useState<TailSamplingPolicy | null>(null);
   const [preview, setPreview] = useState<TailSamplingPreview | null>(null);
 

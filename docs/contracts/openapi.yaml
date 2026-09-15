@@ -27,6 +27,8 @@ tags:
   - name: metrics
   - name: inventory
   - name: logs
+  - name: explorer
+    description: Query builder field discovery and saved explorer views (api.md "Fields", "Saved views", D-118, D-119)
   - name: traces
   - name: apm
     description: Application performance monitoring derived from traces (apm.md)
@@ -827,6 +829,332 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
         "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/fields/keys:
+    get:
+      tags: [explorer]
+      operationId: listFieldKeys
+      description: |
+        Attribute keys of one signal for query builders (api.md "Fields"). Top-level fields are always listed first
+        (`source: field`); attribute and resource keys come from the hourly key index (ClickHouse `attribute_keys`,
+        D-118) over the range, or — when the index has no rows for the range, e.g. right after an upgrade — from a
+        sample of at most 20000 recent records (`sampled: true`). `logs` also lists top-level keys of JSON bodies
+        (`source: body`, sampled). Ordered by frequency; `q` is a case-insensitive substring of the key.
+      parameters:
+        - $ref: "#/components/parameters/FieldSignal"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 256 }
+        - name: metric
+          in: query
+          description: "`signal=metrics`: keys of this metric only"
+          schema: { type: string, maxLength: 512 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FieldKeysResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/fields/values:
+    get:
+      tags: [explorer]
+      operationId: listFieldValues
+      description: |
+        Most frequent values of one key with counts, read from a sample of at most 100000 matching records of the
+        range (`sampled: true` when the sample was full). `filters` (JSON array of QueryFilter) and `q` restrict the
+        records; a filter on `key` itself is ignored so the other values stay visible.
+      parameters:
+        - $ref: "#/components/parameters/FieldSignal"
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, maxLength: 256 }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: q
+          in: query
+          description: Case-insensitive substring of the value
+          schema: { type: string, maxLength: 256 }
+        - name: metric
+          in: query
+          description: "`signal=metrics`: values of this metric only"
+          schema: { type: string, maxLength: 512 }
+        - name: filters
+          in: query
+          description: JSON array of QueryFilter
+          schema: { type: string, maxLength: 16384 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FieldValuesResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/logs/query:
+    post:
+      tags: [logs]
+      operationId: queryLogs
+      description: |
+        Structured log search (Logs Explorer, api.md "Logs"): `filters` are AND-ed, `groups` are OR-ed AND-groups,
+        `q` is a case-insensitive body substring. Rows carry the core fields, the requested `columns` in `fields`
+        and — with `include_record` — the attribute maps. Paging as GET /api/v1/logs (`cursor`), in `order`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogsQueryRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogsQueryResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/logs/aggregate:
+    post:
+      tags: [logs]
+      operationId: aggregateLogs
+      description: |
+        Log volume over time for the same filter model as POST /api/v1/logs/query: record counts per `step`
+        bucket, optionally split by `group_by` into the `limit` most frequent values plus an `other` series.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogsAggregateRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogsAggregateResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/metrics:
+    get:
+      tags: [metrics]
+      operationId: listMetrics
+      description: |
+        Every metric name with data points in the range, from any resource (Metrics Explorer). Ranges up to 6h read
+        raw data points; longer ranges read the 1-minute rollup for gauges and sums (no description/temporality) plus
+        the raw points of the last 6h for other types. `q`: case-insensitive substring of the name.
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 256 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 1000 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricListResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/metrics/query:
+    post:
+      tags: [metrics]
+      operationId: queryMetric
+      description: |
+        Time series of any metric with the query builder filter model. Aggregations by type: gauges and
+        non-monotonic sums `avg` `min` `max` `sum` `last` `count`; monotonic sums `rate` `increase` `sum` `last`;
+        histograms and exponential histograms `p50` `p75` `p90` `p95` `p99` (linear interpolation inside
+        buckets) `avg` `count` `sum` `rate`; summaries `p50`…`p99` (stored quantiles, averaged) `avg` `count` `sum`.
+        At most `limit` series (`truncated`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MetricQueryRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricQueryResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/metrics/{name}:
+    get:
+      tags: [metrics]
+      operationId: getMetric
+      description: |
+        Metadata of one metric in the range with its attribute and resource keys. The name may contain `/`
+        (URL-encode other reserved characters). `404` when the metric has no data points in the range.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string, maxLength: 512 }
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/saved-views:
+    get:
+      tags: [explorer]
+      operationId: listSavedViews
+      description: |
+        Saved explorer views of the organization the caller may read (org-wide views and own private views).
+        PostgreSQL auth mode only (404 otherwise).
+      parameters:
+        - name: signal
+          in: query
+          schema: { $ref: "#/components/schemas/SavedViewSignal" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [views]
+                properties:
+                  views:
+                    type: array
+                    items: { $ref: "#/components/schemas/SavedView" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [explorer]
+      operationId: createSavedView
+      description: Signed-in members and higher. At most 500 views per organization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedViewInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedView" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/saved-views/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [explorer]
+      operationId: getSavedView
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedView" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [explorer]
+      operationId: updateSavedView
+      description: The creator, or an admin/owner for org-wide views.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SavedViewInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedView" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [explorer]
+      operationId: deleteSavedView
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/traces/{trace_id}:
     get:
@@ -5612,6 +5940,11 @@ components:
       in: query
       description: RFC3339 or unix milliseconds. Default now − 1h.
       schema: { type: string }
+    FieldSignal:
+      name: signal
+      in: query
+      required: true
+      schema: { $ref: "#/components/schemas/FieldSignal" }
     To:
       name: to
       in: query
@@ -5810,13 +6143,15 @@ components:
 
     Plan:
       type: object
-      required: [id, name, description, limits, enforcement]
+      required: [id, name, description, limits, enforcement, trial_days, trial_fallback_plan]
       properties:
         id: { type: string }
         name: { type: string }
         description: { type: string }
         limits: { $ref: "#/components/schemas/PlanLimits" }
         enforcement: { $ref: "#/components/schemas/PlanEnforcement" }
+        trial_days: { type: integer, minimum: 0, maximum: 365, description: "Trial length in days; > 0 = the plan can be trialled (D-106)" }
+        trial_fallback_plan: { type: string, description: "Plan assigned when a trial of this plan ends (the catalog default unless set); empty for plans without trials" }
 
     PlanCatalog:
       type: object
@@ -6862,6 +7197,305 @@ components:
         span_id: { type: string, description: "16 lowercase hex characters or empty" }
         attributes: { $ref: "#/components/schemas/StringMap" }
         resource_attributes: { $ref: "#/components/schemas/StringMap" }
+
+    # ---- explorer: fields, structured log queries, metrics explorer, saved views (api.md "Fields", D-118, D-119) ----
+
+    FieldSignal:
+      type: string
+      enum: [logs, metrics, traces]
+
+    FieldSource:
+      type: string
+      description: |
+        `field`: top-level column (e.g. `service.name`, `severity_text`, `body`); `attribute`: record / span / data
+        point attribute (`attributes.<k>`); `resource`: resource attribute (`resource.<k>`); `body`: top-level key of a
+        JSON log body (`body.<k>`).
+      enum: [field, attribute, resource, body]
+
+    FieldType:
+      type: string
+      enum: [string, number, bool]
+
+    FieldKey:
+      type: object
+      required: [key, name, source, type, count, cardinality]
+      properties:
+        key: { type: string, description: "Key to use in filters, columns and group_by, e.g. `resource.k8s.pod.name`" }
+        name: { type: string, description: "Key without the source prefix" }
+        source: { $ref: "#/components/schemas/FieldSource" }
+        type: { $ref: "#/components/schemas/FieldType" }
+        count: { type: [integer, "null"], description: "Records with the key in the range (null for top-level fields)" }
+        cardinality: { type: [integer, "null"], description: "Approximate distinct values (null when unknown)" }
+
+    FieldKeysResponse:
+      type: object
+      required: [keys, sampled]
+      properties:
+        keys:
+          type: array
+          items: { $ref: "#/components/schemas/FieldKey" }
+        sampled: { type: boolean }
+
+    FieldValue:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        count: { type: integer }
+
+    FieldValuesResponse:
+      type: object
+      required: [key, type, values, sampled]
+      properties:
+        key: { type: string }
+        type: { $ref: "#/components/schemas/FieldType" }
+        values:
+          type: array
+          items: { $ref: "#/components/schemas/FieldValue" }
+        sampled: { type: boolean }
+
+    FilterOp:
+      type: string
+      enum: ["=", "!=", in, not_in, contains, not_contains, like, not_like, regex, not_regex, exists, not_exists, ">", ">=", "<", "<="]
+
+    QueryFilter:
+      type: object
+      description: |
+        One condition. Keys: top-level fields of the signal, `attributes.<k>`, `resource.<k>`, `body.<k>` (logs, JSON
+        body) or a bare attribute key (record attribute, else resource attribute). `in`/`not_in` take `values`
+        (1–100); `exists`/`not_exists` take no value; the others take `value`. `contains` is case-insensitive;
+        `like` uses SQL wildcards (`%`, `_`, case-sensitive); `regex` is RE2. `>`…`<=` compare numerically (attribute
+        values that are not numbers never match). Values are at most 1024 bytes.
+      required: [key, op]
+      properties:
+        key: { type: string, maxLength: 256 }
+        op: { $ref: "#/components/schemas/FilterOp" }
+        value: { type: [string, number, boolean] }
+        values:
+          type: array
+          maxItems: 100
+          items: { type: [string, number, boolean] }
+
+    FilterGroups:
+      type: array
+      description: OR of AND-groups ([[a, b], [c]] = (a AND b) OR c), AND-ed with `filters`. At most 10 groups and 50 conditions in total.
+      maxItems: 10
+      items:
+        type: array
+        items: { $ref: "#/components/schemas/QueryFilter" }
+
+    LogsQueryRequest:
+      type: object
+      properties:
+        from: { type: [string, integer], description: "RFC3339 or unix ms (default now-1h)" }
+        to: { type: [string, integer], description: "RFC3339 or unix ms (default now)" }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        q: { type: string, maxLength: 1024, description: Case-insensitive substring of the body }
+        order: { type: string, enum: [desc, asc], default: desc }
+        limit: { type: integer, minimum: 1, description: "Default 100, capped by OPENLOG_API_MAX_ROWS" }
+        cursor: { type: string, description: "next_cursor of the previous page (same request otherwise)" }
+        columns:
+          type: array
+          maxItems: 50
+          description: Keys to return in `fields` (top-level fields, attributes, resource attributes, JSON body keys)
+          items: { type: string, maxLength: 256 }
+        include_record: { type: boolean, default: false, description: Also return `attributes` and `resource_attributes` }
+
+    LogQueryRow:
+      type: object
+      required: [id, timestamp, observed_timestamp, severity_text, severity_number, body, service_name, host_id, host_name, trace_id, span_id, fields]
+      properties:
+        id: { type: string, description: "Row identity within the result (timestamp and content hash)" }
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        observed_timestamp: { $ref: "#/components/schemas/Timestamp" }
+        severity_text: { type: string }
+        severity_number: { type: integer }
+        body: { type: string }
+        service_name: { type: string }
+        host_id: { type: string }
+        host_name: { type: string }
+        trace_id: { type: string }
+        span_id: { type: string }
+        fields:
+          type: object
+          description: Requested columns; keys the record does not have are omitted
+          additionalProperties: { type: string }
+        attributes: { $ref: "#/components/schemas/StringMap" }
+        resource_attributes: { $ref: "#/components/schemas/StringMap" }
+
+    LogsQueryResponse:
+      type: object
+      required: [rows, next_cursor]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/LogQueryRow" }
+        next_cursor: { type: [string, "null"] }
+
+    LogsAggregateRequest:
+      type: object
+      properties:
+        from: { type: [string, integer] }
+        to: { type: [string, integer] }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        q: { type: string, maxLength: 1024 }
+        step: { type: string, description: "Go duration ≥ 1s; default: a round step giving at most ~120 buckets" }
+        group_by: { type: string, maxLength: 256, description: Key whose values split the counts }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 10, description: Series of group_by values }
+
+    LogsAggregateSeries:
+      type: object
+      required: [group, other, total, points]
+      properties:
+        group: { type: string, description: "Value of group_by (\"\" without group_by, or when the key is missing)" }
+        other: { type: boolean, description: All values outside the top `limit` }
+        total: { type: integer }
+        points:
+          type: array
+          description: "[bucket start unix ms, count]; buckets without records are omitted"
+          items: { $ref: "#/components/schemas/MetricPoint" }
+
+    LogsAggregateResponse:
+      type: object
+      required: [step, total, series]
+      properties:
+        step: { type: string, example: 60s }
+        total: { type: integer }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/LogsAggregateSeries" }
+
+    MetricTemporality:
+      type: string
+      enum: [unspecified, delta, cumulative]
+
+    MetricInfo:
+      type: object
+      required: [name, type, unit, description, temporality, monotonic, last_seen, series, services]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/MetricType" }
+        unit: { type: string }
+        description: { type: string }
+        temporality: { $ref: "#/components/schemas/MetricTemporality" }
+        monotonic: { type: boolean }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        series: { type: integer, description: Approximate number of series in the range }
+        services:
+          type: array
+          description: Up to 5 most frequent service.name values (empty service names omitted)
+          items: { type: string }
+
+    MetricListResponse:
+      type: object
+      required: [metrics, truncated]
+      properties:
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/MetricInfo" }
+        truncated: { type: boolean }
+
+    MetricAggregation:
+      type: string
+      enum: [avg, min, max, sum, last, count, rate, increase, p50, p75, p90, p95, p99]
+
+    MetricDetail:
+      allOf:
+        - $ref: "#/components/schemas/MetricInfo"
+        - type: object
+          required: [attribute_keys, resource_keys, aggregations, default_aggregation]
+          properties:
+            attribute_keys:
+              type: array
+              items: { $ref: "#/components/schemas/FieldKey" }
+            resource_keys:
+              type: array
+              items: { $ref: "#/components/schemas/FieldKey" }
+            aggregations:
+              type: array
+              items: { $ref: "#/components/schemas/MetricAggregation" }
+            default_aggregation: { $ref: "#/components/schemas/MetricAggregation" }
+
+    MetricQueryRequest:
+      type: object
+      required: [metric]
+      properties:
+        metric: { type: string, maxLength: 512 }
+        from: { type: [string, integer] }
+        to: { type: [string, integer] }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        aggregation: { $ref: "#/components/schemas/MetricAggregation" }
+        group_by:
+          type: array
+          maxItems: 5
+          items: { type: string, maxLength: 256 }
+        step: { type: string, description: "Go duration ≥ 10s; default ≈ 300 points" }
+        limit: { type: integer, minimum: 1, maximum: 200, default: 50, description: Maximum series }
+
+    MetricQueryResponse:
+      type: object
+      required: [metric, aggregation, step, series, truncated]
+      properties:
+        metric:
+          type: object
+          required: [name, type, unit, temporality, monotonic]
+          properties:
+            name: { type: string }
+            type: { $ref: "#/components/schemas/MetricType" }
+            unit: { type: string }
+            temporality: { $ref: "#/components/schemas/MetricTemporality" }
+            monotonic: { type: boolean }
+        aggregation: { $ref: "#/components/schemas/MetricAggregation" }
+        step: { type: string, example: 60s }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/MetricSeries" }
+        truncated: { type: boolean }
+
+    SavedViewSignal:
+      type: string
+      enum: [logs, metrics, traces]
+
+    SavedViewInput:
+      type: object
+      required: [signal, name, visibility, state]
+      properties:
+        signal: { $ref: "#/components/schemas/SavedViewSignal" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        visibility: { type: string, enum: [private, org] }
+        state:
+          type: object
+          description: "Explorer state (JSON object ≤ 32 KiB), e.g. logs: {filters, groups, q, columns, order, group_by, range, from, to}"
+          additionalProperties: true
+
+    SavedView:
+      type: object
+      required: [id, signal, name, description, visibility, state, created_by_user_id, created_by_email, can_edit, created_at, updated_at]
+      properties:
+        id: { type: string }
+        signal: { $ref: "#/components/schemas/SavedViewSignal" }
+        name: { type: string }
+        description: { type: string }
+        visibility: { type: string, enum: [private, org] }
+        state: { type: object, additionalProperties: true }
+        created_by_user_id: { type: [string, "null"] }
+        created_by_email: { type: string }
+        can_edit: { type: boolean }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
 
     SpanKind:
       type: string

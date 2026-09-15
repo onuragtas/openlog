@@ -9,6 +9,7 @@ import { AttributeChips } from "@/components/AttributeChips";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatRelative } from "@/lib/format";
+import { hostHasContainers } from "@/lib/host-os";
 import { useNow } from "@/lib/hooks";
 import { parseTimeParam } from "@/lib/time";
 import { HOST_TABS, type HostTab } from "@/router";
@@ -28,9 +29,9 @@ export function HostDetailPage() {
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
   const host = useQuery(hostQuery(hostId));
-  // Containers are collected on Linux only (D-104): hide the tab when the host reports another os.type.
+  // Containers: Linux (inventory, metrics, logs) and macOS (Docker inventory); none on Windows (D-104, D-112).
   const osType = host.data?.resource_attributes?.["os.type"];
-  const tabs = HOST_TABS.filter((k) => k !== "containers" || !osType || osType === "linux");
+  const tabs = HOST_TABS.filter((k) => k !== "containers" || hostHasContainers(osType));
   const tab: HostTab = search.tab && tabs.includes(search.tab) ? search.tab : "overview";
 
   if (host.isPending) return <LoadingState />;

@@ -239,7 +239,8 @@ func TestScheduleAndCancelOrgDeletion(t *testing.T) {
 	f.member(org, owner, "owner")
 	keyHash := randHash()
 	f.exec(`INSERT INTO license_keys (org_id, name, key_prefix, key_hash) VALUES ($1, 'k', 'olk_', $2)`, org, keyHash)
-	f.exec(`INSERT INTO license_keys (org_id, name, key_prefix, key_hash, revoked_at) VALUES ($1, 'old', 'olk_', $2, now())`, org, randHash())
+	oldHash := randHash()
+	f.exec(`INSERT INTO license_keys (org_id, name, key_prefix, key_hash, revoked_at) VALUES ($1, 'old', 'olk_', $2, now())`, org, oldHash)
 
 	store := postgres.NewStore(p)
 	if _, err := store.LookupLicenseKey(ctx, [][]byte{keyHash}); err != nil {
@@ -263,8 +264,13 @@ func TestScheduleAndCancelOrgDeletion(t *testing.T) {
 	if ms, _ := store.ListMemberships(ctx, owner); len(ms) != 0 {
 		t.Fatalf("memberships %v", ms)
 	}
-	if _, err := store.LookupLicenseKey(ctx, [][]byte{keyHash}); !errors.Is(err, tenant.ErrUnknownKey) {
+	// D-115: the key revoked by the scheduling answers org_deleted (also through a later hash candidate); the key a
+	// user revoked before stays an unknown key.
+	if _, err := store.LookupLicenseKey(ctx, [][]byte{randHash(), keyHash}); !errors.Is(err, tenant.ErrOrgDeleted) {
 		t.Fatalf("key of a scheduled organization: %v", err)
+	}
+	if _, err := store.LookupLicenseKey(ctx, [][]byte{oldHash}); !errors.Is(err, tenant.ErrUnknownKey) || errors.Is(err, tenant.ErrOrgDeleted) {
+		t.Fatalf("key revoked before the scheduling: %v", err)
 	}
 	pending, err := st.PendingForOwner(ctx, owner)
 	if err != nil || len(pending) != 1 || pending[0].ID != d.ID {
@@ -283,11 +289,68 @@ func TestScheduleAndCancelOrgDeletion(t *testing.T) {
 	if _, err := store.LookupLicenseKey(ctx, [][]byte{keyHash}); err != nil {
 		t.Fatalf("key after cancel: %v", err)
 	}
+	if n := f.count(`SELECT count(*) FROM license_key_tombstones WHERE org_deletion_id::text = $1`, d.ID); n != 0 {
+		t.Fatalf("tombstones left after cancel: %d", n)
+	}
 	if n := f.count(`SELECT count(*) FROM license_keys WHERE org_id::text = $1 AND revoked_at IS NOT NULL`, org); n != 1 {
 		t.Fatalf("the key revoked before the deletion must stay revoked: %d", n)
 	}
 	if _, _, err := st.CancelOrg(ctx, d.ID, time.Now()); !errors.Is(err, deletion.ErrNotCancellable) {
 		t.Fatalf("second cancel: %v", err)
+	}
+}
+
+// TestOrgDeletedKeyAfterPurge covers the PostgreSQL side only (no ClickHouse): the tombstone survives the purge with a
+// retention, and a new active key with the same hash wins over it (D-115).
+func TestOrgDeletedKeyAfterPurge(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := fixture{t, p, ctx}
+	s := suffix()
+	org := f.org("dsr-t-"+s, "Tomb "+s)
+	keyHash := randHash()
+	f.exec(`INSERT INTO license_keys (org_id, name, key_prefix, key_hash) VALUES ($1, 'k', 'olk_', $2)`, org, keyHash)
+	f.exec(`INSERT INTO license_key_tombstones (key_hash, reason, created_at, expires_at) VALUES ($1, 'org_deleted', now(), now() - interval '1 day')`, randHash())
+
+	store := postgres.NewStore(p)
+	st := deletion.PGStore{Pool: p}
+	d, _, err := st.ScheduleOrg(ctx, deletion.ScheduleInput{OrgID: org, Initiator: deletion.InitiatorOperator, Reason: "test", Grace: 0, Now: time.Now().Add(-time.Second)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := st.Start(ctx, d.ID, time.Now()); err != nil || !ok {
+		t.Fatalf("start %v %v", ok, err)
+	}
+	now := time.Now()
+	if _, err := st.PurgeOrg(ctx, d, nil, true, now); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(`SELECT count(*) FROM organizations WHERE id::text = $1`, org); n != 0 {
+		t.Fatal("organization remains")
+	}
+	if _, err := store.LookupLicenseKey(ctx, [][]byte{keyHash}); !errors.Is(err, tenant.ErrOrgDeleted) {
+		t.Fatalf("key after purge: %v", err)
+	}
+	if _, err := store.LookupLicenseKey(ctx, [][]byte{randHash()}); !errors.Is(err, tenant.ErrUnknownKey) || errors.Is(err, tenant.ErrOrgDeleted) {
+		t.Fatalf("unknown key: %v", err)
+	}
+	if n := f.count(`SELECT count(*) FROM license_key_tombstones WHERE org_deletion_id::text = $1 AND expires_at > now() + interval '300 days'`, d.ID); n != 1 {
+		t.Fatalf("tombstone with retention: %d", n)
+	}
+	if n := f.count(`SELECT count(*) FROM license_key_tombstones WHERE expires_at < now()`); n != 0 {
+		t.Fatalf("expired tombstones not removed: %d", n)
+	}
+	// The same key hash becomes active again in another organization (a re-used custom key): the active key wins.
+	other := f.org("dsr-t2-"+s, "Tomb2 "+s)
+	f.exec(`INSERT INTO license_keys (org_id, name, key_prefix, key_hash) VALUES ($1, 'k', 'olk_', $2)`, other, keyHash)
+	if info, err := store.LookupLicenseKey(ctx, [][]byte{keyHash}); err != nil || info.TenantID != "dsr-t2-"+s {
+		t.Fatalf("re-used key: %+v %v", info, err)
+	}
+	// Revoked there by a user: the old tombstone still matches the hash, but the key row now belongs to an organization
+	// that is not deleted, so the lookup answers an unknown key (401), not org_deleted.
+	f.exec(`UPDATE license_keys SET revoked_at = now() WHERE org_id::text = $1`, other)
+	if _, err := store.LookupLicenseKey(ctx, [][]byte{keyHash}); !errors.Is(err, tenant.ErrUnknownKey) {
+		t.Fatalf("revoked re-used key: %v", err)
 	}
 }
 

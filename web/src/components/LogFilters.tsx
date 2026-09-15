@@ -6,7 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 
+import { SYSTEM_LOG_INPUT, type HostOs } from "@/lib/host-os";
 import { SEVERITIES } from "@/lib/severity";
+
+/** File path placeholder per OS (Linux keeps the translated nginx example). */
+const DEFAULT_LOG_PATH_EXAMPLE: Record<HostOs, string | undefined> = {
+  linux: undefined,
+  darwin: "/opt/homebrew/var/log/nginx/access.log",
+  windows: "C:\\inetpub\\logs\\LogFiles\\W3SVC1\\u_ex260915.log",
+};
 
 export interface LogFilterValues {
   q: string;
@@ -27,14 +35,25 @@ interface LogFiltersProps {
   showService?: boolean;
   /** Source, file path, discovered service and systemd unit fields (agent logs have no service.name). */
   showSourceFilters?: boolean;
+  /**
+   * OS of the host whose logs are filtered: the system log source (journald, unified log, Event Log) and the systemd
+   * unit field follow it. Omitted: the Linux sources.
+   */
+  os?: HostOs;
 }
+
+const SYSTEM_SOURCE_LABEL: Record<HostOs, "logs.sourceJournald" | "logs.sourceUnifiedLog" | "logs.sourceWindowsEventLog"> = {
+  linux: "logs.sourceJournald",
+  darwin: "logs.sourceUnifiedLog",
+  windows: "logs.sourceWindowsEventLog",
+};
 
 /** Filter form; values are applied (to the URL) on submit. The draft resets when the URL values change. */
 export function LogFilters(props: LogFiltersProps) {
   return <LogFiltersForm key={JSON.stringify(props.value)} {...props} />;
 }
 
-function LogFiltersForm({ value, onApply, showHost = true, showService = true, showSourceFilters = false }: LogFiltersProps) {
+function LogFiltersForm({ value, onApply, showHost = true, showService = true, showSourceFilters = false, os = "linux" }: LogFiltersProps) {
   const { t } = useTranslation();
   const id = useId();
   const [draft, setDraft] = useState(value);
@@ -73,21 +92,24 @@ function LogFiltersForm({ value, onApply, showHost = true, showService = true, s
             <NativeSelect id={`${id}-src`} value={draft.source ?? ""} onChange={set("source")}>
               <option value="">{t("logs.sourceAny")}</option>
               <option value="file">{t("logs.sourceFile")}</option>
-              <option value="journald">{t("logs.sourceJournald")}</option>
+              <option value={SYSTEM_LOG_INPUT[os]}>{t(SYSTEM_SOURCE_LABEL[os])}</option>
             </NativeSelect>
           </div>
           <div className="flex w-full flex-col gap-1.5 sm:w-64">
             <Label htmlFor={`${id}-file`}>{t("logs.fileLabel")}</Label>
-            <Input id={`${id}-file`} value={draft.file ?? ""} placeholder={t("logs.filePlaceholder")} onChange={set("file")} className="font-mono" />
+            <Input id={`${id}-file`} value={draft.file ?? ""} placeholder={DEFAULT_LOG_PATH_EXAMPLE[os]} onChange={set("file")} className="font-mono" />
           </div>
           <div className="flex w-full flex-col gap-1.5 sm:w-40">
             <Label htmlFor={`${id}-disc`}>{t("logs.discoveryLabel")}</Label>
             <Input id={`${id}-disc`} value={draft.discovery ?? ""} placeholder={t("logs.discoveryPlaceholder")} onChange={set("discovery")} />
           </div>
-          <div className="flex w-full flex-col gap-1.5 sm:w-44">
-            <Label htmlFor={`${id}-unit`}>{t("logs.unitLabel")}</Label>
-            <Input id={`${id}-unit`} value={draft.unit ?? ""} placeholder={t("logs.unitPlaceholder")} onChange={set("unit")} className="font-mono" />
-          </div>
+          {/* systemd units exist on Linux only; a unit already in the URL stays editable. */}
+          {(os === "linux" || !!draft.unit) && (
+            <div className="flex w-full flex-col gap-1.5 sm:w-44">
+              <Label htmlFor={`${id}-unit`}>{t("logs.unitLabel")}</Label>
+              <Input id={`${id}-unit`} value={draft.unit ?? ""} placeholder={t("logs.unitPlaceholder")} onChange={set("unit")} className="font-mono" />
+            </div>
+          )}
         </>
       )}
       {showService && (

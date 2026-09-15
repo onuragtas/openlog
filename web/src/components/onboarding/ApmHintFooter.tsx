@@ -10,6 +10,7 @@ import { onboardingQuery } from "@/api/onboarding";
 import { hostQuery } from "@/api/queries";
 import { can } from "@/api/roles";
 import { FormError } from "@/components/settings/common";
+import { hostHasPhpForwarder, hostHasPhpInstall, hostOsOf } from "@/lib/host-os";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { AGENT_PRODUCTS, apmTargetForLanguage } from "@/lib/install-commands";
@@ -29,7 +30,9 @@ export interface ApmHint {
  */
 export function ApmHintFooter({ hint, hostId, serviceName, language }: { hint: ApmHint; hostId: string; serviceName: string; language: string }) {
   const { t } = useTranslation();
-  const hostName = useQuery(hostQuery(hostId)).data?.host_name ?? "";
+  const host = useQuery(hostQuery(hostId)).data;
+  const hostName = host?.host_name ?? "";
+  const os = hostOsOf(host);
   const id = useId();
   const [open, setOpen] = useState(false);
   const target = apmTargetForLanguage(hint.language);
@@ -39,12 +42,14 @@ export function ApmHintFooter({ hint, hostId, serviceName, language }: { hint: A
   const onboarding = useQuery({ ...onboardingQuery(), enabled: open && target === "apm/php" });
   const services = useQuery({ ...apmHostServicesQuery(hostId), enabled: active });
   const fleet = useMutation({ mutationFn: () => setHostPHPAgentMode(hostId, "auto") });
-  const canFleet = target === "apm/php" && !!onboarding.data?.features.fleet_php_install && can(me?.role, "fleet.manage") && me?.auth === "session";
+  // The fleet installs the PHP agent on Linux hosts only (D-104).
+  const canFleet =
+    target === "apm/php" && hostHasPhpInstall(os) && !!onboarding.data?.features.fleet_php_install && can(me?.role, "fleet.manage") && me?.auth === "session";
   // PHP-FPM pools whose users cannot write php.sock (reported by the infra agent in sync). Every role may read the fleet;
-  // without the fleet API (other auth modes) the query fails and nothing is shown.
-  const fleetHost = useQuery({ ...fleetHostQuery(hostId), enabled: target === "apm/php" && !!me });
+  // without the fleet API (other auth modes) the query fails and nothing is shown. Windows has no PHP forwarder.
+  const fleetHost = useQuery({ ...fleetHostQuery(hostId), enabled: target === "apm/php" && !!me && hostHasPhpForwarder(os) });
   const phpAccess = fleetHost.data?.php_access;
-  const accessNotice = phpAccess ? <PHPAccessNotice access={phpAccess} /> : null;
+  const accessNotice = phpAccess ? <PHPAccessNotice access={phpAccess} os={os} /> : null;
 
   if (active) {
     const first = services.data?.[0]?.service_name;

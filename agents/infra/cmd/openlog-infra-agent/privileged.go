@@ -143,7 +143,7 @@ func runReconcile(configPath string, explicit bool, ver, rctx string) int {
 	if runtime.GOOS == "linux" {
 		st, err = update.Reconcile(ctx, reconcileOptions(sys, cfg, install, configPath, ver, rctx, log))
 	} else {
-		st, err = update.ReconcileNative(ctx, nativeReconcileOptions(sys, cfg, install, configPath, ver, rctx, log)) // macOS, Windows
+		st, err = update.ReconcileNative(ctx, nativeReconcileOptions(sys, cfg, install, keys, configPath, ver, rctx, log)) // macOS, Windows
 	}
 	if st != nil && st.RestartRequired && rctx != update.ReconcileApply {
 		fmt.Println("restart-required")

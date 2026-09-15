@@ -17,6 +17,19 @@ import (
 // cannot be reached. Ingest answers 503 / UNAVAILABLE so agents retry.
 var ErrUnavailable = errors.New("license key store unavailable")
 
+// ErrOrgDeleted is returned for a license key revoked by the deletion of its organization (scheduled or completed;
+// license_key_tombstones, D-115). Ingest answers 403 / PERMISSION_DENIED with reason org_deleted. It also matches
+// ErrUnknownKey (errors.Is), so callers that only distinguish known from unknown keys are unaffected.
+var ErrOrgDeleted error = orgDeletedError{}
+
+type orgDeletedError struct{}
+
+func (orgDeletedError) Error() string {
+	return "license key of an organization scheduled for deletion or deleted"
+}
+
+func (orgDeletedError) Is(target error) bool { return target == ErrUnknownKey }
+
 // KeyInfo is a resolved, non-revoked license key.
 type KeyInfo struct {
 	KeyID    string
@@ -28,7 +41,9 @@ type KeyStore interface {
 	// LookupLicenseKey returns the active key whose stored hash is one of hashes
 	// (KeyHasher.Candidates, current format first), or ErrUnknownKey when it
 	// does not exist or is revoked. A key found by a later candidate is
-	// rewritten to hashes[0] in the same round trip (D-044).
+	// rewritten to hashes[0] in the same round trip (D-044). When no active key
+	// matches but one of hashes belongs to a key revoked by an organization
+	// deletion, it returns ErrOrgDeleted instead of ErrUnknownKey (D-115).
 	LookupLicenseKey(ctx context.Context, hashes [][]byte) (KeyInfo, error)
 	// TouchLicenseKeys records that keys were used at "at" (coarsely).
 	TouchLicenseKeys(ctx context.Context, keyIDs []string, at time.Time) error
@@ -77,6 +92,7 @@ func (o *CacheOptions) defaults() {
 type entry struct {
 	info      KeyInfo
 	found     bool
+	deleted   bool      // not found: the key belonged to a deleted organization (ErrOrgDeleted)
 	fetched   time.Time // last successful lookup
 	refreshAt time.Time // next lookup attempt
 }
@@ -150,8 +166,8 @@ func (c *Cached) Resolve(ctx context.Context, key string) (string, error) {
 			c.put(k, ne, now)
 			c.results.WithLabelValues("miss").Inc()
 			return ne, nil
-		case errors.Is(err, ErrUnknownKey):
-			ne := entry{fetched: now, refreshAt: now.Add(c.o.NegativeTTL)}
+		case errors.Is(err, ErrUnknownKey): // includes ErrOrgDeleted: cached like an unknown key
+			ne := entry{deleted: errors.Is(err, ErrOrgDeleted), fetched: now, refreshAt: now.Add(c.o.NegativeTTL)}
 			c.put(k, ne, now)
 			c.results.WithLabelValues("negative").Inc()
 			return ne, nil
@@ -181,6 +197,9 @@ func hitLabel(e entry) string {
 
 func (c *Cached) answer(e entry) (string, error) {
 	if !e.found {
+		if e.deleted {
+			return "", ErrOrgDeleted
+		}
 		return "", ErrUnknownKey
 	}
 	c.touchMu.Lock()

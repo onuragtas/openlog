@@ -15,6 +15,7 @@ import {
 } from "@/api/onboarding";
 import { buttonVariants } from "@/components/ui/button";
 import { useNow } from "@/lib/hooks";
+import { agentLog, agentSelfTest, SYSTEM_LOG_INPUT, type HostOs } from "@/lib/host-os";
 import { cleanName, expectedServiceName, type InstallOptions, type InstallTarget } from "@/lib/install-commands";
 import { tDynamic } from "@/lib/onboarding-key";
 import { cn } from "@/lib/utils";
@@ -24,10 +25,9 @@ type TipKey = "firewall" | "endpoint" | "key" | "journal" | "dockerLogs" | "kube
 function tipsFor(target: InstallTarget): TipKey[] {
   switch (target.id) {
     case "linux":
-      return ["firewall", "endpoint", "key", "journal"];
     case "macos":
     case "windows":
-      return ["firewall", "endpoint", "key"];
+      return ["firewall", "endpoint", "key", "journal"];
     case "docker":
       return ["firewall", "endpoint", "key", "dockerLogs"];
     case "kubernetes":
@@ -42,6 +42,14 @@ function tipsFor(target: InstallTarget): TipKey[] {
     default:
       return ["firewall", "endpoint", "key", "serviceName", "appLogs"];
   }
+}
+
+/** OS of the agent the tips talk about: the host card itself, or the host OS option of host-scoped cards; PHP is Linux. */
+function tipOs(target: InstallTarget, options: InstallOptions): HostOs {
+  if (target.id === "macos") return "darwin";
+  if (target.id === "windows") return "windows";
+  if (target.options.includes("hostOs")) return options.hostOs;
+  return "linux";
 }
 
 export interface VerifyStepProps {
@@ -82,6 +90,7 @@ function Panel({
   const { t } = useTranslation();
   const now = useNow(1_000);
   const timedOut = !found && now - common.startedAt > common.timeoutMs;
+  const os = tipOs(common.target, common.options);
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div
@@ -112,7 +121,13 @@ function Panel({
           <summary className="cursor-pointer font-medium">{t("addData.verify.tipsTitle")}</summary>
           <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 break-words text-muted-foreground">
             {tipsFor(common.target).map((k) => (
-              <li key={k}>{tDynamic(t, `addData.verify.tips.${k}`, { endpoint: common.endpoint, name: service ?? "" })}</li>
+              <li key={k}>
+                {tDynamic(t, `addData.verify.tips.${k}`, {
+                  endpoint: common.endpoint,
+                  name: service ?? "",
+                  command: k === "agentConfig" ? agentSelfTest(os).code : agentLog(os).code,
+                })}
+              </li>
             ))}
           </ul>
         </details>
@@ -210,7 +225,7 @@ function LogsVerify({ common }: { common: Common }) {
   const filters: VerifyLogsFilter[] =
     common.target.id === "logs/host"
       ? common.options.journald
-        ? [{ source: "file" }, { source: "journald" }]
+        ? [{ source: "file" }, { source: SYSTEM_LOG_INPUT[common.options.hostOs] ?? "journald" }]
         : [{ source: "file" }]
       : common.target.id === "logs/containers"
         ? [{ source: "container" }]

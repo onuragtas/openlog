@@ -161,7 +161,8 @@ nobody else does, and the API answers `403`. The console has three tabs:
 - **Organizations**: search by name, tenant id, organization id or member e-mail; filter by effective plan and state
   (active, trial, suspended, flagged); sort by creation, name, ingest this period, members or last ingest. Numbers come
   from PostgreSQL (latest quota evaluation, license key `last_used_at`), so the list stays fast with many tenants.
-- **Organization detail**: members (role, last login, verified), plan and overrides (the existing plan editor), usage
+- **Organization detail**: members (role, last login, verified), plan and overrides (the existing plan editor), trial
+  (the plan picker lists only plans with `trial_days`, from `GET /api/v1/plans`), organization deletion (§12), usage
   chart of the current period, quota status, the 50 newest audit events, SSO connections (protocol, enabled, enforced,
   JIT, last test), counts of license keys/API keys/SCIM tokens and verified domains, flags and support sessions. No
   secret, key value, SSO configuration or IP address is shown.
@@ -172,7 +173,7 @@ customer's admins can read it:
 
 | Action | Effect |
 |---|---|
-| Suspend | ingest `403 org_suspended` within `OPENLOG_QUOTA_REFRESH_INTERVAL`; the UI shows a banner; members' changes are refused (`403 org_suspended`) but they can sign in, query and export/delete their data |
+| Suspend | ingest `403 org_suspended` within `OPENLOG_QUOTA_REFRESH_INTERVAL`; the UI shows a banner and turns read-only (create/edit/delete actions of dashboards, alerts, fleet, integrations and settings are hidden or disabled with an explanation; a mutation answered `403 org_suspended` refetches the state at once); members' changes are refused (`403 org_suspended`) but they can sign in, query and export/delete their data |
 | Unsuspend | back to normal immediately on the api pod that handled it, within 15 s on the others |
 | Change plan / overrides | `PUT /api/v1/admin/orgs/{org}/plan` (§2) |
 | Start / extend trial | §9 |
@@ -273,6 +274,11 @@ config.md "Data subject requests and status page"). E-mails need `OPENLOG_SMTP_*
 - Storage: S3 (`OPENLOG_DATA_EXPORT_S3_URL`, or the tiered-storage bucket under `openlog-exports/`) or a local directory
   (`OPENLOG_DATA_EXPORT_LOCAL_PATH`; single api pod or a shared volume). Give the bucket prefix a lifecycle rule a little
   longer than `OPENLOG_DATA_EXPORT_TTL` as a safety net.
+- S3 credentials: static keys, or (`OPENLOG_DATA_EXPORT_S3_CREDENTIALS=auto`, the default without keys) an IAM role
+  (D-116): EKS IRSA (annotate the api service account with `eks.amazonaws.com/role-arn`), EKS Pod Identity, ECS task
+  role or the EC2 instance profile (IMDSv2; on EKS nodes the hop limit must allow pods to reach it). The role needs
+  `s3:PutObject`, `s3:GetObject` and `s3:DeleteObject` on the export prefix. Credentials files, SSO and
+  `credential_process` are not read.
 - The requester gets an e-mail with a download link (`/api/v1/data-exports/download?token=…`, 256-bit random token,
   only its hash is stored) valid until `OPENLOG_DATA_EXPORT_TTL`; owners can also download from the settings page.
   Archives are deleted when they expire. Audit: `data_export.request`, `data_export.download` (organization),
@@ -292,7 +298,8 @@ e-mail goes to the old address; a deletion certificate (`subject_type=user`, sha
 
 1. An owner opens Settings → Organization → *Delete organization*, types the organization name and confirms with the
    password (or a recent SSO sign-in). The organization is soft-deleted at once: members lose access, API keys and
-   license keys stop working (ingest answers `401`), SCIM tokens are revoked, alerts are no longer evaluated and
+   license keys stop working (ingest answers `403` with reason `org_deleted` for the revoked keys, also for 365 days
+   after the purge, so agents left running show a clear error; D-115), SCIM tokens are revoked, alerts are no longer evaluated and
    reports no longer sent. Owners get an e-mail.
 2. During `OPENLOG_ORG_DELETION_GRACE` (default 7 days) any owner can cancel it under Settings → Profile; keys revoked by
    the deletion work again.
@@ -308,7 +315,10 @@ e-mail goes to the old address; a deletion certificate (`subject_type=user`, sha
 Operators delete abusive organizations with `POST /api/v1/admin/orgs/{org}/deletion` `{"reason", "immediate"?}`
 (superadmin; `immediate` skips the grace period; owners are informed but cannot cancel; installation-level audit
 `admin.org_deletion_schedule`). `GET /api/v1/admin/org-deletions` shows progress and `last_error`;
-`POST /api/v1/admin/org-deletions/{id}/cancel` cancels during the grace period.
+`POST /api/v1/admin/org-deletions/{id}/cancel` cancels during the grace period. The operator console's organization
+detail has the same controls in *Organization deletion*: schedule (reason required; *Delete immediately* also requires
+typing the tenant id), the pending deletion with its purge time, initiator, reason and last error, cancel, earlier
+requests and the tenant's deletion certificates (matched by the sha256 of the tenant id).
 
 Watch a running deletion:
 

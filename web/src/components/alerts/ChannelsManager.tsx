@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import {
   alertChannelsQuery,
   createAlertChannel,
@@ -14,7 +13,6 @@ import {
   type AlertChannelTestResult,
   type AlertChannelType,
 } from "@/api/alerts";
-import { can } from "@/api/roles";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { SecretReveal } from "@/components/settings/SecretReveal";
@@ -24,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeLabel } from "./badges";
 import { Field } from "./fields";
 
@@ -230,7 +229,7 @@ function ChannelRow({ channel, canManage, onEdit }: { channel: AlertChannel; can
 
 export function ChannelsManager() {
   const { t } = useTranslation();
-  const canManage = can(useMe().data?.role, "alerts.manage");
+  const canManage = usePermissions().can("alerts.manage");
   const q = useQuery(alertChannelsQuery());
   const [editing, setEditing] = useState<AlertChannel | "new" | null>(null);
   const [generated, setGenerated] = useState<string | null>(null);

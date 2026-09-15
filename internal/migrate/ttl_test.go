@@ -42,7 +42,9 @@ func TestTTLTablesMatchSchema(t *testing.T) {
 		// Kubernetes entities (0040–0042): fixed 30-day TTL after the last point, like containers.
 		"k8s_clusters_local": true, "k8s_nodes_local": true, "k8s_workloads_local": true, "k8s_pods_local": true,
 		// Usage metering (0050_usage, D-079): fixed 400-day retention, independent of the telemetry retention.
-		"usage_signals_1h_local": true, "usage_entities_1d_local": true, "usage_ingest_1h_local": true, "usage_queries_1h_local": true}
+		"usage_signals_1h_local": true, "usage_entities_1d_local": true, "usage_ingest_1h_local": true, "usage_queries_1h_local": true,
+		// Attribute key index (0080_attribute_keys, D-118): hourly key counts with a fixed 30-day TTL, no telemetry values.
+		"attribute_keys_local": true}
 	managed := map[string]bool{}
 	for _, tt := range TTLTables {
 		managed[tt.Table] = true

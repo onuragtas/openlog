@@ -4,13 +4,13 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { alertChannelsQuery, alertRulesQuery, deleteAlertRule, setAlertRuleEnabled, type AlertRule } from "@/api/alerts";
-import { can } from "@/api/roles";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { canEditOwned } from "@/lib/alerts";
+import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeIcon, RuleStateBadge, SeverityBadge } from "./badges";
 
 function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: boolean; channelTypes: Map<string, { name: string; type: "slack" | "email" | "webhook" | "teams" }> }) {
@@ -71,12 +71,13 @@ function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: 
 export function RulesList() {
   const { t } = useTranslation();
   const me = useMe().data;
+  const perms = usePermissions();
   const rules = useQuery(alertRulesQuery());
   const channels = useQuery(alertChannelsQuery());
   const channelTypes = new Map((channels.data?.channels ?? []).map((c) => [c.id, { name: c.name, type: c.type }] as const));
   return (
     <div className="flex flex-col gap-3">
-      {can(me?.role, "alerts.write") && (
+      {perms.can("alerts.write") && (
         <div>
           <Link to="/alerts/rules/new" className={buttonVariants({})}>
             <Plus aria-hidden="true" />
@@ -108,7 +109,7 @@ export function RulesList() {
             </TableHeader>
             <TableBody>
               {rules.data.map((r) => (
-                <RuleRow key={r.id} rule={r} editable={canEditOwned(me?.role, r.created_by_user_id, me?.user?.id)} channelTypes={channelTypes} />
+                <RuleRow key={r.id} rule={r} editable={perms.writable && canEditOwned(me?.role, r.created_by_user_id, me?.user?.id)} channelTypes={channelTypes} />
               ))}
             </TableBody>
           </Table>

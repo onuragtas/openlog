@@ -76,6 +76,9 @@ func (s *Service) grpcExport(ctx context.Context, sig queue.Signal, msg proto.Me
 	if errors.Is(err, tenant.ErrUnavailable) {
 		return prepared{}, unavailableError()
 	}
+	if errors.Is(err, tenant.ErrOrgDeleted) { // key revoked by its organization's deletion (D-115)
+		return prepared{}, grpcErrorInfo(codes.PermissionDenied, orgDeletedMessage, ReasonOrgDeleted, 0)
+	}
 	if err != nil {
 		return prepared{}, status.Error(codes.Unauthenticated, "invalid or missing license key")
 	}

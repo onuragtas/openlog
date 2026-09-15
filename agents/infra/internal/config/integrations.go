@@ -18,10 +18,14 @@ const (
 	IntegrationMySQL      = "mysql"
 	IntegrationPostgreSQL = "postgresql"
 	IntegrationDocker     = "docker"
+	// IntegrationMSSQL is Microsoft SQL Server (any OS; also remote servers through endpoint).
+	IntegrationMSSQL = "mssql"
+	// IntegrationIIS is Microsoft IIS (Windows performance counters; not_available elsewhere).
+	IntegrationIIS = "iis"
 )
 
 // IntegrationIDs lists the implemented integrations in a stable order.
-var IntegrationIDs = []string{IntegrationDocker, IntegrationMySQL, IntegrationNginx, IntegrationPostgreSQL, IntegrationRedis}
+var IntegrationIDs = []string{IntegrationDocker, IntegrationIIS, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx, IntegrationPostgreSQL, IntegrationRedis}
 
 // IntegrationsConfig configures the metric integrations bound to discovered services.
 type IntegrationsConfig struct {
@@ -44,6 +48,8 @@ type IntegrationsConfig struct {
 	MySQL      IntegrationConfig `yaml:"mysql"`
 	PostgreSQL IntegrationConfig `yaml:"postgresql"`
 	Docker     IntegrationConfig `yaml:"docker"`
+	MSSQL      IntegrationConfig `yaml:"mssql"`
+	IIS        IntegrationConfig `yaml:"iis"`
 }
 
 // IntegrationConfig configures one integration. Settings apply to every
@@ -123,6 +129,10 @@ func (c *IntegrationsConfig) Integration(id string) *IntegrationConfig {
 		return &c.PostgreSQL
 	case IntegrationDocker:
 		return &c.Docker
+	case IntegrationMSSQL:
+		return &c.MSSQL
+	case IntegrationIIS:
+		return &c.IIS
 	}
 	return nil
 }
@@ -172,7 +182,7 @@ func defaultIntegrations() IntegrationsConfig {
 	return IntegrationsConfig{
 		Enabled: true, Interval: Duration(30 * time.Second), Timeout: Duration(10 * time.Second),
 		MaxConcurrent: 4, MaxInstances: 32, RemoteConfig: true,
-		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on,
+		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on,
 	}
 }
 
@@ -183,6 +193,9 @@ var integrationKeys = map[string]map[string]bool{
 	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true},
 	IntegrationPostgreSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
 	IntegrationDocker:     {},
+	// mssql: top_n_tables bounds the wait types of sqlserver.os.wait.duration (default 10).
+	IntegrationMSSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true},
+	IntegrationIIS:   {},
 }
 
 func (s InstanceSettings) usedKeys() []string {

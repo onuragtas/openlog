@@ -2,13 +2,19 @@
 // is not shipped. Subcommands:
 //
 //	e2e keygen  -out DIR                              test signing key (DIR/key.seed, DIR/key.pub)
-//	e2e release -seed F -version V -arch A -binary B -out DIR -base-url U [-floor V] [-min-upgrade-from V] [-corrupt]
+//	e2e release -seed F -version V -arch A -binary B -out DIR -base-url U [-os linux|darwin|windows] [-layout flat|v] [-floor V] [-min-upgrade-from V] [-corrupt]
 //	e2e php-release -seed F -version V -arch A -from TARBALL -out DIR -base-url U [-broken]   PHP agent release (php-<V>/)
 //	e2e serve   -listen ADDR -releases DIR -arch A   fake ingest: OTLP sink, release files, scripted sync
+//	e2e serve   -scenario native -os darwin|windows -from V1 -to V2 -listen ADDR -releases DIR -arch A
+//	            macOS/Windows service scenario (../native.sh, ../native.ps1): upgrade V1 -> V2, then rollback to V1
+//
+// Layout flat (Linux scenario): <out>/<archive> and <out>/<V>/manifest.json(.sig). Layout v: everything in <out>/v<V>/,
+// the layout of a release directory, so install.sh --base-url / install.ps1 -BaseUrl <base>/releases install from it.
 package main
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
@@ -81,6 +87,8 @@ func release(args []string) error {
 	floor := fs.String("floor", "", "compatibility.rollback_floor")
 	minFrom := fs.String("min-upgrade-from", "", "compatibility.min_upgrade_from")
 	corrupt := fs.Bool("corrupt", false, "flip a byte of the archive after signing (sha256 mismatch, same size)")
+	goos := fs.String("os", "linux", "target OS: linux, darwin (tar.gz) or windows (zip)")
+	layout := fs.String("layout", "flat", "flat or v (see the package comment)")
 	fs.Parse(args)
 
 	seed, err := os.ReadFile(*seedFile)
@@ -95,19 +103,30 @@ func release(args []string) error {
 	if err != nil {
 		return err
 	}
-	top := update.TopDir(*version, "linux", *arch)
-	archive, err := tarball(top, map[string]fileEntry{
-		update.BinaryName:                {bin, 0o755},
+	exe, format := "openlog-infra-agent", lib.FormatTarGz
+	if *goos == "windows" {
+		exe, format = "openlog-infra-agent.exe", lib.FormatZip
+	}
+	top := update.TopDir(*version, *goos, *arch)
+	names := []string{exe, "LICENSE", "README.md", "packaging/config.example.yaml", "packaging/systemd/example.unit"}
+	files := map[string]fileEntry{
+		exe:                              {bin, 0o755},
 		"LICENSE":                        {[]byte("Apache License 2.0\n"), 0o644},
 		"README.md":                      {[]byte("# openlog-infra-agent " + *version + "\n"), 0o644},
 		"packaging/config.example.yaml":  {[]byte("license_key: \"\"\n"), 0o644},
 		"packaging/systemd/example.unit": {[]byte("[Service]\n"), 0o644},
-	})
+	}
+	var archive []byte
+	if format == lib.FormatZip {
+		archive, err = zipArchive(top, names, files)
+	} else {
+		archive, err = tarball(top, names, files)
+	}
 	if err != nil {
 		return err
 	}
 	sum := sha256.Sum256(archive)
-	name := top + ".tar.gz"
+	name := top + "." + format
 	m := lib.Manifest{
 		Schema: 1, Product: lib.Product, Version: *version, Channel: lib.ChannelStable,
 		ReleasedAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
@@ -117,8 +136,8 @@ func release(args []string) error {
 			MinUpgradeFrom: *minFrom, RollbackFloor: *floor,
 		},
 		Artifacts: []lib.Artifact{{
-			Component: lib.ComponentInfraAgent, OS: "linux", Arch: *arch, Format: lib.FormatTarGz,
-			Name: name, URL: strings.TrimRight(*baseURL, "/") + "/" + name,
+			Component: lib.ComponentInfraAgent, OS: *goos, Arch: *arch, Format: format,
+			Name: name, URL: strings.TrimRight(*baseURL, "/") + "/" + releasePath(*layout, *version, name),
 			SHA256: hex.EncodeToString(sum[:]), Size: int64(len(archive)),
 		}},
 	}
@@ -132,11 +151,11 @@ func release(args []string) error {
 	if *corrupt {
 		archive[len(archive)/2] ^= 0xff
 	}
-	dir := filepath.Join(*out, *version)
+	dir := filepath.Join(*out, manifestDir(*layout, *version))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(*out, name), archive, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(*out, filepath.FromSlash(releasePath(*layout, *version, name))), archive, 0o644); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(dir, update.ManifestFile), data, 0o644); err != nil {
@@ -155,7 +174,66 @@ type fileEntry struct {
 	mode int64
 }
 
-func tarball(top string, files map[string]fileEntry) ([]byte, error) {
+// manifestDir is the directory of a release's manifest below the releases directory.
+func manifestDir(layout, version string) string {
+	if layout == "v" {
+		return "v" + version
+	}
+	return version
+}
+
+// releasePath is the slash path of a release file below the releases directory.
+func releasePath(layout, version, name string) string {
+	if layout == "v" {
+		return "v" + version + "/" + name
+	}
+	return name
+}
+
+// zipArchive is tarball for Windows releases (directory entries, then the files in order).
+func zipArchive(top string, names []string, files map[string]fileEntry) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	mtime := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	dirs := map[string]bool{}
+	addDir := func(d string) error {
+		if dirs[d] {
+			return nil
+		}
+		dirs[d] = true
+		h := &zip.FileHeader{Name: d + "/", Modified: mtime}
+		h.SetMode(os.ModeDir | 0o755)
+		_, err := zw.CreateHeader(h)
+		return err
+	}
+	if err := addDir(top); err != nil {
+		return nil, err
+	}
+	for _, name := range names {
+		f := files[name]
+		parts := strings.Split(name, "/")
+		for i := 1; i < len(parts); i++ {
+			if err := addDir(top + "/" + strings.Join(parts[:i], "/")); err != nil {
+				return nil, err
+			}
+		}
+		h := &zip.FileHeader{Name: top + "/" + name, Method: zip.Deflate, Modified: mtime}
+		h.SetMode(os.FileMode(f.mode))
+		w, err := zw.CreateHeader(h)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(f.data); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func tarball(top string, names []string, files map[string]fileEntry) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(zw)
@@ -171,7 +249,7 @@ func tarball(top string, files map[string]fileEntry) ([]byte, error) {
 	if err := addDir(top); err != nil {
 		return nil, err
 	}
-	for _, name := range []string{update.BinaryName, "LICENSE", "README.md", "packaging/config.example.yaml", "packaging/systemd/example.unit"} {
+	for _, name := range names {
 		f := files[name]
 		parts := strings.Split(name, "/")
 		for i := 1; i < len(parts); i++ {
@@ -341,7 +419,18 @@ func serve(args []string) error {
 	releases := fs.String("releases", "", "releases directory")
 	arch := fs.String("arch", "", "linux architecture")
 	gates := fs.String("gates", "", "directory of gate files created by scenario.sh")
+	scenario := fs.String("scenario", "systemd", "systemd (scenario.sh, Linux) or native (native.sh on macOS, native.ps1 on Windows)")
+	goos := fs.String("os", "linux", "OS of the releases (native scenario: darwin or windows)")
+	from := fs.String("from", "", "native scenario: installed version")
+	to := fs.String("to", "", "native scenario: upgrade target")
 	fs.Parse(args)
+	layout := "flat"
+	if *scenario == "native" {
+		layout = "v"
+		if *from == "" || *to == "" {
+			return fmt.Errorf("-scenario native needs -from and -to")
+		}
+	}
 
 	logf := func(format string, a ...any) {
 		fmt.Printf("%s server: %s\n", time.Now().UTC().Format("15:04:05.000"), fmt.Sprintf(format, a...))
@@ -415,6 +504,23 @@ func serve(args []string) error {
 			done: func(r syncReq) bool {
 				return r.PHP != nil && r.PHP.Version == "" && r.PHP.ManagedBy == phpagent.ManagedNone && r.phpUpdate("0.9.6", phpagent.StateUninstalled)
 			}},
+	}
+	if *scenario == "native" {
+		// launchd / Windows SCM: the service process applies the staged update itself and exits so that the service
+		// manager starts the other version (D-104). The rollback needs the running version's manifest (rule 5), which
+		// the privileged apply stored next to the self-updated binary.
+		steps = []step{
+			{name: "installed " + *from + " syncs in staged mode",
+				done: func(r syncReq) bool { return r.Agent.Version == *from && staged(r) }},
+			{name: "self-update " + *from + " -> " + *to + " applied by the service process and confirmed", action: update.ActionUpgrade, version: *to,
+				done: func(r syncReq) bool {
+					return r.Agent.Version == *to && r.Update.State == update.StateSucceeded && r.Update.ToVersion == *to && staged(r)
+				}},
+			{name: "rollback " + *to + " -> " + *from + " applied and confirmed", action: update.ActionRollback, version: *from,
+				done: func(r syncReq) bool {
+					return r.Agent.Version == *from && r.Update.State == update.StateSucceeded && r.Update.ToVersion == *from && staged(r)
+				}},
+		}
 	}
 	gateOpen := func(s step) bool {
 		if s.gate == "" {
@@ -495,7 +601,7 @@ func serve(args []string) error {
 		}
 		resp := update.SyncResponse{PollIntervalSeconds: 60, ServerVersion: "0.9.9"}
 		if cur < len(steps) && steps[cur].action != "" && gateOpen(steps[cur]) {
-			ins, err := instructionFor(steps[cur], cur, *releases, *arch, "http://"+*listen+"/releases")
+			ins, err := instructionFor(steps[cur], cur, *releases, *goos, *arch, layout, "http://"+*listen+"/releases")
 			if err != nil {
 				logf("SCENARIO FAILED: %v", err)
 				http.Error(w, err.Error(), 500)
@@ -526,8 +632,8 @@ func serve(args []string) error {
 	return http.ListenAndServe(*listen, mux)
 }
 
-func instructionFor(s step, idx int, releases, arch, baseURL string) (*update.Instruction, error) {
-	dir := filepath.Join(releases, s.version)
+func instructionFor(s step, idx int, releases, goos, arch, layout, baseURL string) (*update.Instruction, error) {
+	dir := filepath.Join(releases, manifestDir(layout, s.version))
 	m, err := os.ReadFile(filepath.Join(dir, update.ManifestFile))
 	if err != nil {
 		return nil, err
@@ -547,7 +653,7 @@ func instructionFor(s step, idx int, releases, arch, baseURL string) (*update.In
 	return &update.Instruction{
 		Action: s.action, TargetVersion: s.version,
 		Manifest: base64.StdEncoding.EncodeToString(m), Signature: string(sig),
-		DownloadURL: baseURL + "/" + update.TopDir(s.version, "linux", arch) + ".tar.gz",
+		DownloadURL: baseURL + "/" + releasePath(layout, s.version, update.TopDir(s.version, goos, arch)+"."+update.ArtifactFormat(goos)),
 		RolloutID:   fmt.Sprintf("e2e-step-%d", idx+1),
 	}, nil
 }

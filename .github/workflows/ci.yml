@@ -84,33 +84,79 @@ jobs:
   infra-agent-macos:
     name: infra-agent (macOS)
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: agents/infra
+    env:
+      # The version the tar.gz/pkg steps package (test-pkg.sh checks that -version reports it).
+      PKG_VERSION: 0.0.${{ github.run_number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: agents/infra/go.mod
-          cache-dependency-path: agents/infra/go.sum
+          cache-dependency-path: |
+            go.sum
+            agents/infra/go.sum
       - name: vet
         run: go vet ./...
       - name: test
         run: go test ./...
+      - name: throwaway release test keys (openlog-release keygen; test only)
+        working-directory: .
+        run: |
+          set -euo pipefail
+          go run ./cmd/openlog-release keygen > "$RUNNER_TEMP/testkeys.env"
+          {
+            echo "TEST_PUBLIC_KEYS=$(sed -n 's/^OPENLOG_RELEASE_PUBLIC_KEYS=//p' "$RUNNER_TEMP/testkeys.env")"
+            echo "TEST_SIGNING_KEY=$(sed -n 's/^OPENLOG_RELEASE_SIGNING_KEY=//p' "$RUNNER_TEMP/testkeys.env")"
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/testkeys.env"
       - name: build and smoke test (-version, -once, -validate-rules)
         run: |
           set -euo pipefail
-          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/openlog-infra-agent" ./cmd/openlog-infra-agent
-          "$RUNNER_TEMP/openlog-infra-agent" -version
-          "$RUNNER_TEMP/openlog-infra-agent" -once > "$RUNNER_TEMP/once.json"
+          arch=$(uname -m | sed 's/x86_64/amd64/')
+          name="openlog-infra-agent_${PKG_VERSION}_darwin_$arch"
+          stage="$RUNNER_TEMP/stage/$name"
+          mkdir -p "$stage"
+          mod=github.com/onuragtas/openlog/agents/infra/internal
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X $mod/version.Version=$PKG_VERSION -X $mod/release.trustedKeys=$TEST_PUBLIC_KEYS" \
+            -o "$stage/openlog-infra-agent" ./cmd/openlog-infra-agent
+          cp LICENSE README.md "$stage/"
+          cp -R packaging "$stage/packaging"
+          "$stage/openlog-infra-agent" -version
+          "$stage/openlog-infra-agent" -once > "$RUNNER_TEMP/once.json"
           python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); assert "metrics" in d, "no metrics key"' "$RUNNER_TEMP/once.json"
-          "$RUNNER_TEMP/openlog-infra-agent" -validate-rules
+          "$stage/openlog-infra-agent" -validate-rules
+          echo "PKG_ARCH=$arch" >> "$GITHUB_ENV"
+      - name: tar.gz, embedded manifest (test keys), pkg
+        working-directory: .
+        env:
+          OPENLOG_RELEASE_SIGNING_KEY: ${{ env.TEST_SIGNING_KEY }}
+          OPENLOG_RELEASE_PUBLIC_KEYS: ${{ env.TEST_PUBLIC_KEYS }}
+          RELEASE_BASE_URL: https://example.invalid/releases
+        run: |
+          set -euo pipefail
+          name="openlog-infra-agent_${PKG_VERSION}_darwin_$PKG_ARCH"
+          go run ./cmd/openlog-release archive --out "$RUNNER_TEMP/$name.tar.gz" --prefix "$name" "$RUNNER_TEMP/stage/$name"
+          agents/infra/packaging/embedded-manifest.sh "$PKG_VERSION" "$RUNNER_TEMP/embedded-manifest" "$RUNNER_TEMP/$name.tar.gz"
+          agents/infra/packaging/macos/build-pkg.sh "$PKG_VERSION" "$PKG_ARCH" "$RUNNER_TEMP/stage/$name" "$RUNNER_TEMP/$name.pkg" "$RUNNER_TEMP/embedded-manifest"
+      - name: pkg install test
+        working-directory: .
+        env:
+          EXPECT_MANIFEST: "1"
+        run: agents/infra/packaging/macos/test-pkg.sh "$RUNNER_TEMP/openlog-infra-agent_${PKG_VERSION}_darwin_${PKG_ARCH}.pkg" "$PKG_VERSION"
+      - name: self-update end-to-end (install.sh, LaunchDaemon, upgrade and rollback)
+        timeout-minutes: 12
+        env:
+          WORK: ${{ runner.temp }}/update-e2e
+        run: test/update/native.sh
 
   infra-agent-windows:
     name: infra-agent (Windows)
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: agents/infra
@@ -120,21 +166,39 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: agents/infra/go.mod
-          cache-dependency-path: agents/infra/go.sum
+          cache-dependency-path: |
+            go.sum
+            agents/infra/go.sum
       - name: vet
         run: go vet ./...
       - name: test
         run: go test ./...
+      - name: throwaway release test keys (openlog-release keygen; test only)
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lines = go run ./cmd/openlog-release keygen
+          if ($LASTEXITCODE -ne 0) { throw "keygen failed" }
+          foreach ($l in $lines) {
+            if ($l -match '^OPENLOG_RELEASE_PUBLIC_KEYS=(.+)$') { "TEST_PUBLIC_KEYS=$($Matches[1])" >> $env:GITHUB_ENV }
+            if ($l -match '^OPENLOG_RELEASE_SIGNING_KEY=(.+)$') { "TEST_SIGNING_KEY=$($Matches[1])" >> $env:GITHUB_ENV }
+          }
       - name: build and smoke test (-version, -once, -validate-rules)
         env:
           CGO_ENABLED: "0"
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe'
-          # The version the zip/MSI steps below package; test-install.ps1 checks that -version reports it.
-          $ldflags = "-X github.com/onuragtas/openlog/agents/infra/internal/version.Version=0.0.${{ github.run_number }}"
+          # The version the zip/MSI steps below package; test-install.ps1 checks that -version reports it. The test keys let
+          # the installed agent verify the MSI's embedded manifest (-verify-release).
+          $mod = 'github.com/onuragtas/openlog/agents/infra/internal'
+          $ldflags = "-X $mod/version.Version=0.0.${{ github.run_number }} -X $mod/release.trustedKeys=$env:TEST_PUBLIC_KEYS"
           go build -trimpath -ldflags $ldflags -o $exe ./cmd/openlog-infra-agent
           if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+          $env:GOARCH = 'arm64'
+          go build -trimpath -ldflags $ldflags -o (Join-Path $env:RUNNER_TEMP 'arm64\openlog-infra-agent.exe') ./cmd/openlog-infra-agent
+          if ($LASTEXITCODE -ne 0) { throw "go build (arm64) failed" }
+          Remove-Item Env:GOARCH
           & $exe -version
           if ($LASTEXITCODE -ne 0) { throw "-version failed" }
           $once = & $exe -once
@@ -143,31 +207,56 @@ jobs:
           if ($null -eq $snapshot.metrics) { throw "-once output has no metrics key" }
           & $exe -validate-rules
           if ($LASTEXITCODE -ne 0) { throw "-validate-rules failed" }
-      - name: zip archive (openlog-release archive)
-        if: hashFiles('agents/infra/packaging/windows/build-msi.ps1') != ''
+      - name: zip archives (openlog-release archive; amd64, arm64)
         working-directory: .
         run: |
           $ErrorActionPreference = 'Stop'
           $v = '0.0.${{ github.run_number }}'
-          $name = "openlog-infra-agent_${v}_windows_amd64"
-          $stage = Join-Path $env:RUNNER_TEMP "stage/$name"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item (Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe') $stage
-          Copy-Item agents/infra/LICENSE, agents/infra/README.md $stage
-          Copy-Item -Recurse agents/infra/packaging (Join-Path $stage 'packaging')
-          go run ./cmd/openlog-release archive --out (Join-Path $env:RUNNER_TEMP "$name.zip") --prefix $name $stage
-          if ($LASTEXITCODE -ne 0) { throw "archive failed" }
-      - name: MSI build and install test
-        if: hashFiles('agents/infra/packaging/windows/build-msi.ps1') != ''
+          foreach ($arch in @('amd64', 'arm64')) {
+            $name = "openlog-infra-agent_${v}_windows_$arch"
+            $stage = Join-Path $env:RUNNER_TEMP "stage/$name"
+            New-Item -ItemType Directory -Force -Path $stage | Out-Null
+            $exe = if ($arch -eq 'amd64') { Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe' } else { Join-Path $env:RUNNER_TEMP 'arm64\openlog-infra-agent.exe' }
+            Copy-Item $exe $stage
+            Copy-Item agents/infra/LICENSE, agents/infra/README.md $stage
+            Copy-Item -Recurse agents/infra/packaging (Join-Path $stage 'packaging')
+            go run ./cmd/openlog-release archive --out (Join-Path $env:RUNNER_TEMP "$name.zip") --prefix $name $stage
+            if ($LASTEXITCODE -ne 0) { throw "archive ($arch) failed" }
+          }
+      - name: embedded manifest (test keys)
+        working-directory: .
+        shell: bash
+        env:
+          OPENLOG_RELEASE_SIGNING_KEY: ${{ env.TEST_SIGNING_KEY }}
+          OPENLOG_RELEASE_PUBLIC_KEYS: ${{ env.TEST_PUBLIC_KEYS }}
+          RELEASE_BASE_URL: https://example.invalid/releases
+        run: |
+          v=0.0.${{ github.run_number }}
+          agents/infra/packaging/embedded-manifest.sh "$v" "$RUNNER_TEMP/embedded-manifest" \
+            "$RUNNER_TEMP/openlog-infra-agent_${v}_windows_amd64.zip" "$RUNNER_TEMP/openlog-infra-agent_${v}_windows_arm64.zip"
+      - name: MSI build and install test (amd64, embedded manifest)
         working-directory: .
         run: |
           $ErrorActionPreference = 'Stop'
           $v = '0.0.${{ github.run_number }}'
           $name = "openlog-infra-agent_${v}_windows_amd64"
           $msi = Join-Path $env:RUNNER_TEMP "$name.msi"
-          ./agents/infra/packaging/windows/build-msi.ps1 -Version $v -Arch amd64 `
+          ./agents/infra/packaging/windows/build-msi.ps1 -Version $v -Arch amd64 -ManifestDir (Join-Path $env:RUNNER_TEMP 'embedded-manifest') `
             -Exe (Join-Path $env:RUNNER_TEMP 'openlog-infra-agent.exe') -SourceDir (Join-Path $env:RUNNER_TEMP "stage/$name") -Out $msi
-          ./agents/infra/packaging/windows/test-install.ps1 -Msi $msi -Zip (Join-Path $env:RUNNER_TEMP "$name.zip") -Version $v
+          ./agents/infra/packaging/windows/test-install.ps1 -Msi $msi -Zip (Join-Path $env:RUNNER_TEMP "$name.zip") -Version $v -ExpectManifest
+      - name: MSI build (arm64; build only, windows-latest cannot install it)
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = '0.0.${{ github.run_number }}'
+          $name = "openlog-infra-agent_${v}_windows_arm64"
+          ./agents/infra/packaging/windows/build-msi.ps1 -Version $v -Arch arm64 -ManifestDir (Join-Path $env:RUNNER_TEMP 'embedded-manifest') `
+            -Exe (Join-Path $env:RUNNER_TEMP 'arm64\openlog-infra-agent.exe') -SourceDir (Join-Path $env:RUNNER_TEMP "stage/$name") `
+            -Out (Join-Path $env:RUNNER_TEMP "$name.msi")
+      - name: self-update end-to-end (install.ps1, Windows service, upgrade and rollback)
+        timeout-minutes: 12
+        working-directory: .
+        run: ./agents/infra/test/update/native.ps1 -Work (Join-Path $env:RUNNER_TEMP 'update-e2e')
 
   go-agent:
     name: go (agents/go + instrumentation modules)

@@ -5,11 +5,11 @@ import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { apmSettingsQuery, putApmSettings } from "@/api/apm";
 import { ApiError } from "@/api/client";
-import { atLeast } from "@/api/roles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMs, type ServiceScope } from "@/lib/apm";
+import { usePermissions } from "@/lib/org-writable";
 
 /** Apdex T of a service with an inline editor for signed-in admins (PUT …/settings). */
 export function ApdexSettings({ scope }: { scope: ServiceScope }) {
@@ -22,7 +22,8 @@ export function ApdexSettings({ scope }: { scope: ServiceScope }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
-  const canEdit = me.data?.auth === "session" && atLeast(me.data?.role, "admin");
+  const perms = usePermissions();
+  const canEdit = me.data?.auth === "session" && perms.canWriteAs("admin");
   const save = useMutation({
     mutationFn: (ms: number) => putApmSettings(scope, ms),
     onSuccess: () => {

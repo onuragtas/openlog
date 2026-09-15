@@ -23,6 +23,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { formatBytes } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { FlagCard, OperatorGuard, StateBadge } from "./OperatorConsole";
+import { OperatorDeletionSection } from "./OperatorDeletion";
 import { ReasonAction } from "./ReasonAction";
 
 export function OperatorOrgDetail({ orgId }: { orgId?: string }) {
@@ -189,6 +190,7 @@ function DetailBody({ orgRef }: { orgRef: string }) {
           </ul>
         </SettingsSection>
       )}
+      <OperatorDeletionSection org={o} />
       <SettingsSection title={t("operator.detail.audit")}>
         <ul className="flex flex-col divide-y text-sm">
           {d.audit.map((e) => (
@@ -238,9 +240,10 @@ function Actions({ detail }: { detail: Detail }) {
   const navigate = useNavigate();
   const o = detail.organization;
   const plans = useQuery(plansQuery()).data?.plans ?? [];
-  const trialPlans = plans.filter((p) => (p as { trial_days?: number }).trial_days !== 0);
+  // Only plans of the catalog with trial_days can be trialled (D-106); the days default to the chosen plan's.
+  const trialPlans = plans.filter((p) => p.trial_days > 0);
   const [trialPlan, setTrialPlan] = useState("");
-  const [trialDays, setTrialDays] = useState("14");
+  const [trialDays, setTrialDays] = useState(() => (detail.lifecycle.trial_ends_at && !detail.lifecycle.trial_ended_at ? "14" : ""));
   const refresh = () => void qc.invalidateQueries({ queryKey: ["operator"] });
   const act = (action: OperatorAction) => async (reason: string) => {
     await runOperatorAction(o.id, action, reason);
@@ -271,20 +274,38 @@ function Actions({ detail }: { detail: Detail }) {
               <label htmlFor={`${id}-trial-plan`} className="text-xs text-muted-foreground">
                 {t("operator.actions.trialPlan")}
               </label>
-              <NativeSelect id={`${id}-trial-plan`} value={trialPlan} onChange={(e) => setTrialPlan(e.target.value)}>
+              <NativeSelect
+                id={`${id}-trial-plan`}
+                value={trialPlan}
+                onChange={(e) => {
+                  setTrialPlan(e.target.value);
+                  const plan = trialPlans.find((p) => p.id === e.target.value);
+                  setTrialDays(plan ? String(plan.trial_days) : "");
+                }}
+              >
                 <option value="" />
                 {trialPlans.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {t("operator.actions.trialPlanOption", { name: p.name || p.id, count: p.trial_days })}
                   </option>
                 ))}
               </NativeSelect>
+              {trialPlans.length === 0 && <p className="text-xs text-muted-foreground">{t("operator.actions.noTrialPlans")}</p>}
             </>
           )}
           <label htmlFor={`${id}-trial-days`} className="text-xs text-muted-foreground">
             {t("operator.actions.trialDays")}
           </label>
-          <Input id={`${id}-trial-days`} type="number" min={1} max={365} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} className="max-w-32" />
+          <Input
+            id={`${id}-trial-days`}
+            type="number"
+            min={1}
+            max={365}
+            value={trialDays}
+            placeholder={trialActive ? "" : t("operator.actions.trialDaysDefault")}
+            onChange={(e) => setTrialDays(e.target.value)}
+            className="max-w-32"
+          />
         </ReasonAction>
         <ReasonAction label={t("operator.actions.resetNotifications")} onConfirm={act("reset-quota-notifications")} />
         <ReasonAction label={t("operator.actions.forceLogout")} destructive onConfirm={act("force-logout")} />

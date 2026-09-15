@@ -616,6 +616,15 @@ One row per scheduling: `org_id` (SET NULL once the organization is gone), `tena
 completes, `requested_by`, `requested_by_email`, `reason` and `notify` are cleared. A deletion becomes `deleting` (no
 longer cancellable) when the leader starts it after `purge_after`.
 
+### `license_key_tombstones` (`0075_license_key_tombstones`)
+License keys revoked by an organization deletion, so ingest answers `403 org_deleted` instead of `401` (D-115):
+`key_hash` (primary key; `license_keys.key_hash` at scheduling time — a hash, no personal data), `reason`
+(`org_deleted`), `org_deletion_id` (no foreign key; not an `org_id` column, so the purge keeps the row), `created_at`,
+`expires_at`. Written by the scheduling for the keys it revokes (keys revoked earlier by users get none), deleted by a
+cancellation, given `expires_at` = purge time + 365 days by the purge; the purge also deletes expired rows. The license
+key lookup consults it only when no active key matches a candidate hash (D-044 candidates, same as `license_keys`) and
+ignores it while that hash belongs to a key of an organization that is not deleted.
+
 ### `deletion_certificates`
 Proof of a completed hard deletion without personal data, kept indefinitely: `subject_type` (`organization`/`user`),
 `subject_hash` (hex sha256 of the tenant id or user id), `initiator` (`owner`/`operator`/`self`), `requested_at`,
@@ -654,6 +663,18 @@ PK `(component, day)`: `checks`, `operational` (operational or under maintenance
 major outage). The api leader adds one check per component per minute; uptime = `(checks - outage) / checks`. Rows
 older than 400 days are pruned. The latest snapshot is the `system_state` document `status_page`
 (`checked_at`, `components`, `processing_lag_seconds`).
+
+## Saved views (`0080_saved_views`)
+
+Saved Logs/Metrics Explorer views ([api.md](api.md#saved-views), code: `internal/savedview`, D-118).
+
+| Table | Key | Content |
+|---|---|---|
+| `saved_views` | `id` | `org_id` (cascade), `signal` (`logs`·`metrics`·`traces`), `name` (1–200), `description` (≤ 2000), `visibility` (`private`·`org`), `state` (jsonb object ≤ 64 KiB; the API accepts ≤ 32 KiB: filters, groups, columns, time range …), `created_by` (SET NULL), `created_at`, `updated_at`. Index `(org_id, signal, lower(name))` |
+
+Visibility is filtered in SQL (`visibility = 'org' OR created_by = viewer OR (created_by IS NULL AND admin)`). The limit of
+500 views per organization is checked in the insert statement (`INSERT … SELECT … WHERE count < 500`; concurrent creates
+may exceed it by a few rows). Audit: `saved_view.{create,update,delete}`.
 
 ## Sizing and operations
 

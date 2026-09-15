@@ -2,15 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import { alertHolidayCalendarsQuery, createHolidayCalendar, deleteHolidayCalendar, updateHolidayCalendar, type AlertHolidayCalendar } from "@/api/alerts";
-import { can } from "@/api/roles";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { parseCalendarDates } from "@/lib/mute-schedule";
+import { usePermissions } from "@/lib/org-writable";
 import { Field, Section } from "./fields";
 
 function CalendarForm({ calendar, onDone }: { calendar: AlertHolidayCalendar | null; onDone: () => void }) {
@@ -77,7 +76,7 @@ function CalendarForm({ calendar, onDone }: { calendar: AlertHolidayCalendar | n
 /** Holiday calendars used as exceptions by recurring mutes (alerting.md §5.2). */
 export function HolidayCalendarsManager() {
   const { t } = useTranslation();
-  const canManage = can(useMe().data?.role, "alerts.manage");
+  const canManage = usePermissions().can("alerts.manage");
   const q = useQuery(alertHolidayCalendarsQuery());
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AlertHolidayCalendar | "new" | null>(null);

@@ -112,6 +112,8 @@ receivers, so OTel Collector data fits the same panels):
 | `mysql` | mysql, mariadb | global status, `performance_schema` io waits (top-N), replica status | required | `mysql.*` |
 | `postgresql` | postgresql | `pg_stat_database`, `pg_stat_bgwriter`/`pg_stat_checkpointer`, `pg_stat_replication`, `pg_locks`, top-N `pg_stat_user_tables`/`indexes` | required | `postgresql.*` |
 | `docker` | docker | Docker Engine API reachability (no own metrics: `container.*` come from cgroups, OTel has no engine-level `docker.*` names) | socket access | — |
+| `mssql` | mssql | `sys.dm_os_performance_counters` (connections, batch requests, deadlocks, lock waits, buffer cache hit ratio, page life expectancy), `sys.master_files` sizes, top-N `sys.dm_os_wait_stats`; any OS, also remote servers via `endpoint` | required (SQL Server authentication) | `sqlserver.*` |
+| `iis` | iis | Windows performance counters through WMI (Web Service per site: connections, requests per method, bytes and files sent/received, not-found errors; application pool state) | none (Windows only) | `iis.*` |
 
 How it works: an integration instance starts when discovery finds a service whose rule has the integration id and stops when the service
 disappears. Each instance runs on its own goroutine (`integrations.interval`, default 30 s; `integrations.timeout` 10 s; at most
@@ -191,8 +193,17 @@ location = /nginx_status {
 ACL SETUSER openlog on >'<password>' +info +ping
 ```
 
+```sql
+-- SQL Server 2016+ (mixed-mode authentication). SQL Server 2022: VIEW SERVER PERFORMANCE STATE is enough instead of VIEW SERVER STATE.
+CREATE LOGIN openlog WITH PASSWORD = '<password>', CHECK_POLICY = ON;
+GRANT VIEW SERVER STATE TO openlog;
+GRANT VIEW ANY DEFINITION TO openlog;   -- database sizes (sys.master_files)
+```
+
 Dependencies: `github.com/go-sql-driver/mysql` (MPL-2.0, used unmodified as a library), `filippo.io/edwards25519` (BSD-3-Clause),
-`github.com/jackc/pgx/v5`, `pgpassfile`, `pgservicefile` (MIT), `golang.org/x/text` (BSD-3-Clause).
+`github.com/jackc/pgx/v5`, `pgpassfile`, `pgservicefile` (MIT), `golang.org/x/text` (BSD-3-Clause), `github.com/microsoft/go-mssqldb`,
+`github.com/golang-sql/civil`, `github.com/golang-sql/sqlexp` (BSD-3-Clause), `github.com/google/uuid`, `github.com/shopspring/decimal` (MIT),
+`golang.org/x/crypto` (BSD-3-Clause), `github.com/yusufpapurcu/wmi`, `github.com/go-ole/go-ole` (MIT).
 
 ## Logs
 
@@ -330,7 +341,7 @@ metric names and inventory bodies are used; collectors read native APIs instead 
 | Inventory: OS, hardware, packages, processes, users, interfaces, mounts, listening ports | ✅ | ✅ `sw_vers`/sysctl, pkgutil receipts + Homebrew + `/Applications`, `dscacheutil`, `lsof` | ✅ registry, Programs and Features, ProfileList, GetExtendedTcpTable |
 | Service manager inventory | `systemd_unit` | `launchd_service` | `windows_service` |
 | Kernel modules | ✅ | not available | not available |
-| Discovery + integrations (nginx, Redis, MySQL/MariaDB, PostgreSQL) | ✅ | ✅ (Homebrew services and log paths) | ✅ (process/service names; IIS and SQL Server are discovered, no metric integration: `not_available`) |
+| Discovery + integrations (nginx, Redis, MySQL/MariaDB, PostgreSQL, SQL Server) | ✅ | ✅ (Homebrew services and log paths) | ✅ (process/service names; plus IIS through performance counters) |
 | Containers | ✅ Docker/CRI inventory + cgroup metrics + logs | Docker inventory over `docker.sock` only | not available |
 | Logs: files | ✅ | ✅ | ✅ (opened with `FILE_SHARE_DELETE`) |
 | Logs: system | journald | unified log (`logs.unified_log`) | Event Log (`logs.windows_event_log`) |
@@ -338,7 +349,7 @@ metric names and inventory bodies are used; collectors read native APIs instead 
 | Kubernetes | ✅ | not available | not available |
 | Service | systemd, `openlog-agent` user | LaunchDaemon, root | Windows service, LocalSystem |
 | Self-update (signed manifests, self-test, rollback) | ✅ `ExecStartPre=+ -apply` | ✅ in the service process | ✅ in the service process |
-| Packages | tar.gz, deb, rpm | tar.gz (`install.sh`) | zip (`install.ps1`), MSI (amd64) |
+| Packages | tar.gz, deb, rpm | tar.gz (`install.sh`), pkg | zip (`install.ps1`), MSI (amd64, arm64) |
 
 ### Permissions
 
@@ -362,6 +373,14 @@ tail -f /var/log/openlog-infra-agent.log                 # JSON log (rotated by 
 sudo openlog-infra-agent -once | jq '.discovered_services'
 ```
 
+Or with the installer package (credentials in a root-owned file that the postinstall script reads and deletes; see
+`docs/operations/releasing.md` "MSI and macOS pkg"):
+
+```sh
+sudo sh -c 'umask 077; printf "OPENLOG_LICENSE_KEY=KEY\nOPENLOG_ENDPOINT=https://ingest.example.com:4318\n" > /tmp/openlog-infra-agent.env'
+sudo installer -pkg openlog-infra-agent_<v>_darwin_arm64.pkg -target /
+```
+
 Paths: `/opt/openlog/infra-agent/{versions/<v>,current}`, `/etc/openlog-infra-agent/config.yaml`, `/var/lib/openlog-infra-agent`,
 `/Library/LaunchDaemons/org.openlog.infra-agent.plist`, `/usr/local/bin/openlog-infra-agent`.
 Downloads by `curl` carry no quarantine attribute, so the unsigned binary runs; releases signed and notarized in CI need the Apple secrets
@@ -373,6 +392,7 @@ Uninstall:
 sudo /opt/openlog/infra-agent/current/openlog-infra-agent -uninstall-service
 sudo rm -rf /opt/openlog/infra-agent /usr/local/bin/openlog-infra-agent /etc/newsyslog.d/openlog-infra-agent.conf
 sudo rm -rf /etc/openlog-infra-agent /var/lib/openlog-infra-agent /var/log/openlog-infra-agent.log*   # configuration and state
+sudo pkgutil --forget org.openlog.infra-agent                                                       # pkg installs
 ```
 
 ### Install on Windows
@@ -383,7 +403,7 @@ PowerShell as Administrator:
 & ([scriptblock]::Create((Invoke-RestMethod https://github.com/onuragtas/openlog/releases/latest/download/install.ps1))) `
   -LicenseKey KEY -Endpoint https://ingest.example.com:4318
 
-# or the MSI (amd64)
+# or the MSI (amd64; arm64 for Windows on ARM)
 msiexec /i openlog-infra-agent_<v>_windows_amd64.msi LICENSE_KEY="KEY" ENDPOINT="https://ingest.example.com:4318" /qn
 
 Get-Service openlog-infra-agent
@@ -424,7 +444,9 @@ logs:
 The service process runs the privileged apply step itself before collecting (see `releases-updates.md` §3): it re-verifies the staged
 release's signature with its compiled-in keys, copies and checks the archive (`tar.gz` on macOS, `zip` on Windows), self-tests the candidate,
 switches `current` and exits once so launchd (`KeepAlive`) or the SCM (recovery actions, exit code 3) starts the new binary. An unconfirmed
-candidate is rolled back after 3 starts or 5 minutes, like on Linux.
+candidate is rolled back after 3 starts or 5 minutes, like on Linux. The MSI and pkg install a signed manifest of their version next to
+the binary (D-113), so a rollback ordered from openlog also works from a package-installed version. CI runs the whole cycle on both OSes
+(`test/update/native.sh`, `test/update/native.ps1`: install the older release, upgrade through the fake backend, roll back).
 
 
 ## Kubernetes

@@ -74,8 +74,8 @@ export const verifyKubernetesQuery = (intervalMs = VERIFY_POLL_MS) =>
 export interface VerifyLogsFilter {
   /** service.name of OTLP senders */
   service?: string;
-  /** openlog.log.source of infra agent records: file, journald or container */
-  source?: "file" | "journald" | "container";
+  /** openlog.log.source of infra agent records: file, journald, unified_log (macOS), windows_event_log or container */
+  source?: "file" | "journald" | "unified_log" | "windows_event_log" | "container";
 }
 
 /** Newest log record matching the filter since `since` (unix ms). */

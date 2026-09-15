@@ -1,6 +1,11 @@
 // Package objstore stores data export archives in a local directory or an S3-compatible bucket (AWS S3, MinIO, …;
-// path-style or virtual-hosted base URLs, AWS Signature Version 4 with static credentials). It has no dependency on
-// an SDK: exports need only PUT, GET and DELETE of single objects (docs/operations/saas.md "Data subject requests").
+// path-style or virtual-hosted base URLs, AWS Signature Version 4). It has no dependency on an SDK: exports need only
+// PUT, GET and DELETE of single objects (docs/operations/saas.md "Data subject requests").
+//
+// Credentials are static keys or DefaultChain, a subset of the AWS default chain (D-116): environment variables, web
+// identity (EKS IRSA: STS AssumeRoleWithWebIdentity), container credentials (ECS task role, EKS Pod Identity) and the
+// EC2 instance profile (IMDSv2), cached and refreshed 5 minutes before they expire. Shared config/credentials files,
+// SSO and process credentials are not supported.
 package objstore
 
 import (

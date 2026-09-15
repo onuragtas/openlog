@@ -3,7 +3,6 @@ import { KeyRound, Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apiKeysQuery, createApiKey, revokeApiKey, useMe, type ApiKey } from "@/api/account";
-import { can } from "@/api/roles";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useNow } from "@/lib/hooks";
+import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 import { SecretReveal } from "./SecretReveal";
@@ -27,8 +27,9 @@ export function ApiKeysSettings() {
   const qc = useQueryClient();
   const now = useNow();
   const me = useMe().data;
-  const canCreate = can(me?.role, "api_keys.create");
-  const canRevokeAny = can(me?.role, "api_keys.revoke_any");
+  const perms = usePermissions();
+  const canCreate = perms.can("api_keys.create");
+  const canRevokeAny = perms.can("api_keys.revoke_any");
   const keys = useQuery(apiKeysQuery());
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState<Expiry>("d90");
@@ -56,7 +57,7 @@ export function ApiKeysSettings() {
     ) : (
       <Badge variant="success">{t("settings.active")}</Badge>
     );
-  const canRevoke = (k: ApiKey) => !k.revoked_at && (canRevokeAny || k.created_by_user_id === me?.user?.id);
+  const canRevoke = (k: ApiKey) => !k.revoked_at && perms.writable && (canRevokeAny || k.created_by_user_id === me?.user?.id);
 
   return (
     <div className="flex flex-col gap-4">

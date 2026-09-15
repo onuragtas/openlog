@@ -730,6 +730,45 @@ bound query parameters. Integration panels select one instance with
  "series": [{"attributes": {"cpu.mode": "user"}, "points": [[1757757600000, 0.12]]}]}
 ```
 
+### `GET /api/v1/metrics?from=&to=&q=&limit=` (Metrics Explorer, D-119)
+Every metric with data points in the range, from any resource (not only infra agent hosts). Ranges up to 6h read raw data
+points; longer ranges add the 1-minute rollup (gauges and sums; no description or temporality) to the raw points of the
+last 6h. `q`: case-insensitive substring of the name; `limit` default 1000, max 5000 (`truncated`).
+```json
+{"metrics": [{"name": "http.server.request.duration", "type": "histogram", "unit": "s", "description": "…",
+              "temporality": "cumulative", "monotonic": false, "last_seen": "…", "series": 42, "services": ["checkout"]}],
+ "truncated": false}
+```
+
+### `GET /api/v1/metrics/{name}?from=&to=`
+`MetricInfo` of one metric plus `attribute_keys` and `resource_keys` (as `GET /api/v1/fields/keys`, at most 500),
+`aggregations` and `default_aggregation`. The name may contain `/`. No data points in the range → `404`.
+
+### `POST /api/v1/metrics/query` `{"metric", "from"?, "to"?, "filters"?, "groups"?, "aggregation"?, "group_by"?, "step"?, "limit"?}`
+Time series of one metric with the filter conditions of [Fields](#fields) (metric keys: `metric.name`, `metric.type`,
+`unit`, `service.name`, `host.id`, `host.name`, `scope.name`, `value`, `attributes.<k>`, `resource.<k>`, bare keys).
+`group_by`: at most 5 keys; each series' `attributes` maps the canonical form of each key (aliases resolved, `attr.k` → `attributes.k`; bare keys stay bare) to its value. `step`: Go duration ≥ 10s, default
+≈ 300 points (at most 11000 points). `limit`: series, default 50, max 200 (`truncated`).
+
+| Type | Aggregations (first = default) | Computation |
+|---|---|---|
+| gauge | `avg`, `min`, `max`, `sum`, `last`, `count` | per series per step, then over the group (`last` = sum of the series' last values) |
+| monotonic sum | `rate`, `increase`, `sum`, `last` | cumulative: increase between consecutive steps per series (after a reset the new value), `rate` = increase / seconds; delta: sum of the points (`rate` / step) |
+| non-monotonic sum | `last`, `avg`, `min`, `max`, `sum`, `count` | as gauges |
+| histogram, exponential_histogram | `p95`, `p50`, `p75`, `p90`, `p99`, `avg`, `count`, `sum`, `rate` | per series the bucket counts' increase per step (cumulative) or their sum (delta), merged per group (series with another bucket layout are skipped); quantiles by linear interpolation inside the bucket (first bucket from 0 when its bound is positive, overflow bucket = largest bound); `avg` = sum / count, `rate` = count / second |
+| summary | `avg`, `p50`, `p75`, `p90`, `p95`, `p99`, `count`, `sum` | quantiles: the stored quantile values of that level, averaged over the group's series (levels the data does not have give no points); count/sum increase per step |
+
+Ranges longer than 6h read gauges and sums from the 1-minute rollup when every filter and `group_by` key is available
+there (`attributes.<k>`, `metric.name`, `metric.type`, `unit`, `service.name`, `host.id`); otherwise raw data points
+(30-day retention). Histograms and summaries always read raw data points, at most 200000 (series, step) rows
+(`truncated`). An unknown metric → `200` with empty `series` and `metric.type` `""`; an aggregation not available for
+the type → `400`.
+```json
+{"metric": {"name": "http.server.request.duration", "type": "histogram", "unit": "s", "temporality": "cumulative", "monotonic": false},
+ "aggregation": "p95", "step": "60s", "truncated": false,
+ "series": [{"attributes": {"resource.service.name": "checkout"}, "points": [[1757757600000, 0.182]]}]}
+```
+
 ## Inventory and discovery
 
 ### `GET /api/v1/hosts/{host_id}/inventory?category=`
@@ -774,6 +813,110 @@ longer than 1024 bytes → `400 invalid_argument`. Agent log records have an emp
 {"logs": [{"timestamp": "…", "severity_text": "ERROR", "severity_number": 17, "body": "…", "host_id": "…",
            "service_name": "…", "trace_id": "…", "span_id": "…", "attributes": {}, "resource_attributes": {}}],
  "next_cursor": "eyJ2IjoxLCJ0IjoxNzU3NzU3NjAwMDAwMDAwMDAwLCJrIjoiNDIiLCJuIjoxfQ"}
+```
+
+### `POST /api/v1/logs/query` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "order"?, "limit"?, "cursor"?, "columns"?, "include_record"?}`
+Structured search of the Logs Explorer (D-118) with the filter conditions of [Fields](#fields). `from`/`to`: RFC3339 or
+unix ms (default the last hour); `q`: case-insensitive body substring (≤ 1024 bytes); `order`: `desc` (default) or
+`asc`; `limit` default 100, capped by `OPENLOG_API_MAX_ROWS`. Paging works as for `GET /api/v1/logs`: send the same body
+with `cursor` = `next_cursor` (a cursor of the other order → `400`). `columns` (≤ 50 keys) are returned in `fields` as
+strings — keys a record does not have are omitted; `include_record` adds `attributes` and `resource_attributes`.
+Inventory events are excluded. Unknown body fields → `400`.
+```json
+{"rows": [{"id": "1757757600123456789-9f3a…", "timestamp": "…", "observed_timestamp": "…", "severity_text": "ERROR",
+           "severity_number": 17, "body": "…", "service_name": "checkout", "host_id": "…", "host_name": "…",
+           "trace_id": "…", "span_id": "…", "fields": {"attributes.http.route": "/api/orders", "resource.k8s.pod.name": "checkout-7d9"},
+           "attributes": {}, "resource_attributes": {}}],
+ "next_cursor": null}
+```
+`id` identifies a row within a listing (timestamp and row key, with a suffix for identical rows).
+
+### `POST /api/v1/logs/aggregate` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "step"?, "group_by"?, "limit"?}`
+Record counts per time bucket for the same conditions (Logs Explorer histogram). `step`: Go duration ≥ 1s (at most 10000
+buckets); default the smallest of 1s, 2s, 5s, 10s, 15s, 30s, 1m, 2m, 5m, 10m, 15m, 30m, 1h, 2h, 3h, 6h, 12h, 1d, 7d giving
+at most 120 buckets. `group_by` (a filterable key) splits the counts into the `limit` (default 10, max 50) most frequent
+values, ordered by frequency, plus one `other: true` series for all remaining values; a missing map key groups as `""`.
+Buckets without records are omitted.
+```json
+{"step": "60s", "total": 1520,
+ "series": [{"group": "ERROR", "other": false, "total": 120, "points": [[1757757600000, 4]]},
+            {"group": "", "other": true, "total": 30, "points": [[1757757600000, 1]]}]}
+```
+
+## Fields
+
+Attribute discovery of the query builders (Logs and Metrics Explorer, D-118). Any role and API keys (`telemetry.read`),
+tenant-scoped like every telemetry endpoint; organization query limits apply (`422`/`429`), timeouts are `504`.
+
+**Keys.** Filters, columns and `group_by` name data with one key syntax:
+
+| Key | Reads |
+|---|---|
+| top-level field | logs: `timestamp`\*, `observed_timestamp`\*, `body`, `severity_text` (alias `severity`), `severity_number`, `service.name`, `host.id`, `host.name`, `trace_id`, `span_id`, `trace_flags`, `event.name`, `scope.name`; traces: `timestamp`\*, `name`, `kind`, `status_code`, `status_message`, `service.name`, `host.id`, `trace_id`, `span_id`, `parent_span_id`, `duration_ns`, `scope.name`; metrics: `metric.name`, `metric.type`, `unit`, `service.name`, `host.id`, `host.name`, `scope.name`, `value` |
+| `attributes.<k>` (or `attr.<k>`) | record / span / data point attribute `k` |
+| `resource.<k>` | resource attribute `k` |
+| `body.<k>[.<k2>…]` | logs: value at that path of a JSON body (strings unquoted, other JSON values as their text; path elements `[A-Za-z0-9_-@$:]`, at most 8) |
+| any other key | the record attribute when present, else the resource attribute |
+
+\* display only (the time range filters them). Keys are 1–256 bytes without control characters; `tenant_id` is rejected.
+Keys and values are always bound query parameters.
+
+### `GET /api/v1/fields/keys?signal=logs|metrics|traces&from=&to=&q=&metric=&limit=`
+Top-level fields first (`source: field`, `count`/`cardinality` null), then attribute and resource keys ordered by
+frequency from the hourly key index `attribute_keys` (ClickHouse `0080_attribute_keys`: materialized views on the raw
+tables count records per tenant, signal, metric, hour and key, with an approximate distinct value count and the share
+of numeric / boolean values that gives `type`). When the index has no rows for the range (data written before the
+migration), keys come from at most 20000 records of the last hour of the range and `sampled` is true. `signal=logs`
+also returns top-level keys of JSON bodies (`source: body`, from at most 2000 records of the last 15 minutes whose body
+starts with `{`). `q`: case-insensitive substring of the key; `metric` (metrics only): keys of that metric; `limit`
+default 200, max 1000.
+```json
+{"keys": [{"key": "service.name", "name": "service.name", "source": "field", "type": "string", "count": null, "cardinality": null},
+          {"key": "attributes.http.status_code", "name": "http.status_code", "source": "attribute", "type": "number", "count": 1520, "cardinality": 7},
+          {"key": "resource.k8s.pod.name", "name": "k8s.pod.name", "source": "resource", "type": "string", "count": 1520, "cardinality": 12}],
+ "sampled": false}
+```
+
+### `GET /api/v1/fields/values?signal=&key=&from=&to=&q=&metric=&filters=&limit=`
+Most frequent values of `key` with counts, from at most 100000 matching records of the range (`sampled: true` when
+the sample was full, counts are then relative). Map and JSON body keys count only records that have the key.
+`filters`: URL-encoded JSON array of filter conditions (below); conditions on `key` itself are ignored so the other
+values stay visible. `q`: case-insensitive substring of the value. `type` is `number` when every returned value parses
+as a number. `limit` default 50, max 1000.
+`{"key": "attributes.http.route", "type": "string", "values": [{"value": "/api/orders", "count": 912}], "sampled": false}`
+
+**Filter conditions** (`filters`, `groups` of the POST endpoints below): `{"key", "op", "value"? , "values"?}`.
+
+| `op` | Meaning |
+|---|---|
+| `=`, `!=` | equality (string; numeric for numeric top-level fields). A missing map key reads as `""` |
+| `in`, `not_in` | `values`: 1–100 |
+| `contains`, `not_contains` | case-insensitive substring |
+| `like`, `not_like` | SQL `LIKE` (`%`, `_`; case-sensitive) |
+| `regex`, `not_regex` | RE2 (ClickHouse `match`), at most 512 bytes, validated |
+| `exists`, `not_exists` | map / JSON key present; top-level string field non-empty; no value |
+| `>`, `>=`, `<`, `<=` | numeric; attribute values that are not numbers never match |
+
+Values are strings, numbers or booleans of at most 1024 bytes (`trace_id`/`span_id` values are lower-cased).
+`filters` are AND-ed; `groups` is an OR of AND-groups (`[[a, b], [c]]` = `(a AND b) OR c`) AND-ed with `filters`; an
+empty group matches everything. At most 50 conditions and 10 groups. Invalid keys, ops or values → `400`.
+
+## Saved views
+
+Named Logs/Metrics Explorer states (PostgreSQL `saved_views`, `0080_saved_views`; D-118). PostgreSQL auth mode only
+(`404` otherwise). Reads: any role and API keys — org-wide views and the caller's own private views (admins also see
+private views whose creator was deleted). Writes: signed-in members and higher; changing or deleting another user's
+view requires admin/owner and an org-wide (or orphaned) view. At most 500 views per organization (`409`).
+Audit: `saved_view.{create,update,delete}`.
+
+### `GET /api/v1/saved-views?signal=` · `POST /api/v1/saved-views` · `GET|PUT|DELETE /api/v1/saved-views/{id}`
+Body of POST/PUT: `{"signal": "logs"|"metrics"|"traces", "name" (1–200 characters), "description"? (≤ 2000),
+"visibility": "private"|"org", "state": {…}}`; `state` is a JSON object of at most 32 KiB stored as given (the web UI
+keeps `filters`, `groups`, `q`, `columns`, `order`, `group_by` and the time range in it).
+```json
+{"id": "…", "signal": "logs", "name": "Checkout errors", "description": "", "visibility": "org",
+ "state": {"filters": [{"key": "service.name", "op": "=", "value": "checkout"}], "columns": ["body"]},
+ "created_by_user_id": "…", "created_by_email": "ada@example.com", "can_edit": true, "created_at": "…", "updated_at": "…"}
 ```
 
 ## Traces
@@ -1401,7 +1544,8 @@ Latest stored evaluation (every minute, api leader): `{"level", "ingest_blocked"
 UI banner.
 
 ### `GET /api/v1/plans`
-`{"plans": [Plan], "default"}` — the configured catalog.
+`{"plans": [Plan], "default"}` — the configured catalog. Each plan carries `trial_days` (`0` = no trials) and
+`trial_fallback_plan` (the plan assigned when its trial ends; `""` for plans without trials).
 
 ### `GET /api/v1/usage/query-limits` · `PUT /api/v1/usage/query-limits` · `DELETE /api/v1/usage/query-limits`
 ClickHouse query limits of the organization and where each comes from ([usage.md](usage.md) §4.5; postgres auth mode).
@@ -1435,6 +1579,12 @@ In SaaS mode (D-105) the `google.rpc.Status` body carries a `google.rpc.ErrorInf
 
 - Suspended organization: HTTP `403` / gRPC `PERMISSION_DENIED`, reason `org_suspended`, message
   `organization suspended: ingest is disabled …`. Not retryable by design (no `Retry-After`).
+- License key of an organization scheduled for deletion or deleted (all modes, not only SaaS; D-115): HTTP `403` / gRPC
+  `PERMISSION_DENIED`, reason `org_deleted`, message `organization deleted: this license key belonged to an organization
+  that is scheduled for deletion or deleted; ingest is disabled`. Only keys revoked by the deletion itself get it
+  (`license_key_tombstones`), during the grace period and for 365 days after the purge; keys a user revoked, unknown and
+  missing keys stay `401` / `UNAUTHENTICATED`. Cached like an unknown key: after a cancellation the key works again
+  within the negative cache TTL (10 s). Pods older than D-115 answer `401`.
 - Plan host limit (`limits.hosts`): a request whose resources all carry `host.id` values beyond the limit gets HTTP
   `429` + `Retry-After: 300` / gRPC `RESOURCE_EXHAUSTED` + `RetryInfo`, reason `quota_exceeded`, message
   `quota_exceeded: host limit of N hosts …`. When the request also carries admitted hosts, only the resources of the

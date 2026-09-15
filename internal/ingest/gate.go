@@ -35,9 +35,15 @@ type Gate interface {
 // Error reasons of the ErrorInfo detail.
 const (
 	ReasonOrgSuspended  = "org_suspended"
+	ReasonOrgDeleted    = "org_deleted" // license key revoked by the organization's deletion (tenant.ErrOrgDeleted, D-115); SaaS and self-hosted
 	ReasonQuotaExceeded = "quota_exceeded"
 	errorDomain         = "openlog"
 )
+
+// orgDeletedMessage answers keys of organizations scheduled for deletion or deleted. 403 rather than 410: consistent
+// with org_suspended, non-retryable for OTLP exporters like 410, available in gRPC, and a cancellation can make the key
+// work again (D-115).
+const orgDeletedMessage = "organization deleted: this license key belonged to an organization that is scheduled for deletion or deleted; ingest is disabled"
 
 // SetGate enables SaaS enforcement. Must be called before Run.
 func (s *Service) SetGate(g Gate) { s.gate = g }

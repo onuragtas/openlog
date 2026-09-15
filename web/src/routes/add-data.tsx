@@ -3,6 +3,8 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { onboardingQuery } from "@/api/onboarding";
+import { hostQuery } from "@/api/queries";
+import { DEFAULT_LOG_PATH, hostOsOf } from "@/lib/host-os";
 import { PageHeader } from "@/components/AppShell";
 import { AddDataCatalog } from "@/components/onboarding/AddDataCatalog";
 import { InstallFlow } from "@/components/onboarding/InstallFlow";
@@ -41,6 +43,9 @@ export function AddDataTargetPage() {
   const search = targetRoute.useSearch();
   const target = findTarget(_splat);
   const onboarding = useQuery({ ...onboardingQuery(), enabled: !!target });
+  // Host-scoped cards opened from a host start with that host's OS (os.type); an unknown host keeps Linux.
+  const scoped = !!target && target.options.includes("hostOs") && !!search.host;
+  const host = useQuery({ ...hostQuery(search.host ?? ""), enabled: scoped, retry: false });
 
   // Client-side navigation to /add-data can match this splat route with an empty splat: show the catalog.
   if (!_splat || _splat.replace(/\//g, "") === "") return <AddDataPage />;
@@ -74,7 +79,7 @@ export function AddDataTargetPage() {
           </div>
         }
       />
-      {onboarding.isPending ? (
+      {onboarding.isPending || (scoped && host.isPending) ? (
         <LoadingState />
       ) : onboarding.isError ? (
         <ErrorState error={onboarding.error} onRetry={() => void onboarding.refetch()} />
@@ -83,7 +88,11 @@ export function AddDataTargetPage() {
           key={target.id}
           target={target}
           onboarding={onboarding.data}
-          initial={{ ...(search.hostName ? { hostName: search.hostName } : {}), ...(search.service ? { serviceName: search.service } : {}) }}
+          initial={{
+            ...(search.hostName ? { hostName: search.hostName } : {}),
+            ...(search.service ? { serviceName: search.service } : {}),
+            ...(scoped && host.data ? { hostOs: hostOsOf(host.data), logPath: DEFAULT_LOG_PATH[hostOsOf(host.data)] } : {}),
+          }}
         />
       )}
     </div>

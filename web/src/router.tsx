@@ -13,6 +13,9 @@ import { LoginPage } from "@/routes/login";
 import { validateRangeSearch, type RangeSpec } from "@/lib/time";
 import { sanitizeFiltersSearch, type DashboardFilter } from "@/lib/dashboard-filters";
 import { sanitizeVarsSearch } from "@/lib/dashboards";
+import { normalizeColumns } from "@/lib/logs-explorer";
+import { decodeMetricQueries, encodeMetricQueries, sanitizeFormula, type CompactMetricQuery } from "@/lib/metrics-explorer";
+import { decodeFilterState, encodeFilterState, type CompactFilterState } from "@/lib/querybuilder";
 import { POD_PHASES, WORKLOAD_HEALTHS, WORKLOAD_KINDS, type PodPhaseParam, type WorkloadHealthParam, type WorkloadKind } from "@/lib/kubernetes";
 
 // Screens are code-split per route (uPlot only loads with host detail).
@@ -29,6 +32,7 @@ const KubernetesPodPage = lazyRouteComponent(() => import("@/routes/kubernetes-d
 const HostIntegrationPage = lazyRouteComponent(() => import("@/routes/integrations"), "HostIntegrationPage");
 const IntegrationsPage = lazyRouteComponent(() => import("@/routes/integrations"), "IntegrationsPage");
 const LogsPage = lazyRouteComponent(() => import("@/routes/logs"), "LogsPage");
+const MetricsPage = lazyRouteComponent(() => import("@/routes/metrics"), "MetricsPage");
 const TracePage = lazyRouteComponent(() => import("@/routes/trace"), "TracePage");
 const InventorySearchPage = lazyRouteComponent(() => import("@/routes/inventory-search"), "InventorySearchPage");
 const InvitePage = lazyRouteComponent(() => import("@/routes/invite"), "InvitePage");
@@ -361,6 +365,15 @@ export interface LogsSearch {
   /** transaction name and its service (logs of that transaction's traces) */
   txn?: string;
   txnsvc?: string;
+  /** Logs Explorer conditions and OR-groups (lib/querybuilder.ts compact form; the body search stays in `q`) */
+  f?: CompactFilterState;
+  /** table columns, timestamp first */
+  cols?: string[];
+  order?: "asc";
+  /** volume chart group-by key ("~": none) */
+  gb?: string;
+  /** applied saved view id */
+  view?: string;
 }
 
 const logsRoute = createRoute({
@@ -375,8 +388,29 @@ const logsRoute = createRoute({
     span: str(s.span),
     txn: str(s.txn),
     txnsvc: str(s.txnsvc),
+    f: encodeFilterState({ ...decodeFilterState(s.f), q: "" }),
+    cols: Array.isArray(s.cols) ? normalizeColumns(s.cols) : undefined,
+    order: s.order === "asc" ? "asc" : undefined,
+    gb: str(s.gb)?.slice(0, 256),
+    view: str(s.view),
   }),
   component: LogsPage,
+});
+
+// ---- Metrics Explorer (routes/metrics.tsx) ----
+
+export interface MetricsSearch {
+  /** queries A, B, … (lib/metrics-explorer.ts compact form) */
+  mq?: CompactMetricQuery[];
+  /** client-side formula over the queries, e.g. A / B * 100 */
+  formula?: string;
+}
+
+const metricsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/metrics",
+  validateSearch: (s: Record<string, unknown>): MetricsSearch => ({ mq: encodeMetricQueries(decodeMetricQueries(s.mq)), formula: sanitizeFormula(s.formula) }),
+  component: MetricsPage,
 });
 
 export interface TraceSearch {
@@ -795,6 +829,7 @@ export const routeTree = rootRoute.addChildren([
     apmMapRoute,
     apmErrorsRoute,
     logsRoute,
+    metricsRoute,
     traceRoute,
     inventorySearchRoute,
     fleetRoute,

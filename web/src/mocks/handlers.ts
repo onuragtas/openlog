@@ -16,6 +16,7 @@ import { operatorHandlers } from "./operator";
 import { ssoHandlers } from "./sso";
 import { onboardingHandlers, onboardingHosts } from "./onboarding";
 import { privacyHandlers } from "./privacy";
+import { explorerHandlers } from "./explorer";
 import * as fx from "./fixtures";
 
 type ErrorCode = "invalid_argument" | "unauthenticated" | "not_found" | "internal" | "timeout";
@@ -87,7 +88,7 @@ export const handlers = [
 
   http.get(`${API}/hosts/:hostId`, authed(({ params }) => {
     const now = Date.now();
-    const h = [...fx.hosts(now), ...onboardingHosts(now)].find((x) => x.host_id === params.hostId);
+    const h = [...fx.hosts(now), ...fx.osHosts(now), ...onboardingHosts(now)].find((x) => x.host_id === params.hostId);
     return h ? HttpResponse.json(h) : apiError("not_found", "host not found");
   })),
 
@@ -301,6 +302,7 @@ export const handlers = [
   ...ssoHandlers,
   ...onboardingHandlers,
   ...privacyHandlers, // mocks/privacy.ts: data exports, deletion, status page (D-107, D-108)
+  ...explorerHandlers, // mocks/explorer.ts: field keys/values, logs and metrics explorer, saved views (D-118, D-119)
 
   http.all(`${API}/*`, () => apiError("not_found", "no such endpoint")),
 ];

@@ -1,23 +1,24 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 import { login } from "@/api/account";
 import i18n from "@/i18n";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
+import { OS_HOST_IDS } from "@/mocks/fixtures";
 import { server } from "@/mocks/server";
 import { ApmHintFooter, type ApmHint } from "./ApmHintFooter";
 
 const HOST = "9f3c2a71d4b84e0f8a6b1c2d3e4f5a6b"; // web-1 in mocks/fixtures.ts
 
-function renderHint(hint: ApmHint, serviceName = "PHP-FPM", language = "PHP") {
+function renderHint(hint: ApmHint, serviceName = "PHP-FPM", language = "PHP", hostId = HOST) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const rootRoute = createRootRoute({
     component: () => (
       <div>
-        <ApmHintFooter hint={hint} hostId={HOST} serviceName={serviceName} language={language} />
+        <ApmHintFooter hint={hint} hostId={hostId} serviceName={serviceName} language={language} />
       </div>
     ),
   });
@@ -114,6 +115,46 @@ describe("ApmHintFooter", { timeout: 20_000 }, () => {
     expect(screen.getByTestId("php-access-manual").textContent).toBe(
       "sudo usermod -aG openlog-php admin && \\\n  sudo usermod -aG openlog-php semihyurudu && \\\n  sudo systemctl reload php7.2-fpm.service",
     );
+  });
+
+  it("PHP-FPM pools on macOS and Windows hosts: macOS commands, nothing on Windows, no fleet install on either", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const access = (hostId: string) =>
+      HttpResponse.json({
+        next_cursor: null,
+        hosts: [
+          {
+            host_id: hostId,
+            php_access: {
+              socket_group: "_www",
+              group: "_www",
+              group_exists: true,
+              agent_member: true,
+              grants: "auto",
+              pools: [{ pool: "www", php_version: "8.3", user: "shop", unit: "homebrew.mxcl.php", access: "missing" }],
+            },
+          },
+        ],
+      });
+    server.use(http.get("*/api/v1/fleet/hosts", ({ request }) => access(new URL(request.url).searchParams.get("q") ?? "")));
+    const user = userEvent.setup();
+
+    let view = renderHint({ language: "php", agent: "openlog-agent-php", status: "not_installed" }, "PHP-FPM", "PHP", OS_HOST_IDS.mac);
+    expect(await screen.findByTestId("php-access-restart")).toHaveTextContent("sudo launchctl kickstart -k system/org.openlog.infra-agent");
+    expect(screen.getByTestId("php-access-manual")).toHaveTextContent("sudo dseditgroup -o edit -a shop -t user _www");
+    await user.click(screen.getByRole("button", { name: "Install openlog-php-agent" }));
+    await screen.findByTestId("apm-hint-setup");
+    expect(screen.queryByRole("button", { name: "Install via fleet on this host" })).not.toBeInTheDocument();
+    view.unmount();
+
+    view = renderHint({ language: "php", agent: "openlog-agent-php", status: "not_installed" }, "PHP-FPM", "PHP", OS_HOST_IDS.win);
+    await user.click(await screen.findByRole("button", { name: "Install openlog-php-agent" }));
+    await screen.findByTestId("apm-hint-setup");
+    // The host (os.type windows) has loaded once the setup link carries its name.
+    await waitFor(() => expect(new URL(screen.getByTestId("apm-hint-setup").getAttribute("href")!, "http://localhost").searchParams.get("hostName")).toBe("win-iis-1"));
+    expect(screen.queryByTestId("php-access")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Install via fleet on this host" })).not.toBeInTheDocument();
+    view.unmount();
   });
 
   it("maps every language hint to its agent and Add data card", async () => {

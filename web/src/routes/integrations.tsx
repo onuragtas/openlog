@@ -5,7 +5,7 @@ import { useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { hostQuery, inventorySearchQuery, metricQuery, servicesQuery, type MetricRequest } from "@/api/queries";
-import { can } from "@/api/roles";
+import { hostOsOf } from "@/lib/host-os";
 import { PageHeader } from "@/components/AppShell";
 import { KPIS, type KpiSpec } from "@/components/integrations/kpis";
 import { PANELS, PG_DATABASE, PG_QUERY_ID, PG_QUERY_TEXT, PG_TABLE, type PanelChart } from "@/components/integrations/panels";
@@ -41,6 +41,7 @@ import {
   type IntegrationStatus,
   type InstanceRef,
 } from "@/lib/integrations";
+import { usePermissions } from "@/lib/org-writable";
 import type { ChartSeriesInput } from "@/lib/series";
 import type { RangeSpec } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -343,10 +344,11 @@ export function HostIntegrationPage() {
   const host = useQuery(hostQuery(hostId));
   const services = useQuery(servicesQuery(hostId));
   const role = useMe().data?.role;
-  const canAlert = can(role, "alerts.write");
+  const perms = usePermissions();
+  const canAlert = perms.can("alerts.write");
   // Every role reads alert templates (writes are checked in the gallery).
   const canReadAlerts = !!role;
-  const canManage = can(role, "fleet.manage");
+  const canManage = perms.can("fleet.manage");
   const apply = useApplyState(hostId, services.data?.snapshot_time);
   const inst: InstanceRef = { hostId, discoveryId, instance };
 
@@ -433,6 +435,7 @@ export function HostIntegrationPage() {
           hint={integ.hint}
           canManage={canManage}
           onSaved={apply.markSaved}
+          os={hostOsOf(host.data)}
         />
       ) : (
         <LegacyConfigHelp status={integ.status} error={integ.error} id={integ.id ?? discoveryId} />

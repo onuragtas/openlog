@@ -5,6 +5,7 @@ import { useMe } from "@/api/account";
 import { operatorMeQuery } from "@/api/operator";
 import { can, type Permission } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
+import { ReadOnlyNotice } from "@/components/ReadOnly";
 
 const TABS = [
   { to: "/settings/profile", label: "settings.tabs.profile", permission: null },
@@ -50,6 +51,7 @@ export function SettingsLayout() {
           </Link>
         )}
       </nav>
+      <ReadOnlyNotice className="mb-4" />
       <Outlet />
     </div>
   );

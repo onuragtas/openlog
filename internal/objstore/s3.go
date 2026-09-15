@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,14 +17,17 @@ import (
 
 // S3 stores objects under BaseURL (bucket and prefix included, ending with "/"): path-style
 // "https://s3.example.com/bucket/prefix/" or virtual-hosted "https://bucket.s3.eu-west-1.amazonaws.com/prefix/".
-// Requests are signed with AWS Signature Version 4 when AccessKeyID is set.
+// Requests are signed with AWS Signature Version 4: with Credentials when set (a provider returning ErrNoCredentials
+// means unsigned requests), else with the static AccessKeyID/SecretAccessKey when AccessKeyID is set.
 type S3 struct {
 	BaseURL         string
 	Region          string
 	AccessKeyID     string
 	SecretAccessKey string
-	Client          *http.Client
-	Now             func() time.Time
+	// Credentials, when set, replaces the static keys (e.g. DefaultChain for IAM roles).
+	Credentials CredentialsProvider
+	Client      *http.Client
+	Now         func() time.Time
 }
 
 // Kind implements Store.
@@ -59,7 +63,17 @@ func (s *S3) client() *http.Client {
 
 func (s *S3) do(req *http.Request, payloadHash string) (*http.Response, error) {
 	req.Header.Set("X-Amz-Content-Sha256", payloadHash)
-	if s.AccessKeyID != "" {
+	var creds Credentials
+	if s.Credentials != nil {
+		c, err := s.Credentials.Retrieve(req.Context())
+		if err != nil && !errors.Is(err, ErrNoCredentials) {
+			return nil, fmt.Errorf("s3 credentials: %w", err)
+		}
+		creds = c
+	} else if s.AccessKeyID != "" {
+		creds = Credentials{AccessKeyID: s.AccessKeyID, SecretAccessKey: s.SecretAccessKey}
+	}
+	if creds.AccessKeyID != "" {
 		now := time.Now
 		if s.Now != nil {
 			now = s.Now
@@ -68,7 +82,7 @@ func (s *S3) do(req *http.Request, payloadHash string) (*http.Response, error) {
 		if region == "" {
 			region = "us-east-1"
 		}
-		SignV4(req, payloadHash, s.AccessKeyID, s.SecretAccessKey, region, now())
+		SignV4Credentials(req, payloadHash, creds, region, now())
 	}
 	return s.client().Do(req)
 }
@@ -174,6 +188,17 @@ func hmacSHA256(key []byte, data string) []byte {
 	m := hmac.New(sha256.New, key)
 	m.Write([]byte(data))
 	return m.Sum(nil)
+}
+
+// SignV4Credentials is SignV4 with credentials: a session token (temporary credentials) is sent and signed as
+// X-Amz-Security-Token.
+func SignV4Credentials(req *http.Request, payloadHash string, creds Credentials, region string, now time.Time) {
+	if creds.SessionToken != "" {
+		req.Header.Set("X-Amz-Security-Token", creds.SessionToken)
+	} else {
+		req.Header.Del("X-Amz-Security-Token")
+	}
+	SignV4(req, payloadHash, creds.AccessKeyID, creds.SecretAccessKey, region, now)
 }
 
 // SignV4 adds X-Amz-Date and the Authorization header of AWS Signature Version 4 (service s3) to req. The host,

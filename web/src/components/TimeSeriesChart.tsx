@@ -55,6 +55,10 @@ export interface TimeSeriesChartProps {
   /** Adds a "filter by" action to legend entries whose label it returns an accessible name for (dashboard filters). */
   selectLabel?: (seriesLabel: string) => string | null;
   onSelectSeries?: (seriesLabel: string) => void;
+  /** Series color by label (e.g. log severities); labels without one use the palette by position. */
+  colorFor?: (seriesLabel: string, theme: "light" | "dark") => string | undefined;
+  /** Enables click-drag selection of a time range (unix ms), e.g. to zoom into it. */
+  onSelectRange?: (from: number, to: number) => void;
 }
 
 export interface ChartMarker {
@@ -352,7 +356,7 @@ function ChartLegend({
  * data refreshes and legend toggles go through setSeries/setData, and
  * container width changes (resize, rotation, drawer) go through setSize.
  */
-export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers, selectLabel, onSelectSeries }: TimeSeriesChartProps) {
+export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers, selectLabel, onSelectSeries, colorFor, onSelectRange }: TimeSeriesChartProps) {
   const { t, i18n } = useTranslation();
   const { resolved } = useTheme();
   const mobile = useIsMobile();
@@ -362,6 +366,8 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   const plotKeyRef = useRef("");
   const liveRef = useRef<Live | null>(null);
   const markersRef = useRef<readonly ChartMarker[] | undefined>(markers);
+  const colorForRef = useRef(colorFor);
+  const selectRangeRef = useRef(onSelectRange);
   const widthRef = useRef(0);
   const [width, setWidth] = useState(0);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -379,11 +385,13 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   // The plot is created once the container has a measured width; later
   // width changes only resize it (see the setSize effect).
   const measured = width > 0;
-  const structureKey = hasData ? JSON.stringify([aligned.labels, unit, !!stacked, height, resolved, locale, yMax ?? null, yCap ?? null, !!bars, dashed ?? []]) : "";
+  const structureKey = hasData ? JSON.stringify([aligned.labels, unit, !!stacked, height, resolved, locale, yMax ?? null, yCap ?? null, !!bars, dashed ?? [], !!onSelectRange]) : "";
 
   useLayoutEffect(() => {
     liveRef.current = aligned ? { data: aligned, drawn, visible, from, to } : null;
     markersRef.current = markers;
+    colorForRef.current = colorFor;
+    selectRangeRef.current = onSelectRange;
     widthRef.current = width;
   });
 
@@ -408,7 +416,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
     const live = liveRef.current;
     if (!el || !structureKey || !measured || !live) return;
     const fmt = (v: number | null) => formatValue(v, unit, locale);
-    const colorOf = (i: number) => paletteColor(i, resolved);
+    const colorOf = (i: number) => colorForRef.current?.(live.data.labels[i] ?? "", resolved) ?? paletteColor(i, resolved);
     const axisColor = cssVar("--chart-axis", "#6b7280");
     const gridColor = cssVar("--chart-grid", "#e5e7eb");
     // Half the widest time label, so the last x tick label is not clipped.
@@ -418,8 +426,19 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
       width: widthRef.current,
       height,
       padding: [8, rightPad, 0, 0],
-      cursor: { drag: { x: false, y: false }, points: { size: 6 } },
+      cursor: { drag: { x: !!selectRangeRef.current, y: false, setScale: false }, points: { size: 6 } },
       legend: { show: false },
+      hooks: selectRangeRef.current
+        ? {
+            setSelect: [
+              (u) => {
+                const { left, width: w } = u.select;
+                if (w > 2) selectRangeRef.current?.(u.posToVal(left, "x") * 1000, u.posToVal(left + w, "x") * 1000);
+                u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+              },
+            ],
+          }
+        : undefined,
       scales: {
         x: {
           time: true,
@@ -528,7 +547,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
 
   const fmt = (v: number | null) => formatValue(v, unit, locale);
   const lv = legendValues(aligned, hoverIdx);
-  const items: LegendItem[] = aligned.labels.map((label, i) => ({ label, color: paletteColor(i, resolved), value: fmt(lv.values[i] ?? null), visible: visible[i] !== false }));
+  const items: LegendItem[] = aligned.labels.map((label, i) => ({ label, color: colorFor?.(label, resolved) ?? paletteColor(i, resolved), value: fmt(lv.values[i] ?? null), visible: visible[i] !== false }));
   const sinceMs = dataStartHint((aligned.xs[0] ?? 0) * 1000, from, to);
   const since = sinceMs !== null ? t("charts.dataSince", { time: timeFormatter(locale).format(new Date(sinceMs)) }) : null;
 

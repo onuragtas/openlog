@@ -38,6 +38,7 @@ import {
 } from "@/lib/alerts";
 import { OqlEditor } from "@/components/oql/OqlEditor";
 import { alertQueryIssues } from "@/lib/oql";
+import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeIcon } from "./badges";
 import { describedBy, useIssue } from "./field-utils";
 import { DurationField, Field, Section } from "./fields";
@@ -89,13 +90,14 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
   const uid = useId();
   const meQuery = useMe();
   const me = meQuery.data;
+  const perms = usePermissions();
   const issue = useIssue();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<RuleDraft>(() => (rule ? draftFromRule(rule) : (initial ?? emptyDraft())));
   const [submitted, setSubmitted] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(() => new Set());
   const [saved, setSaved] = useState(false);
-  const canEdit = rule ? canEditOwned(me?.role, rule.created_by_user_id, me?.user?.id) : can(me?.role, "alerts.write");
+  const canEdit = perms.writable && (rule ? canEditOwned(me?.role, rule.created_by_user_id, me?.user?.id) : can(me?.role, "alerts.write"));
   // Until the role is known the form stays editable and the save button hidden (no read-only flash).
   const readOnly = !meQuery.isPending && !canEdit;
   const errors = useMemo(() => validateDraft(draft), [draft]);

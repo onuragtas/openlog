@@ -143,6 +143,14 @@ func (s PGStore) ScheduleOrg(ctx context.Context, in ScheduleInput) (OrgDeletion
 			in.OrgID, tenantID, in.Initiator, in.Reason, actor, in.ActorEmail, string(nb), keys, tokens, in.Now, in.Now.Add(in.Grace)).Scan(&id); err != nil {
 			return err
 		}
+		// Tombstones let ingest answer 403 org_deleted for these keys, during the grace period and after the purge (D-115).
+		// Keys revoked earlier by users get none and keep answering 401.
+		if _, err := tx.Exec(ctx, `INSERT INTO license_key_tombstones (key_hash, reason, org_deletion_id, created_at)
+			SELECT key_hash, 'org_deleted', $2::uuid, $3 FROM license_keys WHERE org_id = $4 AND id = ANY($1::uuid[])
+			ON CONFLICT (key_hash) DO UPDATE SET reason = EXCLUDED.reason, org_deletion_id = EXCLUDED.org_deletion_id,
+				created_at = EXCLUDED.created_at, expires_at = NULL`, keys, id, in.Now, in.OrgID); err != nil {
+			return err
+		}
 		d, err = scanDeletion(tx.QueryRow(ctx, `SELECT `+deletionCols+deletionFrom+` WHERE d.id = $1`, id))
 		return err
 	})
@@ -177,6 +185,9 @@ func (s PGStore) CancelOrg(ctx context.Context, id string, now time.Time) (OrgDe
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE scim_tokens SET revoked_at = NULL WHERE org_id = $1 AND id = ANY($2::uuid[])`, orgID, tokens); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM license_key_tombstones WHERE org_deletion_id::text = $1`, id); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE org_deletions SET status = 'cancelled', cancelled_at = $2, notify = '{}'::jsonb WHERE id = $1`, id, now); err != nil {
@@ -257,6 +268,10 @@ type PurgeResult struct {
 	ExportKeys []ExportObject
 }
 
+// TombstoneRetention is how long ingest keeps answering 403 org_deleted for the license keys of a deleted organization
+// after its purge; afterwards they answer 401 like unknown keys (D-115). Expired tombstones are removed by the next purge.
+const TombstoneRetention = 365 * 24 * time.Hour
+
 // ExportObject is a stored export archive.
 type ExportObject struct {
 	Storage string
@@ -284,6 +299,13 @@ func (s PGStore) PurgeOrg(ctx context.Context, d OrgDeletion, chRows map[string]
 			if counts, res.ExportKeys, err = purgeOrgRows(ctx, tx, d.OrgID, d.TenantID, now); err != nil {
 				return err
 			}
+		}
+		// The license key tombstones (hashes only) outlive the organization for TombstoneRetention (D-115).
+		if _, err := tx.Exec(ctx, `UPDATE license_key_tombstones SET expires_at = $2 WHERE org_deletion_id = $1::uuid`, d.ID, now.Add(TombstoneRetention)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM license_key_tombstones WHERE expires_at < $1`, now); err != nil {
+			return err
 		}
 		started := now
 		if startedAt != nil {

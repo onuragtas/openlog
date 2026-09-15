@@ -17,7 +17,6 @@ import {
   type AlertMuteScheduleInput,
   type AlertRule,
 } from "@/api/alerts";
-import { can } from "@/api/roles";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -42,6 +41,7 @@ import {
   type Recurrence,
   type WeekDay,
 } from "@/lib/mute-schedule";
+import { usePermissions } from "@/lib/org-writable";
 import { fromDateTimeLocal, toDateTimeLocal } from "@/lib/time";
 import { Field } from "./fields";
 import { HolidayCalendarsManager } from "./HolidayCalendarsManager";
@@ -396,7 +396,7 @@ export function MutesManager() {
   const { t } = useTranslation();
   const me = useMe().data;
   const now = useNow(30_000);
-  const canWrite = can(me?.role, "alerts.write");
+  const canWrite = usePermissions().can("alerts.write");
   const mutes = useQuery(alertMutesQuery());
   const rules = useQuery(alertRulesQuery());
   const queryClient = useQueryClient();

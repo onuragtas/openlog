@@ -25,6 +25,8 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 |---|---|
 | `openlog-infra-agent_<v>_linux_{amd64,arm64}.tar.gz` (one top dir: binary, `LICENSE`, `README.md`, `packaging/`) | `artifacts[]` `component=infra-agent`, `format=tar.gz` |
 | `openlog-infra-agent_<v>_linux_{amd64,arm64}.{deb,rpm}` | `format=deb` / `rpm` |
+| `openlog-infra-agent_<v>_darwin_{amd64,arm64}.tar.gz` and `.pkg` (`infra-agent-macos` job; pkg: `agents/infra/packaging/macos/build-pkg.sh`) | `format=tar.gz` / `pkg` |
+| `openlog-infra-agent_<v>_windows_{amd64,arm64}.zip` and `.msi` (`infra-agent-windows` job; MSI: `agents/infra/packaging/windows/build-msi.ps1`, the arm64 MSI is built but not install-tested) | `format=zip` / `msi` |
 | `openlog_<v>_linux_{amd64,arm64}.tar.gz` (all backend binaries) | `component=backend` |
 | `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP agent: 36 modules, `openlog-php-install`; [php-agent.md](../contracts/php-agent.md) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
 | `openlog-javaagent-<v>.jar` + `.sha256` (Java agent, [below](#java-agent-jar)) | `component=java-agent`, `os`/`arch` `any`, `format=jar` (the `.sha256` is not in the manifest) |
@@ -510,6 +512,38 @@ Maintainer scripts (`packaging/scripts`, shared by deb and rpm):
 A package upgrade removes the previous package's `versions/<old>/` files, so an agent rollback target
 installed by a package disappears on the next package upgrade (self-downloaded versions are not
 affected).
+
+## MSI and macOS pkg (D-113)
+
+Built on native runners by `release.yml` (`infra-agent-windows`, `infra-agent-macos`) and in every `ci.yml` run with throwaway
+test keys (`infra-agent (Windows)`: amd64 MSI install test with `-ExpectManifest`, arm64 MSI build only, self-update end-to-end;
+`infra-agent (macOS)`: pkg build, `test-pkg.sh`, self-update end-to-end).
+
+- **Embedded manifest.** Both packages install `versions/<v>/manifest.json(.sig)` for rule 5 (rollback_floor). It is built by
+  `agents/infra/packaging/embedded-manifest.sh VERSION OUT_DIR ARCHIVE…` (the zips or tar.gz archives only, the Makefile's manifest
+  arguments without `--image`, signed with `OPENLOG_RELEASE_SIGNING_KEY` (+ `_2`) and verified with `--check-artifacts`). The signing key
+  is therefore also available to the steps "embedded manifest" of the two native jobs. The `release` job fails when an embedded
+  manifest differs from the published one in anything but `artifacts` and `images`.
+- **MSI.** `build-msi.ps1 -Version V -Arch amd64|arm64 -Exe … -SourceDir … -Out … -ManifestDir …` (WiX 5: `-arch x64|arm64`, util custom
+  actions `Wix4UtilCA_X64`/`Wix4UtilCA_A64`; the exe's PE machine type must match `-Arch`). Authenticode signing with the
+  `WINDOWS_SIGNING_CERT_*` secrets. The arm64 MSI cannot be install-tested on `windows-latest` (x64).
+- **pkg.** `build-pkg.sh VERSION ARCH STAGE_DIR OUT.pkg [MANIFEST_DIR]` (pkgbuild component package + productbuild distribution,
+  `hostArchitectures` of ARCH, macOS 12+). Payload `/opt/openlog/infra-agent/versions/<v>/` (root:wheel). The postinstall script configures
+  the agent only when `/etc/openlog-infra-agent/config.yaml` exists or credentials are provided, then runs
+  `-reconcile -reconcile-context package` and (re)starts the LaunchDaemon when a license key is configured. Credentials:
+  `sudo OPENLOG_LICENSE_KEY=… OPENLOG_ENDPOINT=… installer -pkg …` is not reliable (sudo and installer filter the environment), so
+  write them to a root-owned, not group/other-writable `/tmp/openlog-infra-agent.env` (lines `OPENLOG_LICENSE_KEY=…`,
+  `OPENLOG_ENDPOINT=…`; deleted after reading) or create the configuration first. Signing with the
+  `APPLE_DEVELOPER_ID_INSTALLER_CERT_P12_BASE64` / `APPLE_DEVELOPER_ID_INSTALLER_CERT_PASSWORD` secrets; with the `APPLE_NOTARY_*` secrets
+  the signed pkg is notarized and stapled. Without them the pkg is unsigned (warning): `installer -pkg` works, Finder/Gatekeeper
+  refuses a double-click.
+
+```sh
+sudo sh -c 'umask 077; printf "OPENLOG_LICENSE_KEY=KEY\nOPENLOG_ENDPOINT=https://ingest.example.com:4318\n" > /tmp/openlog-infra-agent.env'
+sudo installer -pkg openlog-infra-agent_<v>_darwin_arm64.pkg -target /
+# uninstall
+sudo openlog-infra-agent -uninstall-service && sudo rm -rf /opt/openlog/infra-agent /usr/local/bin/openlog-infra-agent && sudo pkgutil --forget org.openlog.infra-agent
+```
 
 ## install.sh
 

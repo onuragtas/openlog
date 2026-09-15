@@ -13,9 +13,14 @@ export const MOCK_PLANS: Plan[] = [
     description: "For evaluation",
     limits: { ingest_gb_month: 100, hosts: 5, users: 3, retention_days: { logs: 7, traces: 7 }, query: {} },
     enforcement: { hard_ingest_limit: true, grace_percent: 10 },
+    trial_days: 0,
+    trial_fallback_plan: "",
   },
-  { id: "pro", name: "Pro", description: "", limits: { ingest_gb_month: 1000, hosts: 100, retention_days: { logs: 30 }, query: {} }, enforcement: {} },
-  { id: "enterprise", name: "Enterprise", description: "", limits: { retention_days: {}, query: {} }, enforcement: {} },
+  {
+    id: "pro", name: "Pro", description: "", limits: { ingest_gb_month: 1000, hosts: 100, retention_days: { logs: 30 }, query: {} }, enforcement: {},
+    trial_days: 14, trial_fallback_plan: "free",
+  },
+  { id: "enterprise", name: "Enterprise", description: "", limits: { retention_days: {}, query: {} }, enforcement: {}, trial_days: 0, trial_fallback_plan: "" },
 ];
 
 interface Assignment {

@@ -207,11 +207,52 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
     renderFlow("integrations/mysql");
     expect(await screen.findByTestId("key-not-needed")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText("Nothing to choose for this data source.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Host operating system")).toHaveValue("linux");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     const blocks = await screen.findAllByTestId("command-block");
     expect(blocks.map((b) => b.getAttribute("data-block"))).toEqual(["sqlUser", "passwordFile", "agentConfig", "restart"]);
     await user.click(screen.getByRole("button", { name: "I ran the commands" }));
     expect(await screen.findByRole("link", { name: "Open integrations" })).toBeInTheDocument();
+  });
+
+  it("host logs card switches commands, the system log checkbox and the tips with the host OS", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    server.use(http.get("*/api/v1/logs", () => HttpResponse.json({ logs: [] })));
+    const user = userEvent.setup();
+    renderFlow("logs/host", ONBOARDING, { timeoutMs: 1 });
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    expect(screen.getByLabelText("Also read the systemd journal")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Host operating system"), "windows");
+    expect(screen.getByLabelText("Log files (absolute glob)")).toHaveValue("C:\\inetpub\\logs\\LogFiles\\W3SVC1\\*.log");
+    await user.click(screen.getByLabelText("Also read the Windows Event Log"));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const blocks = await screen.findAllByTestId("command-block");
+    expect(blocks.map((b) => b.getAttribute("data-block"))).toEqual(["agentConfig", "restart"]);
+    expect(blocks[0]).toHaveTextContent("windows_event_log:");
+    expect(within(blocks[1]!).getByText("Restart-Service openlog-infra-agent")).toHaveAttribute("data-lang", "powershell");
+    expect(screen.getByTestId("install-notes")).toHaveTextContent("Run the PowerShell commands as Administrator");
+    await user.click(screen.getByRole("button", { name: "I ran the commands" }));
+    expect(await screen.findByTestId("verify-tips")).toHaveTextContent("C:\\ProgramData\\openlog\\infra-agent\\logs\\openlog-infra-agent.log");
+    expect(screen.getByTestId("verify-tips").textContent).not.toMatch(/journalctl|sudo/);
+  });
+
+  it("macOS host card tips name the launchd log, host-scoped cards start with the host's OS", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const view = renderFlow("macos", ONBOARDING, { timeoutMs: 1 });
+    await user.click(await screen.findByRole("radio", { name: /Use a placeholder/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(await screen.findByRole("button", { name: "I ran the commands" }));
+    expect(await screen.findByTestId("verify-tips")).toHaveTextContent("Agent log: tail -f /var/log/openlog-infra-agent.log");
+    view.unmount();
+
+    renderFlow("integrations/redis", ONBOARDING, { initial: { hostOs: "darwin" } });
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    expect(screen.getByLabelText("Host operating system")).toHaveValue("darwin");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const restart = (await screen.findAllByTestId("command-block")).find((b) => b.getAttribute("data-block") === "restart")!;
+    expect(restart).toHaveTextContent("sudo launchctl kickstart -k system/org.openlog.infra-agent");
   });
 });

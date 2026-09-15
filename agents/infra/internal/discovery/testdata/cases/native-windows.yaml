@@ -22,13 +22,14 @@ expect:
   - rule_id: iis
     services: [W3SVC]
     log_paths: ["C:/inetpub/logs/LogFiles/W3SVC*/*.log"]
-    status: not_available
+    status: enabled                # D-113: iis integration (auto_enable, no credentials)
   - rule_id: mssql
     pids: [3100]
     ports: [1433]
     services: [MSSQLSERVER]
     matched_by: [process, service, listening_port]
     log_paths: ["C:/Program Files/Microsoft SQL Server/MSSQL*/MSSQL/Log/ERRORLOG"]
+    status: needs_configuration    # D-113: mssql integration requires credentials
   - { rule_id: nginx, pids: [4100], ports: [8081], log_paths: [], status: enabled }
   - { rule_id: redis, pids: [4200], services: [Redis], ports: [6379], log_paths: [] }
 forbid: [mysql, postgresql, apache-httpd]

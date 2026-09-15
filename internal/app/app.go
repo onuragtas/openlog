@@ -301,6 +301,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	}
 	// sharelimit.go: cluster-wide share link rate limits (D-096)
 	dashboardTasks = append(dashboardTasks, startShareRateLimit(ctx, pgPool, srv, log)...)
+	// savedviews.go: saved Logs/Metrics Explorer views (D-118)
+	startSavedViews(pgPool, srv)
 	if pgPool != nil { // tail sampling policies (D-075); static mode serves the read-only default
 		srv.SetTailSampling(tailsampling.PGStore{Pool: pgPool}, cfg.TailSampling.Enabled)
 	} else {

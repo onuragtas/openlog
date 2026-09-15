@@ -25,7 +25,8 @@ var Tables = []string{TableMetrics, TableLogs, TableSpans, TableRelinkQueue, Tab
 var Columns = map[string][]string{
 	TableMetrics: {"tenant_id", "metric_name", "metric_type", "temporality", "is_monotonic", "unit", "description",
 		"service_name", "host_id", "host_name", "series_id", "resource_attributes", "scope_name", "attributes",
-		"start_timestamp", "timestamp", "value", "count", "sum", "bucket_counts", "explicit_bounds", "flags"},
+		"start_timestamp", "timestamp", "value", "count", "sum", "bucket_counts", "explicit_bounds", "flags",
+		"quantiles", "quantile_values"}, // 0081_metrics_summary_quantiles
 	TableLogs: {"tenant_id", "timestamp", "observed_timestamp", "service_name", "host_id", "host_name",
 		"severity_text", "severity_number", "trace_id", "span_id", "trace_flags", "event_name", "body",
 		"resource_attributes", "scope_name", "attributes"},
@@ -65,16 +66,21 @@ type MetricRow struct {
 	Value              float64
 	Count              uint64
 	Sum                float64
-	BucketCounts       []uint64
-	ExplicitBounds     []float64
-	Flags              uint32
+	// Histograms: explicit bucket counts (len(ExplicitBounds)+1); exponential histograms are converted (convert.go).
+	BucketCounts   []uint64
+	ExplicitBounds []float64
+	Flags          uint32
+	// Summaries: quantile levels and their values.
+	Quantiles      []float64
+	QuantileValues []float64
 }
 
 // Values implements row.
 func (r *MetricRow) Values() []any {
 	return []any{r.TenantID, r.MetricName, r.MetricType, r.Temporality, r.IsMonotonic, r.Unit, r.Description,
 		r.ServiceName, r.HostID, r.HostName, r.SeriesID, r.ResourceAttributes, r.ScopeName, r.Attributes,
-		r.StartTimestamp, r.Timestamp, r.Value, r.Count, r.Sum, nonNilU64(r.BucketCounts), nonNilF64(r.ExplicitBounds), r.Flags}
+		r.StartTimestamp, r.Timestamp, r.Value, r.Count, r.Sum, nonNilU64(r.BucketCounts), nonNilF64(r.ExplicitBounds), r.Flags,
+		nonNilF64(r.Quantiles), nonNilF64(r.QuantileValues)}
 }
 
 // LogRow is one log record.

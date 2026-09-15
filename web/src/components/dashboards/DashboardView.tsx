@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Copy, Download, History, Mail, Pencil, Plus, Settings, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import { ApiError } from "@/api/client";
 import {
   dashboardQuery,
@@ -14,7 +13,6 @@ import {
   type Dashboard,
   type DashboardWidget,
 } from "@/api/dashboards";
-import { atLeast } from "@/api/roles";
 import { FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +33,7 @@ import {
   type GridItemLayout,
   type VarValues,
 } from "@/lib/dashboards";
+import { usePermissions } from "@/lib/org-writable";
 import type { RangeSpec } from "@/lib/time";
 import { DashboardGrid } from "./DashboardGrid";
 import { DashboardSettings } from "./DashboardSettings";
@@ -69,7 +68,7 @@ type Panel = "history" | "share" | "reports";
 export function DashboardView({ dashboardId, search, range, onSearchChange, onOpenDashboard }: DashboardViewProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const me = useMe().data;
+  const perms = usePermissions();
   const q = useQuery(dashboardQuery(dashboardId));
   const [local, setLocal] = useState<Dashboard | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -125,11 +124,11 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
     return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   }
 
-  const canEdit = doc.can_edit;
+  const canEdit = doc.can_edit && perms.writable;
   const edit = !!search.edit && canEdit;
   const page = doc.pages.find((p) => p.id === search.page) ?? doc.pages[0]!;
   // Share links and reports: editors, and admins/owners (api.md "Share links", "Scheduled reports").
-  const canShare = canEdit || atLeast(me?.role, "admin");
+  const canShare = canEdit || perms.canWriteAs("admin");
 
   const onLayoutChange = (layout: GridItemLayout[]) => {
     if (!edit || !layoutChanged(page.widgets, layout)) return;
@@ -201,7 +200,7 @@ export function DashboardView({ dashboardId, search, range, onSearchChange, onOp
             <Button variant="outline" size="icon" aria-label={t("dashboards.history.title")} title={t("dashboards.history.title")} onClick={openPanel("history")} data-testid="open-history">
               <History aria-hidden="true" />
             </Button>
-            {atLeast(me?.role, "member") && (
+            {perms.canWriteAs("member") && (
               <Button variant="outline" size="icon" aria-label={t("dashboards.duplicateNamed", { name: doc.name })} title={t("dashboards.duplicate")} disabled={duplicate.isPending} onClick={() => duplicate.mutate()}>
                 <Copy aria-hidden="true" />
               </Button>

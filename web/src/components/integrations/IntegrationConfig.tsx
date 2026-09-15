@@ -15,8 +15,10 @@ import {
   type IntegrationName,
 } from "@/api/integrationSettings";
 import { servicesQuery } from "@/api/queries";
+import { CopyCommand } from "@/components/onboarding/CopyCommand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AGENT_CONFIG_PATH, agentRestart, type HostOs } from "@/lib/host-os";
 import {
   applyPhase,
   CONFIG_FIELDS,
@@ -72,10 +74,12 @@ interface ConfigPanelProps {
   hint?: string;
   canManage: boolean;
   onSaved: () => void;
+  /** OS of the host (os.type): the manual snippet names its config.yaml path and restart command. */
+  os?: HostOs;
 }
 
 /** needs_configuration / error: what went wrong, the inline form and the manual snippet. */
-export function IntegrationConfigPanel({ hostId, hostName, instance, integration, status, error, hint, canManage, onSaved }: ConfigPanelProps) {
+export function IntegrationConfigPanel({ hostId, hostName, instance, integration, status, error, hint, canManage, onSaved, os = "linux" }: ConfigPanelProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const settings = useQuery(integrationSettingsQuery(hostId));
@@ -116,7 +120,7 @@ export function IntegrationConfigPanel({ hostId, hostName, instance, integration
         </div>
       )}
 
-      {hint ? <ManualSnippet hint={hint} hostName={hostName} /> : <p className="mt-3 text-sm">{t("integrations.panel.noHint", { id: integration })}</p>}
+      {hint ? <ManualSnippet hint={hint} hostName={hostName} os={os} /> : <p className="mt-3 text-sm">{t("integrations.panel.noHint", { id: integration })}</p>}
     </section>
   );
 }
@@ -277,9 +281,10 @@ function ConfigForm({
   );
 }
 
-function ManualSnippet({ hint, hostName }: { hint: string; hostName: string }) {
+function ManualSnippet({ hint, hostName, os }: { hint: string; hostName: string; os: HostOs }) {
   const { t } = useTranslation();
   const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
+  const restart = agentRestart(os);
   const onCopy = async () => {
     try {
       await navigator.clipboard.writeText(hint);
@@ -294,7 +299,9 @@ function ManualSnippet({ hint, hostName }: { hint: string; hostName: string }) {
         <ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden="true" />
         {t("integrations.panel.manualTitle")}
       </summary>
-      <p className="mt-2 text-sm">{t("integrations.panel.manualIntro", { host: hostName })}</p>
+      <p className="mt-2 text-sm break-words" data-os={os}>
+        {t("integrations.panel.manualIntro",{ host: hostName, path: AGENT_CONFIG_PATH[os] })}
+      </p>
       <div className="mt-2 overflow-hidden rounded-md border bg-card">
         <div className="flex items-center justify-between gap-2 border-b px-3 py-1.5">
           <span className="text-xs text-muted-foreground">{t("integrations.panel.hintLabel")}</span>
@@ -311,6 +318,9 @@ function ManualSnippet({ hint, hostName }: { hint: string; hostName: string }) {
         {copy === "copied" ? t("integrations.panel.copied") : copy === "failed" ? t("integrations.panel.copyFailed") : ""}
       </p>
       {copy === "failed" && <p className="mt-1 text-xs text-destructive-text">{t("integrations.panel.copyFailed")}</p>}
+      <div className="mt-2 text-xs">
+        <CopyCommand code={restart.code} label={t("integrations.panel.restartLabel")} lang={restart.lang} testId="integration-restart" />
+      </div>
     </details>
   );
 }

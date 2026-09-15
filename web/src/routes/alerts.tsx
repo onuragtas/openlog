@@ -17,6 +17,7 @@ import { TemplateGallery } from "@/components/alerts/TemplateGallery";
 import { Button } from "@/components/ui/button";
 import { applyPrefill, draftFromInput } from "@/lib/alerts";
 import { templateLanguage, TEMPLATE_CATEGORIES } from "@/lib/alert-templates";
+import { ReadOnlyNotice } from "@/components/ReadOnly";
 
 const incidentsRoute = getRouteApi("/app/alerts/incidents");
 const incidentRoute = getRouteApi("/app/alerts/incidents/$incidentId");
@@ -49,6 +50,7 @@ export function AlertsLayout() {
           </Link>
         ))}
       </nav>
+      <ReadOnlyNotice />
       <Outlet />
     </div>
   );

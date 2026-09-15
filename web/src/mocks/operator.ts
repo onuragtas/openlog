@@ -66,6 +66,20 @@ function findOrg(ref: string): OperatorOrg | undefined {
   return state.orgs.find((o) => o.id === ref || o.tenant_id === ref);
 }
 
+/** Organization of the operator console by id or tenant id (admin deletion mocks in privacy.ts). */
+export function mockOperatorOrg(ref: string): Pick<OperatorOrg, "id" | "tenant_id" | "name"> | undefined {
+  return findOrg(ref);
+}
+
+/** Suspends or reactivates a mock organization (tests of the suspended read-only UI). */
+export function setMockOrgSuspended(ref: string, suspended: boolean): void {
+  const o = findOrg(ref);
+  if (!o) return;
+  o.state = suspended ? "suspended" : "active";
+  o.suspended_at = suspended ? iso(Date.now()) : null;
+  o.suspend_reason = suspended ? "test" : "";
+}
+
 function lifecycle(o: OperatorOrg): OrgLifecycle {
   return {
     org_id: o.id, tenant_id: o.tenant_id, suspended: o.state === "suspended", suspended_at: o.suspended_at, suspend_reason: o.suspend_reason,

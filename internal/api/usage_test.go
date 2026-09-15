@@ -94,7 +94,7 @@ func (f *fakePlanStore) FindOrgByBillingCustomer(context.Context, string, string
 func newUsageServer(t *testing.T, p *auth.Principal) (*Server, *fakeUsageReader, *fakePlanStore) {
 	t.Helper()
 	c, err := quota.ParseCatalog(`{"plans":[{"id":"free","name":"Free","limits":{"ingest_gb_month":100,"users":5,"retention_days":{"logs":7}},
-		"enforcement":{"hard_ingest_limit":true}},{"id":"pro","name":"Pro","limits":{"ingest_gb_month":1000}}]}`, "")
+		"enforcement":{"hard_ingest_limit":true}},{"id":"pro","name":"Pro","trial_days":14,"limits":{"ingest_gb_month":1000}}]}`, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,6 +184,11 @@ func TestUsageOverview(t *testing.T) {
 	}
 	if rec, body := usageDo(t, s, http.MethodGet, "/api/v1/plans", ""); rec.Code != 200 || len(body["plans"].([]any)) != 2 || body["default"] != "free" {
 		t.Errorf("plans: %d %v", rec.Code, body)
+	} else {
+		free, pro := body["plans"].([]any)[0].(map[string]any), body["plans"].([]any)[1].(map[string]any)
+		if free["trial_days"] != float64(0) || free["trial_fallback_plan"] != "" || pro["trial_days"] != float64(14) || pro["trial_fallback_plan"] != "free" {
+			t.Errorf("plan trial fields: free=%v pro=%v", free, pro)
+		}
 	}
 }
 

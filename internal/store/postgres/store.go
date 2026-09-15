@@ -501,11 +501,14 @@ func (s *Store) RevokeLicenseKey(ctx context.Context, orgID, id, by string, at t
 // LookupLicenseKey implements tenant.KeyStore. One statement finds the active key by any candidate hash
 // (best candidate first) and rewrites a key found by an older-format hash to hashes[0] (D-044); the rewrite is
 // skipped when another row already has that hash, so it can never fail the lookup with a unique violation.
+// Without an active key, a license_key_tombstones row for a candidate yields tenant.ErrOrgDeleted (D-115) unless that
+// hash still belongs to a key of an organization that is not deleted (a cancellation an older pod did not clean up).
 func (s *Store) LookupLicenseKey(ctx context.Context, hashes [][]byte) (tenant.KeyInfo, error) {
 	var info tenant.KeyInfo
 	if len(hashes) == 0 {
 		return info, tenant.ErrUnknownKey
 	}
+	var deleted bool
 	err := s.pool.QueryRow(ctx, `WITH hit AS (
 			SELECT k.id, k.key_hash, o.tenant_id FROM license_keys k JOIN organizations o ON o.id = k.org_id
 			WHERE k.key_hash = ANY($1::bytea[]) AND k.revoked_at IS NULL AND o.deleted_at IS NULL
@@ -515,9 +518,18 @@ func (s *Store) LookupLicenseKey(ctx context.Context, hashes [][]byte) (tenant.K
 			WHERE l.id = hit.id AND hit.key_hash <> $2 AND l.revoked_at IS NULL
 			  AND NOT EXISTS (SELECT 1 FROM license_keys x WHERE x.key_hash = $2)
 		)
-		SELECT id::text, tenant_id FROM hit`, hashes, hashes[0]).Scan(&info.KeyID, &info.TenantID)
+		SELECT id::text, tenant_id, false FROM hit
+		UNION ALL
+		(SELECT '', '', true FROM license_key_tombstones t
+			WHERE t.key_hash = ANY($1::bytea[]) AND NOT EXISTS (SELECT 1 FROM hit)
+			  AND NOT EXISTS (SELECT 1 FROM license_keys x JOIN organizations xo ON xo.id = x.org_id
+				WHERE x.key_hash = t.key_hash AND xo.deleted_at IS NULL)
+			LIMIT 1)`, hashes, hashes[0]).Scan(&info.KeyID, &info.TenantID, &deleted)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return info, tenant.ErrUnknownKey
+	}
+	if err == nil && deleted {
+		return tenant.KeyInfo{}, tenant.ErrOrgDeleted
 	}
 	return info, err
 }

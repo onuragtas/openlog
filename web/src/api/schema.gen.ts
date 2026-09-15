@@ -454,6 +454,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fields/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Attribute keys of one signal for query builders (api.md "Fields"). Top-level fields are always listed first
+         *     (`source: field`); attribute and resource keys come from the hourly key index (ClickHouse `attribute_keys`,
+         *     D-118) over the range, or — when the index has no rows for the range, e.g. right after an upgrade — from a
+         *     sample of at most 20000 recent records (`sampled: true`). `logs` also lists top-level keys of JSON bodies
+         *     (`source: body`, sampled). Ordered by frequency; `q` is a case-insensitive substring of the key.
+         */
+        get: operations["listFieldKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fields/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Most frequent values of one key with counts, read from a sample of at most 100000 matching records of the
+         *     range (`sampled: true` when the sample was full). `filters` (JSON array of QueryFilter) and `q` restrict the
+         *     records; a filter on `key` itself is ignored so the other values stay visible.
+         */
+        get: operations["listFieldValues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/logs/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Structured log search (Logs Explorer, api.md "Logs"): `filters` are AND-ed, `groups` are OR-ed AND-groups,
+         *     `q` is a case-insensitive body substring. Rows carry the core fields, the requested `columns` in `fields`
+         *     and — with `include_record` — the attribute maps. Paging as GET /api/v1/logs (`cursor`), in `order`.
+         */
+        post: operations["queryLogs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/logs/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Log volume over time for the same filter model as POST /api/v1/logs/query: record counts per `step`
+         *     bucket, optionally split by `group_by` into the `limit` most frequent values plus an `other` series.
+         */
+        post: operations["aggregateLogs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every metric name with data points in the range, from any resource (Metrics Explorer). Ranges up to 6h read
+         *     raw data points; longer ranges read the 1-minute rollup for gauges and sums (no description/temporality) plus
+         *     the raw points of the last 6h for other types. `q`: case-insensitive substring of the name.
+         */
+        get: operations["listMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Time series of any metric with the query builder filter model. Aggregations by type: gauges and
+         *     non-monotonic sums `avg` `min` `max` `sum` `last` `count`; monotonic sums `rate` `increase` `sum` `last`;
+         *     histograms and exponential histograms `p50` `p75` `p90` `p95` `p99` (linear interpolation inside
+         *     buckets) `avg` `count` `sum` `rate`; summaries `p50`…`p99` (stored quantiles, averaged) `avg` `count` `sum`.
+         *     At most `limit` series (`truncated`).
+         */
+        post: operations["queryMetric"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metrics/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Metadata of one metric in the range with its attribute and resource keys. The name may contain `/`
+         *     (URL-encode other reserved characters). `404` when the metric has no data points in the range.
+         */
+        get: operations["getMetric"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Saved explorer views of the organization the caller may read (org-wide views and own private views).
+         *     PostgreSQL auth mode only (404 otherwise).
+         */
+        get: operations["listSavedViews"];
+        put?: never;
+        /** @description Signed-in members and higher. At most 500 views per organization. */
+        post: operations["createSavedView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getSavedView"];
+        /** @description The creator, or an admin/owner for org-wide views. */
+        put: operations["updateSavedView"];
+        post?: never;
+        delete: operations["deleteSavedView"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/traces/{trace_id}": {
         parameters: {
             query?: never;
@@ -3779,6 +3968,10 @@ export interface components {
             description: string;
             limits: components["schemas"]["PlanLimits"];
             enforcement: components["schemas"]["PlanEnforcement"];
+            /** @description Trial length in days; > 0 = the plan can be trialled (D-106) */
+            trial_days: number;
+            /** @description Plan assigned when a trial of this plan ends (the catalog default unless set); empty for plans without trials */
+            trial_fallback_plan: string;
         };
         PlanCatalog: {
             plans: components["schemas"]["Plan"][];
@@ -4658,6 +4851,227 @@ export interface components {
             span_id: string;
             attributes: components["schemas"]["StringMap"];
             resource_attributes: components["schemas"]["StringMap"];
+        };
+        /** @enum {string} */
+        FieldSignal: "logs" | "metrics" | "traces";
+        /**
+         * @description `field`: top-level column (e.g. `service.name`, `severity_text`, `body`); `attribute`: record / span / data
+         *     point attribute (`attributes.<k>`); `resource`: resource attribute (`resource.<k>`); `body`: top-level key of a
+         *     JSON log body (`body.<k>`).
+         * @enum {string}
+         */
+        FieldSource: "field" | "attribute" | "resource" | "body";
+        /** @enum {string} */
+        FieldType: "string" | "number" | "bool";
+        FieldKey: {
+            /** @description Key to use in filters, columns and group_by, e.g. `resource.k8s.pod.name` */
+            key: string;
+            /** @description Key without the source prefix */
+            name: string;
+            source: components["schemas"]["FieldSource"];
+            type: components["schemas"]["FieldType"];
+            /** @description Records with the key in the range (null for top-level fields) */
+            count: number | null;
+            /** @description Approximate distinct values (null when unknown) */
+            cardinality: number | null;
+        };
+        FieldKeysResponse: {
+            keys: components["schemas"]["FieldKey"][];
+            sampled: boolean;
+        };
+        FieldValue: {
+            value: string;
+            count: number;
+        };
+        FieldValuesResponse: {
+            key: string;
+            type: components["schemas"]["FieldType"];
+            values: components["schemas"]["FieldValue"][];
+            sampled: boolean;
+        };
+        /** @enum {string} */
+        FilterOp: "=" | "!=" | "in" | "not_in" | "contains" | "not_contains" | "like" | "not_like" | "regex" | "not_regex" | "exists" | "not_exists" | ">" | ">=" | "<" | "<=";
+        /**
+         * @description One condition. Keys: top-level fields of the signal, `attributes.<k>`, `resource.<k>`, `body.<k>` (logs, JSON
+         *     body) or a bare attribute key (record attribute, else resource attribute). `in`/`not_in` take `values`
+         *     (1–100); `exists`/`not_exists` take no value; the others take `value`. `contains` is case-insensitive;
+         *     `like` uses SQL wildcards (`%`, `_`, case-sensitive); `regex` is RE2. `>`…`<=` compare numerically (attribute
+         *     values that are not numbers never match). Values are at most 1024 bytes.
+         */
+        QueryFilter: {
+            key: string;
+            op: components["schemas"]["FilterOp"];
+            value?: string | number | boolean;
+            values?: (string | number | boolean)[];
+        };
+        /** @description OR of AND-groups ([[a, b], [c]] = (a AND b) OR c), AND-ed with `filters`. At most 10 groups and 50 conditions in total. */
+        FilterGroups: components["schemas"]["QueryFilter"][][];
+        LogsQueryRequest: {
+            /** @description RFC3339 or unix ms (default now-1h) */
+            from?: string | number;
+            /** @description RFC3339 or unix ms (default now) */
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            /** @description Case-insensitive substring of the body */
+            q?: string;
+            /**
+             * @default desc
+             * @enum {string}
+             */
+            order: "desc" | "asc";
+            /** @description Default 100, capped by OPENLOG_API_MAX_ROWS */
+            limit?: number;
+            /** @description next_cursor of the previous page (same request otherwise) */
+            cursor?: string;
+            /** @description Keys to return in `fields` (top-level fields, attributes, resource attributes, JSON body keys) */
+            columns?: string[];
+            /**
+             * @description Also return `attributes` and `resource_attributes`
+             * @default false
+             */
+            include_record: boolean;
+        };
+        LogQueryRow: {
+            /** @description Row identity within the result (timestamp and content hash) */
+            id: string;
+            timestamp: components["schemas"]["Timestamp"];
+            observed_timestamp: components["schemas"]["Timestamp"];
+            severity_text: string;
+            severity_number: number;
+            body: string;
+            service_name: string;
+            host_id: string;
+            host_name: string;
+            trace_id: string;
+            span_id: string;
+            /** @description Requested columns; keys the record does not have are omitted */
+            fields: {
+                [key: string]: string;
+            };
+            attributes?: components["schemas"]["StringMap"];
+            resource_attributes?: components["schemas"]["StringMap"];
+        };
+        LogsQueryResponse: {
+            rows: components["schemas"]["LogQueryRow"][];
+            next_cursor: string | null;
+        };
+        LogsAggregateRequest: {
+            from?: string | number;
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            q?: string;
+            /** @description Go duration ≥ 1s; default: a round step giving at most ~120 buckets */
+            step?: string;
+            /** @description Key whose values split the counts */
+            group_by?: string;
+            /**
+             * @description Series of group_by values
+             * @default 10
+             */
+            limit: number;
+        };
+        LogsAggregateSeries: {
+            /** @description Value of group_by ("" without group_by, or when the key is missing) */
+            group: string;
+            /** @description All values outside the top `limit` */
+            other: boolean;
+            total: number;
+            /** @description [bucket start unix ms, count]; buckets without records are omitted */
+            points: components["schemas"]["MetricPoint"][];
+        };
+        LogsAggregateResponse: {
+            /** @example 60s */
+            step: string;
+            total: number;
+            series: components["schemas"]["LogsAggregateSeries"][];
+        };
+        /** @enum {string} */
+        MetricTemporality: "unspecified" | "delta" | "cumulative";
+        MetricInfo: {
+            name: string;
+            type: components["schemas"]["MetricType"];
+            unit: string;
+            description: string;
+            temporality: components["schemas"]["MetricTemporality"];
+            monotonic: boolean;
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description Approximate number of series in the range */
+            series: number;
+            /** @description Up to 5 most frequent service.name values (empty service names omitted) */
+            services: string[];
+        };
+        MetricListResponse: {
+            metrics: components["schemas"]["MetricInfo"][];
+            truncated: boolean;
+        };
+        /** @enum {string} */
+        MetricAggregation: "avg" | "min" | "max" | "sum" | "last" | "count" | "rate" | "increase" | "p50" | "p75" | "p90" | "p95" | "p99";
+        MetricDetail: components["schemas"]["MetricInfo"] & {
+            attribute_keys: components["schemas"]["FieldKey"][];
+            resource_keys: components["schemas"]["FieldKey"][];
+            aggregations: components["schemas"]["MetricAggregation"][];
+            default_aggregation: components["schemas"]["MetricAggregation"];
+        };
+        MetricQueryRequest: {
+            metric: string;
+            from?: string | number;
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            aggregation?: components["schemas"]["MetricAggregation"];
+            group_by?: string[];
+            /** @description Go duration ≥ 10s; default ≈ 300 points */
+            step?: string;
+            /**
+             * @description Maximum series
+             * @default 50
+             */
+            limit: number;
+        };
+        MetricQueryResponse: {
+            metric: {
+                name: string;
+                type: components["schemas"]["MetricType"];
+                unit: string;
+                temporality: components["schemas"]["MetricTemporality"];
+                monotonic: boolean;
+            };
+            aggregation: components["schemas"]["MetricAggregation"];
+            /** @example 60s */
+            step: string;
+            series: components["schemas"]["MetricSeries"][];
+            truncated: boolean;
+        };
+        /** @enum {string} */
+        SavedViewSignal: "logs" | "metrics" | "traces";
+        SavedViewInput: {
+            signal: components["schemas"]["SavedViewSignal"];
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            visibility: "private" | "org";
+            /** @description Explorer state (JSON object ≤ 32 KiB), e.g. logs: {filters, groups, q, columns, order, group_by, range, from, to} */
+            state: {
+                [key: string]: unknown;
+            };
+        };
+        SavedView: {
+            id: string;
+            signal: components["schemas"]["SavedViewSignal"];
+            name: string;
+            description: string;
+            /** @enum {string} */
+            visibility: "private" | "org";
+            state: {
+                [key: string]: unknown;
+            };
+            created_by_user_id: string | null;
+            created_by_email: string;
+            can_edit: boolean;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
         SpanKind: "unspecified" | "internal" | "server" | "client" | "producer" | "consumer";
@@ -7269,6 +7683,7 @@ export interface components {
         ContainerID: string;
         /** @description RFC3339 or unix milliseconds. Default now − 1h. */
         From: string;
+        FieldSignal: components["schemas"]["FieldSignal"];
         /** @description RFC3339 or unix milliseconds. Default now. */
         To: string;
         /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
@@ -8201,6 +8616,415 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             500: components["responses"]["Internal"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listFieldKeys: {
+        parameters: {
+            query: {
+                signal: components["parameters"]["FieldSignal"];
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                q?: string;
+                /** @description `signal=metrics`: keys of this metric only */
+                metric?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldKeysResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listFieldValues: {
+        parameters: {
+            query: {
+                signal: components["parameters"]["FieldSignal"];
+                key: string;
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Case-insensitive substring of the value */
+                q?: string;
+                /** @description `signal=metrics`: values of this metric only */
+                metric?: string;
+                /** @description JSON array of QueryFilter */
+                filters?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldValuesResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            504: components["responses"]["Timeout"];
+        };
+    };
+    queryLogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogsQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsQueryResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    aggregateLogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogsAggregateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsAggregateResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listMetrics: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricListResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            504: components["responses"]["Timeout"];
+        };
+    };
+    queryMetric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricQueryResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getMetric: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listSavedViews: {
+        parameters: {
+            query?: {
+                signal?: components["schemas"]["SavedViewSignal"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        views: components["schemas"]["SavedView"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedViewInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getTrace: {

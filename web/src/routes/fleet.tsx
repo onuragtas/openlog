@@ -1,9 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import { fleetPolicyQuery, fleetSummaryQuery } from "@/api/fleet";
-import { can } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
 import { FleetHostsTable } from "@/components/fleet/FleetHostsTable";
 import { FleetSummaryCards } from "@/components/fleet/FleetSummaryCards";
@@ -11,6 +9,8 @@ import { PolicyEditor } from "@/components/fleet/PolicyEditor";
 import { RolloutPanel } from "@/components/fleet/RolloutPanel";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Card, CardContent } from "@/components/ui/card";
+import { ReadOnlyNotice } from "@/components/ReadOnly";
+import { usePermissions } from "@/lib/org-writable";
 
 const route = getRouteApi("/app/fleet");
 
@@ -19,13 +19,14 @@ export function FleetPage() {
   const { t } = useTranslation();
   const search = route.useSearch();
   const navigate = useNavigate({ from: "/fleet" });
-  const canManage = can(useMe().data?.role, "fleet.manage");
+  const canManage = usePermissions().can("fleet.manage");
   const summary = useQuery(fleetSummaryQuery());
   const policy = useQuery(fleetPolicyQuery());
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t("fleet.title")} subtitle={t("fleet.subtitle")} />
+      <ReadOnlyNotice />
 
       {summary.isPending ? (
         <LoadingState />

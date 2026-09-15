@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { DEFAULT_LOG_PATH, HOST_OSES, type HostOs } from "@/lib/host-os";
 import type { InstallOptions, InstallTarget, OptionKey } from "@/lib/install-commands";
 import { tDynamic } from "@/lib/onboarding-key";
 
@@ -19,7 +20,11 @@ const SELECTS: Partial<Record<OptionKey, { labels: string; values: readonly stri
   arch: { labels: "archs", values: ["amd64", "arm64"] },
   otelLanguage: { labels: "otelLanguages", values: ["node", "python", "java", "dotnet", "go", "other"] },
   protocol: { labels: "protocols", values: ["http", "grpc"] },
+  hostOs: { labels: "hostOses", values: HOST_OSES },
 };
+
+/** Label of the system log checkbox per host OS (journald, unified log, Event Log). */
+const SYSTEM_LOG_LABEL: Record<HostOs, string> = { linux: "journald", darwin: "unifiedLog", windows: "windowsEventLog" };
 
 const CHECKBOXES: readonly OptionKey[] = ["dockerAccess", "journald"];
 
@@ -46,13 +51,18 @@ export function OptionsStep({ target, value, onChange }: { target: InstallTarget
   const id = useId();
   const keys = target.options.filter((k) => !((k === "phpPackage" || k === "arch") && value.phpMode === "fleet"));
   if (keys.length === 0) return <p className="text-sm text-muted-foreground">{t("addData.options.none")}</p>;
-  const set = (k: OptionKey, v: string | boolean) => onChange({ ...value, [k]: v } as InstallOptions);
+  const set = (k: OptionKey, v: string | boolean) => {
+    const next = { ...value, [k]: v } as InstallOptions;
+    // Switching the host OS swaps an untouched example log path for the new OS's example.
+    if (k === "hostOs" && Object.values(DEFAULT_LOG_PATH).includes(value.logPath.trim())) next.logPath = DEFAULT_LOG_PATH[v as HostOs] ?? value.logPath;
+    onChange(next);
+  };
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
       {keys.map((k) => {
         const fid = `${id}-${k}`;
-        const label = tDynamic(t, `addData.options.${k}`);
+        const label = tDynamic(t, `addData.options.${k === "journald" ? (SYSTEM_LOG_LABEL[value.hostOs] ?? "journald") : k}`);
         const help = HELP[k] ? tDynamic(t, `addData.options.${HELP[k]}`) : undefined;
         const helpId = help ? `${fid}-help` : undefined;
         if (CHECKBOXES.includes(k)) {

@@ -1,10 +1,14 @@
+import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { hostQuery } from "@/api/queries";
 import { LogFilters } from "@/components/LogFilters";
 import { LogTable } from "@/components/LogTable";
+import { CopyCommand } from "@/components/onboarding/CopyCommand";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
+import { AGENT_CONFIG_PATH, agentRestart, DEFAULT_LOG_PATH, hostLogsYaml, hostOsOf, type HostOs } from "@/lib/host-os";
 import { useLogPages } from "@/lib/use-logs";
 
 const route = getRouteApi("/app/hosts/$hostId");
@@ -12,23 +16,35 @@ const route = getRouteApi("/app/hosts/$hostId");
 /** Agent log collection docs; link text is shown without a link until the page exists. */
 const LOGS_DOCS_URL: string | undefined = undefined;
 
-function NoHostLogs() {
+const EMPTY_BODY: Record<HostOs, "logs.hostEmptyBody" | "logs.hostEmptyBodyDarwin" | "logs.hostEmptyBodyWindows"> = {
+  linux: "logs.hostEmptyBody",
+  darwin: "logs.hostEmptyBodyDarwin",
+  windows: "logs.hostEmptyBodyWindows",
+};
+
+/** Empty state of the host logs tab: the config.yaml logs section and the restart for the host's OS (D-112). */
+export function NoHostLogs({ os }: { os: HostOs }) {
   const { t } = useTranslation();
+  const restart = agentRestart(os);
   return (
     <EmptyState icon={<FileText className="size-5" aria-hidden="true" />} className="px-4">
-      <p className="mb-1 font-medium text-foreground">{t("logs.hostEmptyTitle")}</p>
-      <p>{t("logs.hostEmptyBody")}</p>
-      <p className="mt-2">
-        {LOGS_DOCS_URL ? (
-          <a href={LOGS_DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
-            {t("logs.hostEmptyDocs")}
-          </a>
-        ) : (
-          <>
-            <span className="font-medium text-foreground">{t("logs.hostEmptyDocs")}</span> {t("logs.docsSoon")}
-          </>
-        )}
-      </p>
+      <div className="mx-auto flex max-w-xl min-w-0 flex-col gap-2 text-left" data-testid="host-logs-empty" data-os={os}>
+        <p className="text-center font-medium text-foreground">{t("logs.hostEmptyTitle")}</p>
+        <p>{t(EMPTY_BODY[os], { path: AGENT_CONFIG_PATH[os] })}</p>
+        <CopyCommand code={hostLogsYaml(os, DEFAULT_LOG_PATH[os], true)} label={t("logs.hostEmptyConfig")} lang="yaml" testId="host-logs-config" />
+        <CopyCommand code={restart.code} label={t("logs.hostEmptyRestart")} lang={restart.lang} testId="host-logs-restart" />
+        <p className="mt-1">
+          {LOGS_DOCS_URL ? (
+            <a href={LOGS_DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
+              {t("logs.hostEmptyDocs")}
+            </a>
+          ) : (
+            <>
+              <span className="font-medium text-foreground">{t("logs.hostEmptyDocs")}</span> {t("logs.docsSoon")}
+            </>
+          )}
+        </p>
+      </div>
     </EmptyState>
   );
 }
@@ -41,6 +57,7 @@ export function HostLogsTab({ hostId }: { hostId: string }) {
   const { t } = useTranslation();
   const search = route.useSearch();
   const navigate = useNavigate({ from: "/hosts/$hostId" });
+  const os = hostOsOf(useQuery(hostQuery(hostId)).data);
   const { query, logs } = useLogPages({
     range: { range: search.range, from: search.from, to: search.to },
     hostId,
@@ -70,6 +87,7 @@ export function HostLogsTab({ hostId }: { hostId: string }) {
         showHost={false}
         showService={false}
         showSourceFilters
+        os={os}
         onApply={(v) =>
           void navigate({
             search: (prev) => ({
@@ -90,7 +108,7 @@ export function HostLogsTab({ hostId }: { hostId: string }) {
         ) : query.isError && !logs ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : !logs || logs.length === 0 ? (
-          filtered ? <EmptyState>{t("logs.empty")}</EmptyState> : <NoHostLogs />
+          filtered ? <EmptyState>{t("logs.empty")}</EmptyState> : <NoHostLogs os={os} />
         ) : (
           <LogTable
             logs={logs}

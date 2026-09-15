@@ -25,6 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { WriteGuard } from "@/components/ReadOnly";
+import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 import { SecretReveal } from "./SecretReveal";
@@ -37,10 +39,12 @@ export function MembersSettings() {
   const me = useMe().data;
   const role = me?.role ?? null;
   const myId = me?.user?.id;
-  const canManage = can(role, "members.manage");
-  const canInvite = can(role, "invitations.manage");
+  const perms = usePermissions();
+  const canManage = perms.can("members.manage");
+  // Invitations stay readable in a read-only (suspended) organization; creating and revoking them does not.
+  const canInvite = perms.can("invitations.manage");
   const members = useQuery(membersQuery());
-  const invitations = useQuery({ ...invitationsQuery(), enabled: canInvite });
+  const invitations = useQuery({ ...invitationsQuery(), enabled: can(role, "invitations.manage") });
   const emailEnabled = useQuery(authConfigQuery()).data?.email_enabled === true;
 
   const [email, setEmail] = useState("");
@@ -151,7 +155,9 @@ export function MembersSettings() {
                     </TableCell>
                     <TableCell className="text-right">
                       {self ? (
-                        <ConfirmButton label={t("settings.leave")} confirmLabel={t("settings.confirmLeave")} pending={remove.isPending} onConfirm={() => remove.mutate(m.user_id)} />
+                        <WriteGuard>
+                          <ConfirmButton label={t("settings.leave")} confirmLabel={t("settings.confirmLeave")} pending={remove.isPending} onConfirm={() => remove.mutate(m.user_id)} />
+                        </WriteGuard>
                       ) : (
                         canManage &&
                         (m.role !== "owner" || role === "owner") && (

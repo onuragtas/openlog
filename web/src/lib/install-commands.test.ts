@@ -202,7 +202,35 @@ describe("macOS and Windows hosts", () => {
       expect(findTarget(id)?.requires, id).toEqual(["linux", "macos", "windows"]);
     }
     for (const id of ["logs/containers", "apm/php"] as const) expect(findTarget(id)?.requires, id).toEqual(["linux"]);
-    expect(build("integrations/redis").notes).toContain("otherHostOs");
+    for (const id of ["integrations/nginx", "integrations/redis", "integrations/mysql", "integrations/postgresql", "logs/host"] as const) {
+      expect(findTarget(id)?.options, id).toContain("hostOs");
+    }
+  });
+
+  it("integrations follow the host OS: password file, config path and restart", () => {
+    const linux = build("integrations/redis");
+    expect(linux.blocks.find((b) => b.id === "restart")).toMatchObject({ lang: "sh", code: "sudo systemctl restart openlog-infra-agent" });
+
+    const mac = build("integrations/redis", { hostOs: "darwin" });
+    expect(mac.blocks.map((b) => b.id)).toEqual(["redisAcl", "passwordFile", "agentConfig", "restart"]);
+    expect(mac.blocks[1]!.code).toBe("sudo install -m 0600 -o root -g wheel /dev/null /etc/openlog-infra-agent/redis.password\nsudo -e /etc/openlog-infra-agent/redis.password");
+    expect(mac.blocks[3]).toMatchObject({ lang: "sh", code: "sudo launchctl kickstart -k system/org.openlog.infra-agent" });
+    expect(mac.notes).toContain("macosRoot");
+
+    const win = build("integrations/mysql", { hostOs: "windows" });
+    const byId = Object.fromEntries(win.blocks.map((b) => [b.id, b]));
+    expect(byId.passwordFile).toMatchObject({ lang: "powershell" });
+    expect(byId.passwordFile!.code).toContain("$f = 'C:\\ProgramData\\openlog\\infra-agent\\mysql.password'");
+    expect(byId.passwordFile!.code).toContain("icacls $f /inheritance:r");
+    expect(byId.agentConfig!.code).toBe(
+      "# C:\\ProgramData\\openlog\\infra-agent\\config.yaml\nintegrations:\n  mysql:\n    username: openlog\n    password: 'file:C:\\ProgramData\\openlog\\infra-agent\\mysql.password'",
+    );
+    expect(byId.restart).toMatchObject({ lang: "powershell", code: "Restart-Service openlog-infra-agent" });
+    expect(win.notes).toContain("windowsElevated");
+    for (const b of win.blocks) expect(b.code, b.id).not.toMatch(/sudo|systemctl|\/etc\//);
+
+    expect(block("integrations/nginx", "restart", { hostOs: "windows" })).toMatchObject({ lang: "powershell", code: "nginx -t; if ($LASTEXITCODE -eq 0) { nginx -s reload }" });
+    expect(block("integrations/nginx", "restart", { hostOs: "darwin" }).code).toBe("nginx -t && nginx -s reload");
   });
 });
 
@@ -342,6 +370,30 @@ describe("logs", () => {
     );
     expect(r.blocks[1]!.code).toBe("sudo usermod -aG systemd-journal openlog-agent");
     expect(r.notes).not.toContain("placeholderKey");
+  });
+
+  it("host logs on macOS: unified log, Homebrew path, launchctl and no journal group", () => {
+    const r = build("logs/host", { hostOs: "darwin", journald: true });
+    expect(r.blocks.map((b) => b.id)).toEqual(["agentConfig", "restart"]);
+    expect(r.blocks[0]!.code).toContain('    - path: "/opt/homebrew/var/log/nginx/*.log"');
+    expect(r.blocks[0]!.code).toContain("  unified_log:\n    enabled: true");
+    expect(r.blocks[0]!.code).toContain("predicate: ");
+    expect(r.blocks[1]).toMatchObject({ lang: "sh", code: "sudo launchctl kickstart -k system/org.openlog.infra-agent" });
+    expect(r.notes).toEqual(expect.arrayContaining(["macosRoot", "homebrewLogs"]));
+    expect(r.notes).not.toContain("journaldGroup");
+    // A typed path is kept.
+    expect(build("logs/host", { hostOs: "darwin", logPath: "/usr/local/var/log/redis.log" }).blocks[0]!.code).toContain('"/usr/local/var/log/redis.log"');
+  });
+
+  it("host logs on Windows: ProgramData config, IIS path, Event Log channels and Restart-Service", () => {
+    const r = build("logs/host", { hostOs: "windows", journald: true });
+    expect(r.blocks.map((b) => b.id)).toEqual(["agentConfig", "restart"]);
+    expect(r.blocks[0]!.code).toBe(
+      "# C:\\ProgramData\\openlog\\infra-agent\\config.yaml\nlogs:\n  enabled: true\n  files:\n    - path: 'C:\\inetpub\\logs\\LogFiles\\W3SVC1\\*.log'\n" +
+        "  windows_event_log:\n    enabled: true\n    channels:\n      - { name: System, levels: [critical, error, warning] }\n      - { name: Application, levels: [critical, error, warning] }",
+    );
+    expect(r.blocks[1]).toMatchObject({ lang: "powershell", code: "Restart-Service openlog-infra-agent" });
+    expect(r.notes).toEqual(expect.arrayContaining(["windowsElevated", "iisLogs", "mergeConfig"]));
   });
 
   it("container logs", () => {

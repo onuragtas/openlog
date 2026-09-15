@@ -24,6 +24,7 @@ import (
 	"github.com/onuragtas/openlog/internal/dashboard"
 	"github.com/onuragtas/openlog/internal/fleet"
 	"github.com/onuragtas/openlog/internal/intsettings"
+	"github.com/onuragtas/openlog/internal/savedview"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
 )
@@ -67,6 +68,8 @@ type Server struct {
 	privacy *PrivacyDeps
 	// public status page and its incidents (statuspage.go, D-108); nil: none
 	statusPage *StatusPageDeps
+	// saved explorer views (savedviews.go, D-118); nil: none
+	savedViews *savedview.Manager
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -120,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/v1/inventory/search", s.inventorySearch)
 	route("GET /api/v1/logs", s.listLogs)
 	route("GET /api/v1/traces/{trace_id}", s.getTrace)
+	s.explorerRoutes(mux) // fields.go, logsquery.go, metricsexplorer.go, savedviews.go (D-118, D-119)
 	s.apmRoutes(mux)
 	s.containerRoutes(mux)
 	s.kubernetesRoutes(mux) // kubernetes.go

@@ -42,7 +42,13 @@ func startPrivacyAPI(cfg config.Config, pool *pgxpool.Pool, conn clickhouse.Conn
 	if e := p.Export; e.Enabled {
 		var objects objstore.Store = objstore.Local{Dir: e.LocalPath}
 		if e.ExportStorage() == "s3" {
-			objects = &objstore.S3{BaseURL: e.S3URL, Region: e.S3Region, AccessKeyID: e.S3AccessKeyID, SecretAccessKey: e.S3SecretAccessKey}
+			s3 := &objstore.S3{BaseURL: e.S3URL, Region: e.S3Region, AccessKeyID: e.S3AccessKeyID, SecretAccessKey: e.S3SecretAccessKey}
+			if e.S3Credentials == "auto" {
+				// AWS default chain subset (D-116): env, web identity (IRSA), ECS/EKS container, EC2 instance profile.
+				s3.AccessKeyID, s3.SecretAccessKey = "", ""
+				s3.Credentials = objstore.DefaultChain(objstore.ChainOptions{Region: e.S3Region})
+			}
+			objects = s3
 		}
 		svc := &dataexport.Service{Store: dataexport.PGStore{Pool: pool}, Objects: objects,
 			Limits: dataexport.Limits{MaxBytes: e.MaxBytes, MaxRows: e.MaxRows, MaxRange: e.MaxRange, RowsPerSecond: e.RowsPerSecond, TTL: e.TTL}}
@@ -50,7 +56,7 @@ func startPrivacyAPI(cfg config.Config, pool *pgxpool.Pool, conn clickhouse.Conn
 		tasks = append(tasks, leaderTask{"data-exports", (&dataexport.Job{Service: svc, Pool: pool, TempDir: filepath.Join(e.LocalPath, ".tmp"),
 			Rows: dataexport.ClickHouseSource{Conn: conn, Database: cfg.ClickHouseDatabase}, Mailer: mailer, PublicURL: cfg.Alert.PublicURL,
 			Log: log.With("job", "data-exports")}).Run})
-		log.Info("data exports enabled", "storage", objects.Kind(), "ttl", e.TTL, "max_bytes", e.MaxBytes)
+		log.Info("data exports enabled", "storage", objects.Kind(), "s3_credentials", e.S3Credentials, "ttl", e.TTL, "max_bytes", e.MaxBytes)
 	}
 	tasks = append(tasks, leaderTask{"org-deletion", job.Run})
 	srv.SetPrivacy(deps)

@@ -85,6 +85,29 @@ describe("integration configuration from the UI", () => {
     expect(within(manual).getByLabelText("Configuration snippet")).toHaveTextContent("env:OPENLOG_REDIS_PASSWORD");
   });
 
+  it("manual snippet names the config path and restart of the host OS", async () => {
+    const user = userEvent.setup();
+    const cases = [
+      ["linux", "/etc/openlog-infra-agent/config.yaml", "sudo systemctl restart openlog-infra-agent", "sh"],
+      ["darwin", "/etc/openlog-infra-agent/config.yaml", "sudo launchctl kickstart -k system/org.openlog.infra-agent", "sh"],
+      ["windows", "C:\\ProgramData\\openlog\\infra-agent\\config.yaml", "Restart-Service openlog-infra-agent", "powershell"],
+    ] as const;
+    for (const [os, path, restart, lang] of cases) {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const view = render(
+        <QueryClientProvider client={client}>
+          <IntegrationConfigPanel hostId={HOST} hostName="db-1" instance={INSTANCE} integration="redis" status="needs_configuration" hint={HINT} canManage onSaved={() => {}} os={os} />
+        </QueryClientProvider>,
+      );
+      const manual = screen.getByTestId("integration-manual-config");
+      await user.click(within(manual).getByText("Manual configuration (config.yaml)"));
+      expect(within(manual).getByText(`Alternatively, add this to ${path} on db-1 and restart the agent:`)).toBeInTheDocument();
+      expect(within(manual).getByTestId("integration-restart")).toHaveTextContent(restart);
+      expect(within(manual).getByTestId("integration-restart")).toHaveAttribute("data-lang", lang);
+      view.unmount();
+    }
+  });
+
   it("disables the integration on the host and turns it back on", async () => {
     const user = userEvent.setup();
     renderHarness();

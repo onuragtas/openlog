@@ -1,0 +1,81 @@
+#!/bin/sh
+# postinstall of openlog-infra-agent_@VERSION@_darwin_<arch>.pkg (build-pkg.sh, D-113). Runs as root; output goes to
+# /var/log/install.log.
+#
+# Configuration (same keys as install.sh): the agent is configured when /etc/openlog-infra-agent/config.yaml exists or
+# credentials are provided, either in the installer's environment (OPENLOG_LICENSE_KEY, OPENLOG_ENDPOINT) or in
+# /tmp/openlog-infra-agent.env with lines OPENLOG_LICENSE_KEY=… and OPENLOG_ENDPOINT=…. The file is only used when it is
+# a regular file owned by root and not writable by group or others (another user could otherwise redirect the agent's
+# data), and it is deleted after reading. Then -reconcile -reconcile-context package points current at this version
+# (keeping a newer self-updated one), writes the LaunchDaemon, CLI link and log rotation, and the service is
+# (re)started when a license key is configured.
+set -eu
+
+VERSION=@VERSION@
+ROOT=/opt/openlog/infra-agent
+BIN=$ROOT/versions/$VERSION/openlog-infra-agent
+CONFIG=/etc/openlog-infra-agent/config.yaml
+STATE_DIR=/var/lib/openlog-infra-agent
+ENV_FILE=/tmp/openlog-infra-agent.env
+LABEL=org.openlog.infra-agent
+PLIST=/Library/LaunchDaemons/$LABEL.plist
+
+log() { echo "openlog-infra-agent postinstall: $*"; }
+
+[ -x "$BIN" ] || { log "error: $BIN is missing"; exit 1; }
+chown -R root:wheel "$ROOT"
+chmod -R go-w "$ROOT"
+install -d -m 0700 -o root -g wheel "$STATE_DIR"
+
+license_key=${OPENLOG_LICENSE_KEY:-}
+endpoint=${OPENLOG_ENDPOINT:-}
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+	mode=$(stat -f %Lp "$ENV_FILE" 2>/dev/null || echo 777)
+	if [ ! -L "$ENV_FILE" ] && [ -f "$ENV_FILE" ] && [ "$(stat -f %u "$ENV_FILE")" = 0 ] && [ $((0$mode & 022)) -eq 0 ]; then
+		v=$(sed -n 's/^OPENLOG_LICENSE_KEY=//p' "$ENV_FILE" | tail -n 1)
+		[ -z "$v" ] || license_key=$v
+		v=$(sed -n 's/^OPENLOG_ENDPOINT=//p' "$ENV_FILE" | tail -n 1)
+		[ -z "$v" ] || endpoint=$v
+		log "read credentials from $ENV_FILE"
+	else
+		log "warning: ignoring $ENV_FILE: it must be a regular file owned by root and not writable by group or others"
+	fi
+	rm -f "$ENV_FILE"
+fi
+
+if [ -f "$CONFIG" ] || [ -n "$license_key" ] || [ -n "$endpoint" ]; then
+	set -- -configure -config "$CONFIG"
+	[ -z "$license_key" ] || set -- "$@" -license-key "$license_key"
+	[ -z "$endpoint" ] || set -- "$@" -endpoint "$endpoint"
+	"$BIN" "$@" || { log "error: -configure failed"; exit 1; }
+else
+	log "no $CONFIG and no credentials: configure later with: sudo openlog-infra-agent -configure -license-key KEY -endpoint URL"
+fi
+
+restart_needed=0
+if out=$("$BIN" -reconcile -reconcile-context package -config "$CONFIG"); then :; else
+	log "warning: reconcile reported errors (see above)"
+fi
+case $out in *restart-required*) restart_needed=1 ;; esac
+
+loaded() { launchctl print "system/$LABEL" >/dev/null 2>&1; }
+if [ -f "$CONFIG" ] && grep -Eq '^license_key:[[:space:]]*"?[^"[:space:]#]' "$CONFIG"; then
+	if loaded && [ "$restart_needed" = 1 ]; then
+		launchctl bootout "system/$LABEL" >/dev/null 2>&1 || true
+		i=0
+		while loaded && [ "$i" -lt 20 ]; do
+			sleep 1
+			i=$((i + 1))
+		done
+	fi
+	if loaded; then
+		launchctl kickstart -k "system/$LABEL"
+	else
+		launchctl bootstrap system "$PLIST"
+	fi
+	log "service $LABEL (re)started"
+else
+	log "no license_key configured; service $LABEL not started"
+fi
+log "installed $("$ROOT/current/openlog-infra-agent" -version 2>/dev/null | head -n 1 || echo "openlog-infra-agent $VERSION")"
+exit 0

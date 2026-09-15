@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { Copy, Download, LayoutDashboard, Plus, Upload } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import {
   createDashboard,
   dashboardsQuery,
@@ -15,7 +14,6 @@ import {
   type DashboardSummary,
   type DashboardVisibility,
 } from "@/api/dashboards";
-import { atLeast } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
 import { ConfirmButton } from "@/components/settings/ConfirmButton";
 import { DateTimeText, FormError } from "@/components/settings/common";
@@ -29,6 +27,8 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadJson, exportFileName, parseImport } from "@/lib/dashboards";
 import { useIsMobile } from "@/lib/media";
+import { ReadOnlyNotice } from "@/components/ReadOnly";
+import { usePermissions } from "@/lib/org-writable";
 import { useDebounced } from "@/lib/use-debounced";
 
 export interface DashboardsListProps {
@@ -39,7 +39,6 @@ export interface DashboardsListProps {
 
 export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: DashboardsListProps) {
   const { t } = useTranslation();
-  const me = useMe().data;
   const mobile = useIsMobile();
   const queryClient = useQueryClient();
   const [text, setText] = useState(q);
@@ -47,7 +46,8 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
   const list = useQuery(dashboardsQuery(debounced.trim()));
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  const canCreate = atLeast(me?.role, "member");
+  const perms = usePermissions();
+  const canCreate = perms.canWriteAs("member");
 
   useEffect(() => {
     if (debounced.trim() !== q) onSearchChange(debounced.trim() || undefined);
@@ -81,7 +81,7 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
         <Download aria-hidden="true" />
         <span className="max-md:sr-only">{t("dashboards.export")}</span>
       </Button>
-      {d.can_edit && <ConfirmButton label={t("dashboards.delete")} confirmLabel={t("dashboards.confirmDelete")} pending={remove.isPending} onConfirm={() => remove.mutate(d.id)} />}
+      {d.can_edit && perms.writable && <ConfirmButton label={t("dashboards.delete")} confirmLabel={t("dashboards.confirmDelete")} pending={remove.isPending} onConfirm={() => remove.mutate(d.id)} />}
     </div>
   );
   const nameLink = (d: DashboardSummary) => (
@@ -115,6 +115,7 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
           )
         }
       />
+      <ReadOnlyNotice />
       <Input type="search" className="max-w-sm" aria-label={t("dashboards.search")} placeholder={t("dashboards.search")} value={text} onChange={(e) => setText(e.target.value)} />
       <FormError error={remove.error ?? duplicate.error ?? doExport.error} />
       {list.isPending ? (

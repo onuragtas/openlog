@@ -7,6 +7,8 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/containers"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/docker"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/iis"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mssql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mysql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/nginx"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/postgresql"
@@ -25,5 +27,7 @@ func Registry(cfg *config.Config, ctr *containers.Source) []integrations.Integra
 		mysql.Integration{},
 		postgresql.Integration{},
 		docker.Integration{Source: ctr, Socket: cfg.Containers.DockerSocket},
+		mssql.Integration{},
+		iis.Integration{}, // Windows performance counters; not_available elsewhere
 	}
 }

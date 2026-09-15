@@ -1,20 +1,32 @@
 // MSW handlers for data exports, account/organization deletion and the status page (docs/contracts/api.md
 // "Data export and deletion", "Status page") with in-memory state.
 import { http, HttpResponse } from "msw";
-import type { AccountPrivacy, DataExport, OrgDeletion } from "@/api/privacy";
+import { subjectHash, type AccountPrivacy, type DataExport, type DeletionCertificate, type OrgDeletion } from "@/api/privacy";
 import type { StatusIncident, StatusPage } from "@/api/statusPage";
 import { authenticate, MOCK_EMAIL, MOCK_PASSWORD } from "./account";
 import { formatTs } from "./fixtures";
+import { mockOperatorOrg } from "./operator";
 
 const API = "*/api/v1";
 const DAY = 86_400_000;
 
-const state: { exports: DataExport[]; deletions: OrgDeletion[]; incidents: StatusIncident[] } = { exports: [], deletions: [], incidents: [] };
+const state: { exports: DataExport[]; deletions: OrgDeletion[]; incidents: StatusIncident[]; certificates: { subject: string; cert: DeletionCertificate }[] } = {
+  exports: [],
+  deletions: [],
+  incidents: [],
+  certificates: [],
+};
 
 export function resetMockPrivacy(): void {
   state.exports = [];
   state.deletions = [];
   state.incidents = [];
+  state.certificates = [];
+}
+
+/** Adds a deletion certificate of a tenant id or user id (tests). */
+export function addMockDeletionCertificate(subject: string, cert: DeletionCertificate): void {
+  state.certificates.push({ subject, cert });
 }
 
 function fail(code: string, message: string, status: number) {
@@ -53,7 +65,7 @@ export const privacyHandlers = [
   http.get(`${API}/account/privacy`, ({ request }) => {
     const ctx = authenticate(request);
     if (ctx instanceof Response) return ctx;
-    const body: AccountPrivacy = { has_password: true, data_export_enabled: true, org_deletion_grace_seconds: 7 * 86_400, reauth_max_age_seconds: 600, org_deletions: state.deletions };
+    const body: AccountPrivacy = { has_password: true, data_export_enabled: true, org_deletion_grace_seconds: 7 * 86_400, reauth_max_age_seconds: 600, org_deletions: state.deletions.filter((d) => d.status === "scheduled" || d.status === "deleting") };
     return HttpResponse.json(body);
   }),
   http.get(`${API}/account/data-exports`, ({ request }) => {
@@ -114,6 +126,50 @@ export const privacyHandlers = [
     if (!d) return fail("not_found", "not found", 404);
     state.deletions = state.deletions.filter((x) => x.id !== d.id);
     return HttpResponse.json({ deletion: { ...d, status: "cancelled", cancellable: false, cancelled_at: formatTs(Date.now()) } });
+  }),
+  http.post(`${API}/admin/orgs/:org/deletion`, async ({ request, params }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    const org = mockOperatorOrg(String(params.org));
+    if (!org) return fail("not_found", "not found", 404);
+    const b = (await request.json()) as { reason?: string; immediate?: boolean };
+    const reason = (b.reason ?? "").trim();
+    if (!reason || reason.length > 1000) return fail("invalid_argument", "reason is required (at most 1000 characters)", 400);
+    if (state.deletions.some((d) => d.organization_id === org.id && (d.status === "scheduled" || d.status === "deleting"))) {
+      return fail("conflict", "the organization is already scheduled for deletion", 409);
+    }
+    const now = Date.now();
+    const d: OrgDeletion = {
+      id: crypto.randomUUID(), organization_id: org.id, organization_name: org.name, tenant_id: org.tenant_id, status: "scheduled", initiator: "operator",
+      reason, requested_by_email: MOCK_EMAIL, requested_at: formatTs(now), purge_after: formatTs(b.immediate ? now : now + 7 * DAY), cancelled_at: null,
+      started_at: null, completed_at: null, cancellable: true, certificate_id: null, last_error: "",
+    };
+    state.deletions.push(d);
+    return HttpResponse.json({ deletion: d }, { status: 202 });
+  }),
+  http.get(`${API}/admin/org-deletions`, ({ request }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    return HttpResponse.json({ deletions: [...state.deletions].reverse() });
+  }),
+  http.post(`${API}/admin/org-deletions/:id/cancel`, ({ request, params }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    const d = state.deletions.find((x) => x.id === params.id);
+    if (!d) return fail("not_found", "not found", 404);
+    if (d.status !== "scheduled") return fail("conflict", "the deletion can no longer be cancelled", 409);
+    Object.assign(d, { status: "cancelled", cancellable: false, cancelled_at: formatTs(Date.now()) });
+    return HttpResponse.json({ deletion: d });
+  }),
+  http.get(`${API}/admin/deletion-certificates`, async ({ request }) => {
+    const ctx = authenticate(request);
+    if (ctx instanceof Response) return ctx;
+    const want = new URL(request.url).searchParams.get("subject_hash") ?? "";
+    const out: DeletionCertificate[] = [];
+    for (const c of state.certificates) {
+      if (!want || (await subjectHash(c.subject)) === want) out.push(c.cert);
+    }
+    return HttpResponse.json({ certificates: out });
   }),
   http.post(`${API}/account/delete`, async ({ request }) => {
     const ctx = authenticate(request);

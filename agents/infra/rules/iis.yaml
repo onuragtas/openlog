@@ -6,6 +6,8 @@ match:
   - process: { exe_basename: ["w3wp"] }                    # application pool worker (w3wp.exe)
 endpoints:
   - from: listening_port
-integration: null                                          # no IIS metric integration yet: not_available
+integration:
+  id: iis                                                  # Windows performance counters (Web Service, APP_POOL_WAS); no credentials
+  auto_enable: true
 logs:
   - path: "C:/inetpub/logs/LogFiles/W3SVC*/*.log"          # default site log directory (W3C format)

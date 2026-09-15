@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { BellRing, CheckCircle2, MessageSquare, Repeat, Send, ShieldAlert, VolumeX, Waves, XCircle } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import {
   acknowledgeIncident,
   addIncidentNote,
@@ -13,7 +12,6 @@ import {
   type AlertIncidentEvent,
   type AlertSeverity,
 } from "@/api/alerts";
-import { can } from "@/api/roles";
 import { AttributeChips } from "@/components/AttributeChips";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -23,6 +21,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDurationShort } from "@/lib/alerts";
 import { useNow } from "@/lib/hooks";
+import { usePermissions } from "@/lib/org-writable";
 import { IncidentStateBadge, SeverityBadge } from "./badges";
 import { DeliveriesTable } from "./DeliveriesTable";
 import { Section } from "./fields";
@@ -171,7 +170,7 @@ export function IncidentDetail({ id }: { id: string }) {
   const { t } = useTranslation();
   const uid = useId();
   const queryClient = useQueryClient();
-  const canWrite = can(useMe().data?.role, "alerts.write");
+  const canWrite = usePermissions().can("alerts.write");
   const q = useQuery(alertIncidentQuery(id));
   const [resolving, setResolving] = useState(false);
   const [note, setNote] = useState("");

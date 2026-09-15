@@ -2,14 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { currentOrgQuery, meQuery, renameOrg, setOrgLanguage, useMe, type OrgLanguage } from "@/api/account";
-import { can } from "@/api/roles";
+import { currentOrgQuery, meQuery, renameOrg, setOrgLanguage, type OrgLanguage } from "@/api/account";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { SUPPORTED_LANGUAGES } from "@/i18n";
+import { usePermissions } from "@/lib/org-writable";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 import { DataExportSection } from "./DataExportSection";
 import { DeleteOrganizationSection } from "./DeleteOrganizationSection";
@@ -20,9 +20,8 @@ export function OrganizationSettings() {
   const { t } = useTranslation();
   const id = useId();
   const qc = useQueryClient();
-  const me = useMe().data;
   const org = useQuery(currentOrgQuery());
-  const canEdit = can(me?.role, "org.update");
+  const canEdit = usePermissions().can("org.update");
   const [draft, setDraft] = useState<string | null>(null);
   const rename = useMutation({
     mutationFn: (name: string) => renameOrg(name),

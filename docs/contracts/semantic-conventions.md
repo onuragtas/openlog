@@ -437,7 +437,8 @@ fingerprint). Each instance collects on its own schedule (`integrations.interval
 timeout (`integrations.timeout`, 10 s), at most `integrations.max_concurrent` collections at once and exponential backoff after failures
 (interval · 2ⁿ, max 5 min). The latest sample of every instance is sent with the next metrics payload. Metric names, types, units and attribute keys
 are those of the OpenTelemetry Collector contrib receivers (`nginxreceiver`, `redisreceiver`, `mysqlreceiver`, `postgresqlreceiver`, checked
-against their `metadata.yaml` on `main`, 2026-09-13), so data collected by an OTel Collector with these receivers matches the same panels.
+against their `metadata.yaml` on `main`, 2026-09-13; `sqlserverreceiver` and `iisreceiver` on 2026-09-15), so data collected by an OTel Collector
+with these receivers matches the same panels.
 Metrics that are disabled by default in the receiver but emitted by openlog are marked *(opt-in in OTel)*.
 
 ### 6.1 Resource
@@ -448,7 +449,7 @@ Every instance (and every entity of §6.5 PostgreSQL) is a separate OTLP `Resour
 |---|---|
 | `openlog.discovery.id` | `rule_id` of the discovered service (e.g. `mariadb`) |
 | `openlog.discovery.instance` | `instance` of the discovered service; `<openlog.discovery.id>:<openlog.discovery.instance>` is the `discovered_service` key (§3.4) |
-| `openlog.integration.id` | `nginx`, `redis`, `mysql`, `postgresql` |
+| `openlog.integration.id` | `nginx`, `redis`, `mysql`, `postgresql`, `mssql`, `iis` |
 | `service.instance.id` | `host:port` of the endpoint; loopback hosts are replaced by `host.name` (`web-1:6379`); unix sockets: `<host.name>:<socket path>`. MySQL overrides it with the receiver's UUIDv5 (§6.4) |
 | `server.address` | endpoint host (IP as dialed, e.g. `127.0.0.1`, `172.18.0.5`), or the socket path for unix sockets |
 | `server.port` | int, endpoint port (absent for unix sockets) |
@@ -478,14 +479,15 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 | `integrations.enabled` | `true` | master switch (requires `discovery.enabled`) |
 | `integrations.interval` / `timeout` | `30s` / `10s` | default collection interval (≥ 5 s) and per-collection timeout (≤ interval) |
 | `integrations.max_concurrent` / `max_instances` | `4` / `32` | concurrency limit; instance limit (later instances: `not_available`) |
-| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `redis`, `mysql`, `postgresql`, `docker`) |
+| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `redis`, `mysql`, `postgresql`, `docker`, `mssql`, `iis`) |
 | `integrations.<id>.interval` | — | overrides the default interval |
 | `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql) or the `http(s)://…` status URL (nginx: stub_status page, NGINX Plus API `/api/` or `/api/<n>`, or VTS JSON page; the format is detected, §6.3) |
-| `integrations.<id>.username` / `password` | — | redis, mysql, postgresql. `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
+| `integrations.<id>.username` / `password` | — | redis, mysql, postgresql, mssql (SQL Server authentication; Windows authentication is not supported). `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
 | `integrations.<id>.tls` | — | `{enabled, insecure_skip_verify, ca_file, server_name}`; PostgreSQL without `tls` uses `sslmode=prefer` over TCP |
 | `integrations.postgresql.database` | `postgres` | initial database |
 | `integrations.postgresql.databases` / `exclude_databases` | `[]` | database allow/deny lists (default: every non-template database with `datallowconn`, max 32) |
 | `integrations.{mysql,postgresql}.top_n_tables` | `50` / `20` | cardinality guard: largest tables/indexes (PostgreSQL, per database) or tables/indexes with most io wait time (MySQL) |
+| `integrations.mssql.top_n_tables` | `10` | wait types with the most total wait time in `sqlserver.os.wait.duration` (§6.7) |
 | `integrations.postgresql.query_stats` | `{enabled: false, top_n: 20, min_calls: 0}` | opt-in `pg_stat_statements` top statements (§6.5): `top_n` 0..100 (0 = 20) by total execution time, `min_calls` skips statements with fewer calls. `config.yaml` only (not part of remote integration config) |
 | `integrations.<id>.instances[]` | `[]` | overrides for services matching **all** given `match` fields: `port` (listening, private or published), `endpoint` (derived candidate), `unit`, `container` (name or ≥ 12-char id prefix), `instance`; plus any setting above and `enabled` |
 | `integrations.remote_config` | `true` | apply integration settings configured in the openlog UI (delivered by agent sync, [releases-updates.md](releases-updates.md) §3, D-039). `false`: ignored; the agent reports revision `disabled` |
@@ -719,6 +721,67 @@ denied (hint: docker group membership, which is root-equivalent), `error` when t
 `containers.enabled` is false. The state reflects the Docker Engine API only: on hosts where only a CRI runtime (containerd, CRI-O) answers,
 container listing succeeds but the integration reports `error` (`docker socket not found`).
 
+### 6.7 Microsoft SQL Server (`mssql`, D-113)
+
+Integration id `mssql` (rule `mssql`: Windows service `MSSQLSERVER`/`MSSQL$<instance>`, `sqlservr`, port 1433, `mssql/server` containers, the
+`mssql-server` package on Linux). TDS over TCP with `github.com/microsoft/go-mssqldb` (pinned in `agents/infra/go.mod`) on every OS: a remote server
+(Azure SQL Managed Instance, a Linux host without the agent) is monitored from any agent with `integrations.mssql.instances[].endpoint`. Unix
+sockets are skipped (no TDS endpoint). SQL Server authentication only (`username`/`password`, remote config D-039: endpoint, username, password);
+without credentials the status is `needs_configuration` (the rule requires `credentials`), a failed login (18456) without a password
+`needs_configuration`, with a password `error: authentication failed`. Connection: database `master`, `app name=openlog-infra-agent`,
+`encrypt=false` (login packet only, the SQL Server default) or, with `tls.enabled`, `encrypt=true` with `TrustServerCertificate` =
+`tls.insecure_skip_verify`, `certificate` = `tls.ca_file`, `hostNameInCertificate` = `tls.server_name`. Required permissions: `VIEW SERVER STATE`
+(SQL Server 2022: `VIEW SERVER PERFORMANCE STATE`) and, for database sizes, `VIEW ANY DEFINITION`; a missing permission for sizes or waits makes
+the collection partial.
+
+Resource attributes: `sqlserver.version` (`SERVERPROPERTY('ProductVersion')`), `sqlserver.instance.name` (`@@SERVICENAME`). Cumulative sums
+carry `start_time_unix_nano` = `sqlserver_start_time`. Sources: `sys.dm_os_performance_counters` (object prefix `SQLServer:` / `MSSQL$<instance>:`
+removed; per-instance counters use `_Total`), `sys.master_files`, `sys.dm_os_wait_stats`. `.rate` gauges are per-second deltas of the cumulative
+`/sec` counters between two collections of the same connection (none on the first collection or after a counter reset).
+
+| Metric | Type | Unit | Attributes | Source |
+|---|---|---|---|---|
+| `sqlserver.user.connection.count` | Gauge, int | `{connections}` | — | General Statistics `User Connections` |
+| `sqlserver.processes.blocked` *(opt-in in OTel)* | Gauge, int | `{processes}` | — | General Statistics `Processes blocked` |
+| `sqlserver.batch.request.rate` | Gauge, double | `{requests}/s` | — | SQL Statistics `Batch Requests/sec` |
+| `sqlserver.batch.sql_compilation.rate` | Gauge, double | `{compilations}/s` | — | SQL Statistics `SQL Compilations/sec` |
+| `sqlserver.batch.sql_recompilation.rate` | Gauge, double | `{compilations}/s` | — | SQL Statistics `SQL Re-Compilations/sec` |
+| `sqlserver.deadlock.rate` *(opt-in in OTel)* | Gauge, double | `{deadlocks}/s` | — | Locks `Number of Deadlocks/sec` (`_Total`) |
+| `sqlserver.deadlock.count` *(openlog, not in OTel)* | Sum, monotonic, int | `{deadlocks}` | — | same counter, cumulative (no deadlock is lost between collections) |
+| `sqlserver.lock.wait.rate` | Gauge, double | `{requests}/s` | — | Locks `Lock Waits/sec` (`_Total`) |
+| `sqlserver.transaction.rate` | Gauge, double | `{transactions}/s` | — | Databases `Transactions/sec` (`_Total`) |
+| `sqlserver.page.split.rate` | Gauge, double | `{pages}/s` | — | Access Methods `Page Splits/sec` |
+| `sqlserver.page.buffer_cache.hit_ratio` | Gauge, double | `%` | — | Buffer Manager `Buffer cache hit ratio` / `… base` × 100 |
+| `sqlserver.page.life_expectancy` | Gauge, int | `s` | `performance_counter.object_name` = `Buffer Manager` | Buffer Manager `Page life expectancy` |
+| `sqlserver.database.size` *(openlog, not in OTel)* | Sum, non-monotonic, int | `By` | `sqlserver.database.name`, `file_type` (`rows`, `log`, `filestream`, `fulltext`) | `sys.master_files` pages × 8192 |
+| `sqlserver.os.wait.duration` *(opt-in in OTel)* | Sum, monotonic, double | `s` | `wait.type`, `wait.category` | `sys.dm_os_wait_stats.wait_time_ms` / 1000, top `top_n_tables` (10) wait types by total wait time, idle/background waits excluded; category as in Query Store (`Lock`, `Buffer IO`, `Buffer Latch`, `Latch`, `Tran Log IO`, `Network IO`, `Parallelism`, `CPU`, `Memory`, `Preemptive`, `Other Disk IO`, `Replication`, `Other`) |
+
+### 6.8 Microsoft IIS (`iis`, D-113)
+
+Integration id `iis` (rule `iis`: Windows service `W3SVC`, `w3wp` worker processes), Windows only; on other OSes the status is `not_available`.
+No endpoint, no credentials (`auto_enable`). The service process (LocalSystem) reads the raw performance counter classes through WMI
+(`SELECT * FROM Win32_PerfRawData_W3SVC_WebService` and `Win32_PerfRawData_APPPOOLCountersProvider_APPPOOLWAS`); raw values are the cumulative
+counts behind the `…/sec` counters. `_Total` instances are skipped. Status: `error` when the Web Service class cannot be read or has no site instance
+(W3SVC stopped, counters not registered: `lodctr /R`); missing application pool counters or properties unknown to the Windows version make the
+collection partial.
+
+Resources: one per site (`iis.site`) and one per application pool (`iis.application_pool`), each with the instance attributes of §6.1.
+
+| Metric | Type | Unit | Attributes | Counter (per site unless noted) |
+|---|---|---|---|---|
+| `iis.connection.active` | Sum, non-monotonic, int | `{connections}` | — | `CurrentConnections` |
+| `iis.connection.anonymous` | Sum, monotonic, int | `{connections}` | — | `TotalAnonymousUsers` |
+| `iis.connection.attempt.count` | Sum, monotonic, int | `{attempts}` | — | `TotalConnectionAttemptsallinstances` |
+| `iis.network.blocked` | Sum, monotonic, int | `By` | — | `TotalBlockedBandwidthBytes` |
+| `iis.network.io` | Sum, monotonic, int | `By` | `direction` = `sent`, `received` | `TotalBytesSent`, `TotalBytesReceived` |
+| `iis.network.file.count` | Sum, monotonic, int | `{files}` | `direction` = `sent`, `received` | `TotalFilesSent`, `TotalFilesReceived` |
+| `iis.request.count` | Sum, monotonic, int | `{requests}` | `request` = `delete`, `get`, `head`, `options`, `post`, `put`, `trace` | `Total<Method>Requests` |
+| `iis.request.not_found.count` *(openlog, not in OTel)* | Sum, monotonic, int | `{requests}` | — | `TotalNotFoundErrors` |
+| `iis.application_pool.state` | Gauge, int | `{state}` | — (resource `iis.application_pool`) | `CurrentApplicationPoolState`: 1 Uninitialized, 2 Initialized, 3 Running, 4 Disabling, 5 Disabled, 6 Shutdown Pending, 7 Delete Pending |
+
+Not collected: `iis.uptime`, `iis.application_pool.uptime` (elapsed-time counters need the performance counter timebase), `iis.request.queue.*`,
+`iis.request.rejected`, `iis.thread.active` (HTTP Service Request Queues / W3SVC_W3WP classes).
+
 ## 7. Kubernetes (infra agent, M4, D-070, D-071)
 
 The infra agent runs in Kubernetes from the `deploy/helm/openlog-agent` chart in two modes ([operations/kubernetes.md](../operations/kubernetes.md)):
@@ -858,3 +921,22 @@ Materialized views on `metrics_local` (schema 0040–0044, like `containers_mv`)
 on `logs_local` for `resource_attributes['k8s.pod.uid']` and `attributes['k8s.object.uid']`. A node links to its host through the host
 resource attributes `k8s.cluster.name` + `k8s.node.name`; a pod links to containers (`containers.container_id`) through
 `openlog.k8s.pod.containers[].container_id` and to APM services through `apm_service_containers` (API: [api.md](api.md) "Kubernetes").
+
+## 8. Metric data points (storage, all resources)
+
+Every OTLP metric is stored in `metrics` (one row per data point) whatever its resource — infra agent, APM agents,
+OpenTelemetry SDKs or collectors; `service_name`, `host_id` and `host_name` are copied from the resource attributes
+`service.name`, `host.id` and `host.name` when present (empty otherwise). Per type (processor `AddMetrics`, D-119):
+
+| OTLP type | `metric_type` | Stored |
+|---|---|---|
+| Gauge | `gauge` | `value` |
+| Sum | `sum` | `value`, `temporality` (`delta`/`cumulative`), `is_monotonic` |
+| Histogram | `histogram` | `count`, `sum`, `value` = mean, `explicit_bounds`, `bucket_counts` (len(bounds)+1), `temporality` |
+| ExponentialHistogram | `exponential_histogram` | `count`, `sum`, `value` = mean, `temporality`; buckets converted to `explicit_bounds`/`bucket_counts`: index i of each sign covers magnitudes (base^i, base^(i+1)] with base = 2^(2^-scale), the zero bucket [-zero_threshold, zero_threshold]; gaps become empty buckets; scales outside -10..20 or more than 1024 buckets store no buckets |
+| Summary | `summary` | `count`, `sum`, `value` = mean, `temporality` = `cumulative`, `quantiles` + `quantile_values` (0081) |
+
+Data points with `FLAG_NO_RECORDED_VALUE` are dropped (reason `no_recorded_value`). Rows written before D-119 have
+exponential histogram `bucket_counts` of the positive buckets only (no bounds) and summaries without quantiles.
+`metrics_1m` rolls up gauges and sums only. The hourly key index `attribute_keys` (0080, D-118) is filled from the
+attribute and resource attribute maps of `logs_local`, `spans_local` and `metrics_local` (per metric name).

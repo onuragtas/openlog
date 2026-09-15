@@ -165,14 +165,22 @@ type planJSON struct {
 	Description string            `json:"description"`
 	Limits      quota.Limits      `json:"limits"`
 	Enforcement quota.Enforcement `json:"enforcement"`
+	// TrialDays > 0: the plan can be trialled (D-106); TrialFallbackPlan is the plan assigned when the trial ends
+	// (the catalog default unless the plan sets one; "" for plans without trials).
+	TrialDays         int    `json:"trial_days"`
+	TrialFallbackPlan string `json:"trial_fallback_plan"`
 }
 
-func toPlanJSON(p quota.Plan) planJSON {
+func toPlanJSON(c *quota.Catalog, p quota.Plan) planJSON {
 	l := p.Limits
 	if l.RetentionDays == nil {
 		l.RetentionDays = map[string]int{}
 	}
-	return planJSON{ID: p.ID, Name: p.Name, Description: p.Description, Limits: l, Enforcement: p.Enforcement}
+	out := planJSON{ID: p.ID, Name: p.Name, Description: p.Description, Limits: l, Enforcement: p.Enforcement, TrialDays: p.TrialDays}
+	if p.TrialDays > 0 && c != nil {
+		out.TrialFallbackPlan = c.TrialFallback(p)
+	}
+	return out
 }
 
 type usagePeriodJSON struct {
@@ -266,7 +274,7 @@ func (s *Server) getUsage(w http.ResponseWriter, r *http.Request, p *auth.Princi
 		"organization":    map[string]string{"id": p.OrgID, "name": p.OrgName, "tenant_id": p.TenantID},
 		"period":          toPeriodJSON(period, until),
 		"saas_mode":       u.SaaS,
-		"plan":            toPlanJSON(plan),
+		"plan":            toPlanJSON(s.usage.Catalog, plan),
 		"plan_assigned":   op.Assigned,
 		"usage":           totals,
 		"stored":          stored,
@@ -426,7 +434,7 @@ func (s *Server) getUsageStatus(w http.ResponseWriter, r *http.Request, p *auth.
 func (s *Server) listPlans(w http.ResponseWriter, _ *http.Request, _ *auth.Principal) error {
 	plans := make([]planJSON, 0, len(s.usage.Catalog.Plans))
 	for _, p := range s.usage.Catalog.Plans {
-		plans = append(plans, toPlanJSON(p))
+		plans = append(plans, toPlanJSON(s.usage.Catalog, p))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"plans": plans, "default": s.usage.Catalog.Default})
 	return nil
@@ -455,7 +463,7 @@ func (s *Server) orgPlanResponse(op quota.OrgPlan) orgPlanJSON {
 		PlanID:       planID, Assigned: op.Assigned, Overrides: op.Overrides, Note: op.Note,
 		Billing: map[string]string{"provider": op.BillingProvider, "customer_id": op.BillingCustomerID,
 			"subscription_id": op.BillingSubscriptionID},
-		UpdatedAt: optTime(op.UpdatedAt), UpdatedBy: op.UpdatedByEmail, Effective: toPlanJSON(eff),
+		UpdatedAt: optTime(op.UpdatedAt), UpdatedBy: op.UpdatedByEmail, Effective: toPlanJSON(s.usage.Catalog, eff),
 	}
 }
 

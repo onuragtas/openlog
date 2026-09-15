@@ -33,6 +33,9 @@ type DataExport struct {
 	S3Region          string // OPENLOG_DATA_EXPORT_S3_REGION, else OPENLOG_S3_REGION, else us-east-1
 	S3AccessKeyID     string // OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID, else OPENLOG_S3_ACCESS_KEY_ID
 	S3SecretAccessKey string // OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY, else OPENLOG_S3_SECRET_ACCESS_KEY
+	// S3Credentials is static (the keys above) or auto (AWS credential chain: env, web identity, ECS, IMDSv2; D-116)
+	// (OPENLOG_DATA_EXPORT_S3_CREDENTIALS; default static when keys are set, else auto).
+	S3Credentials string
 	// TTL is how long a finished archive and its download link stay available (OPENLOG_DATA_EXPORT_TTL).
 	TTL time.Duration
 	// MaxBytes bounds the archive size; the telemetry part stops (truncated) when reached (OPENLOG_DATA_EXPORT_MAX_BYTES).
@@ -75,8 +78,16 @@ func loadPrivacy(p *parser) Privacy {
 	if e.S3Region == "" {
 		e.S3Region = p.str("OPENLOG_S3_REGION", "us-east-1")
 	}
-	if e.S3AccessKeyID == "" && e.S3SecretAccessKey == "" {
+	e.S3Credentials = strings.ToLower(strings.TrimSpace(p.str("OPENLOG_DATA_EXPORT_S3_CREDENTIALS", "")))
+	// With explicit auto the tiered storage keys (ClickHouse's) are not borrowed: the export uses its IAM role.
+	if e.S3AccessKeyID == "" && e.S3SecretAccessKey == "" && e.S3Credentials != "auto" {
 		e.S3AccessKeyID, e.S3SecretAccessKey = p.str("OPENLOG_S3_ACCESS_KEY_ID", ""), p.str("OPENLOG_S3_SECRET_ACCESS_KEY", "")
+	}
+	if e.S3Credentials == "" {
+		e.S3Credentials = "auto"
+		if e.S3AccessKeyID != "" || e.S3SecretAccessKey != "" {
+			e.S3Credentials = "static"
+		}
 	}
 	return Privacy{OrgDeletionGrace: p.duration("OPENLOG_ORG_DELETION_GRACE", 7*24*time.Hour), Export: e}
 }
@@ -141,6 +152,18 @@ func (c Config) validatePrivacy() []error {
 	}
 	if (e.S3AccessKeyID == "") != (e.S3SecretAccessKey == "") {
 		errs = append(errs, errors.New("OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID and OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY must be set together"))
+	}
+	switch e.S3Credentials {
+	case "static":
+		if e.S3AccessKeyID == "" && e.S3SecretAccessKey == "" {
+			errs = append(errs, errors.New("OPENLOG_DATA_EXPORT_S3_CREDENTIALS=static requires OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID and OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY (or OPENLOG_S3_*)"))
+		}
+	case "auto":
+		if e.S3AccessKeyID != "" || e.S3SecretAccessKey != "" {
+			errs = append(errs, errors.New("OPENLOG_DATA_EXPORT_S3_CREDENTIALS=auto uses the AWS credential chain; unset OPENLOG_DATA_EXPORT_S3_ACCESS_KEY_ID/OPENLOG_DATA_EXPORT_S3_SECRET_ACCESS_KEY or use static"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("OPENLOG_DATA_EXPORT_S3_CREDENTIALS: must be static or auto, got %q", e.S3Credentials))
 	}
 	if e.LocalPath == "" || !strings.HasPrefix(e.LocalPath, "/") {
 		errs = append(errs, fmt.Errorf("OPENLOG_DATA_EXPORT_LOCAL_PATH: must be an absolute path, got %q", e.LocalPath))

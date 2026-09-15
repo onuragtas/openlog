@@ -13,6 +13,7 @@ import (
 type fakeKeys struct {
 	mu       sync.Mutex
 	keys     map[string]KeyInfo
+	deleted  map[string]bool // tombstones (hash → org deleted)
 	err      error
 	touchErr error
 	lookups  int
@@ -25,7 +26,17 @@ func hashKey(k string) string {
 	return string(h[:])
 }
 
-func newFake() *fakeKeys { return &fakeKeys{keys: map[string]KeyInfo{}} }
+func newFake() *fakeKeys { return &fakeKeys{keys: map[string]KeyInfo{}, deleted: map[string]bool{}} }
+
+func (f *fakeKeys) tombstone(key string, on bool) {
+	f.mu.Lock()
+	if on {
+		f.deleted[hashKey(key)] = true
+	} else {
+		delete(f.deleted, hashKey(key))
+	}
+	f.mu.Unlock()
+}
 
 func (f *fakeKeys) set(key, id, tenant string) {
 	f.mu.Lock()
@@ -56,11 +67,14 @@ func (f *fakeKeys) LookupLicenseKey(_ context.Context, hs [][]byte) (KeyInfo, er
 	f.lookups++
 	block, err := f.block, f.err
 	var info KeyInfo
-	ok := false
+	ok, tomb := false, false
 	for _, h := range hs {
 		if info, ok = f.keys[string(h)]; ok {
 			break
 		}
+	}
+	for _, h := range hs {
+		tomb = tomb || f.deleted[string(h)]
 	}
 	f.mu.Unlock()
 	if block != nil {
@@ -68,6 +82,9 @@ func (f *fakeKeys) LookupLicenseKey(_ context.Context, hs [][]byte) (KeyInfo, er
 	}
 	if err != nil {
 		return KeyInfo{}, err
+	}
+	if !ok && tomb {
+		return KeyInfo{}, ErrOrgDeleted
 	}
 	if !ok {
 		return KeyInfo{}, ErrUnknownKey
@@ -264,5 +281,33 @@ func TestCachedBoundedSize(t *testing.T) {
 	}
 	if c.Len() > 10 {
 		t.Fatalf("cache grew to %d entries", c.Len())
+	}
+}
+
+func TestCachedOrgDeletedKeyIsNegativeUntilCancelled(t *testing.T) {
+	f := newFake()
+	f.tombstone("gone", true)
+	c, clk := newCache(f, CacheOptions{TTL: time.Minute, NegativeTTL: 10 * time.Second})
+	for i := 0; i < 3; i++ {
+		_, err := c.Resolve(ctx, "gone")
+		if !errors.Is(err, ErrOrgDeleted) || !errors.Is(err, ErrUnknownKey) {
+			t.Fatalf("Resolve = %v, want ErrOrgDeleted (matching ErrUnknownKey)", err)
+		}
+	}
+	if f.count() != 1 {
+		t.Fatalf("lookups = %d, want 1 (cached as a negative entry)", f.count())
+	}
+	if _, err := c.Resolve(ctx, "other"); !errors.Is(err, ErrUnknownKey) || errors.Is(err, ErrOrgDeleted) {
+		t.Fatalf("unknown key: %v", err)
+	}
+	// The deletion is cancelled: the key is active again and the tombstone removed.
+	f.tombstone("gone", false)
+	f.set("gone", "id1", "tenant-1")
+	if _, err := c.Resolve(ctx, "gone"); !errors.Is(err, ErrOrgDeleted) {
+		t.Fatalf("within NegativeTTL: %v", err)
+	}
+	clk.Advance(11 * time.Second)
+	if got, err := c.Resolve(ctx, "gone"); err != nil || got != "tenant-1" {
+		t.Fatalf("after cancel + NegativeTTL = %q, %v", got, err)
 	}
 }

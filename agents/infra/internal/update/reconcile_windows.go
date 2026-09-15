@@ -16,8 +16,6 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
-
-	lib "github.com/onuragtas/openlog/libs/release"
 )
 
 // ServiceCommandLine is the ImagePath of the service: the current link keeps it stable across updates.
@@ -27,11 +25,6 @@ func ServiceCommandLine(installRoot, configPath string) (exe string, args []stri
 
 func (r *reconciler) native(ctx context.Context, prev *ReconcileStatus) {
 	root := r.o.Install.InstallRoot
-	// Packages (MSI) install versions\<v> without touching current: point it at this release unless a newer one
-	// (installed by a self-update) is current.
-	if r.o.Context == ReconcilePackage {
-		r.packageCurrent(root)
-	}
 	// Configuration (license key) and state: SYSTEM and Administrators only.
 	for _, dir := range []string{filepath.Dir(r.o.ConfigPath), r.o.StateDir} {
 		if dir == "" || dir == "." {
@@ -117,26 +110,6 @@ func (r *reconciler) native(ctx context.Context, prev *ReconcileStatus) {
 		}
 	}
 	_ = ctx
-}
-
-// packageCurrent switches current to this release unless current already points at a newer valid version.
-func (r *reconciler) packageCurrent(root string) {
-	mine := r.o.Install.VersionDir
-	if cur, err := CurrentDir(root); err == nil && cur != mine {
-		cv, err1 := lib.ParseVersion(cur)
-		mv, err2 := lib.ParseVersion(mine)
-		if _, statErr := os.Stat(filepath.Join(root, "versions", cur, BinaryName)); err1 == nil && err2 == nil && statErr == nil && lib.Compare(cv, mv) > 0 {
-			r.note("current points at the newer version " + cur + " (self-update); kept")
-			return
-		}
-	} else if err == nil {
-		return
-	}
-	if err := SwitchCurrent(root, mine); err != nil {
-		r.fail("current", err)
-		return
-	}
-	r.note("current switched to " + mine)
 }
 
 // UninstallService stops and deletes the Windows service.

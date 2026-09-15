@@ -3,10 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { BellPlus, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMe } from "@/api/account";
 import { alertPreviewQuery, alertTemplateRenderQuery, alertTemplatesQuery, createAlertRule, type AlertRule, type AlertTemplate, type AlertTemplateParam } from "@/api/alerts";
 import { hostsQuery } from "@/api/queries";
-import { can } from "@/api/roles";
 import { FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -27,6 +25,7 @@ import {
 } from "@/lib/alert-templates";
 import { previewChartData, unitKindFor } from "@/lib/alerts";
 import { formatValue } from "@/lib/format";
+import { usePermissions } from "@/lib/org-writable";
 import { cn } from "@/lib/utils";
 import { SeverityBadge } from "./badges";
 import { Field } from "./fields";
@@ -98,7 +97,7 @@ function ParamInput({ p, value, error, onChange, hostOptions }: { p: AlertTempla
 function TemplateSetup({ template, target, onCreated }: { template: AlertTemplate; target: TemplateTarget; onCreated?: (rule: AlertRule) => void }) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const canWrite = can(useMe().data?.role, "alerts.write");
+  const canWrite = usePermissions().can("alerts.write");
   const params = useMemo(() => editableParams(template, target), [template, target]);
   const [values, setValues] = useState(() => initialValues(params));
   const [created, setCreated] = useState<AlertRule | null>(null);

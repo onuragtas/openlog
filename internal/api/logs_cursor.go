@@ -21,6 +21,8 @@ type logCursor struct {
 	TS  int64  `json:"t"`
 	Key string `json:"k"` // uint64 as a decimal string (JSON numbers lose precision above 2^53)
 	N   int    `json:"n"`
+	// Asc marks cursors of oldest-first listings (POST /api/v1/logs/query order=asc); GET /api/v1/logs rejects them.
+	Asc bool `json:"a,omitempty"`
 }
 
 // logPos is the sort position of one row.
@@ -29,12 +31,18 @@ type logPos struct {
 	key uint64
 }
 
-func encodeLogCursor(p logPos, n int) string {
-	b, _ := json.Marshal(logCursor{V: logCursorVersion, TS: p.ts, Key: strconv.FormatUint(p.key, 10), N: n})
+func encodeLogCursor(p logPos, n int) string { return encodeLogCursorOrder(p, n, false) }
+
+func encodeLogCursorOrder(p logPos, n int, asc bool) string {
+	b, _ := json.Marshal(logCursor{V: logCursorVersion, TS: p.ts, Key: strconv.FormatUint(p.key, 10), N: n, Asc: asc})
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-func decodeLogCursor(s string) (logPos, int, error) {
+// decodeLogCursor decodes a newest-first cursor.
+func decodeLogCursor(s string) (logPos, int, error) { return decodeLogCursorOrder(s, false) }
+
+// decodeLogCursorOrder decodes a cursor of a listing in the given order; a cursor of the other order is invalid.
+func decodeLogCursorOrder(s string, asc bool) (logPos, int, error) {
 	bad := badRequest("cursor: invalid or expired cursor (use next_cursor of a previous response)")
 	if len(s) > 512 {
 		return logPos{}, 0, bad
@@ -44,7 +52,7 @@ func decodeLogCursor(s string) (logPos, int, error) {
 		return logPos{}, 0, bad
 	}
 	var c logCursor
-	if err := json.Unmarshal(raw, &c); err != nil || c.V != logCursorVersion || c.N < 0 || c.N > 1_000_000 {
+	if err := json.Unmarshal(raw, &c); err != nil || c.V != logCursorVersion || c.N < 0 || c.N > 1_000_000 || c.Asc != asc {
 		return logPos{}, 0, bad
 	}
 	key, err := strconv.ParseUint(c.Key, 10, 64)
@@ -58,6 +66,11 @@ func decodeLogCursor(s string) (logPos, int, error) {
 // newest first, and returns the indexes to emit plus the next cursor ("" when there are no more rows).
 // skip is the cursor's n: that many leading rows at exactly the cursor position were returned before.
 func logPage(positions []logPos, cursor *logPos, skip, limit int) (first, end int, next string) {
+	return logPageOrder(positions, cursor, skip, limit, false)
+}
+
+// logPageOrder is logPage for rows in either order (asc: fetched with "(timestamp, l_key) >= cursor").
+func logPageOrder(positions []logPos, cursor *logPos, skip, limit int, asc bool) (first, end int, next string) {
 	i := 0
 	if cursor != nil {
 		for i < len(positions) && skip > 0 && positions[i] == *cursor {
@@ -78,5 +91,5 @@ func logPage(positions []logPos, cursor *logPos, skip, limit int) (first, end in
 		// Every emitted row is at the cursor position: add the rows returned on earlier pages.
 		n += i
 	}
-	return i, end, encodeLogCursor(last, n)
+	return i, end, encodeLogCursorOrder(last, n, asc)
 }

@@ -6,6 +6,7 @@ import { useMe } from "@/api/account";
 import { can } from "@/api/roles";
 import { SSO_TEST_CONNECTION_KEY, ssoConnectionsQuery } from "@/api/sso";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
+import { WriteGuard } from "@/components/ReadOnly";
 import { SsoConnectionForm } from "./SsoConnectionForm";
 import { SsoConnections } from "./SsoConnections";
 import { SsoDomains } from "./SsoDomains";
@@ -64,7 +65,9 @@ export function SsoSettings() {
   // Without connections the wizard is shown directly (key -1 stays when the first connection is saved).
   const target = open ?? (hasConnections ? null : { key: -1, id: null });
 
+  // Read-only organization (suspended, support view): the settings stay visible, every control is disabled.
   return (
+    <WriteGuard block>
     <div className="flex flex-col gap-4">
       {testResult === "ok" && <Notice tone="success">{t("sso.testOk")}</Notice>}
       {testResult === "failed" && <Notice tone="error">{t("sso.testFailed")}</Notice>}
@@ -93,5 +96,6 @@ export function SsoSettings() {
       {hasConnections && <SsoEnforcement state={s} preferredId={target?.id ?? null} />}
       <SsoScimTokens enabled={s.scim_enabled} />
     </div>
+    </WriteGuard>
   );
 }

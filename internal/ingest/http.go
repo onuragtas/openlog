@@ -59,6 +59,10 @@ func (s *Service) httpExport(sig queue.Signal) http.Handler {
 			s.httpError(w, sig, isJSON, http.StatusServiceUnavailable, codes.Unavailable, "authentication temporarily unavailable, retry later")
 			return
 		}
+		if errors.Is(err, tenant.ErrOrgDeleted) { // key revoked by its organization's deletion (D-115)
+			s.httpErrorInfo(w, sig, isJSON, http.StatusForbidden, codes.PermissionDenied, orgDeletedMessage, ReasonOrgDeleted, 0)
+			return
+		}
 		if err != nil {
 			s.httpError(w, sig, isJSON, http.StatusUnauthorized, codes.Unauthenticated, "invalid or missing license key")
 			return

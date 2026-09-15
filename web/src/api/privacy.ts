@@ -68,3 +68,37 @@ export async function cancelOrgDeletion(id: string): Promise<OrgDeletion> {
 export async function deleteAccount(confirmEmail: string, password: string | undefined): Promise<void> {
   expectOk(await api.POST("/api/v1/account/delete", { body: { confirm_email: confirmEmail, password } }));
 }
+
+// ---- operators (superadmins): organization deletions and certificates ----
+
+export type DeletionCertificate = S["DeletionCertificate"];
+
+export const adminOrgDeletionsQuery = () =>
+  queryOptions({
+    queryKey: ["operator", "org-deletions"],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/admin/org-deletions", { params: { query: { limit: 500 } }, signal })).deletions,
+  });
+
+/** Hex sha256 of a tenant id or user id: the subject of a deletion certificate. */
+export async function subjectHash(id: string): Promise<string> {
+  const sum = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id));
+  return Array.from(new Uint8Array(sum), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Deletion certificates of one subject (tenant id or user id), newest first. */
+export const deletionCertificatesQuery = (subjectId: string) =>
+  queryOptions({
+    queryKey: ["operator", "deletion-certificates", subjectId],
+    queryFn: async ({ signal }) => {
+      const hash = await subjectHash(subjectId);
+      return unwrap(await api.GET("/api/v1/admin/deletion-certificates", { params: { query: { subject_hash: hash, limit: 100 } }, signal })).certificates;
+    },
+  });
+
+export async function adminScheduleOrgDeletion(org: string, reason: string, immediate: boolean): Promise<OrgDeletion> {
+  return unwrap(await api.POST("/api/v1/admin/orgs/{org}/deletion", { params: { path: { org } }, body: { reason, immediate } })).deletion;
+}
+
+export async function adminCancelOrgDeletion(id: string): Promise<OrgDeletion> {
+  return unwrap(await api.POST("/api/v1/admin/org-deletions/{id}/cancel", { params: { path: { id } } })).deletion;
+}

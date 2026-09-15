@@ -8,13 +8,17 @@ package update
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
+
+	lib "github.com/onuragtas/openlog/libs/release"
 )
 
 // Service identities.
@@ -102,8 +106,10 @@ type NativeReconcileOptions struct {
 	// Context is ReconcileApply, ReconcilePackage, ReconcileInstall or ReconcileManual.
 	Context      string
 	InvocationID string
-	Log          *slog.Logger
-	Now          func() time.Time
+	// Trusted are the release keys of this binary; context package checks the manifest the package installed with them.
+	Trusted []ed25519.PublicKey
+	Log     *slog.Logger
+	Now     func() time.Time
 }
 
 // ReconcileNative is "-reconcile" on macOS (LaunchDaemon, root-owned layout and directories, CLI link, log rotation)
@@ -139,6 +145,11 @@ func ReconcileNative(ctx context.Context, o NativeReconcileOptions) (*ReconcileS
 	if err != nil {
 		r.fail("install root", err)
 	}
+	if o.Context == ReconcilePackage {
+		// Packages (MSI, pkg) install versions/<v> without touching current and carry a signed manifest of <v>.
+		r.packageCurrent(root)
+		r.packageManifest(root, o.Trusted)
+	}
 	r.native(ctx, &prev) // reconcile_darwin.go, reconcile_windows.go
 	if err := saveStatus(filepath.Join(root, ReconcileStatusFile), r.st); err != nil {
 		r.fail("status", err)
@@ -147,6 +158,75 @@ func ReconcileNative(ctx context.Context, o NativeReconcileOptions) (*ReconcileS
 		return r.st, errors.Join(errors.New(joinErrors(r.st.Errors)))
 	}
 	return r.st, nil
+}
+
+// packageCurrent switches current to this release unless current already points at a newer valid version (installed by
+// a self-update after the package).
+func (r *reconciler) packageCurrent(root string) {
+	mine := r.o.Install.VersionDir
+	if cur, err := CurrentDir(root); err == nil && cur != mine {
+		cv, err1 := lib.ParseVersion(cur)
+		mv, err2 := lib.ParseVersion(mine)
+		if _, statErr := os.Stat(filepath.Join(root, "versions", cur, BinaryName)); err1 == nil && err2 == nil && statErr == nil && lib.Compare(cv, mv) > 0 {
+			r.note("current points at the newer version " + cur + " (self-update); kept")
+			return
+		}
+	} else if err == nil {
+		return
+	}
+	if err := SwitchCurrent(root, mine); err != nil {
+		r.fail("current", err)
+		return
+	}
+	r.note("current switched to " + mine)
+}
+
+// packageManifest checks the signed manifest a package (MSI, pkg) installed next to its binary. The published
+// manifest.json cannot be part of a package (it lists the package's own sha256), so release builds embed a second
+// manifest of the same version listing the zip/tar.gz archives, like deb/rpm. Rule 5 reads rollback_floor from it:
+// without a valid one a backend-ordered rollback from this version is refused. Problems are notes, not errors: the
+// installation itself works.
+func (r *reconciler) packageManifest(root string, trusted []ed25519.PublicKey) {
+	ver := r.o.Install.VersionDir
+	err := CheckVersionManifest(filepath.Join(root, "versions", ver), ver, trusted)
+	switch {
+	case err == nil:
+		return
+	case errors.Is(err, fs.ErrNotExist):
+		r.note("versions/" + ver + " has no manifest.json (package built without an embedded manifest): a rollback ordered from this version is refused until a self-update installs a newer version")
+	default:
+		r.note("versions/" + ver + "/manifest.json is not usable (" + err.Error() + "): a rollback ordered from this version is refused")
+	}
+	r.log.Warn("package manifest not usable for rollback_floor", "version", ver, "error", err)
+}
+
+// CheckVersionManifest verifies <dir>/manifest.json against <dir>/manifest.json.sig with the trusted keys and checks that
+// it is an openlog manifest of version with a rollback_floor. Missing files report fs.ErrNotExist.
+func CheckVersionManifest(dir, version string, trusted []ed25519.PublicKey) error {
+	data, err := readLimited(filepath.Join(dir, ManifestFile), maxManifestBytes)
+	if err != nil {
+		return err
+	}
+	sig, err := readLimited(filepath.Join(dir, SignatureFile), maxSignatureBytes)
+	if err != nil {
+		return err
+	}
+	if len(trusted) == 0 {
+		return errors.New(ErrNoTrustedKeys)
+	}
+	m, _, err := lib.VerifyManifest(data, sig, trusted)
+	if err != nil {
+		return fmt.Errorf("manifest signature: %w", err)
+	}
+	switch {
+	case m.Product != lib.Product:
+		return fmt.Errorf("manifest product %q", m.Product)
+	case m.Version != version:
+		return fmt.Errorf("manifest is for version %s, not %s", m.Version, version)
+	case m.Compatibility.RollbackFloor == "":
+		return fmt.Errorf("manifest of %s has no rollback_floor", version)
+	}
+	return nil
 }
 
 func joinErrors(errs []string) string {

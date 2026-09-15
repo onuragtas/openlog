@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"log/slog"
 	"os"
@@ -71,7 +72,7 @@ func runNativeStartApply(configPath string, explicit bool, ver string) (exit boo
 		},
 		Reconcile: func(ctx context.Context, dir string) error {
 			if dir == "" {
-				_, err := update.ReconcileNative(ctx, nativeReconcileOptions(sys, cfg, install, configPath, ver, update.ReconcileApply, log))
+				_, err := update.ReconcileNative(ctx, nativeReconcileOptions(sys, cfg, install, keys, configPath, ver, update.ReconcileApply, log))
 				return err
 			}
 			args := []string{"-reconcile", "-reconcile-context", update.ReconcileApply}
@@ -91,10 +92,10 @@ func runNativeStartApply(configPath string, explicit bool, ver string) (exit boo
 	return false
 }
 
-func nativeReconcileOptions(sys *update.Sys, cfg *config.Config, install update.Install, configPath, ver, rctx string, log *slog.Logger) update.NativeReconcileOptions {
+func nativeReconcileOptions(sys *update.Sys, cfg *config.Config, install update.Install, keys []ed25519.PublicKey, configPath, ver, rctx string, log *slog.Logger) update.NativeReconcileOptions {
 	return update.NativeReconcileOptions{
 		Sys: sys, Install: install, StateDir: cfg.StateDir, ConfigPath: configPath, Version: ver,
-		Context: rctx, InvocationID: os.Getenv("INVOCATION_ID"), Log: log,
+		Context: rctx, InvocationID: os.Getenv("INVOCATION_ID"), Trusted: keys, Log: log,
 	}
 }
 

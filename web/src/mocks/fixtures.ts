@@ -56,6 +56,42 @@ export function hosts(now: number): Host[] {
   ].sort((a, b) => a.host_name.localeCompare(b.host_name) || a.host_id.localeCompare(b.host_id));
 }
 
+/**
+ * A macOS and a Windows host (D-104) for the OS-specific host cards (D-112). They resolve through GET /hosts/{id} only
+ * and stay out of the host list, so list counts of the Linux fixtures do not change.
+ */
+export const OS_HOST_IDS = {
+  mac: "d4c1a0e0b7f24f7e9a3d0c5b2e6f8a10",
+  win: "e5d2b1f1c8a34a8fab4e1d6c3f7a9b21",
+} as const;
+
+export function osHosts(now: number): Host[] {
+  const base = (id: string, name: string, os: string, pretty: string, version: string, arch: string): Host => ({
+    host_id: id,
+    host_name: name,
+    os_description: pretty,
+    arch,
+    agent_version: "0.4.0",
+    last_seen: formatTs(now - 6_000),
+    resource_attributes: {
+      "host.id": id,
+      "host.name": name,
+      "host.arch": arch,
+      "os.type": os,
+      "os.name": os === "darwin" ? "macOS" : "Windows",
+      "os.version": version,
+      "os.description": pretty,
+      "openlog.entity.type": "host",
+      "openlog.agent.name": "openlog-infra-agent",
+      "openlog.agent.version": "0.4.0",
+    },
+  });
+  return [
+    base(OS_HOST_IDS.mac, "mac-build-1", "darwin", "macOS 15.6 (24G84)", "15.6", "arm64"),
+    base(OS_HOST_IDS.win, "win-iis-1", "windows", "Windows Server 2022 Datacenter", "10.0.20348", "amd64"),
+  ];
+}
+
 // ---- inventory ----
 
 const PKG_NAMES = [

@@ -29,6 +29,8 @@ const (
 	MySQL      = "mysql"
 	PostgreSQL = "postgresql"
 	Docker     = "docker"
+	MSSQL      = "mssql"
+	IIS        = "iis"
 )
 
 // RevisionDisabled is reported by agents configured with integrations.remote_config: false.
@@ -76,6 +78,8 @@ var allowedFields = map[string]field{
 	MySQL:      fEndpoint | fUsername | fPassword,
 	PostgreSQL: fEndpoint | fUsername | fPassword | fDatabase | fDatabases,
 	Docker:     0,
+	MSSQL:      fEndpoint | fUsername | fPassword,
+	IIS:        0,
 }
 
 // Integrations returns the supported integration names, sorted.

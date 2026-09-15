@@ -3,6 +3,8 @@
 // (scripts/install.sh, agents/*/README.md, deploy/helm/openlog-agent, docs/contracts/php-agent.md §7).
 // The license key only ever appears in command text shown to the user; never in a URL.
 
+import { AGENT_CONFIG_DIR, AGENT_CONFIG_PATH, agentRestart, DEFAULT_LOG_PATH, hostLogsYaml, HOST_OSES, SHELL_LANG, yamlPath, type HostOs } from "./host-os";
+
 export const TARGET_IDS = [
   "linux",
   "macos",
@@ -51,6 +53,7 @@ export type OptionKey =
   | "arch"
   | "otelLanguage"
   | "protocol"
+  | "hostOs"
   | "logPath"
   | "journald"
   | "browserOrigin";
@@ -88,16 +91,16 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "apm/java", group: "apm", verify: "apm", options: ["serviceName", "environment", "javaMode"], docs: blob("agents/java/README.md") },
   { id: "apm/dotnet", group: "apm", verify: "apm", options: ["serviceName", "environment", "dotnetApp"], docs: blob("agents/dotnet/README.md") },
   { id: "apm/php", group: "apm", verify: "apm", options: ["serviceName", "environment", "phpMode", "phpPackage", "arch"], docs: blob("docs/contracts/php-agent.md"), requires: ["linux"] },
-  { id: "logs/host", group: "logs", verify: "logs", options: ["logPath", "journald"], docs: blob("agents/infra/README.md#logs"), requires: INFRA_HOSTS },
+  { id: "logs/host", group: "logs", verify: "logs", options: ["hostOs", "logPath", "journald"], docs: blob("agents/infra/README.md#logs"), requires: INFRA_HOSTS },
   { id: "logs/containers", group: "logs", verify: "logs", options: [], docs: blob("agents/infra/README.md#logs"), requires: ["linux"] },
   { id: "logs/browser", group: "logs", verify: "logs", options: ["serviceName", "environment", "browserOrigin"], docs: blob("docs/contracts/config.md") },
   { id: "logs/otel", group: "logs", verify: "logs", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
   { id: "otel/sdk", group: "opentelemetry", verify: "apm", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
   { id: "otel/collector", group: "opentelemetry", verify: "apm", options: ["protocol"], docs: blob("README.md") },
-  { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
-  { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
-  { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
-  { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: [], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
 ];
 
 export function findTarget(id: string | undefined): InstallTarget | undefined {
@@ -159,7 +162,10 @@ export interface InstallOptions {
   arch: "amd64" | "arm64";
   otelLanguage: "node" | "python" | "java" | "dotnet" | "go" | "other";
   protocol: "http" | "grpc";
+  /** OS of the host the infra agent runs on (host logs and integration cards; prefilled from the host's os.type). */
+  hostOs: HostOs;
   logPath: string;
+  /** Also read the host's system log: journald (Linux), unified log (macOS) or Event Log (Windows). */
   journald: boolean;
   browserOrigin: string;
 }
@@ -182,7 +188,8 @@ export const DEFAULT_OPTIONS: InstallOptions = {
   arch: "amd64",
   otelLanguage: "node",
   protocol: "http",
-  logPath: "/var/log/myapp/*.log",
+  hostOs: "linux",
+  logPath: DEFAULT_LOG_PATH.linux,
   journald: false,
   browserOrigin: "",
 };
@@ -264,7 +271,10 @@ export type NoteKey =
   | "macosService"
   | "windowsService"
   | "windowsMsi"
-  | "otherHostOs"
+  | "windowsElevated"
+  | "macosRoot"
+  | "homebrewLogs"
+  | "iisLogs"
   | "dockerGroup"
   | "dockerImageTag"
   | "helmChartSource"
@@ -663,17 +673,35 @@ function apmPhp(c: Ctx) {
 
 // ---- logs ----
 
+/** The host OS of a card; values other than the three agent OSes fall back to Linux. */
+function osOf(c: Ctx): HostOs {
+  return HOST_OSES.includes(c.o.hostOs) ? c.o.hostOs : "linux";
+}
+
+/** Restart of the infra agent on the card's host OS, with the notes the OS needs. */
+function restartAgent(c: Ctx, os: HostOs) {
+  const r = agentRestart(os);
+  add(c, "restart", r.lang, r.code);
+  if (os === "windows") note(c, "windowsElevated");
+}
+
 function logsHost(c: Ctx) {
-  const lines = ["# /etc/openlog-infra-agent/config.yaml", "logs:", "  enabled: true", "  files:", `    - path: ${yamlQuote(c.o.logPath.trim() || DEFAULT_OPTIONS.logPath)}`];
-  if (c.o.journald) lines.push("  journald:", "    enabled: true");
-  add(c, "agentConfig", "yaml", lines.join("\n"));
-  if (c.o.journald) {
+  const os = osOf(c);
+  // The log path option starts with the Linux example; another OS gets its own example unless the user typed a path.
+  const typed = c.o.logPath.trim();
+  const path = !typed || (os !== "linux" && typed === DEFAULT_LOG_PATH.linux) ? DEFAULT_LOG_PATH[os] : typed;
+  add(c, "agentConfig", "yaml", hostLogsYaml(os, path, c.o.journald));
+  if (c.o.journald && os === "linux") {
     add(c, "journalAccess", "sh", "sudo usermod -aG systemd-journal openlog-agent");
     note(c, "journaldGroup");
   }
-  add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+  restartAgent(c, os);
   note(c, "mergeConfig");
-  note(c, "otherHostOs");
+  if (os === "darwin") {
+    note(c, "macosRoot");
+    if (path === DEFAULT_LOG_PATH.darwin) note(c, "homebrewLogs");
+  }
+  if (os === "windows" && path === DEFAULT_LOG_PATH.windows) note(c, "iisLogs");
 }
 
 function logsContainers(c: Ctx) {
@@ -844,10 +872,39 @@ function collector(c: Ctx) {
 
 // ---- integrations ----
 
-const PASSWORD_FILE = (name: string) =>
-  [`sudo install -m 0600 -o openlog-agent -g openlog-agent /dev/null /etc/openlog-infra-agent/${name}.password`, `sudoedit /etc/openlog-infra-agent/${name}.password`].join("\n");
+/** A password file only the agent can read: the openlog-agent user on Linux, root on macOS, SYSTEM and Administrators on Windows. */
+function passwordFile(os: HostOs, name: string): string {
+  const file = os === "windows" ? `${AGENT_CONFIG_DIR.windows}\\${name}.password` : `${AGENT_CONFIG_DIR[os]}/${name}.password`;
+  switch (os) {
+    case "darwin":
+      return [`sudo install -m 0600 -o root -g wheel /dev/null ${file}`, `sudo -e ${file}`].join("\n");
+    case "windows":
+      return [
+        `$f = ${psQuote(file)}`,
+        "Set-Content -Path $f -Value '<password>' -NoNewline",
+        "# SYSTEM and Administrators only (well-known SIDs work on every Windows language)",
+        "icacls $f /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)'",
+      ].join("\n");
+    default:
+      return [`sudo install -m 0600 -o openlog-agent -g openlog-agent /dev/null ${file}`, `sudoedit ${file}`].join("\n");
+  }
+}
+
+/** `integrations.<name>` with a username and a password file. */
+function integrationConfig(os: HostOs, name: string): string {
+  const file = os === "windows" ? `${AGENT_CONFIG_DIR.windows}\\${name}.password` : `${AGENT_CONFIG_DIR[os]}/${name}.password`;
+  return [`# ${AGENT_CONFIG_PATH[os]}`, "integrations:", `  ${name}:`, "    username: openlog", `    password: ${os === "windows" ? yamlPath(`file:${file}`) : `file:${file}`}`].join("\n");
+}
+
+const NGINX_RELOAD: Record<HostOs, string> = {
+  linux: "sudo nginx -t && sudo systemctl reload nginx",
+  darwin: "nginx -t && nginx -s reload",
+  windows: "nginx -t; if ($LASTEXITCODE -eq 0) { nginx -s reload }",
+};
 
 function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
+  const os = osOf(c);
+  const shell = SHELL_LANG[os];
   note(c, "integrationUi");
   switch (id) {
     case "nginx":
@@ -865,14 +922,14 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
           "}",
         ].join("\n"),
       );
-      add(c, "restart", "sh", "sudo nginx -t && sudo systemctl reload nginx");
+      add(c, "restart", shell, NGINX_RELOAD[os]);
       note(c, "integrationAuto");
       break;
     case "redis":
-      add(c, "redisAcl", "sh", "redis-cli ACL SETUSER openlog on '><password>' +info +ping");
-      add(c, "passwordFile", "sh", PASSWORD_FILE("redis"));
-      add(c, "agentConfig", "yaml", ["# /etc/openlog-infra-agent/config.yaml", "integrations:", "  redis:", "    username: openlog", "    password: file:/etc/openlog-infra-agent/redis.password"].join("\n"));
-      add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+      add(c, "redisAcl", shell, "redis-cli ACL SETUSER openlog on '><password>' +info +ping");
+      add(c, "passwordFile", shell, passwordFile(os, "redis"));
+      add(c, "agentConfig", "yaml", integrationConfig(os, "redis"));
+      restartAgent(c, os);
       note(c, "redisAclOptional");
       note(c, "passwordPlaceholder");
       break;
@@ -889,9 +946,9 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
           "GRANT SELECT ON performance_schema.* TO 'openlog'@'localhost';",
         ].join("\n"),
       );
-      add(c, "passwordFile", "sh", PASSWORD_FILE("mysql"));
-      add(c, "agentConfig", "yaml", ["# /etc/openlog-infra-agent/config.yaml", "integrations:", "  mysql:", "    username: openlog", "    password: file:/etc/openlog-infra-agent/mysql.password"].join("\n"));
-      add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+      add(c, "passwordFile", shell, passwordFile(os, "mysql"));
+      add(c, "agentConfig", "yaml", integrationConfig(os, "mysql"));
+      restartAgent(c, os);
       note(c, "passwordPlaceholder");
       break;
     case "postgresql":
@@ -901,19 +958,14 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
         "sql",
         ["-- PostgreSQL 10+", "CREATE ROLE openlog WITH LOGIN PASSWORD '<password>' CONNECTION LIMIT 3;", "GRANT pg_monitor TO openlog;"].join("\n"),
       );
-      add(c, "passwordFile", "sh", PASSWORD_FILE("postgresql"));
-      add(
-        c,
-        "agentConfig",
-        "yaml",
-        ["# /etc/openlog-infra-agent/config.yaml", "integrations:", "  postgresql:", "    username: openlog", "    password: file:/etc/openlog-infra-agent/postgresql.password"].join("\n"),
-      );
-      add(c, "restart", "sh", "sudo systemctl restart openlog-infra-agent");
+      add(c, "passwordFile", shell, passwordFile(os, "postgresql"));
+      add(c, "agentConfig", "yaml", integrationConfig(os, "postgresql"));
+      restartAgent(c, os);
       note(c, "passwordPlaceholder");
       break;
   }
   note(c, "mergeConfig");
-  note(c, "otherHostOs");
+  if (os === "darwin") note(c, "macosRoot");
 }
 
 /**
