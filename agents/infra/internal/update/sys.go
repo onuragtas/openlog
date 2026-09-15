@@ -39,6 +39,9 @@ type Sys struct {
 	// SelfTestAsCurrent runs candidate self-tests with the identity of the privileged process instead of the agent
 	// user: macOS and Windows services run as root / LocalSystem (D-104).
 	SelfTestAsCurrent bool
+	// TrustTree replaces the ownership check of TrustedTree when set. Only tests set it: on Windows the check reads
+	// ACLs, which temporary directories of a test run cannot satisfy.
+	TrustTree func(dir string) bool
 }
 
 // HostSys is the real host.
@@ -71,6 +74,9 @@ func (s *Sys) trustedInfo(path string, fi fs.FileInfo) bool {
 // trustedTree reports whether dir and everything below it are trusted directories and regular files
 // (no symlinks, devices or files another user can modify).
 func (s *Sys) trustedTree(dir string) bool {
+	if s.TrustTree != nil {
+		return s.TrustTree(dir)
+	}
 	ok := true
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {

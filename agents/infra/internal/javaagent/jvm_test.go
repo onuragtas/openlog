@@ -3,6 +3,7 @@ package javaagent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -29,6 +30,10 @@ func TestParseManifestMF(t *testing.T) {
 }
 
 func TestInspectorLoadedVersion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// The inspector runs with goos "linux" on POSIX paths; Windows paths are covered by the windows inspector test.
+		t.Skip("Linux inspector paths; see the windows inspector test")
+	}
 	e := newEnv(t)
 	t0 := time.Date(2026, 9, 15, 8, 0, 0, 0, time.UTC)
 	st := &Status{Version: "1.1.0", Previous: "1.0.0",

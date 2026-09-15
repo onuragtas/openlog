@@ -43,6 +43,10 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$STAGE/modules" "$STAGE/bin" "$WORK/src" "$WORK/logs"
 rsync -a --exclude modules --exclude '*.o' --exclude '*.lo' --exclude .libs --exclude autom4te.cache \
   --exclude tests --exclude fuzz --exclude build "$PHP_DIR/ext/" "$WORK/src/"
+# The module reports PHP_OPENLOG_VERSION (phpinfo, telemetry.distro.version): stamp the release version into the copy.
+sed -i.orig "s/^#define PHP_OPENLOG_VERSION \".*\"$/#define PHP_OPENLOG_VERSION \"$VERSION\"/" "$WORK/src/php_openlog.h"
+rm -f "$WORK/src/php_openlog.h.orig"
+grep -q "^#define PHP_OPENLOG_VERSION \"$VERSION\"$" "$WORK/src/php_openlog.h" || { echo "cannot stamp PHP_OPENLOG_VERSION=$VERSION" >&2; exit 1; }
 
 # pull_image <image> [--platform <p>]: a local image is enough; otherwise up to four pulls with backoff, so a transient
 # registry or network error (Docker Hub token requests time out on CI runners) does not fail the whole release.

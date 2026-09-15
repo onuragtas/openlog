@@ -79,8 +79,14 @@ func testManifest(t *testing.T, version, baseURL string, jar []byte, floor strin
 func signLine(data []byte, k testKey) []byte { return []byte(lib.SignatureLine(data, k.priv) + "\n") }
 
 func testSys() *update.Sys {
-	return &update.Sys{Root: "/", RootUID: os.Getuid(), RootGID: os.Getgid(), IsRoot: func() bool { return true },
+	sys := &update.Sys{Root: "/", RootUID: os.Getuid(), RootGID: os.Getgid(), IsRoot: func() bool { return true },
 		Lchown: func(string, int, int) error { return nil }}
+	if runtime.GOOS == "windows" {
+		// TrustedTree reads ACLs on Windows; temporary directories of a test run are not SYSTEM/Administrators-only.
+		// Unix keeps the real ownership check (RootUID/RootGID = the test user).
+		sys.TrustTree = func(string) bool { return true }
+	}
+	return sys
 }
 
 // env is one host: install root, link path, state dir and infra install root below a temp dir.
