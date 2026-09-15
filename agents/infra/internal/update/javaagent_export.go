@@ -21,7 +21,7 @@ func (s *Sys) TrustedDir(dir string) error {
 		if err != nil {
 			return err
 		}
-		if !fi.IsDir() || !s.trustedAncestor(d, fi) {
+		if !fi.IsDir() || !s.trustedParent(d, fi) {
 			return fmt.Errorf("directory %s is writable by a non-root user", d)
 		}
 		if filepath.Dir(d) == d {

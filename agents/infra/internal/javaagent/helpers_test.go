@@ -84,7 +84,7 @@ func testSys() *update.Sys {
 	if runtime.GOOS == "windows" {
 		// TrustedTree reads ACLs on Windows; temporary directories of a test run are not SYSTEM/Administrators-only.
 		// Unix keeps the real ownership check (RootUID/RootGID = the test user).
-		sys.TrustTree = func(string) bool { return true }
+		sys.TrustPath = func(string) bool { return true }
 	}
 	return sys
 }

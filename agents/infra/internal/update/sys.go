@@ -39,9 +39,10 @@ type Sys struct {
 	// SelfTestAsCurrent runs candidate self-tests with the identity of the privileged process instead of the agent
 	// user: macOS and Windows services run as root / LocalSystem (D-104).
 	SelfTestAsCurrent bool
-	// TrustTree replaces the ownership check of TrustedTree when set. Only tests set it: on Windows the check reads
-	// ACLs, which temporary directories of a test run cannot satisfy.
-	TrustTree func(dir string) bool
+	// TrustPath replaces the ownership checks of files and of the directories above them (TrustedTree, TrustedFile,
+	// TrustedDir, TrustedRegular) when set. Only tests set it: on Windows the checks read ACLs, which temporary
+	// directories of a test run cannot satisfy.
+	TrustPath func(path string) bool
 }
 
 // HostSys is the real host.
@@ -68,15 +69,24 @@ func (s *Sys) path(p string) string { return filepath.Join(s.Root, p) }
 // trustedInfo reports whether the file at path (described by fi) belongs to the trusted owner and cannot be
 // modified by anyone else (POSIX: not writable by group or others; Windows: ACL, see platform_windows.go).
 func (s *Sys) trustedInfo(path string, fi fs.FileInfo) bool {
+	if s.TrustPath != nil {
+		return s.TrustPath(path)
+	}
 	return s.trustedOwnerAndMode(path, fi)
+}
+
+// trustedParent reports whether a directory above a trusted file lets nobody but the trusted owner replace, rename
+// or re-permission its entries (trustedAncestor per platform; TrustPath in tests).
+func (s *Sys) trustedParent(path string, fi fs.FileInfo) bool {
+	if s.TrustPath != nil {
+		return s.TrustPath(path)
+	}
+	return s.trustedAncestor(path, fi)
 }
 
 // trustedTree reports whether dir and everything below it are trusted directories and regular files
 // (no symlinks, devices or files another user can modify).
 func (s *Sys) trustedTree(dir string) bool {
-	if s.TrustTree != nil {
-		return s.TrustTree(dir)
-	}
 	ok := true
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -114,7 +124,7 @@ func (s *Sys) TrustedFile(path string) error {
 		if err != nil {
 			return err
 		}
-		if !s.trustedAncestor(d, fi) {
+		if !s.trustedParent(d, fi) {
 			return fmt.Errorf("directory %s of %s is writable by a non-root user", d, real)
 		}
 		if filepath.Dir(d) == d {
