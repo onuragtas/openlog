@@ -16,7 +16,7 @@ x-php-common: &php-common
   environment: &php-env
     OPENLOG_AGENT: ${OPENLOG_AGENT:-on}
     OPENLOG_ENVIRONMENT: demo
-    OPENLOG_TT_THRESHOLD_MS: ${OPENLOG_TT_THRESHOLD_MS:-500}
+    OPENLOG_TT_THRESHOLD_MS: ${OPENLOG_TT_THRESHOLD_MS:-10}
     REDIS_HOST: redis
   # TCP probe (no PHP request, so no health-check traces): FPM on 9000, Apache on 80.
   healthcheck:

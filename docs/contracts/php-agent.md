@@ -162,7 +162,7 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
 - The extension records a **bounded segment tree** of userland function calls for every sampled request, in memory only.
   The tree is built from **wall-clock stack samples** taken every `min_segment_ms` and at the start and end of every
   instrumented span (observing every call costs ~60 ns per call, > 1 ms on a framework request; measured).
-- It is **sent only if** the transaction duration ≥ `openlog.transaction_tracer.threshold_ms` (default **500 ms**) or the
+- It is **sent only if** the transaction duration ≥ `openlog.transaction_tracer.threshold_ms` (default **10 ms**) or the
   transaction ended with an error; otherwise discarded at request end.
 - Limits: `openlog.transaction_tracer.max_segments` (default **2000**), `min_segment_ms` (default **1 ms**; the sampling
   interval after the first 100 ms of a request, 10 ms before (D-057); calls shorter than it appear only when a sample
@@ -174,7 +174,7 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
   segment is based on; start/end are ± half an interval).
 - Internal functions are traced only when in the instrumented set (datastores, HTTP, `sleep`/`usleep`, `file_*` on
   remote streams) — they appear as their own client/internal spans, not as function segments.
-- Overhead budget (enforced by benchmarks in CI): tracer disabled ≤ 3 % RPS; enabled with default thresholds ≤ 7 % RPS on
+- Overhead budget (enforced by benchmarks in CI): tracer disabled ≤ 3 % RPS; enabled (threshold 500 ms, the default until 0.1.36) ≤ 7 % RPS on
   the reference Laravel app. Measured state and method: `agents/php/ext/README.md` "Overhead" (D-057). On PHP 8 the
   Observer API itself costs every function call ~100 CPU instructions on 8.0–8.3 and ~50–65 on 8.4 once any fcall
   observer is registered, independent of what the observer does; `openlog.userland_hooks=0` avoids it (§4).
@@ -190,7 +190,7 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
 | `openlog.sampling_ratio` | `1.0` (parent-based: an incoming sampled `traceparent` is always recorded) |
 | `openlog.capture_query_text` | `sanitized` (`raw`, `off`) |
 | `openlog.transaction_tracer.enabled` | `1` |
-| `openlog.transaction_tracer.threshold_ms` | `500` |
+| `openlog.transaction_tracer.threshold_ms` | `10` |
 | `openlog.transaction_tracer.max_segments` | `2000` |
 | `openlog.transaction_tracer.min_segment_ms` | `1` |
 | `openlog.transaction_tracer.max_memory_kb` | `4096` |

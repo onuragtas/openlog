@@ -39,7 +39,8 @@ echo "samples>=1: ", $build['attrs']['openlog.php.samples'] >= 1 ? 'yes' : 'no',
 echo "load covers its usleep (>=290 ms): ", $load['dur'] >= 290000000 ? 'yes' : 'no (' . $load['dur'] . ')', "\n";
 echo "line: ", $build['attrs']['code.line.number'], " file set: ", $build['attrs']['code.file.path'] !== '' ? 'yes' : 'no', "\n";
 
-$r = ol_run($code, ['env' => ['SLOW' => '0']]);
+// ~20 ms (helper's usleep), below an explicit 500 ms threshold
+$r = ol_run($code, ['env' => ['SLOW' => '0'], 'ini' => ['openlog.transaction_tracer.threshold_ms' => '500']]);
 $t = ol_one_trace($r);
 echo "fast request: function_trace=", var_export($t['function_trace'], true), " spans=", count($t['spans']), "\n";
 

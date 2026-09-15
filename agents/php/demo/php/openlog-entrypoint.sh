@@ -3,7 +3,7 @@
 #   OPENLOG_AGENT          on (default) | off (extension loaded, transaction tracer disabled) | none (not loaded)
 #   OPENLOG_SERVICE_NAME   service.name of this container
 #   OPENLOG_TRANSPORT      default unix:///run/openlog-infra-agent/php.sock
-#   OPENLOG_TT_THRESHOLD_MS transaction tracer threshold (default 500)
+#   OPENLOG_TT_THRESHOLD_MS transaction tracer threshold (default 10)
 #   OPENLOG_INI_EXTRA      extra ini lines (newline separated), appended verbatim
 # Images built with OPENLOG_EXT=0 have no openlog.so: the ini stays empty and the apps run uninstrumented.
 set -e
@@ -28,7 +28,7 @@ else
     echo "openlog.environment = \"${OPENLOG_ENVIRONMENT:-demo}\""
     echo "openlog.transport = \"${OPENLOG_TRANSPORT:-unix:///run/openlog-infra-agent/php.sock}\""
     echo "openlog.transaction_tracer.enabled = $tracer"
-    echo "openlog.transaction_tracer.threshold_ms = ${OPENLOG_TT_THRESHOLD_MS:-500}"
+    echo "openlog.transaction_tracer.threshold_ms = ${OPENLOG_TT_THRESHOLD_MS:-10}"
     [ -n "$OPENLOG_INI_EXTRA" ] && printf '%s\n' "$OPENLOG_INI_EXTRA"
   } > "$ini"
   echo "[openlog-entrypoint] openlog.so enabled: service=${OPENLOG_SERVICE_NAME:-php-app} tracer=$tracer" >&2

@@ -7,7 +7,8 @@ CLI transaction: kind 1, "php <script>", resource, openlog.php.cli
 require __DIR__ . '/inc/harness.php';
 $r = ol_run('<?php echo "hello\n";', [
     'env' => ['OPENLOG_SERVICE_NAME' => 'cli-svc', 'OPENLOG_ENVIRONMENT' => 'test'],
-    'ini' => ['openlog.service_version' => '1.2.3'],
+    // explicit threshold: a slow CI runner must not turn this short script into a function trace
+    'ini' => ['openlog.service_version' => '1.2.3', 'openlog.transaction_tracer.threshold_ms' => '500'],
 ]);
 echo $r['out'];
 $t = ol_one_trace($r);

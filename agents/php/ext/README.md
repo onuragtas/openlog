@@ -156,7 +156,7 @@ Development helpers (copy the source to a scratch directory, build inside the of
 | `openlog.sampling_ratio` | `1.0` | all | head sampling; a sampled incoming `traceparent` is always recorded, an unsampled one never |
 | `openlog.capture_query_text` | `sanitized` | all | `raw`, `off` |
 | `openlog.transaction_tracer.enabled` | `1` | system, perdir | function-level segments |
-| `openlog.transaction_tracer.threshold_ms` | `500` | all | segments are sent when the transaction takes at least this long or failed |
+| `openlog.transaction_tracer.threshold_ms` | `10` | all | segments are sent when the transaction takes at least this long or failed |
 | `openlog.transaction_tracer.max_segments` | `2000` | all | |
 | `openlog.transaction_tracer.min_segment_ms` | `1` | all | stack sampling interval; calls shorter than it appear only when a sample hits them |
 | `openlog.transaction_tracer.max_memory_kb` | `4096` | all | |

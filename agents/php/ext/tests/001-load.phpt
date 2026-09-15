@@ -29,7 +29,7 @@ is_sampled yes
 stats yes
 openlog.enabled=1
 openlog.transaction_tracer.enabled=1
-openlog.transaction_tracer.threshold_ms=500
+openlog.transaction_tracer.threshold_ms=10
 openlog.transaction_tracer.max_segments=2000
 openlog.transaction_tracer.min_segment_ms=1
 openlog.transaction_tracer.max_memory_kb=4096

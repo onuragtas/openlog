@@ -45,7 +45,7 @@ Useful knobs (environment of `make up`):
 | variable | default | effect |
 |---|---|---|
 | `OPENLOG_AGENT` | `on` | `on` / `off` (extension loaded, transaction tracer disabled) / `none` (not loaded) |
-| `OPENLOG_TT_THRESHOLD_MS` | `500` | `openlog.transaction_tracer.threshold_ms` |
+| `OPENLOG_TT_THRESHOLD_MS` | `10` | `openlog.transaction_tracer.threshold_ms` |
 | `OPENLOG_DEBUG_DUMP` | `0` | `debug-forwarder` only: `1` prints every message and converted span; `2` also raw JSON |
 | `OPENLOG_ENDPOINT` / `OPENLOG_LICENSE_KEY` | `http://openlog:4318` / `dev-license-key` | export target |
 | `OPENLOG_NETWORK` | `openlog_default` | external network of the shared openlog |
