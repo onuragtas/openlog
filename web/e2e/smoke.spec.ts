@@ -59,16 +59,24 @@ test("logs load older pages; big traces are virtualized", async ({ page }) => {
   await expect(page).toHaveURL(/\/logs/);
 
   // 400 host log records plus container, trace and Kubernetes logs from other mocks in 24h, 200 per page.
-  await expect(page.getByText("Newest 200 records")).toBeVisible();
+  await expect(page.getByText("200 records loaded", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Load older logs" }).click();
-  await expect(page.getByText(/Newest (399|400) records/)).toBeVisible();
-  // The last full page may need one more request to learn there is nothing older.
+  await expect(page.getByText(/^(399|400) records loaded$/)).toBeVisible();
+  // Keep paging until the range is exhausted (the explorer mock has several hundred records in 24h).
   const more = page.getByRole("button", { name: "Load older logs" });
-  if (await more.isVisible()) await more.click();
-  await expect(page.getByText("No older logs in this range")).toBeAttached();
-  await expect(page.getByText(/Newest 4[0-9]{2} records/)).toBeVisible();
+  const none = page.getByText("No older logs in this range");
+  const loaded = page.getByText(/^[0-9]+ records loaded$/);
+  for (let pages = 2; ; pages++) {
+    await expect(more.or(none)).toBeVisible();
+    if (await none.isVisible()) break;
+    expect(pages).toBeLessThan(10);
+    const before = await loaded.textContent();
+    await more.click();
+    await expect(loaded).not.toHaveText(before ?? "");
+  }
+  expect(Number((await loaded.textContent())?.split(" ")[0])).toBeGreaterThan(400);
   // Only visible rows are in the DOM.
-  expect(await page.locator('[data-testid="log-scroll"] [role="row"]').count()).toBeLessThan(120);
+  expect(await page.locator('[data-testid="explorer-scroll"] [role="row"]').count()).toBeLessThan(120);
 
   await page.goto("/traces/b16b16b16b16b16b16b16b16b16b16b1");
   await expect(page.getByText("12000 spans")).toBeVisible();

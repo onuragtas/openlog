@@ -107,6 +107,10 @@ func testRows(tenant string, n int, now time.Time) map[string][][]any {
 		rows[TableInventoryItems] = append(rows[TableInventoryItems], it.Values())
 		sn := InventorySnapshotRow{TenantID: tenant, HostID: host, SnapshotID: "s1", SnapshotTime: ts, ItemCount: 1}
 		rows[TableInventorySnapshots] = append(rows[TableInventorySnapshots], sn.Values())
+		// usage_ingest_1h is sharded by cityHash64(tenant_id, signal) and sums rows with the same (tenant_id, hour,
+		// signal): one distinct signal value per row keeps the rows apart and spreads them over both shards.
+		u := UsageIngestRow{TenantID: tenant, Hour: now.Truncate(time.Hour), Signal: "signal-" + strconv.Itoa(i), Requests: 1, Bytes: uint64(100 + i)}
+		rows[TableUsageIngest] = append(rows[TableUsageIngest], u.Values())
 	}
 	return rows
 }

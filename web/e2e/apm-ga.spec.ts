@@ -41,7 +41,9 @@ test("APM GA: error inbox workflow, comments and the organization-wide inbox", a
 test("APM GA: log → trace → logs of the trace, and span links", async ({ page }) => {
   // "checkout flow" log records carry the mock trace and its span ids (mocks/handlers.ts).
   await signIn(page, "/logs?q=checkout%20flow");
-  await page.getByRole("link", { name: /^View trace / }).first().click();
+  // The explorer table links a record with a span id to that span (below); the record details link the whole trace.
+  await page.getByRole("button", { name: /^Open log details/ }).first().click();
+  await page.getByRole("link", { name: "View trace", exact: true }).click();
   await expect(page).toHaveURL(/\/traces\/[0-9a-f]{32}/);
   const panel = page.getByTestId("trace-logs");
   await expect(panel.getByRole("heading", { name: "Logs for this trace" })).toBeVisible();

@@ -512,7 +512,7 @@ services:
   # For testing only; production uses a real bucket (OPENLOG_S3_ENDPOINT) without this profile.
   minio:
     profiles: ["tiered"]
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     hostname: minio
     command: ["server", "/data"]
     environment:
@@ -529,7 +529,7 @@ services:
 
   minio-init:
     profiles: ["tiered"]
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     entrypoint: ["/bin/sh", "-c"]
     command:
       - mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc mb -p local/openlog-cold

@@ -67,7 +67,7 @@ test("integrations: overview, Redis panel with alert preset, needs-configuration
   await expect(help.getByText("A password is saved. Leave empty to keep it.")).toBeVisible();
   const manual = help.getByTestId("integration-manual-config");
   await manual.getByText("Manual configuration (config.yaml)").click();
-  await expect(manual.locator("pre")).toContainText("env:OPENLOG_REDIS_PASSWORD");
+  await expect(manual.getByLabel("Configuration snippet")).toContainText("env:OPENLOG_REDIS_PASSWORD");
   await manual.getByRole("button", { name: "Copy snippet" }).click();
   await expect(manual.getByRole("button", { name: "Copied" })).toBeVisible();
   await expect(page.getByRole("switch", { name: "Collect Redis metrics on this host" })).toHaveAttribute("aria-checked", "true");

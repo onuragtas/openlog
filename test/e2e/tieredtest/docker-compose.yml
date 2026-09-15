@@ -40,7 +40,7 @@ x-ch-env: &ch-env
 
 services:
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     hostname: minio
     command: ["server", "/data"]
     environment:
@@ -55,7 +55,7 @@ services:
       retries: 40
 
   minio-init:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     entrypoint: ["/bin/sh", "-c"]
     command:
       # openlog-backup: target of the BACKUP ... TO S3 / RESTORE phase (TIEREDTEST_BACKUP=1), separate from the data bucket.

@@ -11,7 +11,8 @@ services:
     environment:
       CLICKHOUSE_USER: openlog
       CLICKHOUSE_PASSWORD: openlog
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+      # internal/oql creates its read-only user oql_ro (CREATE USER / GRANT) as openlog.
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     volumes:
       - ../../../deploy/compose/clickhouse/openlog-cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
     ulimits:

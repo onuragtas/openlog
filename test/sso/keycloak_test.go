@@ -427,8 +427,10 @@ func (h *harness) updateClient(match func(client map[string]any) bool, mutate fu
 func oidcClient(c map[string]any) bool { return c["clientId"] == "openlog" }
 func samlClient(c map[string]any) bool { return c["protocol"] == "saml" }
 
-// logoutAtKeycloak ends a user's Keycloak sessions over the admin API; Keycloak notifies the clients through their
-// back-channel logout URLs.
+// logoutAtKeycloak ends every Keycloak session of a user, one session at a time over the admin API; Keycloak notifies
+// the clients of each session through their back-channel logout URLs. POST /users/{id}/logout is not used: Keycloak
+// 26.3 ends all sessions of the user there but sends the back-channel logout for only one of them, so with a session
+// left over from an earlier subtest the session of this subtest's browser was never notified.
 func (h *harness) logoutAtKeycloak(username string) {
 	h.t.Helper()
 	token := h.keycloakAdminToken()
@@ -439,8 +441,17 @@ func (h *harness) logoutAtKeycloak(username string) {
 	if err := json.Unmarshal(data, &users); err != nil || len(users) != 1 {
 		h.t.Fatalf("keycloak user %s: %s", username, data)
 	}
-	if out, code := h.keycloakAdmin(token, http.MethodPost, "/users/"+users[0].ID+"/logout", "", nil); code != http.StatusNoContent {
-		h.t.Fatalf("keycloak logout of %s: %d %s", username, code, out)
+	data, code := h.keycloakAdmin(token, http.MethodGet, "/users/"+users[0].ID+"/sessions", "", nil)
+	var sessions []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &sessions); err != nil || code != http.StatusOK || len(sessions) == 0 {
+		h.t.Fatalf("keycloak sessions of %s: %d %s", username, code, data)
+	}
+	for _, s := range sessions {
+		if out, code := h.keycloakAdmin(token, http.MethodDelete, "/sessions/"+url.PathEscape(s.ID), "", nil); code != http.StatusNoContent {
+			h.t.Fatalf("keycloak logout of %s (session %s): %d %s", username, s.ID, code, out)
+		}
 	}
 }
 
