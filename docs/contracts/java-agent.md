@@ -75,7 +75,8 @@ The privileged step uses `install_root` and `link_path` only from a configuratio
    containers or dev builds; otherwise `capable=false` with a `reason`.
 3. **Staging** (`mode=auto`, target ≠ current, not rolled back before, a failed target not within 1 h, no self-update
    in progress): the signed manifest comes from the fleet (`java_agent.manifest`) or, locally with `version: agent`,
-   from the manifest next to the infra agent binary. Verification: signature by a trusted key, product/schema, manifest
+   from the manifest next to the infra agent binary when it lists the jar (the manifest embedded in deb/rpm/MSI/pkg
+   packages does not: such hosts wait for the fleet without recording a failure). Verification: signature by a trusted key, product/schema, manifest
    version = target, a `java-agent` `jar` artifact (`any`/`any`, at most 256 MiB), and for a downgrade target ≥
    `rollback_floor` of the installed version's manifest. Download (size and sha256 of the manifest; license key only
    for the ingest host), the jar must have `Premain-Class` and, when it names one, `Openlog-Javaagent-Version` = target.

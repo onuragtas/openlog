@@ -460,7 +460,7 @@ func (m *Manager) Evaluate(ctx context.Context) {
 			}
 			return
 		}
-		if m.blocked(st, e.target) || !m.mayRestart() {
+		if !m.releaseAvailable(e) || m.blocked(st, e.target) || !m.mayRestart() {
 			return
 		}
 		m.install(ctx, e, cur, inUse)
@@ -589,6 +589,28 @@ func (m *Manager) release(e effective) (manifest, sig []byte, downloadURL string
 		return manifest, sig, "", nil
 	}
 	return nil, nil, "", fmt.Errorf("no signed manifest for Java agent %s (the fleet sends it; locally only the infra agent's own version is available)", e.target)
+}
+
+// releaseAvailable reports whether release can supply a manifest with the Java agent jar. The manifest embedded in the
+// deb, rpm, MSI and pkg packages lists only infra agent artifacts: a host started from a package waits for the fleet's
+// offer instead of failing (and being blocked for FailedRetryDelay) before its first sync.
+func (m *Manager) releaseAvailable(e effective) bool {
+	if r := e.remote; r != nil && r.TargetVersion == e.target && r.Manifest != "" {
+		return true
+	}
+	if e.target != m.o.AgentVersion || m.o.OwnManifest == nil {
+		return false
+	}
+	b, _, err := m.o.OwnManifest()
+	if err != nil {
+		return false
+	}
+	mf, err := lib.ParseManifest(b)
+	if err != nil {
+		return false
+	}
+	_, ok := mf.Artifact(lib.ComponentJavaAgent, lib.PlatformAny, lib.PlatformAny, lib.FormatJar)
+	return ok
 }
 
 // request writes a rollback, switch or uninstall request and hands it over.

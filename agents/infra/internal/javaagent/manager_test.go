@@ -84,10 +84,18 @@ func TestManagerInProcessLifecycle(t *testing.T) {
 	ctx := context.Background()
 
 	m.Evaluate(ctx)
-	// Locally only the infra agent's own manifest is available: without it the install fails (retried after 1 h).
-	if r := m.Report(); r.Status != StatusError || r.Mode != config.JavaAgentModeAuto || r.Source != SourceLocal || r.TargetVersion != "0.9.0" ||
-		r.Update == nil || r.Update.State != StateFailed || !strings.Contains(r.Detail, "no signed manifest") {
+	// Locally only the infra agent's own manifest is available: without it the agent waits for the fleet (no failure,
+	// which would block the fleet's offer for 1 h).
+	if r := m.Report(); r.Status != StatusNotFound || r.Mode != config.JavaAgentModeAuto || r.Source != SourceLocal || r.TargetVersion != "0.9.0" ||
+		r.Update != nil {
 		t.Fatalf("initial report = %+v", r)
+	}
+	// A package's embedded manifest lists no java-agent jar: still waiting.
+	embedded, _ := json.Marshal(map[string]any{"schema": 1, "product": "openlog", "version": "0.9.0", "channel": "stable", "artifacts": []any{}})
+	m.o.OwnManifest = func() ([]byte, []byte, error) { return embedded, signLine(embedded, e.key), nil }
+	m.Evaluate(ctx)
+	if r := m.Report(); r.Status != StatusNotFound || r.Update != nil {
+		t.Fatalf("embedded manifest report = %+v", r)
 	}
 
 	m.SetRemote(f.remote("auto", "1.0.0", ""))
