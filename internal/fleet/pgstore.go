@@ -62,18 +62,18 @@ func mapPGErr(err error) error {
 // ---- policy ----
 
 const policyCols = `p.mode, p.channel, p.target, p.pinned_version, p.waves, p.wave_soak_minutes, p.halt_failure_rate,
-	p.maintenance_windows::text, p.updated_at, coalesce(u.email, ''), p.php_agent::text`
+	p.maintenance_windows::text, p.updated_at, coalesce(u.email, ''), p.php_agent::text, p.java_agent::text`
 
 func scanPolicy(row pgx.Row) (StoredPolicy, error) {
 	var (
-		sp      StoredPolicy
-		waves   []int32
-		windows string
-		updated time.Time
-		php     string
+		sp        StoredPolicy
+		waves     []int32
+		windows   string
+		updated   time.Time
+		php, java string
 	)
 	err := row.Scan(&sp.Mode, &sp.Channel, &sp.Target, &sp.PinnedVersion, &waves, &sp.WaveSoakMinutes, &sp.HaltFailureRate,
-		&windows, &updated, &sp.UpdatedByEmail, &php)
+		&windows, &updated, &sp.UpdatedByEmail, &php, &java)
 	if err != nil {
 		return sp, err
 	}
@@ -87,6 +87,14 @@ func scanPolicy(row pgx.Row) (StoredPolicy, error) {
 		if n, err := stored.Normalize(); err == nil {
 			n.ChangedAt = stored.ChangedAt
 			sp.PHPAgent = n
+		}
+	}
+	sp.JavaAgent = DefaultJavaAgentPolicy()
+	var storedJava JavaAgentPolicy
+	if json.Unmarshal([]byte(java), &storedJava) == nil && storedJava.Mode != "" { // '{}' = never changed (0086)
+		if n, err := storedJava.Normalize(); err == nil {
+			n.ChangedAt = storedJava.ChangedAt
+			sp.JavaAgent = n
 		}
 	}
 	return sp, nil
@@ -129,16 +137,62 @@ func (s *PGStore) PutPolicy(ctx context.Context, orgID string, p Policy, userID 
 	if err != nil {
 		return err
 	}
+	java, err := json.Marshal(p.JavaAgent)
+	if err != nil {
+		return err
+	}
 	_, err = s.pool.Exec(ctx, `INSERT INTO agent_update_policies
-		(org_id, mode, channel, target, pinned_version, waves, wave_soak_minutes, halt_failure_rate, maintenance_windows, updated_at, updated_by, php_agent)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11::uuid, $12::jsonb)
+		(org_id, mode, channel, target, pinned_version, waves, wave_soak_minutes, halt_failure_rate, maintenance_windows, updated_at, updated_by, php_agent, java_agent)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11::uuid, $12::jsonb, $13::jsonb)
 		ON CONFLICT (org_id) DO UPDATE SET mode = EXCLUDED.mode, channel = EXCLUDED.channel, target = EXCLUDED.target,
 			pinned_version = EXCLUDED.pinned_version, waves = EXCLUDED.waves, wave_soak_minutes = EXCLUDED.wave_soak_minutes,
 			halt_failure_rate = EXCLUDED.halt_failure_rate, maintenance_windows = EXCLUDED.maintenance_windows,
-			updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by, php_agent = EXCLUDED.php_agent`,
+			updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by, php_agent = EXCLUDED.php_agent,
+			java_agent = EXCLUDED.java_agent`,
 		orgID, p.Mode, p.Channel, p.Target, p.PinnedVersion, int32s(p.Waves), p.WaveSoakMinutes, p.HaltFailureRate,
-		string(windows), at, nullUUID(userID), string(php))
+		string(windows), at, nullUUID(userID), string(php), string(java))
 	return mapPGErr(err)
+}
+
+// ---- Java agent overrides (0086) ----
+
+func (s *PGStore) ListJavaOverrides(ctx context.Context, orgID string) (map[string]JavaOverride, error) {
+	out := map[string]JavaOverride{}
+	if !validUUID(orgID) {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT host_id, mode, updated_at FROM agent_java_host_overrides WHERE org_id = $1`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var o JavaOverride
+		if err := rows.Scan(&o.HostID, &o.Mode, &o.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out[o.HostID] = o
+	}
+	return out, rows.Err()
+}
+
+func (s *PGStore) PutJavaOverride(ctx context.Context, orgID string, o JavaOverride, userID string) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO agent_java_host_overrides (org_id, host_id, mode, updated_at, updated_by)
+		VALUES ($1, $2, $3, $4, $5::uuid)
+		ON CONFLICT (org_id, host_id) DO UPDATE SET mode = EXCLUDED.mode, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+		orgID, o.HostID, o.Mode, o.UpdatedAt, nullUUID(userID))
+	return mapPGErr(err)
+}
+
+func (s *PGStore) DeleteJavaOverride(ctx context.Context, orgID, hostID string) (bool, error) {
+	if !validUUID(orgID) {
+		return false, nil
+	}
+	tag, err := s.pool.Exec(ctx, `DELETE FROM agent_java_host_overrides WHERE org_id = $1 AND host_id = $2`, orgID, hostID)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // ---- PHP agent overrides (0045) ----
@@ -241,10 +295,16 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 		changed                                                              = make([]*time.Time, n)
 		syncAt                                                               = make([]time.Time, n)
 		rollout                                                              = make([]*string, n)
-		php, phpAccess                                                       = make([]*string, n), make([]*string, n)
+		php, phpAccess, java                                                 = make([]*string, n), make([]*string, n), make([]*string, n)
 	)
 	for i, r := range recs {
 		h := r.Report
+		if h.JavaAgent != nil {
+			if b, err := json.Marshal(h.JavaAgent); err == nil {
+				s := string(b)
+				java[i] = &s
+			}
+		}
 		if h.PHPAgent != nil {
 			if b, err := json.Marshal(h.PHPAgent); err == nil {
 				s := string(b)
@@ -269,14 +329,16 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 	}
 	_, err := s.pool.Exec(ctx, `INSERT INTO agent_hosts (org_id, host_id, host_name, agent_name, agent_version, agent_commit,
 			agent_os, agent_arch, install_method, update_capable, update_state, update_from, update_to, update_error,
-			update_changed_at, config_hash, first_seen_at, last_sync_at, rollout_id, integrations_config_revision, php_agent, php_access)
+			update_changed_at, config_hash, first_seen_at, last_sync_at, rollout_id, integrations_config_revision, php_agent, php_access,
+			java_agent)
 		SELECT o.id, r.host_id, r.host_name, r.agent_name, r.version, r.commit, r.os, r.arch, r.method, r.capable, r.state,
-			r.from_v, r.to_v, r.err, r.changed, r.hash, r.sync_at, r.sync_at, r.rollout::uuid, r.int_rev, r.php::jsonb, r.php_access::jsonb
+			r.from_v, r.to_v, r.err, r.changed, r.hash, r.sync_at, r.sync_at, r.rollout::uuid, r.int_rev, r.php::jsonb, r.php_access::jsonb,
+			r.java::jsonb
 		FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[],
 			$10::bool[], $11::text[], $12::text[], $13::text[], $14::text[], $15::timestamptz[], $16::text[], $17::timestamptz[], $18::text[],
-			$19::text[], $20::text[], $21::text[])
+			$19::text[], $20::text[], $21::text[], $22::text[])
 			AS r(tenant_id, host_id, host_name, agent_name, version, commit, os, arch, method, capable, state, from_v, to_v, err,
-			     changed, hash, sync_at, rollout, int_rev, php, php_access)
+			     changed, hash, sync_at, rollout, int_rev, php, php_access, java)
 		JOIN organizations o ON o.tenant_id = r.tenant_id
 		ON CONFLICT (org_id, host_id) DO UPDATE SET host_name = EXCLUDED.host_name, agent_name = EXCLUDED.agent_name,
 			agent_version = EXCLUDED.agent_version, agent_commit = EXCLUDED.agent_commit, agent_os = EXCLUDED.agent_os,
@@ -286,30 +348,32 @@ func (s *PGStore) UpsertHosts(ctx context.Context, recs []HostRecord) error {
 			last_sync_at = GREATEST(agent_hosts.last_sync_at, EXCLUDED.last_sync_at),
 			rollout_id = COALESCE(EXCLUDED.rollout_id, agent_hosts.rollout_id),
 			integrations_config_revision = EXCLUDED.integrations_config_revision, php_agent = EXCLUDED.php_agent,
-			php_access = EXCLUDED.php_access`,
+			php_access = EXCLUDED.php_access, java_agent = EXCLUDED.java_agent`,
 		tenant, hostID, name, agentName, version, commit, goos, arch, method, capable, state, from, to, errMsg, changed, hash, syncAt, rollout, intRev, php,
-		phpAccess)
+		phpAccess, java)
 	return err
 }
 
 const hostCols = `org_id::text, host_id, host_name, agent_name, agent_version, agent_commit, agent_os, agent_arch, install_method,
 	update_capable, update_state, update_from, update_to, update_error, update_changed_at, config_hash, first_seen_at, last_sync_at,
-	coalesce(rollout_id::text, ''), integrations_config_revision, coalesce(php_agent::text, ''), coalesce(php_access::text, '')`
+	coalesce(rollout_id::text, ''), integrations_config_revision, coalesce(php_agent::text, ''), coalesce(php_access::text, ''),
+	coalesce(java_agent::text, '')`
 
 func scanHost(row pgx.Row) (Host, error) {
 	var (
-		h              Host
-		changed        *time.Time
-		php, phpAccess string
+		h                    Host
+		changed              *time.Time
+		php, phpAccess, java string
 	)
 	err := row.Scan(&h.OrgID, &h.HostID, &h.HostName, &h.AgentName, &h.Version, &h.Commit, &h.OS, &h.Arch, &h.InstallMethod,
 		&h.UpdateCapable, &h.UpdateState, &h.UpdateFrom, &h.UpdateTo, &h.UpdateError, &changed, &h.ConfigHash, &h.FirstSeenAt,
-		&h.LastSyncAt, &h.RolloutID, &h.IntegrationsConfigRevision, &php, &phpAccess)
+		&h.LastSyncAt, &h.RolloutID, &h.IntegrationsConfigRevision, &php, &phpAccess, &java)
 	if changed != nil {
 		h.UpdateChangedAt = *changed
 	}
 	h.PHPAgent = ParsePHPAgentReport([]byte(php))
 	h.PHPAccess = ParsePHPAccessReport([]byte(phpAccess))
+	h.JavaAgent = ParseJavaAgentReport([]byte(java))
 	return h, err
 }
 
@@ -573,6 +637,9 @@ func (s *PGStore) LoadOrgState(ctx context.Context, tenantID string) (OrgState, 
 	}
 	if st.PHPOverrides, err = s.ListPHPOverrides(ctx, st.OrgID); err != nil {
 		return st, fmt.Errorf("php agent overrides: %w", err)
+	}
+	if st.JavaOverrides, err = s.ListJavaOverrides(ctx, st.OrgID); err != nil {
+		return st, fmt.Errorf("java agent overrides: %w", err)
 	}
 	st.Integrations, err = intsettings.NewPGStore(s.pool).ListSettings(ctx, st.OrgID)
 	switch {

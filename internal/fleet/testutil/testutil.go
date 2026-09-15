@@ -58,7 +58,12 @@ type ReleaseSpec struct {
 	BaseURL              string // default DefaultBaseURL
 	// PHPAgent adds a php-agent tar.gz artifact for every platform (php-agent.md §7.1).
 	PHPAgent bool
+	// JavaAgent adds the platform independent java-agent jar (java-agent.md §2).
+	JavaAgent bool
 }
+
+// JavaArtifactName is the jar name of the Java agent.
+func JavaArtifactName(version string) string { return "openlog-javaagent-" + version + ".jar" }
 
 // PHPArtifactName is the tarball name of the PHP agent.
 func PHPArtifactName(version, goos, arch string) string {
@@ -152,6 +157,16 @@ func Build(s Signer, spec ReleaseSpec) (Built, error) {
 			OldestSupportedAgent: spec.OldestSupportedAgent, MinUpgradeFrom: spec.MinUpgradeFrom, RollbackFloor: spec.RollbackFloor,
 		},
 		Artifacts: []lib.Artifact{},
+	}
+	if spec.JavaAgent {
+		jar := []byte("java agent jar " + spec.Version)
+		name := JavaArtifactName(spec.Version)
+		sum := sha256.Sum256(jar)
+		files[name] = jar
+		m.Artifacts = append(m.Artifacts, lib.Artifact{
+			Component: lib.ComponentJavaAgent, OS: lib.PlatformAny, Arch: lib.PlatformAny, Format: lib.FormatJar, Name: name,
+			URL: spec.BaseURL + "/v" + spec.Version + "/" + name, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(jar)),
+		})
 	}
 	for _, p := range spec.Platforms {
 		goos, arch, ok := strings.Cut(p, "/")

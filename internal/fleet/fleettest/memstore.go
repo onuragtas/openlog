@@ -24,6 +24,7 @@ type MemStore struct {
 	policies  map[string]fleet.Policy
 	overrides map[string]map[string]fleet.Override
 	phpOvs    map[string]map[string]fleet.PHPOverride
+	javaOvs   map[string]map[string]fleet.JavaOverride
 	hosts     map[string]map[string]fleet.Host
 	rollouts  []*fleet.Rollout
 	audit     []fleet.AuditEntry
@@ -38,7 +39,35 @@ var _ fleet.Store = (*MemStore)(nil)
 func NewMemStore() *MemStore {
 	return &MemStore{TenantOrgs: map[string]string{}, policies: map[string]fleet.Policy{},
 		overrides: map[string]map[string]fleet.Override{}, hosts: map[string]map[string]fleet.Host{},
-		phpOvs: map[string]map[string]fleet.PHPOverride{}}
+		phpOvs: map[string]map[string]fleet.PHPOverride{}, javaOvs: map[string]map[string]fleet.JavaOverride{}}
+}
+
+func (s *MemStore) ListJavaOverrides(_ context.Context, orgID string) (map[string]fleet.JavaOverride, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]fleet.JavaOverride{}
+	for k, v := range s.javaOvs[orgID] {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (s *MemStore) PutJavaOverride(_ context.Context, orgID string, o fleet.JavaOverride, _ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.javaOvs[orgID] == nil {
+		s.javaOvs[orgID] = map[string]fleet.JavaOverride{}
+	}
+	s.javaOvs[orgID][o.HostID] = o
+	return nil
+}
+
+func (s *MemStore) DeleteJavaOverride(_ context.Context, orgID, hostID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.javaOvs[orgID][hostID]
+	delete(s.javaOvs[orgID], hostID)
+	return ok, nil
 }
 
 func (s *MemStore) ListPHPOverrides(_ context.Context, orgID string) (map[string]fleet.PHPOverride, error) {
@@ -117,7 +146,9 @@ func (s *MemStore) LoadOrgState(ctx context.Context, tenantID string) (fleet.Org
 	ovs, _ := s.ListOverrides(ctx, org)
 	cur, _ := s.CurrentRollout(ctx, org)
 	phpOvs, _ := s.ListPHPOverrides(ctx, org)
-	st := fleet.OrgState{OrgID: org, Policy: sp.Policy, Overrides: ovs, Rollout: cur, IntegrationsLoaded: true, PHPOverrides: phpOvs}
+	javaOvs, _ := s.ListJavaOverrides(ctx, org)
+	st := fleet.OrgState{OrgID: org, Policy: sp.Policy, Overrides: ovs, Rollout: cur, IntegrationsLoaded: true, PHPOverrides: phpOvs,
+		JavaOverrides: javaOvs}
 	if s.Integrations != nil {
 		ints, err := s.Integrations.ListSettings(ctx, org)
 		if err != nil {

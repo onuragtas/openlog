@@ -25,6 +25,12 @@ java -javaagent:/opt/openlog/openlog-javaagent-X.Y.Z.jar -jar app.jar
 # or: JAVA_TOOL_OPTIONS="-javaagent:/opt/openlog/openlog-javaagent.jar"
 ```
 
+**Automatic updates on hosts with the infra agent:** leave `/opt/openlog/openlog-javaagent.jar` to the infra agent and
+set `java_agent.mode: auto` in its `config.yaml` (or on the Fleet page). It installs the signed jar of each release into
+`/opt/openlog/java-agent/versions/<v>/` and switches the link; running applications keep their version until they are
+restarted and are listed as "restart pending" on the host page. A jar you copied to that path yourself is left alone
+(see [java-agent.md](../../docs/contracts/java-agent.md) §2.2 for adopting it).
+
 Every setting can also be a system property: `OPENLOG_SERVICE_NAME` ⇔ `-Dopenlog.service.name=checkout`. System
 properties win over environment variables, as they do in OpenTelemetry Java. Container images:
 
@@ -252,6 +258,10 @@ manifest.json` in a directory with the jar checks signature and sha256, or compa
 `Openlog-Upstream-Javaagent-Version` attributes, plus `telemetry.distro.version`, identify a jar. The upstream agent
 version is pinned in `gradle.properties` and moves with openlog releases. **Maven Central** publishing
 (`io.github.onuragtas.openlog:openlog-javaagent`, for build tools that download agents) is planned, not done.
+
+The infra agent consumes the manifest entry to update the jar on hosts (`java_agent`, D-123,
+[java-agent.md](../../docs/contracts/java-agent.md) §2): verification with the release keys compiled into the infra
+agent, root-owned `versions/<v>/`, atomic link switch, JVM inventory with the loaded version, fleet waves.
 
 ## Development
 

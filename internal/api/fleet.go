@@ -45,8 +45,10 @@ func (s *Server) fleetRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/fleet/hosts", false, s.fleetHosts)
 	route("PUT /api/v1/fleet/hosts/{host_id}/override", true, s.putHostOverride)
 	route("DELETE /api/v1/fleet/hosts/{host_id}/override", true, s.deleteHostOverride)
-	route("PUT /api/v1/fleet/hosts/{host_id}/php-agent", true, s.putHostPHPOverride)       // fleet_php.go
-	route("DELETE /api/v1/fleet/hosts/{host_id}/php-agent", true, s.deleteHostPHPOverride) // fleet_php.go
+	route("PUT /api/v1/fleet/hosts/{host_id}/php-agent", true, s.putHostPHPOverride)         // fleet_php.go
+	route("DELETE /api/v1/fleet/hosts/{host_id}/php-agent", true, s.deleteHostPHPOverride)   // fleet_php.go
+	route("PUT /api/v1/fleet/hosts/{host_id}/java-agent", true, s.putHostJavaOverride)       // fleet_java.go
+	route("DELETE /api/v1/fleet/hosts/{host_id}/java-agent", true, s.deleteHostJavaOverride) // fleet_java.go
 	route("GET /api/v1/fleet/rollouts", false, s.fleetRollouts)
 	route("POST /api/v1/fleet/rollouts/{id}/pause", true, s.pauseRollout)
 	route("POST /api/v1/fleet/rollouts/{id}/resume", true, s.resumeRollout)
@@ -216,6 +218,8 @@ type fleetHostJSON struct {
 	PHPAgent     fleetHostPHPJSON   `json:"php_agent"` // fleet_php.go
 	// PHPAccess: PHP-FPM pools and their access to php.sock (null when not reported).
 	PHPAccess *fleet.PHPAccessReport `json:"php_access"`
+	// JavaAgent: JVMs with the openlog Java agent and the managed jar (fleet_java.go).
+	JavaAgent fleetHostJavaJSON `json:"java_agent"`
 }
 
 func hostResponse(h fleet.HostView) fleetHostJSON {
@@ -233,6 +237,7 @@ func hostResponse(h fleet.HostView) fleetHostJSON {
 	out.Outdated, out.Supported, out.Status, out.StatusTarget = h.Outdated, h.Supported, string(h.Status), optString(h.Target)
 	out.PHPAgent = hostPHPResponse(h)
 	out.PHPAccess = h.PHPAccess
+	out.JavaAgent = hostJavaResponse(h)
 	return out
 }
 

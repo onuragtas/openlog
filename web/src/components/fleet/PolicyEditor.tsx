@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   saveFleetPolicy,
   type FleetChannel,
+  type FleetJavaAgentMode,
   type FleetMode,
   type FleetPHPAgentMode,
   type FleetPolicy,
@@ -33,9 +34,12 @@ interface FormState {
   phpVersion: string;
   phpReload: "none" | "graceful";
   phpExclude: string;
+  javaMode: FleetJavaAgentMode;
+  javaVersion: string;
 }
 
 const PHP_MODES: FleetPHPAgentMode[] = ["off", "manual", "auto"];
+const JAVA_MODES: FleetJavaAgentMode[] = ["off", "manual", "auto"];
 
 const excludeLines = (text: string) =>
   text
@@ -49,6 +53,8 @@ function toForm(p: FleetPolicy): FormState {
     phpVersion: p.php_agent.version,
     phpReload: p.php_agent.reload,
     phpExclude: p.php_agent.exclude_bins.join("\n"),
+    javaMode: p.java_agent?.mode ?? "manual",
+    javaVersion: p.java_agent?.version ?? "agent",
     mode: p.mode,
     channel: p.channel,
     target: p.target,
@@ -83,7 +89,8 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
   const windowErrors = form.windows.map((w) => windowError(w));
   const phpVersionOk = form.phpVersion.trim() === "agent" || isVersion(form.phpVersion);
   const phpExcludeOk = excludeLines(form.phpExclude).length <= 50;
-  const valid = !waves.error && soakOk && haltOk && pinnedOk && windowErrors.every((e) => e === null) && phpVersionOk && phpExcludeOk;
+  const javaVersionOk = form.javaVersion.trim() === "agent" || isVersion(form.javaVersion);
+  const valid = !waves.error && soakOk && haltOk && pinnedOk && windowErrors.every((e) => e === null) && phpVersionOk && phpExcludeOk && javaVersionOk;
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(policy));
 
   const save = useMutation({
@@ -108,6 +115,7 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
       halt_failure_rate: halt / 100,
       maintenance_windows: form.windows,
       php_agent: { mode: form.phpMode, version: form.phpVersion.trim(), reload: form.phpReload, exclude_bins: excludeLines(form.phpExclude) },
+      java_agent: { mode: form.javaMode, version: form.javaVersion.trim() },
     });
   };
 
@@ -367,6 +375,48 @@ export function PolicyEditor({ policy, canManage }: { policy: FleetPolicy; canMa
             <p id={`${id}-php-exclude-help`} className={cn("text-xs", phpExcludeOk ? "text-muted-foreground" : "text-destructive-text")}>
               {phpExcludeOk ? t("fleet.policy.php.excludeBinsHelp") : t("fleet.policy.php.excludeBinsError")}
             </p>
+          </div>
+        </fieldset>
+
+        <fieldset className="flex min-w-0 flex-col gap-3 border-t pt-4" aria-describedby={`${id}-java-desc`}>
+          <legend className="text-sm font-medium">{t("fleet.policy.java.title")}</legend>
+          <p id={`${id}-java-desc`} className="text-xs text-muted-foreground">
+            {t("fleet.policy.java.description")}
+          </p>
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <Label htmlFor={`${id}-java-mode`}>{t("fleet.policy.java.mode")}</Label>
+              <NativeSelect
+                id={`${id}-java-mode`}
+                className="w-full min-w-0"
+                value={form.javaMode}
+                aria-describedby={`${id}-java-mode-help`}
+                onChange={(e) => set("javaMode", e.target.value as FleetJavaAgentMode)}
+              >
+                {JAVA_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {t(`fleet.policy.java.modes.${m}`)}
+                  </option>
+                ))}
+              </NativeSelect>
+              <p id={`${id}-java-mode-help`} className="text-xs text-muted-foreground">
+                {t(`fleet.policy.java.modeHelp.${form.javaMode}`)}
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-java-version`}>{t("fleet.policy.java.version")}</Label>
+              <Input
+                id={`${id}-java-version`}
+                value={form.javaVersion}
+                placeholder="agent"
+                aria-invalid={!javaVersionOk}
+                aria-describedby={`${id}-java-version-help`}
+                onChange={(e) => set("javaVersion", e.target.value)}
+              />
+              <p id={`${id}-java-version-help`} className={cn("text-xs", javaVersionOk ? "text-muted-foreground" : "text-destructive-text")}>
+                {javaVersionOk ? t("fleet.policy.java.versionHelp") : t("fleet.policy.java.versionError")}
+              </p>
+            </div>
           </div>
         </fieldset>
       </fieldset>

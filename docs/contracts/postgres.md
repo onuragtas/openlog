@@ -286,7 +286,13 @@ increasing percentages ending at 100), `wave_soak_minutes` (0–43200), `halt_fa
 `end <= start` spans midnight), `updated_at`, `updated_by`, `php_agent` (`0045_php_agent_fleet`, jsonb
 `{"mode": "off|manual|auto", "version": "agent|<semver>", "reload": "none|graceful", "exclude_bins": [], "changed_at"}`;
 `{}` = defaults: `manual`, `agent`, `none`). **No row = the default policy** (`auto`, `stable`, `latest`,
-`[10,50,100]`, 60 min, 0.05, no windows, PHP agent `manual`). Validation is done by the API.
+`[10,50,100]`, 60 min, 0.05, no windows, PHP agent `manual`). Validation is done by the API. `java_agent`
+(`0086_java_agent_fleet`, jsonb `{"mode": "off|manual|auto", "version": "agent|<semver>", "changed_at"}`; `{}` =
+defaults `manual`, `agent`; java-agent.md §2.6).
+
+### `agent_java_host_overrides` (`0086_java_agent_fleet`)
+`(org_id, host_id)` PK, `mode` (`off`·`manual`·`auto`: the host's Java agent mode instead of the policy's; an `auto`
+override skips Java agent waves), `updated_at`, `updated_by`. Rows are kept when the host disappears.
 
 ### `agent_php_host_overrides` (`0045_php_agent_fleet`)
 `(org_id, host_id)` PK, `mode` (`off`·`manual`·`auto`: the host's PHP agent mode instead of the policy's; an `auto`
@@ -327,7 +333,9 @@ turned off on the host), `php_agent` (`0045_php_agent_fleet`, jsonb: the `php_ag
 PHP runtimes, installed PHP agent version, `managed_by`, last operation — bounded by ingest; NULL when the agent does
 not report one), `php_access` (`0064_php_access`, jsonb: the `php_access` section of the last sync request — socket
 group, PHP-FPM pools and whether their users may write `php.sock`, php-agent.md §1 — at most 512 pools; NULL when the
-agent does not report one).
+agent does not report one), `java_agent` (`0086_java_agent_fleet`, jsonb: the `java_agent` section of the last sync
+request — managed jar version, link state, JVMs with loaded version and `restart_pending`, last operation — at most 64
+JVMs; NULL when the agent does not report one).
 
 Written **only by ingest, asynchronously**: sync requests are answered from memory; reports are queued per pod
 (coalesced per host, bounded by `OPENLOG_FLEET_REPORT_QUEUE_SIZE`, the oldest report is dropped when full:

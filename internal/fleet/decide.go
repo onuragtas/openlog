@@ -74,6 +74,8 @@ type HostReport struct {
 	IntegrationsConfigRevision string
 	// PHPAgent is the PHP runtime inventory and PHP agent state (nil: the agent does not report it).
 	PHPAgent *PHPAgentReport
+	// JavaAgent is the JVM inventory and Java agent state (nil: the agent does not report it).
+	JavaAgent *JavaAgentReport
 	// PHPAccess is which PHP-FPM pools may send to php.sock (nil: not reported, e.g. no PHP-FPM pools or an older agent).
 	PHPAccess *PHPAccessReport
 }

@@ -2,11 +2,13 @@
 // Filters, tabs and selections live in the URL (router.tsx validateSearch).
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Bug, Network, Search } from "lucide-react";
+import { ArrowLeft, Bug, Network, PackageCheck, Search } from "lucide-react";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { apmMapPathQuery, apmMapQuery, apmServiceQuery, apmServicesQuery, type ApmService } from "@/api/apm";
+import { apmAgentsQuery, apmMapPathQuery, apmMapQuery, apmServiceQuery, apmServicesQuery, type ApmService } from "@/api/apm";
+import { AgentVersionBadge } from "@/components/apm/AgentVersions";
+import { indexAgents, serviceKey } from "@/lib/agent-versions";
 import { ApiError } from "@/api/client";
 import { ApdexSettings } from "@/components/apm/ApdexSettings";
 import { ApdexBadge, Sparkline } from "@/components/apm/Charts";
@@ -68,6 +70,9 @@ export function ApmServicesPage() {
   const locale = i18n.resolvedLanguage ?? "en";
   const range = { range: search.range, from: search.from, to: search.to };
   const all = useQuery(apmServicesQuery(range));
+  // Agent version badges (D-124): no upgrade instructions needed here, so no registry checks.
+  const agents = useQuery(apmAgentsQuery(range, { upgrade: false }));
+  const agentIndex = useMemo(() => indexAgents(agents.data?.services ?? []), [agents.data]);
   const q = search.q ?? "";
   const environments = useMemo(() => [...new Set((all.data?.services ?? []).map((s) => s.environment).filter(Boolean))].sort(), [all.data]);
   const services = useMemo(
@@ -119,6 +124,12 @@ export function ApmServicesPage() {
                 {t("apm.errors.inboxLink")}
               </Link>
             </Button>
+            <Button asChild variant="outline">
+              <Link to="/apm/agents" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, env: search.env })}>
+                <PackageCheck className="size-4" aria-hidden="true" />
+                {t("apm.agents.link")}
+              </Link>
+            </Button>
           </div>
         }
       />
@@ -156,15 +167,18 @@ export function ApmServicesPage() {
                 return (
                   <TableRow key={`${s.service_name}|${s.service_namespace}|${s.environment}`}>
                     <TableCell>
-                      <Link
-                        to="/apm/services/$service"
-                        params={{ service: s.service_name }}
-                        search={linkSearch}
-                        className="font-medium hover:underline"
-                        aria-label={t("apm.openService", { name: s.service_name })}
-                      >
-                        {s.service_name}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Link
+                          to="/apm/services/$service"
+                          params={{ service: s.service_name }}
+                          search={linkSearch}
+                          className="font-medium hover:underline"
+                          aria-label={t("apm.openService", { name: s.service_name })}
+                        >
+                          {s.service_name}
+                        </Link>
+                        <AgentVersionBadge service={agentIndex.get(serviceKey(s))} latest={agents.data?.release.latest} />
+                      </div>
                       <div className="text-xs text-muted-foreground">{[s.language, s.version].filter(Boolean).join(" · ")}</div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">

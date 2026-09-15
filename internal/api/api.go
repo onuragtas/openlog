@@ -23,6 +23,7 @@ import (
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/dashboard"
 	"github.com/onuragtas/openlog/internal/fleet"
+	"github.com/onuragtas/openlog/internal/fleet/catalog"
 	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/savedview"
 	"github.com/onuragtas/openlog/internal/updatereq"
@@ -70,6 +71,8 @@ type Server struct {
 	statusPage *StatusPageDeps
 	// saved explorer views (savedviews.go, D-118); nil: none
 	savedViews *savedview.Manager
+	// verified release catalog of the language agent version comparison (apm_agents.go, D-124); nil: statuses unknown
+	agentReleases func() *catalog.Snapshot
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.

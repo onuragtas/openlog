@@ -63,6 +63,7 @@ type Config struct {
 	Release           ReleaseConfig      `yaml:"release"`
 	PHPForwarder      PHPForwarder       `yaml:"php_forwarder"`
 	PHPAgent          PHPAgentConfig     `yaml:"php_agent"`  // php_agent.go
+	JavaAgent         JavaAgentConfig    `yaml:"java_agent"` // java_agent.go
 	Kubernetes        KubernetesConfig   `yaml:"kubernetes"` // kubernetes.go
 }
 
@@ -305,6 +306,7 @@ func DefaultFor(goos string) *Config {
 			MaxPendingTraces: 10000, ReassemblyTimeout: Duration(5 * time.Second),
 		},
 		PHPAgent:   defaultPHPAgent(),
+		JavaAgent:  defaultJavaAgent(),
 		Kubernetes: defaultKubernetes(),
 	}
 	applyPlatformDefaults(c, goos)
@@ -420,6 +422,7 @@ func (c *Config) Validate(requireExport bool) error {
 	errs = append(errs, c.Integrations.validate()...)
 	errs = append(errs, c.PHPForwarder.validate()...)
 	errs = append(errs, c.PHPAgent.validate()...)
+	errs = append(errs, c.JavaAgent.validate()...)
 	errs = append(errs, c.Kubernetes.validate(os.Getenv)...)
 	for k := range c.Host.ExtraAttributes {
 		if k == "" {

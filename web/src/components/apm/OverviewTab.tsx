@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { apmDeploymentsQuery, apmOverviewQuery, apmTransactionsQuery } from "@/api/apm";
+import { AgentUpgradeNotice } from "@/components/apm/AgentVersions";
 import { RedTiles } from "@/components/apm/Charts";
 import { DeploymentsCard } from "@/components/apm/Deployments";
 import { TransactionTable } from "@/components/apm/TransactionsTab";
@@ -33,6 +34,7 @@ export function OverviewTab({ scope, range, onOpenTransaction, onViewAll, onOpen
 
   return (
     <div className="flex flex-col gap-4">
+      <AgentUpgradeNotice scope={scope} range={range} />
       {overview.data && <RedTiles red={overview.data.totals} apdexTMs={overview.data.apdex_t_ms} />}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard title={t("apm.metrics.throughput")}>

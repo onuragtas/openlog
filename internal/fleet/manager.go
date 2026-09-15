@@ -120,6 +120,23 @@ func (m *Manager) PutPolicy(ctx context.Context, orgID string, p Policy, a Actor
 			}
 		}
 	}
+	// java_agent: the same rules.
+	switch {
+	case np.JavaAgent.Mode == "":
+		np.JavaAgent = old.JavaAgent
+	case np.JavaAgent.sameSettings(old.JavaAgent):
+		np.JavaAgent.ChangedAt = old.JavaAgent.ChangedAt
+	default:
+		now := m.o.Now().UTC()
+		np.JavaAgent.ChangedAt = &now
+	}
+	if np.JavaAgent.Mode == JavaModeAuto && np.JavaAgent.Version != JavaVersionAgent {
+		if snap := m.snapshot(); snap.Len() > 0 {
+			if _, ok := snap.Release(np.JavaAgent.Version); !ok {
+				return StoredPolicy{}, invalidf("java_agent.version %s is not a verified release", np.JavaAgent.Version)
+			}
+		}
+	}
 	if err := m.store.PutPolicy(ctx, orgID, np, a.UserID, m.o.Now()); err != nil {
 		return StoredPolicy{}, err
 	}
@@ -324,6 +341,9 @@ type HostView struct {
 	// PHPOverride and PHP are the host's PHP agent mode override and decision.
 	PHPOverride *PHPOverride
 	PHP         PHPDecision
+	// JavaOverride and Java are the host's Java agent mode override and decision.
+	JavaOverride *JavaOverride
+	Java         JavaDecision
 }
 
 // Hosts lists hosts with filters and pagination.
@@ -356,6 +376,10 @@ func (m *Manager) Hosts(ctx context.Context, orgID string, f HostFilter) ([]Host
 	if err != nil {
 		return nil, "", err
 	}
+	javaOvs, err := m.store.ListJavaOverrides(ctx, orgID)
+	if err != nil {
+		return nil, "", err
+	}
 	snap := m.snapshot()
 	floor, hasFloor := oldestSupported(snap)
 	now := m.o.Now()
@@ -367,6 +391,11 @@ func (m *Manager) Hosts(ctx context.Context, orgID string, f HostFilter) ([]Host
 			hv.PHPOverride, pin.Override = &o, &o
 		}
 		hv.PHP = DecidePHP(pin)
+		jin := JavaInput{Now: now, Host: h.HostReport, Policy: sp.Policy, Catalog: snap}
+		if o, ok := javaOvs[h.HostID]; ok {
+			hv.JavaOverride, jin.Override = &o, &o
+		}
+		hv.Java = DecideJava(jin)
 		in := Input{Now: now, Host: h.HostReport, Policy: sp.Policy, Rollout: cur, Catalog: snap}
 		if o, ok := ovs[h.HostID]; ok {
 			hv.Override = &o
@@ -461,6 +490,36 @@ func (m *Manager) DeletePHPOverride(ctx context.Context, orgID, hostID string, a
 	}
 	if deleted {
 		m.audit(ctx, orgID, a, "fleet.php_agent_override.delete", "agent_host", hostID, nil)
+	}
+	return nil
+}
+
+// PutJavaOverride sets the Java agent mode (off, manual, auto) of a known host.
+func (m *Manager) PutJavaOverride(ctx context.Context, orgID, hostID, mode string, a Actor) (JavaOverride, error) {
+	switch mode {
+	case JavaModeOff, JavaModeManual, JavaModeAuto:
+	default:
+		return JavaOverride{}, invalidf("mode must be off, manual or auto")
+	}
+	if _, err := m.store.GetHost(ctx, orgID, hostID); err != nil {
+		return JavaOverride{}, err
+	}
+	o := JavaOverride{HostID: hostID, Mode: mode, UpdatedAt: m.o.Now()}
+	if err := m.store.PutJavaOverride(ctx, orgID, o, a.UserID); err != nil {
+		return JavaOverride{}, err
+	}
+	m.audit(ctx, orgID, a, "fleet.java_agent_override.set", "agent_host", hostID, map[string]any{"mode": mode})
+	return o, nil
+}
+
+// DeleteJavaOverride removes a host's Java agent mode override (idempotent).
+func (m *Manager) DeleteJavaOverride(ctx context.Context, orgID, hostID string, a Actor) error {
+	deleted, err := m.store.DeleteJavaOverride(ctx, orgID, hostID)
+	if err != nil {
+		return err
+	}
+	if deleted {
+		m.audit(ctx, orgID, a, "fleet.java_agent_override.delete", "agent_host", hostID, nil)
 	}
 	return nil
 }

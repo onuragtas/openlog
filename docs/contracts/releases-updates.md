@@ -199,6 +199,24 @@ store):
   manifest like an update instruction (signature, schema, version, a `php-agent` `tar.gz` artifact for its platform,
   rollback floor of the installed PHP agent for downgrades).
 
+#### Java agent
+
+The infra agent consumes the `java-agent` jar artifact (os/arch `any`) to keep `openlog-javaagent.jar` current on the
+host ([java-agent.md](java-agent.md) §2, D-123). Agents report JVMs and the managed jar in the request (`java_agent`,
+java-agent.md §2.5; bounded by ingest: 64 JVMs) and ingest answers the host's fleet settings (null without a policy
+store):
+
+```json
+"java_agent": {"mode": "auto", "version": "agent", "target_version": "0.4.0", "manifest": "<base64 of manifest.json>",
+  "signature": "…", "download_url": "https://…/openlog-javaagent-0.4.0.jar", "reason": "offer"}
+```
+
+- `target_version` is set with `reason=offer` (with manifest, signature and a download URL, the backend mirror when
+  enabled) and `reason=up_to_date`; otherwise `""` and the agent keeps what is installed.
+- The agent applies these settings instead of `config.yaml` unless `java_agent.remote_config: false`, and verifies the
+  manifest like an update instruction (signature, schema, version, a `java-agent` `jar` artifact, rollback floor of
+  the installed jar for downgrades).
+
 ### Agent verification rules (all must pass or the update is rejected and reported as `failed`)
 
 1. Signature valid with a trusted key.

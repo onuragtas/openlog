@@ -52,6 +52,8 @@ type Policy struct {
 	MaintenanceWindows []Window `json:"maintenance_windows"`
 	// PHPAgent configures PHP agent installation through the infra agent (phpagent.go).
 	PHPAgent PHPAgentPolicy `json:"php_agent"`
+	// JavaAgent configures managing the Java agent jar through the infra agent (javaagent.go).
+	JavaAgent JavaAgentPolicy `json:"java_agent"`
 }
 
 // DefaultPolicy is used for organizations without a stored policy.
@@ -59,7 +61,7 @@ func DefaultPolicy() Policy {
 	return Policy{
 		Mode: ModeAuto, Channel: lib.ChannelStable, Target: TargetLatest,
 		Waves: []int{10, 50, 100}, WaveSoakMinutes: 60, HaltFailureRate: 0.05,
-		MaintenanceWindows: []Window{}, PHPAgent: DefaultPHPAgentPolicy(),
+		MaintenanceWindows: []Window{}, PHPAgent: DefaultPHPAgentPolicy(), JavaAgent: DefaultJavaAgentPolicy(),
 	}
 }
 
@@ -140,6 +142,14 @@ func (p Policy) Normalize() (Policy, error) {
 			return p, err
 		}
 		p.PHPAgent = php
+	}
+	// The same for java_agent.
+	if p.JavaAgent.Mode != "" {
+		java, err := p.JavaAgent.Normalize()
+		if err != nil {
+			return p, err
+		}
+		p.JavaAgent = java
 	}
 	return p, nil
 }

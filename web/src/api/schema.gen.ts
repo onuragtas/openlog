@@ -1087,6 +1087,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apm/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Language agents and versions per service, compared with the newest release (D-124)
+         * @description Language agents reporting each service since `from` (hourly aggregate of the span resource: telemetry.distro.*,
+         *     telemetry.sdk.*), versions with distinct instances, and the comparison with the newest verified release of the
+         *     organization's fleet channel. Agents are application dependencies and never update themselves; `upgrade`
+         *     carries the command. Without a release catalog (`release.catalog` disabled or unavailable) every status of an
+         *     openlog agent is `unknown`.
+         */
+        get: operations["listApmAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -2223,6 +2247,26 @@ export interface paths {
         post?: never;
         /** @description Idempotent; the host follows the policy again. Audit action fleet.php_agent_override.delete. */
         delete: operations["deleteFleetHostPHPAgentOverride"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fleet/hosts/{host_id}/java-agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Admin or owner. Sets the host's Java agent mode instead of the policy's (java-agent.md §2); an auto override skips Java agent waves. Audit action fleet.java_agent_override.set. */
+        put: operations["putFleetHostJavaAgentOverride"];
+        post?: never;
+        /** @description Idempotent; the host follows the policy again. Audit action fleet.java_agent_override.delete. */
+        delete: operations["deleteFleetHostJavaAgentOverride"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5282,6 +5326,71 @@ export interface components {
             /** @description The host has a host record (GET /hosts/{host_id}) */
             known: boolean;
         };
+        /**
+         * @description outdated: older than release.latest; unsupported: older than release.oldest_supported; unknown: no release
+         *     catalog or a version that is not SemVer (development builds); third_party: not an openlog distro, not compared.
+         * @enum {string}
+         */
+        ApmAgentStatus: "ok" | "outdated" | "unsupported" | "unknown" | "third_party";
+        ApmAgentRelease: {
+            /** @enum {string} */
+            catalog: "ok" | "unavailable" | "disabled";
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            latest: string | null;
+            /** @description compatibility.oldest_supported_agent */
+            oldest_supported: string | null;
+            notes_url: string;
+        };
+        ApmAgentVersion: {
+            /** @description telemetry.distro.version (third_party: telemetry.sdk.version) */
+            version: string;
+            status: components["schemas"]["ApmAgentStatus"];
+            /** @description Distinct service.instance.id (else host.id), approximate */
+            instances: number;
+            spans: number;
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        ApmAgentUpgrade: {
+            package: string;
+            /** @description Package version of release.latest (PEP 440 for Python) */
+            version: string;
+            command: string;
+            lang: string;
+            /**
+             * @description npm, PyPI, nuget.org; empty for other kinds
+             * @enum {string}
+             */
+            registry: "available" | "missing" | "unknown" | "";
+            registry_url: string;
+            release_asset_url: string;
+            docs_url: string;
+            docs_section: string;
+            notes: ("go_modules" | "java_fleet_auto" | "php_fleet_auto" | "registry_fallback")[];
+        };
+        ApmServiceAgent: {
+            /** @enum {string} */
+            kind: "go" | "node" | "python" | "java" | "dotnet" | "php" | "unknown" | "third_party";
+            distro_name: string;
+            sdk_name: string;
+            sdk_language: string;
+            status: components["schemas"]["ApmAgentStatus"];
+            instances: number;
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description Newest first, at most 20 */
+            versions: components["schemas"]["ApmAgentVersion"][];
+            versions_truncated: boolean;
+            /** @description openlog Go instrumentation modules recognised from span scopes (gin, echo, grpc) */
+            instrumentation_modules: string[];
+            upgrade: components["schemas"]["ApmAgentUpgrade"] | null;
+        };
+        ApmServiceAgents: {
+            service_name: string;
+            service_namespace: string;
+            environment: string;
+            status: components["schemas"]["ApmAgentStatus"];
+            agents: components["schemas"]["ApmServiceAgent"][];
+        };
         ApmServiceContainer: {
             container_id: string;
             /** @description Docker name, else the span resource's container.name */
@@ -6413,6 +6522,21 @@ export interface components {
             maintenance_windows: components["schemas"]["MaintenanceWindow"][];
             /** @description Omitted = keep the stored section. changed_at is set by the server. */
             php_agent?: components["schemas"]["FleetPHPAgentPolicyInput"];
+            /** @description Omitted = keep the stored section. changed_at is set by the server. */
+            java_agent?: components["schemas"]["FleetJavaAgentPolicyInput"];
+        };
+        /** @enum {string} */
+        FleetJavaAgentMode: "off" | "manual" | "auto";
+        FleetJavaAgentPolicyInput: {
+            mode: components["schemas"]["FleetJavaAgentMode"];
+            /** @description agent (the host's infra agent version; default) or a SemVer version */
+            version?: string;
+        };
+        FleetJavaAgentPolicy: {
+            mode: components["schemas"]["FleetJavaAgentMode"];
+            version: string;
+            /** @description Last change of the section; Java agent waves start then (or at the target's release time if later) */
+            changed_at: components["schemas"]["NullableTimestamp"];
         };
         /** @enum {string} */
         FleetPHPAgentMode: "off" | "manual" | "auto";
@@ -6443,6 +6567,7 @@ export interface components {
             halt_failure_rate: number;
             maintenance_windows: components["schemas"]["MaintenanceWindow"][];
             php_agent: components["schemas"]["FleetPHPAgentPolicy"];
+            java_agent: components["schemas"]["FleetJavaAgentPolicy"];
             is_default: boolean;
             updated_at: components["schemas"]["NullableTimestamp"];
             updated_by_email: string;
@@ -6631,6 +6756,70 @@ export interface components {
             php_agent: components["schemas"]["FleetHostPHPAgent"];
             /** @description PHP-FPM pools and whether their users may send spans to php.sock (php-agent.md §1); null when not reported */
             php_access: components["schemas"]["FleetPHPAccess"] | null;
+            java_agent: components["schemas"]["FleetHostJavaAgent"];
+        };
+        FleetJavaOverride: {
+            mode: components["schemas"]["FleetJavaAgentMode"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        /** @description A running JVM that loads an openlog Java agent (-javaagent on its command line or in JAVA_TOOL_OPTIONS) */
+        FleetJavaJVM: {
+            pid: number;
+            name: string;
+            /** @description Command line with secrets masked */
+            command: string;
+            /** @description The -javaagent path as the JVM received it */
+            agent_path: string;
+            /** @description Version the JVM loaded ("" = unknown) */
+            loaded_version: string;
+            /** @description The path is the managed link_path or inside install_root */
+            managed: boolean;
+            /** @description Managed and running another version than the installed one; restart the application to load it */
+            restart_pending: boolean;
+            started_at: string;
+            /** @description Runs in a container (never managed) */
+            container: boolean;
+        };
+        FleetJavaAgentUpdate: {
+            /** @description install, upgrade, rollback, switch or uninstall */
+            operation: string;
+            version: string;
+            /** @description downloading, restarting, confirming, applied, failed, rolled_back, uninstalled */
+            state: string;
+            error: string;
+            changed_at: string;
+        };
+        FleetHostJavaAgent: {
+            /** @description false for agents that do not report JVMs (older versions) */
+            reported: boolean;
+            mode: components["schemas"]["FleetJavaAgentMode"];
+            /** @description Mode the agent applies ("" when not reported) */
+            agent_mode: string;
+            /** @description remote (fleet settings) or local (config.yaml) */
+            source: string;
+            /** @description The host can apply installations (privileged step) */
+            capable: boolean;
+            reason: string;
+            /** @description The install root carries the infra agent's marker */
+            managed: boolean;
+            /** @description Version of the managed jar (current) */
+            version: string | null;
+            /** @description Agent-reported state: installed, staged, restart_pending, unmanaged (link_path is a file openlog did not create), error, not_found; "" when not reported */
+            state: string;
+            /** @description Explanation of state (guidance */
+            detail: string;
+            link_path: string;
+            /** @description missing, managed, unmanaged, pending (Windows: locked by a JVM) or error */
+            link_state: string;
+            jvms: components["schemas"]["FleetJavaJVM"][];
+            update: components["schemas"]["FleetJavaAgentUpdate"] | null;
+            override: components["schemas"]["FleetJavaOverride"] | null;
+            /**
+             * @description Java agent decision for the host now
+             * @enum {string}
+             */
+            status: "offer" | "up_to_date" | "mode_off" | "manual" | "not_reported" | "not_capable" | "invalid_version" | "no_catalog" | "target_unavailable" | "no_artifact" | "already_failed" | "not_in_wave" | "outside_window";
+            status_target: string | null;
         };
         FleetPHPAccess: {
             /** @description Group applied to php.sock ("" when none) */
@@ -10185,6 +10374,45 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
         };
     };
+    listApmAgents: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Exact service name */
+                service?: string;
+                /** @description service.namespace; omitted = all namespaces, present (also empty) = exact match */
+                namespace?: components["parameters"]["ApmNamespace"];
+                /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
+                environment?: components["parameters"]["ApmEnvironment"];
+                /** @description false omits upgrade instructions (no registry checks) */
+                upgrade?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        release: components["schemas"]["ApmAgentRelease"];
+                        services: components["schemas"]["ApmServiceAgents"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
     getVersion: {
         parameters: {
             query?: never;
@@ -12529,6 +12757,60 @@ export interface operations {
         };
     };
     deleteFleetHostPHPAgentOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putFleetHostJavaAgentOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    mode: components["schemas"]["FleetJavaAgentMode"];
+                };
+            };
+        };
+        responses: {
+            /** @description Override stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetJavaOverride"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteFleetHostJavaAgentOverride: {
         parameters: {
             query?: never;
             header?: never;

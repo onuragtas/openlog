@@ -106,6 +106,8 @@ type SyncRequest struct {
 	Reconcile *ReconcileReport `json:"reconcile,omitempty"`
 	// PHPAgent is the PHP runtime inventory and PHP agent installation state (phpagent.Report, php-agent.md §7.3).
 	PHPAgent any `json:"php_agent,omitempty"`
+	// JavaAgent is the JVM inventory and Java agent installation state (javaagent.Report, java-agent.md §2).
+	JavaAgent any `json:"java_agent,omitempty"`
 	// PHPAccess is which PHP-FPM pools may send to php.sock (absent without PHP-FPM pools, php-agent.md §1).
 	PHPAccess *phpaccess.Report `json:"php_access,omitempty"`
 }
@@ -155,6 +157,8 @@ type SyncResponse struct {
 	IntegrationsConfig *config.RemoteIntegrations `json:"integrations_config"`
 	// PHPAgent is the fleet's PHP agent settings for this host (phpagent.Remote; null/absent: keep the last ones).
 	PHPAgent json.RawMessage `json:"php_agent,omitempty"`
+	// JavaAgent is the fleet's Java agent settings for this host (javaagent.Remote; null/absent: keep the last ones).
+	JavaAgent json.RawMessage `json:"java_agent,omitempty"`
 }
 
 // Instruction is an update ordered by the backend. The backend is untrusted: everything that

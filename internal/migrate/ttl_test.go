@@ -39,6 +39,8 @@ func TestTTLTablesMatchSchema(t *testing.T) {
 		"containers_local": true, "apm_service_containers_local": true, "apm_relink_queue_local": true,
 		// APM GA (0035_apm_ga): small aggregates with a fixed 30-day TTL, like apm_service_containers.
 		"apm_error_group_dims_local": true, "apm_service_versions_1m_local": true,
+		// Language agent versions (0090_apm_agent_versions, D-124): fixed 30-day TTL, like apm_service_versions_1m.
+		"apm_agent_versions_1h_local": true,
 		// Kubernetes entities (0040–0042): fixed 30-day TTL after the last point, like containers.
 		"k8s_clusters_local": true, "k8s_nodes_local": true, "k8s_workloads_local": true, "k8s_pods_local": true,
 		// Usage metering (0050_usage, D-079): fixed 400-day retention, independent of the telemetry retention.

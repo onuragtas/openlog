@@ -994,6 +994,41 @@ Services with spans since `from` (`q`: case-insensitive substring of the name), 
   "sparkline": [[1757757600000, 88.0]]}]}
 ```
 
+### `GET /api/v1/apm/agents?from=&to=&service=&namespace=&environment=&upgrade=`
+Language agents reporting each service since `from` and how their versions compare with the newest release (D-124,
+[agent-updates.md](../operations/agent-updates.md)). Language agents are application dependencies and never update
+themselves; `upgrade` carries the command. A separate endpoint (not a field of `GET /apm/services`) so the services
+list stays cheap and registry checks run only where commands are shown; `upgrade=false` omits them.
+```json
+{"release": {"catalog": "ok", "channel": "stable", "latest": "0.1.31", "oldest_supported": "0.1.20", "notes_url": "…"},
+ "services": [{"service_name": "web", "service_namespace": "", "environment": "prod", "status": "unsupported",
+   "agents": [{"kind": "node", "distro_name": "openlog", "sdk_name": "opentelemetry", "sdk_language": "nodejs",
+     "status": "unsupported", "instances": 4, "last_seen": "…", "versions_truncated": false, "instrumentation_modules": [],
+     "versions": [{"version": "0.1.31", "status": "ok", "instances": 1, "spans": 120, "last_seen": "…"},
+                  {"version": "0.1.9", "status": "unsupported", "instances": 3, "spans": 900, "last_seen": "…"}],
+     "upgrade": {"package": "openlog-node", "version": "0.1.31", "command": "npm install openlog-node@0.1.31", "lang": "sh",
+       "registry": "available", "registry_url": "…", "release_asset_url": "…", "docs_url": "…", "docs_section": "", "notes": []}}]}]}
+```
+- **Detection** (hourly ClickHouse aggregate `apm_agent_versions_1h` of the span resource, 30 days, no backfill):
+  `telemetry.distro.name` `openlog` + `telemetry.sdk.language` → `kind` `node`, `python`, `java`, `dotnet`, `go`
+  (`unknown` for other languages); `openlog-php` → `php`; anything else → `third_party` (versions are
+  `telemetry.sdk.version`, never compared). `instances`: distinct `service.instance.id`, else `host.id` (approximate;
+  an instance that changed version counts under both). Versions newest first, at most 20 (`versions_truncated`).
+  `instrumentation_modules` (Go): `gin`, `echo`, `grpc` recognised from span scopes.
+- **Comparison**: `release.latest` is the newest verified release of the organization's fleet channel (`stable` without
+  fleet management) from the release catalog; `release.oldest_supported` is `compatibility.oldest_supported_agent` of
+  this backend's release manifest, else of the latest release. `status`: `unsupported` < floor, `outdated` < latest,
+  else `ok`; `unknown` for development builds (`0.0.0…`), non-SemVer versions and whenever `release.catalog` is
+  `disabled` (static auth mode) or `unavailable` (offline, not fetched yet; `latest` null). Python PEP 440
+  pre-releases (`0.2.0rc1`) are compared as SemVer. Agent and service `status` = worst version status.
+- **Upgrade** (null for `third_party`, `unknown` and without `latest`): `node` `npm install openlog-node@X`, `python`
+  `pip install -U "openlog-agent==X"` (PEP 440), `dotnet` `dotnet add package OpenLog.Agent --version X` — each from
+  the registry only when `registry` is `available` (the onboarding check), else the release asset (`notes`
+  `registry_fallback`); `go` `go get github.com/onuragtas/openlog/agents/go@vX` + detected instrumentation modules and
+  `go mod tidy` (`go_modules`); `java` jar download URL of the release (`java_fleet_auto`, `docs_section`
+  "Distribution and updates" of java-agent.md); `php` `.deb` (amd64) of the release (`php_fleet_auto`: fleet
+  installation with `php_agent.mode: auto`).
+
 ### `GET /api/v1/apm/services/{service_name}`
 `404` when the service has no data within retention.
 ```json
@@ -1142,6 +1177,7 @@ controller within `OPENLOG_FLEET_CONTROLLER_INTERVAL`. Every change is written t
  "wave_soak_minutes": 60, "halt_failure_rate": 0.05,
  "maintenance_windows": [{"days": ["sat", "sun"], "start": "02:00", "end": "05:00"}],
  "php_agent": {"mode": "manual", "version": "agent", "reload": "none", "exclude_bins": [], "changed_at": null},
+ "java_agent": {"mode": "manual", "version": "agent", "changed_at": null},
  "is_default": false, "updated_at": "…", "updated_by_email": "…"}
 ```
 `php_agent` controls installing the PHP agent through the infra agent ([php-agent.md](php-agent.md) §7.3): `mode`
@@ -1151,6 +1187,12 @@ or a SemVer version (must be a verified release when the catalog is loaded); `re
 Apache reload after a change); `exclude_bins` globs (at most 50). Hosts follow the policy's `waves` and
 `wave_soak_minutes` starting at the later of `changed_at` (set by the server when the section changes) and the
 target's release time, and its maintenance windows. A `PUT` without `php_agent` keeps the stored section.
+
+`java_agent` keeps `openlog-javaagent.jar` current through the infra agent ([java-agent.md](java-agent.md) §2):
+`mode` `off` (fleet installations are removed once no JVM uses them) · `manual` (default: JVM inventory only) · `auto`
+(install and upgrade the jar behind `link_path`); `version` `agent` or a SemVer version (verified release when the
+catalog is loaded; pinning an older version within the rollback floor is the fleet-ordered rollback). Waves, soak time
+and maintenance windows apply as for `php_agent`. A `PUT` without `java_agent` keeps the stored section.
 
 `PUT` takes the policy fields and returns the stored policy. `400 invalid_argument`: unknown mode/channel/target,
 `waves` not strictly increasing in 1..100 or not ending at 100 (1–20 waves), `wave_soak_minutes` outside 0..43200,
@@ -1197,6 +1239,13 @@ the reported version exactly, `state` the reported update state, `q` a substring
       "libc": "glibc", "scan_dir": "/etc/php/8.2/fpm/conf.d", "module": "20220829-nts-glibc", "supported": true,
       "enabled": true, "loaded": true, "excluded": false}],
     "update": {"operation": "upgrade", "version": "0.4.0", "state": "applied", "error": "", "changed_at": "…"} | null,
+    "override": {"mode": "auto", "updated_at": "…"} | null, "status": "up_to_date", "status_target": "0.4.0" | null},
+  "java_agent": {"reported": true, "mode": "auto", "agent_mode": "auto", "source": "remote", "capable": true, "reason": "",
+    "managed": true, "version": "0.4.0" | null, "state": "restart_pending", "detail": "1 JVM(s) still run an older Java agent: …",
+    "link_path": "/opt/openlog/openlog-javaagent.jar", "link_state": "managed",
+    "jvms": [{"pid": 4242, "name": "java", "command": "java -jar shop.jar", "agent_path": "/opt/openlog/openlog-javaagent.jar",
+      "loaded_version": "0.3.0", "managed": true, "restart_pending": true, "started_at": "…", "container": false}],
+    "update": {"operation": "upgrade", "version": "0.4.0", "state": "applied", "error": "", "changed_at": "…"} | null,
     "override": {"mode": "auto", "updated_at": "…"} | null, "status": "up_to_date", "status_target": "0.4.0" | null}}],
  "next_cursor": null}
 ```
@@ -1224,6 +1273,19 @@ policy's `php_agent.mode`; an `auto` override skips waves (maintenance windows s
 `{"mode", "updated_at"}`; `404` for a host that never synced; `400` for another mode. `DELETE` is idempotent (`204`)
 and returns the host to the policy. Audit `fleet.php_agent_override.set` (`details.mode`) /
 `fleet.php_agent_override.delete`.
+
+`java_agent.state` is what the host reports: `installed`, `staged` (download or hand-over in progress),
+`restart_pending` (JVMs still run an older version — restart those applications to load the new one; Windows: the
+link copy is locked), `unmanaged` (`link_path` is a jar the infra agent did not install; `detail` explains how to
+adopt it), `error`, `not_found`; empty when not reported. `java_agent.status` is the decision (same inputs as the
+sync response): `offer`, `up_to_date`, `mode_off`, `manual`, `not_reported`, `not_capable`, `invalid_version`,
+`no_catalog`, `target_unavailable`, `no_artifact`, `already_failed`, `not_in_wave`, `outside_window`.
+
+### `PUT /api/v1/fleet/hosts/{host_id}/java-agent` `{"mode": "off"|"manual"|"auto"}` · `DELETE …/java-agent`
+The host's Java agent mode instead of the policy's `java_agent.mode`; an `auto` override skips waves (maintenance
+windows still apply). `PUT` returns `{"mode", "updated_at"}`; `404` for a host that never synced; `400` for another
+mode. `DELETE` is idempotent (`204`). Audit `fleet.java_agent_override.set` (`details.mode`) /
+`fleet.java_agent_override.delete`.
 
 ### `GET /api/v1/fleet/rollouts?limit=`
 Newest first (default 20, max 100): `{"rollouts": [Rollout]}`.

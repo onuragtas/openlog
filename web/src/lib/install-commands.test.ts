@@ -273,6 +273,7 @@ describe("APM agents", () => {
         "sudo install -D -m 0644 openlog-javaagent-0.9.1.jar /opt/openlog/openlog-javaagent.jar",
     );
     expect(block("apm/java", "run").code).toMatch(/\njava -javaagent:\/opt\/openlog\/openlog-javaagent\.jar -jar app\.jar$/);
+    expect(build("apm/java").notes).toContain("javaFleet");
     const unknown = build("apm/java", {}, { agent_version: null });
     expect(unknown.blocks[0]!.code).toContain("/download/vX.Y.Z/openlog-javaagent-X.Y.Z.jar");
     expect(unknown.notes).toContain("versionUnknown");

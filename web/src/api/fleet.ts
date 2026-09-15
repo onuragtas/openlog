@@ -26,6 +26,12 @@ export type FleetPHPOverride = S["FleetPHPOverride"];
 export type FleetPHPStatus = FleetHostPHPAgent["status"];
 export type FleetPHPAccess = S["FleetPHPAccess"];
 export type FleetPHPPoolAccess = S["FleetPHPPoolAccess"];
+export type FleetJavaAgentMode = S["FleetJavaAgentMode"];
+export type FleetJavaAgentPolicy = S["FleetJavaAgentPolicy"];
+export type FleetHostJavaAgent = S["FleetHostJavaAgent"];
+export type FleetJavaJVM = S["FleetJavaJVM"];
+export type FleetJavaOverride = S["FleetJavaOverride"];
+export type FleetJavaStatus = FleetHostJavaAgent["status"];
 
 /** While a rollout is active the page follows it closely; otherwise it refreshes slowly. */
 export const ACTIVE_REFRESH_MS = 3_000;
@@ -116,6 +122,15 @@ export async function setHostPHPAgentMode(hostId: string, mode: FleetPHPAgentMod
 
 export async function clearHostPHPAgentMode(hostId: string): Promise<void> {
   expectOk(await api.DELETE("/api/v1/fleet/hosts/{host_id}/php-agent", { params: { path: { host_id: hostId } } }));
+}
+
+/** Per-host Java agent mode instead of the policy's (java-agent.md §2). */
+export async function setHostJavaAgentMode(hostId: string, mode: FleetJavaAgentMode): Promise<FleetJavaOverride> {
+  return unwrap(await api.PUT("/api/v1/fleet/hosts/{host_id}/java-agent", { params: { path: { host_id: hostId } }, body: { mode } }));
+}
+
+export async function clearHostJavaAgentMode(hostId: string): Promise<void> {
+  expectOk(await api.DELETE("/api/v1/fleet/hosts/{host_id}/java-agent", { params: { path: { host_id: hostId } } }));
 }
 
 export async function pauseRollout(id: string): Promise<FleetRollout> {

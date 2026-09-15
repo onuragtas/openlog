@@ -576,6 +576,45 @@ php_agent:
 - Self-telemetry: `openlog.agent.php_agent.operations{operation, result}`; the host carries `openlog.php_agent.version`.
 - Spans of PHP-FPM workers reach the agent through `php.sock` (see "PHP forwarder" for its group and mode).
 
+## Java agent updates
+
+Contract: `openlog/docs/contracts/java-agent.md` §2 (D-123). The agent reports the JVMs that load the openlog Java agent
+(`-javaagent:` on the command line or in `JAVA_TOOL_OPTIONS`/`JDK_JAVA_OPTIONS`: pid, agent path, the version the JVM
+actually loaded, whether it must be restarted) and can keep one stable jar path current. Configure the application
+once, e.g. in the PM2 ecosystem file or the systemd unit:
+
+```sh
+JAVA_TOOL_OPTIONS=-javaagent:/opt/openlog/openlog-javaagent.jar
+```
+
+```yaml
+java_agent:
+  mode: auto                # off | manual (default: only report JVMs) | auto
+  version: agent            # agent (= this agent's version, default) or e.g. 0.9.1
+  remote_config: true       # the Fleet page's mode/version replace these (default)
+  health_check_after: 2m
+  install_root: /opt/openlog/java-agent          # versions/<v>/openlog-javaagent.jar, current
+  link_path: /opt/openlog/openlog-javaagent.jar  # Windows: C:\Program Files\openlog\openlog-javaagent.jar
+```
+
+- The jar is downloaded and verified like a self-update (signed manifest, sha256), installed root-owned into
+  `versions/<v>/` and `link_path` is switched atomically to it (a new symlink renamed over the old one). A jar is never
+  changed in place: running JVMs keep the version they started with and are reported `restart_pending` — restart the
+  application to load the new version. The agent never restarts or signals a JVM.
+- Linux: installing needs the privileged pre-start step (`-apply`), like the PHP agent (the agent exits once). macOS and
+  Windows: the privileged service process applies it directly.
+- A `link_path` the agent did not create (e.g. a jar copied there by hand) is never touched: the report says
+  `unmanaged`. Adopt it by pointing `-javaagent` at `/opt/openlog/java-agent/current/openlog-javaagent.jar`, or move
+  the file away (`sudo mv /opt/openlog/openlog-javaagent.jar /opt/openlog/openlog-javaagent.jar.manual`; running JVMs
+  are unaffected) so that the agent creates the link within 5 minutes (or at `systemctl restart openlog-infra-agent`).
+- Windows locks jars that a JVM has open, so the copy at `link_path` switches only once those applications stopped
+  (retried every 30 s); `-javaagent:C:\Program Files\openlog\java-agent\current\openlog-javaagent.jar` updates without
+  that wait.
+- `mode: off` removes the managed jar and link once no running JVM uses them. Applications still configured with the
+  path will not start afterwards.
+- Rollback: automatic when the installed jar fails verification; otherwise pin `java_agent.version` (Fleet policy) to
+  the previous version.
+
 ## Configuration
 
 See [`packaging/config.example.yaml`](packaging/config.example.yaml). `OPENLOG_LICENSE_KEY` and `OPENLOG_ENDPOINT` override the file.

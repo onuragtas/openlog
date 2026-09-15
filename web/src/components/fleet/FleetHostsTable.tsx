@@ -6,15 +6,19 @@ import { Search } from "lucide-react";
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  clearHostJavaAgentMode,
   clearHostOverride,
   clearHostPHPAgentMode,
   fleetHostsQuery,
+  setHostJavaAgentMode,
   setHostOverride,
   setHostPHPAgentMode,
   type FleetHost,
   type FleetHostFilter,
+  type FleetJavaAgentMode,
   type FleetPHPAgentMode,
 } from "@/api/fleet";
+import { javaStateTone, javaStatusTone } from "@/lib/java-agent";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
@@ -29,8 +33,8 @@ import { cn } from "@/lib/utils";
 const STATES = ["idle", "downloading", "verifying", "staged", "restarting", "confirming", "succeeded", "failed", "rolled_back"] as const;
 
 const GRID =
-  "minmax(9rem,1.4fr) minmax(7rem,0.9fr) minmax(6rem,0.7fr) minmax(9rem,1.3fr) minmax(9rem,1.2fr) minmax(11rem,1.3fr) minmax(6rem,0.8fr) minmax(6rem,0.7fr) minmax(8rem,auto)";
-/** The grid needs 75rem; below this container width rows become cards. */
+  "minmax(9rem,1.4fr) minmax(7rem,0.9fr) minmax(6rem,0.7fr) minmax(9rem,1.3fr) minmax(9rem,1.2fr) minmax(11rem,1.3fr) minmax(10rem,1.2fr) minmax(6rem,0.8fr) minmax(6rem,0.7fr) minmax(8rem,auto)";
+/** The grid needs 85rem; below this container width rows become cards. */
 const COMPACT_BELOW = 768;
 
 type PHPTone = "default" | "secondary" | "outline" | "warning" | "destructive";
@@ -93,12 +97,19 @@ export function FleetHostsTable({
     },
     onSettled: invalidate,
   });
+  const javaMode = useMutation({
+    mutationFn: async (p: { hostId: string; mode: FleetJavaAgentMode | "" }) => {
+      if (p.mode === "") await clearHostJavaAgentMode(p.hostId);
+      else await setHostJavaAgentMode(p.hostId, p.mode);
+    },
+    onSettled: invalidate,
+  });
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is not compiler-compatible yet
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => (compact ? 230 : 60),
+    estimateSize: () => (compact ? 290 : 60),
     overscan: compact ? 4 : 10,
     // The layout is part of the key: switching remounts rows so their new heights are measured.
     getItemKey: (i) => `${compact ? "c" : "w"}|${rows[i]!.host_id}`,
@@ -111,6 +122,7 @@ export function FleetHostsTable({
     t("fleet.hosts.columns.update"),
     t("fleet.hosts.columns.status"),
     t("fleet.hosts.columns.php"),
+    t("fleet.hosts.columns.java"),
     t("fleet.hosts.columns.override"),
     t("fleet.hosts.columns.lastSync"),
     t("fleet.hosts.columns.actions"),
@@ -161,7 +173,7 @@ export function FleetHostsTable({
         </div>
         {hosts.data && <p className="ml-auto text-xs text-muted-foreground" aria-live="polite">{t("fleet.hosts.count", { count: rows.length })}</p>}
       </div>
-      <FormError error={hold.error ?? pin.error ?? clear.error ?? phpMode.error} />
+      <FormError error={hold.error ?? pin.error ?? clear.error ?? phpMode.error ?? javaMode.error} />
 
       <div ref={measureRef} className="rounded-xl border bg-card text-sm">
         {hosts.isPending ? (
@@ -172,7 +184,7 @@ export function FleetHostsTable({
           <EmptyState>{filter.q || filter.version || filter.state ? t("fleet.hosts.noMatch") : t("fleet.hosts.empty")}</EmptyState>
         ) : (
           <div role="table" aria-label={t("fleet.hosts.title")} aria-rowcount={rows.length + 1} className={compact ? undefined : "overflow-x-auto"}>
-            <div className={compact ? undefined : "min-w-[75rem]"}>
+            <div className={compact ? undefined : "min-w-[85rem]"}>
               <div role="rowgroup" className={compact ? "sr-only" : "border-b"}>
                 <div role="row" className="grid items-center px-2" style={{ gridTemplateColumns: GRID }}>
                   {header.map((h, i) => (
@@ -214,6 +226,8 @@ export function FleetHostsTable({
                           busy={hold.isPending || pin.isPending || clear.isPending}
                           phpBusy={phpMode.isPending}
                           onPHPMode={(mode) => phpMode.mutate({ hostId: h.host_id, mode })}
+                          javaBusy={javaMode.isPending}
+                          onJavaMode={(mode) => javaMode.mutate({ hostId: h.host_id, mode })}
                           onHold={() => hold.mutate(h.host_id)}
                           onClear={() => clear.mutate(h.host_id)}
                           onPinStart={() => setPinning({ hostId: h.host_id, version: h.override?.version ?? h.agent.version })}
@@ -249,6 +263,8 @@ function HostCells({
   busy,
   phpBusy,
   onPHPMode,
+  javaBusy,
+  onJavaMode,
   onHold,
   onClear,
   onPinStart,
@@ -264,6 +280,8 @@ function HostCells({
   busy: boolean;
   phpBusy: boolean;
   onPHPMode: (mode: FleetPHPAgentMode | "") => void;
+  javaBusy: boolean;
+  onJavaMode: (mode: FleetJavaAgentMode | "") => void;
   onHold: () => void;
   onClear: () => void;
   onPinStart: () => void;
@@ -329,13 +347,17 @@ function HostCells({
         {label(5)}
         <PHPCell host={h} canManage={canManage} busy={phpBusy} onMode={onPHPMode} name={name} />
       </div>
+      <div role="cell" className={cn(cell, card && "col-span-2")} data-testid="fleet-host-java">
+        {label(6)}
+        <JavaCell host={h} canManage={canManage} busy={javaBusy} onMode={onJavaMode} name={name} />
+      </div>
       <div role="cell" className={cn(cell, card && !h.override && "hidden")}>
-        {h.override && label(6)}
+        {h.override && label(7)}
         {h.override?.action === "hold" && <Badge variant="warning">{t("fleet.hosts.held")}</Badge>}
         {h.override?.action === "pin" && <Badge variant="secondary">{t("fleet.hosts.pinnedTo", { version: h.override.version ?? "" })}</Badge>}
       </div>
       <div role="cell" className={cell}>
-        {label(7)}
+        {label(8)}
         <DateTimeText value={h.last_sync_at} relative />
       </div>
       <div role="cell" className={cn(cell, card ? "col-span-2" : "items-end", card && !canManage && "hidden")} aria-label={t("fleet.hosts.actionsFor", { host: name })}>
@@ -385,6 +407,74 @@ function HostCells({
             </span>
           ))}
       </div>
+    </>
+  );
+}
+
+/** Managed Java agent jar, JVMs with restarts pending, decision and the per-host mode (java-agent.md §2). */
+function JavaCell({
+  host: h,
+  canManage,
+  busy,
+  onMode,
+  name,
+}: {
+  host: FleetHost;
+  canManage: boolean;
+  busy: boolean;
+  onMode: (mode: FleetJavaAgentMode | "") => void;
+  name: string;
+}) {
+  const { t } = useTranslation();
+  const id = useId();
+  const p = h.java_agent;
+  if (!p.reported) {
+    return <span className="text-muted-foreground">{t("fleet.hosts.javaNotReported")}</span>;
+  }
+  const pending = p.jvms.filter((j) => j.restart_pending).length;
+  return (
+    <>
+      <span className="flex flex-wrap items-center gap-1">
+        {p.state && (
+          <Badge variant={javaStateTone(p.state)} title={p.detail || undefined} className="max-w-full">
+            <span className="truncate">{translateOptional(`fleet.javaState.${p.state}`, p.state)}</span>
+          </Badge>
+        )}
+        {p.version && <span className="font-mono text-[11px]">{t("fleet.hosts.javaInstalled", { version: p.version })}</span>}
+      </span>
+      <span className="flex flex-wrap items-center gap-1">
+        <span className="text-muted-foreground">{p.jvms.length === 0 ? t("fleet.hosts.javaNoJvms") : t("fleet.hosts.javaJvms", { count: p.jvms.length })}</span>
+        {pending > 0 && <Badge variant="warning">{t("fleet.hosts.javaRestartPending", { count: pending })}</Badge>}
+        <Badge variant={javaStatusTone(p.status)} className="max-w-full">
+          <span className="truncate">
+            {p.status === "offer" ? t("fleet.javaStatus.offer", { version: p.status_target ?? "" }) : translateOptional(`fleet.javaStatus.${p.status}`, p.status)}
+          </span>
+        </Badge>
+      </span>
+      {p.update?.error && (
+        <span className="w-full max-w-full truncate text-destructive-text" title={p.update.error}>
+          {t("fleet.hosts.error", { message: p.update.error })}
+        </span>
+      )}
+      {canManage && (
+        <>
+          <label htmlFor={`${id}-java`} className="sr-only">
+            {t("fleet.hosts.javaModeFor", { host: name })}
+          </label>
+          <NativeSelect
+            id={`${id}-java`}
+            className="h-7 w-full max-w-full min-w-0 text-xs"
+            value={p.override?.mode ?? ""}
+            disabled={busy}
+            onChange={(e) => onMode(e.target.value as FleetJavaAgentMode | "")}
+          >
+            <option value="">{t("fleet.hosts.javaFollowPolicy")}</option>
+            <option value="auto">{t("fleet.hosts.javaForce.auto")}</option>
+            <option value="manual">{t("fleet.hosts.javaForce.manual")}</option>
+            <option value="off">{t("fleet.hosts.javaForce.off")}</option>
+          </NativeSelect>
+        </>
+      )}
     </>
   );
 }

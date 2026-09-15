@@ -29,6 +29,8 @@ type OrgState struct {
 	IntegrationsLoaded bool
 	// PHPOverrides are the per-host PHP agent modes (by host id).
 	PHPOverrides map[string]PHPOverride
+	// JavaOverrides are the per-host Java agent modes (by host id).
+	JavaOverrides map[string]JavaOverride
 }
 
 // StoredPolicy is a policy with its metadata.
@@ -104,6 +106,9 @@ type Store interface {
 	ListPHPOverrides(ctx context.Context, orgID string) (map[string]PHPOverride, error)
 	PutPHPOverride(ctx context.Context, orgID string, o PHPOverride, userID string) error
 	DeletePHPOverride(ctx context.Context, orgID, hostID string) (bool, error)
+	ListJavaOverrides(ctx context.Context, orgID string) (map[string]JavaOverride, error)
+	PutJavaOverride(ctx context.Context, orgID string, o JavaOverride, userID string) error
+	DeleteJavaOverride(ctx context.Context, orgID, hostID string) (bool, error)
 
 	GetHost(ctx context.Context, orgID, hostID string) (Host, error)
 	ListHosts(ctx context.Context, orgID string, f HostFilter) (hosts []Host, nextCursor string, err error)

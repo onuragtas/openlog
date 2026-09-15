@@ -71,6 +71,7 @@ func applyPlatformDefaults(c *Config, goos string) {
 		c.PHPForwarder.Enabled = &off // no unix datagram socket; the PHP agent is Linux-only
 		c.PHPForwarder.Socket = ""
 		c.PHPAgent.Mode = PHPAgentModeOff
+		c.JavaAgent.InstallRoot, c.JavaAgent.LinkPath = WindowsJavaAgentRoot, WindowsJavaAgentLink
 		c.Logs.WindowsEventLog.Channels = []EventLogChannel{
 			{Name: "System", Levels: []string{"critical", "error", "warning"}},
 			{Name: "Application", Levels: []string{"critical", "error", "warning"}},

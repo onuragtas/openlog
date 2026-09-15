@@ -99,6 +99,7 @@ func startFleetAPI(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, s
 	cat := releaseCatalog(ctx, cfg, reg, log)
 	store := fleet.NewPGStore(pool)
 	srv.SetFleet(fleet.NewManager(store, cat, fleet.ManagerOptions{StaleAfter: cfg.Fleet.HostStaleAfter, Log: log}))
+	srv.SetAgentReleases(cat.Snapshot) // language agent version comparison of GET /api/v1/apm/agents (D-124)
 	ctl := fleet.NewController(store, cat.Snapshot, fleet.ControllerOptions{
 		Interval: cfg.Fleet.ControllerInterval, StaleAfter: cfg.Fleet.HostStaleAfter, Registerer: reg, Log: log.With("job", "fleet-rollouts"),
 	})

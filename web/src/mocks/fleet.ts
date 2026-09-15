@@ -3,7 +3,17 @@
 // current wave update, one host fails in the second wave, waves advance, the rollout completes), so the
 // UI and Playwright can watch a rollout progress without a backend.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { FleetHost, FleetHostPHPAgent, FleetPHPAgentMode, FleetPolicy, FleetRollout, FleetSummary } from "@/api/fleet";
+import type {
+  FleetHost,
+  FleetHostJavaAgent,
+  FleetJavaAgentMode,
+  FleetJavaJVM,
+  FleetHostPHPAgent,
+  FleetPHPAgentMode,
+  FleetPolicy,
+  FleetRollout,
+  FleetSummary,
+} from "@/api/fleet";
 import type { Role } from "@/api/roles";
 import { compareVersions, isOpenRollout, isVersion, parseWaves } from "@/lib/fleet";
 import { authenticate } from "./account";
@@ -70,6 +80,64 @@ function seedPHP(i: number, container: boolean, version: string, now: number): F
   };
 }
 
+const JAVA_LINK = "/opt/openlog/openlog-javaagent.jar";
+
+/** Java inventory of a seeded host: every 5th web host runs a Spring Boot app with the openlog Java agent (java-agent.md §2). */
+function seedJava(i: number, container: boolean, now: number): FleetHostJavaAgent {
+  const base: FleetHostJavaAgent = {
+    reported: !container,
+    mode: "manual",
+    agent_mode: container ? "" : "manual",
+    source: container ? "" : "remote",
+    capable: !container,
+    reason: container ? "running in a container: update the image instead" : "",
+    managed: false,
+    version: null,
+    state: container ? "" : "not_found",
+    detail: "",
+    link_path: container ? "" : JAVA_LINK,
+    link_state: container ? "" : "missing",
+    jvms: [],
+    update: null,
+    override: null,
+    status: container ? "not_reported" : "manual",
+    status_target: null,
+  };
+  if (container || i % 5 !== 2) return base;
+  const jvm = (pid: number, loaded: string, managed: boolean, pending: boolean, agentPath = JAVA_LINK): FleetJavaJVM => ({
+    pid,
+    name: "java",
+    command: `java -Xmx512m -jar /srv/app-${i}/app.jar --spring.profiles.active=prod`,
+    agent_path: agentPath,
+    loaded_version: loaded,
+    managed,
+    restart_pending: pending,
+    started_at: formatTs(now - (i + 3) * 3_600_000),
+    container: false,
+  });
+  if (i === 7) {
+    // A jar copied by hand: never changed by the infra agent.
+    return {
+      ...base,
+      state: "unmanaged",
+      link_state: "unmanaged",
+      detail: `${JAVA_LINK} was not installed by the infra agent and is left alone. To keep the Java agent updated, point -javaagent at /opt/openlog/java-agent/current/openlog-javaagent.jar, or move the file away (running JVMs keep their open copy) so that the infra agent creates ${JAVA_LINK} as a link`,
+      jvms: [jvm(4100 + i, "0.2.0", false, false)],
+    };
+  }
+  const pending = i % 10 === 2;
+  return {
+    ...base,
+    managed: true,
+    version: "0.3.0",
+    state: pending ? "restart_pending" : "installed",
+    detail: pending ? "1 JVM(s) still run an older Java agent: restart the application(s) to load 0.3.0" : "",
+    link_state: "managed",
+    jvms: [jvm(4100 + i, pending ? "0.2.0" : "0.3.0", true, pending), jvm(4200 + i, "0.3.0", true, false)],
+    update: { operation: "upgrade", version: "0.3.0", state: "applied", error: "", changed_at: formatTs(now - 86_400_000) },
+  };
+}
+
 function seedHosts(now: number): FleetHost[] {
   const hosts: FleetHost[] = [];
   for (let i = 0; i < 64; i++) {
@@ -78,6 +146,7 @@ function seedHosts(now: number): FleetHost[] {
     const name = container ? `k8s-node-${i - 59}` : `web-${String(i + 1).padStart(2, "0")}`;
     hosts.push({
       php_agent: seedPHP(i, container, version, now),
+      java_agent: seedJava(i, container, now),
       php_access: container
         ? null
         : {
@@ -129,6 +198,7 @@ function seed(): MockState {
       halt_failure_rate: 0.05,
       maintenance_windows: [],
       php_agent: { mode: "manual", version: "agent", reload: "none", exclude_bins: [], changed_at: null },
+      java_agent: { mode: "manual", version: "agent", changed_at: null },
       is_default: false,
       updated_at: formatTs(now - 3 * 86_400_000),
       updated_by_email: "admin@openlog.local",
@@ -239,6 +309,55 @@ function stepPHP(): void {
   }
 }
 
+/** The Java agent decision (internal/fleet DecideJava without waves and windows). */
+function decideJava(h: FleetHost): FleetHostJavaAgent {
+  const p = h.java_agent;
+  const mode: FleetJavaAgentMode = p.override?.mode ?? db.policy.java_agent.mode;
+  const out = (status: FleetHostJavaAgent["status"], target: string | null = null): FleetHostJavaAgent => ({ ...p, mode, status, status_target: target });
+  if (mode === "off") return out("mode_off");
+  if (mode === "manual") return out("manual");
+  const target = db.policy.java_agent.version === "agent" ? h.agent.version : db.policy.java_agent.version;
+  if (!p.reported) return out("not_reported", target);
+  if (!p.capable) return out("not_capable", target);
+  if (p.version === target) return out("up_to_date", target);
+  return out("offer", target);
+}
+
+/** Offered hosts switch their Java agent jar; running JVMs keep their version and need a restart. */
+function stepJava(): void {
+  const now = formatTs(Date.now());
+  for (const h of db.hosts) {
+    const d = decideJava(h);
+    const p = h.java_agent;
+    if (d.status === "offer" && d.status_target) {
+      const target = d.status_target;
+      const managedLink = p.link_state !== "unmanaged";
+      const jvms = p.jvms.map((j) => (j.managed || managedLink ? { ...j, managed: true, restart_pending: j.loaded_version !== target } : j));
+      const pending = jvms.filter((j) => j.restart_pending).length;
+      h.java_agent = {
+        ...p,
+        managed: true,
+        version: target,
+        jvms,
+        link_state: managedLink ? "managed" : "unmanaged",
+        state: !managedLink ? "unmanaged" : pending > 0 ? "restart_pending" : "installed",
+        detail: !managedLink ? p.detail : pending > 0 ? `${pending} JVM(s) still run an older Java agent: restart the application(s) to load ${target}` : "",
+        update: { operation: p.version ? "upgrade" : "install", version: target, state: "applied", error: "", changed_at: now },
+      };
+    } else if (d.status === "mode_off" && p.managed && !p.jvms.some((j) => j.managed)) {
+      h.java_agent = {
+        ...p,
+        managed: false,
+        version: null,
+        state: "not_found",
+        link_state: "missing",
+        detail: "",
+        update: { operation: "uninstall", version: p.version ?? "", state: "uninstalled", error: "", changed_at: now },
+      };
+    }
+  }
+}
+
 function view(h: FleetHost): FleetHost {
   const r = current();
   const d = decide(h, r);
@@ -249,6 +368,7 @@ function view(h: FleetHost): FleetHost {
     status: d.status,
     status_target: d.target,
     php_agent: decidePHP(h),
+    java_agent: decideJava(h),
   };
 }
 
@@ -423,6 +543,7 @@ export const fleetHandlers = [
   http.get(`${API}/summary`, read(() => {
     step();
     stepPHP();
+    stepJava();
     return HttpResponse.json(summary());
   })),
 
@@ -445,10 +566,20 @@ export const fleetHandlers = [
       const same = JSON.stringify(merged) === JSON.stringify({ mode: php.mode, version: php.version, reload: php.reload, exclude_bins: php.exclude_bins });
       php = { ...merged, changed_at: same ? php.changed_at : formatTs(Date.now()) };
     }
+    let java = db.policy.java_agent;
+    if (p.java_agent) {
+      const next = p.java_agent;
+      if (!["off", "manual", "auto"].includes(next.mode)) return fail("invalid_argument", "java_agent.mode must be off, manual or auto");
+      const version = ((next.version ?? "agent").trim() || "agent").replace(/^v/, "");
+      if (version !== "agent" && !isVersion(version)) return fail("invalid_argument", "java_agent.version must be agent or a SemVer version");
+      const same = next.mode === java.mode && version === java.version;
+      java = { mode: next.mode, version, changed_at: same ? java.changed_at : formatTs(Date.now()) };
+    }
     db.policy = {
       ...db.policy,
       ...p,
       php_agent: php,
+      java_agent: java,
       pinned_version: p.target === "pinned" ? (p.pinned_version ?? null) : null,
       is_default: false,
       updated_at: formatTs(Date.now()),
@@ -504,6 +635,21 @@ export const fleetHandlers = [
   http.delete(`${API}/hosts/:hostId/php-agent`, write(({ params }) => {
     const h = db.hosts.find((x) => x.host_id === params.hostId);
     if (h) h.php_agent = { ...h.php_agent, override: null };
+    return new HttpResponse(null, { status: 204 });
+  })),
+
+  http.put(`${API}/hosts/:hostId/java-agent`, write(async ({ request, params }) => {
+    const h = db.hosts.find((x) => x.host_id === params.hostId);
+    if (!h) return fail("not_found", "not found");
+    const b = await body<{ mode: FleetJavaAgentMode }>(request);
+    if (!b.mode || !["off", "manual", "auto"].includes(b.mode)) return fail("invalid_argument", "mode must be off, manual or auto");
+    h.java_agent = { ...h.java_agent, override: { mode: b.mode, updated_at: formatTs(Date.now()) } };
+    return HttpResponse.json(h.java_agent.override);
+  })),
+
+  http.delete(`${API}/hosts/:hostId/java-agent`, write(({ params }) => {
+    const h = db.hosts.find((x) => x.host_id === params.hostId);
+    if (h) h.java_agent = { ...h.java_agent, override: null };
     return new HttpResponse(null, { status: 204 });
   })),
 

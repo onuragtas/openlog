@@ -290,6 +290,7 @@ export type NoteKey =
   | "pythonModules"
   | "javaChecksum"
   | "javaDockerKey"
+  | "javaFleet"
   | "dotnetRuntime"
   | "phpNeedsInfraAgent"
   | "phpFleetPage"
@@ -625,6 +626,7 @@ function apmJava(c: Ctx) {
       ].join("\n"),
     );
     add(c, "run", "sh", `${openlogEnv(c)}\njava -javaagent:/opt/openlog/openlog-javaagent.jar -jar app.jar`);
+    note(c, "javaFleet");
   }
   if (!c.version) note(c, "versionUnknown");
 }

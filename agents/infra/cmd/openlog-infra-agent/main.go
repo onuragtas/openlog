@@ -183,12 +183,15 @@ func run() int {
 	php := newPHPAgentManager(cfg, ver, install, mgr, a, cancel, log) // phpagent.go
 	php.SetStats(a.Stats())
 	php.Startup()
+	java := newJavaAgentManager(cfg, ver, install, mgr, cancel, log) // javaagent.go
+	java.Startup()
 	syncer := &update.Syncer{
 		Endpoint: cfg.Endpoint, LicenseKey: cfg.LicenseKey, UserAgent: update.AgentName + "/" + ver,
 		Client: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "sync"),
-		Handle: mgr.Handle, Kick: mergeKicks(ctx, mgr.Kick(), php.Kick()), InitialDelay: -1,
+		Handle: mgr.Handle, Kick: mergeKicks(ctx, mgr.Kick(), php.Kick(), java.Kick()), InitialDelay: -1,
 		Integrations: a.ApplyRemoteIntegrations,
 		PHPAgent:     php.SetRemote,
+		JavaAgent:    java.SetRemote,
 		Request: func() update.SyncRequest {
 			return update.SyncRequest{
 				HostID: a.HostID(), HostName: a.HostName(), Agent: mgr.AgentInfo(),
@@ -196,6 +199,7 @@ func run() int {
 				IntegrationsConfigRevision: a.IntegrationsConfigRevision(),
 				Reconcile:                  install.Reconcile.Report(),
 				PHPAgent:                   php.Report(),
+				JavaAgent:                  java.Report(),
 				PHPAccess:                  a.PHPAccess(update.AgentUser, filepath.Join(filepath.Dir(*configPath), phpaccess.OptOutFile)),
 			}
 		},
@@ -209,6 +213,7 @@ func run() int {
 	wg.Go(func() { syncer.Run(ctx) })
 	wg.Go(func() { mgr.Run(ctx) })
 	wg.Go(func() { php.Run(ctx) })
+	wg.Go(func() { java.Run(ctx) })
 
 	if err := a.Run(ctx); err != nil {
 		log.Error("agent failed", "error", err)

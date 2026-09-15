@@ -132,6 +132,7 @@ type syncRequest struct {
 	IntegrationsConfigRevision string          `json:"integrations_config_revision"`
 	PHPAgent                   json.RawMessage `json:"php_agent"`
 	PHPAccess                  json.RawMessage `json:"php_access"`
+	JavaAgent                  json.RawMessage `json:"java_agent"`
 }
 
 // SyncResponse is the sync answer.
@@ -144,6 +145,8 @@ type SyncResponse struct {
 	IntegrationsConfig *IntegrationsConfigJSON `json:"integrations_config"`
 	// PHPAgent is the fleet's PHP agent settings for the host (null without a policy store).
 	PHPAgent *PHPAgentJSON `json:"php_agent"`
+	// JavaAgent is the fleet's Java agent settings for the host (null without a policy store).
+	JavaAgent *JavaAgentJSON `json:"java_agent"`
 }
 
 // IntegrationsConfigJSON is the remote integration config of a host.
@@ -235,6 +238,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 		IntegrationsConfigRevision: clip(strings.TrimSpace(req.IntegrationsConfigRevision), 128),
 		PHPAgent:                   ParsePHPAgentReport(req.PHPAgent),
 		PHPAccess:                  ParsePHPAccessReport(req.PHPAccess),
+		JavaAgent:                  ParseJavaAgentReport(req.JavaAgent),
 	}
 	if u := req.Update; u != nil {
 		if st := clip(strings.TrimSpace(u.State), 32); st != "" {
@@ -274,6 +278,7 @@ func (s *SyncService) handleSync(w http.ResponseWriter, r *http.Request) {
 			}
 			resp.IntegrationsConfig = s.integrationsConfig(st, rep)
 			resp.PHPAgent = s.phpAgentJSON(r, st, rep, in.Catalog, now)
+			resp.JavaAgent = s.javaAgentJSON(r, st, rep, in.Catalog, now)
 		}
 		s.decisions.WithLabelValues(string(reason)).Inc()
 		if s.recorder != nil {
@@ -333,6 +338,35 @@ func (s *SyncService) phpAgentJSON(r *http.Request, st OrgState, rep HostReport,
 	case ReasonPHPUpToDate:
 		out.TargetVersion = d.Target
 	case ReasonPHPOffer:
+		out.TargetVersion = d.Target
+		out.Manifest = base64.StdEncoding.EncodeToString(d.Release.Raw)
+		out.Signature = string(d.Release.Signature)
+		out.DownloadURL = d.Artifact.URL
+		if s.o.ServeMirror && s.catalog != nil && s.catalog.MirrorEnabled() {
+			out.DownloadURL = s.mirrorBase(r) + ReleasesPathFmt + url.PathEscape(d.Release.VersionString()) + "/" + url.PathEscape(d.Artifact.Name)
+		}
+	}
+	return out
+}
+
+// javaAgentJSON is the host's java_agent section: the effective settings and, when the host should install a
+// version now, its signed manifest and download URL.
+func (s *SyncService) javaAgentJSON(r *http.Request, st OrgState, rep HostReport, snap *catalog.Snapshot, now time.Time) *JavaAgentJSON {
+	p := st.Policy.JavaAgent
+	if p.Mode == "" {
+		p = DefaultJavaAgentPolicy()
+	}
+	in := JavaInput{Now: now, Host: rep, Policy: st.Policy, Catalog: snap}
+	in.Policy.JavaAgent = p
+	if o, ok := st.JavaOverrides[rep.HostID]; ok {
+		in.Override = &o
+	}
+	d := DecideJava(in)
+	out := &JavaAgentJSON{Mode: d.Mode, Version: p.Version, Reason: string(d.Reason)}
+	switch d.Reason {
+	case ReasonJavaUpToDate:
+		out.TargetVersion = d.Target
+	case ReasonJavaOffer:
 		out.TargetVersion = d.Target
 		out.Manifest = base64.StdEncoding.EncodeToString(d.Release.Raw)
 		out.Signature = string(d.Release.Signature)

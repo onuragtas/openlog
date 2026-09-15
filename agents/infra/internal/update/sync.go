@@ -66,6 +66,9 @@ type Syncer struct {
 	// PHPAgent receives the php_agent section of a successful sync when the backend sent one (optional; must not
 	// block for long).
 	PHPAgent func(json.RawMessage)
+	// JavaAgent receives the java_agent section of a successful sync when the backend sent one (optional; must not
+	// block for long).
+	JavaAgent func(json.RawMessage)
 	// Kick triggers an immediate sync (state changes).
 	Kick <-chan struct{}
 	// InitialDelay before the first sync; negative means a random delay up to MaxInitialDelay.
@@ -165,6 +168,9 @@ func (s *Syncer) Run(ctx context.Context) {
 			}
 			if s.PHPAgent != nil && len(resp.PHPAgent) > 0 && string(resp.PHPAgent) != "null" {
 				s.PHPAgent(resp.PHPAgent)
+			}
+			if s.JavaAgent != nil && len(resp.JavaAgent) > 0 && string(resp.JavaAgent) != "null" {
+				s.JavaAgent(resp.JavaAgent)
 			}
 		}
 		wait = Jitter(interval, rnd())

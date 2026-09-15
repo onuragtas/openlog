@@ -54,7 +54,8 @@ func (s *Server) apmRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/apm/hosts/{host_id}/services", s.apmHostServices)
 	route("GET /api/v1/apm/map", s.apmMap)
 	route("GET /api/v1/apm/traces", s.apmTraces)
-	s.apmGARoutes(mux) // apm_error_inbox.go: error workflow, deployments, map path
+	route("GET /api/v1/apm/agents", s.apmAgents) // apm_agents.go (D-124)
+	s.apmGARoutes(mux)                           // apm_error_inbox.go: error workflow, deployments, map path
 	if s.accounts != nil {
 		pattern := "PUT /api/v1/apm/services/{service}/settings"
 		mux.Handle(pattern, s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {

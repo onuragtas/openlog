@@ -162,6 +162,14 @@ php_agent:                       # PHP agent installation through this agent (do
   health_check_after: 5m         # after an installation: roll back unless PHP loads it and services still send data
   install_root: /opt/openlog/php-agent   # packages and manual installs there are never changed
 
+java_agent:                      # keeps openlog-javaagent.jar current (docs/contracts/java-agent.md §2)
+  mode: manual                   # manual = only report JVMs; auto = install/upgrade the jar; off = remove the managed jar
+  version: agent                 # agent = this agent's version, or e.g. 0.9.1
+  remote_config: true            # the Fleet page's mode/version replace these
+  health_check_after: 2m         # after a switch: verify the jar, roll back when it is broken
+  install_root: /opt/openlog/java-agent  # versions/<v>/openlog-javaagent.jar + current
+  link_path: /opt/openlog/openlog-javaagent.jar  # use -javaagent:<link_path>; a file you put there yourself is never changed
+
 update:
   enabled: true                 # apply signed updates ordered by the backend (sync/version reporting runs regardless)
   install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user

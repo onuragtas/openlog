@@ -7,6 +7,8 @@ import { useMe } from "@/api/account";
 import { fleetHostQuery } from "@/api/fleet";
 import { hostQuery, metricQuery } from "@/api/queries";
 import { PHPAccessNotice } from "@/components/onboarding/PHPAccessNotice";
+import { JavaAgentPanel } from "@/components/fleet/JavaAgentPanel";
+import { usePermissions } from "@/lib/org-writable";
 import { can } from "@/api/roles";
 import { WriteGuard, WriteGuardLink } from "@/components/ReadOnly";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -179,12 +181,16 @@ export function HostOverviewTab({ hostId }: { hostId: string }) {
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const me = useMe().data;
   const canAlert = can(me?.role, "alerts.write");
+  const canManageFleet = usePermissions().can("fleet.manage");
   // PHP-FPM pools that cannot write the agent's socket lose their spans silently; show the fix on the host page too.
-  const phpAccess = useQuery({ ...fleetHostQuery(hostId), enabled: !!me }).data?.php_access;
+  const fleetHost = useQuery({ ...fleetHostQuery(hostId), enabled: !!me }).data;
+  const phpAccess = fleetHost?.php_access;
   const os = hostOsOf(useQuery(hostQuery(hostId)).data);
   return (
     <div className="flex flex-col gap-4">
       {phpAccess && <PHPAccessNotice access={phpAccess} os={os} />}
+      {/* JVMs with the openlog Java agent and the jar the infra agent keeps current (java-agent.md §2). */}
+      {fleetHost?.java_agent && <JavaAgentPanel host={fleetHost} canManage={canManageFleet} />}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {OVERVIEW_CHARTS.map((def) => (
           <MetricChartCard key={def.id} hostId={hostId} range={range} def={def} canAlert={canAlert} />

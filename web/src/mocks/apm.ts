@@ -2,6 +2,11 @@
 // shop (frontend → orders → postgresql, frontend → catalog → redis) with deterministic series.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import type {
+  ApmAgentStatus,
+  ApmAgentUpgrade,
+  ApmAgentVersion,
+  ApmServiceAgent,
+  ApmServiceAgents,
   ApmDbQuery,
   ApmDeployment,
   ApmErrorActivity,
@@ -701,7 +706,81 @@ export const apmHandlers = [
     if (min !== null && !(Number(min) >= 0)) return fail("invalid_argument", "min_duration_ms must be a non-negative number");
     return HttpResponse.json({ traces: traces(w, url) });
   })),
+
+  // Language agent versions (D-124): catalog unsupported (PHP), frontend outdated (Node.js), orders ok (Go),
+  // legacy-billing a plain OpenTelemetry SDK.
+  http.get(`${API}/apm/agents`, authed(({ request }) => {
+    const url = new URL(request.url);
+    const w = window(url);
+    if (w instanceof Response) return w;
+    const p = url.searchParams;
+    const svc = p.get("service");
+    const ns = p.get("namespace");
+    const env = p.get("environment");
+    const services = mockAgentServices()
+      .filter((s) => (!svc || s.service_name === svc) && (ns === null || s.service_namespace === ns) && (env === null || s.environment === env))
+      .map((s) => (p.get("upgrade") === "false" ? { ...s, agents: s.agents.map((a) => ({ ...a, upgrade: null })) } : s));
+    return HttpResponse.json({
+      release: { catalog: "ok", channel: "stable", latest: AGENT_LATEST, oldest_supported: "0.1.20", notes_url: `https://github.com/onuragtas/openlog/releases/tag/v${AGENT_LATEST}` },
+      services,
+    });
+  })),
 ];
+
+const AGENT_LATEST = "0.1.31";
+
+function mockUpgrade(kind: "node" | "go" | "php"): ApmAgentUpgrade {
+  const docs = "https://github.com/onuragtas/openlog/blob/master/";
+  const base = { version: AGENT_LATEST, lang: "sh", registry: "" as const, registry_url: "", release_asset_url: "", docs_url: "", docs_section: "", notes: [] as ApmAgentUpgrade["notes"] };
+  switch (kind) {
+    case "node":
+      return { ...base, package: "openlog-node", command: `npm install openlog-node@${AGENT_LATEST}`, registry: "available", registry_url: `https://www.npmjs.com/package/openlog-node/v/${AGENT_LATEST}`, docs_url: `${docs}agents/node/README.md` };
+    case "go":
+      return {
+        ...base,
+        package: "github.com/onuragtas/openlog/agents/go",
+        command: `go get github.com/onuragtas/openlog/agents/go@v${AGENT_LATEST} github.com/onuragtas/openlog/agents/go/instrumentation/gin@v${AGENT_LATEST}\ngo mod tidy`,
+        docs_url: `${docs}agents/go/README.md`,
+        notes: ["go_modules"],
+      };
+    case "php": {
+      const file = `openlog-php-agent_${AGENT_LATEST}_linux_amd64.deb`;
+      const asset = `https://github.com/onuragtas/openlog/releases/download/v${AGENT_LATEST}/${file}`;
+      return { ...base, package: "openlog-php-agent", command: `curl -fsSLO ${asset}\nsudo apt-get install ./${file}`, release_asset_url: asset, docs_url: `${docs}docs/contracts/php-agent.md`, notes: ["php_fleet_auto"] };
+    }
+  }
+}
+
+function mockAgentServices(): ApmServiceAgents[] {
+  const seen = formatTs(Date.now() - 4_000);
+  const version = (v: string, status: ApmAgentStatus, instances: number): ApmAgentVersion => ({ version: v, status, instances, spans: instances * 1200, last_seen: seen });
+  const agent = (kind: ApmServiceAgent["kind"], sdk_language: string, status: ApmAgentStatus, versions: ApmAgentVersion[], extra: Partial<ApmServiceAgent> = {}): ApmServiceAgent => ({
+    kind,
+    distro_name: kind === "php" ? "openlog-php" : kind === "third_party" ? "" : "openlog",
+    sdk_name: kind === "php" ? "" : "opentelemetry",
+    sdk_language,
+    status,
+    instances: versions.reduce((n, v) => n + v.instances, 0),
+    last_seen: seen,
+    versions,
+    versions_truncated: false,
+    instrumentation_modules: [],
+    upgrade: null,
+    ...extra,
+  });
+  return [
+    { service_name: "catalog", service_namespace: NS, environment: ENV, status: "unsupported", agents: [agent("php", "php", "unsupported", [version("0.1.9", "unsupported", 2)], { upgrade: mockUpgrade("php") })] },
+    {
+      service_name: "frontend",
+      service_namespace: NS,
+      environment: ENV,
+      status: "outdated",
+      agents: [agent("node", "nodejs", "outdated", [version("0.1.31", "ok", 1), version("0.1.28", "outdated", 3)], { upgrade: mockUpgrade("node") })],
+    },
+    { service_name: "legacy-billing", service_namespace: "", environment: ENV, status: "third_party", agents: [agent("third_party", "python", "third_party", [version("1.27.0", "third_party", 1)])] },
+    { service_name: "orders", service_namespace: NS, environment: ENV, status: "ok", agents: [agent("go", "go", "ok", [version("0.1.31", "ok", 2)], { instrumentation_modules: ["gin"], upgrade: mockUpgrade("go") })] },
+  ];
+}
 
 /** Test helper: forget stored Apdex settings. */
 export function resetMockApm(): void {

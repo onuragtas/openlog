@@ -46,6 +46,7 @@ const ApmServicesPage = lazyRouteComponent(() => import("@/routes/apm"), "ApmSer
 const ApmServicePage = lazyRouteComponent(() => import("@/routes/apm"), "ApmServicePage");
 const ApmMapPage = lazyRouteComponent(() => import("@/routes/apm"), "ApmMapPage");
 const ApmErrorsPage = lazyRouteComponent(() => import("@/routes/apm-errors"), "ApmErrorsPage");
+const ApmAgentsPage = lazyRouteComponent(() => import("@/routes/apm-agents"), "ApmAgentsPage");
 const AlertsLayout = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsLayout");
 const AlertsIncidentsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentsPage");
 const AlertsIncidentPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentPage");
@@ -614,6 +615,24 @@ const apmErrorsRoute = createRoute({
   component: ApmErrorsPage,
 });
 
+/** Language agent versions of every service (routes/apm-agents.tsx, D-124). */
+export interface ApmAgentsSearch {
+  q?: string;
+  env?: string;
+  outdated?: boolean;
+}
+
+const apmAgentsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/apm/agents",
+  validateSearch: (s: Record<string, unknown>): ApmAgentsSearch => ({
+    q: str(s.q),
+    env: str(s.env),
+    outdated: s.outdated === true || s.outdated === "true" ? true : undefined,
+  }),
+  component: ApmAgentsPage,
+});
+
 export interface InventorySearchSearch {
   category?: string;
   q?: string;
@@ -902,6 +921,7 @@ export const routeTree = rootRoute.addChildren([
     apmServiceRoute,
     apmMapRoute,
     apmErrorsRoute,
+    apmAgentsRoute,
     logsRoute,
     metricsRoute,
     tracesRoute,
