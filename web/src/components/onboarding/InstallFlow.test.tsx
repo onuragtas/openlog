@@ -217,7 +217,7 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
 
   it("host logs card switches commands, the system log checkbox and the tips with the host OS", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
-    server.use(http.get("*/api/v1/logs", () => HttpResponse.json({ logs: [] })));
+    server.use(http.post("*/api/v1/logs/query", () => HttpResponse.json({ rows: [], next_cursor: null })));
     const user = userEvent.setup();
     renderFlow("logs/host", ONBOARDING, { timeoutMs: 1 });
     await user.click(await screen.findByRole("button", { name: "Continue" }));

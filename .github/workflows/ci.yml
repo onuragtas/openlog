@@ -648,6 +648,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # Optional: needs the full compose stack; a failure does not fail the workflow.
+    # The other long suites (integration tags, Playwright, updater acceptance, installer, TLS, tiered storage, SSO) run in
+    # .github/workflows/long-tests.yml, which never gates a release (docs/operations/ci.md).
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

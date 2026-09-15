@@ -480,9 +480,10 @@ func TestAPMSharded(t *testing.T) {
 			return engine
 		}
 		for _, days := range []int{7, 30} {
-			changed, err := migrate.ApplyAPMRetention(ctx, boot, "openlog", days, log)
-			if err != nil || !changed {
-				t.Fatalf("apply %d days: changed=%v %v", days, changed, err)
+			opts := migrate.TTLOptions{Cluster: "openlog", APMRetentionDays: days}
+			plan, err := migrate.ApplyTableTTLs(ctx, boot, opts, log)
+			if err != nil || !plan.Changed() {
+				t.Fatalf("apply %d days: changed=%v %v", days, plan.Changed(), err)
 			}
 			for _, c := range []clickhouse.Conn{boot, s1r2, s2r1} {
 				for _, table := range []string{"apm_transactions_1m_local", "apm_services_local"} {
@@ -494,8 +495,8 @@ func TestAPMSharded(t *testing.T) {
 			if got, err := migrate.AppliedAPMRetention(ctx, boot); err != nil || got != days {
 				t.Errorf("recorded retention %d %v, want %d", got, err, days)
 			}
-			if changed, err := migrate.ApplyAPMRetention(ctx, boot, "openlog", days, log); err != nil || changed {
-				t.Errorf("second apply of %d days: changed=%v %v", days, changed, err)
+			if plan, err := migrate.ApplyTableTTLs(ctx, boot, opts, log); err != nil || plan.Changed() {
+				t.Errorf("second apply of %d days: changed=%v %v", days, plan.Changed(), err)
 			}
 		}
 	})

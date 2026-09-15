@@ -2,6 +2,7 @@
 // pastes or creates for an install is never sent here; it only lives in component state.
 import { queryOptions } from "@tanstack/react-query";
 import { api, unwrap } from "./client";
+import type { QueryFilter } from "./explorer";
 import type { components } from "./schema.gen";
 
 export type Onboarding = components["schemas"]["Onboarding"];
@@ -78,21 +79,23 @@ export interface VerifyLogsFilter {
   source?: "file" | "journald" | "unified_log" | "windows_event_log" | "container";
 }
 
+/** Explorer filters (POST /api/v1/logs/query) of a verification filter. */
+export function verifyLogsFilters(filter: VerifyLogsFilter): QueryFilter[] {
+  const out: QueryFilter[] = [];
+  if (filter.service) out.push({ key: "service.name", op: "=", value: filter.service });
+  if (filter.source) out.push({ key: "attributes.openlog.log.source", op: "=", value: filter.source });
+  return out;
+}
+
 /** Newest log record matching the filter since `since` (unix ms). */
 export const verifyLogsQuery = (filter: VerifyLogsFilter, since: number, intervalMs = VERIFY_POLL_MS) =>
   queryOptions({
     queryKey: ["onboarding", "verify", "logs", filter.service ?? "", filter.source ?? "", since],
     queryFn: async ({ signal }) => {
       const to = Math.max(Date.now(), since + 1);
-      // `attr.<key>` filters are flat query keys (openapi-fetch would serialize an object as deepObject).
-      const query = {
-        from: String(since),
-        to: String(to),
-        limit: 1,
-        ...(filter.service ? { service: filter.service } : {}),
-        ...(filter.source ? { "attr.openlog.log.source": filter.source } : {}),
-      };
-      return unwrap(await api.GET("/api/v1/logs", { params: { query: query as { from: string; to: string; limit: number } }, signal })).logs;
+      const filters = verifyLogsFilters(filter);
+      const body = { from: since, to, order: "desc" as const, limit: 1, include_record: false, filters: filters.length ? filters : undefined };
+      return unwrap(await api.POST("/api/v1/logs/query", { body, signal })).rows;
     },
     refetchInterval: intervalMs,
     staleTime: 0,

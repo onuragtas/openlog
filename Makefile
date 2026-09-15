@@ -102,6 +102,27 @@ tlstest:
 tieredtest:
 	cd test/e2e/tieredtest && go test -tags tieredtest -v -count=1 -timeout 30m .
 
+# Every -tags integration package against throwaway PostgreSQL/ClickHouse (test/integration/run.sh; docs/operations/ci.md).
+# INTTEST_PHASE=shared|self|renderer runs one part.
+.PHONY: integration
+INTTEST_PHASE ?= all
+integration:
+	test/integration/run.sh $(INTTEST_PHASE)
+
+# Single sign-on end to end against Keycloak + PostgreSQL (test/sso, compose project openlog-ssotest).
+# SSOTEST_KEEP=1 keeps the stack.
+.PHONY: ssotest
+SSOTEST_PG_PORT ?= 27440
+SSOTEST_KEYCLOAK_PORT ?= 18080
+export SSOTEST_PG_PORT SSOTEST_KEYCLOAK_PORT
+SSOTEST_COMPOSE := docker compose -p openlog-ssotest -f test/integration/sso/docker-compose.yml
+ssotest:
+	$(SSOTEST_COMPOSE) up -d --wait --wait-timeout 300
+	@status=0; OPENLOG_TEST_POSTGRES_DSN="postgres://openlog:openlog@127.0.0.1:$(SSOTEST_PG_PORT)/openlog?sslmode=disable" \
+		OPENLOG_TEST_KEYCLOAK_URL=http://127.0.0.1:$(SSOTEST_KEYCLOAK_PORT) OPENLOG_TEST_CALLBACK_HOST=host.docker.internal \
+		OPENLOG_TEST_LISTEN_ADDR=0.0.0.0:0 go test -tags ssoe2e -v -count=1 -timeout 20m ./test/sso || status=$$?; \
+		if [ "$(SSOTEST_KEEP)" != 1 ]; then $(SSOTEST_COMPOSE) down -v; fi; exit $$status
+
 # Web UI (requires Node >= 20.19). `build` does not need Node: without `make web`
 # the binaries embed the placeholder web/dist/index.html.
 .PHONY: web web-test
@@ -110,6 +131,11 @@ web:
 
 web-test:
 	cd web && npm run typecheck && npm run lint && npm test
+
+# Playwright suite against the Vite dev server with MSW mocks (web/playwright.config.ts).
+.PHONY: web-e2e
+web-e2e:
+	cd web && npx playwright install chromium && npx playwright test
 
 # ---------------------------------------------------------------------------------------------
 # Releases (docs/operations/releasing.md)
@@ -345,7 +371,7 @@ stack-demo:
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 KUBECONFORM_IMAGE ?= ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
-SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/stackdemo/run.sh test/stackdemo/host/entrypoint.sh \
+SHELL_SCRIPTS := scripts/install.sh scripts/install-server.sh scripts/go-agent-release.sh packaging/scripts/*.sh packaging/test/*.sh test/integration/run.sh test/stackdemo/run.shtest/stackdemo/host/entrypoint.sh \
 	agents/node/scripts/release-pack.sh agents/python/scripts/release-dist.sh agents/dotnet/scripts/release-nupkg.sh
 
 .PHONY: shellcheck actionlint helm-lint package-test install-test
@@ -353,7 +379,7 @@ shellcheck:
 	docker run --rm -v "$(CURDIR)":/mnt -w /mnt $(SHELLCHECK_IMAGE) $(SHELL_SCRIPTS)
 
 actionlint:
-	docker run --rm -v "$(CURDIR)":/repo -w /repo $(ACTIONLINT_IMAGE) -color .github/workflows/ci.yml .github/workflows/release.yml
+	docker run --rm -v "$(CURDIR)":/repo -w /repo $(ACTIONLINT_IMAGE) -color .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/long-tests.yml
 
 helm-lint:
 	"$(HELM)" lint deploy/helm/openlog

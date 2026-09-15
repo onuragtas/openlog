@@ -4,6 +4,8 @@
 (compose `single` profile: Kafka, ClickHouse, `openlog-allinone`). It asserts everything through
 the Query API (`docs/contracts/api.md`) and, where the API has no view, ClickHouse directly.
 
+Which of these suites CI runs, and where (`ci.yml`, `long-tests.yml`): [ci.md](ci.md).
+
 ## Run
 
 Requirements: Docker with Compose v2.17+ (`additional_contexts`), Go 1.26, about 4 GB free memory.

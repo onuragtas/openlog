@@ -209,7 +209,7 @@ export function severityColor(label: string, theme: "light" | "dark"): string | 
   return theme === "dark" ? pair[1] : pair[0];
 }
 
-/** Badge variant of a severity number (as components/LogTable). */
+/** Badge variant of a severity number. */
 export function severityBadgeVariant(n: number): "destructive" | "warning" | "secondary" | "muted" {
   if (n >= 17) return "destructive";
   if (n >= 13) return "warning";
