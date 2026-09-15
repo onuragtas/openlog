@@ -2037,6 +2037,7 @@ export const en = {
     },
     volume: {
       title: "Log volume",
+      titleBy: "Log volume by {{key}}",
       total: "{{value}} logs",
       groupBy: "Group by",
       groupByKey: "Group by another key",
@@ -2081,6 +2082,11 @@ export const en = {
       openInLogs: "Open in Logs Explorer",
       openInTraces: "Open in Traces Explorer",
     },
+    oqlUnsupported: {
+      regex: "Regular expression filters have no OQL equivalent",
+      key: "A filter or group-by key has no OQL equivalent (e.g. timestamps or JSON body fields)",
+      transaction: "The APM transaction filter has no OQL equivalent",
+    },
   },
   tracesExplorer: {
     title: "Traces",
@@ -2113,6 +2119,7 @@ export const en = {
     },
     charts: {
       count: "Span count",
+      countBy: "Span count by {{key}}",
       total_one: "{{value}} span",
       total_other: "{{value}} spans",
       latency: "Span duration",

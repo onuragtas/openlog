@@ -2038,6 +2038,7 @@ export const tr: Messages = {
     },
     volume: {
       title: "Log hacmi",
+      titleBy: "{{key}} bazında log hacmi",
       total: "{{value}} log",
       groupBy: "Grupla",
       groupByKey: "Başka bir anahtara göre grupla",
@@ -2082,6 +2083,11 @@ export const tr: Messages = {
       openInLogs: "Logs Explorer'da aç",
       openInTraces: "Traces Explorer'da aç",
     },
+    oqlUnsupported: {
+      regex: "Düzenli ifade filtrelerinin OQL karşılığı yok",
+      key: "Bir filtre ya da gruplama anahtarının OQL karşılığı yok (ör. zaman damgaları veya JSON gövde alanları)",
+      transaction: "APM işlem filtresinin OQL karşılığı yok",
+    },
   },
   tracesExplorer: {
     title: "Trace'ler",
@@ -2114,6 +2120,7 @@ export const tr: Messages = {
     },
     charts: {
       count: "Span sayısı",
+      countBy: "{{key}} bazında span sayısı",
       total_one: "{{value}} span",
       total_other: "{{value}} span",
       latency: "Span süresi",

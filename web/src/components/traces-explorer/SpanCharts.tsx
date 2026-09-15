@@ -5,9 +5,11 @@ import { ListTree } from "lucide-react";
 import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { tracesAggregateQuery, type QueryFilter } from "@/api/explorer";
+import { AddToDashboardButton } from "@/components/oql/AddToDashboardButton";
 import { KeyPicker } from "@/components/querybuilder/KeyPicker";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { NativeSelect } from "@/components/ui/native-select";
+import { spanCountOql, spanLatencyOql, type ExplorerOqlResult } from "@/lib/explorer-oql";
 import type { RangeSpec } from "@/lib/time";
 import { latencySeries, NO_SPAN_GROUP, spanCountSeries } from "@/lib/traces-explorer";
 
@@ -36,6 +38,9 @@ export function SpanCharts({ range, filter, rootOnly, groupBy, onGroupByChange, 
   );
   const latency = useMemo(() => (agg.data ? latencySeries(agg.data) : undefined), [agg.data]);
   const error = agg.isError && !agg.data ? agg.error : undefined;
+  const countOql = useMemo(() => spanCountOql({ filter, rootOnly, groupBy: grouped ? groupBy : undefined }), [filter, rootOnly, grouped, groupBy]);
+  const latencyOql = useMemo(() => spanLatencyOql({ filter, rootOnly }), [filter, rootOnly]);
+  const unsupported = (r: ExplorerOqlResult) => (r.ok ? undefined : t(`explorer.oqlUnsupported.${r.reason}`));
 
   return (
     <div className="grid min-w-0 gap-3 lg:grid-cols-2">
@@ -46,6 +51,14 @@ export function SpanCharts({ range, filter, rootOnly, groupBy, onGroupByChange, 
           </h2>
           {agg.data && <span className="text-xs text-muted-foreground">{t("tracesExplorer.charts.total", { count: agg.data.total, value: agg.data.total.toLocaleString(i18n.resolvedLanguage) })}</span>}
           <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            <AddToDashboardButton
+              query={countOql.ok ? countOql.query : ""}
+              title={grouped ? t("tracesExplorer.charts.countBy", { key: groupBy }) : t("tracesExplorer.charts.count")}
+              visualization="bar"
+              options={{ legend: true, stacked: true }}
+              disabledReason={unsupported(countOql)}
+              className="my-0 size-8"
+            />
             <label htmlFor={`${id}-gb`} className="text-xs text-muted-foreground">
               {t("tracesExplorer.charts.groupBy")}
             </label>
@@ -84,6 +97,15 @@ export function SpanCharts({ range, filter, rootOnly, groupBy, onGroupByChange, 
           <h2 id={`${id}-latency`} className="text-sm font-medium">
             {t("tracesExplorer.charts.latency")}
           </h2>
+          <div className="ml-auto flex items-center">
+            <AddToDashboardButton
+              query={latencyOql.ok ? latencyOql.query : ""}
+              title={t("tracesExplorer.charts.latency")}
+              unit="ms"
+              disabledReason={unsupported(latencyOql)}
+              className="my-0 size-8"
+            />
+          </div>
         </div>
         <TimeSeriesChart
           series={latency}

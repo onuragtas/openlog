@@ -9,8 +9,10 @@ import {
   dashboardsQuery,
   isDashboardsUnavailable,
   type Dashboard,
+  type DashboardUnit,
   type DashboardVisualization,
   type DashboardWidgetInput,
+  type DashboardWidgetOptions,
 } from "@/api/dashboards";
 import { FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -27,21 +29,40 @@ export interface AddToDashboardDialogProps {
   query: string;
   defaultTitle?: string;
   defaultVisualization?: DashboardVisualization;
+  /** Widget unit and options (e.g. stacked bars of an explorer chart); not editable here. */
+  defaultUnit?: DashboardUnit;
+  defaultOptions?: DashboardWidgetOptions;
 }
 
 /** Adds a query as a widget to an existing dashboard (POST …/widgets) or to a new one (POST /dashboards). */
-export function AddToDashboardDialog({ open, onOpenChange, query, defaultTitle = "", defaultVisualization = "line" }: AddToDashboardDialogProps) {
+export function AddToDashboardDialog({ open, onOpenChange, query, defaultTitle = "", defaultVisualization = "line", defaultUnit = "", defaultOptions }: AddToDashboardDialogProps) {
   const { t } = useTranslation();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" title={t("oql.addToDashboard.title")} closeLabel={t("common.close")} className="w-full max-w-full sm:max-w-md">
-        {open && <AddToDashboardForm query={query} defaultTitle={defaultTitle} defaultVisualization={defaultVisualization} onDone={() => onOpenChange(false)} />}
+        {open && (
+          <AddToDashboardForm query={query} defaultTitle={defaultTitle} defaultVisualization={defaultVisualization} unit={defaultUnit} options={defaultOptions} onDone={() => onOpenChange(false)} />
+        )}
       </SheetContent>
     </Sheet>
   );
 }
 
-function AddToDashboardForm({ query, defaultTitle, defaultVisualization, onDone }: { query: string; defaultTitle: string; defaultVisualization: DashboardVisualization; onDone: () => void }) {
+function AddToDashboardForm({
+  query,
+  defaultTitle,
+  defaultVisualization,
+  unit,
+  options,
+  onDone,
+}: {
+  query: string;
+  defaultTitle: string;
+  defaultVisualization: DashboardVisualization;
+  unit: DashboardUnit;
+  options?: DashboardWidgetOptions;
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
   const uid = useId();
   const queryClient = useQueryClient();
@@ -61,7 +82,7 @@ function AddToDashboardForm({ query, defaultTitle, defaultVisualization, onDone 
 
   const save = useMutation({
     mutationFn: async () => {
-      const widget: DashboardWidgetInput = { title: title.trim(), visualization, layout: defaultLayout(visualization, []), query, unit: "", thresholds: [], options: { legend: true } };
+      const widget: DashboardWidgetInput = { title: title.trim(), visualization, layout: defaultLayout(visualization, []), query, unit, thresholds: [], options: options ?? { legend: true } };
       if (mode === "existing") return addDashboardWidget(dashboardId, widget, pageId || undefined);
       return createDashboard({ name: name.trim(), description: "", visibility: "org", pages: [{ name: t("dashboards.defaultPage"), widgets: [widget] }] });
     },

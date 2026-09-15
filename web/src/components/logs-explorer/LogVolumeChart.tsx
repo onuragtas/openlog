@@ -5,9 +5,11 @@ import { ListTree } from "lucide-react";
 import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { logsAggregateQuery, type ExplorerContext, type FilterState } from "@/api/explorer";
+import { AddToDashboardButton } from "@/components/oql/AddToDashboardButton";
 import { KeyPicker } from "@/components/querybuilder/KeyPicker";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { NativeSelect } from "@/components/ui/native-select";
+import { logsVolumeOql } from "@/lib/explorer-oql";
 import { NO_GROUP, SEVERITY_ORDER, severityColor, volumeSeries } from "@/lib/logs-explorer";
 import type { RangeSpec } from "@/lib/time";
 
@@ -36,6 +38,7 @@ export function LogVolumeChart({ range, filter, groupBy, onGroupByChange, onZoom
     [agg.data, grouped, t],
   );
   const severity = groupBy === "severity_text";
+  const oql = useMemo(() => logsVolumeOql({ filter, groupBy: grouped ? groupBy : undefined, context }), [filter, grouped, groupBy, context]);
 
   return (
     <section aria-labelledby={`${id}-title`} className="rounded-xl border bg-card p-3">
@@ -45,6 +48,14 @@ export function LogVolumeChart({ range, filter, groupBy, onGroupByChange, onZoom
         </h2>
         {agg.data && <span className="text-xs text-muted-foreground">{t("logsExplorer.volume.total", { count: agg.data.total, value: agg.data.total.toLocaleString(i18n.resolvedLanguage) })}</span>}
         <div className="ml-auto flex min-w-0 items-center gap-1.5">
+          <AddToDashboardButton
+            query={oql.ok ? oql.query : ""}
+            title={grouped ? t("logsExplorer.volume.titleBy", { key: groupBy }) : t("logsExplorer.volume.title")}
+            visualization="bar"
+            options={{ legend: true, stacked: true }}
+            disabledReason={oql.ok ? undefined : t(`explorer.oqlUnsupported.${oql.reason}`)}
+            className="my-0 size-8"
+          />
           <label htmlFor={`${id}-gb`} className="text-xs text-muted-foreground">
             {t("logsExplorer.volume.groupBy")}
           </label>

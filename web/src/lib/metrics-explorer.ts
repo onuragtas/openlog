@@ -3,6 +3,7 @@
 import type { MetricAggregation, MetricDetail, QueryFilter } from "@/api/explorer";
 import type { MetricSeries } from "@/api/types";
 import type { UnitKind } from "@/lib/format";
+import { oqlConditions, oqlString, type OqlKeyResolver } from "@/lib/explorer-oql";
 import { decodeFilterState, encodeFilterState, type CompactFilterState } from "@/lib/querybuilder";
 import { validateRangeSearch, type RangeSpec } from "@/lib/time";
 
@@ -274,7 +275,6 @@ export function evaluateFormula(ast: FormulaNode, refs: readonly string[], data:
 export type OqlUnsupported = "noMetric" | "regex" | "aggregation";
 export type MetricOqlResult = { ok: true; query: string } | { ok: false; reason: OqlUnsupported };
 
-const oqlString = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 const DIRECT_KEYS = new Set(["service.name", "host.id", "host.name", "metric.type", "unit", "scope.name", "value"]);
 
 /**
@@ -292,56 +292,8 @@ export function oqlAttribute(key: string): string {
 /** Whether a key is a bare map key: the explorer reads the attribute when present, else the resource attribute. */
 const isBareKey = (key: string) => key !== "metric.name" && !DIRECT_KEYS.has(key) && !key.startsWith("resource.") && !key.startsWith("attributes.");
 
-const oqlValue = (v: string | number | boolean) => (typeof v === "string" ? oqlString(v) : String(v));
-
-/**
- * OQL predicate of one explorer condition, or null without an equivalent (regex). `contains` becomes `CONTAINS`
- * (case-insensitive, literal — identical to the explorer, D-122). A bare key is written as
- * `(attributes['k'] IS NOT NULL AND attributes['k'] … OR attributes['k'] IS NULL AND resource['k'] …)`.
- */
-function oqlCondition(f: QueryFilter): string | null {
-  if (isBareKey(f.key)) {
-    const attr = `attributes[${oqlString(f.key)}]`;
-    const res = `resource[${oqlString(f.key)}]`;
-    if (f.op === "exists") return `(${attr} IS NOT NULL OR ${res} IS NOT NULL)`;
-    if (f.op === "not_exists") return `(${attr} IS NULL AND ${res} IS NULL)`;
-    const onAttr = oqlPredicate(attr, f);
-    const onRes = oqlPredicate(res, f);
-    if (onAttr === null || onRes === null) return null;
-    return `((${attr} IS NOT NULL AND ${onAttr}) OR (${attr} IS NULL AND ${onRes}))`;
-  }
-  return oqlPredicate(oqlAttribute(f.key), f);
-}
-
-function oqlPredicate(attr: string, f: QueryFilter): string | null {
-  const v = f.value ?? "";
-  switch (f.op) {
-    case "=":
-    case "!=":
-    case ">":
-    case ">=":
-    case "<":
-    case "<=":
-      return `${attr} ${f.op} ${oqlValue(v)}`;
-    case "in":
-    case "not_in":
-      return `${attr} ${f.op === "in" ? "IN" : "NOT IN"} (${(f.values ?? []).map(oqlValue).join(", ")})`;
-    case "like":
-      return `${attr} LIKE ${oqlValue(String(v))}`;
-    case "not_like":
-      return `${attr} NOT LIKE ${oqlValue(String(v))}`;
-    case "contains":
-      return `${attr} CONTAINS ${oqlString(String(v))}`;
-    case "not_contains":
-      return `${attr} NOT CONTAINS ${oqlString(String(v))}`;
-    case "exists":
-      return `${attr} IS NOT NULL`;
-    case "not_exists":
-      return `${attr} IS NULL`;
-    default:
-      return null;
-  }
-}
+/** Filter keys of the Metric event type (lib/explorer-oql.ts writes the predicates). */
+const metricKey: OqlKeyResolver = (key) => (isBareKey(key) ? { attr: `attributes[${oqlString(key)}]`, fallback: `resource[${oqlString(key)}]` } : { attr: oqlAttribute(key) });
 
 /** OQL aggregate of an explorer aggregation for the metric's type, or null without an equivalent. */
 function oqlAggregate(agg: MetricAggregation, meta: Pick<MetricDetail, "type" | "monotonic" | "temporality">): string | null {
@@ -379,22 +331,10 @@ export function metricOql(q: MetricQueryState, meta: Pick<MetricDetail, "type" |
   if (!q.metric) return { ok: false, reason: "noMetric" };
   const aggregate = oqlAggregate(q.aggregation ?? meta.default_aggregation, meta);
   if (!aggregate) return { ok: false, reason: "aggregation" };
-  const conds = [`metricName = ${oqlString(q.metric)}`];
-  for (const f of q.filters) {
-    const c = oqlCondition(f);
-    if (!c) return { ok: false, reason: "regex" };
-    conds.push(c);
-  }
-  const groups = q.groups.filter((g) => g.length > 0);
-  if (groups.length) {
-    const alts: string[] = [];
-    for (const g of groups) {
-      const parts = g.map(oqlCondition);
-      if (parts.some((p) => p === null)) return { ok: false, reason: "regex" };
-      alts.push(parts.length > 1 ? `(${parts.join(" AND ")})` : parts[0]!);
-    }
-    conds.push(alts.length > 1 ? `(${alts.join(" OR ")})` : alts[0]!);
-  }
+  // Every metric key resolves, so the only condition without an equivalent is a regular expression.
+  const c = oqlConditions(q, metricKey);
+  if (!c.ok) return { ok: false, reason: "regex" };
+  const conds = [`metricName = ${oqlString(q.metric)}`, ...c.conds];
   const facet = q.groupBy.length ? ` FACET ${q.groupBy.slice(0, MAX_GROUP_BY).map(oqlAttribute).join(", ")} LIMIT 50` : "";
   return { ok: true, query: `SELECT ${aggregate} FROM Metric WHERE ${conds.join(" AND ")}${facet} TIMESERIES AUTO` };
 }
