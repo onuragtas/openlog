@@ -359,7 +359,7 @@ func (m *Manager) Evaluate(ctx context.Context) {
 			m.request(ActionUninstall, OpUninstall, installed, e)
 		}
 	case config.PHPAgentModeAuto:
-		if e.target == "" || e.target == installed || m.blocked(st, e.target) || !anySupported(inv) || !m.mayRestart() {
+		if e.target == "" || e.target == installed || !m.releaseAvailable(e) || m.blocked(st, e.target) || !anySupported(inv) || !m.mayRestart() {
 			return
 		}
 		m.install(ctx, e, installed, inv)
@@ -564,6 +564,28 @@ func (m *Manager) release(e effective) (manifest, sig []byte, downloadURL string
 		return manifest, sig, "", nil
 	}
 	return nil, nil, "", fmt.Errorf("no signed manifest for PHP agent %s (the fleet sends it; locally only the infra agent's own version is available)", e.target)
+}
+
+// releaseAvailable reports whether release can supply a manifest with the PHP agent archive of this platform. The
+// manifest embedded in the deb, rpm, MSI and pkg packages lists only infra agent artifacts: a host started from a
+// package waits for the fleet's offer instead of failing (and being blocked for FailedRetryDelay).
+func (m *Manager) releaseAvailable(e effective) bool {
+	if r := e.remote; r != nil && r.TargetVersion == e.target && r.Manifest != "" {
+		return true
+	}
+	if e.target != m.o.AgentVersion || m.o.OwnManifest == nil {
+		return false
+	}
+	b, _, err := m.o.OwnManifest()
+	if err != nil {
+		return false
+	}
+	mf, err := lib.ParseManifest(b)
+	if err != nil {
+		return false
+	}
+	_, ok := mf.Artifact(lib.ComponentPHPAgent, m.o.OS, m.o.Arch, lib.FormatTarGz)
+	return ok
 }
 
 // request writes a rollback or uninstall request and restarts.

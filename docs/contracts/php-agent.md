@@ -333,7 +333,9 @@ telemetry and PHP spans arriving during the restart are lost).
    otherwise the report has `capable=false` and a `reason`.
 4. **Staging** (unprivileged, `mode=auto`, target ≠ installed, a supported non-excluded runtime, no self-update in
    progress): the signed manifest of the target comes from the fleet (`php_agent.manifest`) or, locally with
-   `version: agent`, from the manifest kept next to the infra agent binary. Verification: signature by a trusted key,
+   `version: agent`, from the manifest kept next to the infra agent binary when it lists the archive (the manifest
+   embedded in deb/rpm/MSI/pkg packages does not: such hosts wait for the fleet without recording a failure).
+   Verification: signature by a trusted key,
    product/schema, manifest version = target, a `php-agent` `tar.gz` artifact for `linux/<arch>`, and for a downgrade
    target ≥ `rollback_floor` of the installed version's manifest. Download (size and sha256 of the signed manifest;
    license key only for the ingest host) and a trial extraction that must contain `bin/openlog-php-install` and

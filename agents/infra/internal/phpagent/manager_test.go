@@ -334,7 +334,8 @@ func TestManagerFailuresBeforeTheRestart(t *testing.T) {
 			e.api = "20230831" // PHP 8.3: supported, but this release only has the 8.2 module
 			return e.release("0.9.1", goodSO)
 		}, nil, "has no openlog.so for the PHP runtimes"},
-		"local version without a manifest": {func(e *mgrEnv) Remote { return Remote{Mode: config.PHPAgentModeAuto, TargetVersion: "0.9.7"} }, nil, "no signed manifest"},
+		// Waits for the fleet's manifest without recording a failure (which would block the offer for FailedRetryDelay).
+		"local version without a manifest": {func(e *mgrEnv) Remote { return Remote{Mode: config.PHPAgentModeAuto, TargetVersion: "0.9.7"} }, nil, ""},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -351,6 +352,9 @@ func TestManagerFailuresBeforeTheRestart(t *testing.T) {
 			}
 			u := m.Report().Update
 			if c.want == "" {
+				if u != nil {
+					t.Fatalf("update = %+v, want none", u)
+				}
 				return
 			}
 			if u == nil || u.State != StateFailed || !strings.Contains(u.Error, c.want) {
