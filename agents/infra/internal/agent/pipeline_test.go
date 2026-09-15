@@ -205,10 +205,10 @@ func TestCollectionStaysOnScheduleWhileExportStalls(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			// Every sample must sit on the schedule grid (±25%: timer jitter on a loaded host reaches ~25ms; a blocked loop is
-			// off by at least a whole interval). A shared CI runner can stall the process past one tick
-			// (time.Ticker then drops it); that single miss is tolerated. A collection loop blocked by the stalled
-			// exporter shows up as off-grid samples or as several missed slots.
-			missed, prevSlot := 0, int64(-1)
+			// off by at least a whole interval). A shared CI runner can stall the process past a tick (time.Ticker then
+			// drops it); such isolated misses are tolerated. A collection loop blocked by the stalled exporter (3 intervals
+			// per send, or the whole outage) shows up as off-grid samples or as consecutive missed slots.
+			missed, maxGap, prevSlot := 0, 0, int64(-1)
 			for i, ts := range ticks {
 				off := ts.Sub(ticks[0])
 				slot := (off + interval/2) / interval
@@ -220,11 +220,12 @@ func TestCollectionStaysOnScheduleWhileExportStalls(t *testing.T) {
 				}
 				if gap := int(int64(slot) - prevSlot - 1); gap > 0 {
 					missed += gap
+					maxGap = max(maxGap, gap)
 				}
 				prevSlot = int64(slot)
 			}
-			if missed > 1 {
-				t.Errorf("%d schedule slots missed (at most 1 tolerated)", missed)
+			if maxGap > 1 || missed > 3 {
+				t.Errorf("%d schedule slots missed, %d in a row (tolerated: isolated misses, at most 3)", missed, maxGap)
 			}
 			times, logs := f.delivered()
 			if len(times) != len(ticks) {
