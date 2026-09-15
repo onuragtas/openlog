@@ -3,7 +3,7 @@ module github.com/onuragtas/openlog/agents/go/instrumentation/chi
 go 1.26
 
 require (
-	github.com/onuragtas/openlog/agents/go v0.1.33
+	github.com/onuragtas/openlog/agents/go v0.1.34
 	go.opentelemetry.io/otel/sdk v1.46.0
 )
 
