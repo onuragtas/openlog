@@ -322,6 +322,9 @@ func TestIntegrationResultsMatchSQL(t *testing.T) {
 				" AND toFloat64OrNull(attributes['http.status']) >= 500 AND resource_attributes['k8s.namespace.name'] IN ('prod') GROUP BY r ORDER BY c DESC, r"},
 		{"like not null", "SELECT count(*) FROM Log WHERE message LIKE '%timeout=true%' AND attributes['http.route'] IS NULL",
 			"SELECT count() " + logs + " AND body LIKE '%timeout=true%' AND NOT mapContains(attributes, 'http.route')"},
+		// CONTAINS (D-122): case-insensitive and literal, like the explorers' contains.
+		{"contains", "SELECT count(*) FROM Log WHERE message CONTAINS 'TIMEOUT=' AND message NOT CONTAINS '%'",
+			"SELECT count() " + logs + " AND positionCaseInsensitiveUTF8(body, 'timeout=') > 0 AND position(body, '%') = 0"},
 		{"not or", "SELECT count(*) FROM Log WHERE NOT (service.name = 'api' OR host.name IN ('h1.local', 'h2.local'))",
 			"SELECT count() " + logs + " AND NOT (service_name = 'api' OR host_name IN ('h1.local', 'h2.local'))"},
 		{"transactions", "SELECT count(*), percentile(duration.ms, 50, 90), max(duration) FROM Transaction WHERE service.name = 'checkout' FACET name",

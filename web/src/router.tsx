@@ -14,6 +14,7 @@ import { validateRangeSearch, type RangeSpec } from "@/lib/time";
 import { sanitizeFiltersSearch, type DashboardFilter } from "@/lib/dashboard-filters";
 import { sanitizeVarsSearch } from "@/lib/dashboards";
 import { normalizeColumns } from "@/lib/logs-explorer";
+import { normalizeSpanColumns } from "@/lib/traces-explorer";
 import { decodeMetricQueries, encodeMetricQueries, sanitizeFormula, type CompactMetricQuery } from "@/lib/metrics-explorer";
 import { decodeFilterState, encodeFilterState, type CompactFilterState } from "@/lib/querybuilder";
 import { POD_PHASES, WORKLOAD_HEALTHS, WORKLOAD_KINDS, type PodPhaseParam, type WorkloadHealthParam, type WorkloadKind } from "@/lib/kubernetes";
@@ -34,6 +35,7 @@ const IntegrationsPage = lazyRouteComponent(() => import("@/routes/integrations"
 const LogsPage = lazyRouteComponent(() => import("@/routes/logs"), "LogsPage");
 const MetricsPage = lazyRouteComponent(() => import("@/routes/metrics"), "MetricsPage");
 const TracePage = lazyRouteComponent(() => import("@/routes/trace"), "TracePage");
+const TracesPage = lazyRouteComponent(() => import("@/routes/traces"), "TracesPage");
 const InventorySearchPage = lazyRouteComponent(() => import("@/routes/inventory-search"), "InventorySearchPage");
 const InvitePage = lazyRouteComponent(() => import("@/routes/invite"), "InvitePage");
 const SignupPage = lazyRouteComponent(() => import("@/routes/signup"), "SignupPage");
@@ -71,6 +73,25 @@ export interface RouterContext {
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : typeof v === "number" ? String(v) : undefined);
+
+/** Search parameters of an embedded Logs Explorer (host, container and pod log tabs; `lq` is the body search). */
+export interface EmbeddedLogsSearch {
+  lq?: string;
+  lf?: CompactFilterState;
+  lcols?: string[];
+  lorder?: "asc";
+  lgb?: string;
+  ltv?: string;
+}
+
+const embeddedLogsSearch = (s: Record<string, unknown>): EmbeddedLogsSearch => ({
+  lq: str(s.lq),
+  lf: encodeFilterState({ ...decodeFilterState(s.lf), q: "" }),
+  lcols: Array.isArray(s.lcols) ? normalizeColumns(s.lcols) : undefined,
+  lorder: s.lorder === "asc" ? "asc" : undefined,
+  lgb: str(s.lgb)?.slice(0, 256),
+  ltv: str(s.ltv)?.slice(0, 256),
+});
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   validateSearch: (search: Record<string, unknown>): RangeSpec => validateRangeSearch(search),
@@ -149,7 +170,7 @@ const hostsRoute = createRoute({
 export const HOST_TABS = ["overview", "services", "containers", "inventory", "logs"] as const;
 export type HostTab = (typeof HOST_TABS)[number];
 
-export interface HostDetailSearch {
+export interface HostDetailSearch extends EmbeddedLogsSearch {
   tab?: HostTab;
   /** inventory category filter */
   category?: string;
@@ -173,7 +194,7 @@ const hostDetailRoute = createRoute({
     tab: (HOST_TABS as readonly string[]).includes(String(s.tab)) ? (s.tab as HostTab) : undefined,
     category: str(s.category),
     iq: str(s.iq),
-    lq: str(s.lq),
+    ...embeddedLogsSearch(s),
     severity: str(s.severity),
     lsrc: str(s.lsrc),
     lfile: str(s.lfile),
@@ -213,7 +234,7 @@ const containersRoute = createRoute({
 export const CONTAINER_TABS = ["overview", "services", "logs", "attributes"] as const;
 export type ContainerTab = (typeof CONTAINER_TABS)[number];
 
-export interface ContainerDetailSearch {
+export interface ContainerDetailSearch extends EmbeddedLogsSearch {
   tab?: ContainerTab;
   /** logs text filter, minimum severity, stream (stdout/stderr) */
   lq?: string;
@@ -226,7 +247,7 @@ const containerDetailRoute = createRoute({
   path: "/containers/$containerId",
   validateSearch: (s: Record<string, unknown>): ContainerDetailSearch => ({
     tab: (CONTAINER_TABS as readonly string[]).includes(String(s.tab)) ? (s.tab as ContainerTab) : undefined,
-    lq: str(s.lq),
+    ...embeddedLogsSearch(s),
     severity: str(s.severity),
     stream: s.stream === "stdout" || s.stream === "stderr" ? s.stream : undefined,
   }),
@@ -317,7 +338,7 @@ const kubernetesWorkloadRoute = createRoute({
 export const K8S_POD_TABS = ["overview", "containers", "logs", "events", "labels"] as const;
 export type K8sPodTab = (typeof K8S_POD_TABS)[number];
 
-export interface KubernetesPodSearch {
+export interface KubernetesPodSearch extends EmbeddedLogsSearch {
   tab?: K8sPodTab;
   /** logs text filter and minimum severity */
   lq?: string;
@@ -327,7 +348,7 @@ export interface KubernetesPodSearch {
 const kubernetesPodRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/kubernetes/pods/$podUid",
-  validateSearch: (s: Record<string, unknown>): KubernetesPodSearch => ({ tab: pick(K8S_POD_TABS, s.tab), lq: str(s.lq), severity: str(s.severity) }),
+  validateSearch: (s: Record<string, unknown>): KubernetesPodSearch => ({ tab: pick(K8S_POD_TABS, s.tab), ...embeddedLogsSearch(s), severity: str(s.severity) }),
   component: KubernetesPodPage,
 });
 
@@ -378,6 +399,8 @@ export interface LogsSearch {
   order?: "asc";
   /** volume chart group-by key ("~": none) */
   gb?: string;
+  /** top values key */
+  tv?: string;
   /** applied saved view id */
   view?: string;
 }
@@ -398,6 +421,7 @@ const logsRoute = createRoute({
     cols: Array.isArray(s.cols) ? normalizeColumns(s.cols) : undefined,
     order: s.order === "asc" ? "asc" : undefined,
     gb: str(s.gb)?.slice(0, 256),
+    tv: str(s.tv)?.slice(0, 256),
     view: str(s.view),
   }),
   component: LogsPage,
@@ -417,6 +441,42 @@ const metricsRoute = createRoute({
   path: "/metrics",
   validateSearch: (s: Record<string, unknown>): MetricsSearch => ({ mq: encodeMetricQueries(decodeMetricQueries(s.mq)), formula: sanitizeFormula(s.formula) }),
   component: MetricsPage,
+});
+
+// ---- Traces Explorer (routes/traces.tsx, D-122) ----
+
+export interface TracesSearch {
+  /** conditions and OR-groups (lib/querybuilder.ts compact form) */
+  f?: CompactFilterState;
+  /** table columns, timestamp first */
+  cols?: string[];
+  order?: "asc";
+  /** slowest spans first (one page) */
+  sort?: "duration";
+  /** root spans only */
+  root?: boolean;
+  /** count chart group-by key ("~": none) */
+  gb?: string;
+  /** top values key */
+  tv?: string;
+  /** applied saved view id */
+  view?: string;
+}
+
+const tracesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/traces",
+  validateSearch: (s: Record<string, unknown>): TracesSearch => ({
+    f: encodeFilterState({ ...decodeFilterState(s.f), q: "" }),
+    cols: Array.isArray(s.cols) ? normalizeSpanColumns(s.cols) : undefined,
+    order: s.order === "asc" ? "asc" : undefined,
+    sort: s.sort === "duration" ? "duration" : undefined,
+    root: s.root === true || s.root === "true" ? true : undefined,
+    gb: str(s.gb)?.slice(0, 256),
+    tv: str(s.tv)?.slice(0, 256),
+    view: str(s.view),
+  }),
+  component: TracesPage,
 });
 
 export interface TraceSearch {
@@ -836,6 +896,7 @@ export const routeTree = rootRoute.addChildren([
     apmErrorsRoute,
     logsRoute,
     metricsRoute,
+    tracesRoute,
     traceRoute,
     inventorySearchRoute,
     fleetRoute,

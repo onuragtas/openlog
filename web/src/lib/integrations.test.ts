@@ -190,6 +190,22 @@ describe("alert prefill", () => {
     const d = applyPrefill(instanceAlertSearch({ metric: "redis.memory.used", agg: "avg", ref, hostName: "web-1", name: "redis.memory.used on web-1" }));
     expect(d.threshold).toBe("");
     expect(d.filters.map((f) => f.field)).toEqual(["host.id", "resource.openlog.discovery.id", "resource.openlog.discovery.instance"]);
+    expect(d.name).toBe("redis.memory.used on web-1");
+  });
+
+  it("scopes IIS chart alerts to the selected site and names the rule after it", () => {
+    const iis: InstanceRef = { hostId: "h1", discoveryId: "iis", instance: "w3svc" };
+    const d = applyPrefill(instanceAlertSearch({ metric: "iis.request.count", agg: "rate", ref: iis, hostName: "win-1", name: "iis.request.count on win-1", site: "Default Web Site" }));
+    expect(d.filters.map((f) => [f.field, f.values])).toEqual([
+      ["host.id", "h1"],
+      ["resource.openlog.discovery.id", "iis"],
+      ["resource.openlog.discovery.instance", "w3svc"],
+      ["resource.iis.site", "Default Web Site"],
+    ]);
+    expect(d.name).toBe("iis.request.count on win-1 (Default Web Site)");
+    // Same chart without a site selection: instance filters only.
+    const all = applyPrefill(instanceAlertSearch({ metric: "iis.request.count", agg: "rate", ref: iis, hostName: "win-1", name: "iis.request.count on win-1" }));
+    expect(all.filters.map((f) => f.field)).not.toContain("resource.iis.site");
   });
 
   it("ignores invalid prefill values", () => {

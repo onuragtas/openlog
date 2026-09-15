@@ -89,6 +89,9 @@ type Status struct {
 	UpdaterVersion string `json:"updater_version,omitempty"`
 	// SelfUpdate is the last attempt of the Compose updater to replace its own container (D-120).
 	SelfUpdate *SelfUpdateRecord `json:"self_update,omitempty"`
+	// MaintenanceWindow is OPENLOG_UPDATER_MAINTENANCE_WINDOW as of CheckedAt (absent in documents of older updaters;
+	// the api re-evaluates open_now / next_open_at when it serves the document).
+	MaintenanceWindow *WindowStatus `json:"maintenance_window,omitempty"`
 }
 
 // Self-update states (SelfUpdateRecord.State).

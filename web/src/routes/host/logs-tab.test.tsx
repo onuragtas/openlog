@@ -1,8 +1,11 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LogFilters } from "@/components/LogFilters";
 import type { HostOs } from "@/lib/host-os";
 import { NoHostLogs } from "./logs-tab";
+
+// The tab embeds the Logs Explorer, whose histogram needs uPlot (matchMedia/canvas); charts have their own tests.
+vi.mock("@/components/TimeSeriesChart", () => ({ TimeSeriesChart: () => null }));
 
 const EMPTY = { q: "", severity: "", service: "", host: "", source: "", file: "", discovery: "", unit: "" };
 

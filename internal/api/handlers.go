@@ -316,14 +316,9 @@ func (s *Server) listLogs(w http.ResponseWriter, r *http.Request, sc *query.Scop
 		q.Where("span_id = {span_id:String}").Param("span_id", strings.ToLower(v))
 	}
 	// Logs correlated with the traces of one transaction (entry spans in the range, at most 10000 traces).
-	if txn, txnSvc := qp.Get("transaction"), qp.Get("transaction_service"); txn != "" || txnSvc != "" {
-		if txn == "" || txnSvc == "" || len(txn) > 4096 || len(txnSvc) > maxServiceNameBytes {
-			return badRequest("transaction and transaction_service must be given together")
-		}
-		traces := spanRange(sc.From(query.Spans).Columns("trace_id"), from, to).
-			Where("service_name = {txn_service:String}").Param("txn_service", txnSvc).
-			Where("is_entry AND transaction_name = {txn:String}").Param("txn", txn).
-			GroupBy("trace_id").Limit(10000)
+	if traces, err := transactionTraces(sc, qp.Get("transaction"), qp.Get("transaction_service"), from, to); err != nil {
+		return err
+	} else if traces != nil {
 		q.WhereIn("trace_id", traces)
 	}
 	if v := qp.Get("host_id"); v != "" {

@@ -13,7 +13,7 @@
 #
 #   apm-host      Debian 12 + openlog-infra-agent; machine-id = host.id of the demo services
 #   web-host      Debian 12 + nginx, redis, postgresql + openlog-infra-agent (logs, integrations)
-#   frontend      Node.js (openlog Node.js agent openlog-node built from agents/node)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-33000}
+#   frontend      Node.js (openlog Node.js agent openlog-node built from agents/node)    http://localhost:${LOCALAGENTS_FRONTEND_PORT:-30000}
 #                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps frontend loadgen)
 #   orders        Go (OTel) -> orders-db
 #   catalog       PHP 8.3 (OTel) -> redis
@@ -22,10 +22,10 @@
 #                 metrics, status, logs; compose project/service; APM services linked by container.id)
 #                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps docker-host)
 #   php-host      Debian 12 + PHP 8.3-FPM + nginx + openlog PHP extension + openlog-infra-agent (php_forwarder)
-#                 http://localhost:${LOCALAGENTS_PHP_PORT:-33080}; service php-shop, host.id a0de…0003
+#                 http://localhost:${LOCALAGENTS_PHP_PORT:-30080}; service php-shop, host.id a0de…0003
 #                 (build/update only this one: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps php-host)
 #   python-shop   Python 3.13 FastAPI/uvicorn (openlog Python agent: wheel built from agents/python, openlog-instrument)
-#                 -> catalog, orders; http://localhost:${LOCALAGENTS_PYTHON_PORT:-33800}; python-shop-loadgen ~4 req/s
+#                 -> catalog, orders; http://localhost:${LOCALAGENTS_PYTHON_PORT:-30800}; python-shop-loadgen ~4 req/s
 #                 (build/update only these: docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps python-shop python-shop-loadgen)
 
 name: openlog-agents
@@ -71,7 +71,7 @@ services:
       OPENLOG_METRIC_EXPORT_INTERVAL: 30s
       CATALOG_URL: http://catalog:8080
       ORDERS_URL: http://orders:8080
-    ports: ["${LOCALAGENTS_FRONTEND_PORT:-33000}:3000"]
+    ports: ["${LOCALAGENTS_FRONTEND_PORT:-30000}:3000"]
     depends_on: [orders, catalog]
     restart: unless-stopped
 
@@ -153,7 +153,7 @@ services:
       OPENLOG_HTTP_IGNORE_PATHS: /health
       OPENLOG_METRIC_EXPORT_INTERVAL: 30s
       DEMO_LOAD_RPS: ${LOCALAGENTS_JAVA_RPS:-4}
-    ports: ["${LOCALAGENTS_JAVA_PORT:-33081}:8080"]
+    ports: ["${LOCALAGENTS_JAVA_PORT:-30081}:8080"]
     restart: unless-stopped
 
   apm-host:
@@ -251,7 +251,7 @@ services:
       PHP_HOST_LOADGEN_RPS: ${LOCALAGENTS_PHP_LOADGEN_RPS:-2}
       OPENLOG_LICENSE_KEY: ${LOCALAGENTS_LICENSE_KEY:-dev-license-key}
       OPENLOG_ENDPOINT: http://openlog:4318
-    ports: ["${LOCALAGENTS_PHP_PORT:-33080}:80"]
+    ports: ["${LOCALAGENTS_PHP_PORT:-30080}:80"]
     volumes: ["php-host-state:/var/lib/openlog-infra-agent"]
     restart: unless-stopped
 
@@ -271,7 +271,7 @@ services:
       OPENLOG_METRIC_EXPORT_INTERVAL: 30s
       CATALOG_URL: http://catalog:8080
       ORDERS_URL: http://orders:8080
-    ports: ["${LOCALAGENTS_PYTHON_PORT:-33800}:8000"]
+    ports: ["${LOCALAGENTS_PYTHON_PORT:-30800}:8000"]
     depends_on: [orders, catalog]
     restart: unless-stopped
 
@@ -286,7 +286,7 @@ services:
 
   dotnet-shop:
     # .NET (OpenLog.Agent, agents/dotnet/samples/OpenLog.SampleApp on ASP.NET Core 8) -> orders-db, redis;
-    # http://localhost:${LOCALAGENTS_DOTNET_PORT:-33900}. Build/update only these:
+    # http://localhost:${LOCALAGENTS_DOTNET_PORT:-30900}. Build/update only these:
     #   docker compose -p openlog-agents -f test/localagents/docker-compose.yml up -d --build --no-deps dotnet-shop dotnet-shop-loadgen
     build:
       context: dotnet-shop
@@ -301,7 +301,7 @@ services:
       OPENLOG_METRIC_EXPORT_INTERVAL: 30s
       PG_CONNECTION: Host=orders-db;Username=orders;Password=orders;Database=orders
       REDIS_CONNECTION: redis:6379
-    ports: ["${LOCALAGENTS_DOTNET_PORT:-33900}:9080"]
+    ports: ["${LOCALAGENTS_DOTNET_PORT:-30900}:9080"]
     depends_on:
       orders-db: {condition: service_healthy}
       redis: {condition: service_healthy}

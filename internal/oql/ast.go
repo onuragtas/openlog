@@ -105,7 +105,7 @@ type Not struct {
 // Predicate compares an attribute.
 type Predicate struct {
 	Attr   *Attr
-	Op     string // = != < <= > >= in "not in" like "not like" "is null" "is not null"
+	Op     string // = != < <= > >= in "not in" like "not like" contains "not contains" "is null" "is not null"
 	Values []Value
 	Span   Span
 }

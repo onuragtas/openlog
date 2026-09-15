@@ -26,7 +26,7 @@ var reserved = map[string]bool{
 
 // Keywords lists the OQL keywords (for editors).
 var Keywords = []string{"SELECT", "FROM", "WHERE", "FACET", "SINCE", "UNTIL", "TIMESERIES", "AUTO", "LIMIT", "MAX",
-	"COMPARE", "WITH", "AGO", "AS", "AND", "OR", "NOT", "IN", "LIKE", "IS", "NULL", "NOW", "TRUE", "FALSE"}
+	"COMPARE", "WITH", "AGO", "AS", "AND", "OR", "NOT", "IN", "LIKE", "CONTAINS", "IS", "NULL", "NOW", "TRUE", "FALSE"}
 
 var durationUnits = map[string]time.Duration{
 	"second": time.Second, "seconds": time.Second, "sec": time.Second, "secs": time.Second, "s": time.Second,
@@ -506,8 +506,9 @@ func (p *parser) predicate() (Expr, error) {
 		case "IN":
 			pr.Op = "in"
 			err = p.list(pr)
-		case "LIKE":
-			pr.Op = "like"
+		case "LIKE", "CONTAINS":
+			// CONTAINS is not reserved: an attribute named contains still parses (D-122).
+			pr.Op = strings.ToLower(t.text)
 			var v Value
 			if v, err = p.value(); err == nil {
 				pr.Values = []Value{v}
@@ -518,14 +519,14 @@ func (p *parser) predicate() (Expr, error) {
 			case isKeyword(n, "IN"):
 				pr.Op = "not in"
 				err = p.list(pr)
-			case isKeyword(n, "LIKE"):
-				pr.Op = "not like"
+			case isKeyword(n, "LIKE"), isKeyword(n, "CONTAINS"):
+				pr.Op = "not " + strings.ToLower(n.text)
 				var v Value
 				if v, err = p.value(); err == nil {
 					pr.Values = []Value{v}
 				}
 			default:
-				return nil, unexpected(n, "IN or LIKE after NOT")
+				return nil, unexpected(n, "IN, LIKE or CONTAINS after NOT")
 			}
 		case "IS":
 			pr.Op = "is null"
@@ -538,13 +539,13 @@ func (p *parser) predicate() (Expr, error) {
 				return nil, unexpected(n, "NULL")
 			}
 		default:
-			return nil, unexpected(t, "a comparison operator (=, !=, <, <=, >, >=, IN, LIKE, IS NULL)")
+			return nil, unexpected(t, "a comparison operator (=, !=, <, <=, >, >=, IN, LIKE, CONTAINS, IS NULL)")
 		}
 		if err != nil {
 			return nil, err
 		}
 	default:
-		return nil, unexpected(t, "a comparison operator (=, !=, <, <=, >, >=, IN, LIKE, IS NULL)")
+		return nil, unexpected(t, "a comparison operator (=, !=, <, <=, >, >=, IN, LIKE, CONTAINS, IS NULL)")
 	}
 	end := p.toks[p.i-1].end
 	pr.Span = Span{a.Span.Pos, end}

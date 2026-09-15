@@ -187,7 +187,7 @@ func (b *Builder) Condition(flt Filter) (string, error) {
 		}
 		return b.numberExpr(f) + " " + op + " " + b.param(n, "Float64"), nil
 	case "contains", "not_contains":
-		c := "positionCaseInsensitiveUTF8(" + b.Expr(f) + ", " + b.param(v, "String") + ") > 0"
+		c := ContainsSQL(b.Expr(f), b.param(v, "String"))
 		if op == "not_contains" {
 			c = "NOT (" + c + ")"
 		}
@@ -212,6 +212,13 @@ func (b *Builder) Condition(flt Filter) (string, error) {
 		return c, nil
 	}
 	return "", invalid("filter on %q: unsupported op %q", clip(f.Key), op)
+}
+
+// ContainsSQL is the condition of `contains` in the explorers and of OQL `CONTAINS` (D-122): a case-insensitive
+// (UTF-8) substring match of the String expression expr with the bound String parameter needle. The needle is matched
+// literally — `%`, `_` and `\` have no special meaning — and an empty needle matches every value.
+func ContainsSQL(expr, needle string) string {
+	return "positionCaseInsensitiveUTF8(" + expr + ", " + needle + ") > 0"
 }
 
 // value decodes and bounds one filter value.

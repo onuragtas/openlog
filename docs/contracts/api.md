@@ -441,6 +441,11 @@ release of `OPENLOG_UPDATE_CHANNEL` when it is newer than the answering pod. `up
 is the updater's own version, `updater.self_update` its last self-update attempt. For a document without `updater_version`
 (an updater older than 0.1.26) the api itself adds `updater_outdated` (Compose) or `updater_outdated_kubernetes` with
 `updater_version: "< <running version>"`.
+`updater.maintenance_window` (D-121) is the updater's `OPENLOG_UPDATER_MAINTENANCE_WINDOW`:
+`{"spec": "sat,sun 02:00-05:00; mon-fri 03:00-04:00", "windows": [MaintenanceWindow], "open_now": false, "next_open_at": "2026-09-19T02:00:00Z"}`
+(UTC; normalized `spec`, `""` = any time with `open_now: true`; `next_open_at` absent without windows or when they never
+close). The api re-evaluates `open_now`/`next_open_at` at answer time; the field is absent in documents of older updaters.
+On Kubernetes the chart's CronJob schedule decides when the updater runs.
 Every API response (including errors and the UI) carries `X-Openlog-Version`.
 
 ### `POST /api/v1/version/check` (admin, owner; postgres auth mode)
@@ -823,13 +828,14 @@ longer than 1024 bytes → `400 invalid_argument`. Agent log records have an emp
  "next_cursor": "eyJ2IjoxLCJ0IjoxNzU3NzU3NjAwMDAwMDAwMDAwLCJrIjoiNDIiLCJuIjoxfQ"}
 ```
 
-### `POST /api/v1/logs/query` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "order"?, "limit"?, "cursor"?, "columns"?, "include_record"?}`
+### `POST /api/v1/logs/query` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "transaction"?, "transaction_service"?, "order"?, "limit"?, "cursor"?, "columns"?, "include_record"?}`
 Structured search of the Logs Explorer (D-118) with the filter conditions of [Fields](#fields). `from`/`to`: RFC3339 or
 unix ms (default the last hour); `q`: case-insensitive body substring (≤ 1024 bytes); `order`: `desc` (default) or
 `asc`; `limit` default 100, capped by `OPENLOG_API_MAX_ROWS`. Paging works as for `GET /api/v1/logs`: send the same body
 with `cursor` = `next_cursor` (a cursor of the other order → `400`). `columns` (≤ 50 keys) are returned in `fields` as
 strings — keys a record does not have are omitted; `include_record` adds `attributes` and `resource_attributes`.
-Inventory events are excluded. Unknown body fields → `400`.
+`transaction` + `transaction_service` (both or neither, `400` otherwise) restrict to the traces of one APM transaction
+exactly like `GET /api/v1/logs` (D-122). Inventory events are excluded. Unknown body fields → `400`.
 ```json
 {"rows": [{"id": "1757757600123456789-9f3a…", "timestamp": "…", "observed_timestamp": "…", "severity_text": "ERROR",
            "severity_number": 17, "body": "…", "service_name": "checkout", "host_id": "…", "host_name": "…",
@@ -839,7 +845,7 @@ Inventory events are excluded. Unknown body fields → `400`.
 ```
 `id` identifies a row within a listing (timestamp and row key, with a suffix for identical rows).
 
-### `POST /api/v1/logs/aggregate` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "step"?, "group_by"?, "limit"?}`
+### `POST /api/v1/logs/aggregate` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "transaction"?, "transaction_service"?, "step"?, "group_by"?, "limit"?}`
 Record counts per time bucket for the same conditions (Logs Explorer histogram). `step`: Go duration ≥ 1s (at most 10000
 buckets); default the smallest of 1s, 2s, 5s, 10s, 15s, 30s, 1m, 2m, 5m, 10m, 15m, 30m, 1h, 2h, 3h, 6h, 12h, 1d, 7d giving
 at most 120 buckets. `group_by` (a filterable key) splits the counts into the `limit` (default 10, max 50) most frequent
@@ -860,7 +866,7 @@ tenant-scoped like every telemetry endpoint; organization query limits apply (`4
 
 | Key | Reads |
 |---|---|
-| top-level field | logs: `timestamp`\*, `observed_timestamp`\*, `body`, `severity_text` (alias `severity`), `severity_number`, `service.name`, `host.id`, `host.name`, `trace_id`, `span_id`, `trace_flags`, `event.name`, `scope.name`; traces: `timestamp`\*, `name`, `kind`, `status_code`, `status_message`, `service.name`, `host.id`, `trace_id`, `span_id`, `parent_span_id`, `duration_ns`, `scope.name`; metrics: `metric.name`, `metric.type`, `unit`, `service.name`, `host.id`, `host.name`, `scope.name`, `value` |
+| top-level field | logs: `timestamp`\*, `observed_timestamp`\*, `body`, `severity_text` (alias `severity`), `severity_number`, `service.name`, `host.id`, `host.name`, `trace_id`, `span_id`, `trace_flags`, `event.name`, `scope.name`; traces: `timestamp`\*, `name`, `kind`, `status_code`, `status_message`, `service.name`, `service.namespace`, `deployment.environment`, `host.id`, `trace_id`, `span_id`, `parent_span_id`, `duration_ns`, `duration_ms` (number), `http.status_code` (number), `is_entry` (bool), `error` (bool), `transaction.name`, `transaction.type`, `db.system`, `peer.name`, `scope.name` (the APM columns of apm.md; they shadow span attributes of the same name — use `attributes.<k>` for those); metrics: `metric.name`, `metric.type`, `unit`, `service.name`, `host.id`, `host.name`, `scope.name`, `value` |
 | `attributes.<k>` (or `attr.<k>`) | record / span / data point attribute `k` |
 | `resource.<k>` | resource attribute `k` |
 | `body.<k>[.<k2>…]` | logs: value at that path of a JSON body (strings unquoted, other JSON values as their text; path elements `[A-Za-z0-9_-@$:]`, at most 8) |
@@ -885,13 +891,16 @@ default 200, max 1000.
  "sampled": false}
 ```
 
-### `GET /api/v1/fields/values?signal=&key=&from=&to=&q=&metric=&filters=&limit=`
+### `GET /api/v1/fields/values?signal=&key=&from=&to=&q=&metric=&filters=&groups=&body_q=&transaction=&transaction_service=&root_only=&limit=`
 Most frequent values of `key` with counts, from at most 100000 matching records of the range (`sampled: true` when
 the sample was full, counts are then relative). Map and JSON body keys count only records that have the key.
-`filters`: URL-encoded JSON array of filter conditions (below); conditions on `key` itself are ignored so the other
-values stay visible. `q`: case-insensitive substring of the value. `type` is `number` when every returned value parses
-as a number. `limit` default 50, max 1000.
-`{"key": "attributes.http.route", "type": "string", "values": [{"value": "/api/orders", "count": 912}], "sampled": false}`
+`filters`: URL-encoded JSON array of filter conditions (below), `groups`: URL-encoded JSON array of condition arrays
+(OR of AND-groups); conditions on `key` itself are ignored so the other values stay visible. `q`: case-insensitive
+substring of the value. The explorer's other conditions (D-122): `body_q` (logs: case-insensitive body substring),
+`transaction` + `transaction_service` (logs, as `POST /logs/query`), `root_only=true` (traces). `total` is the number of
+records counted (every value, not only the returned ones), so `count / total` is a value's share ("top values"). `type`
+is `number` when every returned value parses as a number. `limit` default 50, max 1000.
+`{"key": "attributes.http.route", "type": "string", "values": [{"value": "/api/orders", "count": 912}], "total": 1520, "sampled": false}`
 
 **Filter conditions** (`filters`, `groups` of the POST endpoints below): `{"key", "op", "value"? , "values"?}`.
 
@@ -899,7 +908,7 @@ as a number. `limit` default 50, max 1000.
 |---|---|
 | `=`, `!=` | equality (string; numeric for numeric top-level fields). A missing map key reads as `""` |
 | `in`, `not_in` | `values`: 1–100 |
-| `contains`, `not_contains` | case-insensitive substring |
+| `contains`, `not_contains` | case-insensitive substring; `%`, `_` and `\` are literal (same as OQL `CONTAINS`, D-122) |
 | `like`, `not_like` | SQL `LIKE` (`%`, `_`; case-sensitive) |
 | `regex`, `not_regex` | RE2 (ClickHouse `match`), at most 512 bytes, validated |
 | `exists`, `not_exists` | map / JSON key present; top-level string field non-empty; no value |
@@ -928,6 +937,30 @@ keeps `filters`, `groups`, `q`, `columns`, `order`, `group_by` and the time rang
 ```
 
 ## Traces
+
+### `POST /api/v1/traces/query` `{"from"?, "to"?, "filters"?, "groups"?, "root_only"?, "order"?, "sort"?, "limit"?, "cursor"?, "columns"?, "include_record"?}`
+Structured span search of the Traces Explorer (D-122) with the filter conditions of [Fields](#fields) (signal
+`traces`). `root_only`: spans without a parent span id. `order`, `limit`, `cursor`, `columns`, `include_record` as
+`POST /api/v1/logs/query` (rows ordered by timestamp, ties by trace and span id). `sort`: `timestamp` (default) or
+`duration` — the `limit` slowest spans in one page (`order` desc, no cursor, `next_cursor` null). Tenant-scoped with the
+organization query limits (`422`/`429`, `504`). Open a row with `GET /traces/{trace_id}`.
+```json
+{"rows": [{"id": "1757757600123456789-7a1f…", "timestamp": "…", "trace_id": "…", "span_id": "…", "parent_span_id": "",
+           "name": "GET /orders/{id}", "kind": "server", "status_code": "error", "status_message": "",
+           "service_name": "checkout", "host_id": "…", "duration_ns": 412000000, "duration_ms": 412, "is_entry": true,
+           "is_error": true, "http_status_code": 500, "transaction_name": "GET /orders/{id}",
+           "fields": {"attributes.http.route": "/orders/{id}"}, "attributes": {}, "resource_attributes": {}}],
+ "next_cursor": "…"}
+```
+
+### `POST /api/v1/traces/aggregate` `{"from"?, "to"?, "filters"?, "groups"?, "root_only"?, "step"?, "group_by"?, "limit"?}`
+Span counts per bucket (`step`, `group_by`, `limit`, `series` exactly as `POST /api/v1/logs/aggregate`) plus the
+duration percentiles of all matching spans per bucket in milliseconds (`latency`, not split by `group_by`; ClickHouse
+`quantiles`, approximate on large buckets). Buckets without spans are omitted.
+```json
+{"step": "60s", "total": 1520, "series": [{"group": "checkout", "other": false, "total": 900, "points": [[1757757600000, 15]]}],
+ "latency": {"p50": [[1757757600000, 12.5]], "p95": [[1757757600000, 180]], "p99": [[1757757600000, 410.2]]}}
+```
 
 ### `GET /api/v1/traces/{trace_id}`
 All spans of the trace ordered by start time, or `404`.

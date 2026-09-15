@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # APM demo (test/apmdemo/README.md): the openlog `single` stack plus three OpenTelemetry-instrumented
 # microservices (Node frontend, Go orders, PHP catalog), Redis, PostgreSQL, an infra agent host and a
-# load generator, in the compose project openlog-apmdemo (ports 3xxxx).
+# load generator, in the compose project openlog-apmdemo (host ports 31xxx, below the Linux ephemeral range).
 #
 #   test/apmdemo/run.sh up        build openlog:apm from the repository and start everything
 #   test/apmdemo/run.sh verify    compare API numbers with raw spans for one transaction (+ map, errors, DB)

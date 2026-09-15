@@ -563,12 +563,13 @@ func (c *compiler) predicate(pr *Predicate) error {
 func checkValue(pr *Predicate, r *resolved, v Value) error {
 	name := pr.Attr.String()
 	switch pr.Op {
-	case "like", "not like":
+	case "like", "not like", "contains", "not contains":
+		kw := strings.ToUpper(strings.TrimPrefix(pr.Op, "not "))
 		if !r.isMap() && r.typ() != TString {
-			return pr.Span.err("LIKE needs a string attribute; %s is a %s", name, r.typ())
+			return pr.Span.err("%s needs a string attribute; %s is a %s", kw, name, r.typ())
 		}
 		if v.Kind != ValString {
-			return v.Span.err("LIKE needs a string pattern")
+			return v.Span.err("%s needs a string value", kw)
 		}
 		return nil
 	}

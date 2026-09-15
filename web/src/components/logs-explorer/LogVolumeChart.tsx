@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ListTree } from "lucide-react";
 import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { logsAggregateQuery, type FilterState } from "@/api/explorer";
+import { logsAggregateQuery, type ExplorerContext, type FilterState } from "@/api/explorer";
 import { KeyPicker } from "@/components/querybuilder/KeyPicker";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -19,13 +19,15 @@ export interface LogVolumeChartProps {
   groupBy: string;
   onGroupByChange: (key: string) => void;
   onZoom: (from: number, to: number) => void;
+  /** APM transaction context */
+  context?: ExplorerContext;
 }
 
-export function LogVolumeChart({ range, filter, groupBy, onGroupByChange, onZoom }: LogVolumeChartProps) {
+export function LogVolumeChart({ range, filter, groupBy, onGroupByChange, onZoom, context }: LogVolumeChartProps) {
   const { t, i18n } = useTranslation();
   const id = useId();
   const grouped = groupBy !== NO_GROUP;
-  const agg = useQuery(logsAggregateQuery({ range, filter, groupBy: grouped ? groupBy : undefined }));
+  const agg = useQuery(logsAggregateQuery({ range, filter, groupBy: grouped ? groupBy : undefined, context }));
   const series = useMemo(
     () =>
       agg.data

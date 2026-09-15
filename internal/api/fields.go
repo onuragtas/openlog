@@ -38,6 +38,8 @@ func (s *Server) explorerRoutes(mux *http.ServeMux) {
 		"GET /api/v1/fields/values":     s.fieldValues,
 		"POST /api/v1/logs/query":       s.queryLogs,
 		"POST /api/v1/logs/aggregate":   s.aggregateLogs,
+		"POST /api/v1/traces/query":     s.queryTraces,     // tracesquery.go (D-122)
+		"POST /api/v1/traces/aggregate": s.aggregateTraces, // tracesquery.go (D-122)
 		"GET /api/v1/metrics":           s.listMetrics,
 		"POST /api/v1/metrics/query":    s.queryMetric,
 		"GET /api/v1/metrics/{name...}": s.getMetric,
@@ -330,33 +332,72 @@ func (s *Server) fieldValues(w http.ResponseWriter, r *http.Request, sc *query.S
 	if err != nil {
 		return queryBuilderError(err)
 	}
+	rawGroups, err := boundedParam(r, "groups", 16384)
+	if err != nil {
+		return err
+	}
+	groups, err := qb.ParseGroups(rawGroups)
+	if err != nil {
+		return queryBuilderError(err)
+	}
+	// Conditions of the explorer listing the values are computed for ("top values"): logs body search and
+	// transaction, traces root_only.
+	bodyQ, err := boundedParam(r, "body_q", maxLogQueryBytes)
+	if err != nil {
+		return err
+	}
+	txn, txnSvc := qp.Get("transaction"), qp.Get("transaction_service")
+	rootOnly := false
+	switch qp.Get("root_only") {
+	case "", "false", "0":
+	case "true", "1":
+		rootOnly = true
+	default:
+		return badRequest("root_only must be true or false")
+	}
+	if sig != qb.Logs && (bodyQ != "" || txn != "" || txnSvc != "") {
+		return badRequest("body_q, transaction and transaction_service are only valid with signal=logs")
+	}
+	if sig != qb.Traces && rootOnly {
+		return badRequest("root_only is only valid with signal=traces")
+	}
 	limit, err := intParam(r, "limit", defaultValueLimit, maxValueLimit)
 	if err != nil {
 		return err
 	}
 
 	b := qb.NewBuilder(sig, "fv")
-	cond, err := b.Where(filters, nil, field.Key)
-	if err != nil {
-		return queryBuilderError(err)
-	}
-	records := timeWhere(sc.From(signalTable(sig)).Columns(b.Expr(field)+" AS v"), from, to).Limit(valueSampleRows)
+	records := sc.From(signalTable(sig)).Columns(b.Expr(field) + " AS v").Limit(valueSampleRows)
 	if field.Def() == nil {
 		records.Where(b.Has(field))
 	}
-	if cond != "" {
-		records.Where(cond)
-	}
-	if metric != "" {
-		records.Where("metric_name = {metric:String}").Param("metric", metric)
-	}
 	if search != "" {
-		records.Where("positionCaseInsensitiveUTF8("+b.Expr(field)+", {q:String}) > 0").Param("q", search)
+		records.Where("positionCaseInsensitiveUTF8("+b.Expr(field)+", {vq:String}) > 0").Param("vq", search)
 	}
-	if sig == qb.Logs {
-		records.Where("NOT startsWith(event_name, {inventory_prefix:String})").Param("inventory_prefix", "openlog.inventory.")
+	switch sig {
+	case qb.Logs:
+		c := logConditions{filters: filters, groups: groups, q: bodyQ, txn: txn, txnSvc: txnSvc}
+		if err := applyLogConditions(sc, records, b, c, field.Key, from, to); err != nil {
+			return err
+		}
+	case qb.Traces:
+		if err := applySpanConditions(records, b, filters, groups, rootOnly, field.Key, from, to); err != nil {
+			return err
+		}
+	default:
+		cond, err := b.Where(filters, groups, field.Key)
+		if err != nil {
+			return queryBuilderError(err)
+		}
+		timeWhere(records, from, to)
+		if cond != "" {
+			records.Where(cond)
+		}
+		if metric != "" {
+			records.Where("metric_name = {metric:String}").Param("metric", metric)
+		}
+		b.Bind(records)
 	}
-	b.Bind(records)
 	q := sc.FromSub(records).Columns("v", "count() AS n", "sum(count()) OVER () AS total").
 		GroupBy("v").OrderBy("n DESC", "v").Limit(limit)
 	rows, err := sc.Query(r.Context(), q)
@@ -389,6 +430,6 @@ func (s *Server) fieldValues(w http.ResponseWriter, r *http.Request, sc *query.S
 		typ = qb.TNumber
 	}
 	sort.SliceStable(values, func(i, j int) bool { return values[i].Count > values[j].Count })
-	writeJSON(w, http.StatusOK, map[string]any{"key": field.Key, "type": typ, "values": values, "sampled": total >= valueSampleRows})
+	writeJSON(w, http.StatusOK, map[string]any{"key": field.Key, "type": typ, "values": values, "total": total, "sampled": total >= valueSampleRows})
 	return nil
 }

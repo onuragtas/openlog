@@ -1,20 +1,18 @@
 // Detail side panel of one log record: every field (row fields, attributes, resource attributes, JSON body keys) with
 // filter in / filter out, add or remove as column and copy; the whole record as JSON; trace and span links.
 import { Link } from "@tanstack/react-router";
-import { Check, CircleMinus, CirclePlus, Columns3, Copy } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { FieldType, LogQueryRow, QueryFilter } from "@/api/explorer";
+import { FieldRow } from "@/components/explorer/FieldRow";
 import { JsonView } from "@/components/JsonView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { copyText } from "@/lib/clipboard";
 import { formatDateTime } from "@/lib/format";
-import { jsonBody, recordFields, severityBadgeVariant, valueFilter, type RecordField } from "@/lib/logs-explorer";
-import { QB_LIMITS } from "@/lib/querybuilder";
+import { jsonBody, recordFields, severityBadgeVariant, valueFilter } from "@/lib/logs-explorer";
 import { severityLabel } from "@/lib/severity";
 import { parseTimeParam } from "@/lib/time";
 
@@ -99,57 +97,5 @@ function DetailBody({ row, columns, onToggleColumn, onFilter, keyTypes, canFilte
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-const SOURCE_BADGE = { field: "secondary", attribute: "muted", resource: "outline", body: "muted" } as const;
-
-function FieldRow({ field, column, canFilter, onToggleColumn, onFilter }: { field: RecordField; column: boolean; canFilter: boolean; onToggleColumn: (key: string) => void; onFilter: (exclude: boolean) => void }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const id = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(id);
-  }, [copied]);
-  const tooLong = new TextEncoder().encode(field.value).length > QB_LIMITS.valueBytes;
-  const filterTitle = tooLong ? t("logsExplorer.detail.valueTooLong") : !canFilter ? t("queryBuilder.limit", { max: QB_LIMITS.conditions }) : undefined;
-  const icon = "size-8 pointer-coarse:size-10";
-  return (
-    <li className="flex items-start gap-2 border-b py-1.5 last:border-0">
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 font-mono text-[11px] break-all text-muted-foreground">{field.key}</span>
-          <Badge variant={SOURCE_BADGE[field.source]} className="px-1 py-0 text-[10px]">
-            {t(`queryBuilder.sources.${field.source}`)}
-          </Badge>
-        </div>
-        <div className="font-mono text-xs break-all whitespace-pre-wrap">{field.value}</div>
-      </div>
-      <div className="flex shrink-0 items-center">
-        <Button type="button" variant="ghost" size="icon" className={icon} disabled={tooLong || !canFilter} title={filterTitle ?? t("logsExplorer.detail.filterIn", { key: field.key })} aria-label={t("logsExplorer.detail.filterIn", { key: field.key })} onClick={() => onFilter(false)}>
-          <CirclePlus aria-hidden="true" />
-        </Button>
-        <Button type="button" variant="ghost" size="icon" className={icon} disabled={tooLong || !canFilter} title={filterTitle ?? t("logsExplorer.detail.filterOut", { key: field.key })} aria-label={t("logsExplorer.detail.filterOut", { key: field.key })} onClick={() => onFilter(true)}>
-          <CircleMinus aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className={icon}
-          disabled={field.key === "timestamp"}
-          aria-pressed={column}
-          title={column ? t("logsExplorer.detail.removeColumn", { key: field.key }) : t("logsExplorer.detail.addColumn", { key: field.key })}
-          aria-label={column ? t("logsExplorer.detail.removeColumn", { key: field.key }) : t("logsExplorer.detail.addColumn", { key: field.key })}
-          onClick={() => onToggleColumn(field.key)}
-        >
-          <Columns3 aria-hidden="true" className={column ? "text-primary" : undefined} />
-        </Button>
-        <Button type="button" variant="ghost" size="icon" className={icon} aria-label={copied ? t("logsExplorer.detail.copied") : t("logsExplorer.detail.copy", { key: field.key })} onClick={() => void copyText(field.value).then(setCopied)}>
-          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        </Button>
-      </div>
-    </li>
   );
 }

@@ -107,3 +107,141 @@ func InWindow(ws []Window, t time.Time) bool {
 	}
 	return false
 }
+
+var dayOrder = [7]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"} // by time.Weekday
+
+// FormatWindows renders windows in the normalized OPENLOG_UPDATER_MAINTENANCE_WINDOW syntax ("sat,sun 02:00-05:00;
+// mon-fri 03:00-04:00"; "*" for every day; "" = any time). ParseWindows(FormatWindows(ws)) equals ws.
+func FormatWindows(ws []Window) string {
+	parts := make([]string, 0, len(ws))
+	for _, w := range ws {
+		parts = append(parts, formatDays(w.Days)+" "+formatClock(w.Start)+"-"+formatClock(w.End))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// WindowDays lists the days of w in the order of FormatWindows (nil = every day).
+func WindowDays(w Window) []string {
+	var out []string
+	for _, run := range dayRuns(w.Days) {
+		for i := 0; i < run[1]; i++ {
+			out = append(out, dayOrder[(run[0]+i)%7])
+		}
+	}
+	if len(out) == 7 {
+		return nil
+	}
+	return out
+}
+
+// dayRuns returns runs of consecutive selected days as {first weekday, length}, starting after an unselected day
+// (Monday-first when possible), so "sat,sun,mon" stays one run.
+func dayRuns(days [7]bool) [][2]int {
+	first := -1
+	for i := 0; i < 7; i++ {
+		if d := (int(time.Monday) + 6 + i) % 7; !days[d] { // sun, mon, …: the day before Monday first
+			first = (d + 1) % 7
+			break
+		}
+	}
+	if first < 0 {
+		return [][2]int{{int(time.Monday), 7}}
+	}
+	var runs [][2]int
+	for i := 0; i < 7; i++ {
+		d := (first + i) % 7
+		if !days[d] {
+			continue
+		}
+		if n := len(runs); n > 0 && (runs[n-1][0]+runs[n-1][1])%7 == d {
+			runs[n-1][1]++
+			continue
+		}
+		runs = append(runs, [2]int{d, 1})
+	}
+	return runs
+}
+
+func formatDays(days [7]bool) string {
+	runs := dayRuns(days)
+	if len(runs) == 1 && runs[0][1] == 7 {
+		return "*"
+	}
+	var parts []string
+	for _, r := range runs {
+		switch r[1] {
+		case 1:
+			parts = append(parts, dayOrder[r[0]])
+		case 2:
+			parts = append(parts, dayOrder[r[0]], dayOrder[(r[0]+1)%7])
+		default:
+			parts = append(parts, dayOrder[r[0]]+"-"+dayOrder[(r[0]+r[1]-1)%7])
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
+func formatClock(m int) string { return fmt.Sprintf("%02d:%02d", m/60, m%60) }
+
+// NextOpening returns the next time after t (UTC) at which the windows open, i.e. a window start that is not
+// already covered by an open window the minute before. ok is false without windows (any time) and when the windows
+// never close (e.g. "* 00:00-24:00"). All arithmetic is in UTC, so there are no daylight saving jumps.
+func NextOpening(ws []Window, t time.Time) (time.Time, bool) {
+	if len(ws) == 0 {
+		return time.Time{}, false
+	}
+	t = t.UTC()
+	midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	var best time.Time
+	for day := 0; day <= 7; day++ {
+		base := midnight.AddDate(0, 0, day)
+		for _, w := range ws {
+			if !w.Days[base.Weekday()] {
+				continue
+			}
+			s := base.Add(time.Duration(w.Start) * time.Minute)
+			if !s.After(t) || (!best.IsZero() && !s.Before(best)) || InWindow(ws, s.Add(-time.Minute)) {
+				continue
+			}
+			best = s
+		}
+		if !best.IsZero() {
+			return best, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// WindowStatus is Status.MaintenanceWindow: OPENLOG_UPDATER_MAINTENANCE_WINDOW as evaluated at a point in time.
+type WindowStatus struct {
+	// Spec is the normalized window ("" = updates may run at any time).
+	Spec    string       `json:"spec"`
+	Windows []WindowJSON `json:"windows"`
+	OpenNow bool         `json:"open_now"`
+	// NextOpenAt is the next opening (absent without windows and when the windows never close).
+	NextOpenAt *time.Time `json:"next_open_at,omitempty"`
+}
+
+// WindowJSON is one window of WindowStatus (days empty = every day; times HH:MM UTC).
+type WindowJSON struct {
+	Days  []string `json:"days"`
+	Start string   `json:"start"`
+	End   string   `json:"end"`
+}
+
+// NewWindowStatus evaluates ws at now.
+func NewWindowStatus(ws []Window, now time.Time) *WindowStatus {
+	out := &WindowStatus{Spec: FormatWindows(ws), Windows: []WindowJSON{}, OpenNow: InWindow(ws, now)}
+	for _, w := range ws {
+		days := WindowDays(w)
+		if days == nil {
+			days = []string{}
+		}
+		out.Windows = append(out.Windows, WindowJSON{Days: days, Start: formatClock(w.Start), End: formatClock(w.End)})
+	}
+	if next, ok := NextOpening(ws, now); ok {
+		next = next.UTC()
+		out.NextOpenAt = &next
+	}
+	return out
+}

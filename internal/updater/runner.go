@@ -331,6 +331,7 @@ func (r *Runner) run(ctx context.Context, req *updatereq.Request) (Status, error
 		r.Log.Debug("cannot load updater status", "err", err)
 	}
 	st.Engine, st.Mode, st.CheckedAt, st.UpdaterVersion = r.Engine.Name(), r.Cfg.Mode, r.now(), r.selfVersion()
+	st.MaintenanceWindow = NewWindowStatus(r.Cfg.MaintenanceWindows, st.CheckedAt)
 	save := func() {
 		if err := r.Store.Save(context.WithoutCancel(ctx), st); err != nil {
 			r.Log.Warn("cannot save updater status", "err", err)

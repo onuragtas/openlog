@@ -38,6 +38,28 @@ type logFilter struct {
 	Filters []qb.Filter     `json:"filters"`
 	Groups  [][]qb.Filter   `json:"groups"`
 	Q       string          `json:"q"`
+	// Transaction and TransactionService (together) restrict to the traces of one APM transaction, as
+	// GET /api/v1/logs transaction/transaction_service (a cross-table condition the filter language cannot express).
+	Transaction        string `json:"transaction"`
+	TransactionService string `json:"transaction_service"`
+}
+
+// maxTransactionNameBytes bounds the transaction name of the log transaction filter.
+const maxTransactionNameBytes = 4096
+
+// transactionTraces returns the trace ids of the entry spans of one transaction in the range (at most 10000 traces;
+// APM "logs of this transaction"), or nil when neither name nor service is given.
+func transactionTraces(sc *query.Scope, txn, txnSvc string, from, to time.Time) (*query.Select, error) {
+	if txn == "" && txnSvc == "" {
+		return nil, nil
+	}
+	if txn == "" || txnSvc == "" || len(txn) > maxTransactionNameBytes || len(txnSvc) > maxServiceNameBytes {
+		return nil, badRequest("transaction and transaction_service must be given together")
+	}
+	return spanRange(sc.From(query.Spans).Columns("trace_id"), from, to).
+		Where("service_name = {txn_service:String}").Param("txn_service", txnSvc).
+		Where("is_entry AND transaction_name = {txn:String}").Param("txn", txn).
+		GroupBy("trace_id").Limit(10000), nil
 }
 
 // bodyTime parses a JSON time (RFC3339 string or unix milliseconds as number or string); ok=false when absent.
@@ -98,19 +120,41 @@ func decodeQueryBody(r *http.Request, v any) error {
 	return nil
 }
 
-// apply adds the range, the inventory exclusion, q and the builder conditions to a logs query and binds b.
-func (f *logFilter) apply(q *query.Select, b *qb.Builder, from, to time.Time) error {
-	if len(f.Q) > maxLogQueryBytes {
+// apply adds the range, the inventory exclusion, q, the transaction and the builder conditions to a logs query and
+// binds b.
+func (f *logFilter) apply(sc *query.Scope, q *query.Select, b *qb.Builder, from, to time.Time) error {
+	return applyLogConditions(sc, q, b, logConditions{filters: f.Filters, groups: f.Groups, q: f.Q, txn: f.Transaction, txnSvc: f.TransactionService}, "", from, to)
+}
+
+// logConditions are the conditions of a log listing (request body or GET /fields/values parameters).
+type logConditions struct {
+	filters     []qb.Filter
+	groups      [][]qb.Filter
+	q           string
+	txn, txnSvc string
+}
+
+// applyLogConditions adds the range, the inventory exclusion, q, the transaction and the builder conditions (without
+// those on skipKey) to a logs query and binds b. Every validation error is returned before a statement runs.
+func applyLogConditions(sc *query.Scope, q *query.Select, b *qb.Builder, c logConditions, skipKey string, from, to time.Time) error {
+	if len(c.q) > maxLogQueryBytes {
 		return badRequest("q must be at most %d bytes", maxLogQueryBytes)
+	}
+	traces, err := transactionTraces(sc, c.txn, c.txnSvc, from, to)
+	if err != nil {
+		return err
+	}
+	cond, err := b.Where(c.filters, c.groups, skipKey)
+	if err != nil {
+		return queryBuilderError(err)
 	}
 	timeWhere(q, from, to).
 		Where("NOT startsWith(event_name, {inventory_prefix:String})").Param("inventory_prefix", "openlog.inventory.")
-	if f.Q != "" {
-		q.Where("positionCaseInsensitiveUTF8(body, {q:String}) > 0").Param("q", f.Q)
+	if c.q != "" {
+		q.Where("positionCaseInsensitiveUTF8(body, {q:String}) > 0").Param("q", c.q)
 	}
-	cond, err := b.Where(f.Filters, f.Groups, "")
-	if err != nil {
-		return queryBuilderError(err)
+	if traces != nil {
+		q.WhereIn("trace_id", traces)
 	}
 	if cond != "" {
 		q.Where(cond)
@@ -212,7 +256,7 @@ func (s *Server) queryLogs(w http.ResponseWriter, r *http.Request, sc *query.Sco
 		cols = append(cols, "attributes", "resource_attributes")
 	}
 	q := sc.From(query.Logs).Columns(cols...)
-	if err := req.apply(q, b, from, to); err != nil {
+	if err := req.apply(sc, q, b, from, to); err != nil {
 		return err
 	}
 	if asc {
@@ -345,66 +389,74 @@ func (s *Server) aggregateLogs(w http.ResponseWriter, r *http.Request, sc *query
 	if err != nil {
 		return err
 	}
-	limit := defaultAggSeries
-	if req.Limit < 0 || req.Limit > maxAggSeries {
-		return badRequest("limit must be between 1 and %d", maxAggSeries)
-	} else if req.Limit > 0 {
-		limit = req.Limit
+	limit, err := aggregateLimit(req.Limit)
+	if err != nil {
+		return err
 	}
-	var group *qb.Field
-	if req.GroupBy != "" {
-		if group, err = qb.Resolve(qb.Logs, req.GroupBy); err != nil {
-			return queryBuilderError(err)
-		}
-		if d := group.Def(); d != nil && !d.Filterable {
-			return badRequest("group_by: %q cannot be used to group", group.Key)
-		}
+	group, err := aggregateGroup(qb.Logs, req.GroupBy)
+	if err != nil {
+		return err
 	}
-	bucket := "toInt64(toUnixTimestamp(toStartOfInterval(timestamp, toIntervalSecond({step:UInt32})))) * 1000 AS t"
+	series, total, err := countSeries(r, sc, query.Logs, qb.Logs, "la", group, limit, step, func(q *query.Select, b *qb.Builder) error {
+		return req.apply(sc, q, b, from, to)
+	})
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"step": formatStep(step), "total": total, "series": series})
+	return nil
+}
 
+// stepBucket is the unix ms start of a record's {step:UInt32} bucket.
+const stepBucket = "toInt64(toUnixTimestamp(toStartOfInterval(timestamp, toIntervalSecond({step:UInt32})))) * 1000 AS t"
+
+// countSeries counts the records of table per step bucket — split into the limit most frequent values of group plus an
+// "other" series when group is set — for the conditions added by apply (which binds the builder it is given).
+func countSeries(r *http.Request, sc *query.Scope, table query.Table, sig qb.Signal, prefix string, group *qb.Field, limit int, step time.Duration,
+	apply func(q *query.Select, b *qb.Builder) error) ([]*aggSeriesJSON, uint64, error) {
 	// Top group values (values outside them form the "other" series).
 	var top []string
 	if group != nil {
-		b := qb.NewBuilder(qb.Logs, "la")
-		q := sc.From(query.Logs).Columns(b.Expr(group) + " AS g")
-		if err := req.apply(q, b, from, to); err != nil {
-			return err
+		b := qb.NewBuilder(sig, prefix)
+		q := sc.From(table).Columns(b.Expr(group) + " AS g")
+		if err := apply(q, b); err != nil {
+			return nil, 0, err
 		}
 		q.GroupBy("g").OrderBy("count() DESC", "g").Limit(limit)
 		rows, err := sc.Query(r.Context(), q)
 		if err != nil {
-			return err
+			return nil, 0, err
 		}
 		for rows.Next() {
 			var g string
 			if err := rows.Scan(&g); err != nil {
 				rows.Close()
-				return err
+				return nil, 0, err
 			}
 			top = append(top, g)
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
-			return err
+			return nil, 0, err
 		}
 	}
 
-	b := qb.NewBuilder(qb.Logs, "la")
+	b := qb.NewBuilder(sig, prefix)
 	var q *query.Select
 	if group == nil {
-		q = sc.From(query.Logs).Columns("'' AS grp", "toUInt8(1) AS in_top", bucket, "count() AS n")
+		q = sc.From(table).Columns("'' AS grp", "toUInt8(1) AS in_top", stepBucket, "count() AS n")
 	} else {
 		expr := b.Expr(group)
-		q = sc.From(query.Logs).Columns("if(has({top:Array(String)}, "+expr+"), "+expr+", '') AS grp",
-			"toUInt8(has({top:Array(String)}, "+expr+")) AS in_top", bucket, "count() AS n").Param("top", top)
+		q = sc.From(table).Columns("if(has({top:Array(String)}, "+expr+"), "+expr+", '') AS grp",
+			"toUInt8(has({top:Array(String)}, "+expr+")) AS in_top", stepBucket, "count() AS n").Param("top", top)
 	}
-	if err := req.apply(q, b, from, to); err != nil {
-		return err
+	if err := apply(q, b); err != nil {
+		return nil, 0, err
 	}
 	q.Param("step", uint32(step/time.Second)).GroupBy("grp", "in_top", "t").OrderBy("t", "grp").Limit((limit + 1) * 100_000)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	series := []*aggSeriesJSON{}
@@ -416,7 +468,7 @@ func (s *Server) aggregateLogs(w http.ResponseWriter, r *http.Request, sc *query
 		var t int64
 		var n uint64
 		if err := rows.Scan(&grp, &inTop, &t, &n); err != nil {
-			return err
+			return nil, 0, err
 		}
 		k := "\x00other"
 		if inTop == 1 {
@@ -433,7 +485,7 @@ func (s *Server) aggregateLogs(w http.ResponseWriter, r *http.Request, sc *query
 		total += n
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, 0, err
 	}
 	rank := map[string]int{}
 	for i, g := range top {
@@ -446,6 +498,30 @@ func (s *Server) aggregateLogs(w http.ResponseWriter, r *http.Request, sc *query
 		}
 		return rank[a.Group] < rank[c.Group]
 	})
-	writeJSON(w, http.StatusOK, map[string]any{"step": formatStep(step), "total": total, "series": series})
-	return nil
+	return series, total, nil
+}
+
+// aggregateLimit validates the series limit of an aggregate request.
+func aggregateLimit(n int) (int, error) {
+	if n < 0 || n > maxAggSeries {
+		return 0, badRequest("limit must be between 1 and %d", maxAggSeries)
+	} else if n > 0 {
+		return n, nil
+	}
+	return defaultAggSeries, nil
+}
+
+// aggregateGroup resolves the group_by key of an aggregate request (nil without one).
+func aggregateGroup(sig qb.Signal, key string) (*qb.Field, error) {
+	if key == "" {
+		return nil, nil
+	}
+	group, err := qb.Resolve(sig, key)
+	if err != nil {
+		return nil, queryBuilderError(err)
+	}
+	if d := group.Def(); d != nil && !d.Filterable {
+		return nil, badRequest("group_by: %q cannot be used to group", group.Key)
+	}
+	return group, nil
 }

@@ -3,7 +3,7 @@
 // pasted text such as `severity_text IN (ERROR, WARN)` is parsed into chips (lib/querybuilder.ts); other text becomes a
 // body search. Chips are AND-ed within a lane; "+ OR" adds an alternative lane. Phones get the editor in a bottom sheet.
 import { useQuery } from "@tanstack/react-query";
-import { Filter, Loader2, Plus, Search, X } from "lucide-react";
+import { Filter, Loader2, Lock, Plus, Search, X } from "lucide-react";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { fieldKeysQuery, fieldValuesQuery, type FieldKey, type FieldSignal, type FieldSource, type FieldType, type FilterOp, type FilterState, type QueryFilter } from "@/api/explorer";
@@ -40,6 +40,8 @@ export interface QueryBuilderProps {
   range: RangeSpec;
   /** Unparseable text becomes a body search (default: logs only). */
   allowText?: boolean;
+  /** Conditions of the page context (e.g. the host of a host log tab): shown as locked chips, always applied. */
+  locked?: QueryFilter[];
   className?: string;
 }
 
@@ -62,7 +64,7 @@ export function QueryBuilder(props: QueryBuilderProps) {
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
   if (!mobile) return <FilterEditor {...props} />;
-  const count = conditionCount(props.value) + (props.value.q.trim() ? 1 : 0);
+  const count = conditionCount(props.value) + (props.value.q.trim() ? 1 : 0) + (props.locked?.length ?? 0);
   return (
     <div className={props.className}>
       <Button type="button" variant="outline" className="w-full justify-start" aria-haspopup="dialog" onClick={() => setOpen(true)}>
@@ -82,7 +84,7 @@ export function QueryBuilder(props: QueryBuilderProps) {
 
 type LaneId = "filters" | "new" | number;
 
-function FilterEditor({ signal, metric, value, onChange, range, allowText = signal === "logs", className }: QueryBuilderProps) {
+function FilterEditor({ signal, metric, value, onChange, range, allowText = signal === "logs", locked = [], className }: QueryBuilderProps) {
   const { t } = useTranslation();
   const [orDraft, setOrDraft] = useState(false);
   const total = conditionCount(value);
@@ -115,7 +117,8 @@ function FilterEditor({ signal, metric, value, onChange, range, allowText = sign
             </span>
           )}
           <Lane
-            ctx={{ signal, metric, range, allowText, filters: value.filters }}
+            ctx={{ signal, metric, range, allowText, filters: [...locked, ...value.filters] }}
+            locked={i === 0 ? locked : undefined}
             label={lane.id === "filters" ? t("queryBuilder.title") : t("queryBuilder.orGroup", { n: typeof lane.id === "number" ? lane.id + 1 : Math.max(2, value.groups.length + 1) })}
             conds={lane.conds}
             q={lane.id === "filters" || (i === 0 && allowText) ? value.q : undefined}
@@ -168,6 +171,7 @@ type Editing = { index: number; filter: QueryFilter } | { q: string };
 
 function Lane({
   ctx,
+  locked,
   label,
   conds,
   q,
@@ -177,6 +181,8 @@ function Lane({
   onCancelEmpty,
 }: {
   ctx: SuggestContext;
+  /** locked context conditions shown first (not editable) */
+  locked?: QueryFilter[];
   label: string;
   conds: QueryFilter[];
   /** body search shown in this lane (undefined: not this lane) */
@@ -206,6 +212,7 @@ function Lane({
 
   return (
     <div role="group" aria-label={label} className="flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-input bg-background px-1.5 py-1 shadow-xs focus-within:ring-2 focus-within:ring-ring/40">
+      {locked?.map((f) => <LockedChip key={formatFilter(f)} filter={f} />)}
       {q && !editingQ && (
         <span className="inline-flex max-w-full min-w-0 items-center rounded-md border bg-muted/60 text-xs">
           <button type="button" className="inline-flex min-w-0 items-center gap-1 px-2 py-1 pointer-coarse:py-2" onClick={() => edit({ q })} aria-label={t("queryBuilder.editSearch", { text: q })}>
@@ -241,6 +248,30 @@ function Lane({
         }}
       />
     </div>
+  );
+}
+
+/** A context condition that is always applied and cannot be edited or removed here. */
+function LockedChip({ filter }: { filter: QueryFilter }) {
+  const { t } = useTranslation();
+  const text = formatFilter(filter);
+  const values = filterValues(filter);
+  return (
+    <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border border-dashed bg-muted/30 px-2 py-1 font-mono text-xs" title={t("explorer.context.locked", { condition: text })} data-testid="locked-chip">
+      <Lock className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="sr-only">{t("explorer.context.locked", { condition: text })}</span>
+      <span className="truncate text-muted-foreground" aria-hidden="true">
+        {filter.key}
+      </span>
+      <span className="shrink-0 font-semibold text-muted-foreground" aria-hidden="true">
+        {OP_TEXT[filter.op]}
+      </span>
+      {values.length > 0 && (
+        <span className="truncate" aria-hidden="true">
+          {isMultiValueOp(filter.op) ? `(${values.join(", ")})` : values[0]}
+        </span>
+      )}
+    </span>
   );
 }
 

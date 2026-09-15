@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMs, parseAttrFilter, type ServiceScope } from "@/lib/apm";
+import { encodeFilterState } from "@/lib/querybuilder";
 import { formatDateTime } from "@/lib/format";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
 
@@ -91,10 +92,32 @@ export function TracesTab({ scope, range, filters, onChange }: { scope: ServiceS
         </CardContent>
       </Card>
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>
             <h2>{t("apm.service.tabs.traces")}</h2>
           </CardTitle>
+          <Link
+            to="/traces"
+            search={{
+              range: range.range,
+              from: range.from,
+              to: range.to,
+              f: encodeFilterState({
+                filters: [
+                  { key: "service.name", op: "=", value: scope.service },
+                  { key: "is_entry", op: "=", value: true },
+                  ...(filters.qtxn ? [{ key: "transaction.name", op: "=" as const, value: filters.qtxn }] : []),
+                  ...(num(filters.qmin) !== undefined ? [{ key: "duration_ms", op: ">=" as const, value: num(filters.qmin)! }] : []),
+                  ...(filters.qerr ? [{ key: "error", op: "=" as const, value: true }] : []),
+                ],
+                groups: [],
+                q: "",
+              }),
+            }}
+            className="text-xs text-primary hover:underline"
+          >
+            {t("explorer.context.openInTraces")}
+          </Link>
         </CardHeader>
         <CardContent className="px-0">
           {q.isPending ? (

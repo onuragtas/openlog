@@ -1,24 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, FileText } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import { containerQuery, containerTimeseriesQuery, type ContainerDetail } from "@/api/containers";
 import { ContainerServices } from "@/components/containers/ContainerServices";
 import { ContainerStatusBadge } from "@/components/containers/ContainerTable";
-import { LogFilters } from "@/components/LogFilters";
-import { LogTable } from "@/components/LogTable";
+import type { QueryFilter } from "@/api/explorer";
+import { EmbeddedLogsExplorer } from "@/components/logs-explorer/EmbeddedLogsExplorer";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { containerChartSeries, containerImage, containerName } from "@/lib/containers";
 import { formatDateTime, formatRelative, type UnitKind } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
-import { useLogPages } from "@/lib/use-logs";
 import { CONTAINER_TABS, type ContainerDetailSearch, type ContainerTab } from "@/router";
 
 const route = getRouteApi("/app/containers/$containerId");
@@ -173,54 +171,30 @@ function ContainerCharts({ containerId, range }: { containerId: string; range: R
   );
 }
 
+/** Logs of one container: the Logs Explorer with `resource.container.id` locked; `severity` and `stream` open as chips. */
 function ContainerLogs({ containerId, range, search }: { containerId: string; range: RangeSpec; search: ContainerDetailSearch }) {
   const { t } = useTranslation();
-  const navigate = useNavigate({ from: "/containers/$containerId" });
-  const streamId = useId();
-  const { query, logs } = useLogPages({ range, containerId, q: search.lq, severity: search.severity, attrs: { stream: search.stream } });
-  const value = useMemo(() => ({ q: search.lq ?? "", severity: search.severity ?? "", service: "", host: "" }), [search.lq, search.severity]);
+  const locked = useMemo<QueryFilter[]>(() => [{ key: "resource.container.id", op: "=", value: containerId.toLowerCase() }], [containerId]);
+  const emptyUnfiltered = (
+    <EmptyState icon={<FileText className="size-5" aria-hidden="true" />} className="px-4">
+      {t("containers.detail.logsEmpty")}
+    </EmptyState>
+  );
   return (
-    <section className="flex flex-col gap-3" aria-label={t("containers.detail.tabs.logs")}>
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-0 flex-1">
-          <LogFilters
-            value={value}
-            showHost={false}
-            showService={false}
-            onApply={(v) => void navigate({ search: (prev) => ({ ...prev, lq: v.q || undefined, severity: v.severity || undefined }) })}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor={streamId} className="text-xs text-muted-foreground">
-            {t("containers.detail.streamLabel")}
-          </label>
-          <NativeSelect
-            id={streamId}
-            value={search.stream ?? ""}
-            onChange={(e) => void navigate({ search: (prev) => ({ ...prev, stream: (e.target.value || undefined) as ContainerDetailSearch["stream"] }), replace: true })}
-          >
-            <option value="">{t("containers.detail.anyStream")}</option>
-            <option value="stdout">stdout</option>
-            <option value="stderr">stderr</option>
-          </NativeSelect>
-        </div>
-      </div>
-      <div className="overflow-hidden rounded-xl border bg-card">
-        {query.isPending ? (
-          <LoadingState />
-        ) : query.isError && !logs ? (
-          <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-        ) : !logs || logs.length === 0 ? (
-          <EmptyState icon={<FileText className="size-5" aria-hidden="true" />} className="px-4">
-            {search.lq || search.severity || search.stream ? t("logs.empty") : t("containers.detail.logsEmpty")}
-          </EmptyState>
-        ) : (
-          <LogTable logs={logs} showHost={false} hasMore={query.hasNextPage} loadingMore={query.isFetchingNextPage} onLoadMore={() => void query.fetchNextPage()} />
-        )}
-      </div>
+    <section className="flex min-w-0 flex-col gap-3" aria-label={t("containers.detail.tabs.logs")}>
+      <EmbeddedLogsExplorer
+        range={range}
+        search={search}
+        locked={locked}
+        legacy={{ severity: search.severity, stream: search.stream }}
+        legacyParamNames={CONTAINER_LEGACY_PARAMS}
+        emptyUnfiltered={emptyUnfiltered}
+      />
     </section>
   );
 }
+
+const CONTAINER_LEGACY_PARAMS = ["severity", "stream"] as const;
 
 function ContainerAttributes({ container }: { container: ContainerDetail }) {
   const { t } = useTranslation();

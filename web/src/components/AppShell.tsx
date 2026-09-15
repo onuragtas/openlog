@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
-import { Activity, Bell, Boxes, Container, LayoutDashboard, LineChart, LogOut, Menu, MoreVertical, Plug, PlusCircle, Rocket, ScrollText, SearchCode, Server, Settings, Ship, X } from "lucide-react";
+import { Activity, Bell, Boxes, Container, LayoutDashboard, LineChart, LogOut, Menu, MoreVertical, Plug, PlusCircle, Rocket, ScrollText, SearchCode, Server, Settings, Ship, Waypoints, X } from "lucide-react";
 import { AddDataButton } from "@/components/onboarding/AddDataButton";
 import { Popover } from "radix-ui";
 import { useTranslation } from "react-i18next";
@@ -30,6 +30,7 @@ const NAV = [
   { to: "/integrations", icon: Plug, label: "nav.integrations" },
   { to: "/apm", icon: Activity, label: "nav.apm" },
   { to: "/logs", icon: ScrollText, label: "nav.logs" },
+  { to: "/traces", icon: Waypoints, label: "nav.traces" },
   { to: "/metrics", icon: LineChart, label: "nav.metrics" },
   { to: "/query", icon: SearchCode, label: "nav.query" },
   { to: "/dashboards", icon: LayoutDashboard, label: "nav.dashboards" },

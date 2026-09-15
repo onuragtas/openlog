@@ -876,8 +876,9 @@ paths:
       operationId: listFieldValues
       description: |
         Most frequent values of one key with counts, read from a sample of at most 100000 matching records of the
-        range (`sampled: true` when the sample was full). `filters` (JSON array of QueryFilter) and `q` restrict the
-        records; a filter on `key` itself is ignored so the other values stay visible.
+        range (`sampled: true` when the sample was full). `filters`, `groups`, `q` and the explorer conditions
+        (`body_q`, `transaction`/`transaction_service` for logs, `root_only` for traces) restrict the records; a
+        condition on `key` itself is ignored so the other values stay visible. `total` = records counted.
       parameters:
         - $ref: "#/components/parameters/FieldSignal"
         - name: key
@@ -898,6 +899,26 @@ paths:
           in: query
           description: JSON array of QueryFilter
           schema: { type: string, maxLength: 16384 }
+        - name: groups
+          in: query
+          description: JSON array of QueryFilter arrays (OR of AND-groups)
+          schema: { type: string, maxLength: 16384 }
+        - name: body_q
+          in: query
+          description: "`signal=logs`: case-insensitive substring of the body"
+          schema: { type: string, maxLength: 1024 }
+        - name: transaction
+          in: query
+          description: "`signal=logs`: APM transaction name (with `transaction_service`)"
+          schema: { type: string, maxLength: 4096 }
+        - name: transaction_service
+          in: query
+          description: "`signal=logs`: service of `transaction`"
+          schema: { type: string, maxLength: 512 }
+        - name: root_only
+          in: query
+          description: "`signal=traces`: root spans only"
+          schema: { type: boolean }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 1000, default: 50 }
@@ -1155,6 +1176,64 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/traces/query:
+    post:
+      tags: [traces]
+      operationId: queryTraces
+      description: |
+        Structured span search (Traces Explorer, api.md "Traces", D-122): `filters`/`groups` of QueryFilter on signal
+        `traces`, `root_only`, paging by `cursor` in `order`, or `sort=duration` for the slowest spans in one page.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TracesQueryRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TracesQueryResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/traces/aggregate:
+    post:
+      tags: [traces]
+      operationId: aggregateTraces
+      description: |
+        Span counts per bucket (as POST /api/v1/logs/aggregate) plus p50/p95/p99 span duration in milliseconds per
+        bucket for the same conditions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TracesAggregateRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TracesAggregateResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
 
   /api/v1/traces/{trace_id}:
     get:
@@ -7247,13 +7326,14 @@ components:
 
     FieldValuesResponse:
       type: object
-      required: [key, type, values, sampled]
+      required: [key, type, values, total, sampled]
       properties:
         key: { type: string }
         type: { $ref: "#/components/schemas/FieldType" }
         values:
           type: array
           items: { $ref: "#/components/schemas/FieldValue" }
+        total: { type: integer, description: "Records counted (all values); a value's share is count / total" }
         sampled: { type: boolean }
 
     FilterOp:
@@ -7266,7 +7346,8 @@ components:
         One condition. Keys: top-level fields of the signal, `attributes.<k>`, `resource.<k>`, `body.<k>` (logs, JSON
         body) or a bare attribute key (record attribute, else resource attribute). `in`/`not_in` take `values`
         (1–100); `exists`/`not_exists` take no value; the others take `value`. `contains` is case-insensitive;
-        `like` uses SQL wildcards (`%`, `_`, case-sensitive); `regex` is RE2. `>`…`<=` compare numerically (attribute
+        `like` uses SQL wildcards (`%`, `_`, case-sensitive); `regex` is RE2. `contains` matches `%` and `_` literally
+        (same as OQL CONTAINS). `>`…`<=` compare numerically (attribute
         values that are not numbers never match). Values are at most 1024 bytes.
       required: [key, op]
       properties:
@@ -7297,6 +7378,8 @@ components:
           items: { $ref: "#/components/schemas/QueryFilter" }
         groups: { $ref: "#/components/schemas/FilterGroups" }
         q: { type: string, maxLength: 1024, description: Case-insensitive substring of the body }
+        transaction: { type: string, maxLength: 4096, description: "APM transaction name; with transaction_service: logs of that transaction's traces" }
+        transaction_service: { type: string, maxLength: 512 }
         order: { type: string, enum: [desc, asc], default: desc }
         limit: { type: integer, minimum: 1, description: "Default 100, capped by OPENLOG_API_MAX_ROWS" }
         cursor: { type: string, description: "next_cursor of the previous page (same request otherwise)" }
@@ -7349,6 +7432,8 @@ components:
           items: { $ref: "#/components/schemas/QueryFilter" }
         groups: { $ref: "#/components/schemas/FilterGroups" }
         q: { type: string, maxLength: 1024 }
+        transaction: { type: string, maxLength: 4096 }
+        transaction_service: { type: string, maxLength: 512 }
         step: { type: string, description: "Go duration ≥ 1s; default: a round step giving at most ~120 buckets" }
         group_by: { type: string, maxLength: 256, description: Key whose values split the counts }
         limit: { type: integer, minimum: 1, maximum: 50, default: 10, description: Series of group_by values }
@@ -7374,6 +7459,96 @@ components:
         series:
           type: array
           items: { $ref: "#/components/schemas/LogsAggregateSeries" }
+
+    TracesQueryRequest:
+      type: object
+      properties:
+        from: { type: [string, integer], description: "RFC3339 or unix ms (default now-1h)" }
+        to: { type: [string, integer], description: "RFC3339 or unix ms (default now)" }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        root_only: { type: boolean, default: false, description: Spans without a parent span id }
+        order: { type: string, enum: [desc, asc], default: desc }
+        sort: { type: string, enum: [timestamp, duration], default: timestamp, description: "duration: slowest spans, one page" }
+        limit: { type: integer, minimum: 1, description: "Default 100, capped by OPENLOG_API_MAX_ROWS" }
+        cursor: { type: string }
+        columns:
+          type: array
+          maxItems: 50
+          items: { type: string, maxLength: 256 }
+        include_record: { type: boolean, default: false }
+
+    SpanQueryRow:
+      type: object
+      required: [id, timestamp, trace_id, span_id, parent_span_id, name, kind, status_code, status_message, service_name, host_id, duration_ns, duration_ms, is_entry, is_error, http_status_code, transaction_name, fields]
+      properties:
+        id: { type: string }
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        trace_id: { type: string }
+        span_id: { type: string }
+        parent_span_id: { type: string }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/SpanKind" }
+        status_code: { $ref: "#/components/schemas/SpanStatusCode" }
+        status_message: { type: string }
+        service_name: { type: string }
+        host_id: { type: string }
+        duration_ns: { type: integer }
+        duration_ms: { type: number }
+        is_entry: { type: boolean }
+        is_error: { type: boolean }
+        http_status_code: { type: integer }
+        transaction_name: { type: string }
+        fields:
+          type: object
+          additionalProperties: { type: string }
+        attributes: { $ref: "#/components/schemas/StringMap" }
+        resource_attributes: { $ref: "#/components/schemas/StringMap" }
+
+    TracesQueryResponse:
+      type: object
+      required: [rows, next_cursor]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/SpanQueryRow" }
+        next_cursor: { type: [string, "null"] }
+
+    TracesAggregateRequest:
+      type: object
+      properties:
+        from: { type: [string, integer] }
+        to: { type: [string, integer] }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        root_only: { type: boolean, default: false }
+        step: { type: string }
+        group_by: { type: string, maxLength: 256 }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 10 }
+
+    TracesAggregateResponse:
+      type: object
+      required: [step, total, series, latency]
+      properties:
+        step: { type: string, example: 60s }
+        total: { type: integer }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/LogsAggregateSeries" }
+        latency:
+          type: object
+          required: [p50, p95, p99]
+          description: Span duration percentiles in milliseconds per bucket
+          properties:
+            p50: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            p95: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
+            p99: { type: array, items: { $ref: "#/components/schemas/MetricPoint" } }
 
     MetricTemporality:
       type: string
@@ -8670,6 +8845,18 @@ components:
               message: { type: string, description: English text }
               params: { type: object, additionalProperties: { type: string } }
         updater_version: { type: string, description: Version of the openlog-updater that wrote the document (absent in documents of updaters before 0.1.26) }
+        maintenance_window:
+          description: >-
+            OPENLOG_UPDATER_MAINTENANCE_WINDOW of the updater (UTC; D-121). Absent in documents of updaters before this
+            field. The api re-evaluates open_now and next_open_at when it answers. On Kubernetes the CronJob schedule of
+            the chart decides when the updater runs; the window only limits which runs may install.
+          type: object
+          required: [spec, windows, open_now]
+          properties:
+            spec: { type: string, description: 'Normalized window, e.g. "sat,sun 02:00-05:00; mon-fri 03:00-04:00"; empty = updates may run at any time', example: "sat,sun 02:00-05:00" }
+            windows: { type: array, items: { $ref: "#/components/schemas/MaintenanceWindow" } }
+            open_now: { type: boolean, description: Inside a window now (always true without windows) }
+            next_open_at: { type: string, format: date-time, description: "Next opening (UTC); absent without windows or when the windows never close" }
         self_update:
           description: Last attempt of the Compose updater to replace its own container with the installed release (D-120); one attempt per target version.
           type: object

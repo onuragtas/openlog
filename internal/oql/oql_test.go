@@ -68,6 +68,7 @@ var goldens = []golden{
 	{name: "log_timeseries_facets", query: "SELECT count(*), uniqueCount(host.name) FROM Log WHERE message LIKE '%timeout%' FACET service.name, host.name TIMESERIES 5 minutes SINCE 1 day ago LIMIT 5"},
 	{name: "log_map_attrs", query: "SELECT count(attributes['http.route']) FROM Log WHERE attributes['http.status'] >= 500 AND resource.k8s.namespace.name IN ('prod', 'staging') AND http.method = 'GET' FACET resource['cloud.region']"},
 	{name: "log_is_null", query: "SELECT count(*) FROM Log WHERE trace.id IS NOT NULL AND attributes['user'] IS NULL AND severity.number IS NULL"},
+	{name: "log_contains", query: "SELECT count(*) FROM Log WHERE message CONTAINS '50%_OFF' AND attributes['http.route'] NOT CONTAINS 'Health' AND contains = 'x'"},
 	{name: "log_not_or", query: "SELECT count(*) FROM Log WHERE NOT (severity = 'DEBUG' OR severity = 'TRACE') AND service.name NOT IN ('a', 'b') AND message NOT LIKE 'health%'"},
 	{name: "tx_percentile", query: "SELECT percentile(duration.ms, 50, 95, 99), average(duration.ms) AS 'avg ms' FROM Transaction WHERE service.name = 'checkout' AND error = false FACET transaction.name"},
 	{name: "tx_rate_filter", query: "SELECT rate(count(*), 1 minute), filter(count(*), WHERE http.status_code >= 500) AS errors, filter(percentile(duration.ms, 95), WHERE http.status_code < 500) FROM Transaction TIMESERIES AUTO SINCE 6 hours ago"},

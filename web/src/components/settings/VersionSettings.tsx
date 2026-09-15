@@ -7,9 +7,47 @@ import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DateTimeText, FormError, SettingsSection } from "./common";
+import { formatWindowsLocal, formatWindowsUtc } from "./maintenanceWindow";
 import { updateMessage, updateState, updateStep } from "./updateMessages";
 
 type Updater = NonNullable<VersionInfo["updater"]>;
+type UpdaterWindow = NonNullable<Updater["maintenance_window"]>;
+
+/** The next opening as "in 5 hours (09/16/2026, 03:00:00)". */
+function NextOpening({ at }: { at: string }) {
+  return (
+    <span data-testid="next-opening">
+      <DateTimeText value={at} relative /> (<DateTimeText value={at} />)
+    </span>
+  );
+}
+
+/**
+ * OPENLOG_UPDATER_MAINTENANCE_WINDOW as reported by the updater: the UTC window, the browser's local time and the
+ * next opening. On Kubernetes the chart's CronJob schedule decides when the updater runs, so no opening is shown.
+ */
+function MaintenanceWindowText({ window: mw, kubernetes }: { window: UpdaterWindow; kubernetes: boolean }) {
+  const { t } = useTranslation();
+  if (mw.spec === "" || mw.windows.length === 0) return <span>{t("update.info.anyTime")}</span>;
+  const local = formatWindowsLocal(mw.windows);
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span>{t("update.info.windowUtc", { value: formatWindowsUtc(mw.windows) })}</span>
+      {local && <span className="text-xs text-muted-foreground">({t("update.info.yourTime", { value: local })})</span>}
+      {kubernetes ? (
+        <span className="text-xs text-muted-foreground">{t("update.info.cronJobSchedule")}</span>
+      ) : mw.open_now ? (
+        <Badge variant="success">{t("update.info.windowOpenNow")}</Badge>
+      ) : (
+        mw.next_open_at && (
+          <span className="text-xs text-muted-foreground">
+            {t("update.info.nextOpening")} <NextOpening at={mw.next_open_at} />
+          </span>
+        )
+      )}
+    </span>
+  );
+}
 
 const CHECK_VARIANT = { enabled: "success", disabled: "muted", failed: "destructive" } as const;
 
@@ -92,6 +130,9 @@ export function VersionSettings() {
   const updaterUsable = !!u && u.mode !== "off";
   const listening = requests?.updater_listening ?? false;
   const canApply = updaterUsable && (u.engine === "kubernetes" || listening);
+  const mw = u?.maintenance_window;
+  const kubernetes = u?.engine === "kubernetes";
+  const waiting = u?.state === "waiting_for_maintenance_window";
   let hint: string | null = null;
   if (u?.mode === "off") hint = t("update.info.modeOff");
   else if (u?.engine === "kubernetes") hint = t("update.info.kubernetes");
@@ -157,8 +198,18 @@ export function VersionSettings() {
                     {t("update.info.target")}: <span className="font-mono">{u.target_version}</span>
                   </span>
                 )}
+                {waiting && !kubernetes && mw?.next_open_at && (
+                  <span className="text-xs">
+                    {t("update.info.nextOpening")} <NextOpening at={mw.next_open_at} />
+                  </span>
+                )}
               </span>
               {u.message && <span className="text-muted-foreground">{updateMessage(u.message, u.message_code, u.message_params)}</span>}
+              {waiting && requests?.can_request && target && updaterUsable && (
+                <span className="text-xs text-muted-foreground" data-testid="waiting-hint">
+                  {t("update.info.waitingHint")}
+                </span>
+              )}
               {u.error && <span className="text-destructive-text">{u.error}</span>}
               {(u.notices ?? []).map((n) => (
                 <span key={n.code} role="note" className="text-warning-text" data-testid="updater-notice">
@@ -187,6 +238,15 @@ export function VersionSettings() {
             <span className="text-muted-foreground">{t("update.info.noUpdater")}</span>
           )}
         </dd>
+
+        {u && mw && (
+          <>
+            <dt className="text-muted-foreground">{t("update.info.maintenanceWindow")}</dt>
+            <dd data-testid="maintenance-window">
+              <MaintenanceWindowText window={mw} kubernetes={kubernetes} />
+            </dd>
+          </>
+        )}
 
         {latest && (
           <>
@@ -232,6 +292,11 @@ export function VersionSettings() {
                 {t("update.info.confirmTitle", { version: target })}
               </p>
               <p className="text-sm text-muted-foreground">{t("update.info.confirmBody")}</p>
+              {mw && (
+                <p className="text-sm" data-testid="confirm-window">
+                  {t("update.info.confirmWindow")} <MaintenanceWindowText window={mw} kubernetes={kubernetes} />
+                </p>
+              )}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" className="size-4 accent-primary" checked={ignoreWindow} onChange={(e) => setIgnoreWindow(e.target.checked)} />
                 {t("update.info.ignoreWindow")}

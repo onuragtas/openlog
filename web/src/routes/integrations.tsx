@@ -13,6 +13,7 @@ import {
   IIS_APP_POOL,
   IIS_POOLS_QUERY,
   IIS_SITE,
+  IIS_SITE_KEY,
   IIS_SITES_QUERY,
   panelCharts,
   panelResource,
@@ -150,7 +151,7 @@ function PanelChartCard({
           >
             <Link
               to="/alerts/rules/new"
-              search={instanceAlertSearch({ metric: alertQuery.name, agg: alertQuery.agg, ref: inst, hostName, name: `${alertQuery.name} on ${hostName}` }) as never}
+              search={instanceAlertSearch({ metric: alertQuery.name, agg: alertQuery.agg, ref: inst, hostName, name: `${alertQuery.name} on ${hostName}`, site: resource[IIS_SITE_KEY] }) as never}
               aria-label={`${t("integrations.alerts.fromChart")}: ${title}`}
               title={t("integrations.alerts.fromChart")}
               className={buttonVariants({ variant: "ghost", size: "icon", className: "-my-3 size-10" })}

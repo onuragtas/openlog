@@ -27,11 +27,11 @@ const ROW_FIELDS: Record<string, (r: LogQueryRow) => string> = {
 };
 
 /** Validated column list: unique non-empty keys, `timestamp` pinned first, at most MAX_COLUMNS; defaults when empty. */
-export function normalizeColumns(raw: unknown): string[] {
+export function normalizeColumns(raw: unknown, defaults: readonly string[] = DEFAULT_COLUMNS): string[] {
   const list = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
   const keys = list.filter((k): k is string => typeof k === "string" && k.trim() !== "" && k.length <= 256).map((k) => k.trim());
   const unique = [...new Set(keys)].filter((k) => k !== "timestamp");
-  if (unique.length === 0) return [...DEFAULT_COLUMNS];
+  if (unique.length === 0) return [...defaults];
   return ["timestamp", ...unique].slice(0, MAX_COLUMNS);
 }
 
@@ -52,6 +52,12 @@ export function toggleColumn(cols: readonly string[], key: string): string[] {
   if (cols.includes(key)) return cols.filter((c) => c !== key);
   return normalizeColumns([...cols, key]);
 }
+
+/** Whether a value can be used in a filter condition (API limit of 1024 bytes). */
+export const isFilterableValue = (value: string) => new TextEncoder().encode(value).length <= 1024;
+
+/** Share of a top value in percent (0 when the total is unknown). */
+export const valueShare = (count: number, total: number) => (total > 0 ? Math.min(100, (count / total) * 100) : 0);
 
 /** Keys requested in `columns` (row fields are always returned). */
 export const requestColumns = (cols: readonly string[]) => cols.filter((c) => !(c in ROW_FIELDS));
@@ -121,6 +127,37 @@ export interface LegacyLogsParams {
   host?: string;
   trace?: string;
   span?: string;
+}
+
+/** Pre-explorer parameters of the host, container and pod log tabs (`lq` stays the body search). */
+export interface LegacyTabParams {
+  severity?: string;
+  /** openlog.log.source, log.file.path, openlog.discovery.id, openlog.systemd.unit (host tab) */
+  source?: string;
+  file?: string;
+  discovery?: string;
+  unit?: string;
+  /** log.iostream (container tab) */
+  stream?: string;
+}
+
+/** Conditions equivalent to the pre-explorer log tab parameters (the GET /api/v1/logs `attr.*` filters). */
+export function legacyTabFilters(p: LegacyTabParams): QueryFilter[] {
+  const out: QueryFilter[] = [];
+  const sev = p.severity ? severityNumber(p.severity) : null;
+  if (sev !== null) out.push({ key: "severity_number", op: ">=", value: sev });
+  const attrs: [keyof LegacyTabParams, string][] = [
+    ["source", "openlog.log.source"],
+    ["file", "log.file.path"],
+    ["discovery", "openlog.discovery.id"],
+    ["unit", "openlog.systemd.unit"],
+    ["stream", "log.iostream"],
+  ];
+  for (const [param, key] of attrs) {
+    const v = p[param]?.trim();
+    if (v) out.push({ key: `attributes.${key}`, op: "=", value: v });
+  }
+  return out;
 }
 
 /** Conditions equivalent to the pre-explorer /logs parameters. */
@@ -224,33 +261,33 @@ function writeJson(key: string, value: unknown): void {
   }
 }
 
-/** Last used column set (fallback when the URL has none). */
-export const storedColumns = (): string[] | null => {
-  const v = readJson(STORAGE.columns);
-  return Array.isArray(v) ? normalizeColumns(v) : null;
+/** Last used column set (fallback when the URL has none); other explorers pass their own storage key and defaults. */
+export const storedColumns = (key: string = STORAGE.columns, defaults: readonly string[] = DEFAULT_COLUMNS): string[] | null => {
+  const v = readJson(key);
+  return Array.isArray(v) ? normalizeColumns(v, defaults) : null;
 };
-export const storeColumns = (cols: readonly string[]) => writeJson(STORAGE.columns, cols);
+export const storeColumns = (cols: readonly string[], key: string = STORAGE.columns) => writeJson(key, cols);
 
 export const MIN_COLUMN_WIDTH = 64;
 export const MAX_COLUMN_WIDTH = 1200;
 
-export function storedWidths(): Record<string, number> {
-  const v = readJson(STORAGE.widths);
+export function storedWidths(key: string = STORAGE.widths): Record<string, number> {
+  const v = readJson(key);
   if (!v || typeof v !== "object") return {};
   return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter((e): e is [string, number] => typeof e[1] === "number" && e[1] >= MIN_COLUMN_WIDTH && e[1] <= MAX_COLUMN_WIDTH));
 }
-export const storeWidths = (w: Record<string, number>) => writeJson(STORAGE.widths, w);
+export const storeWidths = (w: Record<string, number>, key: string = STORAGE.widths) => writeJson(key, w);
 
 export interface TablePrefs {
   density: "compact" | "comfortable";
   wrap: boolean;
 }
 
-export function storedPrefs(): TablePrefs {
-  const v = readJson(STORAGE.prefs) as Partial<TablePrefs> | null;
+export function storedPrefs(key: string = STORAGE.prefs): TablePrefs {
+  const v = readJson(key) as Partial<TablePrefs> | null;
   return { density: v?.density === "comfortable" ? "comfortable" : "compact", wrap: v?.wrap === true };
 }
-export const storePrefs = (p: TablePrefs) => writeJson(STORAGE.prefs, p);
+export const storePrefs = (p: TablePrefs, key: string = STORAGE.prefs) => writeJson(key, p);
 
 // ---- saved views ----------------------------------------------------------------------------------------------------
 

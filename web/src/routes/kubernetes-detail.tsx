@@ -17,8 +17,8 @@ import { EventList } from "@/components/kubernetes/EventList";
 import { PodContainers } from "@/components/kubernetes/PodContainers";
 import { PodStatusBadge, WorkloadHealthBadge } from "@/components/kubernetes/K8sBadges";
 import { PodTable, WorkloadLink } from "@/components/kubernetes/KubernetesTables";
-import { LogFilters } from "@/components/LogFilters";
-import { LogTable } from "@/components/LogTable";
+import type { QueryFilter } from "@/api/explorer";
+import { EmbeddedLogsExplorer } from "@/components/logs-explorer/EmbeddedLogsExplorer";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,6 @@ import { useNow } from "@/lib/hooks";
 import { podChartSeries, rangeOnly, replicasText, timeseriesBounds, workloadChartSeries } from "@/lib/kubernetes";
 import type { ChartSeriesInput } from "@/lib/series";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
-import { useLogPages } from "@/lib/use-logs";
 import { K8S_POD_TABS, type K8sPodTab, type KubernetesPodSearch } from "@/router";
 
 const workloadRoute = getRouteApi("/app/kubernetes/workloads/$clusterUid/$namespace/$kind/$name");
@@ -316,35 +315,23 @@ function PodCharts({ podUid, range }: { podUid: string; range: RangeSpec }) {
   return <ChartGrid charts={charts} series={series} q={q} />;
 }
 
+/** Logs of one pod: the Logs Explorer with `resource.k8s.pod.uid` locked; `severity` opens as a chip. */
 function PodLogs({ podUid, range, search }: { podUid: string; range: RangeSpec; search: KubernetesPodSearch }) {
   const { t } = useTranslation();
-  const navigate = useNavigate({ from: "/kubernetes/pods/$podUid" });
-  const { query, logs } = useLogPages({ range, k8sPodUid: podUid, q: search.lq, severity: search.severity });
-  const value = useMemo(() => ({ q: search.lq ?? "", severity: search.severity ?? "", service: "", host: "" }), [search.lq, search.severity]);
+  const locked = useMemo<QueryFilter[]>(() => [{ key: "resource.k8s.pod.uid", op: "=", value: podUid }], [podUid]);
+  const emptyUnfiltered = (
+    <EmptyState icon={<FileText className="size-5" aria-hidden="true" />} className="px-4">
+      {t("kubernetes.pod.logsEmpty")}
+    </EmptyState>
+  );
   return (
-    <section className="flex flex-col gap-3" aria-label={t("kubernetes.pod.tabs.logs")}>
-      <LogFilters
-        value={value}
-        showHost={false}
-        showService={false}
-        onApply={(v) => void navigate({ search: (prev) => ({ ...prev, lq: v.q || undefined, severity: v.severity || undefined }) })}
-      />
-      <div className="overflow-hidden rounded-xl border bg-card">
-        {query.isPending ? (
-          <LoadingState />
-        ) : query.isError && !logs ? (
-          <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-        ) : !logs || logs.length === 0 ? (
-          <EmptyState icon={<FileText className="size-5" aria-hidden="true" />} className="px-4">
-            {search.lq || search.severity ? t("logs.empty") : t("kubernetes.pod.logsEmpty")}
-          </EmptyState>
-        ) : (
-          <LogTable logs={logs} showHost={false} hasMore={query.hasNextPage} loadingMore={query.isFetchingNextPage} onLoadMore={() => void query.fetchNextPage()} />
-        )}
-      </div>
+    <section className="flex min-w-0 flex-col gap-3" aria-label={t("kubernetes.pod.tabs.logs")}>
+      <EmbeddedLogsExplorer range={range} search={search} locked={locked} legacy={{ severity: search.severity }} legacyParamNames={POD_LEGACY_PARAMS} emptyUnfiltered={emptyUnfiltered} />
     </section>
   );
 }
+
+const POD_LEGACY_PARAMS = ["severity"] as const;
 
 function PodEvents({ podUid, range }: { podUid: string; range: RangeSpec }) {
   const q = useQuery(kubernetesPodEventsQuery(podUid, range));

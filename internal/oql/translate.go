@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/internal/api/query"
+	"github.com/onuragtas/openlog/internal/querybuilder"
 )
 
 // sqlBuilder renders a plan as query.Select fragments. Every value from the query (literals, map keys, variable
@@ -228,6 +229,13 @@ func (b *sqlBuilder) predicate(pr *Predicate) string {
 	case "like", "not like":
 		c := b.attr(pr.Attr) + " LIKE " + b.param(vals[0].Str, "String")
 		if op == "not like" {
+			return "NOT (" + c + ")"
+		}
+		return c
+	case "contains", "not contains":
+		// Same condition as the explorers' contains (querybuilder.ContainsSQL, D-122): case-insensitive, literal.
+		c := querybuilder.ContainsSQL(b.attr(pr.Attr), b.param(vals[0].Str, "String"))
+		if op == "not contains" {
 			return "NOT (" + c + ")"
 		}
 		return c

@@ -277,7 +277,10 @@ export type MetricOqlResult = { ok: true; query: string } | { ok: false; reason:
 const oqlString = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 const DIRECT_KEYS = new Set(["service.name", "host.id", "host.name", "metric.type", "unit", "scope.name", "value"]);
 
-/** OQL attribute for a filter or group-by key of the Metric event type. */
+/**
+ * OQL attribute for a filter or group-by key of the Metric event type. A bare key (no `attributes.`/`resource.`
+ * prefix) reads the data point attribute here; filters expand it to "attribute, else resource" (oqlCondition).
+ */
 export function oqlAttribute(key: string): string {
   if (key === "metric.name") return "metricName";
   if (DIRECT_KEYS.has(key)) return key;
@@ -286,10 +289,31 @@ export function oqlAttribute(key: string): string {
   return `attributes[${oqlString(key)}]`;
 }
 
+/** Whether a key is a bare map key: the explorer reads the attribute when present, else the resource attribute. */
+const isBareKey = (key: string) => key !== "metric.name" && !DIRECT_KEYS.has(key) && !key.startsWith("resource.") && !key.startsWith("attributes.");
+
 const oqlValue = (v: string | number | boolean) => (typeof v === "string" ? oqlString(v) : String(v));
 
+/**
+ * OQL predicate of one explorer condition, or null without an equivalent (regex). `contains` becomes `CONTAINS`
+ * (case-insensitive, literal — identical to the explorer, D-122). A bare key is written as
+ * `(attributes['k'] IS NOT NULL AND attributes['k'] … OR attributes['k'] IS NULL AND resource['k'] …)`.
+ */
 function oqlCondition(f: QueryFilter): string | null {
-  const attr = oqlAttribute(f.key);
+  if (isBareKey(f.key)) {
+    const attr = `attributes[${oqlString(f.key)}]`;
+    const res = `resource[${oqlString(f.key)}]`;
+    if (f.op === "exists") return `(${attr} IS NOT NULL OR ${res} IS NOT NULL)`;
+    if (f.op === "not_exists") return `(${attr} IS NULL AND ${res} IS NULL)`;
+    const onAttr = oqlPredicate(attr, f);
+    const onRes = oqlPredicate(res, f);
+    if (onAttr === null || onRes === null) return null;
+    return `((${attr} IS NOT NULL AND ${onAttr}) OR (${attr} IS NULL AND ${onRes}))`;
+  }
+  return oqlPredicate(oqlAttribute(f.key), f);
+}
+
+function oqlPredicate(attr: string, f: QueryFilter): string | null {
   const v = f.value ?? "";
   switch (f.op) {
     case "=":
@@ -307,9 +331,9 @@ function oqlCondition(f: QueryFilter): string | null {
     case "not_like":
       return `${attr} NOT LIKE ${oqlValue(String(v))}`;
     case "contains":
-      return `${attr} LIKE ${oqlString(`%${String(v)}%`)}`;
+      return `${attr} CONTAINS ${oqlString(String(v))}`;
     case "not_contains":
-      return `${attr} NOT LIKE ${oqlString(`%${String(v)}%`)}`;
+      return `${attr} NOT CONTAINS ${oqlString(String(v))}`;
     case "exists":
       return `${attr} IS NOT NULL`;
     case "not_exists":

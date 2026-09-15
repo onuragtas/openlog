@@ -39,6 +39,9 @@ func TestExplorerEndpointsAreTenantScoped(t *testing.T) {
 		"/api/v1/metrics?q=cpu",
 		"/api/v1/metrics?q=cpu" + long,
 		"/api/v1/metrics/http.server/duration",
+		"/api/v1/fields/values?signal=logs&key=attributes.http.route&q=api&body_q=timeout&transaction=GET+%2Fa&transaction_service=api&groups=" +
+			url.QueryEscape(`[[{"key":"service.name","op":"=","value":"a"}],[{"key":"host.id","op":"exists"}]]`),
+		"/api/v1/fields/values?signal=traces&key=name&root_only=true&filters=" + url.QueryEscape(`[{"key":"duration_ms","op":">","value":100}]`),
 	} {
 		if rec := explorerGet(h, p); rec.Code >= 500 || rec.Code == 400 {
 			t.Errorf("%s: status %d %s", p, rec.Code, rec.Body)
@@ -49,15 +52,24 @@ func TestExplorerEndpointsAreTenantScoped(t *testing.T) {
 			`"groups":[[{"key":"http.status_code","op":">=","value":500}],[{"key":"body","op":"contains","value":"panic"}]],` +
 			`"q":"timeout","columns":["attributes.http.route","resource.k8s.pod.name","body.user.id","timestamp"],"include_record":true,` +
 			`"order":"asc","cursor":"` + encodeLogCursorOrder(logPos{ts: 1, key: 2}, 1, true) + `"}`,
-		"/api/v1/logs/aggregate": `{"group_by":"resource.k8s.namespace.name","limit":5,"filters":[{"key":"host.id","op":"!=","value":"h1"}]}`,
-		"/api/v1/metrics/query":  `{"metric":"system.cpu.utilization","filters":[{"key":"host.name","op":"=","value":"h1"}],"group_by":["state"],"from":"2026-09-13T12:00:00Z"}`,
+		"/api/v1/logs/aggregate": `{"group_by":"resource.k8s.namespace.name","limit":5,"filters":[{"key":"host.id","op":"!=","value":"h1"}],"transaction":"GET /a","transaction_service":"api"}`,
+		"/api/v1/traces/query": `{"filters":[{"key":"service.name","op":"=","value":"api"},{"key":"duration_ms","op":">=","value":250}],` +
+			`"groups":[[{"key":"error","op":"=","value":true}],[{"key":"http.route","op":"contains","value":"/orders"}]],"root_only":true,` +
+			`"columns":["attributes.http.route","resource.k8s.pod.name","timestamp"],"include_record":true,"order":"asc","cursor":"` + encodeLogCursorOrder(logPos{ts: 1, key: 2}, 1, true) + `"}`,
+		"/api/v1/traces/aggregate": `{"group_by":"service.name","limit":5,"filters":[{"key":"kind","op":"in","values":["server","consumer"]}],"root_only":true}`,
+		"/api/v1/metrics/query":    `{"metric":"system.cpu.utilization","filters":[{"key":"host.name","op":"=","value":"h1"}],"group_by":["state"],"from":"2026-09-13T12:00:00Z"}`,
 	} {
 		if rec := postJSON(h, path, body, "key-a"); rec.Code != 200 {
 			t.Errorf("%s: status %d %s", path, rec.Code, rec.Body)
 		}
 	}
-	if rec := postJSON(h, "/api/v1/logs/aggregate", `{}`, "key-a"); rec.Code != 200 {
-		t.Errorf("aggregate without group_by: %d %s", rec.Code, rec.Body)
+	for _, path := range []string{"/api/v1/logs/aggregate", "/api/v1/traces/aggregate"} {
+		if rec := postJSON(h, path, `{}`, "key-a"); rec.Code != 200 {
+			t.Errorf("%s without group_by: %d %s", path, rec.Code, rec.Body)
+		}
+	}
+	if rec := postJSON(h, "/api/v1/traces/query", `{"sort":"duration","limit":20}`, "key-a"); rec.Code != 200 {
+		t.Errorf("traces by duration: %d %s", rec.Code, rec.Body)
 	}
 	if len(conn.sql) < 15 {
 		t.Fatalf("only %d statements executed", len(conn.sql))
@@ -92,6 +104,11 @@ func TestExplorerValidation(t *testing.T) {
 		"/api/v1/fields/values?signal=logs&key=a&filters=" + url.QueryEscape(`{"key":"a"}`),
 		"/api/v1/fields/values?signal=logs&key=a&filters=" + url.QueryEscape(`[{"key":"b","op":"~","value":"x"}]`),
 		"/api/v1/fields/values?signal=traces&key=body.user",
+		"/api/v1/fields/values?signal=traces&key=name&body_q=x",
+		"/api/v1/fields/values?signal=logs&key=body&root_only=true",
+		"/api/v1/fields/values?signal=traces&key=name&root_only=maybe",
+		"/api/v1/fields/values?signal=logs&key=body&transaction=x",
+		"/api/v1/fields/values?signal=logs&key=body&groups=" + url.QueryEscape(`[{"key":"a"}]`),
 		"/api/v1/metrics?limit=-1",
 	} {
 		if rec := explorerGet(h, p); rec.Code != 400 {
@@ -117,6 +134,17 @@ func TestExplorerValidation(t *testing.T) {
 		{"/api/v1/logs/aggregate", `{"step":"1ms"}`},
 		{"/api/v1/logs/aggregate", `{"limit":51}`},
 		{"/api/v1/logs/aggregate", `{"group_by":"timestamp"}`},
+		{"/api/v1/logs/query", `{"transaction":"GET /a"}`},
+		{"/api/v1/logs/aggregate", `{"transaction_service":"api"}`},
+		{"/api/v1/traces/query", `{"filters":[{"key":"body.x","op":"exists"}]}`},
+		{"/api/v1/traces/query", `{"sort":"slowest"}`},
+		{"/api/v1/traces/query", `{"sort":"duration","order":"asc"}`},
+		{"/api/v1/traces/query", `{"sort":"duration","cursor":"` + desc + `"}`},
+		{"/api/v1/traces/query", `{"order":"asc","cursor":"` + desc + `"}`},
+		{"/api/v1/traces/query", `{"root_only":"yes"}`},
+		{"/api/v1/traces/query", `{"columns":[` + strings.Join(many, ",") + `]}`},
+		{"/api/v1/traces/aggregate", `{"group_by":"timestamp"}`},
+		{"/api/v1/traces/aggregate", `{"filters":[{"key":"duration_ms","op":">","value":"slow"}]}`},
 		{"/api/v1/metrics/query", `{}`},
 		{"/api/v1/metrics/query", `{"metric":"m","group_by":["value"]}`},
 		{"/api/v1/metrics/query", `{"metric":"m","group_by":["a","b","c","d","e","f"]}`},
@@ -136,7 +164,7 @@ func TestExplorerValidation(t *testing.T) {
 		t.Errorf("text/plain body: %d", rec.Code)
 	}
 	for _, sql := range conn.sql {
-		if strings.Contains(sql, "logs") && !strings.Contains(sql, "metrics") {
+		if (strings.Contains(sql, "logs") || strings.Contains(sql, "spans")) && !strings.Contains(sql, "metrics") {
 			// Invalid log requests must fail before any statement; metric validation reads metadata only after
 			// the request itself is valid.
 			t.Errorf("statement executed for an invalid request: %s", sql)

@@ -486,8 +486,9 @@ export interface paths {
         };
         /**
          * @description Most frequent values of one key with counts, read from a sample of at most 100000 matching records of the
-         *     range (`sampled: true` when the sample was full). `filters` (JSON array of QueryFilter) and `q` restrict the
-         *     records; a filter on `key` itself is ignored so the other values stay visible.
+         *     range (`sampled: true` when the sample was full). `filters`, `groups`, `q` and the explorer conditions
+         *     (`body_q`, `transaction`/`transaction_service` for logs, `root_only` for traces) restrict the records; a
+         *     condition on `key` itself is ignored so the other values stay visible. `total` = records counted.
          */
         get: operations["listFieldValues"];
         put?: never;
@@ -638,6 +639,46 @@ export interface paths {
         put: operations["updateSavedView"];
         post?: never;
         delete: operations["deleteSavedView"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/traces/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Structured span search (Traces Explorer, api.md "Traces", D-122): `filters`/`groups` of QueryFilter on signal
+         *     `traces`, `root_only`, paging by `cursor` in `order`, or `sort=duration` for the slowest spans in one page.
+         */
+        post: operations["queryTraces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/traces/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Span counts per bucket (as POST /api/v1/logs/aggregate) plus p50/p95/p99 span duration in milliseconds per
+         *     bucket for the same conditions.
+         */
+        post: operations["aggregateTraces"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4889,6 +4930,8 @@ export interface components {
             key: string;
             type: components["schemas"]["FieldType"];
             values: components["schemas"]["FieldValue"][];
+            /** @description Records counted (all values); a value's share is count / total */
+            total: number;
             sampled: boolean;
         };
         /** @enum {string} */
@@ -4897,7 +4940,8 @@ export interface components {
          * @description One condition. Keys: top-level fields of the signal, `attributes.<k>`, `resource.<k>`, `body.<k>` (logs, JSON
          *     body) or a bare attribute key (record attribute, else resource attribute). `in`/`not_in` take `values`
          *     (1–100); `exists`/`not_exists` take no value; the others take `value`. `contains` is case-insensitive;
-         *     `like` uses SQL wildcards (`%`, `_`, case-sensitive); `regex` is RE2. `>`…`<=` compare numerically (attribute
+         *     `like` uses SQL wildcards (`%`, `_`, case-sensitive); `regex` is RE2. `contains` matches `%` and `_` literally
+         *     (same as OQL CONTAINS). `>`…`<=` compare numerically (attribute
          *     values that are not numbers never match). Values are at most 1024 bytes.
          */
         QueryFilter: {
@@ -4917,6 +4961,9 @@ export interface components {
             groups?: components["schemas"]["FilterGroups"];
             /** @description Case-insensitive substring of the body */
             q?: string;
+            /** @description APM transaction name; with transaction_service: logs of that transaction's traces */
+            transaction?: string;
+            transaction_service?: string;
             /**
              * @default desc
              * @enum {string}
@@ -4964,6 +5011,8 @@ export interface components {
             filters?: components["schemas"]["QueryFilter"][];
             groups?: components["schemas"]["FilterGroups"];
             q?: string;
+            transaction?: string;
+            transaction_service?: string;
             /** @description Go duration ≥ 1s; default: a round step giving at most ~120 buckets */
             step?: string;
             /** @description Key whose values split the counts */
@@ -4988,6 +5037,88 @@ export interface components {
             step: string;
             total: number;
             series: components["schemas"]["LogsAggregateSeries"][];
+        };
+        TracesQueryRequest: {
+            /** @description RFC3339 or unix ms (default now-1h) */
+            from?: string | number;
+            /** @description RFC3339 or unix ms (default now) */
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            /**
+             * @description Spans without a parent span id
+             * @default false
+             */
+            root_only: boolean;
+            /**
+             * @default desc
+             * @enum {string}
+             */
+            order: "desc" | "asc";
+            /**
+             * @description duration: slowest spans, one page
+             * @default timestamp
+             * @enum {string}
+             */
+            sort: "timestamp" | "duration";
+            /** @description Default 100, capped by OPENLOG_API_MAX_ROWS */
+            limit?: number;
+            cursor?: string;
+            columns?: string[];
+            /** @default false */
+            include_record: boolean;
+        };
+        SpanQueryRow: {
+            id: string;
+            timestamp: components["schemas"]["Timestamp"];
+            trace_id: string;
+            span_id: string;
+            parent_span_id: string;
+            name: string;
+            kind: components["schemas"]["SpanKind"];
+            status_code: components["schemas"]["SpanStatusCode"];
+            status_message: string;
+            service_name: string;
+            host_id: string;
+            duration_ns: number;
+            duration_ms: number;
+            is_entry: boolean;
+            is_error: boolean;
+            http_status_code: number;
+            transaction_name: string;
+            fields: {
+                [key: string]: string;
+            };
+            attributes?: components["schemas"]["StringMap"];
+            resource_attributes?: components["schemas"]["StringMap"];
+        };
+        TracesQueryResponse: {
+            rows: components["schemas"]["SpanQueryRow"][];
+            next_cursor: string | null;
+        };
+        TracesAggregateRequest: {
+            from?: string | number;
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            /** @default false */
+            root_only: boolean;
+            step?: string;
+            group_by?: string;
+            /** @default 10 */
+            limit: number;
+        };
+        TracesAggregateResponse: {
+            /** @example 60s */
+            step: string;
+            total: number;
+            series: components["schemas"]["LogsAggregateSeries"][];
+            /** @description Span duration percentiles in milliseconds per bucket */
+            latency: {
+                p50: components["schemas"]["MetricPoint"][];
+                p95: components["schemas"]["MetricPoint"][];
+                p99: components["schemas"]["MetricPoint"][];
+            };
         };
         /** @enum {string} */
         MetricTemporality: "unspecified" | "delta" | "cumulative";
@@ -6037,6 +6168,22 @@ export interface components {
             }[];
             /** @description Version of the openlog-updater that wrote the document (absent in documents of updaters before 0.1.26) */
             updater_version?: string;
+            /** @description OPENLOG_UPDATER_MAINTENANCE_WINDOW of the updater (UTC; D-121). Absent in documents of updaters before this field. The api re-evaluates open_now and next_open_at when it answers. On Kubernetes the CronJob schedule of the chart decides when the updater runs; the window only limits which runs may install. */
+            maintenance_window?: {
+                /**
+                 * @description Normalized window, e.g. "sat,sun 02:00-05:00; mon-fri 03:00-04:00"; empty = updates may run at any time
+                 * @example sat,sun 02:00-05:00
+                 */
+                spec: string;
+                windows: components["schemas"]["MaintenanceWindow"][];
+                /** @description Inside a window now (always true without windows) */
+                open_now: boolean;
+                /**
+                 * Format: date-time
+                 * @description Next opening (UTC); absent without windows or when the windows never close
+                 */
+                next_open_at?: string;
+            };
             /** @description Last attempt of the Compose updater to replace its own container with the installed release (D-120); one attempt per target version. */
             self_update?: {
                 target_version: string;
@@ -8692,6 +8839,16 @@ export interface operations {
                 metric?: string;
                 /** @description JSON array of QueryFilter */
                 filters?: string;
+                /** @description JSON array of QueryFilter arrays (OR of AND-groups) */
+                groups?: string;
+                /** @description `signal=logs`: case-insensitive substring of the body */
+                body_q?: string;
+                /** @description `signal=logs`: APM transaction name (with `transaction_service`) */
+                transaction?: string;
+                /** @description `signal=logs`: service of `transaction` */
+                transaction_service?: string;
+                /** @description `signal=traces`: root spans only */
+                root_only?: boolean;
                 limit?: number;
             };
             header?: never;
@@ -9041,6 +9198,82 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    queryTraces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TracesQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TracesQueryResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    aggregateTraces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TracesAggregateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TracesAggregateResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
         };
     };
     getTrace: {

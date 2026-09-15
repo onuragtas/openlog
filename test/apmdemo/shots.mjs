@@ -2,7 +2,7 @@
 // (for @playwright/test) and runs it. 1440x900, English UI (dark map + Turkish list variants included).
 import { chromium } from "@playwright/test";
 
-const base = process.env.APMDEMO_BASE_URL ?? "http://127.0.0.1:38080";
+const base = process.env.APMDEMO_BASE_URL ?? "http://127.0.0.1:31080";
 const email = process.env.APMDEMO_EMAIL ?? "admin@apmdemo.local";
 const password = process.env.APMDEMO_PASSWORD ?? "apmdemo-password";
 const hostId = process.env.APMDEMO_HOST_ID ?? "a0de0000000000000000000000000001";

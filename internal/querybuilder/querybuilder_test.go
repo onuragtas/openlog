@@ -47,6 +47,11 @@ func TestResolve(t *testing.T) {
 		{Logs, "body.user.id", "body.user.id", SourceBody, TString},
 		{Logs, "http.route", "http.route", SourceAny, TString},
 		{Traces, "duration_ns", "duration_ns", SourceField, TNumber},
+		{Traces, "duration.ms", "duration_ms", SourceField, TNumber},
+		{Traces, "http.status_code", "http.status_code", SourceField, TNumber},
+		{Traces, "is_error", "error", SourceField, TBool},
+		{Traces, "transaction_name", "transaction.name", SourceField, TString},
+		{Traces, "http.route", "http.route", SourceAny, TString},
 		{Metrics, "metricName", "metric.name", SourceField, TString},
 		{Metrics, "state", "state", SourceAny, TString},
 	} {
@@ -131,6 +136,46 @@ func TestConditions(t *testing.T) {
 				t.Errorf("%+v: param %s = %q, want %q", tc.f, k, params[k], v)
 			}
 		}
+	}
+}
+
+func TestTraceConditions(t *testing.T) {
+	for _, tc := range []struct {
+		f      Filter
+		sql    string
+		params map[string]string
+	}{
+		{flt("duration_ms", ">=", 250), "(divide(duration_ns, 1000000) >= {qb_0:Float64})", map[string]string{"qb_0": "250"}},
+		{flt("error", "=", true), "(toString(is_error) = {qb_0:String})", map[string]string{"qb_0": "true"}},
+		{fltIn("kind", "in", "server", "consumer"), "(has({qb_0:Array(String)}, toString(kind)))", map[string]string{"qb_0": "['server','consumer']"}},
+		{flt("http.status_code", ">", 499), "(http_status_code > {qb_0:Float64})", map[string]string{"qb_0": "499"}},
+		{flt("parent_span_id", "not_exists", nil), "(NOT (parent_span_id != ''))", nil},
+		{flt("attributes.http.route", "contains", "API"), "(positionCaseInsensitiveUTF8(attributes[{qb_0:String}], {qb_1:String}) > 0)", map[string]string{"qb_1": "API"}},
+	} {
+		sql, params := render(t, Traces, []Filter{tc.f}, nil)
+		if !strings.Contains(sql, tc.sql) {
+			t.Errorf("%+v:\n got %s\nwant %s", tc.f, sql, tc.sql)
+		}
+		for k, v := range tc.params {
+			if params[k] != v {
+				t.Errorf("%+v: param %s = %q, want %q", tc.f, k, params[k], v)
+			}
+		}
+	}
+	if _, err := Resolve(Traces, "body.x"); err == nil {
+		t.Error("body keys accepted for traces")
+	}
+}
+
+// contains matches the needle literally (no LIKE wildcards, no escaping needed) and case-insensitively; OQL CONTAINS
+// uses the same fragment (D-122).
+func TestContainsIsLiteral(t *testing.T) {
+	if got := ContainsSQL("body", "{p:String}"); got != "positionCaseInsensitiveUTF8(body, {p:String}) > 0" {
+		t.Errorf("ContainsSQL: %s", got)
+	}
+	sql, params := render(t, Logs, []Filter{flt("body", "contains", `50%_off\`)}, nil)
+	if strings.Contains(sql, "LIKE") || params["qb_0"] != `50%_off\\` && params["qb_0"] != `50%_off\` {
+		t.Errorf("contains pattern: %s %v", sql, params)
 	}
 }
 

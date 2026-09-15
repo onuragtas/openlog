@@ -4,7 +4,7 @@
 
 export const OQL_KEYWORDS = [
   "SELECT", "FROM", "WHERE", "FACET", "SINCE", "UNTIL", "TIMESERIES", "LIMIT", "COMPARE", "WITH", "AGO", "AS", "AND", "OR",
-  "NOT", "IN", "LIKE", "IS", "NULL", "TRUE", "FALSE", "NOW", "AUTO",
+  "NOT", "IN", "LIKE", "CONTAINS", "IS", "NULL", "TRUE", "FALSE", "NOW", "AUTO",
 ] as const;
 
 export const OQL_FUNCTIONS = [

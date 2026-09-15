@@ -3,7 +3,7 @@
 // application logs with JSON bodies and many attributes; metrics are the host metrics per host plus application
 // gauges, sums (cumulative and delta), a histogram and a summary.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { FieldKey, FieldType, LogQueryRow, MetricAggregation, MetricDetail, MetricInfo, QueryFilter, SavedView, SavedViewInput } from "@/api/explorer";
+import type { FieldKey, FieldType, LogQueryRow, MetricAggregation, MetricDetail, MetricInfo, QueryFilter, SavedView, SavedViewInput, SpanQueryRow } from "@/api/explorer";
 import type { LogRecord, MetricSeries } from "@/api/types";
 import { parseGoDuration } from "@/lib/logs-explorer";
 import { authenticate } from "./account";
@@ -72,6 +72,8 @@ interface FilterBody {
   filters?: QueryFilter[];
   groups?: QueryFilter[][];
   q?: string;
+  transaction?: string;
+  transaction_service?: string;
 }
 
 function validateFilterBody(b: FilterBody): string | null {
@@ -86,6 +88,17 @@ function validateFilterBody(b: FilterBody): string | null {
   }
   if (b.q !== undefined && (typeof b.q !== "string" || b.q.length > 1024)) return "q must be at most 1024 characters";
   return null;
+}
+
+/** Trace ids of an APM transaction context (entry spans of the mock traces with that name and service), or null. */
+function transactionTraceIds(b: { transaction?: string; transaction_service?: string }): Set<string> | null | Response {
+  if (!b.transaction && !b.transaction_service) return null;
+  if (!b.transaction || !b.transaction_service) return fail("invalid_argument", "transaction and transaction_service must be given together");
+  const ids = spanRecords(Date.now())
+    .filter((r) => r.row.is_entry && r.row.transaction_name === b.transaction && r.row.service_name === b.transaction_service)
+    .map((r) => r.row.trace_id);
+  // APM mock transactions have no spans here: fall back to the mock trace so the page shows correlated logs.
+  return new Set(ids.length ? ids : [fx.TRACE_ID]);
 }
 
 const likeRegex = (pattern: string) => new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`, "s");
@@ -302,6 +315,105 @@ function logKeys(recs: Rec[]): FieldKey[] {
   return [...acc.entries()]
     .map(([key, e]) => ({ key, name: e.name, source: e.source, type: typeOf([...e.values]), count: e.count, cardinality: e.values.size }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+// ---- spans (Traces Explorer) --------------------------------------------------------------------------------------------
+
+interface SpanRec {
+  ts: number;
+  row: SpanQueryRow;
+}
+
+/** 36 copies of the mock trace over the last hour with varying durations; the newest is fx.TRACE_ID. */
+function spanRecords(now: number): SpanRec[] {
+  const out: SpanRec[] = [];
+  for (let k = 0; k < 36; k++) {
+    const traceId = k === 0 ? fx.TRACE_ID : `${(0x5000 + k).toString(16).padStart(8, "0")}${"c".repeat(24)}`;
+    const factor = 0.4 + ((k * 7) % 12) / 6;
+    for (const sp of fx.trace(now - k * 95_000)) {
+      const ts = Date.parse(sp.start);
+      const durationNs = Math.round(sp.duration_ns * factor);
+      const entry = sp.parent_span_id === "" || sp.kind === "server" || sp.kind === "consumer";
+      const status = sp.attributes["http.response.status_code"];
+      out.push({
+        ts,
+        row: {
+          id: `${ts}-${traceId}-${sp.span_id}`,
+          timestamp: sp.start,
+          trace_id: traceId,
+          span_id: sp.span_id,
+          parent_span_id: sp.parent_span_id,
+          name: sp.name,
+          kind: sp.kind,
+          status_code: sp.status_code,
+          status_message: sp.status_message,
+          service_name: sp.service_name,
+          host_id: sp.resource_attributes["host.id"] ?? "",
+          duration_ns: durationNs,
+          duration_ms: durationNs / 1e6,
+          is_entry: entry,
+          is_error: sp.status_code === "error",
+          http_status_code: status ? Number(status) : sp.status_code === "error" && entry ? 503 : 0,
+          transaction_name: entry ? sp.name : "",
+          fields: {},
+          attributes: sp.attributes,
+          resource_attributes: sp.resource_attributes,
+        },
+      });
+    }
+  }
+  return out;
+}
+
+const SPAN_FIELDS: Record<string, { type: FieldType; get: (r: SpanQueryRow) => string }> = {
+  timestamp: { type: "string", get: (r) => r.timestamp },
+  name: { type: "string", get: (r) => r.name },
+  kind: { type: "string", get: (r) => r.kind },
+  status_code: { type: "string", get: (r) => r.status_code },
+  status_message: { type: "string", get: (r) => r.status_message },
+  "service.name": { type: "string", get: (r) => r.service_name },
+  "host.id": { type: "string", get: (r) => r.host_id },
+  trace_id: { type: "string", get: (r) => r.trace_id },
+  span_id: { type: "string", get: (r) => r.span_id },
+  parent_span_id: { type: "string", get: (r) => r.parent_span_id },
+  duration_ns: { type: "number", get: (r) => String(r.duration_ns) },
+  duration_ms: { type: "number", get: (r) => String(r.duration_ms) },
+  "http.status_code": { type: "number", get: (r) => String(r.http_status_code) },
+  is_entry: { type: "bool", get: (r) => String(r.is_entry) },
+  error: { type: "bool", get: (r) => String(r.is_error) },
+  "transaction.name": { type: "string", get: (r) => r.transaction_name },
+};
+
+function spanValue(r: SpanQueryRow, key: string): string | undefined {
+  const field = SPAN_FIELDS[key];
+  if (field) return field.get(r);
+  if (key.startsWith("attributes.")) return r.attributes?.[key.slice(11)];
+  if (key.startsWith("resource.")) return r.resource_attributes?.[key.slice(9)];
+  return r.attributes?.[key] ?? r.resource_attributes?.[key];
+}
+
+function spanKeys(recs: SpanRec[]): FieldKey[] {
+  const acc = new Map<string, { name: string; source: FieldKey["source"]; values: Set<string>; count: number }>();
+  const add = (key: string, name: string, source: FieldKey["source"], v: string) => {
+    const e = acc.get(key) ?? { name, source, values: new Set<string>(), count: 0 };
+    e.count++;
+    e.values.add(v);
+    acc.set(key, e);
+  };
+  for (const { row } of recs) {
+    for (const [k, v] of Object.entries(row.attributes ?? {})) add(`attributes.${k}`, k, "attribute", v);
+    for (const [k, v] of Object.entries(row.resource_attributes ?? {})) add(`resource.${k}`, k, "resource", v);
+  }
+  return [...acc.entries()]
+    .map(([key, e]) => ({ key, name: e.name, source: e.source, type: typeOf([...e.values]), count: e.count, cardinality: e.values.size }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+function quantile(sorted: number[], q: number): number {
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (pos - lo);
 }
 
 // ---- metrics ------------------------------------------------------------------------------------------------------------
@@ -575,8 +687,8 @@ export const explorerHandlers = [
       fields = METRIC_FIELDS.map(([key, type]) => ({ key, name: key, source: "field", type, count: null, cardinality: null }));
       keys = [...metricKeys(ms, "attribute"), ...metricKeys(ms, "resource")];
     } else {
-      fields = ["name", "service.name", "trace_id", "span_id", "kind", "status_code"].map((key) => ({ key, name: key, source: "field", type: "string", count: null, cardinality: null }));
-      keys = [];
+      fields = Object.entries(SPAN_FIELDS).map(([key, f]) => ({ key, name: key, source: "field", type: f.type, count: null, cardinality: null }));
+      keys = spanKeys(spanRecords(Date.now()).filter((r) => r.ts >= w.from && r.ts <= w.to));
     }
     const all = [...fields, ...keys].filter((k) => !q || k.key.toLowerCase().includes(q));
     return HttpResponse.json({ keys: all.slice(0, limit), sampled: false });
@@ -591,27 +703,34 @@ export const explorerHandlers = [
     const w = timeWindow(p.get("from"), p.get("to"));
     if (w instanceof Response) return w;
     let filters: QueryFilter[] = [];
-    if (p.get("filters")) {
-      try {
-        filters = JSON.parse(p.get("filters")!) as QueryFilter[];
-      } catch {
-        return fail("invalid_argument", "filters: invalid JSON");
-      }
-      const err = Array.isArray(filters) ? validateFilterBody({ filters }) : "filters must be a JSON array";
-      if (err) return fail("invalid_argument", `filters: ${err}`);
+    let groups: QueryFilter[][] = [];
+    try {
+      if (p.get("filters")) filters = JSON.parse(p.get("filters")!) as QueryFilter[];
+      if (p.get("groups")) groups = JSON.parse(p.get("groups")!) as QueryFilter[][];
+    } catch {
+      return fail("invalid_argument", "filters/groups: invalid JSON");
     }
+    const ferr = Array.isArray(filters) && Array.isArray(groups) ? validateFilterBody({ filters, groups }) : "filters and groups must be JSON arrays";
+    if (ferr) return fail("invalid_argument", `filters: ${ferr}`);
+    const bodyQ = (p.get("body_q") ?? "").toLowerCase();
+    const rootOnly = p.get("root_only") === "true";
     const limit = Math.min(1000, Math.max(1, Number(p.get("limit") ?? 50) || 50));
     const q = (p.get("q") ?? "").toLowerCase();
     const counts = new Map<string, number>();
     const count = (v: string | undefined) => v !== undefined && (!q || v.toLowerCase().includes(q)) && counts.set(v, (counts.get(v) ?? 0) + 1);
     if (signal === "logs") {
-      for (const r of logRecords(Date.now())) if (r.ts >= w.from && r.ts <= w.to && matchesAll((k) => logValue(r, k), { filters }, key)) count(logValue(r, key));
+      for (const r of logRecords(Date.now()))
+        if (r.ts >= w.from && r.ts <= w.to && (!bodyQ || r.log.body.toLowerCase().includes(bodyQ)) && matchesAll((k) => logValue(r, k), { filters, groups }, key)) count(logValue(r, key));
     } else if (signal === "metrics") {
       const metric = p.get("metric");
-      for (const m of explorerMetrics()) if (!metric || m.name === metric) for (const s of m.series) if (matchesAll((k) => metricValue(m, s, k), { filters }, key)) count(metricValue(m, s, key));
+      for (const m of explorerMetrics()) if (!metric || m.name === metric) for (const s of m.series) if (matchesAll((k) => metricValue(m, s, k), { filters, groups }, key)) count(metricValue(m, s, key));
+    } else {
+      for (const r of spanRecords(Date.now()))
+        if (r.ts >= w.from && r.ts <= w.to && (!rootOnly || r.row.parent_span_id === "") && matchesAll((k) => spanValue(r.row, k), { filters, groups }, key)) count(spanValue(r.row, key));
     }
     const values = [...counts.entries()].map(([value, c]) => ({ value, count: c })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
-    return HttpResponse.json({ key, type: typeOf(values.map((v) => v.value)), values: values.slice(0, limit), sampled: false });
+    const total = values.reduce((n, v) => n + v.count, 0);
+    return HttpResponse.json({ key, type: typeOf(values.map((v) => v.value)), values: values.slice(0, limit), total, sampled: false });
   })),
 
   http.post(`${API}/logs/query`, authed(async (_ctx, { request }) => {
@@ -635,8 +754,10 @@ export const explorerHandlers = [
       }
     }
     const q = (b.q ?? "").toLowerCase();
+    const txn = transactionTraceIds(b);
+    if (txn instanceof Response) return txn;
     const list = logRecords(Date.now())
-      .filter((r) => r.ts >= w.from && r.ts <= w.to && (!q || r.log.body.toLowerCase().includes(q)) && matchesAll((k) => logValue(r, k), b))
+      .filter((r) => r.ts >= w.from && r.ts <= w.to && (!q || r.log.body.toLowerCase().includes(q)) && (!txn || txn.has(r.log.trace_id)) && matchesAll((k) => logValue(r, k), b))
       .sort((x, y) => (b.order === "asc" ? x.ts - y.ts : y.ts - x.ts));
     const end = offset + limit;
     return HttpResponse.json({ rows: list.slice(offset, end).map((r) => logRow(r, columns, !!b.include_record)), next_cursor: end < list.length ? btoa(JSON.stringify({ o: end })) : null });
@@ -657,7 +778,9 @@ export const explorerHandlers = [
     }
     const limit = Math.min(50, Math.max(1, b.limit ?? 10));
     const q = (b.q ?? "").toLowerCase();
-    const recs = logRecords(Date.now()).filter((r) => r.ts >= w.from && r.ts <= w.to && (!q || r.log.body.toLowerCase().includes(q)) && matchesAll((k) => logValue(r, k), b));
+    const txn = transactionTraceIds(b);
+    if (txn instanceof Response) return txn;
+    const recs = logRecords(Date.now()).filter((r) => r.ts >= w.from && r.ts <= w.to && (!q || r.log.body.toLowerCase().includes(q)) && (!txn || txn.has(r.log.trace_id)) && matchesAll((k) => logValue(r, k), b));
     const groupOf = (r: Rec) => (b.group_by ? (logValue(r, b.group_by) ?? "") : "");
     const totals = new Map<string, number>();
     for (const r of recs) totals.set(groupOf(r), (totals.get(groupOf(r)) ?? 0) + 1);
@@ -677,6 +800,68 @@ export const explorerHandlers = [
       .map(([id, e]) => ({ group: e.other ? "" : id, other: e.other, total: e.total, points: [...e.points.entries()].sort((x, y) => x[0] - y[0]) }))
       .sort((x, y) => Number(x.other) - Number(y.other) || y.total - x.total);
     return HttpResponse.json({ step: `${step / 1000}s`, total: recs.length, series });
+  })),
+
+  http.post(`${API}/traces/query`, authed(async (_ctx, { request }) => {
+    const b = (await request.json().catch(() => null)) as (FilterBody & { from?: unknown; to?: unknown; order?: string; sort?: string; root_only?: boolean; limit?: number; cursor?: string; columns?: string[] }) | null;
+    if (!b || typeof b !== "object") return fail("invalid_argument", "invalid JSON body");
+    const w = timeWindow(b.from, b.to);
+    if (w instanceof Response) return w;
+    const err = validateFilterBody(b);
+    if (err) return fail("invalid_argument", err);
+    if (b.sort !== undefined && b.sort !== "timestamp" && b.sort !== "duration") return fail("invalid_argument", "sort must be timestamp or duration");
+    const columns = b.columns ?? [];
+    const limit = Math.min(1000, Math.max(1, b.limit ?? 100));
+    let offset = 0;
+    if (b.cursor) {
+      try {
+        offset = (JSON.parse(atob(b.cursor)) as { o: number }).o;
+      } catch {
+        return fail("invalid_argument", "cursor: invalid");
+      }
+    }
+    const byDuration = b.sort === "duration";
+    const list = spanRecords(Date.now())
+      .filter((r) => r.ts >= w.from && r.ts <= w.to && (!b.root_only || r.row.parent_span_id === "") && matchesAll((k) => spanValue(r.row, k), b))
+      .sort((x, y) => (byDuration ? y.row.duration_ns - x.row.duration_ns : b.order === "asc" ? x.ts - y.ts : y.ts - x.ts));
+    const end = offset + limit;
+    const rows = list.slice(offset, end).map(({ row }) => ({ ...row, fields: Object.fromEntries(columns.map((c) => [c, spanValue(row, c)]).filter((e): e is [string, string] => e[1] !== undefined)) }));
+    return HttpResponse.json({ rows, next_cursor: !byDuration && end < list.length ? btoa(JSON.stringify({ o: end })) : null });
+  })),
+
+  http.post(`${API}/traces/aggregate`, authed(async (_ctx, { request }) => {
+    const b = (await request.json().catch(() => null)) as (FilterBody & { from?: unknown; to?: unknown; step?: string; group_by?: string; root_only?: boolean; limit?: number }) | null;
+    if (!b || typeof b !== "object") return fail("invalid_argument", "invalid JSON body");
+    const w = timeWindow(b.from, b.to);
+    if (w instanceof Response) return w;
+    const err = validateFilterBody(b);
+    if (err) return fail("invalid_argument", err);
+    const step = ROUND_STEPS.find((s) => (w.to - w.from) / s <= 120) ?? ROUND_STEPS[ROUND_STEPS.length - 1]!;
+    const limit = Math.min(50, Math.max(1, b.limit ?? 10));
+    const recs = spanRecords(Date.now()).filter((r) => r.ts >= w.from && r.ts <= w.to && (!b.root_only || r.row.parent_span_id === "") && matchesAll((k) => spanValue(r.row, k), b));
+    const groupOf = (r: SpanRec) => (b.group_by ? (spanValue(r.row, b.group_by) ?? "") : "");
+    const totals = new Map<string, number>();
+    for (const r of recs) totals.set(groupOf(r), (totals.get(groupOf(r)) ?? 0) + 1);
+    const top = new Set([...totals.entries()].sort((x, y) => y[1] - x[1]).slice(0, limit).map(([g]) => g));
+    const buckets = new Map<string, { other: boolean; total: number; points: Map<number, number> }>();
+    const durations = new Map<number, number[]>();
+    for (const r of recs) {
+      const g = groupOf(r);
+      const other = !top.has(g);
+      const id = other ? "\u0000other" : g;
+      const e = buckets.get(id) ?? { other, total: 0, points: new Map<number, number>() };
+      const t = Math.floor(r.ts / step) * step;
+      e.total++;
+      e.points.set(t, (e.points.get(t) ?? 0) + 1);
+      buckets.set(id, e);
+      durations.set(t, [...(durations.get(t) ?? []), r.row.duration_ms]);
+    }
+    const series = [...buckets.entries()]
+      .map(([id, e]) => ({ group: e.other ? "" : id, other: e.other, total: e.total, points: [...e.points.entries()].sort((x, y) => x[0] - y[0]) }))
+      .sort((x, y) => Number(x.other) - Number(y.other) || y.total - x.total);
+    const times = [...durations.keys()].sort((x, y) => x - y);
+    const lat = (q: number) => times.map((t) => [t, quantile([...durations.get(t)!].sort((x, y) => x - y), q)] as [number, number]);
+    return HttpResponse.json({ step: `${step / 1000}s`, total: recs.length, series, latency: { p50: lat(0.5), p95: lat(0.95), p99: lat(0.99) } });
   })),
 
   http.get(`${API}/metrics`, authed((_ctx, { request }) => {

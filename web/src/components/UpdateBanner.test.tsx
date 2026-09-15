@@ -8,7 +8,7 @@ import { login } from "@/api/account";
 import { setSelectedOrg } from "@/api/auth";
 import { api } from "@/api/client";
 import { observeServerVersion, resetServerVersion, VERSION_HEADER } from "@/lib/server-version";
-import { MOCK_EMAIL, MOCK_PASSWORD, MOCK_STAGING_ORG_ID } from "@/mocks/account";
+import { MOCK_DEFAULT_ORG_ID, MOCK_EMAIL, MOCK_PASSWORD, MOCK_STAGING_ORG_ID } from "@/mocks/account";
 import { server } from "@/mocks/server";
 import { DISMISSED_UPDATE_STORAGE, UpdateBanner } from "./UpdateBanner";
 
@@ -53,6 +53,22 @@ describe("UpdateBanner", () => {
   it("hides the release banner from viewers", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     setSelectedOrg(MOCK_STAGING_ORG_ID); // the mock user is a viewer there
+    renderWithClient(<UpdateBanner />);
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(screen.queryByText(/is available/)).not.toBeInTheDocument();
+  });
+
+  it("follows update_requests.can_request: superadmins with any role see it, admins without the permission do not", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const requests = { updater_listening: true, updater_polled_at: null, latest: null };
+    server.use(http.get("*/api/v1/version", () => HttpResponse.json({ ...available, update_requests: { ...requests, can_request: true } })));
+    setSelectedOrg(MOCK_STAGING_ORG_ID); // viewer there, but a superadmin of a sign-up installation
+    const first = renderWithClient(<UpdateBanner />);
+    expect(await screen.findByText("openlog 0.9.1 is available.")).toBeInTheDocument();
+    first.unmount();
+
+    server.use(http.get("*/api/v1/version", () => HttpResponse.json({ ...available, update_requests: { ...requests, can_request: false } })));
+    setSelectedOrg(MOCK_DEFAULT_ORG_ID); // owner, but not a server operator
     renderWithClient(<UpdateBanner />);
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(screen.queryByText(/is available/)).not.toBeInTheDocument();

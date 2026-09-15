@@ -199,6 +199,42 @@ func seedExplorer(addr string) (*explorerEnv, error) {
 		return nil, err
 	}
 
+	// Spans: tenant A has 60 traces of a root entry span ("GET /r<i%3>", service api for even i, (i+1)*10 ms, every
+	// 5th an error) and a 5 ms client child span; trace ids are %032x of i, so logs with trace ids 0..6 correlate.
+	sb, err := conn.PrepareBatch(ctx, "INSERT INTO openlog.spans_local (tenant_id, timestamp, duration_ns, trace_id, span_id, parent_span_id, name, kind, status_code, service_name, host_id, resource_attributes, attributes, is_entry, is_error, http_status_code, transaction_name)")
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < 60; i++ {
+		ts := e.now.Add(-time.Duration(i*40+30) * time.Second)
+		svc := []string{"api", "web"}[i%2]
+		name := fmt.Sprintf("GET /r%d", i%3)
+		status, code, isErr := "ok", uint16(200), false
+		if i%5 == 0 {
+			status, code, isErr = "error", 500, true
+		}
+		trace, root := fmt.Sprintf("%032x", i), fmt.Sprintf("%016x", i+1)
+		res := map[string]string{"k8s.pod.name": "pod-" + svc}
+		if err := sb.Append(e.tenantA, ts, uint64((i+1)*10)*uint64(time.Millisecond), trace, root, "", name, "server", status, svc, "h1", res,
+			map[string]string{"http.route": fmt.Sprintf("/r%d", i%3)}, true, isErr, code, name); err != nil {
+			return nil, err
+		}
+		if err := sb.Append(e.tenantA, ts.Add(time.Millisecond), uint64(5*time.Millisecond), trace, fmt.Sprintf("%016x", 1000+i), root, "SELECT orders", "client", "unset", svc, "h1", res,
+			map[string]string{"db.system": "postgresql"}, false, false, uint16(0), ""); err != nil {
+			return nil, err
+		}
+	}
+	for i := 0; i < 5; i++ {
+		ts := e.now.Add(-time.Duration(i+1) * time.Minute)
+		if err := sb.Append(e.tenantB, ts, uint64(time.Second), fmt.Sprintf("%032x", 900+i), "00000000000000b1", "", "GET /r0", "server", "ok", "secret-svc", "hb",
+			map[string]string{}, map[string]string{}, true, false, uint16(200), "GET /r0"); err != nil {
+			return nil, err
+		}
+	}
+	if err := sb.Send(); err != nil {
+		return nil, err
+	}
+
 	res2, _ := tenant.ParseStatic("key-a=" + e.tenantA + ",key-b=" + e.tenantB)
 	db := query.New(conn, "openlog", 30*time.Second)
 	db.SetLimits("api", config.Query{})
@@ -565,5 +601,202 @@ func TestExplorerMetricsIntegration(t *testing.T) {
 	e.post(t, "key-b", "/api/v1/metrics/query", `{"metric":"explorer.cpu"}`, &mr)
 	if len(mr.Series) != 0 || mr.Metric.Type != "" {
 		t.Errorf("tenant B read tenant A: %+v", mr)
+	}
+}
+
+type spanRows struct {
+	Rows []struct {
+		RowID      string            `json:"id"`
+		TS         string            `json:"timestamp"`
+		Name       string            `json:"name"`
+		Kind       string            `json:"kind"`
+		DurationMs float64           `json:"duration_ms"`
+		IsEntry    bool              `json:"is_entry"`
+		Fields     map[string]string `json:"fields"`
+		Attributes map[string]string `json:"attributes"`
+	}
+	NextCursor *string `json:"next_cursor"`
+}
+
+func TestExplorerTracesQueryIntegration(t *testing.T) {
+	e := explorerSetup(t)
+	count := func(key, body string) int {
+		var sr spanRows
+		e.post(t, key, "/api/v1/traces/query", body, &sr)
+		return len(sr.Rows)
+	}
+	for body, want := range map[string]int{
+		`{"limit":1000}`:                  120,
+		`{"limit":1000,"root_only":true}`: 60,
+		`{"limit":1000,"root_only":true,"filters":[{"key":"duration_ms","op":">=","value":300}]}`:                                                                    31,
+		`{"limit":1000,"filters":[{"key":"error","op":"=","value":true}]}`:                                                                                           12,
+		`{"limit":1000,"filters":[{"key":"name","op":"contains","value":"get /R1"}]}`:                                                                                20,
+		`{"limit":1000,"filters":[{"key":"kind","op":"=","value":"client"}]}`:                                                                                        60,
+		`{"limit":1000,"filters":[{"key":"http.status_code","op":">=","value":500}]}`:                                                                                12,
+		`{"limit":1000,"filters":[{"key":"attributes.db.system","op":"exists"}]}`:                                                                                    60,
+		`{"limit":1000,"filters":[{"key":"resource.k8s.pod.name","op":"=","value":"pod-web"}]}`:                                                                      60,
+		`{"limit":1000,"filters":[{"key":"trace_id","op":"=","value":"0000000000000000000000000000003A"}]}`:                                                          2,
+		`{"limit":1000,"groups":[[{"key":"service.name","op":"=","value":"api"},{"key":"is_entry","op":"=","value":true}],[{"key":"error","op":"=","value":true}]]}`: 30 + 6,
+	} {
+		if got := count("key-a", body); got != want {
+			t.Errorf("%s: %d spans, want %d", body, got, want)
+		}
+	}
+	if got := count("key-b", `{"limit":1000}`); got != 5 {
+		t.Errorf("tenant B: %d spans", got)
+	}
+	var sr spanRows
+	e.post(t, "key-a", "/api/v1/traces/query", `{"sort":"duration","limit":3,"root_only":true,"columns":["http.route"]}`, &sr)
+	if len(sr.Rows) != 3 || sr.Rows[0].DurationMs != 600 || sr.Rows[2].DurationMs != 580 || sr.Rows[0].Fields["http.route"] == "" || sr.NextCursor != nil {
+		t.Errorf("slowest: %+v", sr)
+	}
+	for _, order := range []string{"desc", "asc"} {
+		seen := map[string]bool{}
+		cursor, last := "", ""
+		for pages := 0; ; pages++ {
+			body := `{"limit":7,"order":"` + order + `","columns":["attributes.db.system","timestamp"],"include_record":true`
+			if cursor != "" {
+				body += `,"cursor":"` + cursor + `"`
+			}
+			var page spanRows
+			e.post(t, "key-a", "/api/v1/traces/query", body+"}", &page)
+			for _, r := range page.Rows {
+				if seen[r.RowID] {
+					t.Fatalf("%s: span %s repeated", order, r.RowID)
+				}
+				seen[r.RowID] = true
+				if last != "" && ((order == "desc" && r.TS > last) || (order == "asc" && r.TS < last)) {
+					t.Fatalf("%s: %s after %s", order, r.TS, last)
+				}
+				last = r.TS
+				if _, has := r.Fields["attributes.db.system"]; has == r.IsEntry || r.Fields["timestamp"] != r.TS || r.Attributes == nil {
+					t.Fatalf("columns %+v", r)
+				}
+			}
+			if page.NextCursor == nil {
+				break
+			}
+			cursor = *page.NextCursor
+			if pages > 100 {
+				t.Fatal("paging does not end")
+			}
+		}
+		if len(seen) != 120 {
+			t.Errorf("%s: %d distinct spans, want 120", order, len(seen))
+		}
+	}
+
+	var ar struct {
+		Step   string
+		Total  int
+		Series []struct {
+			Group string
+			Other bool
+			Total int
+		}
+		Latency struct{ P50, P95, P99 [][2]float64 }
+	}
+	e.post(t, "key-a", "/api/v1/traces/aggregate", `{"group_by":"service.name","root_only":true,"step":"10m"}`, &ar)
+	if ar.Total != 60 || len(ar.Series) != 2 || ar.Series[0].Total != 30 || ar.Step != "600s" {
+		t.Errorf("aggregate: %+v", ar)
+	}
+	if len(ar.Latency.P99) == 0 || len(ar.Latency.P50) != len(ar.Latency.P99) {
+		t.Fatalf("latency: %+v", ar.Latency)
+	}
+	for i := range ar.Latency.P50 {
+		if p50, p99 := ar.Latency.P50[i][1], ar.Latency.P99[i][1]; p50 <= 0 || p99 < p50 || p99 > 600 {
+			t.Errorf("bucket %d: p50 %v p99 %v", i, p50, p99)
+		}
+	}
+
+	var vr struct {
+		Type   string
+		Total  int
+		Values []struct {
+			Value string
+			Count int
+		}
+	}
+	e.get(t, "key-a", "/api/v1/fields/values?signal=traces&key=name&root_only=true", &vr)
+	if vr.Total != 60 || len(vr.Values) != 3 || vr.Values[0].Count != 20 {
+		t.Errorf("span names: %+v", vr)
+	}
+	e.get(t, "key-a", "/api/v1/fields/values?signal=traces&key=http.status_code&groups="+url.QueryEscape(`[[{"key":"error","op":"=","value":true}],[{"key":"duration_ms","op":">","value":590}]]`), &vr)
+	if vr.Total != 13 || vr.Type != "number" {
+		t.Errorf("status codes of errors or slow spans: %+v", vr)
+	}
+}
+
+// Logs of one APM transaction through the explorer request (transaction/transaction_service), as GET /api/v1/logs.
+func TestExplorerLogsTransactionIntegration(t *testing.T) {
+	e := explorerSetup(t)
+	// Entry spans "GET /r0" of service api: i%6 == 0 → trace ids 0, 6, …; logs carry trace ids 0..6 (i%7): 43 + 42.
+	const want = 85
+	var lr logRows
+	e.post(t, "key-a", "/api/v1/logs/query", `{"limit":1000,"transaction":"GET /r0","transaction_service":"api"}`, &lr)
+	if len(lr.Rows) != want {
+		t.Errorf("explorer transaction logs: %d, want %d", len(lr.Rows), want)
+	}
+	var legacy struct {
+		Logs []json.RawMessage
+	}
+	e.get(t, "key-a", "/api/v1/logs?limit=1000&transaction=GET+%2Fr0&transaction_service=api", &legacy)
+	if len(legacy.Logs) != want {
+		t.Errorf("GET /logs transaction: %d, want %d", len(legacy.Logs), want)
+	}
+	var ar struct{ Total int }
+	e.post(t, "key-a", "/api/v1/logs/aggregate", `{"transaction":"GET /r0","transaction_service":"api","group_by":"severity_text"}`, &ar)
+	if ar.Total != want {
+		t.Errorf("aggregate: %d", ar.Total)
+	}
+	var vr struct{ Total int }
+	e.get(t, "key-a", "/api/v1/fields/values?signal=logs&key=severity_text&transaction=GET+%2Fr0&transaction_service=api", &vr)
+	if vr.Total != want {
+		t.Errorf("values total: %d", vr.Total)
+	}
+	e.get(t, "key-a", "/api/v1/fields/values?signal=logs&key=service.name&body_q=JSON+LINE", &vr)
+	if vr.Total != e.jsonLogsA {
+		t.Errorf("values with body_q: %d, want %d", vr.Total, e.jsonLogsA)
+	}
+	e.post(t, "key-b", "/api/v1/logs/query", `{"limit":1000,"transaction":"GET /r0","transaction_service":"api"}`, &lr)
+	if len(lr.Rows) != 0 {
+		t.Errorf("tenant B: %d rows", len(lr.Rows))
+	}
+}
+
+// Explorer contains and OQL CONTAINS select the same records: case-insensitive, `%` and `_` literal (D-122).
+func TestExplorerContainsMatchesOQLIntegration(t *testing.T) {
+	e := explorerSetup(t)
+	oqlCount := func(where string) int {
+		var res struct {
+			Rows []struct{ Values []float64 }
+		}
+		e.post(t, "key-a", "/api/v1/query", `{"query":"SELECT count(*) FROM Log WHERE `+where+` SINCE 2 hours ago"}`, &res)
+		if len(res.Rows) != 1 || len(res.Rows[0].Values) != 1 {
+			t.Fatalf("OQL %s: %+v", where, res)
+		}
+		return int(res.Rows[0].Values[0])
+	}
+	explorerCount := func(filters string) int {
+		var lr logRows
+		e.post(t, "key-a", "/api/v1/logs/query", `{"limit":1000,"from":`+strconv.FormatInt(e.now.Add(-2*time.Hour).UnixMilli(), 10)+`,"filters":`+filters+`}`, &lr)
+		return len(lr.Rows)
+	}
+	for _, tc := range []struct {
+		oql, filters string
+		want         int
+	}{
+		{"message CONTAINS 'JSON LINE'", `[{"key":"body","op":"contains","value":"JSON LINE"}]`, e.jsonLogsA},
+		{"message NOT CONTAINS 'Json Line'", `[{"key":"body","op":"not_contains","value":"Json Line"}]`, e.logsA - e.jsonLogsA},
+		{"message CONTAINS '%'", `[{"key":"body","op":"contains","value":"%"}]`, 0},
+		{"message CONTAINS 'request _'", `[{"key":"body","op":"contains","value":"request _"}]`, 0},
+		{"attributes['http.route'] CONTAINS '/R1'", `[{"key":"attributes.http.route","op":"contains","value":"/R1"}]`, 100},
+	} {
+		if got := oqlCount(tc.oql); got != tc.want {
+			t.Errorf("OQL %s: %d, want %d", tc.oql, got, tc.want)
+		}
+		if got := explorerCount(tc.filters); got != tc.want {
+			t.Errorf("explorer %s: %d, want %d", tc.filters, got, tc.want)
+		}
 	}
 }

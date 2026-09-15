@@ -116,3 +116,39 @@ func TestLegacyUpdaterNotice(t *testing.T) {
 		}
 	}
 }
+
+func TestCurrentMaintenanceWindow(t *testing.T) {
+	now := time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC) // Tuesday
+	stale := json.RawMessage(`{"engine":"compose","state":"waiting_for_maintenance_window","maintenance_window":` +
+		`{"spec":"sat,sun 02:00-05:00; mon-fri 03:00-04:00","windows":[],"open_now":true,"next_open_at":"2026-09-01T03:00:00Z"}}`)
+	var doc struct {
+		State             string `json:"state"`
+		MaintenanceWindow struct {
+			Spec       string            `json:"spec"`
+			Windows    []json.RawMessage `json:"windows"`
+			OpenNow    bool              `json:"open_now"`
+			NextOpenAt string            `json:"next_open_at"`
+		} `json:"maintenance_window"`
+	}
+	if err := json.Unmarshal(withCurrentMaintenanceWindow(stale, now), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if mw := doc.MaintenanceWindow; doc.State != "waiting_for_maintenance_window" || mw.Spec != "sat,sun 02:00-05:00; mon-fri 03:00-04:00" ||
+		mw.OpenNow || mw.NextOpenAt != "2026-09-16T03:00:00Z" || len(mw.Windows) != 2 {
+		t.Fatalf("refreshed %+v", doc)
+	}
+	anyTime := withCurrentMaintenanceWindow(json.RawMessage(`{"engine":"compose","maintenance_window":{"spec":""}}`), now)
+	if !strings.Contains(string(anyTime), `"maintenance_window":{"spec":"","windows":[],"open_now":true}`) {
+		t.Fatalf("any time: %s", anyTime)
+	}
+	for _, raw := range []string{
+		`{"engine":"compose","state":"up_to_date"}`, // older updater: no field
+		`{"engine":"compose","maintenance_window":{"spec":"someday"}}`,
+		`{"engine":"compose","maintenance_window":"garbage"}`,
+		`null`,
+	} {
+		if got := withCurrentMaintenanceWindow(json.RawMessage(raw), now); string(got) != raw {
+			t.Errorf("%s changed: %s", raw, got)
+		}
+	}
+}

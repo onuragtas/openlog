@@ -31,13 +31,16 @@ const bar = "flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2 text
  * Two notices above the page content:
  * - "openlog was updated — reload" for everyone, when API responses report a different backend
  *   version than the one this page was loaded from;
- * - "openlog X.Y.Z is available — release notes" for admins and owners, dismissible per version.
+ * - "openlog X.Y.Z is available — release notes", dismissible per version, for those who may act on it: the users
+ *   GET /api/v1/version grants update_requests.can_request (superadmins when OPENLOG_SIGNUP_ENABLED=true, admins and
+ *   owners otherwise); without the request channel (update_requests null, static auth mode) admins and owners.
  */
 export function UpdateBanner() {
   const { t } = useTranslation();
-  const role = useMe().data?.role ?? null;
-  const isAdmin = atLeast(role, "admin");
-  const { data } = useQuery({ ...versionQuery(), enabled: isAdmin });
+  const me = useMe().data;
+  const isAdmin = atLeast(me?.role ?? null, "admin");
+  // Every signed-in user loads the version: a superadmin may have any role in the current organization.
+  const { data } = useQuery({ ...versionQuery(), enabled: !!me });
   const updatedTo = useUpdatedServerVersion();
   const [dismissed, setDismissed] = useState(readDismissed);
 
@@ -57,7 +60,9 @@ export function UpdateBanner() {
     );
   }
   const latest = data?.latest_available;
-  if (!isAdmin || !latest || dismissed === latest.version) return null;
+  const requests = data?.update_requests;
+  const operator = requests ? requests.can_request : isAdmin;
+  if (!operator || !latest || dismissed === latest.version) return null;
   return (
     <div role="status" className={`${bar} bg-muted`}>
       <span>{t("update.available", { version: latest.version })}</span>

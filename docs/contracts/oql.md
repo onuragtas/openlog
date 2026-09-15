@@ -23,7 +23,8 @@ agg        := count '(' ('*' | attr) ')' | (sum | average | avg | min | max | un
             | histogram '(' attr ',' number [',' integer] ')'
 cond       := and (OR and)*      and := not (AND not)*      not := NOT not | '(' cond ')' | predicate
 predicate  := attr ('=' | '!=' | '<>' | '<' | '<=' | '>' | '>=') value
-            | attr [NOT] IN '(' value (',' value)* ')' | attr [NOT] LIKE value | attr IS [NOT] NULL
+            | attr [NOT] IN '(' value (',' value)* ')' | attr [NOT] LIKE value | attr [NOT] CONTAINS value
+            | attr IS [NOT] NULL
 value      := string | number | true | false | variable
 attr       := identifier | `backtick quoted` | attributes '[' string ']' | resource '[' string ']'
 duration   := number unit            unit := second(s) | sec | minute(s) | min | hour(s) | day(s) | week(s)
@@ -71,7 +72,9 @@ converted with `toFloat64OrNull` (non-numeric values are ignored).
 
 **Predicates.** String attributes take string values (numbers are compared as their text); number attributes take numbers
 (a numeric string is accepted); bool attributes take `true`/`false`. `LIKE` uses SQL wildcards (`%`, `_`, case-sensitive)
-on strings. `IS NULL`: map key absent, string attribute empty; never true for number/bool attributes.
+on strings. `CONTAINS` is a case-insensitive substring match on strings in which `%`, `_` and `\` are ordinary
+characters — the same condition as `contains` in the Logs/Metrics/Traces explorers (D-122; `CONTAINS` is not reserved,
+so an attribute named `contains` still works). `IS NULL`: map key absent, string attribute empty; never true for number/bool attributes.
 
 **Functions.**
 

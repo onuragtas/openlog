@@ -3,13 +3,12 @@ import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { logsInfiniteQuery } from "@/api/queries";
+import { logsExplorerQuery, type QueryFilter } from "@/api/explorer";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
-import { concatLogPages } from "@/lib/logs";
 import { parseTimeParam } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +24,7 @@ export interface TraceLogsPanelProps {
   onSelectSpan?: (spanId: string) => void;
 }
 
-/** Log records correlated with a trace (GET /logs?trace_id=, optionally span_id=), shown under the waterfall. */
+/** Log records correlated with a trace (POST /logs/query `trace_id`, optionally `span_id`), shown under the waterfall. */
 export function TraceLogsPanel({ traceId, startMs, endMs, selectedSpanId, onSelectSpan }: TraceLogsPanelProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
@@ -33,8 +32,12 @@ export function TraceLogsPanel({ traceId, startMs, endMs, selectedSpanId, onSele
   const spanId = scope === "span" && selectedSpanId ? selectedSpanId : undefined;
   const from = String(Math.floor(startMs - MARGIN_MS));
   const to = String(Math.ceil(endMs + MARGIN_MS));
-  const q = useInfiniteQuery(logsInfiniteQuery({ range: { from, to }, traceId, spanId, limit: PAGE_SIZE }));
-  const logs = useMemo(() => (q.data ? concatLogPages(q.data.pages) : []), [q.data]);
+  const filters = useMemo<QueryFilter[]>(
+    () => [{ key: "trace_id", op: "=", value: traceId.toLowerCase() }, ...(spanId ? [{ key: "span_id", op: "=" as const, value: spanId.toLowerCase() }] : [])],
+    [traceId, spanId],
+  );
+  const q = useInfiniteQuery(logsExplorerQuery({ range: { from, to }, filter: { filters, groups: [], q: "" }, order: "desc", columns: [], limit: PAGE_SIZE }));
+  const logs = useMemo(() => q.data?.pages.flatMap((p) => p.rows) ?? [], [q.data]);
 
   return (
     <Card data-testid="trace-logs">
@@ -76,11 +79,11 @@ export function TraceLogsPanel({ traceId, startMs, endMs, selectedSpanId, onSele
         ) : (
           <>
             <ol className="flex flex-col divide-y font-mono text-xs" data-testid="trace-log-rows">
-              {logs.map((l, i) => {
+              {logs.map((l) => {
                 const sev = l.severity_number;
                 const variant = sev >= 17 ? "destructive" : sev >= 13 ? "warning" : "muted";
                 return (
-                  <li key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5">
+                  <li key={l.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1.5">
                     <time dateTime={l.timestamp} className="text-muted-foreground">
                       {formatDateTime(parseTimeParam(l.timestamp) ?? 0, locale, true)}
                     </time>

@@ -320,6 +320,77 @@ describe("VersionSettings", () => {
     expect(screen.queryByRole("button", { name: "Update now" })).not.toBeInTheDocument();
   });
 
+  const waitingWindow = {
+    spec: "sat,sun 02:00-05:00; mon-fri 03:00-04:00",
+    windows: [
+      { days: ["sat", "sun"], start: "02:00", end: "05:00" },
+      { days: ["mon", "tue", "wed", "thu", "fri"], start: "03:00", end: "04:00" },
+    ],
+    open_now: false,
+    next_open_at: "2026-09-16T03:00:00Z",
+  };
+
+  it("shows the maintenance window, the next opening while waiting and the hint to install now", async () => {
+    server.use(
+      http.get("*/api/v1/version", () =>
+        HttpResponse.json({
+          ...baseVersion,
+          updater: { ...notifyUpdater, mode: "auto", state: "waiting_for_maintenance_window", maintenance_window: waitingWindow },
+        }),
+      ),
+    );
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderWithClient(<VersionSettings />);
+
+    const row = await screen.findByTestId("maintenance-window");
+    expect(row).toHaveTextContent("Sat, Sun 02:00–05:00; Mon–Fri 03:00–04:00 UTC");
+    expect(within(row).getByText("next opening:")).toBeInTheDocument();
+    const updater = screen.getByTestId("updater-status");
+    expect(within(updater).getByTestId("next-opening").querySelectorAll("time")[0]).toHaveAttribute("dateTime", "2026-09-16T03:00:00Z");
+    expect(within(updater).getByTestId("waiting-hint")).toHaveTextContent("Install now, also outside the maintenance window");
+
+    await user.click(screen.getByRole("button", { name: "Update now" }));
+    expect(screen.getByTestId("confirm-window")).toHaveTextContent("Maintenance window: Sat, Sun 02:00–05:00; Mon–Fri 03:00–04:00 UTC");
+  });
+
+  it("says any time without a window, open now inside it and defers to the CronJob on Kubernetes", async () => {
+    let updater: Record<string, unknown> = { ...notifyUpdater, maintenance_window: { spec: "", windows: [], open_now: true } };
+    server.use(http.get("*/api/v1/version", () => HttpResponse.json({ ...baseVersion, updater })));
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const first = renderWithClient(<VersionSettings />);
+    expect(await screen.findByTestId("maintenance-window")).toHaveTextContent("any time");
+    first.unmount();
+
+    updater = { ...notifyUpdater, maintenance_window: { ...waitingWindow, open_now: true } };
+    const second = renderWithClient(<VersionSettings />);
+    expect(await screen.findByTestId("maintenance-window")).toHaveTextContent("open now");
+    second.unmount();
+
+    updater = { ...notifyUpdater, engine: "kubernetes", state: "waiting_for_maintenance_window", maintenance_window: waitingWindow };
+    renderWithClient(<VersionSettings />);
+    const row = await screen.findByTestId("maintenance-window");
+    expect(row).toHaveTextContent("runs are managed by the CronJob schedule of the chart");
+    expect(screen.queryByTestId("next-opening")).not.toBeInTheDocument();
+  });
+
+  it("omits the window of older updaters and the install-now hint for members", async () => {
+    server.use(
+      http.get("*/api/v1/version", () =>
+        HttpResponse.json({
+          ...baseVersion,
+          updater: { ...notifyUpdater, state: "waiting_for_maintenance_window" },
+          update_requests: { ...baseVersion.update_requests, can_request: false },
+        }),
+      ),
+    );
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<VersionSettings />);
+    expect(await screen.findByTestId("updater-status")).toBeInTheDocument();
+    expect(screen.queryByTestId("maintenance-window")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("waiting-hint")).not.toBeInTheDocument();
+  });
+
   it("has no buttons for members", async () => {
     server.use(
       http.get("*/api/v1/version", () =>

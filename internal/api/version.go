@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/updatecheck"
 	"github.com/onuragtas/openlog/internal/updatemsg"
+	"github.com/onuragtas/openlog/internal/updater"
 	"github.com/onuragtas/openlog/internal/version"
 	lib "github.com/onuragtas/openlog/libs/release"
 )
@@ -55,11 +57,45 @@ func (s *Server) versionInfo(r *http.Request, p *auth.Principal) versionResponse
 		info := s.versions.Info(r.Context())
 		resp.LatestAvailable, resp.UpdateCheck = info.LatestAvailable, info.UpdateCheck
 		if len(info.Updater) > 0 {
-			resp.Updater = withLegacyUpdaterNotice(info.Updater, version.String())
+			resp.Updater = withCurrentMaintenanceWindow(withLegacyUpdaterNotice(info.Updater, version.String()), s.now())
 		}
 	}
 	resp.UpdateRequests = s.updateRequestsInfo(r.Context(), p)
 	return resp
+}
+
+// withCurrentMaintenanceWindow re-evaluates updater.maintenance_window (open_now, next_open_at) at now: the updater
+// writes its document once per run (OPENLOG_UPDATER_INTERVAL, or per CronJob run on Kubernetes), so the stored values
+// may be stale. Documents without the field (older updaters) or with a spec this build cannot parse are unchanged.
+func withCurrentMaintenanceWindow(raw json.RawMessage, now time.Time) json.RawMessage {
+	var doc map[string]json.RawMessage
+	if json.Unmarshal(raw, &doc) != nil || doc == nil {
+		return raw
+	}
+	mw, ok := doc["maintenance_window"]
+	if !ok {
+		return raw
+	}
+	var stored struct {
+		Spec *string `json:"spec"`
+	}
+	if json.Unmarshal(mw, &stored) != nil || stored.Spec == nil {
+		return raw
+	}
+	ws, err := updater.ParseWindows(*stored.Spec)
+	if err != nil {
+		return raw
+	}
+	b, err := json.Marshal(updater.NewWindowStatus(ws, now))
+	if err != nil {
+		return raw
+	}
+	doc["maintenance_window"] = b
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 // withLegacyUpdaterNotice adds the notice updater_outdated (Compose) or updater_outdated_kubernetes to a status

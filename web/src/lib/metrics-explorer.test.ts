@@ -152,7 +152,31 @@ describe("metricOql", () => {
     expect(r).toEqual({
       ok: true,
       query:
-        "SELECT average(value) FROM Metric WHERE metricName = 'system.cpu.utilization' AND host.id = 'h-1' AND attributes['cpu.mode'] NOT IN ('idle', 'steal') AND resource['k8s.pod.name'] IS NOT NULL AND attributes['path'] LIKE '%api%' AND value >= 0.5 AND ((attributes['a'] LIKE 'x%' AND attributes['b'] IS NULL) OR attributes['c'] != true) FACET attributes['cpu.mode'], resource['host.name'] LIMIT 50 TIMESERIES AUTO",
+        "SELECT average(value) FROM Metric WHERE metricName = 'system.cpu.utilization' AND host.id = 'h-1'" +
+        " AND ((attributes['cpu.mode'] IS NOT NULL AND attributes['cpu.mode'] NOT IN ('idle', 'steal')) OR (attributes['cpu.mode'] IS NULL AND resource['cpu.mode'] NOT IN ('idle', 'steal')))" +
+        " AND resource['k8s.pod.name'] IS NOT NULL AND attributes['path'] CONTAINS 'api' AND value >= 0.5" +
+        " AND ((((attributes['a'] IS NOT NULL AND attributes['a'] LIKE 'x%') OR (attributes['a'] IS NULL AND resource['a'] LIKE 'x%')) AND (attributes['b'] IS NULL AND resource['b'] IS NULL))" +
+        " OR ((attributes['c'] IS NOT NULL AND attributes['c'] != true) OR (attributes['c'] IS NULL AND resource['c'] != true)))" +
+        " FACET attributes['cpu.mode'], resource['host.name'] LIMIT 50 TIMESERIES AUTO",
+    });
+  });
+
+  it("writes contains as OQL CONTAINS (case-insensitive, % and _ literal) like the explorer (D-122)", () => {
+    const r = metricOql(
+      q({
+        filters: [
+          { key: "attributes.path", op: "contains", value: "50%_OFF" },
+          { key: "resource.k8s.pod.name", op: "not_contains", value: "it's" },
+          { key: "pool", op: "exists" },
+        ],
+      }),
+      gauge,
+    );
+    expect(r).toEqual({
+      ok: true,
+      query:
+        "SELECT average(value) FROM Metric WHERE metricName = 'system.cpu.utilization' AND attributes['path'] CONTAINS '50%_OFF' AND resource['k8s.pod.name'] NOT CONTAINS 'it''s'" +
+        " AND (attributes['pool'] IS NOT NULL OR resource['pool'] IS NOT NULL) TIMESERIES AUTO",
     });
   });
 

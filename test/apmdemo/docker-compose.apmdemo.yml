@@ -7,7 +7,7 @@
 # The demo services do not depend on `openlog`: the OTLP exporters retry until it is reachable,
 # so this file also works on its own (with any OTLP/HTTP receiver named `openlog`).
 #
-#   frontend          Node.js 22 + Express 5   http://localhost:${APMDEMO_FRONTEND_PORT:-33000}
+#   frontend          Node.js 22 + Express 5   http://localhost:${APMDEMO_FRONTEND_PORT:-31000}
 #   orders            Go net/http + database/sql (pgx) -> orders-db
 #   catalog           PHP 8.3 + Slim 4 (OTel auto-instrumentation) -> redis
 #   apmdemo-loadgen   ~8 req/s against frontend (named so it does not merge with `loadgen`)
@@ -43,7 +43,7 @@ services:
       CATALOG_URL: http://catalog:8080
       ORDERS_URL: http://orders:8080
     ports:
-      - "${APMDEMO_FRONTEND_PORT:-33000}:3000"
+      - "${APMDEMO_FRONTEND_PORT:-31000}:3000"
     depends_on:
       orders:
         condition: service_started

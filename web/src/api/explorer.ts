@@ -17,6 +17,9 @@ export type QueryFilter = S["QueryFilter"];
 export type LogQueryRow = S["LogQueryRow"];
 export type LogsQueryRequest = S["LogsQueryRequest"];
 export type LogsAggregateResponse = S["LogsAggregateResponse"];
+export type SpanQueryRow = S["SpanQueryRow"];
+export type TracesQueryRequest = S["TracesQueryRequest"];
+export type TracesAggregateResponse = S["TracesAggregateResponse"];
 export type MetricInfo = S["MetricInfo"];
 export type MetricDetail = S["MetricDetail"];
 export type MetricAggregation = S["MetricAggregation"];
@@ -56,15 +59,46 @@ export const fieldKeysQuery = (p: { signal: FieldSignal; range: RangeSpec; q?: s
     staleTime: 60_000,
   });
 
-export const fieldValuesQuery = (p: { signal: FieldSignal; key: string; range: RangeSpec; q?: string; metric?: string; filters?: QueryFilter[]; limit?: number; enabled?: boolean }) => {
+/** Explorer conditions outside the filter model: logs body search and APM transaction, traces root spans only. */
+export interface ExplorerContext {
+  bodyQ?: string;
+  transaction?: string;
+  transactionService?: string;
+  rootOnly?: boolean;
+}
+
+/** Request fields of a logs transaction context (the API requires both or neither). */
+export const transactionBody = (c?: ExplorerContext) =>
+  c?.transaction && c.transactionService ? { transaction: c.transaction, transaction_service: c.transactionService } : {};
+
+export const fieldValuesQuery = (p: {
+  signal: FieldSignal;
+  key: string;
+  range: RangeSpec;
+  q?: string;
+  metric?: string;
+  filters?: QueryFilter[];
+  groups?: QueryFilter[][];
+  context?: ExplorerContext;
+  limit?: number;
+  enabled?: boolean;
+}) => {
   const filters = p.filters?.length ? JSON.stringify(p.filters) : undefined;
+  const nonEmptyGroups = (p.groups ?? []).filter((g) => g.length > 0);
+  const groups = nonEmptyGroups.length ? JSON.stringify(nonEmptyGroups) : undefined;
+  const c = p.context;
+  const ctx = {
+    body_q: c?.bodyQ?.trim() || undefined,
+    ...transactionBody(c),
+    root_only: c?.rootOnly ? true : undefined,
+  };
   return queryOptions({
-    queryKey: ["fields", "values", p.signal, p.key, ...rangeKey(p.range), p.q ?? "", p.metric ?? "", filters ?? "", p.limit ?? 50],
+    queryKey: ["fields", "values", p.signal, p.key, ...rangeKey(p.range), p.q ?? "", p.metric ?? "", filters ?? "", groups ?? "", JSON.stringify(ctx), p.limit ?? 50],
     queryFn: async ({ signal }) => {
       const { from, to } = resolveRange(p.range, Date.now());
       return unwrap(
         await api.GET("/api/v1/fields/values", {
-          params: { query: { signal: p.signal, key: p.key, from: String(from), to: String(to), q: p.q || undefined, metric: p.metric || undefined, filters, limit: p.limit } },
+          params: { query: { signal: p.signal, key: p.key, from: String(from), to: String(to), q: p.q || undefined, metric: p.metric || undefined, filters, groups, ...ctx, limit: p.limit } },
           signal,
         }),
       );
@@ -81,6 +115,9 @@ export interface LogsExplorerRequest {
   order: "asc" | "desc";
   columns: string[];
   limit?: number;
+  /** APM transaction of "logs of this transaction" */
+  context?: ExplorerContext;
+  enabled?: boolean;
 }
 
 interface LogsExplorerPage {
@@ -100,7 +137,7 @@ export const LOGS_EXPLORER_PAGE = 200;
 
 /** POST /api/v1/logs/query pages: the window is resolved once and the same body is resent with the cursor. */
 export const logsExplorerQuery = (r: LogsExplorerRequest) => {
-  const body = { ...filterBody(r.filter), order: r.order, columns: r.columns, include_record: true, limit: r.limit ?? LOGS_EXPLORER_PAGE };
+  const body = { ...filterBody(r.filter), ...transactionBody(r.context), order: r.order, columns: r.columns, include_record: true, limit: r.limit ?? LOGS_EXPLORER_PAGE };
   return infiniteQueryOptions({
     queryKey: ["logs-explorer", ...rangeKey(r.range), JSON.stringify(body)],
     initialPageParam: null as LogsExplorerPageParam | null,
@@ -111,16 +148,76 @@ export const logsExplorerQuery = (r: LogsExplorerRequest) => {
     },
     getNextPageParam: (last): LogsExplorerPageParam | undefined => (last.nextCursor ? { from: last.from, to: last.to, cursor: last.nextCursor } : undefined),
     placeholderData: keepPreviousData,
+    enabled: r.enabled !== false,
   });
 };
 
-export const logsAggregateQuery = (r: { range: RangeSpec; filter: FilterState; groupBy?: string }) => {
-  const body = { ...filterBody(r.filter), group_by: r.groupBy || undefined, limit: 10 };
+export const logsAggregateQuery = (r: { range: RangeSpec; filter: FilterState; groupBy?: string; context?: ExplorerContext }) => {
+  const body = { ...filterBody(r.filter), ...transactionBody(r.context), group_by: r.groupBy || undefined, limit: 10 };
   return queryOptions({
     queryKey: ["logs-aggregate", ...rangeKey(r.range), JSON.stringify(body)],
     queryFn: async ({ signal }) => {
       const { from, to } = resolveRange(r.range, Date.now());
       const data = unwrap(await api.POST("/api/v1/logs/aggregate", { body: { ...body, from, to }, signal })) as LogsAggregateResponse;
+      return { ...data, from, to };
+    },
+    placeholderData: keepPreviousData,
+  });
+};
+
+// ---- Traces Explorer (POST /api/v1/traces/query, /traces/aggregate; D-122) ----------------------------------------------
+
+export interface TracesExplorerRequest {
+  range: RangeSpec;
+  filter: Pick<FilterState, "filters" | "groups">;
+  rootOnly: boolean;
+  order: "asc" | "desc";
+  /** duration: the slowest spans of the range in one page */
+  sort: "timestamp" | "duration";
+  columns: string[];
+  limit?: number;
+}
+
+interface TracesExplorerPage {
+  rows: SpanQueryRow[];
+  nextCursor: string | null;
+  from: number;
+  to: number;
+}
+
+export const TRACES_EXPLORER_PAGE = 200;
+
+export const tracesExplorerQuery = (r: TracesExplorerRequest) => {
+  const body = {
+    ...filterBody({ ...r.filter, q: "" }),
+    root_only: r.rootOnly,
+    // sort=duration is one page of the slowest spans, always newest-first order.
+    order: r.sort === "duration" ? ("desc" as const) : r.order,
+    sort: r.sort,
+    columns: r.columns,
+    include_record: true,
+    limit: r.limit ?? TRACES_EXPLORER_PAGE,
+  };
+  return infiniteQueryOptions({
+    queryKey: ["traces-explorer", ...rangeKey(r.range), JSON.stringify(body)],
+    initialPageParam: null as LogsExplorerPageParam | null,
+    queryFn: async ({ pageParam, signal }): Promise<TracesExplorerPage> => {
+      const win = pageParam ?? resolveRange(r.range, Date.now());
+      const data = unwrap(await api.POST("/api/v1/traces/query", { body: { ...body, from: win.from, to: win.to, cursor: pageParam?.cursor }, signal }));
+      return { rows: data.rows, nextCursor: data.next_cursor ?? null, from: win.from, to: win.to };
+    },
+    getNextPageParam: (last): LogsExplorerPageParam | undefined => (last.nextCursor ? { from: last.from, to: last.to, cursor: last.nextCursor } : undefined),
+    placeholderData: keepPreviousData,
+  });
+};
+
+export const tracesAggregateQuery = (r: { range: RangeSpec; filter: Pick<FilterState, "filters" | "groups">; rootOnly: boolean; groupBy?: string }) => {
+  const body = { ...filterBody({ ...r.filter, q: "" }), root_only: r.rootOnly, group_by: r.groupBy || undefined, limit: 10 };
+  return queryOptions({
+    queryKey: ["traces-aggregate", ...rangeKey(r.range), JSON.stringify(body)],
+    queryFn: async ({ signal }) => {
+      const { from, to } = resolveRange(r.range, Date.now());
+      const data = unwrap(await api.POST("/api/v1/traces/aggregate", { body: { ...body, from, to }, signal })) as TracesAggregateResponse;
       return { ...data, from, to };
     },
     placeholderData: keepPreviousData,

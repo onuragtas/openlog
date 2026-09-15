@@ -102,6 +102,9 @@ func num(key, sql string) FieldDef {
 func hexID(key, sql string) FieldDef {
 	return FieldDef{Key: key, SQL: sql, Type: TString, Filterable: true, Lower: true}
 }
+func boolean(key, sql string) FieldDef {
+	return FieldDef{Key: key, SQL: sql, Type: TBool, Filterable: true}
+}
 func shown(key, sql string) FieldDef { return FieldDef{Key: key, SQL: sql, Type: TString} }
 
 // Fields are the top-level fields of each signal, in display order. Aliases are accepted in keys but not listed.
@@ -128,11 +131,21 @@ var Fields = map[Signal][]FieldDef{
 		str("status_code", "toString(status_code)"),
 		str("status_message", "status_message"),
 		str("service.name", "service_name"),
+		str("service.namespace", "service_namespace"),
+		str("deployment.environment", "deployment_environment"),
 		str("host.id", "host_id"),
 		hexID("trace_id", "trace_id"),
 		hexID("span_id", "span_id"),
 		hexID("parent_span_id", "parent_span_id"),
 		num("duration_ns", "duration_ns"),
+		num("duration_ms", "divide(duration_ns, 1000000)"),
+		num("http.status_code", "http_status_code"),
+		boolean("is_entry", "is_entry"),
+		boolean("error", "is_error"),
+		str("transaction.name", "transaction_name"),
+		str("transaction.type", "transaction_type"),
+		str("db.system", "db_system"),
+		str("peer.name", "peer_name"),
 		str("scope.name", "scope_name"),
 	},
 	Metrics: {
@@ -151,7 +164,10 @@ var aliases = map[Signal]map[string]string{
 	Logs: {"severity": "severity_text", "message": "body", "trace.id": "trace_id", "span.id": "span_id",
 		"service_name": "service.name", "host_id": "host.id", "host_name": "host.name", "event_name": "event.name", "scope_name": "scope.name"},
 	Traces: {"trace.id": "trace_id", "span.id": "span_id", "parent.id": "parent_span_id", "service_name": "service.name",
-		"host_id": "host.id", "span.name": "name", "scope_name": "scope.name"},
+		"host_id": "host.id", "span.name": "name", "scope_name": "scope.name", "duration.ms": "duration_ms", "status.code": "status_code",
+		"status.message": "status_message", "service_namespace": "service.namespace", "deployment_environment": "deployment.environment",
+		"http_status_code": "http.status_code", "is_error": "error", "entry": "is_entry", "transaction_name": "transaction.name",
+		"transaction_type": "transaction.type", "db_system": "db.system", "peer_name": "peer.name"},
 	Metrics: {"metricName": "metric.name", "metric_name": "metric.name", "service_name": "service.name", "host_id": "host.id",
 		"host_name": "host.name", "scope_name": "scope.name"},
 }
@@ -261,6 +277,18 @@ func ParseFilters(s string) ([]Filter, error) {
 		return nil, invalid("filters must be a JSON array of {key, op, value | values}")
 	}
 	return fs, nil
+}
+
+// ParseGroups decodes a JSON array of filter arrays (OR of AND-groups, GET query parameters).
+func ParseGroups(s string) ([][]Filter, error) {
+	if strings.TrimSpace(s) == "" {
+		return nil, nil
+	}
+	var gs [][]Filter
+	if err := json.Unmarshal([]byte(s), &gs); err != nil {
+		return nil, invalid("groups must be a JSON array of arrays of {key, op, value | values}")
+	}
+	return gs, nil
 }
 
 // scalar decodes a JSON string, number or boolean into its text.

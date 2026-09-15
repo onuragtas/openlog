@@ -302,6 +302,9 @@ Stored in PostgreSQL (see [postgres.md](postgres.md), tables `agent_update_polic
   `updater_outdated_bundle` (install-server.sh), `updater_outdated_kubernetes` `{updater_version, running_version}` and
   `updater_self_update_failed` `{version, reason}`. Documents without `updater_version` come from updaters older than
   0.1.26; the api adds `updater_outdated` / `updater_outdated_kubernetes` (`updater_version: "< <running>"`) to them.
+- Additive (D-121): `updater.maintenance_window` `{spec, windows[], open_now, next_open_at?}` (normalized
+  `OPENLOG_UPDATER_MAINTENANCE_WINDOW`, UTC; `spec: ""` = any time). The api re-evaluates `open_now` / `next_open_at`
+  when it answers; absent in documents of older updaters.
   The Compose updater replaces its own container after a successful update (`OPENLOG_UPDATER_SELF_UPDATE`,
   docs/operations/upgrading.md "Updater self-update"); the Kubernetes CronJob runs the chart image and never does.
 

@@ -297,8 +297,12 @@ export function filterIntegrationRows(rows: IntegrationRow[], status: Integratio
 
 // ---- recommended alerts ----
 
-/** Rule editor prefill for a panel chart metric on one instance (no threshold). */
-export function instanceAlertSearch(spec: { metric: string; agg: string; ref: InstanceRef; hostName?: string; name: string }): RuleEditorSearch {
+/**
+ * Rule editor prefill for a panel chart metric on one instance (no threshold). With an IIS site selected on the panel the
+ * rule is scoped to that site too (resource.iis.site) and named after it.
+ */
+export function instanceAlertSearch(spec: { metric: string; agg: string; ref: InstanceRef; hostName?: string; name: string; site?: string }): RuleEditorSearch {
+  const resource: Record<string, string> = { ...instanceResourceFilter(spec.ref), ...(spec.site ? { "iis.site": spec.site } : {}) };
   return {
     type: "metric_threshold",
     metric: spec.metric,
@@ -306,7 +310,7 @@ export function instanceAlertSearch(spec: { metric: string; agg: string; ref: In
     hostName: spec.hostName,
     agg: spec.agg,
     groupBy: "host",
-    filters: JSON.stringify(Object.entries(instanceResourceFilter(spec.ref)).map(([k, v]) => ({ field: `resource.${k}`, op: "eq", values: [v] }))),
-    name: spec.name,
+    filters: JSON.stringify(Object.entries(resource).map(([k, v]) => ({ field: `resource.${k}`, op: "eq", values: [v] }))),
+    name: spec.site ? `${spec.name} (${spec.site})` : spec.name,
   };
 }

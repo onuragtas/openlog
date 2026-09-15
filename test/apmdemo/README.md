@@ -11,7 +11,7 @@ apmdemo-host: openlog infra agent (machine-id = host.id of the services)
 ```
 
 ```sh
-test/apmdemo/run.sh up       # build openlog:apm, start the stack and the demo (UI: http://127.0.0.1:38080, admin@apmdemo.local / apmdemo-password)
+test/apmdemo/run.sh up       # build openlog:apm, start the stack and the demo (UI: http://127.0.0.1:31080, admin@apmdemo.local / apmdemo-password)
 test/apmdemo/run.sh verify   # API numbers vs SQL on raw spans, map edges, error groups, DB queries, slow transactions
 test/apmdemo/run.sh e2e      # the e2e APM phase against this stack
 test/apmdemo/run.sh down

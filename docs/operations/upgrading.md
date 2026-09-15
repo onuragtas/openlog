@@ -62,7 +62,9 @@ and stores the result in PostgreSQL. Every pod serves it in `GET /api/v1/version
  "update_check": "enabled", "updater": {"engine": "compose", "mode": "notify", "state": "available", "target_version": "0.9.1"}}
 ```
 
-- Admins and owners see a banner "openlog 0.9.1 is available — Release notes" (dismissed per version in the browser).
+- Those who may request updates (`update_requests.can_request`: superadmins on `OPENLOG_SIGNUP_ENABLED=true`
+  installations, admins and owners otherwise; admins and owners when there is no request channel) see a banner
+  "openlog 0.9.1 is available — Release notes" (dismissed per version in the browser).
 - **Settings → Organization → Version and updates** has two buttons for admins and owners. On multi-tenant
   installations (`OPENLOG_SIGNUP_ENABLED=true`) the owners and admins of self-signup organizations are not server
   operators: there the buttons are shown only to superadmins (`OPENLOG_SUPERADMIN_EMAILS`, signed in with a verified
@@ -74,7 +76,9 @@ and stores the result in PostgreSQL. Every pod serves it in `GET /api/v1/version
   - **Update now** (shown when a newer release is known and an updater reports) asks the updater to install that
     release now — also in `notify` mode, since an admin confirmed it. The confirmation has a checkbox
     "Install now, also outside the maintenance window"; without it the request fails outside
-    `OPENLOG_UPDATER_MAINTENANCE_WINDOW`. The page shows the request state and the updater's steps (backup, pull,
+    `OPENLOG_UPDATER_MAINTENANCE_WINDOW`. The section shows the updater's maintenance window in UTC and in the browser's
+    time with its next opening ("any time" without one; on Kubernetes the CronJob schedule decides when the updater
+    runs); in `waiting_for_maintenance_window` the next opening is shown next to the state. The page shows the request state and the updater's steps (backup, pull,
     migrate, recreate, health, rolled back/succeeded), keeps its data while `openlog` is recreated
     ("The server is restarting… reconnecting") and offers a reload when the new version answers.
   - The Compose updater picks requests up within `OPENLOG_UPDATER_REQUEST_POLL` (10 s). The page says so when the
@@ -429,7 +433,7 @@ of the newer release run again on the next upgrade.
 |---|---|
 | `update_check: failed` | `GET /api/v1/version`; api leader logs `update check failed` (network to GitHub, mirror URL, "no trusted release keys" on self-built images → `OPENLOG_RELEASE_TRUSTED_KEYS_FILE`). |
 | Updater `state: error` | `error` field: current version not readable (`OPENLOG_UPDATER_HEALTH_URLS`), index/manifest signature, Docker socket not mounted. A failed run is retried after `min(OPENLOG_UPDATER_INTERVAL, 1m)`, so the error right after `docker compose up` (`lookup openlog … no such host`: the updater starts before `openlog`) clears within a minute. |
-| `waiting_for_maintenance_window` | `OPENLOG_UPDATER_MAINTENANCE_WINDOW` is UTC. |
+| `waiting_for_maintenance_window` | `OPENLOG_UPDATER_MAINTENANCE_WINDOW` is UTC; Settings → Version and updates (`updater.maintenance_window.next_open_at`) shows the next opening. To install earlier: **Update now** with "Install now, also outside the maintenance window". |
 | `up_to_date` but a newer release exists | `message` lists skipped releases: failed before (remove from `failed_versions` by deleting `/backups/updater-status.json` and `DELETE FROM system_state WHERE key='updater'`), `min_upgrade_from`, missing image. |
 | `rolled_back` | `steps[]` shows the failing step; `docker compose logs openlog-updater` includes the tail of the failed container's log. The previous version keeps running. |
 | `rollback_failed` | Manual action: `docker ps -a` — start `<name>-pre-update` after renaming it back, or restore from backup. |
