@@ -9,6 +9,8 @@ import type {
   AlertIncidentDetail,
   AlertIncidentEvent,
   AlertMute,
+  AlertRoutingRule,
+  AlertRoutingRuleInput,
   AlertRule,
   AlertRuleInput,
   AlertRulePreview,
@@ -41,10 +43,12 @@ interface MockState {
   channels: AlertChannel[];
   mutes: AlertMute[];
   calendars: AlertHolidayCalendar[];
+  routes: AlertRoutingRule[];
   seq: number;
 }
 
-const CH = { slack: "c0000000-0000-4000-8000-000000000001", email: "c0000000-0000-4000-8000-000000000002", webhook: "c0000000-0000-4000-8000-000000000003", teams: "c0000000-0000-4000-8000-000000000004" };
+const CH = { slack: "c0000000-0000-4000-8000-000000000001", email: "c0000000-0000-4000-8000-000000000002", webhook: "c0000000-0000-4000-8000-000000000003", teams: "c0000000-0000-4000-8000-000000000004", pagerduty: "c0000000-0000-4000-8000-000000000005" };
+const ROUTE = { critical: "e0000000-0000-4000-8000-000000000001", default: "e0000000-0000-4000-8000-000000000002" };
 const RULE = { cpu: "r0000000-0000-4000-8000-000000000001", disk: "r0000000-0000-4000-8000-000000000002", logs: "r0000000-0000-4000-8000-000000000003", nodata: "r0000000-0000-4000-8000-000000000004" };
 const INC = { cpu: "i0000000-0000-4000-8000-000000000001", disk: "i0000000-0000-4000-8000-000000000002", old: "i0000000-0000-4000-8000-000000000003" };
 
@@ -161,6 +165,18 @@ function seed(): MockState {
       last_delivery: { at: ago(14 * min), status: "delivered", error: "" } },
     { id: CH.teams, name: "Payments Teams", type: "teams", enabled: false, config: {}, secret_hints: { url: "https://prod-12.westeurope.logic.azure.com/…/•••aB9c" },
       created_by_email: "admin@openlog.local", created_at: ago(5 * 86_400_000), updated_at: ago(86_400_000), last_delivery: null },
+    { id: CH.pagerduty, name: "On-call (PagerDuty)", type: "pagerduty", enabled: true, config: { pagerduty: { region: "eu" } },
+      secret_hints: { routing_key: "•••••••• (set)" }, created_by_email: "admin@openlog.local", created_at: ago(4 * 86_400_000),
+      updated_at: ago(4 * 86_400_000), last_delivery: null },
+  ];
+  // Routing rules (alerting.md §5.6): the first match wins, the default route is evaluated last.
+  const routes: AlertRoutingRule[] = [
+    { id: ROUTE.critical, name: "Critical to on-call", position: 0, enabled: true, is_default: false,
+      match: { severities: ["critical"], services: [], rule_types: [], labels: [], time_window: null },
+      channel_ids: [CH.pagerduty], created_by_email: "admin@openlog.local", created_at: ago(4 * 86_400_000), updated_at: ago(4 * 86_400_000) },
+    { id: ROUTE.default, name: "Everything else", position: 1, enabled: true, is_default: true,
+      match: { severities: [], services: [], rule_types: [], labels: [], time_window: null },
+      channel_ids: [CH.slack], created_by_email: "admin@openlog.local", created_at: ago(4 * 86_400_000), updated_at: ago(4 * 86_400_000) },
   ];
   const mutes: AlertMute[] = [
     { id: "m0000000-0000-4000-8000-000000000001", name: "db-1 maintenance", comment: "PostgreSQL major upgrade", starts_at: ago(3 * 3_600_000),
@@ -174,7 +190,7 @@ function seed(): MockState {
     { id: "h0000000-0000-4000-8000-000000000001", name: "TR public holidays", description: "", dates: ["01-01", "04-23", "05-01", "05-19", "07-15", "08-30", "10-29"], mute_count: 0,
       created_by_email: "admin@openlog.local", created_at: formatTs(now - 86_400_000), updated_at: formatTs(now - 86_400_000) },
   ];
-  return { rules, incidents, events, deliveries, channels, mutes, calendars, seq: 100 };
+  return { rules, incidents, events, deliveries, channels, mutes, calendars, routes, seq: 100 };
 }
 
 let db = seed();
@@ -220,6 +236,9 @@ function validateRule(r: Partial<AlertRuleInput>): string | null {
   if (oql && (c.window_seconds ?? 0) < 60) return "condition.window_seconds: must be 60-21600";
   if (r.type === "metric_threshold" && !c.metric) return "condition.metric: required, at most 256 bytes";
   if (r.type === "apm" && !c.service_name) return "condition.service_name: required, at most 512 bytes";
+  // anomaly (alerting.md §2.12): no threshold of its own, but the watched signal must be complete.
+  if (r.type === "anomaly" && c.signal === "apm" && !c.service_name) return "condition.service_name: required, at most 512 bytes";
+  if (r.type === "anomaly" && c.signal !== "apm" && !c.metric) return "condition.metric: required, at most 256 bytes";
   return null;
 }
 
@@ -314,10 +333,11 @@ export function mockPreview(input: AlertRuleInput, hours: number, now = Date.now
     }
     return { key: `host.id=${h.id}`, labels: { "host.id": h.id, "host.name": h.name }, points, transitions, incidents };
   });
-  const hasOperator = input.type === "metric_threshold" || input.type === "log_match" || input.type === "apm" || (input.type as string) === "oql";
+  const hasOperator = input.type === "metric_threshold" || input.type === "log_match" || input.type === "apm" || input.type === "anomaly" || (input.type as string) === "oql";
   return {
     from: formatTs(from), to: formatTs(to), step_seconds: step / 1000, operator: hasOperator ? op : null, threshold, recovery_threshold: recovery,
-    unit: input.type === "metric_threshold" && (c.metric ?? "").endsWith("utilization") ? "1" : input.type === "apm" ? "ms" : "", series, truncated: false, approximate: false,
+    // anomaly values are dimensionless deviation ratios, like a metric utilization ratio they carry unit "1".
+    unit: input.type === "anomaly" || (input.type === "metric_threshold" && (c.metric ?? "").endsWith("utilization")) ? "1" : input.type === "apm" ? "ms" : "", series, truncated: false, approximate: false,
   };
 }
 
@@ -340,9 +360,28 @@ const RULE_TYPES: AlertRuleTypeInfo[] = [
   { type: "apm_error", available: true, reason: "" },
   // OQL rules (not in openapi.yaml's AlertRuleType enum yet)
   { type: "oql" as AlertRuleTypeInfo["type"], available: true, reason: "" },
+  { type: "anomaly", available: true, reason: "" },
 ];
 
 const canChange = (role: Role, createdBy: string | null) => RANK[role] >= RANK.admin || createdBy === MOCK_USER_ID;
+
+const sortedRoutes = () => [...db.routes].sort((a, b) => a.position - b.position);
+
+/** Normalizes a routing rule match to the shape the API returns (every list present). */
+function routeMatch(m: AlertRoutingRuleInput["match"]): AlertRoutingRule["match"] {
+  return { severities: m?.severities ?? [], services: m?.services ?? [], rule_types: m?.rule_types ?? [], labels: m?.labels ?? [], time_window: m?.time_window ?? null };
+}
+
+function validateRoute(b: Partial<AlertRoutingRuleInput>, exceptId = ""): Response | null {
+  if (!b.name?.trim()) return fail("invalid_argument", "name: must be 1-200 characters");
+  if (!b.channel_ids?.length) return fail("invalid_argument", "channel_ids: at least one channel");
+  if (b.channel_ids.some((id) => !db.channels.some((c) => c.id === id))) return fail("invalid_argument", "channel_ids: unknown channel");
+  if (b.is_default && !!b.match && Object.values(b.match).some((v) => (Array.isArray(v) ? v.length > 0 : !!v))) {
+    return fail("invalid_argument", "match: the default route matches every incident; leave its match empty");
+  }
+  if (b.is_default && db.routes.some((r) => r.is_default && r.id !== exceptId)) return fail("failed_precondition", "the organization already has a default route");
+  return null;
+}
 
 // ---- templates, holiday calendars, schedule previews ----
 
@@ -649,6 +688,46 @@ export const alertHandlers = [
     return HttpResponse.json(res);
   })),
 
+  // Routing rules (alerting.md §5.6); /reorder is registered before /:id so it is not taken as an id.
+  http.get(`${API}/routing-rules`, guarded("read", () => HttpResponse.json({ routing_rules: sortedRoutes() }))),
+  http.post(`${API}/routing-rules/reorder`, guarded("manage", async ({ request }) => {
+    const ids = (await json<{ ids: string[] }>(request)).ids ?? [];
+    if (ids.length !== db.routes.length || new Set(ids).size !== ids.length || ids.some((id) => !db.routes.some((r) => r.id === id))) {
+      return fail("invalid_argument", "ids: must list every routing rule of the organization exactly once");
+    }
+    ids.forEach((id, i) => {
+      const r = db.routes.find((x) => x.id === id);
+      if (r) r.position = i;
+    });
+    return HttpResponse.json({ routing_rules: sortedRoutes() });
+  })),
+  http.post(`${API}/routing-rules`, guarded("manage", async ({ request }) => {
+    const b = await json<AlertRoutingRuleInput>(request);
+    const err = validateRoute(b);
+    if (err) return err;
+    const now = formatTs(Date.now());
+    const r: AlertRoutingRule = { id: uuid(), name: b.name!.trim(), position: b.position ?? db.routes.length, enabled: b.enabled ?? true,
+      is_default: b.is_default ?? false, match: routeMatch(b.match), channel_ids: b.channel_ids ?? [], created_by_email: "admin@openlog.local",
+      created_at: now, updated_at: now };
+    db.routes.push(r);
+    return HttpResponse.json(r, { status: 201 });
+  })),
+  http.put(`${API}/routing-rules/:id`, guarded("manage", async (info) => {
+    const r = db.routes.find((x) => x.id === idOf(info));
+    if (!r) return fail("not_found", "not found");
+    const b = await json<AlertRoutingRuleInput>(info.request);
+    const err = validateRoute(b, r.id);
+    if (err) return err;
+    Object.assign(r, { name: b.name!.trim(), enabled: b.enabled ?? true, is_default: b.is_default ?? false, match: routeMatch(b.match),
+      channel_ids: b.channel_ids ?? r.channel_ids, position: b.position ?? r.position, updated_at: formatTs(Date.now()) });
+    return HttpResponse.json(r);
+  })),
+  http.delete(`${API}/routing-rules/:id`, guarded("manage", (info) => {
+    if (!db.routes.some((x) => x.id === idOf(info))) return fail("not_found", "not found");
+    db.routes = db.routes.filter((x) => x.id !== idOf(info));
+    return new HttpResponse(null, { status: 204 });
+  })),
+
   http.get(`${API}/mutes`, guarded("read", () => HttpResponse.json({ mutes: [...db.mutes].sort((a, b) => b.ends_at.localeCompare(a.ends_at)) }))),
   http.post(`${API}/mutes`, guarded("write", async ({ request }) => {
     const b = await json<AlertMute>(request);
@@ -687,4 +766,4 @@ export const alertHandlers = [
   })),
 ];
 
-export const MOCK_ALERT_IDS = { rules: RULE, incidents: INC, channels: CH };
+export const MOCK_ALERT_IDS = { rules: RULE, incidents: INC, channels: CH, routes: ROUTE };

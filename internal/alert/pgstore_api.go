@@ -535,7 +535,28 @@ func (s *PGStore) incidentRule(ctx context.Context, tx pgx.Tx, inc *Incident) (*
 	return r, nil
 }
 
-func (s *PGStore) AcknowledgeIncident(ctx context.Context, orgID, id string, actor Actor) (*Incident, error) {
+// channelTypes returns id → type for the channels of an organization among ids.
+func channelTypes(ctx context.Context, tx pgx.Tx, orgID string, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT id::text, type FROM alert_channels WHERE org_id = $1 AND id = ANY($2::uuid[])`, orgID, ids)
+	if err != nil {
+		return nil, mapPGErr(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, typ string
+		if err := rows.Scan(&id, &typ); err != nil {
+			return nil, err
+		}
+		out[id] = typ
+	}
+	return out, rows.Err()
+}
+
+func (s *PGStore) AcknowledgeIncident(ctx context.Context, orgID, id string, actor Actor, publicURL string) (*Incident, error) {
 	if !ValidUUID(id) {
 		return nil, ErrNotFound
 	}
@@ -552,12 +573,24 @@ func (s *PGStore) AcknowledgeIncident(ctx context.Context, orgID, id string, act
 	case IncidentResolved:
 		return nil, &PreconditionError{Msg: "the incident is already resolved"}
 	case IncidentOpen:
+		rule, err := s.incidentRule(ctx, tx, inc)
+		if err != nil {
+			return nil, err
+		}
+		types, err := channelTypes(ctx, tx, orgID, inc.ChannelIDs)
+		if err != nil {
+			return nil, err
+		}
 		b := &pgx.Batch{}
 		now := time.Now().UTC()
 		b.Queue(`UPDATE alert_incidents SET state = 'acknowledged', acknowledged_at = $2, acknowledged_by = $3, updated_at = now() WHERE id = $1`,
 			id, now, nullID(actor.UserID))
 		queueEvents(b, []IncidentEvent{{IncidentID: id, OrgID: orgID, At: now, Kind: EventAcknowledged, ActorUserID: actor.UserID, ActorEmail: actor.Email,
 			Message: "acknowledged by " + actor.Email}})
+		// On-call channels are told that someone took over (§5.1); the other channel types stay silent.
+		ack := *inc
+		ack.State, ack.AcknowledgedAt, ack.AcknowledgedByEmail = IncidentAcknowledged, &now, actor.Email
+		queueNotifications(b, ackNotifications(rule, &ack, types, publicURL, uuid.NewString))
 		audit(b, orgID, actor, "alert.incident.acknowledge", "alert_incident", id, map[string]any{"rule_name": inc.RuleName})
 		if err := sendBatch(ctx, tx, b); err != nil {
 			return nil, err

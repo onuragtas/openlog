@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -30,11 +31,12 @@ type fakeAlertStore struct {
 	incidents map[string]*alert.Incident
 	tests     int
 	calendars map[string]*alert.HolidayCalendar // alert_calendars_test.go
+	routes    map[string]*alert.RoutingRule     // alert_routes_test.go
 }
 
 func newFakeAlertStore() *fakeAlertStore {
 	return &fakeAlertStore{rules: map[string]*alert.RuleView{}, channels: map[string]*alert.Channel{}, mutes: map[string]*alert.Mute{},
-		incidents: map[string]*alert.Incident{}}
+		incidents: map[string]*alert.Incident{}, routes: map[string]*alert.RoutingRule{}}
 }
 
 func (f *fakeAlertStore) CountRules(context.Context, string) (int, error) { return len(f.rules), nil }
@@ -120,7 +122,7 @@ func (f *fakeAlertStore) GetIncident(_ context.Context, orgID, id string) (*aler
 	c := *i
 	return &c, nil, nil, nil
 }
-func (f *fakeAlertStore) AcknowledgeIncident(ctx context.Context, orgID, id string, _ alert.Actor) (*alert.Incident, error) {
+func (f *fakeAlertStore) AcknowledgeIncident(ctx context.Context, orgID, id string, _ alert.Actor, _ string) (*alert.Incident, error) {
 	i, _, _, err := f.GetIncident(ctx, orgID, id)
 	if err != nil {
 		return nil, err
@@ -245,6 +247,123 @@ func (f *fakeAlertStore) DeleteMute(ctx context.Context, orgID, id string, _ ale
 }
 func (f *fakeAlertStore) ListDeliveries(context.Context, string, alert.DeliveryFilter) ([]alert.DeliveryView, error) {
 	return []alert.DeliveryView{}, nil
+}
+
+// ---- routing rules (alert_routes_test.go) ----
+
+func (f *fakeAlertStore) ListRoutingRules(_ context.Context, orgID string) ([]alert.RoutingRule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []alert.RoutingRule{}
+	for _, r := range f.routes {
+		if r.OrgID == orgID {
+			out = append(out, *r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Position != out[j].Position {
+			return out[i].Position < out[j].Position
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func (f *fakeAlertStore) GetRoutingRule(_ context.Context, orgID, id string) (*alert.RoutingRule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.routes[id]
+	if !ok || r.OrgID != orgID {
+		return nil, alert.ErrNotFound
+	}
+	c := *r
+	return &c, nil
+}
+
+// checkRoutingWrite mirrors the store's checks: the channels exist in the organization and there is at most one
+// default route (exceptID is the rule being updated).
+func (f *fakeAlertStore) checkRoutingWrite(orgID, exceptID string, v *alert.ValidRoutingRule) error {
+	for _, id := range v.ChannelIDs {
+		if c, ok := f.channels[id]; !ok || c.OrgID != orgID {
+			return &alert.ValidationError{Field: "channel_ids", Msg: "unknown channel"}
+		}
+	}
+	if !v.IsDefault {
+		return nil
+	}
+	for _, r := range f.routes {
+		if r.OrgID == orgID && r.IsDefault && r.ID != exceptID {
+			return &alert.PreconditionError{Msg: "the organization already has a default route"}
+		}
+	}
+	return nil
+}
+
+func (f *fakeAlertStore) CreateRoutingRule(_ context.Context, orgID string, v *alert.ValidRoutingRule, actor alert.Actor) (*alert.RoutingRule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.checkRoutingWrite(orgID, "", v); err != nil {
+		return nil, err
+	}
+	r := &alert.RoutingRule{ID: uuid.NewString(), OrgID: orgID, Name: v.Name, Position: v.Position, Enabled: v.Enabled,
+		IsDefault: v.IsDefault, Match: v.Match, ChannelIDs: v.ChannelIDs, CreatedBy: actor.UserID, CreatedByEmail: actor.Email,
+		CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	f.routes[r.ID] = r
+	c := *r
+	return &c, nil
+}
+
+func (f *fakeAlertStore) UpdateRoutingRule(_ context.Context, orgID, id string, v *alert.ValidRoutingRule, _ alert.Actor) (*alert.RoutingRule, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.routes[id]
+	if !ok || r.OrgID != orgID {
+		return nil, alert.ErrNotFound
+	}
+	if err := f.checkRoutingWrite(orgID, id, v); err != nil {
+		return nil, err
+	}
+	r.Name, r.Position, r.Enabled, r.IsDefault, r.Match, r.ChannelIDs = v.Name, v.Position, v.Enabled, v.IsDefault, v.Match, v.ChannelIDs
+	r.UpdatedAt = time.Now()
+	c := *r
+	return &c, nil
+}
+
+func (f *fakeAlertStore) DeleteRoutingRule(_ context.Context, orgID, id string, _ alert.Actor) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r, ok := f.routes[id]; !ok || r.OrgID != orgID {
+		return alert.ErrNotFound
+	}
+	delete(f.routes, id)
+	return nil
+}
+
+func (f *fakeAlertStore) ReorderRoutingRules(ctx context.Context, orgID string, ids []string, _ alert.Actor) ([]alert.RoutingRule, error) {
+	f.mu.Lock()
+	stored := map[string]bool{}
+	for _, r := range f.routes {
+		if r.OrgID == orgID {
+			stored[r.ID] = true
+		}
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if !stored[id] || seen[id] {
+			f.mu.Unlock()
+			return nil, &alert.ValidationError{Field: "ids", Msg: "must list every routing rule of the organization exactly once"}
+		}
+		seen[id] = true
+	}
+	if len(seen) != len(stored) {
+		f.mu.Unlock()
+		return nil, &alert.ValidationError{Field: "ids", Msg: "must list every routing rule of the organization exactly once"}
+	}
+	for i, id := range ids {
+		f.routes[id].Position = i
+	}
+	f.mu.Unlock()
+	return f.ListRoutingRules(ctx, orgID)
 }
 
 type okSender struct{}

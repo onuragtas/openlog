@@ -130,6 +130,9 @@ var eventTypes = []*eventType{
 			s("span.id", "span_id"),
 			s("event.name", "event_name"),
 			s("scope.name", "scope_name"),
+			// Log pattern (D-128): the id as text (UInt64), "" for records stored before 0091_log_patterns.
+			s("pattern.id", "if(pattern_id = 0, '', toString(pattern_id))"),
+			s("pattern.template", "pattern_template", "pattern"),
 		},
 	},
 	{

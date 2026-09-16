@@ -26,7 +26,9 @@ import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeLabel } from "./badges";
 import { Field } from "./fields";
 
-const TYPES: AlertChannelType[] = ["slack", "email", "webhook", "teams"];
+const TYPES: AlertChannelType[] = ["slack", "email", "webhook", "teams", "pagerduty", "opsgenie"];
+const REGIONS = ["us", "eu"] as const;
+const PRIORITIES = ["P1", "P2", "P3", "P4", "P5"] as const;
 
 function ChannelForm({ channel, onDone, onGenerated }: { channel: AlertChannel | null; onDone: () => void; onGenerated: (secret: string) => void }) {
   const { t } = useTranslation();
@@ -42,6 +44,15 @@ function ChannelForm({ channel, onDone, onGenerated }: { channel: AlertChannel |
   const [override, setOverride] = useState(!!smtp0);
   const [smtp, setSmtp] = useState({ host: smtp0?.host ?? "", port: String(smtp0?.port ?? 587), username: smtp0?.username ?? "", from: smtp0?.from ?? "", tls: smtp0?.tls ?? "starttls" });
   const [password, setPassword] = useState("");
+  // On-call providers (alerting.md §5.3): the integration/API key is a secret, the rest is channel config.
+  const pd0 = channel?.config.pagerduty;
+  const og0 = channel?.config.opsgenie;
+  const [providerKey, setProviderKey] = useState("");
+  const [region, setRegion] = useState(pd0?.region ?? og0?.region ?? "us");
+  const [priority, setPriority] = useState(og0?.priority ?? "");
+  const [responder, setResponder] = useState(og0?.responders?.[0]?.name ?? "");
+  const [tags, setTags] = useState((og0?.tags ?? []).join(", "));
+  const onCall = type === "pagerduty" || type === "opsgenie";
   const id = (n: string) => `${uid}-${n}`;
 
   const save = useMutation({
@@ -51,6 +62,19 @@ function ChannelForm({ channel, onDone, onGenerated }: { channel: AlertChannel |
         input.config = { to: to.split(",").map((s) => s.trim()).filter(Boolean) };
         if (override) input.config.smtp = { host: smtp.host.trim(), port: Number(smtp.port) || 587, username: smtp.username.trim(), from: smtp.from.trim(), tls: smtp.tls as "starttls" | "tls" | "none" };
         if (password) input.secrets = { smtp_password: password };
+      } else if (type === "pagerduty") {
+        input.config = { pagerduty: { region } };
+        if (providerKey.trim()) input.secrets = { routing_key: providerKey.trim() };
+      } else if (type === "opsgenie") {
+        input.config = {
+          opsgenie: {
+            region,
+            priority,
+            responders: responder.trim() ? [{ type: "team", name: responder.trim() }] : [],
+            tags: tags.split(",").map((s) => s.trim()).filter(Boolean),
+          },
+        };
+        if (providerKey.trim()) input.secrets = { api_key: providerKey.trim() };
       } else {
         if (url.trim()) input.secrets = { url: url.trim() };
         if (type === "webhook" && hmac) input.secrets = { ...input.secrets, hmac_secret: hmac };
@@ -128,6 +152,49 @@ function ChannelForm({ channel, onDone, onGenerated }: { channel: AlertChannel |
             </div>
           )}
         </div>
+      ) : onCall ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field
+            id={id("key")}
+            label={t(type === "pagerduty" ? "alerts.channels.routingKey" : "alerts.channels.apiKey")}
+            hint={
+              channel?.secret_hints.routing_key || channel?.secret_hints.api_key
+                ? t("alerts.channels.urlKeep", { hint: channel.secret_hints.routing_key ?? channel.secret_hints.api_key ?? "" })
+                : t(type === "pagerduty" ? "alerts.channels.routingKeyHint" : "alerts.channels.apiKeyHint")
+            }
+          >
+            <Input id={id("key")} type="password" autoComplete="new-password" value={providerKey} onChange={(e) => setProviderKey(e.target.value)} />
+          </Field>
+          <Field id={id("region")} label={t("alerts.channels.region")}>
+            <NativeSelect id={id("region")} value={region} onChange={(e) => setRegion(e.target.value as (typeof REGIONS)[number])}>
+              {REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {t(`alerts.channels.regions.${r}`)}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          {type === "opsgenie" && (
+            <>
+              <Field id={id("priority")} label={t("alerts.channels.priority")}>
+                <NativeSelect id={id("priority")} value={priority} onChange={(e) => setPriority(e.target.value as (typeof PRIORITIES)[number] | "")}>
+                  <option value="">{t("alerts.channels.priorityAuto")}</option>
+                  {PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field id={id("responder")} label={t("alerts.channels.responderTeam")}>
+                <Input id={id("responder")} value={responder} placeholder="ops" onChange={(e) => setResponder(e.target.value)} />
+              </Field>
+              <Field id={id("tags")} label={t("alerts.channels.tags")} hint={t("alerts.channels.tagsHint")}>
+                <Input id={id("tags")} value={tags} placeholder="payments, tier-1" onChange={(e) => setTags(e.target.value)} />
+              </Field>
+            </>
+          )}
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id={id("url")} label={t("alerts.channels.url")} hint={channel?.secret_hints.url ? t("alerts.channels.urlKeep", { hint: channel.secret_hints.url }) : undefined}>
@@ -180,7 +247,15 @@ function ChannelRow({ channel, canManage, onEdit }: { channel: AlertChannel; can
     onError: (e) => setResult(e),
   });
   const remove = useMutation({ mutationFn: () => deleteAlertChannel(channel.id), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["alerts"] }) });
-  const destination = channel.type === "email" ? (channel.config.to ?? []).join(", ") : (channel.secret_hints.url ?? "");
+  const region = (channel.config.pagerduty?.region ?? channel.config.opsgenie?.region ?? "us").toUpperCase();
+  const destination =
+    channel.type === "email"
+      ? (channel.config.to ?? []).join(", ")
+      : channel.type === "pagerduty"
+        ? t("alerts.channels.onCallDestination", { region, detail: t(`alerts.channels.types.${channel.type}`) })
+        : channel.type === "opsgenie"
+          ? t("alerts.channels.onCallDestination", { region, detail: channel.config.opsgenie?.priority || t("alerts.channels.priorityAuto") })
+          : (channel.secret_hints.url ?? "");
   return (
     <TableRow data-testid="channel-row">
       <TableCell>

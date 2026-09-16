@@ -67,6 +67,9 @@ func (s *memEvalStore) LoadSeries(_ context.Context, id string) (map[string]Seri
 	return out, nil
 }
 
+// LoadRouting: this store has no routing rules, so incidents reach the channels of their rule (§5.6).
+func (s *memEvalStore) LoadRouting(context.Context, string) (*Routing, error) { return nil, nil }
+
 func (s *memEvalStore) Commit(_ context.Context, instance string, p *Plan) error {
 	s.leases.mu.Lock()
 	defer s.leases.mu.Unlock()

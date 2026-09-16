@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import {
@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import {
+  ANOMALY_SEASONS,
   canEditOwned,
   changeType,
   draftFromRule,
@@ -47,8 +48,10 @@ import { DurationField, Field, Section } from "./fields";
 // uPlot is loaded only when a preview is shown.
 const PreviewChart = lazy(() => import("./PreviewChart").then((m) => ({ default: m.PreviewChart })));
 
-const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "apm_error", "oql", "slo_burn"];
+const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "apm_error", "oql", "slo_burn", "anomaly"];
 const AGGREGATIONS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
+// A baseline reads the 1-minute rollup, which keeps no raw points for rate or percentiles (alerting.md §2.12).
+const ROLLUP_AGGREGATIONS = ["avg", "min", "max", "sum", "count", "last"] as const;
 const SERIES_AGGREGATIONS = ["avg", "sum", "min", "max"] as const;
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
 const SEVERITIES = ["critical", "warning", "info"] as const;
@@ -108,10 +111,12 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
   // Budgets are not needed to pick an SLO, so the list is fetched without them (slo.md §4).
   const slos = useQuery({ ...slosQuery(false), enabled: draft.type === "slo_burn" });
 
-  const update = (patch: Partial<RuleDraft>, field?: string) => {
+  const update = (patch: Partial<RuleDraft>, field?: string | string[]) => {
     setSaved(false);
     setDraft((d) => ({ ...d, ...patch }));
-    if (field) setDirty((s) => (s.has(field) ? s : new Set(s).add(field)));
+    // One control can govern several fields (a seasonality bounds both the window and the lookback).
+    const fields = field === undefined ? [] : Array.isArray(field) ? field : [field];
+    if (fields.length) setDirty((s) => (fields.every((f) => s.has(f)) ? s : new Set([...s, ...fields])));
   };
   const err = (field: string) => (submitted || dirty.has(field) ? issue(errors[field]) : undefined);
   const id = (name: string) => `${uid}-${name}`;
@@ -547,6 +552,132 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
       );
       break;
     }
+    case "anomaly": {
+      // A baseline has no threshold of its own (alerting.md §2.12): the sensitivity is the band and the rule
+      // fires when the deviation reaches it, so the editor asks for the signal and the shape of the history.
+      const apmSignal = draft.signal === "apm";
+      condition = (
+        <>
+          <p className="text-sm text-muted-foreground">{t("alerts.editor.anomalyHint")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id={id("signal")} label={t("alerts.editor.signal")}>
+              <NativeSelect
+                id={id("signal")}
+                value={apmSignal ? "apm" : "metric"}
+                onChange={(e) => {
+                  const signal = e.target.value as RuleDraft["signal"];
+                  update({ signal, metric: signal === "apm" ? "p95_ms" : "", group_by: signal === "apm" ? [] : ["host"], filters: [] });
+                }}
+              >
+                {(["metric", "apm"] as const).map((s) => (
+                  <option key={s} value={s}>
+                    {t(`alerts.editor.anomalySignals.${s}`)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            {apmSignal ? (
+              <Field id={id("apmmetric")} label={t("alerts.editor.apmMetric")}>
+                <NativeSelect id={id("apmmetric")} value={draft.metric} onChange={(e) => update({ metric: e.target.value })}>
+                  {APM_METRICS.map((m) => (
+                    <option key={m} value={m}>
+                      {t(`alerts.editor.apmMetrics.${m}`)}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            ) : (
+              metricPicker
+            )}
+          </div>
+          {apmSignal ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id={id("svc")} label={t("alerts.editor.serviceName")} error={err("service_name")}>
+                <Input id={id("svc")} value={draft.service_name} placeholder="checkout" onChange={(e) => update({ service_name: e.target.value }, "service_name")} {...describedBy(id("svc"), err("service_name"))} />
+              </Field>
+              <Field id={id("env")} label={t("alerts.editor.environment")} hint={t("alerts.editor.environmentHint")}>
+                <Input id={id("env")} value={draft.environment} onChange={(e) => update({ environment: e.target.value })} {...describedBy(id("env"), undefined, t("alerts.editor.environmentHint"))} />
+              </Field>
+              <Field id={id("tx")} label={t("alerts.editor.transactionName")} hint={t("alerts.editor.transactionHint")}>
+                <Input id={id("tx")} value={draft.transaction_name} onChange={(e) => update({ transaction_name: e.target.value })} {...describedBy(id("tx"), undefined, t("alerts.editor.transactionHint"))} />
+              </Field>
+              {numberField("min_requests", t("alerts.editor.minRequests"))}
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field id={id("agg")} label={t("alerts.editor.aggregation")}>
+                  <NativeSelect id={id("agg")} value={draft.aggregation} onChange={(e) => update({ aggregation: e.target.value as RuleDraft["aggregation"] })}>
+                    {ROLLUP_AGGREGATIONS.map((a) => (
+                      <option key={a} value={a}>
+                        {t(`alerts.editor.aggregations.${a}`)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field id={id("sagg")} label={t("alerts.editor.seriesAggregation")}>
+                  <NativeSelect id={id("sagg")} value={draft.series_aggregation} onChange={(e) => update({ series_aggregation: e.target.value as RuleDraft["series_aggregation"] })}>
+                    <option value="">{t("alerts.editor.auto")}</option>
+                    {SERIES_AGGREGATIONS.map((a) => (
+                      <option key={a} value={a}>
+                        {t(`alerts.editor.seriesAggregations.${a}`)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </div>
+              {filtersEditor}
+            </>
+          )}
+          {groupToggles(
+            apmSignal
+              ? [{ value: "environment", label: t("alerts.editor.groupEnvironment") }, { value: "transaction", label: t("alerts.editor.groupTransaction") }]
+              : [{ value: "host", label: t("alerts.editor.groupHost") }, { value: "service", label: t("alerts.editor.groupService") }],
+            !apmSignal,
+          )}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <DurationField id={id("window")} label={t("alerts.editor.window")} seconds={draft.window_seconds} onChange={(s) => update({ window_seconds: s }, "window_seconds")} error={err("window_seconds")} />
+            <Field id={id("season")} label={t("alerts.editor.seasonality")}>
+              <NativeSelect
+                id={id("season")}
+                value={draft.seasonality}
+                onChange={(e) => update({ seasonality: e.target.value as RuleDraft["seasonality"] }, ["window_seconds", "lookback_days"])}
+              >
+                {(Object.keys(ANOMALY_SEASONS) as (keyof typeof ANOMALY_SEASONS)[]).map((s) => (
+                  <option key={s} value={s}>
+                    {t(`alerts.editor.seasonalities.${s}`)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field id={id("lookback")} label={t("alerts.editor.lookbackDays")} error={err("lookback_days")}>
+              <Input
+                id={id("lookback")}
+                type="number"
+                min={1}
+                max={28}
+                value={draft.lookback_days}
+                onChange={(e) => update({ lookback_days: Number(e.target.value) }, "lookback_days")}
+                {...describedBy(id("lookback"), err("lookback_days"))}
+              />
+            </Field>
+            <Field id={id("direction")} label={t("alerts.editor.direction")}>
+              <NativeSelect id={id("direction")} value={draft.direction} onChange={(e) => update({ direction: e.target.value as RuleDraft["direction"] })}>
+                {(["upper", "lower", "both"] as const).map((dir) => (
+                  <option key={dir} value={dir}>
+                    {t(`alerts.editor.directions.${dir}`)}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+            {numberField("sensitivity", t("alerts.editor.sensitivity"), t("alerts.editor.sensitivityHint"))}
+            {numberField("min_samples", t("alerts.editor.minSamples"))}
+            {numberField("min_deviation", t("alerts.editor.minDeviation"), t("alerts.editor.minDeviationHint"))}
+          </div>
+        </>
+      );
+      break;
+    }
   }
 
   return (
@@ -622,7 +753,10 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
           </fieldset>
         </Section>
 
-        <Section title={t("alerts.editor.sections.condition")}>{condition}</Section>
+        {/* Keyed by type so the condition blocks of two types never reuse each other's inputs. */}
+        <Section title={t("alerts.editor.sections.condition")}>
+          <Fragment key={draft.type}>{condition}</Fragment>
+        </Section>
 
         <PreviewPanel draft={draft} errors={errors} />
 
@@ -767,6 +901,8 @@ function PreviewPanel({ draft, errors }: { draft: RuleDraft; errors: DraftErrors
         </NativeSelect>
         {query.isFetching && debounced && <span className="text-xs text-muted-foreground">{t("alerts.preview.loading")}</span>}
       </div>
+      {/* The preview chart carries one line per series; a baseline plots the deviation, so the band is the line at 1. */}
+      {draft.type === "anomaly" && <p className="text-sm text-muted-foreground">{t("alerts.editor.anomalyPreviewHint")}</p>}
       {!debounced ? (
         <EmptyState className="py-6">{t("alerts.preview.invalid")}</EmptyState>
       ) : query.isError ? (

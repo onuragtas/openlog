@@ -53,6 +53,9 @@ func TestExplorerEndpointsAreTenantScoped(t *testing.T) {
 			`"q":"timeout","columns":["attributes.http.route","resource.k8s.pod.name","body.user.id","timestamp"],"include_record":true,` +
 			`"order":"asc","cursor":"` + encodeLogCursorOrder(logPos{ts: 1, key: 2}, 1, true) + `"}`,
 		"/api/v1/logs/aggregate": `{"group_by":"resource.k8s.namespace.name","limit":5,"filters":[{"key":"host.id","op":"!=","value":"h1"}],"transaction":"GET /a","transaction_service":"api"}`,
+		// Log patterns (logspatterns.go, D-128): filtered, so the raw table is grouped.
+		"/api/v1/logs/patterns": `{"limit":10,"q":"timeout","filters":[{"key":"service.name","op":"=","value":"api"}],` +
+			`"groups":[[{"key":"severity_number","op":">=","value":17}]]}`,
 		"/api/v1/traces/query": `{"filters":[{"key":"service.name","op":"=","value":"api"},{"key":"duration_ms","op":">=","value":250}],` +
 			`"groups":[[{"key":"error","op":"=","value":true}],[{"key":"http.route","op":"contains","value":"/orders"}]],"root_only":true,` +
 			`"columns":["attributes.http.route","resource.k8s.pod.name","timestamp"],"include_record":true,"order":"asc","cursor":"` + encodeLogCursorOrder(logPos{ts: 1, key: 2}, 1, true) + `"}`,
@@ -131,6 +134,12 @@ func TestExplorerValidation(t *testing.T) {
 		{"/api/v1/logs/query", `{"from":true}`},
 		{"/api/v1/logs/query", `{"limit":-5}`},
 		{"/api/v1/logs/query", `{"q":"` + strings.Repeat("x", maxLogQueryBytes+1) + `"}`},
+		{"/api/v1/logs/patterns", `{"limit":501}`},
+		{"/api/v1/logs/patterns", `{"limit":-1}`},
+		{"/api/v1/logs/patterns", `{"unknown":1}`},
+		{"/api/v1/logs/patterns", `{"filters":[{"key":"service.name","op":"~","value":"x"}]}`},
+		{"/api/v1/logs/patterns", `{"transaction":"GET /a"}`},
+		{"/api/v1/logs/patterns", `{"from":"2026-09-15T12:00:00Z","to":"2026-09-15T11:00:00Z"}`},
 		{"/api/v1/logs/aggregate", `{"step":"1ms"}`},
 		{"/api/v1/logs/aggregate", `{"limit":51}`},
 		{"/api/v1/logs/aggregate", `{"group_by":"timestamp"}`},
@@ -168,6 +177,52 @@ func TestExplorerValidation(t *testing.T) {
 			// Invalid log requests must fail before any statement; metric validation reads metadata only after
 			// the request itself is valid.
 			t.Errorf("statement executed for an invalid request: %s", sql)
+		}
+	}
+}
+
+// Log patterns read the hourly rollup only when nothing but the time range restricts the records and the range is
+// long enough; everything else groups the raw logs table, so a filter never changes what the counts mean (D-128).
+func TestLogPatternsSourceTable(t *testing.T) {
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	dayAgo := strconv.FormatInt(now.Add(-24*time.Hour).UnixMilli(), 10)
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"unfiltered long range", `{"from":` + dayAgo + `}`, "log_patterns_1h"},
+		{"unfiltered short range", `{}`, "logs"},
+		{"empty groups do not count as a filter", `{"from":` + dayAgo + `,"groups":[[]]}`, "log_patterns_1h"},
+		{"filtered long range", `{"from":` + dayAgo + `,"filters":[{"key":"service.name","op":"=","value":"api"}]}`, "logs"},
+		{"body search long range", `{"from":` + dayAgo + `,"q":"timeout"}`, "logs"},
+		{"group condition long range", `{"from":` + dayAgo + `,"groups":[[{"key":"host.id","op":"exists"}]]}`, "logs"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, conn := newTestServer(t)
+			s.now = func() time.Time { return now }
+			if rec := postJSON(s.Handler(), "/api/v1/logs/patterns", tc.body, "key-a"); rec.Code != 200 {
+				t.Fatalf("status %d %s", rec.Code, rec.Body)
+			}
+			if len(conn.sql) != 1 {
+				t.Fatalf("%d statements, want 1: %v", len(conn.sql), conn.sql)
+			}
+			m := tableRef.FindStringSubmatch(conn.sql[0])
+			if m == nil || m[1] != tc.want {
+				t.Errorf("read %v, want %s: %s", m, tc.want, conn.sql[0])
+			}
+		})
+	}
+}
+
+func TestPatternLimit(t *testing.T) {
+	for _, tc := range []struct {
+		in      int
+		want    int
+		wantErr bool
+	}{{0, defaultPatternLimit, false}, {10, 10, false}, {maxPatternLimit, maxPatternLimit, false},
+		{maxPatternLimit + 1, 0, true}, {-1, 0, true}} {
+		got, err := patternLimit(tc.in)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("patternLimit(%d) = %d, %v", tc.in, got, err)
 		}
 	}
 }

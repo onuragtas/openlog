@@ -1,7 +1,8 @@
 # Contract: Alerting (M2, D-030)
 
 Rules evaluate telemetry of one organization, open **incidents** and deliver **notifications** to Slack, e-mail
-(SMTP), generic webhooks (HMAC-signed) and Microsoft Teams. Plan: [10-m2.md §1](../plan/10-m2.md), cluster rule:
+(SMTP), generic webhooks (HMAC-signed), Microsoft Teams, PagerDuty and Opsgenie; **routing rules** (§5.6) decide
+which channels an incident reaches. Plan: [10-m2.md §1](../plan/10-m2.md), cluster rule:
 [04-cluster.md](../plan/04-cluster.md) (Alert row). HTTP API: [api.md](api.md#alerting) /
 [openapi.yaml](openapi.yaml) (tag `alerts`). Tables: [postgres.md](postgres.md#alerting-0004_alerting).
 Configuration: [config.md](config.md#openlog-alert). Code: `internal/alert`, `cmd/openlog-alert`, `internal/api/alerts.go`.
@@ -27,7 +28,7 @@ a bound query parameter. The only ClickHouse write is the evaluation history (§
 |---|---|---|---|
 | `name` | string | required | 1–200 chars |
 | `description` | string | `""` | ≤ 2000 chars |
-| `type` | enum | required | `metric_threshold`, `log_match`, `no_data`, `discovery`, `apm` (§2.6), `apm_no_data` (§2.7), `apm_error` (§2.9), `oql` (§2.10), `slo_burn` (§2.11) |
+| `type` | enum | required | `metric_threshold`, `log_match`, `no_data`, `discovery`, `apm` (§2.6), `apm_no_data` (§2.7), `apm_error` (§2.9), `oql` (§2.10), `slo_burn` (§2.11), `anomaly` (§2.12) |
 | `severity` | enum | `warning` | `critical`, `warning`, `info` |
 | `enabled` | bool | `true` | |
 | `interval_seconds` | int | `60` | 10–3600, evaluation period |
@@ -248,6 +249,54 @@ Multi-window multi-burn-rate alerting on the error budget of one SLO ([slo.md](s
   the state is unchanged. Deleting an SLO does not delete its rules.
 - Summary: `error budget of Checkout availability burns 21.6× too fast over 1h and 5m (≥ 14.4×)`.
 
+### 2.12 `anomaly`
+
+A **baseline** condition (D-129, `0089_alert_anomaly`): the signal is compared with the distribution of its own
+recent history instead of with a fixed number — what a static threshold cannot do once hundreds of services each
+have their own normal level.
+
+```json
+{"signal": "metric", "metric": "system.cpu.utilization", "aggregation": "avg", "series_aggregation": "avg",
+ "filters": [], "group_by": ["host"], "window_seconds": 300, "seasonality": "daily", "lookback_days": 7,
+ "direction": "upper", "sensitivity": 3, "min_samples": 3, "min_deviation": 0}
+```
+
+| Field | Default | Notes |
+|---|---|---|
+| `signal` | `metric` | `metric` (the §2.2 selector) or `apm` (the §2.6 selector) |
+| `metric` | required | metric name (`signal=metric`) or an APM metric of §2.6 (`signal=apm`) |
+| `aggregation` | `avg` | `signal=metric`: `avg`, `min`, `max`, `sum`, `count`, `last` — `rate` and percentiles need raw points, which the rollup does not keep |
+| `series_aggregation` | `avg` (`sum` for `sum`/`count`) | across the time series of one group, as §2.2 |
+| `filters`, `group_by` | `[]` | `signal=metric`: `host.id`, `service.name`, `attr.<key>` (the rollup has no host name or resource attributes, so series carry `host.id` only); `signal=apm`: `group_by` `environment`/`transaction`, no filters |
+| `service_name`, `service_namespace`, `environment`, `transaction_type`, `transaction_name`, `min_requests` | | `signal=apm` only, as §2.6 |
+| `window_seconds` | `300` | 60–21600, rounded up to whole minutes; must divide the season so the baseline windows cover the same slot |
+| `seasonality` | `daily` | `none` (the preceding windows), `hourly`, `daily`, `weekly` |
+| `lookback_days` | `7` | 1–28; gives `lookback / season` baseline samples, at most 200 (the most recent ones) |
+| `direction` | `upper` | which side of the band alerts: `upper`, `lower`, `both` |
+| `sensitivity` | `3` | half the band width in standard deviations, 0.5–20 |
+| `min_samples` | `3` | 2–50; a series with fewer baseline samples has no value (missing data). `lookback_days` must give at least this many |
+| `min_deviation` | `0` | absolute deviation below which nothing alerts (noise floor for signals that idle near a constant) |
+
+- **Baseline.** The current window `[end − window, end)` is compared with the windows of the same seasonal slot,
+  `[end − m·season − window, end − m·season)` for `m = 1 … samples`. Centre and scale are the **median** and
+  `1.4826 × MAD` (median absolute deviation, scaled to estimate σ for normal data), not mean and standard
+  deviation: an alerting history contains the previous incidents, and one past spike would raise a mean and
+  inflate a standard deviation for the whole lookback, so the band would swallow the next real anomaly. The
+  scale is never below 1 % of the baseline level.
+- **Value.** `deviation ÷ (sensitivity × σ)`, so the comparison is fixed at `gte 1`: 0 = inside the band, 1 =
+  exactly at its edge, 2 = twice as far out; the deviation is 0 on the side the `direction` does not watch or
+  below `min_deviation`. A history without any variation reports a large finite ratio (every movement is an
+  anomaly) — use `min_deviation` to keep such a signal quiet. `for_seconds` applies; `interval_seconds`
+  default 60; missing-data behaviour is `keep`.
+- **Data.** Only the 1-minute rollups are read (`metrics_1m`, `apm_transactions_1m`, apm.md §8), and only the
+  minutes the seasonal slots need — a daily 7-day baseline reads 8 × window minutes per series, not 7 days.
+- Series keys and labels are those of the underlying selector plus `anomaly.baseline` (the median at that
+  evaluation) and `anomaly.direction` (`above`/`below`).
+- **Preview** (`Range`) simulates every step end the same way. A preview whose range and lookback together
+  would read more than 8000 minutes per series uses fewer (the most recent) baseline samples and is reported
+  as `approximate`.
+- Summary: `system.cpu.utilization avg over 5m is 6σ above the daily baseline 0.41 (≥ 3σ) (host.id=…)`.
+
 ### 2.8 Recommended templates
 
 A catalog of prebuilt rules (code: `internal/alert/templates.go`) for hosts (`host_cpu_high`, `host_memory_high`,
@@ -390,20 +439,22 @@ Rows in `alert_notifications` are inserted in the evaluation (or API) transactio
 | `kind` | When | Idempotency key |
 |---|---|---|
 | `opened` | series enters firing | `<incident_id>:opened:<channel_id>` |
+| `acknowledged` | a user acknowledges the incident; only for channels that track the lifecycle (`pagerduty`, `opsgenie`) | `<incident_id>:acknowledged:<channel_id>` |
 | `resolved` | incident resolved (any reason) | `<incident_id>:resolved:<channel_id>` |
 | `renotify` | open, unacknowledged incident after `renotify_interval_seconds` since the last notification | `<incident_id>:renotify:<n>:<channel_id>` |
 | `test` | `POST /alerts/channels/{id}/test` (sent synchronously by the API) | `test:<notification_id>` |
 
-The key is `UNIQUE` (`INSERT … ON CONFLICT DO NOTHING`) and sent to receivers (§5.3). Channels of `opened` = enabled
-rule channels when the incident opens (stored on the incident); `resolved`/`renotify` go to the same channels.
+The key is `UNIQUE` (`INSERT … ON CONFLICT DO NOTHING`) and sent to receivers (§5.3). Channels of `opened` = the
+channels of the routing rule that matches the incident, else the enabled rule channels when the incident opens
+(§5.6; stored on the incident); `acknowledged`/`resolved`/`renotify` go to the same channels.
 
 Dispatchers (every `openlog-alert` pod, `OPENLOG_ALERT_DISPATCH_WORKERS` workers) claim due rows
 (`status = pending AND next_attempt_at <= now()`, oldest first, `FOR UPDATE SKIP LOCKED`), set `status = sending`,
 `claimed_until = now() + delivery timeout + 30 s`, deliver, then in one transaction write the attempt to
 `alert_delivery_attempts`, the outcome to the row and an incident timeline event. Rules:
 - **Ordering:** a row is not claimed while an older row of the same incident and channel is `pending`/`sending`.
-  `resolved`/`renotify` are sent only if the `opened` row of that channel was `delivered`; otherwise they become
-  `suppressed` (a receiver never gets a resolve without the opening message).
+  `acknowledged`/`resolved`/`renotify` are sent only if the `opened` row of that channel was `delivered`; otherwise
+  they become `suppressed` (a receiver never gets a resolve without the opening message).
 - **Retries:** network errors, timeouts, `408`, `429` (honouring `Retry-After`, ≤ 1 h), `5xx` and SMTP `4xx` are retried
   with exponential backoff and ±20 % jitter: 10 s, 30 s, 1 m, 2 m, 5 m, 10 m, 20 m, 30 m, then every 30 m. Other `4xx`
   and SMTP `5xx` fail at once. After `OPENLOG_ALERT_DELIVERY_MAX_ATTEMPTS` (10) attempts or 24 h the row is `failed`
@@ -421,7 +472,8 @@ Dispatchers (every `openlog-alert` pod, `OPENLOG_ALERT_DISPATCH_WORKERS` workers
 (`{"label", "op": "eq|neq|contains", "value"}` on incident labels; AND-ed). Checked by the dispatcher at delivery time:
 - a matching `opened` row is postponed to the mute's end (timeline `notification_muted`); when it comes due and the
   incident is already resolved it is `suppressed` (and so is its `resolved` row);
-- `resolved` rows are postponed like `opened` rows; `renotify` rows during a mute are `suppressed`.
+- `resolved` rows are postponed like `opened` rows; `renotify` and `acknowledged` rows during a mute are `suppressed`
+  (they are state updates, so postponing them is pointless).
 Evaluation, incidents and the timeline are not affected by mutes. Incidents show `muted: true` while a mute matches.
 
 **Recurring mutes.** A mute with `schedule` repeats; `starts_at`/`ends_at` of the input are then ignored:
@@ -484,8 +536,8 @@ Common event fields (webhook body; the other formats render the same data):
               "threshold": 0.9, "labels": {"host.id": "…", "host.name": "web-1"},
               "opened_at": "…", "acknowledged_at": null, "resolved_at": null, "resolve_reason": null}}
 ```
-`event` ∈ `incident.opened`, `incident.resolved`, `incident.renotify`, `test`. Links use `OPENLOG_PUBLIC_URL`
-(omitted when unset). Values in summaries are rounded to 4 significant digits.
+`event` ∈ `incident.opened`, `incident.acknowledged`, `incident.resolved`, `incident.renotify`, `test`. Links use
+`OPENLOG_PUBLIC_URL` (omitted when unset). Values in summaries are rounded to 4 significant digits.
 
 **Generic webhook** — `POST` to the channel URL, `Content-Type: application/json`, `User-Agent: openlog-alert/<version>`,
 `X-Openlog-Event`, `X-Openlog-Delivery: <notification_id>`, `X-Openlog-Idempotency-Key`,
@@ -504,6 +556,47 @@ actions button "Open incident" (when a public URL is set)]}`. Success = HTTP 200
 FactSet (Severity, Rule, State, Value, Threshold, labels…)], "actions": [Action.OpenUrl "Open incident"]}}]}`.
 Success = HTTP 200/202.
 
+**PagerDuty** (Events API v2) — `POST` to `https://events.pagerduty.com/v2/enqueue` (`region: eu` →
+`https://events.eu.pagerduty.com/v2/enqueue`), the integration key as `routing_key`:
+```json
+{"routing_key": "…", "event_action": "trigger", "dedup_key": "openlog-<incident id>",
+ "client": "openlog", "client_url": "https://openlog.example.com/alerts/incidents/…",
+ "payload": {"summary": "FIRING: High CPU — system.cpu.utilization avg over 1m is 0.93 (> 0.9) on web-1",
+             "severity": "critical", "source": "web-1", "component": "checkout", "group": "Default",
+             "class": "metric_threshold", "timestamp": "2026-09-13T10:00:00.000000000Z",
+             "custom_details": {"rule": "High CPU", "rule_type": "metric_threshold", "severity": "critical",
+                                "state": "open", "value": "0.93", "threshold": "0.9", "organization": "Default",
+                                "host.name": "web-1", "incident_id": "…", "incident_url": "…", "runbook_url": "…"}},
+ "links": [{"href": "…", "text": "Open incident"}, {"href": "…", "text": "Alert rule"}]}
+```
+- **Lifecycle:** `incident.opened` and `incident.renotify` → `trigger`, `incident.acknowledged` → `acknowledge`,
+  `incident.resolved` → `resolve`. The `dedup_key` is `openlog-<incident id>` for every notification of one incident,
+  so updates land on the PagerDuty alert the trigger opened (a re-notification updates it instead of opening a second
+  one). `acknowledge` and `resolve` carry only `routing_key`, `event_action` and `dedup_key`.
+- **Severity:** `critical` → `critical`, `warning` → `warning`, `info` → `info` (anything else `warning`).
+- `source` is the incident's `host.name`, else `service.name`, else `host.id`, else the organization; `component` is
+  `service.name` when the incident has one; internal `alert.*` labels are not sent as details.
+- A **test** notification triggers and resolves at once (`dedup_key` `openlog-test-<notification id>`), so testing a
+  channel leaves no open PagerDuty incident. Success = 2xx (`202 Accepted`).
+
+**Opsgenie** (Alerts API) — `POST` to `https://api.opsgenie.com/v2/alerts` (`region: eu` →
+`https://api.eu.opsgenie.com/v2/alerts`), header `Authorization: GenieKey <api key>`:
+```json
+{"message": "FIRING: High CPU", "alias": "openlog-<incident id>", "description": "<summary + details>",
+ "priority": "P1", "source": "openlog", "entity": "web-1", "tags": ["openlog", "severity:critical", "payments"],
+ "responders": [{"type": "team", "name": "ops"}],
+ "details": {"rule": "High CPU", "value": "0.93", "threshold": "0.9", "host.name": "web-1", "incident_url": "…"}}
+```
+- **Lifecycle:** create on `incident.opened`/`incident.renotify`, then
+  `POST /v2/alerts/<alias>/acknowledge?identifierType=alias` and `POST /v2/alerts/<alias>/close?identifierType=alias`
+  with a `{"user", "source", "note"}` body. The `alias` is `openlog-<incident id>`, so Opsgenie deduplicates
+  re-notifications into the alert the create opened.
+- **Priority:** `critical` → `P1`, `warning` → `P3`, `info` → `P5`, overridden by `config.opsgenie.priority`
+  (`P1` … `P5`). `message` is truncated to 130 characters, `description` to 15 000.
+- `tags` are `openlog`, `severity:<severity>` and the configured tags (≤ 18, Opsgenie allows 20 in total);
+  `responders` are the configured teams, users, escalations or schedules (`type` + `name` or `id`).
+- A **test** notification creates and closes the alert at once. Success = 2xx (`202 Accepted`).
+
 **E-mail** — `multipart/alternative` (plain text + HTML), `Subject: [openlog] FIRING critical: High CPU (web-1)` /
 `RESOLVED …`, `Message-ID: <sha256(idempotency_key)[:32]@openlog>`, resolve and renotify mails carry `In-Reply-To` and
 `References` of the opening mail (threading). Channel config: `to` (1–50 addresses) and optional SMTP override
@@ -512,7 +605,8 @@ Success = HTTP 200/202.
 (plaintext, authentication refused). Only `PLAIN` auth over TLS.
 
 ### 5.4 Channel secrets
-Secret fields: `url` (slack, teams, webhook), `hmac_secret` (webhook), `smtp_password` (email). They are encrypted with
+Secret fields: `url` (slack, teams, webhook), `hmac_secret` (webhook), `smtp_password` (email),
+`routing_key` (pagerduty, the Events API v2 integration key), `api_key` (opsgenie). They are encrypted with
 AES-256-GCM before they reach PostgreSQL:
 - key: `OPENLOG_SECRETS_KEY` = base64 of 32 random bytes (`openssl rand -base64 32`); previous keys for reading in
   `OPENLOG_SECRETS_KEY_PREVIOUS` (comma-separated).
@@ -531,9 +625,51 @@ idempotent, prints counts); (3) remove the old key. `openlog-alert rotate-secret
 keys.
 
 ### 5.5 Egress
-Webhook, Slack and Teams URLs must be `https://` (webhooks may use `http://`). With
+Webhook, Slack and Teams URLs must be `https://` (webhooks may use `http://`). PagerDuty and Opsgenie channels have
+no URL: they always reach the provider's public `https://` endpoint of their `region` (`us`/`eu`). With
 `OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS=true` (recommended for SaaS) connections to loopback, private, link-local and
 unspecified addresses are refused at dial time (DNS rebinding safe), also for SMTP overrides.
+
+### 5.6 Routing rules
+
+`alert_routing_rules` (`0088_alert_routing`, D-127) is an **ordered list per organization** that decides which
+channels an incident reaches when it opens. Without routing rules nothing changes: the incident is delivered to the
+enabled channels of its rule (`channel_ids`, §2.1).
+
+```json
+{"name": "critical payments to on-call", "position": 0, "enabled": true, "is_default": false,
+ "channel_ids": ["…pagerduty…"],
+ "match": {"severities": ["critical"], "services": ["checkout"], "rule_types": ["apm", "metric_threshold"],
+           "labels": [{"label": "env", "op": "eq", "value": "prod"}],
+           "time_window": {"timezone": "Europe/Istanbul", "days": ["mon", "tue", "wed", "thu", "fri"],
+                           "start_time": "09:00", "end_time": "18:00"}}}
+```
+
+| Field | Notes |
+|---|---|
+| `name` | 1–200 characters |
+| `position` | evaluation order, 0 first (0–100); ties keep the stored order. `POST /alerts/routing-rules/reorder` sets the whole order at once |
+| `enabled` | default `true`; a disabled route is skipped |
+| `is_default` | the **default route**: it matches every incident and is evaluated after all other routes. At most one per organization (`409 failed_precondition`), and its `match` must be empty |
+| `channel_ids` | 1–20 channels of the organization (unknown id → `400`); disabled channels of a matching route are dropped |
+| `match.severities` | `critical`, `warning`, `info`; empty = any |
+| `match.services` | exact `service.name` of the incident labels; empty = any |
+| `match.rule_types` | rule types of §2.1; empty = any |
+| `match.labels` | ≤ 20 matchers `{"label", "op": "eq\|neq\|contains", "value"}` on incident labels (the operators of §5.2), AND-ed |
+| `match.time_window` | local window: IANA `timezone` (default `UTC`), `days` (empty = every day), `start_time`/`end_time` `HH:MM`; `end_time` ≤ `start_time` means the next day |
+
+**Matching** happens once, when the incident opens (at its window end, §3.1), with the incident's severity, rule
+type, `service.name` label and all its labels (rule labels included, §6). The parts of a `match` are AND-ed; an
+empty part matches everything.
+
+**Order:** the first **enabled** route whose match applies wins — not the most specific one — then the default
+route. Without a match and without a default route the incident goes to the channels of its rule, so a routing
+mistake never silently drops an alert. The chosen channels are stored on the incident (`channel_ids`), so
+`acknowledged`, `resolved` and `renotify` follow the incident, not the routing rules (editing a route does not move
+open incidents).
+
+At most `100` routing rules per organization (`409 failed_precondition`). Evaluators cache an organization's
+routing rules for 5 seconds; a failed load is logged and the rule's own channels are used for that evaluation.
 
 ## 6. Incidents
 
@@ -549,16 +685,17 @@ Incident labels = series labels + rule `labels` + `alert.severity`, `alert.rule_
 
 | Operation | viewer / API key | member | admin, owner |
 |---|:-:|:-:|:-:|
-| Read rules, rule types, incidents, channels (masked), mutes, delivery log; rule preview | ✓ | ✓ | ✓ |
+| Read rules, rule types, incidents, channels (masked), mutes, routing rules, delivery log; rule preview | ✓ | ✓ | ✓ |
 | Create rules; update, enable/disable, delete **own** rules | | ✓ | ✓ |
 | Acknowledge, resolve, add notes to incidents | | ✓ | ✓ |
 | Create mutes; update/delete **own** mutes | | ✓ | ✓ |
 | Render templates (`/alerts/templates/{id}/render`), mute schedule preview | ✓ | ✓ | ✓ |
-| Update/delete any rule or mute; channels create/update/delete/test; holiday calendars create/update/delete | | | ✓ |
+| Update/delete any rule or mute; channels create/update/delete/test; routing rules create/update/delete/reorder; holiday calendars create/update/delete | | | ✓ |
 
 Writes need a signed-in user (API keys are read-only) and CSRF as usual. Every write is in the audit log
 (`alert.rule.{create,update,delete,enable,disable}`, `alert.channel.{create,update,delete,test}`,
-`alert.mute.{create,update,delete}`, `alert.holiday_calendar.{create,update,delete}`, `alert.incident.{acknowledge,resolve}`). Not available with
+`alert.mute.{create,update,delete}`, `alert.routing_rule.{create,update,delete,reorder}`,
+`alert.holiday_calendar.{create,update,delete}`, `alert.incident.{acknowledge,resolve}`). Not available with
 `OPENLOG_AUTH_MODE=static`.
 
 ## 8. Metrics (`openlog-alert` admin `/metrics`)
@@ -579,5 +716,5 @@ Writes need a signed-in user (API keys are read-only) and CSRF as usual. Every w
 | `openlog_alert_evaluation_write_errors_total` | — (failed inserts, retried) |
 
 ## 9. Not in M2
-PagerDuty/Opsgenie (M3); mute schedules beyond the §5.2 subset (yearly rules, `INTERVAL` > 1, RRULE `COUNT`/`UNTIL`, `RDATE`);
-evaluation history for previews.
+Mute schedules beyond the §5.2 subset (yearly rules, `INTERVAL` > 1, RRULE `COUNT`/`UNTIL`, `RDATE`); evaluation
+history for previews. PagerDuty and Opsgenie channels and routing rules arrived in M3 (§5.3, §5.6, D-127).

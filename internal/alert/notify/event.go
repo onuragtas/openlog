@@ -1,13 +1,15 @@
-// Package notify renders and delivers alert notifications: Slack, Microsoft Teams, generic webhooks (HMAC-signed)
-// and e-mail (SMTP). See docs/contracts/alerting.md §5.3.
+// Package notify renders and delivers alert notifications: Slack, Microsoft Teams, generic webhooks (HMAC-signed),
+// e-mail (SMTP), PagerDuty (Events API v2) and Opsgenie (Alerts API). See docs/contracts/alerting.md §5.3.
 package notify
 
 // Event names.
 const (
-	EventOpened   = "incident.opened"
-	EventResolved = "incident.resolved"
-	EventRenotify = "incident.renotify"
-	EventTest     = "test"
+	EventOpened = "incident.opened"
+	// EventAcknowledged is only delivered to channels that track the incident lifecycle (PagerDuty, Opsgenie).
+	EventAcknowledged = "incident.acknowledged"
+	EventResolved     = "incident.resolved"
+	EventRenotify     = "incident.renotify"
+	EventTest         = "test"
 )
 
 // Event is the notification payload (the generic webhook body; other formats render the same data). It is built

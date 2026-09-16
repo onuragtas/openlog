@@ -4,7 +4,7 @@
 // by the caller: it maps its own search parameters to LogsExplorerParams.
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlignJustify, ArrowDownWideNarrow, ArrowUpNarrowWide, BarChart3, Columns3, ExternalLink, RotateCcw, WrapText, X } from "lucide-react";
+import { AlignJustify, ArrowDownWideNarrow, ArrowUpNarrowWide, BarChart3, Columns3, ExternalLink, Layers, RotateCcw, WrapText, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { fieldKeysQuery, logsExplorerQuery, type ExplorerContext, type FilterState, type QueryFilter, type SavedView } from "@/api/explorer";
@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/AppShell";
 import { TopValuesPanel } from "@/components/explorer/TopValuesPanel";
 import { ExplorerTable } from "@/components/logs-explorer/ExplorerTable";
 import { LogDetailPanel } from "@/components/logs-explorer/LogDetailPanel";
+import { LogPatternsPanel } from "@/components/logs-explorer/LogPatternsPanel";
 import { LogVolumeChart } from "@/components/logs-explorer/LogVolumeChart";
 import { CopyLinkButton } from "@/components/querybuilder/CopyLinkButton";
 import { KeyPicker } from "@/components/querybuilder/KeyPicker";
@@ -48,6 +49,8 @@ export interface LogsExplorerParams {
   gb?: string;
   /** top values key ("" or absent: panel closed unless opened in this session) */
   tv?: string;
+  /** patterns instead of the record list (D-128) */
+  pv?: boolean;
 }
 
 export interface LogsExplorerViewProps {
@@ -86,6 +89,8 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
   const [prefs, setPrefs] = useState(() => storedPrefs());
   const [selected, setSelected] = useState<number | null>(null);
   const [topOpen, setTopOpen] = useState(!!params.tv);
+  // Kept locally as well as in the URL: the embedded explorers map their own parameters and may not carry `pv`.
+  const [patternsView, setPatternsView] = useState(!!params.pv);
 
   const setFilter = (v: FilterState) => {
     setSelected(null);
@@ -101,8 +106,20 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
   };
   const canFilter = conditionCount(requestFilter) < QB_LIMITS.conditions;
   const addFilter = (c: QueryFilter) => canFilter && setFilter({ ...filter, filters: [...filter.filters, c] });
+  const showPatterns = (on: boolean) => {
+    setPatternsView(on);
+    onParams({ pv: on || undefined }, { replace: true });
+  };
+  // Picking a pattern filters the records by it and goes back to the list, which then shows only that message.
+  const selectPattern = (patternId: string) => {
+    if (!canFilter) return;
+    setPatternsView(false);
+    setSelected(null);
+    const next = { ...filter, filters: [...filter.filters, { key: "pattern_id", op: "=" as const, value: patternId }] };
+    onParams({ f: encodeFilterState({ ...next, q: "" }), q: filter.q.trim() || undefined, pv: undefined }, { clearLegacy: true });
+  };
 
-  const query = useInfiniteQuery(logsExplorerQuery({ range, filter: requestFilter, order, columns: requestColumns(columns), context }));
+  const query = useInfiniteQuery(logsExplorerQuery({ range, filter: requestFilter, order, columns: requestColumns(columns), context, enabled: !patternsView }));
   const rows = useMemo(() => query.data?.pages.flatMap((p) => p.rows), [query.data]);
   const keys = useQuery(fieldKeysQuery({ signal: "logs", range, limit: 200 }));
   const keyTypes = useMemo(() => new Map((keys.data?.keys ?? []).map((k) => [k.key, k.type])), [keys.data]);
@@ -182,6 +199,10 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
           <BarChart3 aria-hidden="true" />
           {t("explorer.topValues.button")}
         </Button>
+        <Button type="button" variant="outline" size="sm" aria-pressed={patternsView} onClick={() => showPatterns(!patternsView)}>
+          <Layers aria-hidden="true" />
+          {t("logsExplorer.patterns.button")}
+        </Button>
         {!isDefaultColumns(columns) && (
           <Button type="button" variant="ghost" size="sm" onClick={() => setColumns([...DEFAULT_COLUMNS])}>
             <RotateCcw aria-hidden="true" />
@@ -192,7 +213,9 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
       </div>
       <div className={cn("grid min-w-0 gap-3", topOpen && "lg:grid-cols-[minmax(0,1fr)_19rem]")}>
         <div className="min-w-0 overflow-hidden rounded-xl border bg-card">
-          {query.isPending ? (
+          {patternsView ? (
+            <LogPatternsPanel range={range} filter={requestFilter} context={context} canFilter={canFilter} onSelect={selectPattern} />
+          ) : query.isPending ? (
             <LoadingState />
           ) : query.isError && !rows ? (
             <ErrorState error={query.error} onRetry={() => void query.refetch()} />

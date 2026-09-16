@@ -29,6 +29,7 @@ var Columns = map[string][]string{
 		"quantiles", "quantile_values"}, // 0081_metrics_summary_quantiles
 	TableLogs: {"tenant_id", "timestamp", "observed_timestamp", "service_name", "host_id", "host_name",
 		"severity_text", "severity_number", "trace_id", "span_id", "trace_flags", "event_name", "body",
+		"pattern_id", "pattern_template", // 0091_log_patterns (D-128)
 		"resource_attributes", "scope_name", "attributes"},
 	TableSpans: {"tenant_id", "timestamp", "duration_ns", "trace_id", "span_id", "parent_span_id", "trace_state",
 		"name", "kind", "status_code", "status_message", "service_name", "host_id", "resource_attributes",
@@ -85,19 +86,23 @@ func (r *MetricRow) Values() []any {
 
 // LogRow is one log record.
 type LogRow struct {
-	TenantID           string
-	Timestamp          time.Time
-	ObservedTimestamp  time.Time
-	ServiceName        string
-	HostID             string
-	HostName           string
-	SeverityText       string
-	SeverityNumber     uint8
-	TraceID            string
-	SpanID             string
-	TraceFlags         uint8
-	EventName          string
-	Body               string
+	TenantID          string
+	Timestamp         time.Time
+	ObservedTimestamp time.Time
+	ServiceName       string
+	HostID            string
+	HostName          string
+	SeverityText      string
+	SeverityNumber    uint8
+	TraceID           string
+	SpanID            string
+	TraceFlags        uint8
+	EventName         string
+	Body              string
+	// PatternID and PatternTemplate are the Drain-style pattern of Body (internal/logpattern, D-128):
+	// the hash of the template and the template itself. 0 and "" for records without a body.
+	PatternID          uint64
+	PatternTemplate    string
 	ResourceAttributes map[string]string
 	ScopeName          string
 	Attributes         map[string]string
@@ -107,6 +112,7 @@ type LogRow struct {
 func (r *LogRow) Values() []any {
 	return []any{r.TenantID, r.Timestamp, r.ObservedTimestamp, r.ServiceName, r.HostID, r.HostName,
 		r.SeverityText, r.SeverityNumber, r.TraceID, r.SpanID, r.TraceFlags, r.EventName, r.Body,
+		r.PatternID, r.PatternTemplate,
 		r.ResourceAttributes, r.ScopeName, r.Attributes}
 }
 

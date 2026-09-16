@@ -473,16 +473,16 @@ updated at most once a minute per link. Creating a share link or report locks th
 the per-dashboard limits. The report job claims `(report_id, period)` with `INSERT … ON CONFLICT DO NOTHING` before
 sending. Audit: `dashboard.{restore,settings.update,share.create,share.revoke,share.access,report.create,report.update,report.delete}`.
 
-## Alerting (`0004_alerting`)
+## Alerting (`0004_alerting`, `0088_alert_routing`)
 
-Rules, evaluation state, incidents, channels, mutes and the notification outbox ([alerting.md](alerting.md), API:
+Rules, evaluation state, incidents, channels, routing rules, mutes and the notification outbox ([alerting.md](alerting.md), API:
 [api.md](api.md#alerting), code: `internal/alert/pgstore_*.go`).
 
 | Table | Key | Content |
 |---|---|---|
 | `alert_rules` | `id` | `org_id`, `name`, `description`, `type` (`apm_no_data` allowed since `0006_alerting_m2`), `severity`, `enabled`, `interval_seconds`, `for_seconds`, `recovery_for_seconds`, `condition` (jsonb, validated canonical form), `renotify_interval_seconds`, `flapping` (jsonb), `runbook_url`, `labels` (jsonb), `version` (+1 on every change), `created_by`, `updated_by`, timestamps |
 | `alert_rule_channels` | (`rule_id`, `channel_id`) | rule → channel (both cascade) |
-| `alert_channels` | `id` | `org_id`, `name`, `type` (`slack`·`email`·`webhook`·`teams`), `enabled`, `config` (jsonb, non-secret), `secrets` (`ol1:<key id>:<AES-256-GCM>` of the secret JSON, AAD `org_id/channel_id`), `secrets_key_id`, `secret_hints` (masked), `created_by`, timestamps |
+| `alert_channels` | `id` | `org_id`, `name`, `type` (`slack`·`email`·`webhook`·`teams`, plus `pagerduty`·`opsgenie` since `0088_alert_routing`), `enabled`, `config` (jsonb, non-secret: e-mail recipients/SMTP override, `pagerduty` and `opsgenie` sections), `secrets` (`ol1:<key id>:<AES-256-GCM>` of the secret JSON — `url`, `hmac_secret`, `smtp_password`, `routing_key`, `api_key` —, AAD `org_id/channel_id`), `secrets_key_id`, `secret_hints` (masked), `created_by`, timestamps |
 | `alert_evaluators` | `instance_id` | evaluator heartbeats (`last_seen`, database clock); rows older than 1 h are pruned |
 | `alert_rule_leases` | `rule_id` | `org_id`, `owner` (`''` = free), `lease_until` (`-infinity` = released), `claimed_at`, `next_eval_at`, `last_eval_end`, `last_evaluated_at`, `last_result`, `last_error`, `last_duration_ms`. One row per rule (created with it; missing rows are added by evaluators) |
 | `alert_series_state` | (`rule_id`, `series_key`) | non-ok series (and ok series with flapping history): `labels`, `state`, `pending_since`, `firing_since`, `recovering_since`, `last_value`, `last_seen_at`, `incident_id`, `transitions` (timestamptz[] ≤ 10), `last_notified_at`, `renotify_count` |
@@ -490,7 +490,9 @@ Rules, evaluation state, incidents, channels, mutes and the notification outbox 
 | `alert_incident_events` | `id` (identity) | timeline: `incident_id`, `at`, `kind`, `actor_user_id`, `actor_email`, `message` (≤ 4000), `details` |
 | `alert_mutes` | `id` | `org_id`, `name`, `comment`, `starts_at`, `ends_at`, `rule_ids` (uuid[], empty = all), `matchers` (jsonb), `schedule` (jsonb, `0006_alerting_m2`; NULL = one-off; recurring mutes keep the current or next occurrence in `starts_at`/`ends_at`, rolled forward by dispatchers), `created_by`, timestamps |
 | `alert_holiday_calendars` | `id` | `0015_alert_holiday_calendars`: `org_id`, `name` (unique per org), `description`, `dates` (text[], `YYYY-MM-DD` or `MM-DD`), `created_by`, timestamps; referenced by id from `alert_mutes.schedule->holiday_calendar_ids` (no FK: delete is refused while referenced) |
-| `alert_notifications` | `id` (+ `seq` identity for ordering) | outbox: `org_id`, `incident_id`, `rule_id`, `channel_id` (SET NULL), `channel_type`, `kind`, `idempotency_key` (UNIQUE), `payload` (jsonb event), `status` (`pending`·`sending`·`delivered`·`failed`·`suppressed`), `attempts`, `next_attempt_at`, `claimed_by`, `claimed_until`, `muted_logged`, `last_error`, `created_at`, `finished_at`. Finished rows older than 30 days are pruned |
+| `alert_routing_rules` | `id` | `0088_alert_routing`: ordered routing rules (alerting.md §5.6): `org_id`, `name`, `"position"` (0 first), `enabled`, `is_default` (partial unique index `alert_routing_rules_default_uniq (org_id) WHERE is_default`), `match` (jsonb: severities, services, rule types, label matchers, local time window), `created_by`, timestamps |
+| `alert_routing_rule_channels` | (`route_id`, `channel_id`) | routing rule → channel (both cascade) |
+| `alert_notifications` | `id` (+ `seq` identity for ordering) | outbox: `org_id`, `incident_id`, `rule_id`, `channel_id` (SET NULL), `channel_type`, `kind` (`opened`·`resolved`·`renotify`·`test`, plus `acknowledged` since `0088_alert_routing`), `idempotency_key` (UNIQUE), `payload` (jsonb event), `status` (`pending`·`sending`·`delivered`·`failed`·`suppressed`), `attempts`, `next_attempt_at`, `claimed_by`, `claimed_until`, `muted_logged`, `last_error`, `created_at`, `finished_at`. Finished rows older than 30 days are pruned |
 | `alert_delivery_attempts` | `id` (identity) | delivery log: `notification_id` (cascade), `attempt`, `instance_id`, `started_at`, `duration_ms`, `success`, `status_code`, `error` (≤ 2000) |
 
 **Concurrency.** Leases are claimed with `SELECT … FOR UPDATE SKIP LOCKED` and renewed by the owner; every evaluation
@@ -499,7 +501,8 @@ commit locks the rule's lease row `FOR UPDATE` and checks owner, expiry, `last_e
 rule or incident lock the same lease row first (same lock order), so they serialize with evaluations. Dispatchers claim
 outbox rows with `FOR UPDATE SKIP LOCKED` and finish them conditionally (`status = 'sending' AND claimed_by = me`);
 expired claims return to `pending`. Audit: `alert.rule.*`, `alert.channel.*`, `alert.mute.*`,
-`alert.holiday_calendar.*`, `alert.incident.{acknowledge,resolve}` (details: names, `condition_changed`, `success` of test sends).
+`alert.routing_rule.{create,update,delete,reorder}`, `alert.holiday_calendar.*`,
+`alert.incident.{acknowledge,resolve}` (details: names, `condition_changed`, `success` of test sends).
 
 ## Versions and updates (`0003_component_heartbeats`)
 

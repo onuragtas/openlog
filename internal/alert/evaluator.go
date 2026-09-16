@@ -57,6 +57,9 @@ type Evaluator struct {
 	running map[string]bool
 	wg      sync.WaitGroup
 
+	muRouting sync.Mutex
+	routing   map[string]cachedRouting
+
 	cEvals       *prometheus.CounterVec
 	hDuration    *prometheus.HistogramVec
 	hLag         prometheus.Histogram
@@ -91,6 +94,7 @@ func NewEvaluator(store EvalStore, leases *LeaseManager, db ScopeProvider, o Eva
 		budget:  newTenantBudget(o.TenantMaxConcurrent, o.TenantPerMinute, o.Now),
 		sem:     make(chan struct{}, o.MaxConcurrent),
 		running: map[string]bool{},
+		routing: map[string]cachedRouting{},
 		cEvals: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openlog_alert_evaluations_total",
 			Help: "Alert rule evaluations by result."}, []string{"result"}),
 		hDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "openlog_alert_evaluation_duration_seconds",
@@ -280,7 +284,7 @@ func (e *Evaluator) plan(ctx context.Context, rule *Rule, chans []ChannelRef, l 
 		return empty, err
 	}
 	qctx, cancel := context.WithTimeout(ctx, e.o.QueryTimeout)
-	if rule.Type == TypeAPM {
+	if rule.Type == TypeAPM || rule.Type == TypeAnomaly { // anomaly rules can watch an APM service signal (§2.12)
 		var settings []apm.Setting
 		if e.o.ApdexSettings != nil {
 			if settings, err = e.o.ApdexSettings(ctx, rule.OrgID); err != nil {
@@ -305,7 +309,37 @@ func (e *Evaluator) plan(ctx context.Context, rule *Rule, chans []ChannelRef, l 
 		return empty, err
 	}
 	return BuildPlan(PlanInput{Rule: rule, Channels: chans, States: states, PrevEvalEnd: l.LastEvalEnd, End: end,
-		Result: res, Delay: e.o.Delay, PublicURL: e.o.PublicURL}), nil
+		Result: res, Delay: e.o.Delay, PublicURL: e.o.PublicURL, Routing: e.routingFor(ctx, rule.OrgID)}), nil
+}
+
+// cachedRouting is one organization's routing configuration with the time it was loaded.
+type cachedRouting struct {
+	at time.Time
+	r  *Routing
+}
+
+// routingCacheTTL is how long an evaluator reuses a loaded routing configuration (every evaluation needs it).
+const routingCacheTTL = 5 * time.Second
+
+// routingFor returns the organization's routing rules (§5.6). A failed load is logged and treated as "no routing":
+// incidents then reach the channels of their rule.
+func (e *Evaluator) routingFor(ctx context.Context, orgID string) *Routing {
+	now := e.o.Now()
+	e.muRouting.Lock()
+	c, ok := e.routing[orgID]
+	e.muRouting.Unlock()
+	if ok && now.Sub(c.at) < routingCacheTTL {
+		return c.r
+	}
+	rt, err := e.store.LoadRouting(ctx, orgID)
+	if err != nil {
+		e.o.Log.Warn("cannot load alert routing rules; notifying the rule channels", "org_id", orgID, "err", err)
+		return nil
+	}
+	e.muRouting.Lock()
+	e.routing[orgID] = cachedRouting{at: now, r: rt}
+	e.muRouting.Unlock()
+	return rt
 }
 
 func (e *Evaluator) count(result string) string {

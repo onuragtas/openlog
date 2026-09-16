@@ -16,6 +16,7 @@ import (
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/onuragtas/openlog/internal/apm"
+	"github.com/onuragtas/openlog/internal/logpattern"
 	"github.com/onuragtas/openlog/internal/otlputil"
 )
 
@@ -48,7 +49,12 @@ type Rows struct {
 	usageIngest map[usageIngestKey]*UsageIngestRow
 	// Dropped counts individual items that could not be stored, by reason.
 	Dropped map[string]int
+	// patterns derives the log pattern of every log body (D-128); nil leaves the pattern columns empty.
+	patterns *logpattern.Store
 }
+
+// SetPatterns makes AddLogs derive log patterns with s, the processor's store (its LRU spans chunks).
+func (r *Rows) SetPatterns(s *logpattern.Store) { r.patterns = s }
 
 // NewRows returns an empty accumulator.
 func NewRows() *Rows {
@@ -395,6 +401,8 @@ func (r *Rows) AddLogs(tenant string, receivedAt time.Time, req *collogs.ExportL
 				if sev < 0 || sev > 255 {
 					sev = 0
 				}
+				body := otlputil.AnyValueString(lr.GetBody())
+				patternID, patternTemplate := r.patterns.Pattern(tenant, body)
 				r.Logs = append(r.Logs, LogRow{
 					TenantID:           tenant,
 					Timestamp:          ts,
@@ -408,7 +416,9 @@ func (r *Rows) AddLogs(tenant string, receivedAt time.Time, req *collogs.ExportL
 					SpanID:             otlputil.HexID(lr.GetSpanId()),
 					TraceFlags:         uint8(lr.GetFlags() & 0xff),
 					EventName:          event,
-					Body:               otlputil.AnyValueString(lr.GetBody()),
+					Body:               body,
+					PatternID:          patternID,
+					PatternTemplate:    patternTemplate,
 					ResourceAttributes: ri.attrs,
 					ScopeName:          scope,
 					Attributes:         otlputil.AttrsToMap(lr.GetAttributes()),

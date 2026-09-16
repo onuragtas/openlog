@@ -861,6 +861,36 @@ Buckets without records are omitted.
             {"group": "", "other": true, "total": 30, "points": [[1757757600000, 1]]}]}
 ```
 
+### `POST /api/v1/logs/patterns` `{"from"?, "to"?, "filters"?, "groups"?, "q"?, "transaction"?, "transaction_service"?, "limit"?}`
+The distinct messages behind the records matching the same conditions (Logs Explorer "Patterns", D-128): the processor
+masks the variable parts of every log body into a template (`user <*> logged in from <*>`) and stores the template and
+its id on the record, so this endpoint is a `GROUP BY` over the same filters as `POST /api/v1/logs/query`. Patterns are
+ordered by record count, `limit` default 50, max 500 (`truncated` reports that more exist).
+
+`pattern_id` is a 64-bit id **as a string** (JSON numbers lose precision above 2^53); it is also a filter key, so
+`{"key": "pattern_id", "op": "=", "value": "<id>"}` on `POST /api/v1/logs/query` lists exactly the records of one
+pattern. `count / total` is a pattern's share of the matching records. `severity` counts the records per
+OpenTelemetry severity range and `sample` is the newest record of the pattern in the range.
+
+`unclassified` counts matching records that have no pattern — an empty body, or a record stored before the
+`0091_log_patterns` migration (there is no backfill; logs have a 14-day TTL). They are counted, never listed, because
+they have no template.
+
+A request whose only restriction is the time range **and** whose range is at least 6 hours is answered from the hourly
+rollup (`log_patterns_1h`) and reports `rollup: true`: counts then cover the whole hours of the range, the sample
+carries only its body, service and time, and `unclassified` is `0` (the rollup stores no record without a pattern).
+Every filtered request and every shorter range reads the raw table exactly, so adding a filter never changes what the
+counts mean.
+```json
+{"patterns": [{"pattern_id": "10748583442455546363", "template": "user <*> logged in from <*>", "count": 40012,
+               "severity": {"unspecified": 0, "trace": 0, "debug": 0, "info": 39990, "warn": 0, "error": 22, "fatal": 0},
+               "max_severity_number": 17, "services": ["checkout"],
+               "first_seen": "…", "last_seen": "…",
+               "sample": {"timestamp": "…", "body": "user 4711 logged in from 10.0.0.3", "service_name": "checkout",
+                          "severity_text": "INFO", "severity_number": 9, "trace_id": ""}}],
+ "total": 64512, "unclassified": 12, "rollup": false, "truncated": false}
+```
+
 ## Fields
 
 Attribute discovery of the query builders (Logs and Metrics Explorer, D-118). Any role and API keys (`telemetry.read`),
@@ -1423,7 +1453,8 @@ requests).
 
 ## Alerting
 
-Rules, incidents, notification channels, mute windows and the delivery log of the caller's organization. Semantics
+Rules, incidents, notification channels, routing rules, mute windows and the delivery log of the caller's
+organization. Semantics
 (rule types, evaluation, state machine, notifications, payloads, secrets): [alerting.md](alerting.md); shapes:
 [openapi.yaml](openapi.yaml) tag `alerts`; tables: [postgres.md](postgres.md#alerting-0004_alerting). Reads need any role
 (API keys too); writes need a signed-in user (CSRF as usual) with the role in [Roles](#roles): members create rules and
@@ -1442,9 +1473,11 @@ everything and manage channels. Not available with `OPENLOG_AUTH_MODE=static` (`
 | `GET /api/v1/alerts/rules/{id}/evaluations?from=&to=` | evaluation history from ClickHouse (alerting.md §3.6; default last 24 h, ≤ 30 days, ≤ 500 buckets): `{"from", "to", "step_seconds", "evaluations": [{"at", "firing_series", "evaluations", "errors", "duration_ms", "max_duration_ms"}], "series": [{"series_key", "labels", "points": [[ms, value\|null, state]]}], "truncated"}` |
 | `GET /api/v1/alerts/incidents?state=open,acknowledged&rule_id=&severity=&limit=&cursor=` | newest first (default 50, max 500), `next_cursor`, `counts {open, acknowledged, resolved (7 d)}` |
 | `GET /api/v1/alerts/incidents/{id}` | Incident + `events` (timeline) + `deliveries` |
-| `POST /api/v1/alerts/incidents/{id}/acknowledge` · `…/resolve` `{"note"?}` · `…/notes` `{"text"}` | ack is idempotent (`409` when resolved; stops re-notifications); resolve enqueues resolve notifications; note → `201` event |
-| `GET /api/v1/alerts/channels` · `POST` · `GET/PUT/DELETE /api/v1/alerts/channels/{id}` | secrets are write-only (`secret_hints` masked; omitted secret fields keep stored values; `generated_secrets` once on create); list carries `secrets_configured`. `409` without `OPENLOG_SECRETS_KEY` |
-| `POST /api/v1/alerts/channels/{id}/test` | synchronous test send: `{"success", "status_code", "error", "duration_ms", "notification_id"}` (always `200` when the channel exists) |
+| `POST /api/v1/alerts/incidents/{id}/acknowledge` · `…/resolve` `{"note"?}` · `…/notes` `{"text"}` | ack is idempotent (`409` when resolved; stops re-notifications) and enqueues an `acknowledged` notification for the incident's PagerDuty/Opsgenie channels (alerting.md §5.1); resolve enqueues resolve notifications; note → `201` event |
+| `GET /api/v1/alerts/channels` · `POST` · `GET/PUT/DELETE /api/v1/alerts/channels/{id}` | types `slack`·`email`·`webhook`·`teams`·`pagerduty`·`opsgenie`; secrets are write-only (`url`, `hmac_secret`, `smtp_password`, `routing_key`, `api_key`; `secret_hints` masked; omitted secret fields keep stored values; `generated_secrets` once on create); list carries `secrets_configured`. `409` without `OPENLOG_SECRETS_KEY` |
+| `POST /api/v1/alerts/channels/{id}/test` | synchronous test send: `{"success", "status_code", "error", "duration_ms", "notification_id"}` (always `200` when the channel exists). PagerDuty and Opsgenie tests open and close the alert at once |
+| `GET /api/v1/alerts/routing-rules` · `POST` · `GET/PUT/DELETE /api/v1/alerts/routing-rules/{id}` | ordered routing rules (alerting.md §5.6): `{name, position, enabled, is_default, channel_ids, match {severities, services, rule_types, labels, time_window}}`; reads any role, writes admin/owner. `409` for a second default route or at 100 rules |
+| `POST /api/v1/alerts/routing-rules/reorder` `{"ids": [...]}` | admin/owner: sets the evaluation order; `ids` must list every routing rule of the organization exactly once (`400` otherwise) → the reordered list |
 | `GET /api/v1/alerts/mutes?include_expired=` · `POST` · `PUT/DELETE /api/v1/alerts/mutes/{id}` | `starts_at`/`ends_at` (≤ 90 days), `rule_ids`, label `matchers`; `active` computed. Recurring: `schedule {timezone, days\|rrule, start_time, end_time, from, until}` (alerting.md §5.2); responses then carry the current or next occurrence in `starts_at`/`ends_at` |
 | `POST /api/v1/alerts/mutes/preview` `{"schedule"}` | any role: validates an unsaved schedule, `{"occurrences": [{"starts_at", "ends_at"}]}` (≤ 5, exceptions applied). Mute responses carry the same list as `upcoming`; schedules accept `FREQ=MONTHLY` rules, `exdates` and `holiday_calendar_ids` (alerting.md §5.2) |
 | `GET /api/v1/alerts/holiday-calendars` · `POST` · `GET/PUT/DELETE /api/v1/alerts/holiday-calendars/{id}` | named holiday date sets `{name, description, dates: ["YYYY-MM-DD" \| "MM-DD"]}` (≤ 1000) with `mute_count`; writes admin/owner; delete → `409` while mutes reference it |

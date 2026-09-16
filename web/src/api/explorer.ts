@@ -17,6 +17,8 @@ export type QueryFilter = S["QueryFilter"];
 export type LogQueryRow = S["LogQueryRow"];
 export type LogsQueryRequest = S["LogsQueryRequest"];
 export type LogsAggregateResponse = S["LogsAggregateResponse"];
+export type LogPattern = S["LogPattern"];
+export type LogsPatternsResponse = S["LogsPatternsResponse"];
 export type SpanQueryRow = S["SpanQueryRow"];
 export type TracesQueryRequest = S["TracesQueryRequest"];
 export type TracesAggregateResponse = S["TracesAggregateResponse"];
@@ -135,6 +137,9 @@ interface LogsExplorerPageParam {
 
 export const LOGS_EXPLORER_PAGE = 200;
 
+/** Patterns requested for the "Patterns" view (the API allows at most 500). */
+export const LOG_PATTERNS_LIMIT = 50;
+
 /** POST /api/v1/logs/query pages: the window is resolved once and the same body is resent with the cursor. */
 export const logsExplorerQuery = (r: LogsExplorerRequest) => {
   const body = { ...filterBody(r.filter), ...transactionBody(r.context), order: r.order, columns: r.columns, include_record: true, limit: r.limit ?? LOGS_EXPLORER_PAGE };
@@ -149,6 +154,19 @@ export const logsExplorerQuery = (r: LogsExplorerRequest) => {
     getNextPageParam: (last): LogsExplorerPageParam | undefined => (last.nextCursor ? { from: last.from, to: last.to, cursor: last.nextCursor } : undefined),
     placeholderData: keepPreviousData,
     enabled: r.enabled !== false,
+  });
+};
+
+/** POST /api/v1/logs/patterns: the distinct messages behind the matching records (Logs Explorer "Patterns", D-128). */
+export const logPatternsQuery = (r: { range: RangeSpec; filter: FilterState; context?: ExplorerContext; limit?: number }) => {
+  const body = { ...filterBody(r.filter), ...transactionBody(r.context), limit: r.limit ?? LOG_PATTERNS_LIMIT };
+  return queryOptions({
+    queryKey: ["logs-patterns", ...rangeKey(r.range), JSON.stringify(body)],
+    queryFn: async ({ signal }) => {
+      const { from, to } = resolveRange(r.range, Date.now());
+      return unwrap(await api.POST("/api/v1/logs/patterns", { body: { ...body, from, to }, signal }));
+    },
+    placeholderData: keepPreviousData,
   });
 };
 

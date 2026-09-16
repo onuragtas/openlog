@@ -30,6 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/logpattern"
 	"github.com/onuragtas/openlog/internal/queue"
 )
 
@@ -163,6 +164,8 @@ type Processor struct {
 	cuts       *prometheus.CounterVec
 	lagRecords *prometheus.GaugeVec
 	relink     *relinkEnqueuer // relink.go
+	// patterns keeps the per-tenant log pattern clusters across chunks (internal/logpattern, D-128).
+	patterns *logpattern.Store
 }
 
 // New creates a processor. reg may be nil.
@@ -202,7 +205,8 @@ func New(cfg config.Processor, topicPrefix string, consumer Consumer, writer Wri
 		lagRecords: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "openlog_processor_consumer_lag_records", Help: "Log end offset minus committed offset for partitions assigned to this processor.",
 		}, []string{"topic", "partition"}),
-		relink: newRelinkEnqueuer(),
+		relink:   newRelinkEnqueuer(),
+		patterns: logpattern.NewStore(0, 0),
 	}
 	if reg != nil {
 		reg.MustRegister(p.relink.enqueued, p.relink.tooOld)
@@ -386,6 +390,7 @@ func (p *Processor) refreshOldest(tp topicPartition, ps *partState) {
 // decode converts a chunk's records into rows. Rejected records are counted and skipped.
 func (p *Processor) decode(c *chunk) *Rows {
 	rows := NewRows()
+	rows.SetPatterns(p.patterns)
 	for _, rec := range c.recs {
 		p.decodeRecord(rows, rec)
 	}

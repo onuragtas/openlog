@@ -25,6 +25,11 @@ export type AlertChannel = S["AlertChannel"];
 export type AlertChannelInput = S["AlertChannelInput"];
 export type AlertChannelType = S["AlertChannelType"];
 export type AlertChannelTestResult = S["AlertChannelTestResult"];
+export type AlertRoutingRule = S["AlertRoutingRule"];
+export type AlertRoutingRuleInput = S["AlertRoutingRuleInput"];
+export type AlertRouteMatch = S["AlertRouteMatch"];
+export type AlertRouteMatcher = S["AlertRouteMatcher"];
+export type AlertRouteWindow = S["AlertRouteWindow"];
 export type AlertMute = S["AlertMute"];
 export type AlertMuteInput = S["AlertMuteInput"];
 export type AlertMuteMatcher = S["AlertMuteMatcher"];
@@ -199,6 +204,31 @@ export async function deleteAlertChannel(id: string): Promise<void> {
 
 export async function testAlertChannel(id: string): Promise<AlertChannelTestResult> {
   return unwrap(await api.POST("/api/v1/alerts/channels/{id}/test", { params: { path: { id } } }));
+}
+
+// ---- routing rules (alerting.md §5.6) ----
+
+export const alertRoutingRulesQuery = () =>
+  queryOptions({
+    queryKey: ["alerts", "routing-rules"],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/alerts/routing-rules", { signal })).routing_rules,
+  });
+
+export async function createRoutingRule(input: AlertRoutingRuleInput): Promise<AlertRoutingRule> {
+  return unwrap(await api.POST("/api/v1/alerts/routing-rules", { body: input }));
+}
+
+export async function updateRoutingRule(id: string, input: AlertRoutingRuleInput): Promise<AlertRoutingRule> {
+  return unwrap(await api.PUT("/api/v1/alerts/routing-rules/{id}", { params: { path: { id } }, body: input }));
+}
+
+export async function deleteRoutingRule(id: string): Promise<void> {
+  expectOk(await api.DELETE("/api/v1/alerts/routing-rules/{id}", { params: { path: { id } } }));
+}
+
+/** Sets the evaluation order; ids must list every routing rule of the organization exactly once. */
+export async function reorderRoutingRules(ids: string[]): Promise<AlertRoutingRule[]> {
+  return unwrap(await api.POST("/api/v1/alerts/routing-rules/reorder", { body: { ids } })).routing_rules;
 }
 
 export async function createAlertMute(input: AlertMuteInput): Promise<AlertMute> {

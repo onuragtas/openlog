@@ -54,7 +54,7 @@ Attributes (`GET /api/v1/query/schema` lists them with types):
 
 | Event type | Attributes (type string unless noted) |
 |---|---|
-| `Log` | `service.name`, `host.id`, `host.name`, `severity` (= `severity.text`), `severity.number` (number), `message` (= `body`), `trace.id`, `span.id`, `event.name`, `scope.name` |
+| `Log` | `service.name`, `host.id`, `host.name`, `severity` (= `severity.text`), `severity.number` (number), `message` (= `body`), `trace.id`, `span.id`, `event.name`, `scope.name`, `pattern.id`, `pattern.template` (= `pattern`) |
 | `Span`, `Transaction` | `name` (Transaction: transaction name; `span.name` = span name), `kind`, `status.code`, `status.message`, `trace.id`, `span.id`, `parent.id`, `service.name` (= `appName`), `service.namespace`, `deployment.environment`, `host.id`, `duration` (number, seconds), `duration.ms` (number), `transaction.name`, `transaction.type`, `entry` (bool), `error` (bool), `http.status_code` (number), `db.system`, `db.name`, `db.operation`, `db.statement`, `peer.type`, `peer.name`, `error.type`, `error.message`, `sample.weight` (number), `scope.name` |
 | `Metric` | `metricName` (= `metric.name`), `metric.type`, `unit`, `service.name`, `host.id`, `host.name`\*, `value` (number), `count`\* (number), `sum`\* (number), `scope.name`\* |
 | `Host` | `host.id`, `host.name`, `os.type`, `os.description`, `arch`, `agent.name`, `agent.version` |

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { alertChannelsQuery, alertRulesQuery, deleteAlertRule, setAlertRuleEnabled, type AlertRule } from "@/api/alerts";
+import { alertChannelsQuery, alertRulesQuery, deleteAlertRule, setAlertRuleEnabled, type AlertChannelType, type AlertRule } from "@/api/alerts";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -13,7 +13,7 @@ import { canEditOwned } from "@/lib/alerts";
 import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeIcon, RuleStateBadge, SeverityBadge } from "./badges";
 
-function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: boolean; channelTypes: Map<string, { name: string; type: "slack" | "email" | "webhook" | "teams" }> }) {
+function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: boolean; channelTypes: Map<string, { name: string; type: AlertChannelType }> }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["alerts"] });

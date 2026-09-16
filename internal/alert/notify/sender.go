@@ -15,10 +15,12 @@ import (
 
 // Channel types.
 const (
-	TypeSlack   = "slack"
-	TypeTeams   = "teams"
-	TypeWebhook = "webhook"
-	TypeEmail   = "email"
+	TypeSlack     = "slack"
+	TypeTeams     = "teams"
+	TypeWebhook   = "webhook"
+	TypeEmail     = "email"
+	TypePagerDuty = "pagerduty"
+	TypeOpsgenie  = "opsgenie"
 )
 
 // SMTPConfig is an SMTP server (global OPENLOG_SMTP_* or a channel override).
@@ -39,6 +41,10 @@ type Target struct {
 	HMACSecret string
 	To         []string
 	SMTP       *SMTPConfig // channel override; nil = global server
+	// Key is the PagerDuty integration key or the Opsgenie API key of an on-call channel.
+	Key       string
+	PagerDuty *PagerDutyConfig
+	Opsgenie  *OpsgenieConfig
 }
 
 // Result is the outcome of one delivery attempt.
@@ -67,6 +73,9 @@ type Sender struct {
 	client *http.Client
 	dialer *net.Dialer
 	now    func() time.Time
+	// Base URLs of the on-call providers; empty = the public endpoint of the channel's region.
+	pagerDutyURL string
+	opsgenieURL  string
 }
 
 // ErrBlockedDestination is returned when OPENLOG_ALERT_BLOCK_PRIVATE_DESTINATIONS refuses an address.
@@ -131,6 +140,11 @@ func NewSender(o Options) *Sender {
 // SetClock overrides the clock (tests).
 func (s *Sender) SetClock(now func() time.Time) { s.now = now }
 
+// SetProviderEndpoints overrides the PagerDuty and Opsgenie base URLs (tests).
+func (s *Sender) SetProviderEndpoints(pagerDuty, opsgenie string) {
+	s.pagerDutyURL, s.opsgenieURL = pagerDuty, opsgenie
+}
+
 // Send delivers ev to t. threadKey is the idempotency key of the opening notification (e-mail threading).
 func (s *Sender) Send(ctx context.Context, t Target, ev Event, threadKey string) Result {
 	start := time.Now()
@@ -146,6 +160,10 @@ func (s *Sender) Send(ctx context.Context, t Target, ev Event, threadKey string)
 		r = s.sendWebhook(ctx, t, ev)
 	case TypeEmail:
 		r = s.sendEmail(ctx, t, ev, threadKey)
+	case TypePagerDuty:
+		r = s.sendPagerDuty(ctx, t, ev)
+	case TypeOpsgenie:
+		r = s.sendOpsgenie(ctx, t, ev)
 	default:
 		r = Result{Err: fmt.Errorf("unknown channel type %q", t.Type)}
 	}

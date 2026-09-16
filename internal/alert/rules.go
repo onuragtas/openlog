@@ -64,10 +64,13 @@ const (
 
 // Notification kinds.
 const (
-	KindOpened   = "opened"
-	KindResolved = "resolved"
-	KindRenotify = "renotify"
-	KindTest     = "test"
+	KindOpened = "opened"
+	// KindAcknowledged is enqueued when a user acknowledges an incident, for the channels that track the
+	// lifecycle (PagerDuty, Opsgenie); the other channel types do not receive it (§5.1).
+	KindAcknowledged = "acknowledged"
+	KindResolved     = "resolved"
+	KindRenotify     = "renotify"
+	KindTest         = "test"
 )
 
 // Notification statuses.
@@ -203,7 +206,7 @@ func (in RuleInput) Validate() (*Definition, error) {
 	}
 	rt, ok := ruleTypes[d.Type]
 	if !ok {
-		return nil, invalid("type", "must be one of metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql, slo_burn")
+		return nil, invalid("type", "must be one of metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql, slo_burn, anomaly")
 	}
 	if !rt.Available() {
 		return nil, invalid("type", "rule type %q is not available yet", d.Type)

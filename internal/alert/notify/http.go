@@ -116,6 +116,8 @@ func title(ev Event) (prefix, emoji string) {
 	switch ev.Event {
 	case EventResolved:
 		return "RESOLVED", "✅"
+	case EventAcknowledged:
+		return "ACKNOWLEDGED", "👀"
 	case EventRenotify:
 		return "STILL FIRING", "🔁"
 	case EventTest:

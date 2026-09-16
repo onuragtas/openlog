@@ -46,7 +46,9 @@ func TestTTLTablesMatchSchema(t *testing.T) {
 		// Usage metering (0050_usage, D-079): fixed 400-day retention, independent of the telemetry retention.
 		"usage_signals_1h_local": true, "usage_entities_1d_local": true, "usage_ingest_1h_local": true, "usage_queries_1h_local": true,
 		// Attribute key index (0080_attribute_keys, D-118): hourly key counts with a fixed 30-day TTL, no telemetry values.
-		"attribute_keys_local": true}
+		"attribute_keys_local": true,
+		// Log patterns (0091_log_patterns, D-128): hourly pattern counts with a fixed 30-day TTL, like attribute_keys.
+		"log_patterns_1h_local": true}
 	managed := map[string]bool{}
 	for _, tt := range TTLTables {
 		managed[tt.Table] = true

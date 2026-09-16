@@ -540,6 +540,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/logs/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The distinct messages behind the matching records (Logs Explorer "Patterns", api.md "Logs", D-128). The
+         *     processor masks the variable parts of every log body into a template, so this groups the same filter model as
+         *     POST /api/v1/logs/query by pattern, ordered by record count. `pattern_id` is a 64-bit id as a string and is
+         *     itself a filter key, so the records of one pattern are listed with a `pattern_id` condition. A request
+         *     restricted only by its time range and covering at least 6 hours is answered from the hourly rollup
+         *     (`rollup: true`, whole hours); everything else reads the raw table exactly.
+         */
+        post: operations["logPatterns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metrics": {
         parameters: {
             query?: never;
@@ -2717,6 +2741,61 @@ export interface paths {
         /** @description Admin or owner. Sends a test notification synchronously (no retries) and records it in the delivery log. */
         post: operations["testAlertChannel"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/routing-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Routing rules of the organization in evaluation order (alerting.md §5.6). */
+        get: operations["listAlertRoutingRules"];
+        put?: never;
+        /** @description Admin or owner. 409 when the organization already has a default route or reached 100 routing rules. */
+        post: operations["createAlertRoutingRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/routing-rules/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admin or owner. Sets the evaluation order; ids must list every routing rule of the organization exactly once. */
+        post: operations["reorderAlertRoutingRules"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/routing-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAlertRoutingRule"];
+        /** @description Admin or owner. Full replacement; open incidents keep the channels they were opened with. */
+        put: operations["updateAlertRoutingRule"];
+        post?: never;
+        /** @description Admin or owner. */
+        delete: operations["deleteAlertRoutingRule"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5139,6 +5218,66 @@ export interface components {
             total: number;
             series: components["schemas"]["LogsAggregateSeries"][];
         };
+        LogsPatternsRequest: {
+            /** @description RFC3339 or unix ms (default now-1h) */
+            from?: string | number;
+            /** @description RFC3339 or unix ms (default now) */
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            /** @description Case-insensitive substring of the body */
+            q?: string;
+            transaction?: string;
+            transaction_service?: string;
+            /**
+             * @description Patterns returned
+             * @default 50
+             */
+            limit: number;
+        };
+        /** @description Records of the pattern per OpenTelemetry severity range */
+        LogPatternSeverityMix: {
+            unspecified: number;
+            trace: number;
+            debug: number;
+            info: number;
+            warn: number;
+            error: number;
+            fatal: number;
+        };
+        /** @description Newest record of the pattern in the range; a rollup response carries only body, service and time */
+        LogPatternSample: {
+            timestamp: components["schemas"]["Timestamp"];
+            body: string;
+            service_name: string;
+            severity_text: string;
+            severity_number: number;
+            trace_id: string;
+        };
+        LogPattern: {
+            /** @description 64-bit id as text; also the value of the pattern_id filter key */
+            pattern_id: string;
+            /** @example user <*> logged in from <*> */
+            template: string;
+            count: number;
+            severity: components["schemas"]["LogPatternSeverityMix"];
+            max_severity_number: number;
+            services: string[];
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            sample: components["schemas"]["LogPatternSample"];
+        };
+        LogsPatternsResponse: {
+            patterns: components["schemas"]["LogPattern"][];
+            /** @description Matching records over every pattern */
+            total: number;
+            /** @description Matching records without a pattern (empty body, or stored before the 0091_log_patterns migration); 0 on a rollup response */
+            unclassified: number;
+            /** @description Answered from the hourly rollup (counts cover whole hours) */
+            rollup: boolean;
+            /** @description More patterns exist than `limit` */
+            truncated: boolean;
+        };
         TracesQueryRequest: {
             /** @description RFC3339 or unix ms (default now-1h) */
             from?: string | number;
@@ -7005,7 +7144,7 @@ export interface components {
             access: string;
         };
         /** @enum {string} */
-        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data" | "apm_error" | "oql" | "slo_burn";
+        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data" | "apm_error" | "oql" | "slo_burn" | "anomaly";
         /** @enum {string} */
         AlertSeverity: "critical" | "warning" | "info";
         /** @enum {string} */
@@ -7017,9 +7156,9 @@ export interface components {
         /** @enum {string} */
         AlertResolveReason: "recovered" | "manual" | "no_data" | "expired" | "rule_disabled" | "rule_deleted" | "rule_changed";
         /** @enum {string} */
-        AlertChannelType: "slack" | "email" | "webhook" | "teams";
+        AlertChannelType: "slack" | "email" | "webhook" | "teams" | "pagerduty" | "opsgenie";
         /** @enum {string} */
-        AlertNotificationKind: "opened" | "resolved" | "renotify" | "test";
+        AlertNotificationKind: "opened" | "acknowledged" | "resolved" | "renotify" | "test";
         /** @enum {string} */
         AlertNotificationStatus: "pending" | "sending" | "delivered" | "failed" | "suppressed";
         AlertLabels: {
@@ -7064,6 +7203,10 @@ export interface components {
          *     COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
          *     slo_burn (§2.11): slo_id, windows (1-4 long/short burn windows with their factor), min_requests. The comparison
          *     is fixed (gte 1): the value is the largest min(long, short) burn rate divided by the window's factor.
+         *     anomaly (§2.12): signal (metric = the metric_threshold selector, apm = the apm selector), window_seconds,
+         *     seasonality (none, hourly, daily, weekly), lookback_days, direction (upper, lower, both), sensitivity
+         *     (standard deviations, default 3), min_samples, min_deviation. The comparison is fixed (gte 1): the value is
+         *     the deviation from the median of the same seasonal slot divided by sensitivity x 1.4826 x MAD.
          */
         AlertCondition: {
             metric?: string;
@@ -7088,8 +7231,29 @@ export interface components {
             missing_data?: "keep" | "ok" | "breach";
             query?: string;
             severity_min?: string;
-            /** @enum {string} */
-            signal?: "host" | "metric" | "log";
+            /**
+             * @description no_data: host, metric, log; anomaly: metric or apm
+             * @enum {string}
+             */
+            signal?: "host" | "metric" | "log" | "apm";
+            /**
+             * @description anomaly: the season whose same slot forms the baseline
+             * @enum {string}
+             */
+            seasonality?: "none" | "hourly" | "daily" | "weekly";
+            /** @description anomaly: how far back the baseline samples reach */
+            lookback_days?: number;
+            /**
+             * @description anomaly: the side of the band that alerts
+             * @enum {string}
+             */
+            direction?: "upper" | "lower" | "both";
+            /** @description anomaly: half the band width in standard deviations */
+            sensitivity?: number;
+            /** @description anomaly: baseline samples a series needs before it has a value */
+            min_samples?: number;
+            /** @description anomaly: absolute deviation below which nothing alerts */
+            min_deviation?: number;
             /**
              * Format: uuid
              * @description slo_burn: the SLO whose error budget is watched
@@ -7285,7 +7449,7 @@ export interface components {
             events: components["schemas"]["AlertIncidentEvent"][];
             deliveries: components["schemas"]["AlertDelivery"][];
         };
-        /** @description Non-secret settings. email: to (required), smtp (optional override) */
+        /** @description Non-secret settings, one section per channel type. email: to (required), smtp (optional override); pagerduty: pagerduty; opsgenie: opsgenie (alerting.md §5.3). */
         AlertChannelConfig: {
             to?: string[];
             smtp?: {
@@ -7296,12 +7460,41 @@ export interface components {
                 /** @enum {string} */
                 tls?: "starttls" | "tls" | "none";
             };
+            pagerduty?: {
+                /**
+                 * @description PagerDuty service region (default us)
+                 * @enum {string}
+                 */
+                region?: "us" | "eu";
+            };
+            opsgenie?: {
+                /**
+                 * @description Opsgenie service region (default us)
+                 * @enum {string}
+                 */
+                region?: "us" | "eu";
+                /**
+                 * @description Overrides the severity mapping (critical P1, warning P3, info P5)
+                 * @enum {string}
+                 */
+                priority?: "" | "P1" | "P2" | "P3" | "P4" | "P5";
+                responders?: {
+                    /** @enum {string} */
+                    type: "team" | "user" | "escalation" | "schedule";
+                    /** @description Exactly one of name and id */
+                    name?: string;
+                    id?: string;
+                }[];
+                tags?: string[];
+            };
         };
-        /** @description Write-only. slack/teams/webhook: url; webhook: hmac_secret; email: smtp_password */
+        /** @description Write-only. slack/teams/webhook: url; webhook: hmac_secret; email: smtp_password; pagerduty: routing_key (Events API v2 integration key); opsgenie: api_key. */
         AlertChannelSecrets: {
             url?: string;
             hmac_secret?: string;
             smtp_password?: string;
+            routing_key?: string;
+            api_key?: string;
         };
         AlertChannelInput: {
             name: string;
@@ -7340,6 +7533,55 @@ export interface components {
             error: string;
             duration_ms: number;
             notification_id: string;
+        };
+        AlertRouteMatcher: {
+            /** @example env */
+            label: string;
+            /** @enum {string} */
+            op: "eq" | "neq" | "contains";
+            value: string;
+        };
+        /** @description Local window of a route (alerting.md §5.6); end_time at or before start_time means the next day. */
+        AlertRouteWindow: {
+            /** @example Europe/Istanbul */
+            timezone: string;
+            /** @description Empty = every day */
+            days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+            /** @example 09:00 */
+            start_time: string;
+            /** @example 18:00 */
+            end_time: string;
+        };
+        /** @description Route condition; the parts are AND-ed and an empty part matches everything. */
+        AlertRouteMatch: {
+            severities?: components["schemas"]["AlertSeverity"][];
+            services?: string[];
+            rule_types?: components["schemas"]["AlertRuleType"][];
+            labels?: components["schemas"]["AlertRouteMatcher"][];
+            time_window?: components["schemas"]["AlertRouteWindow"] | null;
+        };
+        AlertRoutingRuleInput: {
+            name: string;
+            /** @description Evaluation order */
+            position?: number;
+            /** @default true */
+            enabled: boolean;
+            /** @description The default route matches every incident and is evaluated last; at most one per organization and its match must be empty */
+            is_default?: boolean;
+            channel_ids: string[];
+            match?: components["schemas"]["AlertRouteMatch"];
+        };
+        AlertRoutingRule: {
+            id: string;
+            name: string;
+            position: number;
+            enabled: boolean;
+            is_default: boolean;
+            match: components["schemas"]["AlertRouteMatch"];
+            channel_ids: string[];
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
         };
         AlertMuteMatcher: {
             /** @example host.name */
@@ -9306,6 +9548,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogsAggregateResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    logPatterns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogsPatternsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsPatternsResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -14000,6 +14280,168 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listAlertRoutingRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routing rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        routing_rules: components["schemas"]["AlertRoutingRule"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAlertRoutingRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRoutingRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Created routing rule */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRoutingRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    reorderAlertRoutingRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Routing rules in the new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        routing_rules: components["schemas"]["AlertRoutingRule"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAlertRoutingRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Routing rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRoutingRule"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAlertRoutingRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRoutingRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Routing rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRoutingRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteAlertRoutingRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAlertMutes: {

@@ -1,4 +1,4 @@
-import { Bell, BellOff, Mail, MessageSquare, Users, Webhook } from "lucide-react";
+import { Bell, BellOff, LifeBuoy, Mail, MessageSquare, Siren, Users, Webhook } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AlertChannelType, AlertIncidentState, AlertRule, AlertSeverity } from "@/api/alerts";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,7 @@ export function RuleStateBadge({ state }: { state: AlertRule["status"]["state"] 
   );
 }
 
-const CHANNEL_ICONS: Record<AlertChannelType, typeof Mail> = { slack: MessageSquare, email: Mail, webhook: Webhook, teams: Users };
+const CHANNEL_ICONS: Record<AlertChannelType, typeof Mail> = { slack: MessageSquare, email: Mail, webhook: Webhook, teams: Users, pagerduty: Siren, opsgenie: LifeBuoy };
 
 export function ChannelTypeIcon({ type, className }: { type: AlertChannelType; className?: string }) {
   const Icon = CHANNEL_ICONS[type];

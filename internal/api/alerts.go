@@ -79,6 +79,7 @@ func (s *Server) alertRoutes(mux *http.ServeMux) {
 	route("PUT /api/v1/alerts/mutes/{id}", alertWrite, s.updateAlertMute)
 	route("DELETE /api/v1/alerts/mutes/{id}", alertWrite, s.deleteAlertMute)
 	route("GET /api/v1/alerts/deliveries", alertRead, s.listAlertDeliveries)
+	s.alertRoutingRoutes(route)       // alert_routes.go
 	s.alertCalendarRoutes(route)      // alert_calendars.go
 	s.alertTemplateRoutes(mux, route) // alert_templates.go
 }

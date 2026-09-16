@@ -38,6 +38,7 @@ func (s *Server) explorerRoutes(mux *http.ServeMux) {
 		"GET /api/v1/fields/values":     s.fieldValues,
 		"POST /api/v1/logs/query":       s.queryLogs,
 		"POST /api/v1/logs/aggregate":   s.aggregateLogs,
+		"POST /api/v1/logs/patterns":    s.logPatterns,     // logspatterns.go (D-128)
 		"POST /api/v1/traces/query":     s.queryTraces,     // tracesquery.go (D-122)
 		"POST /api/v1/traces/aggregate": s.aggregateTraces, // tracesquery.go (D-122)
 		"GET /api/v1/metrics":           s.listMetrics,

@@ -999,6 +999,39 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/logs/patterns:
+    post:
+      tags: [logs]
+      operationId: logPatterns
+      description: |
+        The distinct messages behind the matching records (Logs Explorer "Patterns", api.md "Logs", D-128). The
+        processor masks the variable parts of every log body into a template, so this groups the same filter model as
+        POST /api/v1/logs/query by pattern, ordered by record count. `pattern_id` is a 64-bit id as a string and is
+        itself a filter key, so the records of one pattern are listed with a `pattern_id` condition. A request
+        restricted only by its time range and covering at least 6 hours is answered from the hourly rollup
+        (`rollup: true`, whole hours); everything else reads the raw table exactly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogsPatternsRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogsPatternsResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   /api/v1/metrics:
     get:
       tags: [metrics]
@@ -4375,6 +4408,122 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /api/v1/alerts/routing-rules:
+    get:
+      tags: [alerts]
+      operationId: listAlertRoutingRules
+      description: Routing rules of the organization in evaluation order (alerting.md §5.6).
+      responses:
+        "200":
+          description: Routing rules
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [routing_rules]
+                properties:
+                  routing_rules:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertRoutingRule" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [alerts]
+      operationId: createAlertRoutingRule
+      description: Admin or owner. 409 when the organization already has a default route or reached 100 routing rules.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRoutingRuleInput" }
+      responses:
+        "201":
+          description: Created routing rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRoutingRule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/alerts/routing-rules/reorder:
+    post:
+      tags: [alerts]
+      operationId: reorderAlertRoutingRules
+      description: Admin or owner. Sets the evaluation order; ids must list every routing rule of the organization exactly once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Routing rules in the new order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [routing_rules]
+                properties:
+                  routing_rules:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlertRoutingRule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/alerts/routing-rules/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [alerts]
+      operationId: getAlertRoutingRule
+      responses:
+        "200":
+          description: Routing rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRoutingRule" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [alerts]
+      operationId: updateAlertRoutingRule
+      description: Admin or owner. Full replacement; open incidents keep the channels they were opened with.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlertRoutingRuleInput" }
+      responses:
+        "200":
+          description: Routing rule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlertRoutingRule" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [alerts]
+      operationId: deleteAlertRoutingRule
+      description: Admin or owner.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /api/v1/alerts/mutes:
     get:
       tags: [alerts]
@@ -7649,6 +7798,77 @@ components:
           type: array
           items: { $ref: "#/components/schemas/LogsAggregateSeries" }
 
+    LogsPatternsRequest:
+      type: object
+      properties:
+        from: { type: [string, integer], description: "RFC3339 or unix ms (default now-1h)" }
+        to: { type: [string, integer], description: "RFC3339 or unix ms (default now)" }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        q: { type: string, maxLength: 1024, description: Case-insensitive substring of the body }
+        transaction: { type: string, maxLength: 4096 }
+        transaction_service: { type: string, maxLength: 512 }
+        limit: { type: integer, minimum: 1, maximum: 500, default: 50, description: Patterns returned, most records first }
+
+    LogPatternSeverityMix:
+      type: object
+      required: [unspecified, trace, debug, info, warn, error, fatal]
+      description: Records of the pattern per OpenTelemetry severity range
+      properties:
+        unspecified: { type: integer }
+        trace: { type: integer }
+        debug: { type: integer }
+        info: { type: integer }
+        warn: { type: integer }
+        error: { type: integer }
+        fatal: { type: integer }
+
+    LogPatternSample:
+      type: object
+      required: [timestamp, body, service_name, severity_text, severity_number, trace_id]
+      description: Newest record of the pattern in the range; a rollup response carries only body, service and time
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        body: { type: string }
+        service_name: { type: string }
+        severity_text: { type: string }
+        severity_number: { type: integer }
+        trace_id: { type: string }
+
+    LogPattern:
+      type: object
+      required: [pattern_id, template, count, severity, max_severity_number, services, first_seen, last_seen, sample]
+      properties:
+        pattern_id: { type: string, description: "64-bit id as text; also the value of the pattern_id filter key" }
+        template: { type: string, example: "user <*> logged in from <*>" }
+        count: { type: integer }
+        severity: { $ref: "#/components/schemas/LogPatternSeverityMix" }
+        max_severity_number: { type: integer }
+        services:
+          type: array
+          maxItems: 5
+          items: { type: string }
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        sample: { $ref: "#/components/schemas/LogPatternSample" }
+
+    LogsPatternsResponse:
+      type: object
+      required: [patterns, total, unclassified, rollup, truncated]
+      properties:
+        patterns:
+          type: array
+          items: { $ref: "#/components/schemas/LogPattern" }
+        total: { type: integer, description: Matching records over every pattern, not only the returned ones }
+        unclassified:
+          type: integer
+          description: "Matching records without a pattern (empty body, or stored before the 0091_log_patterns migration); 0 on a rollup response"
+        rollup: { type: boolean, description: Answered from the hourly rollup (counts cover whole hours) }
+        truncated: { type: boolean, description: More patterns exist than `limit` }
+
     TracesQueryRequest:
       type: object
       properties:
@@ -9918,14 +10138,14 @@ components:
         access: { type: string, description: "ok, missing, opted_out or unsupported_user (root or not a local account); unknown values are passed through" }
 
     # ---- Alerting (docs/contracts/alerting.md) ----
-    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql, slo_burn] }
+    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql, slo_burn, anomaly] }
     AlertSeverity: { type: string, enum: [critical, warning, info] }
     AlertOperator: { type: string, enum: [gt, gte, lt, lte] }
     AlertSeriesStateName: { type: string, enum: [ok, pending, firing] }
     AlertIncidentState: { type: string, enum: [open, acknowledged, resolved] }
     AlertResolveReason: { type: string, enum: [recovered, manual, no_data, expired, rule_disabled, rule_deleted, rule_changed] }
-    AlertChannelType: { type: string, enum: [slack, email, webhook, teams] }
-    AlertNotificationKind: { type: string, enum: [opened, resolved, renotify, test] }
+    AlertChannelType: { type: string, enum: [slack, email, webhook, teams, pagerduty, opsgenie] }
+    AlertNotificationKind: { type: string, enum: [opened, acknowledged, resolved, renotify, test] }
     AlertNotificationStatus: { type: string, enum: [pending, sending, delivered, failed, suppressed] }
     AlertLabels:
       type: object
@@ -9976,6 +10196,10 @@ components:
         COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
         slo_burn (§2.11): slo_id, windows (1-4 long/short burn windows with their factor), min_requests. The comparison
         is fixed (gte 1): the value is the largest min(long, short) burn rate divided by the window's factor.
+        anomaly (§2.12): signal (metric = the metric_threshold selector, apm = the apm selector), window_seconds,
+        seasonality (none, hourly, daily, weekly), lookback_days, direction (upper, lower, both), sensitivity
+        (standard deviations, default 3), min_samples, min_deviation. The comparison is fixed (gte 1): the value is
+        the deviation from the median of the same seasonal slot divided by sensitivity x 1.4826 x MAD.
       properties:
         metric: { type: string }
         service_name: { type: string }
@@ -10000,7 +10224,13 @@ components:
         missing_data: { type: string, enum: [keep, ok, breach] }
         query: { type: string }
         severity_min: { type: string }
-        signal: { type: string, enum: [host, metric, log] }
+        signal: { type: string, enum: [host, metric, log, apm], description: "no_data: host, metric, log; anomaly: metric or apm" }
+        seasonality: { type: string, enum: [none, hourly, daily, weekly], description: "anomaly: the season whose same slot forms the baseline" }
+        lookback_days: { type: integer, minimum: 1, maximum: 28, description: "anomaly: how far back the baseline samples reach" }
+        direction: { type: string, enum: [upper, lower, both], description: "anomaly: the side of the band that alerts" }
+        sensitivity: { type: number, minimum: 0.5, maximum: 20, description: "anomaly: half the band width in standard deviations" }
+        min_samples: { type: integer, minimum: 2, maximum: 50, description: "anomaly: baseline samples a series needs before it has a value" }
+        min_deviation: { type: number, minimum: 0, description: "anomaly: absolute deviation below which nothing alerts" }
         slo_id: { type: string, format: uuid, description: "slo_burn: the SLO whose error budget is watched" }
         windows:
           type: array
@@ -10264,7 +10494,9 @@ components:
 
     AlertChannelConfig:
       type: object
-      description: "Non-secret settings. email: to (required), smtp (optional override)"
+      description: >
+        Non-secret settings, one section per channel type. email: to (required), smtp (optional override);
+        pagerduty: pagerduty; opsgenie: opsgenie (alerting.md §5.3).
       properties:
         to:
           type: array
@@ -10277,14 +10509,44 @@ components:
             username: { type: string }
             from: { type: string }
             tls: { type: string, enum: [starttls, tls, none] }
+        pagerduty:
+          type: object
+          properties:
+            region: { type: string, enum: [us, eu], description: "PagerDuty service region (default us)" }
+        opsgenie:
+          type: object
+          properties:
+            region: { type: string, enum: [us, eu], description: "Opsgenie service region (default us)" }
+            priority:
+              type: string
+              enum: ["", P1, P2, P3, P4, P5]
+              description: Overrides the severity mapping (critical P1, warning P3, info P5)
+            responders:
+              type: array
+              maxItems: 20
+              items:
+                type: object
+                required: [type]
+                properties:
+                  type: { type: string, enum: [team, user, escalation, schedule] }
+                  name: { type: string, description: Exactly one of name and id }
+                  id: { type: string }
+            tags:
+              type: array
+              maxItems: 18
+              items: { type: string }
 
     AlertChannelSecrets:
       type: object
-      description: "Write-only. slack/teams/webhook: url; webhook: hmac_secret; email: smtp_password"
+      description: >
+        Write-only. slack/teams/webhook: url; webhook: hmac_secret; email: smtp_password;
+        pagerduty: routing_key (Events API v2 integration key); opsgenie: api_key.
       properties:
         url: { type: string }
         hmac_secret: { type: string }
         smtp_password: { type: string }
+        routing_key: { type: string }
+        api_key: { type: string }
 
     AlertChannelInput:
       type: object
@@ -10335,6 +10597,83 @@ components:
         error: { type: string }
         duration_ms: { type: integer }
         notification_id: { type: string }
+
+    AlertRouteMatcher:
+      type: object
+      required: [label, op, value]
+      properties:
+        label: { type: string, maxLength: 128, example: env }
+        op: { type: string, enum: [eq, neq, contains] }
+        value: { type: string, maxLength: 1024 }
+
+    AlertRouteWindow:
+      type: object
+      description: Local window of a route (alerting.md §5.6); end_time at or before start_time means the next day.
+      required: [timezone, start_time, end_time]
+      properties:
+        timezone: { type: string, example: Europe/Istanbul }
+        days:
+          type: array
+          description: Empty = every day
+          items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        start_time: { type: string, example: "09:00" }
+        end_time: { type: string, example: "18:00" }
+
+    AlertRouteMatch:
+      type: object
+      description: Route condition; the parts are AND-ed and an empty part matches everything.
+      properties:
+        severities:
+          type: array
+          items: { $ref: "#/components/schemas/AlertSeverity" }
+        services:
+          type: array
+          items: { type: string }
+        rule_types:
+          type: array
+          items: { $ref: "#/components/schemas/AlertRuleType" }
+        labels:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/AlertRouteMatcher" }
+        time_window:
+          anyOf:
+            - { $ref: "#/components/schemas/AlertRouteWindow" }
+            - { type: "null" }
+
+    AlertRoutingRuleInput:
+      type: object
+      required: [name, channel_ids]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        position: { type: integer, minimum: 0, maximum: 100, description: Evaluation order, 0 first }
+        enabled: { type: boolean, default: true }
+        is_default:
+          type: boolean
+          description: The default route matches every incident and is evaluated last; at most one per organization and its match must be empty
+        channel_ids:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string }
+        match: { $ref: "#/components/schemas/AlertRouteMatch" }
+
+    AlertRoutingRule:
+      type: object
+      required: [id, name, position, enabled, is_default, match, channel_ids, created_by_email, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        position: { type: integer }
+        enabled: { type: boolean }
+        is_default: { type: boolean }
+        match: { $ref: "#/components/schemas/AlertRouteMatch" }
+        channel_ids:
+          type: array
+          items: { type: string }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
 
     AlertMuteMatcher:
       type: object

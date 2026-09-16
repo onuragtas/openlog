@@ -30,7 +30,7 @@ type ManagerStore interface {
 
 	ListIncidents(ctx context.Context, orgID string, f IncidentFilter) ([]Incident, string, IncidentCounts, error)
 	GetIncident(ctx context.Context, orgID, id string) (*Incident, []IncidentEvent, []DeliveryView, error)
-	AcknowledgeIncident(ctx context.Context, orgID, id string, actor Actor) (*Incident, error)
+	AcknowledgeIncident(ctx context.Context, orgID, id string, actor Actor, publicURL string) (*Incident, error)
 	ResolveIncident(ctx context.Context, orgID, id, note string, actor Actor, publicURL string) (*Incident, error)
 	AddIncidentNote(ctx context.Context, orgID, id, text string, actor Actor) (*IncidentEvent, error)
 
@@ -56,6 +56,13 @@ type ManagerStore interface {
 	HolidayCalendarDates(ctx context.Context, orgID string, ids []string) (map[string][]string, error)
 
 	ListDeliveries(ctx context.Context, orgID string, f DeliveryFilter) ([]DeliveryView, error)
+
+	ListRoutingRules(ctx context.Context, orgID string) ([]RoutingRule, error)
+	GetRoutingRule(ctx context.Context, orgID, id string) (*RoutingRule, error)
+	CreateRoutingRule(ctx context.Context, orgID string, v *ValidRoutingRule, actor Actor) (*RoutingRule, error)
+	UpdateRoutingRule(ctx context.Context, orgID, id string, v *ValidRoutingRule, actor Actor) (*RoutingRule, error)
+	DeleteRoutingRule(ctx context.Context, orgID, id string, actor Actor) error
+	ReorderRoutingRules(ctx context.Context, orgID string, ids []string, actor Actor) ([]RoutingRule, error)
 }
 
 var _ ManagerStore = (*PGStore)(nil)
@@ -226,7 +233,7 @@ func (m *Manager) GetIncident(ctx context.Context, orgID, id string) (*Incident,
 }
 
 func (m *Manager) AcknowledgeIncident(ctx context.Context, orgID, id string, actor Actor) (*Incident, error) {
-	return m.store.AcknowledgeIncident(ctx, orgID, id, actor)
+	return m.store.AcknowledgeIncident(ctx, orgID, id, actor, m.o.PublicURL)
 }
 
 func (m *Manager) ResolveIncident(ctx context.Context, orgID, id, note string, actor Actor) (*Incident, error) {
@@ -452,6 +459,49 @@ func (m *Manager) UpdateHolidayCalendar(ctx context.Context, orgID, id string, i
 
 func (m *Manager) DeleteHolidayCalendar(ctx context.Context, orgID, id string, actor Actor) error {
 	return m.store.DeleteHolidayCalendar(ctx, orgID, id, actor)
+}
+
+// ---- routing rules ----
+
+func (m *Manager) ListRoutingRules(ctx context.Context, orgID string) ([]RoutingRule, error) {
+	return m.store.ListRoutingRules(ctx, orgID)
+}
+
+func (m *Manager) GetRoutingRule(ctx context.Context, orgID, id string) (*RoutingRule, error) {
+	return m.store.GetRoutingRule(ctx, orgID, id)
+}
+
+func (m *Manager) CreateRoutingRule(ctx context.Context, orgID string, in RoutingRuleInput, actor Actor) (*RoutingRule, error) {
+	v, err := in.Validate()
+	if err != nil {
+		return nil, err
+	}
+	return m.store.CreateRoutingRule(ctx, orgID, v, actor)
+}
+
+func (m *Manager) UpdateRoutingRule(ctx context.Context, orgID, id string, in RoutingRuleInput, actor Actor) (*RoutingRule, error) {
+	v, err := in.Validate()
+	if err != nil {
+		return nil, err
+	}
+	return m.store.UpdateRoutingRule(ctx, orgID, id, v, actor)
+}
+
+func (m *Manager) DeleteRoutingRule(ctx context.Context, orgID, id string, actor Actor) error {
+	return m.store.DeleteRoutingRule(ctx, orgID, id, actor)
+}
+
+// ReorderRoutingRules sets the evaluation order; ids must list every routing rule of the organization once.
+func (m *Manager) ReorderRoutingRules(ctx context.Context, orgID string, ids []string, actor Actor) ([]RoutingRule, error) {
+	if len(ids) == 0 {
+		return nil, invalid("ids", "required")
+	}
+	for i, id := range ids {
+		if !ValidUUID(id) {
+			return nil, invalid("ids", "ids[%d] is not a valid id", i)
+		}
+	}
+	return m.store.ReorderRoutingRules(ctx, orgID, ids, actor)
 }
 
 // ---- deliveries ----

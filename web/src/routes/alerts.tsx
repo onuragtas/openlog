@@ -9,6 +9,7 @@ import { ChannelsManager } from "@/components/alerts/ChannelsManager";
 import { EvaluationHistory } from "@/components/alerts/EvaluationHistory";
 import { IncidentDetail, IncidentsList, type IncidentStateFilter } from "@/components/alerts/Incidents";
 import { MutesManager } from "@/components/alerts/MutesManager";
+import { RoutingRulesManager } from "@/components/alerts/RoutingRulesManager";
 import { RuleEditor } from "@/components/alerts/RuleEditor";
 import { RulesList } from "@/components/alerts/RulesList";
 import { RuleStateBadge } from "@/components/alerts/badges";
@@ -30,6 +31,7 @@ const TABS = [
   { to: "/alerts/rules", label: "alerts.tabs.rules" },
   { to: "/alerts/templates", label: "alerts.tabs.templates" },
   { to: "/alerts/channels", label: "alerts.tabs.channels" },
+  { to: "/alerts/routing", label: "alerts.tabs.routing" },
   { to: "/alerts/mutes", label: "alerts.tabs.mutes" },
 ] as const;
 
@@ -194,6 +196,10 @@ export function AlertsRuleEditPage() {
 
 export function AlertsChannelsPage() {
   return <ChannelsManager />;
+}
+
+export function AlertsRoutingPage() {
+  return <RoutingRulesManager />;
 }
 
 export function AlertsMutesPage() {

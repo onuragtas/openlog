@@ -28,7 +28,7 @@ export function LogsPage() {
   return (
     <LogsExplorerView
       range={range}
-      params={{ f: search.f, q: search.q, cols: search.cols, order: search.order, gb: search.gb, tv: search.tv }}
+      params={{ f: search.f, q: search.q, cols: search.cols, order: search.order, gb: search.gb, tv: search.tv, pv: search.pv }}
       legacy={legacy}
       transaction={transaction}
       onParams={(patch, opts) =>

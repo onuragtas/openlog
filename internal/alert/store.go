@@ -38,6 +38,8 @@ type EvalStore interface {
 	LoadRule(ctx context.Context, ruleID string) (*Rule, []ChannelRef, error)
 	// LoadSeries returns the stored series states of a rule with their incidents.
 	LoadSeries(ctx context.Context, ruleID string) (map[string]SeriesState, error)
+	// LoadRouting returns the routing rules of an organization and the channels they may use (§5.6).
+	LoadRouting(ctx context.Context, orgID string) (*Routing, error)
 	// Commit applies a plan if instance still holds the lease, the plan's end is newer than the stored
 	// last_eval_end and the rule still has the evaluated version. Errors: ErrLeaseLost, ErrStale, ErrRuleChanged.
 	Commit(ctx context.Context, instance string, p *Plan) error

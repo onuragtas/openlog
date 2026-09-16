@@ -9,7 +9,7 @@ import type { RangeSpec } from "@/lib/time";
 import type { EmbeddedLogsSearch } from "@/router";
 import { LogsExplorerView, type LogsExplorerParams } from "./LogsExplorerView";
 
-const PARAM_NAMES = { f: "lf", q: "lq", cols: "lcols", order: "lorder", gb: "lgb", tv: "ltv" } as const satisfies Record<keyof LogsExplorerParams, keyof EmbeddedLogsSearch>;
+const PARAM_NAMES = { f: "lf", q: "lq", cols: "lcols", order: "lorder", gb: "lgb", tv: "ltv", pv: "lpv" } as const satisfies Record<keyof LogsExplorerParams, keyof EmbeddedLogsSearch>;
 
 export interface EmbeddedLogsExplorerProps {
   range: RangeSpec;
@@ -27,7 +27,7 @@ export function EmbeddedLogsExplorer({ range, search, locked, legacy, legacyPara
   const navigate = useNavigate();
   const { severity, source, file, discovery, unit, stream } = legacy;
   const legacyConds = useMemo(() => legacyTabFilters({ severity, source, file, discovery, unit, stream }), [severity, source, file, discovery, unit, stream]);
-  const params: LogsExplorerParams = { f: search.lf, q: search.lq, cols: search.lcols, order: search.lorder, gb: search.lgb, tv: search.ltv };
+  const params: LogsExplorerParams = { f: search.lf, q: search.lq, cols: search.lcols, order: search.lorder, gb: search.lgb, tv: search.ltv, pv: search.lpv };
   const update = (patch: Record<string, unknown>, replace = false) =>
     void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, ...patch }), replace } as never);
 

@@ -112,7 +112,17 @@ export interface RuleDraft {
   slow_factor: string;
   slow_long_seconds: number;
   slow_short_seconds: number;
+  /** anomaly: the baseline of the watched signal (alerting.md §2.12); `signal` picks metric or apm */
+  seasonality: NonNullable<AlertCondition["seasonality"]>;
+  lookback_days: number;
+  direction: NonNullable<AlertCondition["direction"]>;
+  sensitivity: string;
+  min_samples: string;
+  min_deviation: string;
 }
+
+/** Seasons an anomaly baseline can use and their length in minutes (0 = the preceding windows). */
+export const ANOMALY_SEASONS = { none: 0, hourly: 60, daily: 1440, weekly: 10080 } as const;
 
 export const DEFAULT_FLAPPING: AlertFlapping = { enabled: true, transitions: 4, window_seconds: 3600, hold_seconds: 600 };
 
@@ -126,6 +136,7 @@ const TYPE_DEFAULTS: Record<AlertRuleType, Partial<RuleDraft>> = {
   oql: { window_seconds: 300, operator: "gt", group_by: [], interval_seconds: 60 },
   apm_error: { window_seconds: 300, group_by: [], interval_seconds: 60, event: "new_group" },
   slo_burn: { window_seconds: 3600, group_by: [], interval_seconds: 60 },
+  anomaly: { window_seconds: 300, group_by: ["host"], interval_seconds: 60, signal: "metric", metric: "" },
 };
 
 /** Event rules ignore for_seconds (discovery, apm_error). */
@@ -174,6 +185,12 @@ export function emptyDraft(type: AlertRuleType = "metric_threshold"): RuleDraft 
     slow_factor: "6",
     slow_long_seconds: 21600,
     slow_short_seconds: 1800,
+    seasonality: "daily",
+    lookback_days: 7,
+    direction: "upper",
+    sensitivity: "3",
+    min_samples: "3",
+    min_deviation: "",
     ...TYPE_DEFAULTS[type],
   };
 }
@@ -195,8 +212,17 @@ export function changeType(d: RuleDraft, type: AlertRuleType): RuleDraft {
     labels: d.labels,
     flapping: d.flapping,
     version: d.version,
-    filters: type === "apm" || type === "apm_no_data" || type === "apm_error" || type === "slo_burn" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
+    filters: keepFilters(d.filters, type),
   };
+}
+
+/** The filters a type can still evaluate after a type switch. */
+function keepFilters(filters: FilterDraft[], type: AlertRuleType): FilterDraft[] {
+  if (type === "apm" || type === "apm_no_data" || type === "apm_error" || type === "slo_burn") return [];
+  // A baseline reads the 1-minute rollup, which has no host name and no resource attributes (alerting.md §2.12).
+  if (type === "anomaly") return filters.filter((f) => f.field === "host.id" || f.field === "service.name" || f.field.startsWith("attr."));
+  if (type === "discovery" || type === "no_data") return filters.filter((f) => !f.field.startsWith("attr."));
+  return filters;
 }
 
 const numStr = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
@@ -247,6 +273,12 @@ export function draftFromRule(rule: AlertRule): RuleDraft {
     slow_factor: numStr(c.windows?.[1]?.factor) || base.slow_factor,
     slow_long_seconds: c.windows?.[1]?.long_seconds ?? base.slow_long_seconds,
     slow_short_seconds: c.windows?.[1]?.short_seconds ?? base.slow_short_seconds,
+    seasonality: c.seasonality ?? base.seasonality,
+    lookback_days: c.lookback_days ?? base.lookback_days,
+    direction: c.direction ?? base.direction,
+    sensitivity: numStr(c.sensitivity) || base.sensitivity,
+    min_samples: numStr(c.min_samples) || base.min_samples,
+    min_deviation: c.min_deviation ? String(c.min_deviation) : "",
   };
 }
 
@@ -383,6 +415,34 @@ export function draftToInput(d: RuleDraft): AlertRuleInput {
         ],
       };
       break;
+    case "anomaly":
+      // The comparison is fixed (gte 1): the sensitivity is the band, not a threshold (alerting.md §2.12).
+      condition = {
+        signal: d.signal === "apm" ? "apm" : "metric",
+        ...(d.signal === "apm"
+          ? {
+              service_name: d.service_name.trim(),
+              environment: d.environment.trim() === "" ? null : d.environment.trim(),
+              transaction_name: d.transaction_name.trim(),
+              metric: d.metric,
+              min_requests: parseNumber(d.min_requests) ?? 0,
+            }
+          : {
+              metric: d.metric.trim(),
+              aggregation: d.aggregation,
+              ...(d.series_aggregation ? { series_aggregation: d.series_aggregation } : {}),
+              filters: filtersToInput(d.filters),
+            }),
+        group_by: d.group_by,
+        window_seconds: d.window_seconds,
+        seasonality: d.seasonality,
+        lookback_days: d.lookback_days,
+        direction: d.direction,
+        sensitivity: parseNumber(d.sensitivity) ?? 3,
+        min_samples: parseNumber(d.min_samples) ?? 3,
+        min_deviation: parseNumber(d.min_deviation) ?? 0,
+      };
+      break;
   }
   const labels: Record<string, string> = {};
   for (const l of d.labels) if (l.key.trim()) labels[l.key.trim()] = l.value;
@@ -407,7 +467,9 @@ export function draftToInput(d: RuleDraft): AlertRuleInput {
 
 // ---- validation ----
 
-export type ValidationKey = "required" | "number" | "range" | "recoverySide" | "labelKey" | "filterValues" | "renotify" | "url" | "oqlQuery";
+export type ValidationKey =
+  | "required" | "number" | "range" | "recoverySide" | "labelKey" | "filterValues" | "renotify" | "url" | "oqlQuery"
+  | "anomalySeason" | "anomalySamples";
 
 export interface ValidationIssue {
   key: ValidationKey;
@@ -488,6 +550,27 @@ export function validateDraft(d: RuleDraft): DraftErrors {
         inRange(e, `${w}_short_seconds`, d[`${w}_short_seconds`], 60, d[`${w}_long_seconds`]);
       }
       break;
+    case "anomaly": {
+      if (d.signal === "apm") {
+        if (!d.service_name.trim()) e.service_name = { key: "required" };
+      } else if (!d.metric.trim()) {
+        e.metric = { key: "required" };
+      }
+      inRange(e, "window_seconds", d.window_seconds, 60, 21600);
+      inRange(e, "lookback_days", d.lookback_days, 1, 28);
+      const sensitivity = parseNumber(d.sensitivity);
+      if (sensitivity === null || sensitivity < 0.5 || sensitivity > 20) e.sensitivity = { key: "range", params: { min: 0.5, max: 20 } };
+      const samples = parseNumber(d.min_samples);
+      if (samples === null || samples < 2 || samples > 50) e.min_samples = { key: "range", params: { min: 2, max: 50 } };
+      if (d.min_deviation.trim() !== "" && (parseNumber(d.min_deviation) ?? -1) < 0) e.min_deviation = { key: "number" };
+      // The window must divide the season so every baseline sample covers the same slot of it.
+      const season = ANOMALY_SEASONS[d.seasonality];
+      const windowMinutes = Math.round(d.window_seconds / 60);
+      if (season > 0 && windowMinutes > 0 && season % windowMinutes !== 0) e.window_seconds = { key: "anomalySeason" };
+      const lags = Math.floor((d.lookback_days * 1440) / (season > 0 ? season : Math.max(windowMinutes, 1)));
+      if (samples !== null && lags < samples) e.lookback_days = { key: "anomalySamples", params: { count: lags } };
+      break;
+    }
     case "oql":
       if (!d.query.trim()) e.query = { key: "required" };
       else if (alertQueryIssues(d.query).length > 0) e.query = { key: "oqlQuery" };
@@ -535,7 +618,7 @@ export interface RuleEditorSearch {
 
 const AGGS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGS = ["avg", "sum", "min", "max"] as const;
-const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "oql", "apm_error", "slo_burn"];
+const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "oql", "apm_error", "slo_burn", "anomaly"];
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
 const SEVERITIES = ["critical", "warning", "info"] as const;
 
@@ -661,11 +744,11 @@ export function previewChartData(p: AlertRulePreview, fallbackLabel: string, max
   return { series, bands, fires: fires.sort((a, b) => a - b), hiddenSeries: Math.max(0, p.series.length - shown.length), incidents };
 }
 
-/** Chart unit for a preview: OTel unit "1" is a ratio (percent) except Apdex. */
+/** Chart unit for a preview: OTel unit "1" is a ratio (percent) except Apdex and anomaly deviation ratios. */
 export function unitKindFor(unit: string, type: AlertRuleType, metric?: string): UnitKind {
   if (unit === "ms") return "ms";
   if (unit === "By") return "bytes";
   if (unit === "By/s") return "bytesPerSec";
-  if (unit === "1") return type === "apm" && metric === "apdex" ? "number" : "percent";
+  if (unit === "1") return type === "anomaly" || (type === "apm" && metric === "apdex") ? "number" : "percent";
   return "number";
 }

@@ -244,7 +244,8 @@ func (d *Dispatcher) Process(ctx context.Context, del *Delivery) DeliveryOutcome
 			return d.terminal(del, StatusSuppressed, "incident acknowledged or resolved", EventNotificationSuppressed)
 		}
 		if m := MatchingMute(d.activeMutes(ctx, del.OrgID, now), inc.RuleID, inc.Labels, now); m != nil {
-			if del.Kind == KindRenotify {
+			// Re-notifications and acknowledgements are state updates: they are dropped, not postponed.
+			if del.Kind == KindRenotify || del.Kind == KindAcknowledged {
 				return d.terminal(del, StatusSuppressed, "muted by "+m.Name, EventNotificationSuppressed)
 			}
 			d.result(del, "muted")

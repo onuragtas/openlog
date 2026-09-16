@@ -248,6 +248,39 @@ function logRecords(now: number): Rec[] {
   });
 }
 
+// ---- log patterns (D-128) ------------------------------------------------------------------------------------------
+// A small stand-in for internal/logpattern: tokens that carry a value become "<*>", so the mock app groups messages
+// the way the backend does. The id only has to be stable, not equal to the backend's hash.
+
+const PUNCT_OPEN = "([{<";
+const PUNCT_CLOSE = ")]}>,;:.!?";
+
+const variableToken = (s: string): boolean =>
+  s.length > 0 &&
+  (/\d/.test(s) || /^"[^]*"$|^'[^]*'$/.test(s) || (s.includes("@") && /[A-Za-z]/.test(s)) || (s.length >= 8 && /^[a-fA-F]+$/.test(s)));
+
+function maskToken(tok: string): string {
+  const kv = /^([A-Za-z_.-]+[=:])([^]+)$/.exec(tok);
+  if (kv && variableToken(kv[2]!)) return `${kv[1]}<*>`;
+  let s = 0;
+  let e = tok.length;
+  while (s < e && PUNCT_OPEN.includes(tok[s]!)) s++;
+  while (e > s && PUNCT_CLOSE.includes(tok[e - 1]!)) e--;
+  const core = tok.slice(s, e);
+  return core && variableToken(core) ? `${tok.slice(0, s)}<*>${tok.slice(e)}` : tok;
+}
+
+const maskBody = (body: string): string => body.split(/\s+/).filter(Boolean).map(maskToken).join(" ");
+
+/** Stable id of a body's template ("0" when there is nothing to group). */
+function patternId(body: string): string {
+  const template = maskBody(body);
+  if (template === "") return "0";
+  let h = 2166136261;
+  for (let i = 0; i < template.length; i++) h = Math.imul(h ^ template.charCodeAt(i), 16777619) >>> 0;
+  return String(h);
+}
+
 const LOG_FIELDS: Record<string, { type: FieldType; get: (r: Rec) => string }> = {
   timestamp: { type: "string", get: (r) => r.log.timestamp },
   body: { type: "string", get: (r) => r.log.body },
@@ -261,6 +294,8 @@ const LOG_FIELDS: Record<string, { type: FieldType; get: (r: Rec) => string }> =
   trace_flags: { type: "number", get: (r) => (r.log.trace_id ? "1" : "0") },
   "event.name": { type: "string", get: () => "" },
   "scope.name": { type: "string", get: () => "" },
+  pattern_id: { type: "string", get: (r) => patternId(r.log.body) },
+  pattern_template: { type: "string", get: (r) => maskBody(r.log.body) },
   observed_timestamp: { type: "string", get: (r) => r.log.timestamp },
 };
 
@@ -800,6 +835,60 @@ export const explorerHandlers = [
       .map(([id, e]) => ({ group: e.other ? "" : id, other: e.other, total: e.total, points: [...e.points.entries()].sort((x, y) => x[0] - y[0]) }))
       .sort((x, y) => Number(x.other) - Number(y.other) || y.total - x.total);
     return HttpResponse.json({ step: `${step / 1000}s`, total: recs.length, series });
+  })),
+
+  http.post(`${API}/logs/patterns`, authed(async (_ctx, { request }) => {
+    const b = (await request.json().catch(() => null)) as (FilterBody & { from?: unknown; to?: unknown; limit?: number }) | null;
+    if (!b || typeof b !== "object") return fail("invalid_argument", "invalid JSON body");
+    const w = timeWindow(b.from, b.to);
+    if (w instanceof Response) return w;
+    const err = validateFilterBody(b);
+    if (err) return fail("invalid_argument", err);
+    if (b.limit !== undefined && (typeof b.limit !== "number" || b.limit < 1 || b.limit > 500)) return fail("invalid_argument", "limit must be between 1 and 500");
+    const limit = b.limit ?? 50;
+    const q = (b.q ?? "").toLowerCase();
+    const txn = transactionTraceIds(b);
+    if (txn instanceof Response) return txn;
+    const recs = logRecords(Date.now()).filter(
+      (r) => r.ts >= w.from && r.ts <= w.to && (!q || r.log.body.toLowerCase().includes(q)) && (!txn || txn.has(r.log.trace_id)) && matchesAll((k) => logValue(r, k), b),
+    );
+    const bucket = (n: number) => (n === 0 ? "unspecified" : n <= 4 ? "trace" : n <= 8 ? "debug" : n <= 12 ? "info" : n <= 16 ? "warn" : n <= 20 ? "error" : "fatal");
+    const groups = new Map<string, Rec[]>();
+    let unclassified = 0;
+    for (const r of recs) {
+      const id = patternId(r.log.body);
+      if (id === "0") {
+        unclassified++;
+        continue;
+      }
+      groups.set(id, [...(groups.get(id) ?? []), r]);
+    }
+    const all = [...groups.entries()]
+      .map(([id, list]) => {
+        const newest = list.reduce((a, r) => (r.ts > a.ts ? r : a), list[0]!);
+        const severity = { unspecified: 0, trace: 0, debug: 0, info: 0, warn: 0, error: 0, fatal: 0 };
+        for (const r of list) severity[bucket(r.log.severity_number)]++;
+        return {
+          pattern_id: id,
+          template: maskBody(newest.log.body),
+          count: list.length,
+          severity,
+          max_severity_number: Math.max(...list.map((r) => r.log.severity_number)),
+          services: [...new Set(list.map((r) => r.log.service_name).filter(Boolean))].slice(0, 5),
+          first_seen: fx.formatTs(Math.min(...list.map((r) => r.ts))),
+          last_seen: fx.formatTs(Math.max(...list.map((r) => r.ts))),
+          sample: {
+            timestamp: newest.log.timestamp,
+            body: newest.log.body,
+            service_name: newest.log.service_name,
+            severity_text: newest.log.severity_text,
+            severity_number: newest.log.severity_number,
+            trace_id: newest.log.trace_id,
+          },
+        };
+      })
+      .sort((x, y) => y.count - x.count || x.pattern_id.localeCompare(y.pattern_id));
+    return HttpResponse.json({ patterns: all.slice(0, limit), total: recs.length, unclassified, rollup: false, truncated: all.length > limit });
   })),
 
   http.post(`${API}/traces/query`, authed(async (_ctx, { request }) => {

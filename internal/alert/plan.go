@@ -154,6 +154,8 @@ type PlanInput struct {
 	Delay       time.Duration
 	PublicURL   string
 	NewID       func() string
+	// Routing is the organization's routing configuration (§5.6); nil = the rule's own channels.
+	Routing *Routing
 }
 
 // StepConfigFor builds the state machine settings of a rule.
@@ -242,13 +244,16 @@ func BuildPlan(in PlanInput) *Plan {
 			if !present {
 				sample = Sample{Key: key, Labels: next.Labels, Value: math.NaN()}
 			}
+			labels := incidentLabels(r, next.Labels)
+			// Routing rules can send this incident to other channels than the rule's own (§5.6).
+			targets := RouteChannels(in.Routing, r, labels, in.End, channels)
 			inc := Incident{
 				ID: newID(), OrgID: r.OrgID, RuleID: r.ID, RuleName: r.Name, RuleType: r.Type, Severity: r.Severity,
-				SeriesKey: key, Labels: incidentLabels(r, next.Labels), Summary: r.Condition.Summary(sample, unit),
+				SeriesKey: key, Labels: labels, Summary: r.Condition.Summary(sample, unit),
 				State: IncidentOpen, Value: optFloat(value), LastValue: optFloat(value), Threshold: optFloat(cfg.Judge.Threshold),
 				OpenedAt: in.End, ChannelIDs: []string{},
 			}
-			for _, c := range channels {
+			for _, c := range targets {
 				inc.ChannelIDs = append(inc.ChannelIDs, c.ID)
 			}
 			p.Opens = append(p.Opens, inc)
@@ -256,7 +261,7 @@ func BuildPlan(in PlanInput) *Plan {
 			next.Incident = &inc
 			p.Events = append(p.Events, IncidentEvent{IncidentID: inc.ID, OrgID: r.OrgID, At: in.End, Kind: EventOpened,
 				Message: inc.Summary, Details: map[string]any{"value": inc.Value, "threshold": inc.Threshold}})
-			for _, c := range channels {
+			for _, c := range targets {
 				p.Notifications = append(p.Notifications, newNotification(r, &inc, c, KindOpened, "", in.PublicURL, newID))
 			}
 		case out.Resolve != "" && prev.IncidentID != "":
@@ -355,7 +360,8 @@ func IdempotencyKey(incidentID, kind, seq, channelID string) string {
 	return incidentID + ":" + kind + ":" + channelID
 }
 
-var kindEvent = map[string]string{KindOpened: notify.EventOpened, KindResolved: notify.EventResolved, KindRenotify: notify.EventRenotify, KindTest: notify.EventTest}
+var kindEvent = map[string]string{KindOpened: notify.EventOpened, KindAcknowledged: notify.EventAcknowledged,
+	KindResolved: notify.EventResolved, KindRenotify: notify.EventRenotify, KindTest: notify.EventTest}
 
 // BuildEvent renders the stored payload of a notification.
 func BuildEvent(r *Rule, inc *Incident, kind, key, publicURL string) notify.Event {
@@ -405,6 +411,22 @@ func newNotification(r *Rule, inc *Incident, ch ChannelRef, kind, seq, publicURL
 	payload, _ := json.Marshal(BuildEvent(r, inc, kind, key, publicURL))
 	return Notification{ID: newID(), OrgID: r.OrgID, IncidentID: inc.ID, RuleID: r.ID, ChannelID: ch.ID, ChannelType: ch.Type,
 		Kind: kind, IdempotencyKey: key, Payload: payload, Status: StatusPending}
+}
+
+// ackChannelTypes are the channel types that track the incident lifecycle at the receiver: only they are told
+// that an incident was acknowledged (§5.1).
+var ackChannelTypes = map[string]bool{notify.TypePagerDuty: true, notify.TypeOpsgenie: true}
+
+// ackNotifications enqueues acknowledge notifications to the lifecycle-aware channels the incident was opened
+// with. types maps channel id → channel type (loaded by the store).
+func ackNotifications(r *Rule, inc *Incident, types map[string]string, publicURL string, newID func() string) []Notification {
+	out := []Notification{}
+	for _, cid := range inc.ChannelIDs {
+		if t := types[cid]; ackChannelTypes[t] {
+			out = append(out, newNotification(r, inc, ChannelRef{ID: cid, Type: t}, KindAcknowledged, "", publicURL, newID))
+		}
+	}
+	return out
 }
 
 // resolveNotifications enqueues resolve notifications to the channels the incident was opened with. Channel types

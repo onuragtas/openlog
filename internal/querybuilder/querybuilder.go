@@ -122,6 +122,10 @@ var Fields = map[Signal][]FieldDef{
 		num("trace_flags", "trace_flags"),
 		str("event.name", "event_name"),
 		str("scope.name", "scope_name"),
+		// Log pattern (D-128). The id is a UInt64 and is read as text: JSON numbers lose precision above 2^53, and
+		// records written before 0091_log_patterns (id 0) must read as "" so exists/not_exists work on them.
+		str("pattern_id", "if(pattern_id = 0, '', toString(pattern_id))"),
+		str("pattern_template", "pattern_template"),
 		shown("observed_timestamp", "toString(observed_timestamp)"),
 	},
 	Traces: {
@@ -162,7 +166,8 @@ var Fields = map[Signal][]FieldDef{
 
 var aliases = map[Signal]map[string]string{
 	Logs: {"severity": "severity_text", "message": "body", "trace.id": "trace_id", "span.id": "span_id",
-		"service_name": "service.name", "host_id": "host.id", "host_name": "host.name", "event_name": "event.name", "scope_name": "scope.name"},
+		"service_name": "service.name", "host_id": "host.id", "host_name": "host.name", "event_name": "event.name", "scope_name": "scope.name",
+		"pattern.id": "pattern_id", "pattern": "pattern_template", "pattern.template": "pattern_template"},
 	Traces: {"trace.id": "trace_id", "span.id": "span_id", "parent.id": "parent_span_id", "service_name": "service.name",
 		"host_id": "host.id", "span.name": "name", "scope_name": "scope.name", "duration.ms": "duration_ms", "status.code": "status_code",
 		"status.message": "status_message", "service_namespace": "service.namespace", "deployment_environment": "deployment.environment",

@@ -56,6 +56,7 @@ const AlertsRulesPage = lazyRouteComponent(() => import("@/routes/alerts"), "Ale
 const AlertsRuleNewPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsRuleNewPage");
 const AlertsRuleEditPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsRuleEditPage");
 const AlertsChannelsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsChannelsPage");
+const AlertsRoutingPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsRoutingPage");
 const AlertsMutesPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsMutesPage");
 const AlertsTemplatesPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsTemplatesPage");
 const SettingsLayout = lazyRouteComponent(() => import("@/routes/settings"), "SettingsLayout");
@@ -86,6 +87,8 @@ export interface EmbeddedLogsSearch {
   lorder?: "asc";
   lgb?: string;
   ltv?: string;
+  /** patterns view instead of the record list (D-128) */
+  lpv?: boolean;
 }
 
 const embeddedLogsSearch = (s: Record<string, unknown>): EmbeddedLogsSearch => ({
@@ -95,6 +98,7 @@ const embeddedLogsSearch = (s: Record<string, unknown>): EmbeddedLogsSearch => (
   lorder: s.lorder === "asc" ? "asc" : undefined,
   lgb: str(s.lgb)?.slice(0, 256),
   ltv: str(s.ltv)?.slice(0, 256),
+  lpv: s.lpv === true || s.lpv === "true" || s.lpv === "1" ? true : undefined,
 });
 
 /** Search params of every route: the time range and the auto-refresh interval (lib/auto-refresh.ts). */
@@ -412,6 +416,8 @@ export interface LogsSearch {
   gb?: string;
   /** top values key */
   tv?: string;
+  /** patterns view instead of the record list (D-128) */
+  pv?: boolean;
   /** applied saved view id */
   view?: string;
 }
@@ -433,6 +439,7 @@ const logsRoute = createRoute({
     order: s.order === "asc" ? "asc" : undefined,
     gb: str(s.gb)?.slice(0, 256),
     tv: str(s.tv)?.slice(0, 256),
+    pv: s.pv === true || s.pv === "true" || s.pv === "1" ? true : undefined,
     view: str(s.view),
   }),
   component: LogsPage,
@@ -775,6 +782,7 @@ const alertsTemplatesRoute = createRoute({
 });
 const alertsRuleRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/rules/$ruleId", component: AlertsRuleEditPage });
 const alertsChannelsRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/channels", component: AlertsChannelsPage });
+const alertsRoutingRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/routing", component: AlertsRoutingPage });
 const alertsMutesRoute = createRoute({ getParentRoute: () => alertsRoute, path: "/mutes", component: AlertsMutesPage });
 
 // ---- Query console and dashboards (routes/query.tsx, routes/dashboards.tsx; docs/contracts/oql.md) ----
@@ -967,6 +975,7 @@ export const routeTree = rootRoute.addChildren([
       alertsRuleRoute,
       alertsTemplatesRoute,
       alertsChannelsRoute,
+      alertsRoutingRoute,
       alertsMutesRoute,
     ]),
     settingsRoute.addChildren([

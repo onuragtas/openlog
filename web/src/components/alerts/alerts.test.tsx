@@ -22,6 +22,7 @@ vi.hoisted(() => {
 });
 import { IncidentDetail, IncidentsList } from "./Incidents";
 import { MutesManager } from "./MutesManager";
+import { RoutingRulesManager } from "./RoutingRulesManager";
 import { RuleEditor } from "./RuleEditor";
 
 /** Renders ui inside a memory router (for Links) with a fresh query client and the theme (charts). */
@@ -121,7 +122,7 @@ describe("alerting UI", () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
     renderUi(<ChannelsManager />);
-    expect(await screen.findAllByTestId("channel-row")).toHaveLength(4);
+    expect(await screen.findAllByTestId("channel-row")).toHaveLength(5);
     expect(screen.getByText("https://hooks.slack.com/…/•••Xk2p")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "New channel" }));
@@ -157,6 +158,35 @@ describe("alerting UI", () => {
     const row = (await screen.findByText("Deploy window")).closest("tr")!;
     expect(row).toHaveTextContent("host.name equals web-1");
     expect(within(row).getByText("Active")).toBeInTheDocument();
+  }, 40_000);
+
+  it("routing rules: ordered list, a new rule and reordering", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderUi(<RoutingRulesManager />);
+    const rows = await screen.findAllByTestId("routing-rule-row");
+    expect(rows).toHaveLength(2);
+    // The first match wins, so the order is shown; the default route is always last.
+    expect(within(rows[0]!).getByText("Critical to on-call")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("Critical")).toBeInTheDocument(); // the match summary, next to the rule name
+    expect(within(rows[0]!).getByText("On-call (PagerDuty)")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("Default")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("every incident")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "New routing rule" }));
+    await user.type(screen.getByLabelText("Name"), "Warnings to Slack");
+    await user.click(screen.getByLabelText(/#ops-alerts/));
+    await user.click(screen.getByLabelText("Warning"));
+    await user.click(screen.getByRole("button", { name: "Create routing rule" }));
+
+    const created = (await screen.findByText("Warnings to Slack")).closest("tr")!;
+    expect(created).toHaveTextContent("Warning");
+    expect(created).toHaveTextContent("#ops-alerts");
+    expect(screen.getAllByTestId("routing-rule-row")).toHaveLength(3);
+
+    // Moving the second rule up reorders the whole list in one request.
+    await user.click(screen.getByRole("button", { name: "Move Warnings to Slack up" }));
+    await vi.waitFor(() => expect(screen.getAllByTestId("routing-rule-row")[0]!).toHaveTextContent("Warnings to Slack"));
   }, 40_000);
 
   it("is read-only for viewers", async () => {

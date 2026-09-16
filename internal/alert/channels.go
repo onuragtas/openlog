@@ -28,6 +28,9 @@ type SMTPOverride struct {
 type ChannelConfig struct {
 	To   []string      `json:"to,omitempty"`
 	SMTP *SMTPOverride `json:"smtp,omitempty"`
+	// On-call providers (§5.3); their integration key / API key is a secret.
+	PagerDuty *notify.PagerDutyConfig `json:"pagerduty,omitempty"`
+	Opsgenie  *notify.OpsgenieConfig  `json:"opsgenie,omitempty"`
 }
 
 // ChannelInput is the API representation of a channel write.
@@ -65,10 +68,12 @@ type Channel struct {
 }
 
 var channelSecretKeys = map[string]map[string]bool{
-	notify.TypeSlack:   {"url": true},
-	notify.TypeTeams:   {"url": true},
-	notify.TypeWebhook: {"url": true, "hmac_secret": true},
-	notify.TypeEmail:   {"smtp_password": true},
+	notify.TypeSlack:     {"url": true},
+	notify.TypeTeams:     {"url": true},
+	notify.TypeWebhook:   {"url": true, "hmac_secret": true},
+	notify.TypeEmail:     {"smtp_password": true},
+	notify.TypePagerDuty: {"routing_key": true},
+	notify.TypeOpsgenie:  {"api_key": true},
 }
 
 // PreparedChannel is a validated channel write.
@@ -95,7 +100,7 @@ func PrepareChannel(in ChannelInput, existing *Channel, existingSecrets map[stri
 	}
 	allowed, ok := channelSecretKeys[p.Type]
 	if !ok {
-		return nil, invalid("type", "must be slack, email, webhook or teams")
+		return nil, invalid("type", "must be slack, email, webhook, teams, pagerduty or opsgenie")
 	}
 	if existing != nil && existing.Type != p.Type {
 		return nil, invalid("type", "cannot be changed")
@@ -112,6 +117,10 @@ func PrepareChannel(in ChannelInput, existing *Channel, existingSecrets map[stri
 		if v != "" {
 			p.Secrets[k] = v
 		}
+	}
+	// Each config section belongs to one channel type.
+	if (p.Config.PagerDuty != nil && p.Type != notify.TypePagerDuty) || (p.Config.Opsgenie != nil && p.Type != notify.TypeOpsgenie) {
+		return nil, invalid("config", "%s channels have no pagerduty or opsgenie settings", p.Type)
 	}
 	switch p.Type {
 	case notify.TypeSlack, notify.TypeTeams, notify.TypeWebhook:
@@ -168,9 +177,105 @@ func PrepareChannel(in ChannelInput, existing *Channel, existingSecrets map[stri
 		} else if _, ok := p.Secrets["smtp_password"]; ok {
 			return nil, invalid("secrets.smtp_password", "only used with config.smtp")
 		}
+	case notify.TypePagerDuty:
+		if len(p.Config.To) > 0 || p.Config.SMTP != nil {
+			return nil, invalid("config", "%s channels only have config.pagerduty", p.Type)
+		}
+		if key := p.Secrets["routing_key"]; key == "" {
+			return nil, invalid("secrets.routing_key", "required")
+		} else if len(key) > 128 {
+			return nil, invalid("secrets.routing_key", "at most 128 characters")
+		}
+		if p.Config.PagerDuty == nil {
+			p.Config.PagerDuty = &notify.PagerDutyConfig{}
+		}
+		region, err := providerRegion(p.Config.PagerDuty.Region)
+		if err != nil {
+			return nil, prefixField("config.pagerduty", err)
+		}
+		p.Config.PagerDuty.Region = region
+	case notify.TypeOpsgenie:
+		if len(p.Config.To) > 0 || p.Config.SMTP != nil {
+			return nil, invalid("config", "%s channels only have config.opsgenie", p.Type)
+		}
+		if key := p.Secrets["api_key"]; key == "" {
+			return nil, invalid("secrets.api_key", "required")
+		} else if len(key) > 256 {
+			return nil, invalid("secrets.api_key", "at most 256 characters")
+		}
+		if p.Config.Opsgenie == nil {
+			p.Config.Opsgenie = &notify.OpsgenieConfig{}
+		}
+		if err := validateOpsgenie(p.Config.Opsgenie); err != nil {
+			return nil, prefixField("config.opsgenie", err)
+		}
 	}
 	p.Hints = SecretHints(p.Secrets)
 	return p, nil
+}
+
+// providerRegion normalizes the service region of an on-call channel.
+func providerRegion(v string) (string, error) {
+	switch r := strings.ToLower(strings.TrimSpace(v)); r {
+	case "", "us":
+		return "us", nil
+	case "eu":
+		return "eu", nil
+	default:
+		return "", invalid("region", "must be us or eu")
+	}
+}
+
+var (
+	opsgenieResponderTypes = map[string]bool{"team": true, "user": true, "escalation": true, "schedule": true}
+	opsgeniePriorities     = map[string]bool{"P1": true, "P2": true, "P3": true, "P4": true, "P5": true}
+)
+
+// validateOpsgenie checks and normalizes the non-secret settings of an opsgenie channel.
+func validateOpsgenie(c *notify.OpsgenieConfig) error {
+	region, err := providerRegion(c.Region)
+	if err != nil {
+		return err
+	}
+	c.Region = region
+	if c.Priority = strings.ToUpper(strings.TrimSpace(c.Priority)); c.Priority != "" && !opsgeniePriorities[c.Priority] {
+		return invalid("priority", "must be empty (mapped from the rule severity) or P1-P5")
+	}
+	if len(c.Responders) > 20 {
+		return invalid("responders", "at most 20 responders")
+	}
+	for i := range c.Responders {
+		r := &c.Responders[i]
+		f := fmt.Sprintf("responders[%d]", i)
+		r.Type, r.Name, r.ID = strings.ToLower(strings.TrimSpace(r.Type)), strings.TrimSpace(r.Name), strings.TrimSpace(r.ID)
+		if !opsgenieResponderTypes[r.Type] {
+			return invalid(f+".type", "must be team, user, escalation or schedule")
+		}
+		if (r.Name == "") == (r.ID == "") {
+			return invalid(f, "set exactly one of name and id")
+		}
+		if len(r.Name) > 512 || len(r.ID) > 512 {
+			return invalid(f, "name and id are at most 512 characters")
+		}
+	}
+	tags := make([]string, 0, len(c.Tags))
+	seen := map[string]bool{}
+	for _, t := range c.Tags {
+		if t = strings.TrimSpace(t); t == "" || seen[t] {
+			continue
+		}
+		if len(t) > 50 {
+			return invalid("tags", "a tag is at most 50 characters")
+		}
+		seen[t] = true
+		tags = append(tags, t)
+	}
+	// openlog adds two tags of its own (§5.3) and Opsgenie allows 20.
+	if len(tags) > 18 {
+		return invalid("tags", "at most 18 tags")
+	}
+	c.Tags = tags
+	return nil
 }
 
 func randomHex(n int) string {
@@ -250,6 +355,12 @@ func TargetFor(ch *Channel, sec map[string]string) notify.Target {
 	t := notify.Target{Type: ch.Type, URL: sec["url"], HMACSecret: sec["hmac_secret"], To: ch.Config.To}
 	if o := ch.Config.SMTP; o != nil && o.Host != "" {
 		t.SMTP = &notify.SMTPConfig{Host: o.Host, Port: o.Port, Username: o.Username, Password: sec["smtp_password"], From: o.From, TLS: o.TLS}
+	}
+	switch ch.Type {
+	case notify.TypePagerDuty:
+		t.Key, t.PagerDuty = sec["routing_key"], ch.Config.PagerDuty
+	case notify.TypeOpsgenie:
+		t.Key, t.Opsgenie = sec["api_key"], ch.Config.Opsgenie
 	}
 	return t
 }
