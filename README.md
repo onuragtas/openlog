@@ -239,7 +239,7 @@ One-time repository setup (signing key, secret, variable, permissions): [docs/op
 
 - Plan (Turkish): [docs/plan](docs/plan/README.md) — vision, decisions, architecture, cluster, agents, roadmap, releases, M2
 - Contracts: [docs/contracts](docs/contracts) — semantic conventions, Kafka, configuration, API, APM, alerting, releases, PHP agent
-- Operations: [docs/operations](docs/operations) — releasing, upgrading, scaling, e2e, local stack demo
+- Operations: [docs/operations](docs/operations) — releasing, upgrading, scaling, e2e, local stack demo, [MCP server for AI tools](docs/operations/mcp.md)
 
 ## License
 

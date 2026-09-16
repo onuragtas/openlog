@@ -335,6 +335,28 @@ PostgreSQL migrations before every command. It does not start an admin server.
 | `OPENLOG_BOOTSTRAP_LICENSE_KEY` | `` | Plaintext ingest key to ensure: 8–256 characters of printable ASCII without spaces, quotes or backslashes (keys created in the UI/API with a custom value need ≥ 16). Prefer generated keys. Fails if it belongs to another organization or was revoked |
 | `OPENLOG_BOOTSTRAP_API_KEY` | `` | Plaintext read-only API key to ensure (same rules) |
 
+## `openlog-mcp`
+
+Read-only Model Context Protocol server for AI tools ([mcp.md](../operations/mcp.md), D-126). It is a
+client of the query API — every tool call is a request to `/api/v1` with an API key — so it reads none of the
+common ClickHouse, Kafka or PostgreSQL variables and needs no access to them. `OPENLOG_ADMIN_ADDR` is used by
+the `http` transport only. These variables are read by `internal/mcp`, not by `internal/config`, and the server
+is not part of the Compose stack or the Helm chart: it runs next to the AI tool (stdio) or as its own
+deployment (http).
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENLOG_MCP_TRANSPORT` | `stdio` | `stdio` (one local client, over stdin/stdout) or `http` (streamable HTTP at `/mcp`). `-transport` overrides it |
+| `OPENLOG_MCP_HTTP_ADDR` | `:8092` | Listen address of the `http` transport (`-addr`). Serves plain HTTP; terminate TLS in front of it |
+| `OPENLOG_MCP_API_URL` | `http://localhost:8080` | Base URL of `openlog-api`, e.g. `https://openlog.example.com` — **without** `/api/v1`. http(s) with a host, no credentials, query or fragment |
+| `OPENLOG_MCP_API_KEY` | `` | API key (`ola_…`) tool calls act as. Required with `stdio`; with `http` it is only the fallback for requests that carry no `Authorization: Bearer` of their own (a request with neither → `401`). Ingest license keys (`olk_…`) are not API keys |
+| `OPENLOG_MCP_ORG_ID` | `` | `X-Openlog-Org-Id` sent with every call, for keys of users in several organizations; empty = the key's organization |
+| `OPENLOG_MCP_TIMEOUT` | `60s` | Bounds one API request (a tool call may make two) |
+| `OPENLOG_MCP_MAX_ROWS` | `100` | Upper bound for the `limit` argument of the list tools (1–1000), so a model cannot pull an unbounded result into its context |
+
+The organization's query limits, the tenant scope and the read-only ClickHouse user are enforced by
+`openlog-api`, not here: the MCP server can reach no data its API key could not.
+
 ## Fleet updates (`openlog-ingest`, `openlog-api`)
 
 Agent sync, release catalog and rollouts ([releases-updates.md](releases-updates.md) §3–§4). Ingest serves

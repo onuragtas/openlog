@@ -21,6 +21,9 @@ more recent range, [config.md](config.md) "ClickHouse read-only user and per-ten
 
 Ingest license keys (`olk_…`) are **not** API credentials, and API keys are not ingest credentials.
 
+`openlog-mcp` ([mcp.md](../operations/mcp.md), D-126) is an API key client: it exposes the telemetry reads below
+as Model Context Protocol tools for AI tools and adds no endpoint and no credential of its own.
+
 **CSRF.** A cookie-authenticated request with a method other than `GET`/`HEAD`/`OPTIONS` must send the session's
 token in `X-CSRF-Token` (returned as `csrf_token` by `/auth/login`, `/auth/signup`, `/invitations/accept` and
 `GET /auth/me`); otherwise `403 permission_denied`. Bearer requests do not need it. Endpoints with a JSON body
