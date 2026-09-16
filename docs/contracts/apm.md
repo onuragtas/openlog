@@ -467,6 +467,13 @@ the trace page lists the trace's logs (`GET /logs?trace_id=` within the trace's 
 `span_id=` of the selected span); a transaction links to the logs of its traces (`GET /logs?transaction=&transaction_service=`,
 the entry spans in the range, at most 10000 traces). Logs are paged with `next_cursor` ([api.md](api.md#logs)).
 
+**Metric → trace (exemplars, D-130).** OTLP data points carry exemplars — the trace a measurement came from. The
+processor stores them in `metric_exemplars` (schema 0092) and `POST /api/v1/metrics/exemplars` returns them for a
+metric, range and the Metrics Explorer's filters, so a spike in a chart opens as a trace (`/traces/{id}?span=`). The
+table's TTL follows the **traces** retention, not the metrics one: an exemplar is a pointer into a trace, and on the
+30-day metrics retention it would outlive its trace by 23 days. There is no trace → metric direction: a trace does not
+record which metric instruments observed it.
+
 ## 12. Deployments
 
 A **deployment** is a `service.version` that starts reporting spans for a service (per namespace/environment) after

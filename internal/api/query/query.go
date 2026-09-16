@@ -29,9 +29,11 @@ type Table struct{ name string }
 
 // Readable tables (Distributed tables).
 var (
-	Hosts              = Table{"hosts"}
-	Metrics            = Table{"metrics"}
-	Metrics1m          = Table{"metrics_1m"}
+	Hosts     = Table{"hosts"}
+	Metrics   = Table{"metrics"}
+	Metrics1m = Table{"metrics_1m"}
+	// MetricExemplars holds the trace links of metric data points (schema 0092_metric_exemplars, D-130).
+	MetricExemplars    = Table{"metric_exemplars"}
 	Logs               = Table{"logs"}
 	Spans              = Table{"spans"}
 	TraceIndex         = Table{"trace_index"}
@@ -258,7 +260,7 @@ func (q *Select) fail(format string, args ...any) {
 // forbidden matches fragment content that could escape the tenant boundary:
 // references to tenant_id, other tables/databases, sub-queries, statement
 // terminators and comments.
-var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_error_group_dims|apm_service_versions_1m|apm_agent_versions_1h|apm_services|apm_service_hosts|containers|apm_service_containers|k8s_clusters|k8s_nodes|k8s_workloads|k8s_pods|alert_evaluations|attribute_keys|attribute_keys_logs|attribute_keys_spans|attribute_keys_metrics|log_patterns_1h)(_local|_mv)?\b)`)
+var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|metric_exemplars|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_error_group_dims|apm_service_versions_1m|apm_agent_versions_1h|apm_services|apm_service_hosts|containers|apm_service_containers|k8s_clusters|k8s_nodes|k8s_workloads|k8s_pods|alert_evaluations|attribute_keys|attribute_keys_logs|attribute_keys_spans|attribute_keys_metrics|log_patterns_1h)(_local|_mv)?\b)`)
 
 func (q *Select) check(frags ...string) bool {
 	for _, f := range frags {

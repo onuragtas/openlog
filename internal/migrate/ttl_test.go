@@ -180,15 +180,17 @@ func TestBuildTTLPlan(t *testing.T) {
 		}
 	}
 	// APM default cold 7 equals the 7-day retention: the APM tables get no move and keep the default policy.
-	if policies != 6 || ttls != 6 {
+	if policies != 7 || ttls != 7 {
 		t.Fatalf("enable: %d policy and %d TTL steps: %+v", policies, ttls, plan.Steps)
 	}
 	want := map[string]string{
-		"metrics_local":           "toDateTime(timestamp) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 30 DAY",
-		"metrics_1m_local":        "timestamp + INTERVAL 30 DAY TO VOLUME 'cold', timestamp + INTERVAL 395 DAY",
-		"logs_local":              "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 14 DAY",
-		"spans_local":             "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 7 DAY",
-		"trace_index_local":       "toDateTime(start) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(start) + INTERVAL 7 DAY",
+		"metrics_local":     "toDateTime(timestamp) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 30 DAY",
+		"metrics_1m_local":  "timestamp + INTERVAL 30 DAY TO VOLUME 'cold', timestamp + INTERVAL 395 DAY",
+		"logs_local":        "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 14 DAY",
+		"spans_local":       "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 7 DAY",
+		"trace_index_local": "toDateTime(start) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(start) + INTERVAL 7 DAY",
+		// Metric exemplars follow the traces class, so they move and expire with the spans (D-130).
+		"metric_exemplars_local":  "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 7 DAY",
 		"alert_evaluations_local": "toDateTime(evaluated_at) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(evaluated_at) + INTERVAL 30 DAY",
 	}
 	for _, s := range plan.Steps {
@@ -224,7 +226,7 @@ func TestBuildTTLPlan(t *testing.T) {
 
 	// Disable again: the move clauses go, the policy stays.
 	plan, _ = BuildTTLPlan(apm, tiered)
-	if len(plan.Steps) != 6 || plan.Tiering {
+	if len(plan.Steps) != 7 || plan.Tiering {
 		t.Fatalf("disable: %+v", plan)
 	}
 	for _, s := range plan.Steps {

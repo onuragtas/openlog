@@ -17,6 +17,7 @@ import (
 // key cityHash64(...) in schema/clickhouse. Direct inserts compute the same hash.
 var ShardingKeys = map[string][]string{
 	TableMetrics:            {"tenant_id", "host_id"},
+	TableMetricExemplars:    {"tenant_id", "trace_id"}, // exemplars.go (D-130)
 	TableLogs:               {"tenant_id", "host_id"},
 	TableSpans:              {"tenant_id", "trace_id"},
 	TableHosts:              {"tenant_id", "host_id"},

@@ -68,6 +68,13 @@ Transaction, Metric\*, Host). Any other identifier on an event type with `attrib
 Map values are strings: compared with a number, or used in `sum`/`average`/`min`/`max`/`percentile`/`histogram`, they are
 converted with `toFloat64OrNull` (non-numeric values are ignored).
 
+**Metric exemplars are not OQL attributes** (D-130). Exemplars — the trace a data point came from — live in their own
+table (`metric_exemplars`, schema 0092) with the traces retention, and an event type reads exactly one table: OQL has
+no join to reach them, and putting them back on the metric row is the design that table exists to avoid. They would
+also be unusable here even if reachable, because every OQL result column is an aggregate (no raw event listing), so a
+trace id could only come back as `latest(...)` or `uniqueCount(...)` — never as the list of links a click-through
+needs. Use `POST /api/v1/metrics/exemplars` ([api.md](api.md#metrics)) for metric → trace navigation.
+
 ## 3. Semantics
 
 **Predicates.** String attributes take string values (numbers are compared as their text); number attributes take numbers

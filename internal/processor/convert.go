@@ -37,7 +37,9 @@ const (
 // Rows accumulates table rows derived from OTLP requests. Hosts are
 // deduplicated per (tenant, host) and keep the most recent resource.
 type Rows struct {
-	Metrics            []MetricRow
+	Metrics []MetricRow
+	// Exemplars are the trace links of metric data points (exemplars.go, D-130), capped per series and minute.
+	Exemplars          []ExemplarRow
 	Logs               []LogRow
 	Spans              []SpanRow
 	InventoryItems     []InventoryItemRow
@@ -49,6 +51,8 @@ type Rows struct {
 	usageIngest map[usageIngestKey]*UsageIngestRow
 	// Dropped counts individual items that could not be stored, by reason.
 	Dropped map[string]int
+	// exemplarCounts caps exemplars per (tenant, metric, series, minute) within this chunk (exemplars.go).
+	exemplarCounts map[exemplarKey]int
 	// patterns derives the log pattern of every log body (D-128); nil leaves the pattern columns empty.
 	patterns *logpattern.Store
 }
@@ -66,6 +70,8 @@ func (r *Rows) Len(table string) int {
 	switch table {
 	case TableMetrics:
 		return len(r.Metrics)
+	case TableMetricExemplars:
+		return len(r.Exemplars)
 	case TableLogs:
 		return len(r.Logs)
 	case TableSpans:
@@ -116,6 +122,11 @@ func (r *Rows) Values(table string) [][]any {
 		out = make([][]any, len(r.Metrics))
 		for i := range r.Metrics {
 			out[i] = r.Metrics[i].Values()
+		}
+	case TableMetricExemplars:
+		out = make([][]any, len(r.Exemplars))
+		for i := range r.Exemplars {
+			out[i] = r.Exemplars[i].Values()
 		}
 	case TableLogs:
 		out = make([][]any, len(r.Logs))
@@ -296,7 +307,8 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 					ServiceName: ri.serviceName, HostID: ri.hostID, HostName: ri.hostName,
 					ResourceAttributes: ri.attrs, ScopeName: scope, Temporality: "unspecified",
 				}
-				add := func(row MetricRow, attrs []*commonpb.KeyValue, start, ts uint64, flags uint32) {
+				// exemplars are the data point's trace links (exemplars.go, D-130); summaries carry none in OTLP.
+				add := func(row MetricRow, attrs []*commonpb.KeyValue, start, ts uint64, flags uint32, exemplars []*metricspb.Exemplar) {
 					if flags&uint32(metricspb.DataPointFlags_DATA_POINT_FLAGS_NO_RECORDED_VALUE_MASK) != 0 {
 						// Staleness marker without a value: storing it would read as a 0 data point.
 						r.Dropped["no_recorded_value"]++
@@ -308,6 +320,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 					row.Timestamp = tsOr(ts, receivedAt)
 					row.Flags = flags
 					r.Metrics = append(r.Metrics, row)
+					r.addExemplars(&row, exemplars, row.Timestamp)
 				}
 				switch d := m.Data.(type) {
 				case *metricspb.Metric_Gauge:
@@ -315,7 +328,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 						row := base
 						row.MetricType = "gauge"
 						row.Value = numberValue(dp)
-						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
+						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags(), dp.GetExemplars())
 					}
 				case *metricspb.Metric_Sum:
 					for _, dp := range d.Sum.GetDataPoints() {
@@ -324,7 +337,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 						row.Temporality = temporality(d.Sum.GetAggregationTemporality())
 						row.IsMonotonic = d.Sum.GetIsMonotonic()
 						row.Value = numberValue(dp)
-						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
+						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags(), dp.GetExemplars())
 					}
 				case *metricspb.Metric_Histogram:
 					for _, dp := range d.Histogram.GetDataPoints() {
@@ -337,7 +350,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 						row.Value = mean(row.Sum, row.Count)
 						row.BucketCounts = dp.GetBucketCounts()
 						row.ExplicitBounds = dp.GetExplicitBounds()
-						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
+						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags(), dp.GetExemplars())
 					}
 				case *metricspb.Metric_ExponentialHistogram:
 					// Stored like explicit histograms: the negative, zero and positive buckets become explicit bounds
@@ -350,7 +363,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 						row.Sum = dp.GetSum()
 						row.Value = mean(row.Sum, row.Count)
 						row.ExplicitBounds, row.BucketCounts = exponentialBuckets(dp)
-						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
+						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags(), dp.GetExemplars())
 					}
 				case *metricspb.Metric_Summary:
 					for _, dp := range d.Summary.GetDataPoints() {
@@ -365,7 +378,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 							row.Quantiles = append(row.Quantiles, qv.GetQuantile())
 							row.QuantileValues = append(row.QuantileValues, qv.GetValue())
 						}
-						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags())
+						add(row, dp.GetAttributes(), dp.GetStartTimeUnixNano(), dp.GetTimeUnixNano(), dp.GetFlags(), nil)
 					}
 				default:
 					r.Dropped["unsupported_metric_type"]++

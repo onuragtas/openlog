@@ -5,7 +5,7 @@ import { LayoutDashboard, ListTree, Trash2, X } from "lucide-react";
 import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
-import { metricDetailQuery, type MetricAggregation, type MetricQueryResponse } from "@/api/explorer";
+import { metricDetailQuery, metricExemplarsQuery, type MetricAggregation, type MetricQueryResponse } from "@/api/explorer";
 import { AddToDashboardButton } from "@/components/oql/AddToDashboardButton";
 import { KeyPicker } from "@/components/querybuilder/KeyPicker";
 import { QueryBuilder } from "@/components/querybuilder/QueryBuilder";
@@ -16,6 +16,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { MAX_GROUP_BY, metricOql, metricSeriesLabel, scaleSeries, unitDisplay, type MetricQueryState } from "@/lib/metrics-explorer";
 import type { RangeSpec } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { ExemplarsPanel } from "./ExemplarsPanel";
 import { SeriesTable } from "./SeriesTable";
 
 export type MetricResult = UseQueryResult<MetricQueryResponse & { from: number; to: number }>;
@@ -42,6 +43,12 @@ export function QueryCard({ query, result, range, active, onActivate, onChooseMe
   const series = useMemo(
     () => (data ? scaleSeries(data.series, unit.scale).map((s) => ({ label: metricSeriesLabel(s, query.groupBy, query.metric), points: s.points, attributes: s.attributes })) : undefined),
     [data, unit.scale, query.groupBy, query.metric],
+  );
+  // Exemplars: the traces behind the data points (D-130). Scaled like the series, so a dot sits on its line.
+  const exemplars = useQuery(metricExemplarsQuery({ metric: query.metric, range, filter: query }));
+  const exemplarDots = useMemo(
+    () => (exemplars.data?.exemplars ?? []).map((e) => ({ t: Date.parse(e.timestamp), value: e.value * unit.scale })),
+    [exemplars.data, unit.scale],
   );
   const groupKeys = useMemo(() => [...(d?.attribute_keys ?? []), ...(d?.resource_keys ?? [])], [d]);
   const oql = d ? metricOql(query, d) : null;
@@ -141,6 +148,7 @@ export function QueryCard({ query, result, range, active, onActivate, onChooseMe
                 isLoading={result.isPending}
                 error={result.isError && !data ? result.error : undefined}
                 onRetry={() => void result.refetch()}
+                exemplars={exemplarDots}
               />
               {data?.truncated && (
                 <p role="note" className="text-xs text-muted-foreground">
@@ -148,6 +156,15 @@ export function QueryCard({ query, result, range, active, onActivate, onChooseMe
                 </p>
               )}
               {series && series.length > 0 && <SeriesTable series={series} unit={unit.kind} caption={title} />}
+              {exemplars.data && exemplars.data.exemplars.length > 0 && (
+                <ExemplarsPanel
+                  exemplars={exemplars.data.exemplars}
+                  total={exemplars.data.total}
+                  truncated={exemplars.data.truncated}
+                  unit={unit.kind}
+                  scale={unit.scale}
+                />
+              )}
             </>
           )}
         </>

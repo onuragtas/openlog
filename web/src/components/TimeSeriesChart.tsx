@@ -52,6 +52,11 @@ export interface TimeSeriesChartProps {
   showLegend?: boolean;
   /** Vertical dashed marker lines (e.g. deployments), `t` in unix ms. */
   markers?: readonly ChartMarker[];
+  /**
+   * Exemplar dots drawn over the plot (metric → trace, D-130); `t` in unix ms, `value` in the chart's own units.
+   * They are decoration only: the accessible, clickable path to each trace is the list rendered beside the chart.
+   */
+  exemplars?: readonly ChartExemplar[];
   /** Adds a "filter by" action to legend entries whose label it returns an accessible name for (dashboard filters). */
   selectLabel?: (seriesLabel: string) => string | null;
   onSelectSeries?: (seriesLabel: string) => void;
@@ -64,6 +69,45 @@ export interface TimeSeriesChartProps {
 export interface ChartMarker {
   t: number;
   label: string;
+}
+
+export interface ChartExemplar {
+  t: number;
+  value: number;
+}
+
+/**
+ * Draws `exemplars` as small filled dots at their own (time, value) (metric → trace, D-130). The dots show *where*
+ * traces exist so a spike is visibly clickable; opening one goes through the list beside the chart, which is
+ * keyboard reachable and needs no canvas hit-testing.
+ */
+function exemplarsPlugin(getExemplars: () => readonly ChartExemplar[] | undefined, color: string): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u) => {
+        const exemplars = getExemplars();
+        const ctx = u.ctx as CanvasRenderingContext2D | null;
+        if (!exemplars?.length || !ctx) return;
+        const ratio = uPlot.pxRatio || 1;
+        const { left, top, width, height } = u.bbox;
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.strokeStyle = withAlpha("#ffffff", 0.9);
+        ctx.lineWidth = ratio;
+        for (const e of exemplars) {
+          const x = Math.round(u.valToPos(e.t / 1000, "x", true));
+          const y = Math.round(u.valToPos(e.value, "y", true));
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          if (x < left || x > left + width || y < top || y > top + height) continue;
+          ctx.beginPath();
+          ctx.arc(x, y, 3.5 * ratio, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.restore();
+      },
+    },
+  };
 }
 
 /** Draws `markers` as dashed vertical lines with a small label (theme color --chart-axis). */
@@ -356,7 +400,7 @@ function ChartLegend({
  * data refreshes and legend toggles go through setSeries/setData, and
  * container width changes (resize, rotation, drawer) go through setSize.
  */
-export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers, selectLabel, onSelectSeries, colorFor, onSelectRange }: TimeSeriesChartProps) {
+export function TimeSeriesChart({ series, unit, stacked, order, from, to, height = 200, isLoading, error, onRetry, title, yMax, yCap, hidden, bars, dashed, showLegend = true, markers, exemplars, selectLabel, onSelectSeries, colorFor, onSelectRange }: TimeSeriesChartProps) {
   const { t, i18n } = useTranslation();
   const { resolved } = useTheme();
   const mobile = useIsMobile();
@@ -366,6 +410,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   const plotKeyRef = useRef("");
   const liveRef = useRef<Live | null>(null);
   const markersRef = useRef<readonly ChartMarker[] | undefined>(markers);
+  const exemplarsRef = useRef<readonly ChartExemplar[] | undefined>(exemplars);
   const colorForRef = useRef(colorFor);
   const selectRangeRef = useRef(onSelectRange);
   const widthRef = useRef(0);
@@ -390,6 +435,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
   useLayoutEffect(() => {
     liveRef.current = aligned ? { data: aligned, drawn, visible, from, to } : null;
     markersRef.current = markers;
+    exemplarsRef.current = exemplars;
     colorForRef.current = colorFor;
     selectRangeRef.current = onSelectRange;
     widthRef.current = width;
@@ -499,6 +545,8 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
           (idx) => setHoverIdx((prev) => (prev === idx ? prev : idx)),
         ),
         markersPlugin(() => markersRef.current, axisColor, AXIS_FONT),
+        // Fixed colors: readable on both themes without depending on a palette slot a series may already use.
+        exemplarsPlugin(() => exemplarsRef.current, resolved === "dark" ? "#c084fc" : "#7e22ce"),
       ],
     };
     const plot = new uPlot(opts, [live.data.xs, ...live.drawn] as uPlot.AlignedData, el);
@@ -521,7 +569,7 @@ export function TimeSeriesChart({ series, unit, stacked, order, from, to, height
       if (plot.series[i + 1] && plot.series[i + 1]!.show !== v) plot.setSeries(i + 1, { show: v });
     });
     plot.setData([aligned.xs, ...drawn] as uPlot.AlignedData);
-  }, [aligned, drawn, visible, from, to, structureKey, markers]);
+  }, [aligned, drawn, visible, from, to, structureKey, markers, exemplars]);
 
   useEffect(() => {
     if (plotRef.current && width > 0) plotRef.current.setSize({ width, height });

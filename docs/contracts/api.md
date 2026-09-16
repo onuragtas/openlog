@@ -786,6 +786,28 @@ the type → `400`.
  "series": [{"attributes": {"resource.service.name": "checkout"}, "points": [[1757757600000, 0.182]]}]}
 ```
 
+### `POST /api/v1/metrics/exemplars` `{"metric", "from"?, "to"?, "filters"?, "groups"?, "limit"?}`
+The traces behind a metric's data points (D-130), so a spike in a chart opens as an actual trace. OTLP data points
+carry exemplars — trace id, span id, the single measurement, its timestamp and the attributes the SDK dropped from the
+metric's own attributes — and the processor stores them in `metric_exemplars` (schema `0092_metric_exemplars`) with the
+identifying columns of their data point. `filters` and `groups` are therefore exactly the conditions of
+`POST /api/v1/metrics/query` (same keys), so the exemplars always belong to the series the chart drew.
+
+Results are **spread over the range**, not the first *n*: the range is divided into `limit` buckets (at least 10s each)
+and the largest-valued exemplar of each bucket is returned, in time order. `limit` default 50, max 500. `total` counts
+every matching exemplar in the range, not only the returned ones; `truncated` reports that more exist.
+
+Retention: exemplars follow the **trace** retention (7 days by default), not the 30-day metric retention — an exemplar
+is a pointer into a trace, and a longer retention would link to traces that no longer exist. Exemplars without a trace
+id are not stored, and OTLP summary data points carry none, so a summary metric never returns any.
+```json
+{"exemplars": [{"timestamp": "2026-09-17T11:42:13.512000000Z", "value": 7.5,
+                "trace_id": "5b8efff798038103d269b633813fc60c", "span_id": "eee19b7ec3c1b174",
+                "service_name": "checkout", "attributes": {"http.route": "/pay"},
+                "filtered_attributes": {"http.status_code": "500"}}],
+ "total": 342, "truncated": true}
+```
+
 ## Inventory and discovery
 
 ### `GET /api/v1/hosts/{host_id}/inventory?category=`

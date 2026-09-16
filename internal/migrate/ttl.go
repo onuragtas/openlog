@@ -46,6 +46,8 @@ var TTLTables = []TTLTable{
 	{"logs_local", "logs", "toDateTime(timestamp)", 14},
 	{"spans_local", "traces", "toDateTime(timestamp)", 7},
 	{"trace_index_local", "traces", "toDateTime(start)", 7},
+	// Metric exemplars point into traces, so they follow the traces class, not the metrics one (D-130).
+	{"metric_exemplars_local", "traces", "toDateTime(timestamp)", 7},
 	{"apm_transactions_1m_local", "apm", "timestamp", 0},
 	{"apm_service_edges_1m_local", "apm", "timestamp", 0},
 	{"apm_service_links_1m_local", "apm", "timestamp", 0},

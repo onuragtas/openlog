@@ -1097,6 +1097,38 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/metrics/exemplars:
+    post:
+      tags: [metrics]
+      operationId: metricExemplars
+      description: |
+        The traces behind a metric's data points (exemplars, D-130), so a spike in a chart can be opened as a trace.
+        `filters` and `groups` are the conditions of `POST /api/v1/metrics/query` with the same keys, so the
+        exemplars belong to the series the chart drew. Results are spread over the range: it is divided into `limit`
+        buckets (at least 10s) and the largest-valued exemplar of each is returned, in time order. Exemplars follow
+        the trace retention (7 days by default), not the metric retention; summary data points carry none.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MetricExemplarsRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricExemplarsResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: resource_exhausted (query exceeded an organization limit)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   /api/v1/metrics/{name}:
     get:
       tags: [metrics]
@@ -8049,6 +8081,53 @@ components:
           type: array
           items: { $ref: "#/components/schemas/MetricSeries" }
         truncated: { type: boolean }
+
+    MetricExemplarsRequest:
+      type: object
+      required: [metric]
+      properties:
+        metric: { type: string, maxLength: 512 }
+        from: { type: [string, integer] }
+        to: { type: [string, integer] }
+        filters:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/QueryFilter" }
+        groups: { $ref: "#/components/schemas/FilterGroups" }
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 50
+          description: Maximum exemplars; also the number of buckets the range is divided into
+
+    MetricExemplar:
+      type: object
+      required: [timestamp, value, trace_id, span_id, service_name, attributes, filtered_attributes]
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        value: { type: number, description: The exemplar's own measurement, not the data point's aggregate }
+        trace_id: { type: string, description: 32 hex characters; never empty }
+        span_id: { type: string, description: 16 hex characters, or empty when recorded outside a span }
+        service_name: { type: string }
+        attributes:
+          allOf:
+            - $ref: "#/components/schemas/StringMap"
+          description: Attributes of the data point the exemplar belongs to
+        filtered_attributes:
+          allOf:
+            - $ref: "#/components/schemas/StringMap"
+          description: Measurement attributes the SDK dropped from the metric's own attributes
+
+    MetricExemplarsResponse:
+      type: object
+      required: [exemplars, total, truncated]
+      properties:
+        exemplars:
+          type: array
+          items: { $ref: "#/components/schemas/MetricExemplar" }
+        total: { type: integer, description: Matching exemplars in the range, not only the returned ones }
+        truncated: { type: boolean, description: More exemplars exist than were returned }
 
     SavedViewSignal:
       type: string

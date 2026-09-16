@@ -19,7 +19,7 @@ const (
 // Tables lists all tables in insert order. Hosts go last so a host only
 // appears once its telemetry has been written. The re-link queue follows spans:
 // a queued minute's late spans are stored before the leader can read the row.
-var Tables = []string{TableMetrics, TableLogs, TableSpans, TableRelinkQueue, TableInventoryItems, TableInventorySnapshots, TableHosts, TableUsageIngest}
+var Tables = []string{TableMetrics, TableMetricExemplars, TableLogs, TableSpans, TableRelinkQueue, TableInventoryItems, TableInventorySnapshots, TableHosts, TableUsageIngest}
 
 // Columns per table; Values() of each row type follows the same order.
 var Columns = map[string][]string{
@@ -27,6 +27,9 @@ var Columns = map[string][]string{
 		"service_name", "host_id", "host_name", "series_id", "resource_attributes", "scope_name", "attributes",
 		"start_timestamp", "timestamp", "value", "count", "sum", "bucket_counts", "explicit_bounds", "flags",
 		"quantiles", "quantile_values"}, // 0081_metrics_summary_quantiles
+	TableMetricExemplars: {"tenant_id", "metric_name", "metric_type", "unit", "service_name", "host_id", "host_name",
+		"scope_name", "series_id", "resource_attributes", "attributes", "timestamp", "value", "trace_id", "span_id",
+		"filtered_attributes"}, // 0092_metric_exemplars (D-130)
 	TableLogs: {"tenant_id", "timestamp", "observed_timestamp", "service_name", "host_id", "host_name",
 		"severity_text", "severity_number", "trace_id", "span_id", "trace_flags", "event_name", "body",
 		"pattern_id", "pattern_template", // 0091_log_patterns (D-128)

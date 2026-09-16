@@ -2193,6 +2193,13 @@ export const tr: Messages = {
     truncated: "Yalnızca ilk {{count}} seri gösteriliyor; filtre ekleyin veya daha az anahtara göre gruplayın.",
     seriesTable: "{{name}} serilerinin değerleri",
     columns: { series: "Seri", last: "Son", avg: "Ort.", min: "En düşük", max: "En yüksek" },
+    exemplars: {
+      title: "Exemplar'lar",
+      description: "Bu metrik ölçülürken kaydedilen trace'ler. Grafikteki noktalar onları gösterir.",
+      columns: { time: "Zaman", value: "Değer", service: "Servis", trace: "Trace" },
+      open: "{{id}} trace'ini aç",
+      truncated: "{{total}} exemplar'dan {{count}} tanesi gösteriliyor; diğerlerini görmek için zaman aralığını daraltın.",
+    },
     oqlUnsupported: {
       noMetric: "Önce bir metrik seçin",
       regex: "Düzenli ifade filtrelerinin OQL karşılığı yok",

@@ -608,6 +608,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/metrics/exemplars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The traces behind a metric's data points (exemplars, D-130), so a spike in a chart can be opened as a trace.
+         *     `filters` and `groups` are the conditions of `POST /api/v1/metrics/query` with the same keys, so the
+         *     exemplars belong to the series the chart drew. Results are spread over the range: it is divided into `limit`
+         *     buckets (at least 10s) and the largest-valued exemplar of each is returned, in time order. Exemplars follow
+         *     the trace retention (7 days by default), not the metric retention; summary data points carry none.
+         */
+        post: operations["metricExemplars"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metrics/{name}": {
         parameters: {
             query?: never;
@@ -5417,6 +5440,39 @@ export interface components {
             series: components["schemas"]["MetricSeries"][];
             truncated: boolean;
         };
+        MetricExemplarsRequest: {
+            metric: string;
+            from?: string | number;
+            to?: string | number;
+            filters?: components["schemas"]["QueryFilter"][];
+            groups?: components["schemas"]["FilterGroups"];
+            /**
+             * @description Maximum exemplars; also the number of buckets the range is divided into
+             * @default 50
+             */
+            limit: number;
+        };
+        MetricExemplar: {
+            timestamp: components["schemas"]["Timestamp"];
+            /** @description The exemplar's own measurement */
+            value: number;
+            /** @description 32 hex characters; never empty */
+            trace_id: string;
+            /** @description 16 hex characters */
+            span_id: string;
+            service_name: string;
+            /** @description Attributes of the data point the exemplar belongs to */
+            attributes: components["schemas"]["StringMap"];
+            /** @description Measurement attributes the SDK dropped from the metric's own attributes */
+            filtered_attributes: components["schemas"]["StringMap"];
+        };
+        MetricExemplarsResponse: {
+            exemplars: components["schemas"]["MetricExemplar"][];
+            /** @description Matching exemplars in the range */
+            total: number;
+            /** @description More exemplars exist than were returned */
+            truncated: boolean;
+        };
         /** @enum {string} */
         SavedViewSignal: "logs" | "metrics" | "traces";
         SavedViewInput: {
@@ -9664,6 +9720,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricQueryResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_exhausted (query exceeded an organization limit) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    metricExemplars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricExemplarsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricExemplarsResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

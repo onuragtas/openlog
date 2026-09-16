@@ -34,16 +34,17 @@ const (
 // explorerRoutes registers the field discovery, structured log query and metrics explorer endpoints (D-118, D-119).
 func (s *Server) explorerRoutes(mux *http.ServeMux) {
 	for pattern, h := range map[string]handlerFunc{
-		"GET /api/v1/fields/keys":       s.fieldKeys,
-		"GET /api/v1/fields/values":     s.fieldValues,
-		"POST /api/v1/logs/query":       s.queryLogs,
-		"POST /api/v1/logs/aggregate":   s.aggregateLogs,
-		"POST /api/v1/logs/patterns":    s.logPatterns,     // logspatterns.go (D-128)
-		"POST /api/v1/traces/query":     s.queryTraces,     // tracesquery.go (D-122)
-		"POST /api/v1/traces/aggregate": s.aggregateTraces, // tracesquery.go (D-122)
-		"GET /api/v1/metrics":           s.listMetrics,
-		"POST /api/v1/metrics/query":    s.queryMetric,
-		"GET /api/v1/metrics/{name...}": s.getMetric,
+		"GET /api/v1/fields/keys":        s.fieldKeys,
+		"GET /api/v1/fields/values":      s.fieldValues,
+		"POST /api/v1/logs/query":        s.queryLogs,
+		"POST /api/v1/logs/aggregate":    s.aggregateLogs,
+		"POST /api/v1/logs/patterns":     s.logPatterns,     // logspatterns.go (D-128)
+		"POST /api/v1/traces/query":      s.queryTraces,     // tracesquery.go (D-122)
+		"POST /api/v1/traces/aggregate":  s.aggregateTraces, // tracesquery.go (D-122)
+		"GET /api/v1/metrics":            s.listMetrics,
+		"POST /api/v1/metrics/query":     s.queryMetric,
+		"POST /api/v1/metrics/exemplars": s.metricExemplars, // metricsexemplars.go (D-130)
+		"GET /api/v1/metrics/{name...}":  s.getMetric,
 	} {
 		mux.Handle(pattern, s.wrap(pattern, h))
 	}

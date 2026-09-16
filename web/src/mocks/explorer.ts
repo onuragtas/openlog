@@ -1025,6 +1025,40 @@ export const explorerHandlers = [
     });
   })),
 
+  // POST /api/v1/metrics/exemplars (D-130): traces spread over the range. The first one is the mock trace, so the
+  // link actually opens a trace page; summaries carry no exemplars in OTLP.
+  http.post(`${API}/metrics/exemplars`, authed(async (_ctx, { request }) => {
+    const b = (await request.json().catch(() => null)) as (FilterBody & { metric?: string; from?: unknown; to?: unknown; limit?: number }) | null;
+    if (!b || typeof b !== "object" || typeof b.metric !== "string" || b.metric === "") return fail("invalid_argument", "metric is required");
+    const w = timeWindow(b.from, b.to);
+    if (w instanceof Response) return w;
+    const err = validateFilterBody(b);
+    if (err) return fail("invalid_argument", err);
+    if (b.limit !== undefined && (!Number.isInteger(b.limit) || b.limit < 1 || b.limit > 500)) return fail("invalid_argument", "limit must be between 1 and 500");
+    const limit = b.limit ?? 50;
+    const m = explorerMetrics().find((x) => x.name === b.metric);
+    if (!m || m.type === "summary") return HttpResponse.json({ exemplars: [], total: 0, truncated: false });
+    const count = Math.min(limit, 6);
+    const spanID = fx.trace(Date.now())[0]?.span_id ?? "";
+    const exemplars = Array.from({ length: count }, (_, i) => {
+      const t = w.from + ((i + 0.5) * (w.to - w.from)) / count;
+      const s = m.series[i % m.series.length]!;
+      return {
+        timestamp: fx.formatTs(t),
+        // Above the line: an exemplar is one measurement, not the aggregate the chart draws.
+        value: s.value(Math.floor(t / 1000), false) * 1.4,
+        trace_id: i === 0 ? fx.TRACE_ID : String(i + 1).padStart(32, "0"),
+        span_id: i === 0 ? spanID : "",
+        service_name: s.resource["service.name"] ?? "checkout",
+        attributes: s.attributes,
+        filtered_attributes: i % 2 === 0 ? { "http.status_code": "500" } : {},
+      };
+    });
+    // More exist than are returned, so the UI's "narrow the range" note is exercised.
+    const total = count * 3;
+    return HttpResponse.json({ exemplars, total, truncated: total > exemplars.length });
+  })),
+
   http.get(`${API}/metrics/*`, authed((_ctx, { request }) => {
     const url = new URL(request.url);
     const name = decodeURIComponent(url.pathname.slice(url.pathname.indexOf("/api/v1/metrics/") + "/api/v1/metrics/".length));

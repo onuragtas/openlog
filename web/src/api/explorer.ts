@@ -26,6 +26,8 @@ export type MetricInfo = S["MetricInfo"];
 export type MetricDetail = S["MetricDetail"];
 export type MetricAggregation = S["MetricAggregation"];
 export type MetricQueryResponse = S["MetricQueryResponse"];
+export type MetricExemplar = S["MetricExemplar"];
+export type MetricExemplarsResponse = S["MetricExemplarsResponse"];
 export type SavedView = S["SavedView"];
 export type SavedViewInput = S["SavedViewInput"];
 
@@ -292,6 +294,32 @@ export const metricExplorerSeriesQuery = (r: MetricExplorerRequest) => {
     enabled: r.metric !== "",
     placeholderData: keepPreviousData,
     refetchInterval: r.range.range ? REFRESH_MS : false,
+  });
+};
+
+/** Exemplars requested per chart; also the number of buckets the API spreads them over (it allows at most 500). */
+export const METRIC_EXEMPLARS_LIMIT = 50;
+
+/**
+ * POST /api/v1/metrics/exemplars: the traces behind a metric's data points (D-130). Takes the same filter conditions
+ * as the series query, so the exemplars belong to the series the chart drew.
+ */
+export const metricExemplarsQuery = (r: { metric: string; range: RangeSpec; filter: Pick<FilterState, "filters" | "groups">; limit?: number }) => {
+  const groups = r.filter.groups.filter((g) => g.length > 0);
+  const body = {
+    metric: r.metric,
+    filters: r.filter.filters.length ? r.filter.filters : undefined,
+    groups: groups.length ? groups : undefined,
+    limit: r.limit ?? METRIC_EXEMPLARS_LIMIT,
+  };
+  return queryOptions({
+    queryKey: ["metrics-explorer", "exemplars", ...rangeKey(r.range), JSON.stringify(body)],
+    queryFn: async ({ signal }) => {
+      const { from, to } = resolveRange(r.range, Date.now());
+      return unwrap(await api.POST("/api/v1/metrics/exemplars", { body: { ...body, from, to }, signal })) as MetricExemplarsResponse;
+    },
+    enabled: r.metric !== "",
+    placeholderData: keepPreviousData,
   });
 };
 

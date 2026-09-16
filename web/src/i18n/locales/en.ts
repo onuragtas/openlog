@@ -2192,6 +2192,13 @@ export const en = {
     truncated: "Only the first {{count}} series are shown; add filters or group by fewer keys.",
     seriesTable: "Series values of {{name}}",
     columns: { series: "Series", last: "Last", avg: "Avg", min: "Min", max: "Max" },
+    exemplars: {
+      title: "Exemplars",
+      description: "Traces recorded while this metric was measured. The dots on the chart mark them.",
+      columns: { time: "Time", value: "Value", service: "Service", trace: "Trace" },
+      open: "Open trace {{id}}",
+      truncated: "Showing {{count}} of {{total}} exemplars; narrow the time range to see others.",
+    },
     oqlUnsupported: {
       noMetric: "Choose a metric first",
       regex: "Regular expression filters have no OQL equivalent",
