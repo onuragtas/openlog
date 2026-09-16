@@ -1301,6 +1301,8 @@ export const en = {
       title: "Run these commands",
       endpoint: "OTLP/HTTP endpoint",
       grpcEndpoint: "OTLP/gRPC endpoint",
+      javaMethods:
+        "Traces show calls into instrumented libraries (HTTP, JDBC, Redis, Kafka). To see your own methods as spans, add -Dotel.instrumentation.methods.include=com.example.OrderService[submit,cancel] to the JVM flags, or annotate methods with @WithSpan. List a few important methods only; instrumenting many of them costs performance.",
       grpcHttp2:
         "gRPC needs HTTP/2 end to end: a proxy, API gateway or CDN in front of port 4317 must forward HTTP/2 (TLS with h2, or h2c to the ingest). If agents report export errors, choose OTLP/HTTP instead.",
       derived: "Derived from {{source}}. Make sure agents can reach it; an operator can set OPENLOG_INGEST_PUBLIC_URL.",

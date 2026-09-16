@@ -131,6 +131,11 @@ export function InstallFlow({
                 ))}
               </dl>
             )}
+            {target.id === "apm/java" && (
+              <p className="rounded-lg border bg-muted/40 p-3 text-sm" data-testid="java-methods-note">
+                {t("addData.install.javaMethods")}
+              </p>
+            )}
             {needsKey && target.options.includes("protocol") && options.protocol === "grpc" && (
               <p className="rounded-lg border border-warning/60 bg-warning/10 p-3 text-sm" data-testid="grpc-http2-note">
                 {t("addData.install.grpcHttp2")}

@@ -1302,6 +1302,8 @@ export const tr: Messages = {
       title: "Bu komutları çalıştırın",
       endpoint: "OTLP/HTTP uç noktası",
       grpcEndpoint: "OTLP/gRPC uç noktası",
+      javaMethods:
+        "Trace'lerde kütüphane çağrıları görünür (HTTP, JDBC, Redis, Kafka). Kendi metotlarınızı da span olarak görmek için JVM parametrelerine -Dotel.instrumentation.methods.include=com.ornek.SiparisServisi[olustur,iptal] ekleyin ya da metotları @WithSpan ile işaretleyin. Sadece birkaç önemli metodu yazın; çok sayıda metot performansı düşürür.",
       grpcHttp2:
         "gRPC uçtan uca HTTP/2 gerektirir: 4317 portunun önündeki proxy, API gateway veya CDN HTTP/2'yi iletmelidir (h2 ile TLS ya da ingest'e h2c). Agent'lar gönderim hatası veriyorsa OTLP/HTTP seçin.",
       derived: "{{source}} üzerinden türetildi. Agent'ların erişebildiğinden emin olun; bir operatör OPENLOG_INGEST_PUBLIC_URL ayarlayabilir.",

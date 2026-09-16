@@ -42,6 +42,9 @@ describe("logsVolumeOql", () => {
     expect(logsVolumeOql({ filter: logs({ filters: [{ key: "body", op: "regex", value: "^x" }] }) })).toEqual({ ok: false, reason: "regex" });
     expect(logsVolumeOql({ filter: logs({ groups: [[{ key: "body.user.id", op: "=", value: "1" }]] }) })).toEqual({ ok: false, reason: "key" });
     expect(logsVolumeOql({ filter: logs({}), groupBy: "trace_flags" })).toEqual({ ok: false, reason: "key" });
+    // A bare key reads the attribute, else the resource attribute: FACET takes one attribute, so it has no equivalent.
+    expect(logsVolumeOql({ filter: logs({}), groupBy: "k8s.namespace.name" })).toEqual({ ok: false, reason: "key" });
+    expect(spanCountOql({ filter: { filters: [], groups: [] }, rootOnly: false, groupBy: "k8s.namespace.name" })).toEqual({ ok: false, reason: "key" });
     expect(logsVolumeOql({ filter: logs({}), context: { transaction: "GET /", transactionService: "web" } })).toEqual({ ok: false, reason: "transaction" });
   });
 });

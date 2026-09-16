@@ -167,7 +167,9 @@ function build(select: string, from: "Log" | "Span", conds: string[], groupBy: s
   let facet = "";
   if (groupBy) {
     const k = resolve(groupBy);
-    if (!k) return { ok: false, reason: "key" };
+    // FACET takes one attribute, so a bare key (attribute, else resource attribute) has no equivalent: grouping by it
+    // would silently drop the records that carry the value on the resource. The field pickers offer prefixed keys.
+    if (!k || k.fallback) return { ok: false, reason: "key" };
     facet = ` FACET ${k.attr} LIMIT ${FACET_LIMIT}`;
   }
   const where = conds.length ? ` WHERE ${conds.join(" AND ")}` : "";

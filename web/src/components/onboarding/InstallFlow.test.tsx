@@ -216,6 +216,16 @@ describe("InstallFlow", { timeout: 20_000 }, () => {
     expect(tips.textContent).not.toContain("“”");
   });
 
+  it("tells Java users how to trace their own methods", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderFlow("apm/java");
+    await user.click(await screen.findByRole("radio", { name: /Use a placeholder/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByTestId("java-methods-note")).toHaveTextContent("otel.instrumentation.methods.include");
+  });
+
   it("warns that gRPC needs HTTP/2 only when the gRPC protocol is chosen", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
