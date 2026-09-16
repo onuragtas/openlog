@@ -77,6 +77,37 @@ describe("OQL editor", () => {
   });
 });
 
+describe("query wizard", () => {
+  it("builds and runs a query without writing OQL, and examples say what they answer", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    renderUi(<ConsoleHarness onSearch={onSearch} />);
+
+    // Without a query in the URL the guided builder is open and starts from "how many logs over time".
+    const wizard = await screen.findByTestId("query-wizard");
+    expect(screen.getByTestId("wizard-preview")).toHaveTextContent("SELECT count(*) FROM Log TIMESERIES AUTO");
+
+    await user.selectOptions(within(wizard).getByLabelText("Look at"), "Transaction");
+    await user.selectOptions(within(wizard).getByLabelText("Show"), "percentile");
+    await user.selectOptions(await within(wizard).findByLabelText("Attribute"), "duration.ms");
+    await user.selectOptions(within(wizard).getByLabelText("Split by"), "transaction.name");
+    const built = "SELECT percentile(duration.ms, 50, 95, 99) FROM Transaction FACET transaction.name LIMIT 10 TIMESERIES AUTO";
+    expect(screen.getByTestId("wizard-preview")).toHaveTextContent(built);
+
+    await user.click(within(wizard).getByRole("button", { name: "Run query" }));
+    expect(onSearch).toHaveBeenCalledWith({ q: built });
+    expect(screen.getByRole("textbox", { name: "OQL query" })).toHaveValue(built);
+
+    // Examples stay reachable after a query ran, with a title above each query.
+    await user.click(screen.getByRole("button", { name: "Examples" }));
+    const examples = await screen.findByTestId("query-examples");
+    expect(within(examples).getByText("Log volume by severity")).toBeInTheDocument();
+    await user.click(within(examples).getByText("Error logs per service"));
+    expect(onSearch).toHaveBeenLastCalledWith({ q: "SELECT count(*) FROM Log WHERE severity = 'ERROR' FACET service.name" });
+  }, 30_000);
+});
+
 describe("query console", () => {
   it("runs a query, toggles chart/table, keeps history and explains errors", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
@@ -84,7 +115,7 @@ describe("query console", () => {
     const onSearch = vi.fn();
     renderUi(<ConsoleHarness onSearch={onSearch} />);
 
-    expect(await screen.findByText("Examples")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Examples" })).toBeInTheDocument();
     const box = screen.getByRole("textbox", { name: "OQL query" });
     fireEvent.change(box, { target: { value: "SELECT count(*) FROM Log FACET severity" } });
     expect(screen.getByTestId("range-note")).toHaveTextContent("Uses the time picker range");
