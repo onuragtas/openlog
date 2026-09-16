@@ -841,6 +841,14 @@ func (s *Store) AddAuditEvent(_ context.Context, e *auth.AuditEvent) error {
 	return nil
 }
 
+// matchesActor reports whether the actor filter matches the event's actor: the user's
+// e-mail, or the name of the API key that made the change (D-133).
+func matchesActor(e auth.AuditEvent, q string) bool {
+	q = strings.ToLower(q)
+	return strings.Contains(strings.ToLower(e.ActorEmail), q) ||
+		(e.ActorAPIKeyName != "" && strings.Contains(strings.ToLower(e.ActorAPIKeyName), q))
+}
+
 func (s *Store) ListAuditEvents(_ context.Context, orgID string, f auth.AuditFilter) ([]auth.AuditEvent, error) {
 	defer s.mu.Unlock()
 	if err := s.lock(); err != nil {
@@ -850,7 +858,7 @@ func (s *Store) ListAuditEvents(_ context.Context, orgID string, f auth.AuditFil
 	for _, e := range s.audit {
 		switch {
 		case e.OrgID != orgID,
-			f.Actor != "" && !strings.Contains(strings.ToLower(e.ActorEmail), strings.ToLower(f.Actor)),
+			f.Actor != "" && !matchesActor(e, f.Actor),
 			f.Action != "" && !strings.HasPrefix(e.Action, f.Action),
 			!f.From.IsZero() && e.CreatedAt.Before(f.From),
 			!f.To.IsZero() && !e.CreatedAt.Before(f.To),

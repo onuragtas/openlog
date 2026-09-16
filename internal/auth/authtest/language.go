@@ -121,7 +121,7 @@ func language(t *testing.T, e *Env) {
 	}
 
 	// API keys have no user preferences.
-	_, key, err := e.Svc.CreateAPIKey(ctx, owner.P, "lang", nil, e.Meta)
+	_, key, err := e.Svc.CreateAPIKey(ctx, owner.P, "lang", auth.RoleViewer, nil, e.Meta)
 	ok(t, err, "api key")
 	kp, err := e.Auth(http.MethodGet, nil, WithBearer(key))
 	ok(t, err, "api key auth")

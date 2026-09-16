@@ -145,7 +145,7 @@ keyed by organization and `group_id`; a group without a row is **unresolved** an
 | `resolved_at`, `resolved_in_version` | set while resolved; the version is optional |
 | `regressed_at`, `regression_count` | last automatic reopening and how many there were |
 
-Transitions (any, by a signed-in member, admin or owner; audit event `apm.error_group.update` per changed group with
+Transitions (any, by a member, admin or owner — an API key with that role too; audit event `apm.error_group.update` per changed group with
 `details.status`/`assignee_user_id` from/to): resolving sets `resolved_at = now` (kept when an already resolved group
 is resolved again with the same version); unresolving or ignoring clears `resolved_at` and the version. A no-op
 change writes nothing. Ignored groups stay ignored whatever happens (they are excluded from `apm_error` new-group
@@ -411,7 +411,7 @@ Rows written by an older processor have defaults and are ignored by the APM view
 ## 9. API
 
 Base `/api/v1/apm`, tenant-scoped like every telemetry endpoint (viewer role, API keys allowed); the Apdex settings
-`PUT` needs a signed-in admin/owner. `from`/`to` as elsewhere (default last hour); `step` (Go duration, ≥ 60s, default
+`PUT` needs the admin or owner role, an API key with that role included (D-133). `from`/`to` as elsewhere (default last hour); `step` (Go duration, ≥ 60s, default
 ≈ 60 points, rounded up to whole minutes). Service scope parameters on every `services/{service_name}` endpoint:
 `namespace`, `environment` (§1). Durations are milliseconds (float), rates 0..1, `throughput` requests per minute.
 Endpoints and shapes: [api.md § APM](api.md#apm), [openapi.yaml](openapi.yaml) (tag `apm`).
@@ -425,7 +425,7 @@ Endpoints and shapes: [api.md § APM](api.md#apm), [openapi.yaml](openapi.yaml) 
 | `GET /apm/services/{s}/transaction?name=&type=` | one transaction: totals, histogram, timeseries, slowest traces |
 | `GET /apm/services/{s}/errors` · `GET /apm/errors` | error inbox with workflow state and filters (§3.4) |
 | `GET /apm/services/{s}/errors/{group_id}` | group detail: stack, series, sample traces, affected dimensions (§3.3), state, comments, activity |
-| `PATCH /apm/errors/groups` | bulk status / assignee / resolved-in-version (signed-in member+) |
+| `PATCH /apm/errors/groups` | bulk status / assignee / resolved-in-version (member+) |
 | `GET/POST /apm/errors/groups/{group_id}/comments`, `DELETE …/{comment_id}` | comments |
 | `GET /apm/services/{s}/deployments`, `…/deployments/compare` | deployments and before/after comparison (§12) |
 | `GET /apm/map/path` | nodes and edges used by a transaction (§5.1) |

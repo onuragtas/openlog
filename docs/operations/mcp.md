@@ -7,7 +7,7 @@ look at APM services, read log records, check alert incidents and SLO error budg
 
 The server is a front end of the query API, not of the databases. Each tool call is one or two
 requests to `/api/v1` carrying **your API key**, so everything the API enforces applies unchanged:
-the key authenticates as a `viewer` of its organization, the tenant of every ClickHouse query comes
+the key authenticates with its own role, the tenant of every ClickHouse query comes
 from that key alone, and the queries run as the read-only ClickHouse user with the organization's
 limits ([api.md](../contracts/api.md#authentication), [config.md](../contracts/config.md)). The
 process itself needs no ClickHouse, PostgreSQL or Kafka access, and it stores nothing.
@@ -17,8 +17,10 @@ process itself needs no ClickHouse, PostgreSQL or Kafka access, and it stores no
 Create one in the web UI under **Settings → API keys**, or with `openlog-admin bootstrap`
 (`OPENLOG_BOOTSTRAP_API_KEY`). The key looks like `ola_…` and is shown only once.
 
-An API key is a read-only viewer of one organization: telemetry endpoints answer, every management
-endpoint answers `403`. Ingest license keys (`olk_…`) are **not** API keys and do not work here.
+An API key belongs to one organization and carries a role — `viewer` (the default), `member` or
+`admin` ([api.md "Roles"](../contracts/api.md#roles), D-133). Every tool here only ever calls read
+endpoints, so a `viewer` key is enough: give the MCP server nothing more. Ingest license keys
+(`olk_…`) are **not** API keys and do not work here.
 
 ## 2. Transports
 
@@ -147,7 +149,7 @@ of several organizations can be pinned with `OPENLOG_MCP_ORG_ID` (stdio) or the 
 | Symptom | Cause |
 |---|---|
 | `openlog rejected the API key` | wrong, revoked or expired key, or an ingest license key (`olk_…`) |
-| `openlog refused the request` | the endpoint is not open to API keys, or the organization does not have the feature (SLOs need postgres auth mode) |
+| `openlog refused the request` | the key's role does not allow the endpoint, or the organization does not have the feature (SLOs need postgres auth mode) |
 | `cannot reach the openlog API at …` | `OPENLOG_MCP_API_URL` wrong or unreachable; it is the **base** URL, without `/api/v1` |
 | `resource_exhausted` / `timeout` | the query hit the organization's ClickHouse limits — shorter range, more filters |
 | the client shows no tools | check stderr of the process; with `http`, `curl -sS -H 'Authorization: Bearer ola_…' https://…/mcp` must not answer `401` |

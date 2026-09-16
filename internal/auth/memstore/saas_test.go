@@ -101,7 +101,7 @@ func TestSignupVerificationGating(t *testing.T) {
 	if !errors.Is(err, auth.ErrPermissionDenied) || !strings.Contains(err.Error(), "confirm your e-mail") {
 		t.Fatalf("unverified creates license key: %v", err)
 	}
-	if _, _, err = e.Svc.CreateAPIKey(bg, p, "k", nil, e.Meta); !errors.Is(err, auth.ErrPermissionDenied) {
+	if _, _, err = e.Svc.CreateAPIKey(bg, p, "k", auth.RoleViewer, nil, e.Meta); !errors.Is(err, auth.ErrPermissionDenied) {
 		t.Fatalf("unverified creates API key: %v", err)
 	}
 	if _, _, err = e.Svc.CreateInvitation(bg, p, e.Email("friend"), auth.RoleViewer, e.Meta); !errors.Is(err, auth.ErrPermissionDenied) {
@@ -289,7 +289,7 @@ func TestRemovedMemberRevocation(t *testing.T) {
 	e := authtest.NewEnv(t, st, auth.Config{})
 	org, owner := e.Bootstrap("rm")
 	member := e.AddUser(owner, "member", auth.RoleMember)
-	_, secret, err := e.Svc.CreateAPIKey(bg, member.P, "script", nil, e.Meta)
+	_, secret, err := e.Svc.CreateAPIKey(bg, member.P, "script", auth.RoleViewer, nil, e.Meta)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +334,7 @@ func TestKeyHashSecretMigration(t *testing.T) {
 	if _, _, err := plain.Svc.CreateLicenseKey(bg, owner.P, "imported", custom, plain.Meta); err != nil {
 		t.Fatal(err)
 	}
-	ak, akSecret, err := plain.Svc.CreateAPIKey(bg, owner.P, "old", nil, plain.Meta)
+	ak, akSecret, err := plain.Svc.CreateAPIKey(bg, owner.P, "old", auth.RoleViewer, nil, plain.Meta)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestAuditFilter(t *testing.T) {
 	_, owner := e.Bootstrap("af")
 	for i := 0; i < 5; i++ {
 		e.Advance(time.Minute)
-		if _, _, err := e.Svc.CreateAPIKey(bg, owner.P, "k", nil, e.Meta); err != nil {
+		if _, _, err := e.Svc.CreateAPIKey(bg, owner.P, "k", auth.RoleViewer, nil, e.Meta); err != nil {
 			t.Fatal(err)
 		}
 	}

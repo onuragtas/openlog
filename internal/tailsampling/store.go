@@ -72,6 +72,11 @@ func (s PGStore) Put(ctx context.Context, orgID string, p Policy, expectedVersio
 	if actor.UserID != "" {
 		userID = actor.UserID
 	}
+	// A change made with an API key has no user: the key is named instead (D-133).
+	var keyID any
+	if actor.APIKeyID != "" {
+		keyID = actor.APIKeyID
+	}
 	out := StoredPolicy{Policy: p, UpdatedByEmail: actor.Email}
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		var current int
@@ -90,9 +95,10 @@ func (s PGStore) Put(ctx context.Context, orgID string, p Policy, expectedVersio
 		}
 		details, _ := json.Marshal(map[string]any{"version": out.Version, "enabled": p.Enabled, "baseline_ratio": p.BaselineRatio,
 			"max_spans_per_second": p.MaxSpansPerSecond, "rules": len(p.Rules)})
-		_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip)
-			VALUES ($1, $2, $3, 'apm.tail_sampling.update', 'tail_sampling_policy', $1::text, $4, $5)`,
-			orgID, userID, actor.Email, details, actor.IP)
+		_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+			action, target_type, target_id, details, ip)
+			VALUES ($1, $2, $3, $4, $5, 'apm.tail_sampling.update', 'tail_sampling_policy', $1::text, $6, $7)`,
+			orgID, userID, actor.Email, keyID, actor.APIKeyName, details, actor.IP)
 		return err
 	})
 	if err != nil {

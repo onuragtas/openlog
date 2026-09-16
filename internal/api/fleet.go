@@ -56,23 +56,14 @@ func (s *Server) fleetRoutes(mux *http.ServeMux) {
 	route("POST /api/v1/fleet/rollback", true, s.fleetRollback)
 }
 
+// fleetAllowed authorizes a fleet request. Reads are open to every role, API keys
+// included; changing what runs on the organization's machines is user-only
+// whatever a key's role is (roles.go ActManageFleet).
 func fleetAllowed(p *auth.Principal, write bool) *apiError {
-	if !p.HasOrg() {
-		return &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"}
+	if write {
+		return authorize(p, auth.ActManageFleet)
 	}
-	if !write {
-		if !p.Role.Can(auth.ActReadFleet) {
-			return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
-		}
-		return nil
-	}
-	if p.Kind != auth.KindSession {
-		return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-	}
-	if !p.Role.Can(auth.ActManageFleet) {
-		return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
-	}
-	return nil
+	return authorize(p, auth.ActReadFleet)
 }
 
 func (s *Server) writeFleetError(w http.ResponseWriter, route string, err error) {
@@ -94,6 +85,8 @@ func (s *Server) writeFleetError(w http.ResponseWriter, route string, err error)
 	}
 }
 
+// actor is the audit actor of a fleet change. Fleet changes are user-only, so the
+// key fields stay empty; they are set for symmetry with the other actors.
 func (s *Server) actor(r *http.Request, p *auth.Principal) fleet.Actor {
 	return fleet.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
 }

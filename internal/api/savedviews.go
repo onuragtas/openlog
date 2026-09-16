@@ -31,19 +31,14 @@ func (s *Server) savedViewRoutes(mux *http.ServeMux) {
 			if p == nil {
 				return
 			}
-			if !p.HasOrg() {
-				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"})
+			if ae := authorize(p, auth.ActReadTelemetry); ae != nil {
+				writeError(rec, ae)
 				return
 			}
-			if !p.Role.Can(auth.ActReadTelemetry) {
-				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"})
-				return
-			}
-			v := savedview.Viewer{Admin: p.Role.AtLeast(auth.RoleAdmin)}
-			if p.Kind == auth.KindSession {
-				v.UserID = p.UserID
-				v.CanWrite = p.Role.AtLeast(auth.RoleMember)
-			}
+			// UserID stays empty for API keys: a key owns nothing, so it edits a view
+			// only through the admin rule.
+			v := savedview.Viewer{UserID: p.UserID, Admin: allowed(p, auth.ActManageSavedViews),
+				CanWrite: allowed(p, auth.ActWriteSavedViews)}
 			if err := h(rec, r, p, v); err != nil {
 				s.writeSavedViewError(rec, pattern, p, err)
 			}
@@ -66,14 +61,14 @@ func (s *Server) writeSavedViewError(w http.ResponseWriter, route string, p *aut
 	case errors.Is(err, savedview.ErrLimit):
 		writeError(w, &apiError{http.StatusConflict, "failed_precondition", "the organization already has the maximum number of saved views (500); delete some first"})
 	case errors.Is(err, savedview.ErrForbidden):
-		msg := "only the creator of this saved view or an admin can change it"
-		switch {
-		case p.Kind != auth.KindSession:
-			msg = "this operation requires a signed-in user; API keys are read-only"
-		case !p.Role.AtLeast(auth.RoleMember):
-			msg = "your role (" + string(p.Role) + ") does not allow this operation"
+		// The store refused: either the principal may not write at all (the gate says why),
+		// or it may write but does not own this view.
+		if ae := authorize(p, auth.ActWriteSavedViews); ae != nil {
+			writeError(w, ae)
+			return
 		}
-		writeError(w, &apiError{http.StatusForbidden, "permission_denied", msg})
+		writeError(w, &apiError{http.StatusForbidden, "permission_denied",
+			"only the creator of this saved view or an admin can change it"})
 	default:
 		s.writeAccountError(w, route, err)
 	}

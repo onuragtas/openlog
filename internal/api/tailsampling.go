@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/internal/api/query"
-	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/tailsampling"
 )
@@ -82,14 +81,8 @@ func (s *Server) getTailSampling(w http.ResponseWriter, r *http.Request, _ *quer
 }
 
 func (s *Server) putTailSampling(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	if !p.HasOrg() {
-		return &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"}
-	}
-	if p.Kind != auth.KindSession {
-		return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-	}
-	if !p.Role.Can(auth.ActUpdateOrg) {
-		return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+	if ae := authorize(p, auth.ActUpdateOrg); ae != nil {
+		return ae
 	}
 	var body struct {
 		Policy  json.RawMessage `json:"policy"`
@@ -109,7 +102,7 @@ func (s *Server) putTailSampling(w http.ResponseWriter, r *http.Request, p *auth
 	if conf.store == nil {
 		return notFound("tail sampling policies are not available")
 	}
-	st, err := conf.store.Put(r.Context(), p.OrgID, policy, *body.Version, apm.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP})
+	st, err := conf.store.Put(r.Context(), p.OrgID, policy, *body.Version, s.apmActor(r, p))
 	switch {
 	case errors.Is(err, tailsampling.ErrVersionConflict):
 		return &apiError{http.StatusConflict, "conflict", err.Error()}

@@ -197,7 +197,7 @@ func TestSCIMProvisioning(t *testing.T) {
 		t.Fatal(err)
 	}
 	alicePrincipal := &auth.Principal{Kind: auth.KindSession, UserID: u.ID, Email: u.Email, EmailVerified: true, OrgID: e.org.ID, TenantID: e.org.TenantID, Role: auth.RoleAdmin}
-	if _, _, err := e.auth.CreateAPIKey(ctx, alicePrincipal, "grafana", nil, auth.ClientMeta{}); err != nil {
+	if _, _, err := e.auth.CreateAPIKey(ctx, alicePrincipal, "grafana", auth.RoleViewer, nil, auth.ClientMeta{}); err != nil {
 		t.Fatal(err)
 	}
 	code, body := e.do(http.MethodPatch, "/Users/"+aliceID, patch(map[string]any{"op": "Replace", "path": "active", "value": "False"}))

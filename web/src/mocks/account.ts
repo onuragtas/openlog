@@ -4,7 +4,7 @@
 // keep the session and tests can end it; in Vitest it lives in memory and
 // `resetMockAccounts()` runs after every test.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { ApiKey, AuditEvent, AuthConfig, Invitation, LicenseKey, Member, Session } from "@/api/account";
+import type { ApiKey, ApiKeyRole, AuditEvent, AuthConfig, Invitation, LicenseKey, Member, Session } from "@/api/account";
 import { customKeyProblem } from "@/api/licenseKeyValue";
 import type { Role } from "@/api/roles";
 import { formatTs } from "./fixtures";
@@ -19,6 +19,8 @@ export const MOCK_STAGING_ORG_ID = "0f7b3c1e-5a2d-4c1b-9e8f-00000000000b";
 const SESSION_KEY = "openlog.mock.session";
 
 const RANK: Record<Role, number> = { viewer: 1, member: 2, admin: 3, owner: 4 };
+/** Roles an API key may carry; "owner" is not one of them (D-133). */
+const KEY_ROLES: readonly string[] = ["viewer", "member", "admin"];
 
 type Code = "invalid_argument" | "unauthenticated" | "permission_denied" | "not_found" | "already_exists" | "failed_precondition";
 const STATUS: Record<Code, number> = {
@@ -126,6 +128,7 @@ function seed() {
   const audit: AuditEvent[] = Array.from({ length: 60 }, (_, i) => ({
     id: 60 - i,
     actor_email: i % 3 === 0 ? "grace@example.com" : user.email,
+    actor_api_key: null,
     action: actions[i % actions.length]!,
     target_type: "object",
     target_id: `t-${60 - i}`,
@@ -157,8 +160,12 @@ function seed() {
     customKeyValues: new Set<string>(),
     apiKeys: [
       {
-        id: "ak-1", name: "grafana", prefix: "ola_5d1e0c9a", scope: "read", created_by_user_id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000002",
+        id: "ak-1", name: "grafana", prefix: "ola_5d1e0c9a", role: "viewer", scope: "read", created_by_user_id: "7c1e2d9a-3b4f-4e5a-8b6c-000000000002",
         created_by_email: "grace@example.com", created_at: ago(15 * day), last_used_at: ago(3_600_000), expires_at: null, revoked_at: null,
+      },
+      {
+        id: "ak-2", name: "terraform", prefix: "ola_b82f14d6", role: "admin", scope: "write", created_by_user_id: user.id,
+        created_by_email: user.email, created_at: ago(6 * day), last_used_at: ago(2 * 3_600_000), expires_at: null, revoked_at: null,
       },
     ] as ApiKey[],
     sessions: [
@@ -257,6 +264,8 @@ function me(ctx: Ctx) {
   return {
     auth: ctx.kind,
     user: session ? db.user : null,
+    // The bearer key of authenticate() is read-only (MOCK_API_KEY); sessions have no key.
+    api_key: session ? null : { id: "ak-mock", name: "mock api key", role: "viewer" },
     organization: { id: ctx.org.id, tenant_id: ctx.org.tenant_id, name: ctx.org.name },
     role: ctx.role,
     organizations: session ? db.orgs.map((o) => ({ id: o.id, tenant_id: o.tenant_id, name: o.name, role: o.role })) : [],
@@ -505,13 +514,18 @@ export const accountHandlers = [
 
   http.get(`${API}/api-keys`, authed("member", () => HttpResponse.json({ api_keys: db.apiKeys }))),
 
-  http.post(`${API}/api-keys`, authed("member", async (_ctx, { request }) => {
-    const b = await body<{ name: string; expires_at: string | null }>(request);
+  http.post(`${API}/api-keys`, authed("member", async (ctx, { request }) => {
+    const b = await body<{ name: string; role?: string; expires_at: string | null }>(request);
     const name = b.name?.trim();
     if (!name) return fail("invalid_argument", "name is required");
+    // An absent role means viewer, so older clients keep creating read-only keys; a writing one needs an admin or owner.
+    const role = b.role ?? "viewer";
+    if (!KEY_ROLES.includes(role)) return fail("invalid_argument", "role must be one of viewer, member, admin");
+    if (role !== "viewer" && RANK[ctx.role] < RANK.admin) return fail("permission_denied", `your role (${ctx.role}) does not allow creating a key that can write`);
     const key = `ola_${hex(48)}`;
     const api_key: ApiKey = {
-      id: nextId("ak"), name, prefix: key.slice(0, 12), scope: "read", created_by_user_id: db.user.id, created_by_email: db.user.email,
+      id: nextId("ak"), name, prefix: key.slice(0, 12), role: role as ApiKeyRole, scope: role === "viewer" ? "read" : "write",
+      created_by_user_id: db.user.id, created_by_email: db.user.email,
       created_at: formatTs(Date.now()), last_used_at: null, expires_at: b.expires_at ? formatTs(Date.parse(b.expires_at)) : null, revoked_at: null,
     };
     db.apiKeys.unshift(api_key);

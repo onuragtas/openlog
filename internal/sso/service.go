@@ -172,18 +172,11 @@ func (s *Service) fail(err error) error {
 var errUnavailableNoURL = &auth.Error{Code: auth.CodeFailedPrecondition,
 	Message: "single sign-on needs OPENLOG_PUBLIC_URL (the redirect and SAML URLs are derived from it)"}
 
-// gate requires a signed-in user in an organization with at least role min.
+// gate requires a signed-in user in an organization with at least role min. Single
+// sign-on decides how people sign in, so it is user-only whatever an API key's role
+// is; the decision itself is auth.Allow (internal/auth/roles.go).
 func (s *Service) gate(p *auth.Principal, min auth.Role) error {
-	if p == nil || p.Kind != auth.KindSession {
-		return denied("this operation requires a signed-in user; API keys are read-only")
-	}
-	if !p.HasOrg() {
-		return denied("you are not a member of any organization")
-	}
-	if !p.Role.AtLeast(min) {
-		return denied("your role (" + string(p.Role) + ") does not allow this operation")
-	}
-	return nil
+	return auth.Allow(p, auth.Permission{Min: min, UserOnly: true})
 }
 
 // ---- helpers ----

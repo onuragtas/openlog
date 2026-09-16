@@ -10,6 +10,7 @@ export type Permission =
   | "license_keys.list"
   | "api_keys.list"
   | "api_keys.create"
+  | "api_keys.create_writing"
   | "org.update"
   | "members.manage"
   | "invitations.manage"
@@ -26,6 +27,8 @@ const MIN_ROLE: Record<Permission, Role> = {
   "license_keys.list": "member",
   "api_keys.list": "member",
   "api_keys.create": "member",
+  // An API key above viewer changes configuration, so only admins and owners may create one (D-133).
+  "api_keys.create_writing": "admin",
   "org.update": "admin",
   "members.manage": "admin",
   "invitations.manage": "admin",

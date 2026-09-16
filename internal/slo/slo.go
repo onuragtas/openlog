@@ -59,11 +59,14 @@ func (e *ValidationError) Error() string {
 
 func invalid(field, msg string) error { return &ValidationError{Field: field, Msg: msg} }
 
-// Actor is the user changing a definition (audit log).
+// Actor is who changed a definition (audit log): a signed-in user, or an API key
+// acting with its own role (D-133), in which case UserID and Email are empty.
 type Actor struct {
-	UserID string
-	Email  string
-	IP     string
+	UserID     string
+	Email      string
+	IP         string
+	APIKeyID   string
+	APIKeyName string
 }
 
 // Input is the writable part of an SLO. Namespace and environment follow apm.md §1: nil = every

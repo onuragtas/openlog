@@ -52,16 +52,13 @@ func (s *Server) syntheticsRoutes(mux *http.ServeMux) {
 type syntheticsWriteHandler func(w http.ResponseWriter, r *http.Request, p *auth.Principal) error
 
 // syntheticsWriteRoute registers a mutating endpoint: wrap authenticates (CSRF included), the handler
-// additionally needs a signed-in member.
+// additionally needs a principal whose role may write checks (a member, or an API key with that role).
 func (s *Server) syntheticsWriteRoute(mux *http.ServeMux, pattern string, h syntheticsWriteHandler) {
 	mux.Handle(pattern, s.wrap(pattern, func(w http.ResponseWriter, r *http.Request, _ *query.Scope) error {
 		noStore(w)
 		p, _ := auth.PrincipalFrom(r.Context())
-		if p == nil || p.Kind != auth.KindSession {
-			return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-		}
-		if !p.Role.AtLeast(auth.RoleMember) {
-			return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+		if ae := authorize(p, auth.ActWriteSynthetics); ae != nil {
+			return ae
 		}
 		return syntheticsError(h(w, r, p))
 	}))

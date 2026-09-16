@@ -35,11 +35,14 @@ type Setting struct {
 	UpdatedByEmail string
 }
 
-// Actor is the user changing a setting (audit log).
+// Actor is who changed a setting (audit log): a signed-in user, or an API key
+// acting with its own role (D-133), in which case UserID and Email are empty.
 type Actor struct {
-	UserID string
-	Email  string
-	IP     string
+	UserID     string
+	Email      string
+	IP         string
+	APIKeyID   string
+	APIKeyName string
 }
 
 // SettingsStore persists per-service settings per organization.
@@ -126,9 +129,10 @@ func (s PGSettings) Put(ctx context.Context, orgID string, key ServiceKey, apdex
 		}
 		details, _ := json.Marshal(map[string]any{"service_namespace": key.Namespace, "environment": key.Environment,
 			"apdex_t_ms": apdexTMs, "previous_apdex_t_ms": previous})
-		_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip)
-			VALUES ($1, $2, $3, 'apm.service_settings.update', 'apm_service', $4, $5, $6)`,
-			orgID, userID, actor.Email, key.Name, details, actor.IP)
+		_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+			action, target_type, target_id, details, ip)
+			VALUES ($1, $2, $3, $4, $5, 'apm.service_settings.update', 'apm_service', $6, $7, $8)`,
+			orgID, userID, actor.Email, uuidOrNil(actor.APIKeyID), actor.APIKeyName, key.Name, details, actor.IP)
 		return err
 	})
 	if err != nil {

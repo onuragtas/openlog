@@ -6873,6 +6873,13 @@ export interface components {
             /** @enum {string} */
             auth: "session" | "api_key" | "license_key";
             user: components["schemas"]["User"] | null;
+            /** @description The API key that authenticated this request and the role it acts with; null unless auth is api_key (D-133). */
+            api_key: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                role: "viewer" | "member" | "admin";
+            } | null;
             /** @description The organization of this request (X-Openlog-Org-Id or the default one); null without memberships. */
             organization: components["schemas"]["OrgRef"] | null;
             role: components["schemas"]["Role"] | null;
@@ -6940,8 +6947,16 @@ export interface components {
             id: string;
             name: string;
             prefix: string;
-            /** @enum {string} */
-            scope: "read";
+            /**
+             * @description What the key may do (api.md "Roles", D-133); owner is not a key role
+             * @enum {string}
+             */
+            role: "viewer" | "member" | "admin";
+            /**
+             * @description Derived from role and kept for older clients: read for a viewer key, write for a member or admin key
+             * @enum {string}
+             */
+            scope: "read" | "write";
             created_by_user_id: string;
             created_by_email: string;
             created_at: components["schemas"]["Timestamp"];
@@ -6960,7 +6975,13 @@ export interface components {
         };
         AuditEvent: {
             id: number;
+            /** @description Empty for a change made with an API key: the key is the actor (D-133) */
             actor_email: string;
+            /** @description The API key that made the change, by id and by the name it had then; null when a signed-in user did. */
+            actor_api_key: {
+                id: string;
+                name: string;
+            } | null;
             action: string;
             target_type: string;
             target_id: string;
@@ -13503,6 +13524,12 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
+                    /**
+                     * @description What the key may do (D-133). Absent means viewer, so older clients keep creating read-only keys. A role above viewer needs an admin or owner caller and never exceeds the caller's own role (403).
+                     * @default viewer
+                     * @enum {string}
+                     */
+                    role?: "viewer" | "member" | "admin";
                     /** @description RFC3339 or unix milliseconds, in the future */
                     expires_at?: string | null;
                 };
@@ -13602,7 +13629,7 @@ export interface operations {
             query?: {
                 /** @description Default 100, max 500. */
                 limit?: number;
-                /** @description Case-insensitive substring of the actor e-mail */
+                /** @description Case-insensitive substring of the actor e-mail or of the API key name */
                 actor?: string;
                 /** @description Action prefix, e.g. member. or member.remove */
                 action?: string;

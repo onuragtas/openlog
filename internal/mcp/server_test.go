@@ -123,7 +123,7 @@ func TestCallToolReportsAPIErrors(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("result is not an error")
 	}
-	if !strings.Contains(contentText(res), "read-only") {
+	if !strings.Contains(contentText(res), "role of the API key") {
 		t.Errorf("content %q", contentText(res))
 	}
 }

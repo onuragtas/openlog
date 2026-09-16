@@ -11,7 +11,7 @@ import (
 
 // CurrentOrg returns the caller's organization.
 func (s *Service) CurrentOrg(ctx context.Context, p *Principal) (Organization, error) {
-	if err := requireOrg(p, ActReadOrg); err != nil {
+	if err := Authorize(p, ActReadOrg); err != nil {
 		return Organization{}, err
 	}
 	org, err := s.store.GetOrganization(ctx, p.OrgID)
@@ -33,17 +33,14 @@ func (s *Service) RenameOrg(ctx context.Context, p *Principal, name string, meta
 	if err := s.store.UpdateOrganizationName(ctx, p.OrgID, name); err != nil {
 		return Organization{}, s.fail(err)
 	}
-	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "org.rename", "organization", p.OrgID, map[string]any{"name": name})
+	// An admin API key may rename the organization, so the actor may be a key rather than a user.
+	s.auditAs(ctx, p.OrgID, ActorOf(p, meta.IP), "org.rename", "organization", p.OrgID, map[string]any{"name": name})
 	return s.CurrentOrg(ctx, p)
 }
 
-// gate requires a session principal with an organization role that allows a.
-func (s *Service) gate(p *Principal, a Action) error {
-	if err := requireSession(p); err != nil {
-		return err
-	}
-	return requireOrg(p, a)
-}
+// gate authorizes a through the permission matrix (roles.go): the matrix decides
+// whether a also requires a signed-in user.
+func (s *Service) gate(p *Principal, a Action) error { return Authorize(p, a) }
 
 // ---- members ----
 
@@ -441,10 +438,35 @@ func (s *Service) ListAPIKeys(ctx context.Context, p *Principal) ([]APIKey, erro
 	return ks, nil
 }
 
-// CreateAPIKey creates a read-only API key (member+). The plaintext is returned once.
-func (s *Service) CreateAPIKey(ctx context.Context, p *Principal, name string, expiresAt *time.Time, meta ClientMeta) (APIKey, string, error) {
+// KeyScope returns the scope stored with a key of role r ("read" for a viewer key,
+// "write" for one that may change configuration).
+func KeyScope(r Role) string {
+	if r == RoleViewer {
+		return "read"
+	}
+	return "write"
+}
+
+// CreateAPIKey creates an API key with role (member+; "" = viewer). A key that may
+// write needs an admin or owner to create it, and no key is more capable than its
+// creator (D-133). The plaintext is returned once.
+func (s *Service) CreateAPIKey(ctx context.Context, p *Principal, name string, role Role, expiresAt *time.Time, meta ClientMeta) (APIKey, string, error) {
+	if role == "" {
+		role = RoleViewer
+	}
+	if !role.ValidKeyRole() {
+		return APIKey{}, "", invalid("role must be one of viewer, member, admin")
+	}
 	if err := s.gate(p, ActCreateAPIKey); err != nil {
 		return APIKey{}, "", err
+	}
+	if role != RoleViewer {
+		if err := s.gate(p, ActCreateWritingAPIKey); err != nil {
+			return APIKey{}, "", err
+		}
+		if !p.Role.AtLeast(role) {
+			return APIKey{}, "", denied("you cannot create an API key with more permissions than your own role")
+		}
 	}
 	if err := s.requireVerified(p); err != nil {
 		return APIKey{}, "", err
@@ -461,18 +483,19 @@ func (s *Service) CreateAPIKey(ctx context.Context, p *Principal, name string, e
 	if err != nil {
 		return APIKey{}, "", err
 	}
-	k := APIKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: s.cfg.KeyHasher.Hash(secret), Scope: "read",
-		CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: now, ExpiresAt: expiresAt}
+	k := APIKey{OrgID: p.OrgID, Name: name, Prefix: DisplayPrefix(secret), Hash: s.cfg.KeyHasher.Hash(secret),
+		Scope: KeyScope(role), Role: role, CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: now, ExpiresAt: expiresAt}
 	if err := s.store.CreateAPIKey(ctx, &k); err != nil {
 		return APIKey{}, "", s.fail(err)
 	}
-	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "api_key.create", "api_key", k.ID, map[string]any{"name": name, "prefix": k.Prefix})
+	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, "api_key.create", "api_key", k.ID,
+		map[string]any{"name": name, "prefix": k.Prefix, "role": string(role)})
 	return k, secret, nil
 }
 
 // RevokeAPIKey revokes an API key: its creator or an admin+. Takes effect immediately.
 func (s *Service) RevokeAPIKey(ctx context.Context, p *Principal, id string, meta ClientMeta) (APIKey, error) {
-	if err := s.gate(p, ActListAPIKeys); err != nil {
+	if err := s.gate(p, ActRevokeAPIKey); err != nil {
 		return APIKey{}, err
 	}
 	k, err := s.store.GetAPIKey(ctx, p.OrgID, id)

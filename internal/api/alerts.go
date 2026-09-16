@@ -85,29 +85,14 @@ func (s *Server) alertRoutes(mux *http.ServeMux) {
 }
 
 func alertAllowed(p *auth.Principal, access alertAccess) *apiError {
-	denied := func() *apiError {
-		return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+	switch access {
+	case alertManage:
+		return authorize(p, auth.ActManageAlerts)
+	case alertWrite:
+		return authorize(p, auth.ActWriteAlerts)
+	default:
+		return authorize(p, auth.ActReadAlerts)
 	}
-	if !p.HasOrg() {
-		return &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"}
-	}
-	if access == alertRead {
-		if !p.Role.Can(auth.ActReadAlerts) {
-			return denied()
-		}
-		return nil
-	}
-	if p.Kind != auth.KindSession {
-		return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-	}
-	action := auth.ActWriteAlerts
-	if access == alertManage {
-		action = auth.ActManageAlerts
-	}
-	if !p.Role.Can(action) {
-		return denied()
-	}
-	return nil
 }
 
 func (s *Server) writeAlertError(w http.ResponseWriter, route string, err error) {
@@ -137,10 +122,11 @@ func (s *Server) writeAlertError(w http.ResponseWriter, route string, err error)
 }
 
 func (s *Server) alertActor(r *http.Request, p *auth.Principal) alert.Actor {
-	return alert.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
+	return alert.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP,
+		APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 }
 
-func manageAny(p *auth.Principal) bool { return p.Role.Can(auth.ActManageAlerts) }
+func manageAny(p *auth.Principal) bool { return allowed(p, auth.ActManageAlerts) }
 
 // ---- response shapes ----
 

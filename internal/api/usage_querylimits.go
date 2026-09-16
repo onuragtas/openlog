@@ -55,7 +55,7 @@ func (s *Server) canManageQueryLimits(p *auth.Principal) bool {
 	if s.isSuperadmin(p) {
 		return true
 	}
-	return !s.usage.SaaS && p.Kind == auth.KindSession && p.Role.AtLeast(auth.RoleOwner)
+	return !s.usage.SaaS && allowed(p, auth.ActManageQueryLimits)
 }
 
 func (s *Server) queryLimitsResponse(ctx context.Context, p *auth.Principal) (queryLimitsJSON, error) {

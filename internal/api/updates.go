@@ -35,8 +35,10 @@ func (s *Server) SetUpdateRequests(q updatereq.Queue, checkNow func(ctx context.
 //
 // superadmin reports that the permission comes from OPENLOG_SUPERADMIN_EMAILS (recorded in the audit entry).
 func (s *Server) updateAllowed(p *auth.Principal) (superadmin bool, ae *apiError) {
-	if p.Kind != auth.KindSession {
-		return false, &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
+	// Updating the backend is user-only whatever an API key's role is; the check is stated
+	// here as well as in the matrix so a key gets that answer on both paths below.
+	if err := auth.Allow(p, auth.Permission{UserOnly: true}); err != nil {
+		return false, denyError(err)
 	}
 	if s.accounts.Config().SignupEnabled {
 		if s.isSuperadmin(p) {
@@ -45,8 +47,8 @@ func (s *Server) updateAllowed(p *auth.Principal) (superadmin bool, ae *apiError
 		return false, &apiError{http.StatusForbidden, "permission_denied",
 			"server updates can only be requested by superadmins (OPENLOG_SUPERADMIN_EMAILS, verified e-mail) when OPENLOG_SIGNUP_ENABLED=true"}
 	}
-	if !p.HasOrg() || !p.Role.Can(auth.ActRequestUpdate) {
-		return false, &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+	if ae := authorize(p, auth.ActRequestUpdate); ae != nil {
+		return false, ae
 	}
 	return false, nil
 }

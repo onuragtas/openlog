@@ -889,9 +889,10 @@ export const tr: Messages = {
     },
     apiKeys: {
       title: "API anahtarları",
-      description: "Sorgu API'sini kullanan betikler ve entegrasyonlar için salt okunur anahtarlar.",
+      description: "Sorgu API'sini kullanan betikler ve entegrasyonlar için anahtarlar. Yapılandırmayı değiştirebilen bir rol vermediğiniz sürece anahtar yalnızca veri okur.",
       name: "Anahtar adı",
       namePlaceholder: "ör. grafana",
+      role: "Rol",
       expiry: "Bitiş",
       expiryOptions: {
         never: "Süresiz",
@@ -901,7 +902,8 @@ export const tr: Messages = {
       },
       create: "API anahtarı oluştur",
       created: "Yeni API anahtarı “{{name}}”",
-      usage: "Authorization: Bearer <anahtar> olarak gönderin. Yalnızca veri okuyabilir ve yalnızca bir kez gösterilir.",
+      usageRead: "Authorization: Bearer <anahtar> olarak gönderin. Yalnızca veri okuyabilir ve yalnızca bir kez gösterilir.",
+      usageWriting: "Authorization: Bearer <anahtar> olarak gönderin. Veri okuyabilir ve yapılandırmayı değiştirebilir; yalnızca bir kez gösterilir.",
       empty: "Henüz API anahtarı yok.",
     },
     security: {

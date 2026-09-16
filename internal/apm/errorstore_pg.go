@@ -230,8 +230,10 @@ func sameTime(a, b *time.Time) bool {
 
 func audit(ctx context.Context, tx pgx.Tx, orgID string, actor Actor, action, groupID string, details map[string]any) error {
 	b, _ := json.Marshal(details)
-	_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip)
-		VALUES ($1, $2, $3, $4, 'apm_error_group', $5, $6, $7)`, orgID, uuidOrNil(actor.UserID), actor.Email, action, groupID, b, actor.IP)
+	_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+		action, target_type, target_id, details, ip)
+		VALUES ($1, $2, $3, $4, $5, $6, 'apm_error_group', $7, $8, $9)`, orgID, uuidOrNil(actor.UserID), actor.Email,
+		uuidOrNil(actor.APIKeyID), actor.APIKeyName, action, groupID, b, actor.IP)
 	return err
 }
 

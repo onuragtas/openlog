@@ -205,12 +205,8 @@ func (s *Server) wrap(pattern string, h handlerFunc) http.Handler {
 		if p == nil {
 			return
 		}
-		if !p.HasOrg() {
-			writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"})
-			return
-		}
-		if !p.Role.Can(auth.ActReadTelemetry) {
-			writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "your role does not allow reading telemetry"})
+		if ae := authorize(p, auth.ActReadTelemetry); ae != nil {
+			writeError(rec, ae)
 			return
 		}
 		sc, err := s.db.Scope(p.TenantID)

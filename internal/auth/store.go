@@ -136,14 +136,19 @@ type LicenseKey struct {
 	RevokedAt      *time.Time
 }
 
-// APIKey is a read-only Query API key. The plaintext is never stored.
+// APIKey is a Query and management API key. The plaintext is never stored.
 type APIKey struct {
-	ID             string
-	OrgID          string
-	Name           string
-	Prefix         string
-	Hash           []byte
-	Scope          string
+	ID     string
+	OrgID  string
+	Name   string
+	Prefix string
+	Hash   []byte
+	// Scope is derived from Role at creation and kept for older binaries: "read" for a viewer key,
+	// "write" for one that may change configuration.
+	Scope string
+	// Role is what the key may do in its organization: viewer (read-only, the default and what every
+	// key created before 0091_api_key_roles has), member or admin (D-133).
+	Role           Role
 	CreatedBy      string
 	CreatedByEmail string
 	CreatedAt      time.Time
@@ -191,12 +196,16 @@ type AuditEvent struct {
 	OrgID       string
 	ActorUserID string
 	ActorEmail  string
-	Action      string
-	TargetType  string
-	TargetID    string
-	Details     map[string]any
-	IP          string
-	CreatedAt   time.Time
+	// ActorAPIKeyID and ActorAPIKeyName name the API key that made the change; both are empty for
+	// changes made by a user, and ActorUserID/ActorEmail are empty for changes made by a key (D-133).
+	ActorAPIKeyID   string
+	ActorAPIKeyName string
+	Action          string
+	TargetType      string
+	TargetID        string
+	Details         map[string]any
+	IP              string
+	CreatedAt       time.Time
 }
 
 // Store persists auth data. Implementations return ErrNotFound,

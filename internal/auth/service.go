@@ -248,8 +248,14 @@ func (s *Service) authenticateAPIKey(ctx context.Context, r *http.Request, key s
 			s.log.Warn("cannot update API key last_used_at", "err", err)
 		}
 	}
-	// API keys are read-only: they act as viewers regardless of the creator's role.
-	return &Principal{Kind: KindAPIKey, APIKeyID: k.ID, OrgID: org.ID, OrgName: org.Name, TenantID: org.TenantID, Role: RoleViewer, EmailVerified: true}, nil
+	// A key acts with its own role (D-133), not with the role of whoever created it. Keys stored before
+	// 0091_api_key_roles have no role and stay read-only viewers, as does anything unrecognized.
+	role := k.Role
+	if !role.ValidKeyRole() {
+		role = RoleViewer
+	}
+	return &Principal{Kind: KindAPIKey, APIKeyID: k.ID, APIKeyName: k.Name, OrgID: org.ID, OrgName: org.Name,
+		TenantID: org.TenantID, Role: role, EmailVerified: true}, nil
 }
 
 // ---- cookies ----
@@ -554,16 +560,23 @@ func (s *Service) Me(ctx context.Context, p *Principal) (MeResult, error) {
 }
 
 // Audit records an event performed by p in p's organization (best effort, like the service's own
-// events), for API operations outside this package (e.g. update requests).
+// events), for API operations outside this package (e.g. update requests). A change made with an
+// API key is attributed to the key, not to a user.
 func (s *Service) Audit(ctx context.Context, p *Principal, meta ClientMeta, action, targetType, targetID string, details map[string]any) {
-	s.audit(ctx, p.OrgID, p.UserID, p.Email, meta, action, targetType, targetID, details)
+	s.auditAs(ctx, p.OrgID, ActorOf(p, meta.IP), action, targetType, targetID, details)
 }
 
 // ---- helpers ----
 
+// audit records an event performed by a signed-in user.
 func (s *Service) audit(ctx context.Context, orgID, actorID, actorEmail string, meta ClientMeta, action, targetType, targetID string, details map[string]any) {
-	e := &AuditEvent{OrgID: orgID, ActorUserID: actorID, ActorEmail: actorEmail, Action: action,
-		TargetType: targetType, TargetID: targetID, Details: details, IP: meta.IP, CreatedAt: s.now()}
+	s.auditAs(ctx, orgID, Actor{UserID: actorID, Email: actorEmail, IP: meta.IP}, action, targetType, targetID, details)
+}
+
+func (s *Service) auditAs(ctx context.Context, orgID string, a Actor, action, targetType, targetID string, details map[string]any) {
+	e := &AuditEvent{OrgID: orgID, ActorUserID: a.UserID, ActorEmail: a.Email, ActorAPIKeyID: a.APIKeyID,
+		ActorAPIKeyName: a.APIKeyName, Action: action, TargetType: targetType, TargetID: targetID,
+		Details: details, IP: a.IP, CreatedAt: s.now()}
 	if err := s.store.AddAuditEvent(context.WithoutCancel(ctx), e); err != nil {
 		s.log.Error("cannot write audit log", "action", action, "org_id", orgID, "err", err)
 	}
@@ -596,19 +609,6 @@ func cleanName(v, field string, required bool) (string, error) {
 	return v, nil
 }
 
-func requireSession(p *Principal) error {
-	if p == nil || p.Kind != KindSession {
-		return denied("this operation requires a signed-in user; API keys are read-only")
-	}
-	return nil
-}
-
-func requireOrg(p *Principal, a Action) error {
-	if !p.HasOrg() {
-		return denied("you are not a member of any organization")
-	}
-	if !p.Role.Can(a) {
-		return denied("your role (" + string(p.Role) + ") does not allow this operation")
-	}
-	return nil
-}
+// requireSession allows an operation on the caller's own account, which needs no
+// membership and which no API key can perform (roles.go ActManageOwnAccount).
+func requireSession(p *Principal) error { return Authorize(p, ActManageOwnAccount) }

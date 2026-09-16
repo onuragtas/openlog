@@ -888,9 +888,10 @@ export const en = {
     },
     apiKeys: {
       title: "API keys",
-      description: "Read-only keys for scripts and integrations that use the query API.",
+      description: "Keys for scripts and integrations that use the query API. A key only reads data unless you give it a role that may change configuration.",
       name: "Key name",
       namePlaceholder: "e.g. grafana",
+      role: "Role",
       expiry: "Expires",
       expiryOptions: {
         never: "Never",
@@ -900,7 +901,8 @@ export const en = {
       },
       create: "Create API key",
       created: "New API key “{{name}}”",
-      usage: "Send it as Authorization: Bearer <key>. It can only read data and is shown only once.",
+      usageRead: "Send it as Authorization: Bearer <key>. It can only read data and is shown only once.",
+      usageWriting: "Send it as Authorization: Bearer <key>. It can read data and change configuration, and is shown only once.",
       empty: "No API keys yet.",
     },
     security: {

@@ -40,7 +40,10 @@ func TestDashboardEndpoints(t *testing.T) {
 		"admin":  pr(auth.KindSession, "cccccccc-cccc-cccc-cccc-cccccccccccc", auth.RoleAdmin),
 		"viewer": pr(auth.KindSession, "dddddddd-dddd-dddd-dddd-dddddddddddd", auth.RoleViewer),
 		"key":    pr(auth.KindAPIKey, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", auth.RoleViewer),
-		"noorg":  {Kind: auth.KindSession, UserID: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"},
+		// A key with a writing role (D-133). It has no user id: a key owns no dashboard.
+		"key-member": {Kind: auth.KindAPIKey, APIKeyID: "ffffffff-ffff-ffff-ffff-ffffffffffff", APIKeyName: "terraform",
+			OrgID: orgID, TenantID: "t1", Role: auth.RoleMember},
+		"noorg": {Kind: auth.KindSession, UserID: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"},
 	}
 	s := New(config.API{QueryTimeout: time.Second, MaxRows: 1000}, query.New(&recordingConn{}, "openlog", time.Second), authn,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -107,7 +110,10 @@ func TestDashboardEndpoints(t *testing.T) {
 		{"noorg", "GET", "/api/v1/dashboards", "", 403, "not a member"},
 		{"nobody", "GET", "/api/v1/dashboards", "", 401, ""},
 		{"viewer", "POST", "/api/v1/dashboards", body, 403, "role (viewer)"},
-		{"key", "POST", "/api/v1/dashboards", body, 403, "API keys are read-only"},
+		{"key", "POST", "/api/v1/dashboards", body, 403, "this API key's role (viewer)"},
+		// The same endpoint accepts a key whose role may write; it owns nothing, so the
+		// dashboard has no creator.
+		{"key-member", "POST", "/api/v1/dashboards", body, 201, `"created_by_user_id":null`},
 		{"bob", "PUT", path, `{"name": "X", "version": 1}`, 403, "only the creator"},
 		{"bob", "DELETE", path, "", 403, "only the creator"},
 		{"viewer", "DELETE", path, "", 403, "role (viewer)"},

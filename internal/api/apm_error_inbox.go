@@ -723,21 +723,18 @@ func (s *Server) apmErrorComments(w http.ResponseWriter, r *http.Request, _ *que
 	return nil
 }
 
-// ---- mutations (signed-in members) ----
+// ---- mutations (members; an API key with that role too) ----
 
 type apmWriteHandler func(w http.ResponseWriter, r *http.Request, p *auth.Principal, sc *query.Scope, store apm.ErrorStateStore) error
 
 // apmWriteRoute registers a mutating endpoint: wrap authenticates (session CSRF included) and creates the tenant
-// scope; the handler additionally needs a signed-in member.
+// scope; the handler additionally needs a principal whose role may work on the error inbox.
 func (s *Server) apmWriteRoute(mux *http.ServeMux, pattern string, h apmWriteHandler) {
 	mux.Handle(pattern, s.wrap(pattern, func(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 		noStore(w)
 		p, _ := auth.PrincipalFrom(r.Context())
-		if p == nil || p.Kind != auth.KindSession {
-			return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-		}
-		if !p.Role.Can(auth.ActWriteAPMErrors) {
-			return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+		if ae := authorize(p, auth.ActWriteAPMErrors); ae != nil {
+			return ae
 		}
 		store := s.errorStore()
 		if store == nil {
@@ -793,7 +790,7 @@ func errorGroupKeys(ctx context.Context, sc *query.Scope, ids []uint64) ([]apm.E
 }
 
 func (s *Server) apmActor(r *http.Request, p *auth.Principal) apm.Actor {
-	a := apm.Actor{UserID: p.UserID, Email: p.Email}
+	a := apm.Actor{UserID: p.UserID, Email: p.Email, APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 	if s.accounts != nil {
 		a.IP = s.accounts.Meta(r).IP
 	}
@@ -899,7 +896,7 @@ func (s *Server) apmDeleteErrorComment(w http.ResponseWriter, r *http.Request, p
 	if len(commentID) != 36 {
 		return notFound("comment not found")
 	}
-	if err := store.DeleteComment(r.Context(), p.OrgID, id, commentID, s.apmActor(r, p), p.Role.Can(auth.ActManageAPMErrors)); err != nil {
+	if err := store.DeleteComment(r.Context(), p.OrgID, id, commentID, s.apmActor(r, p), allowed(p, auth.ActManageAPMErrors)); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)

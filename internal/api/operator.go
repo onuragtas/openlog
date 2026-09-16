@@ -569,7 +569,7 @@ func (s *Server) orgSaaSState(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	now := s.now()
 	ss := supportSessionFrom(r.Context())
 	resp := map[string]any{"saas_mode": s.saas.d.SaaS, "suspended": l.Suspended, "trial": nil, "support_access": nil, "support_session": nil,
-		"can_manage_support_access": p.Kind == auth.KindSession && p.Role == auth.RoleOwner && ss == nil}
+		"can_manage_support_access": allowed(p, auth.ActManageSupportAccess) && ss == nil}
 	if l.TrialActive() {
 		plan := s.saas.d.Catalog.Resolve(l.TrialPlanID)
 		resp["trial"] = map[string]any{"plan_id": l.TrialPlanID, "plan_name": plan.Name, "ends_at": formatTime(*l.TrialEndsAt),
@@ -586,7 +586,7 @@ func (s *Server) orgSaaSState(w http.ResponseWriter, r *http.Request, p *auth.Pr
 }
 
 func (s *Server) requireOwnerSession(r *http.Request, p *auth.Principal) error {
-	if p.Kind != auth.KindSession || !p.HasOrg() || p.Role != auth.RoleOwner || supportSessionFrom(r.Context()) != nil {
+	if !allowed(p, auth.ActManageSupportAccess) || supportSessionFrom(r.Context()) != nil {
 		return &apiError{http.StatusForbidden, "permission_denied", "only owners can manage openlog support access"}
 	}
 	return nil

@@ -94,9 +94,19 @@ func auditDetails(in Input) []byte {
 	return b
 }
 
+// keyID is the API key that made the change, or NULL for a signed-in user.
+func keyID(a Actor) any {
+	if a.APIKeyID == "" {
+		return nil
+	}
+	return a.APIKeyID
+}
+
 func audit(ctx context.Context, tx pgx.Tx, orgID, action, id string, details []byte, actor Actor) error {
-	_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip)
-		VALUES ($1, $2, $3, $4, 'slo', $5, $6, $7)`, orgID, actorID(actor), actor.Email, action, id, details, actor.IP)
+	_, err := tx.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+		action, target_type, target_id, details, ip)
+		VALUES ($1, $2, $3, $4, $5, $6, 'slo', $7, $8, $9)`, orgID, actorID(actor), actor.Email,
+		keyID(actor), actor.APIKeyName, action, id, details, actor.IP)
 	return err
 }
 

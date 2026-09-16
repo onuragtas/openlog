@@ -137,11 +137,10 @@ func (s *Service) currentSession(ctx context.Context, p *auth.Principal) (auth.S
 	return auth.Session{}, &auth.Error{Code: auth.CodeUnauthenticated, Message: "session ended"}
 }
 
+// requireSessionPrincipal allows an operation on the caller's own single sign-on
+// session, which no API key can perform (the decision is auth.Allow).
 func requireSessionPrincipal(p *auth.Principal) error {
-	if p == nil || p.Kind != auth.KindSession {
-		return denied("this operation requires a signed-in user")
-	}
-	return nil
+	return auth.Allow(p, auth.Permission{UserOnly: true})
 }
 
 // SessionInfo reports whether the caller's session was created by single sign-on and whether the IdP session can

@@ -21,8 +21,8 @@ func (s *Server) integrationSettingsRoutes(mux *http.ServeMux) {
 	if s.intSettings == nil || s.accounts == nil {
 		return
 	}
-	// Same permissions as the fleet endpoints: reads for every role (API keys too), changes for signed-in
-	// admins and owners.
+	// Reads for every role (API keys too); changes for admins and owners, including an API key
+	// with the admin role (integration settings are configuration, D-133).
 	route := func(pattern string, write bool, h fleetFunc) {
 		mux.Handle(pattern, s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {
 			noStore(rec)
@@ -30,7 +30,11 @@ func (s *Server) integrationSettingsRoutes(mux *http.ServeMux) {
 			if p == nil {
 				return
 			}
-			if ae := fleetAllowed(p, write); ae != nil {
+			act := auth.ActReadIntegrationSettings
+			if write {
+				act = auth.ActManageIntegrationSettings
+			}
+			if ae := authorize(p, act); ae != nil {
 				writeError(rec, ae)
 				return
 			}
@@ -62,7 +66,8 @@ func (s *Server) writeIntegrationSettingsError(w http.ResponseWriter, route stri
 }
 
 func (s *Server) intActor(r *http.Request, p *auth.Principal) intsettings.Actor {
-	return intsettings.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
+	return intsettings.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP,
+		APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 }
 
 // ---- response shapes ----

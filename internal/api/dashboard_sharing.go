@@ -57,8 +57,10 @@ type dashboardSettingsJSON struct {
 }
 
 func settingsResponse(st dashboard.Settings, v dashboard.Viewer) dashboardSettingsJSON {
+	// can_edit must report exactly what updateDashboardSettings enforces below; an admin API key
+	// has no user id but may change these settings (D-133).
 	out := dashboardSettingsJSON{ShareLinksEnabled: st.SharesEnabled, ReportDomains: st.ReportDomains, UpdatedAt: optTimePtr(&st.UpdatedAt),
-		CanEdit: v.CanWrite && v.Admin && v.UserID != ""}
+		CanEdit: v.CanWrite && v.Admin}
 	if out.ReportDomains == nil {
 		out.ReportDomains = []string{}
 	}

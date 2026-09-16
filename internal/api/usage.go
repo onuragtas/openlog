@@ -88,7 +88,7 @@ func (s *Server) usageRoutes(mux *http.ServeMux) {
 				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"})
 				return
 			}
-			if !p.Role.Can(auth.ActReadOrg) {
+			if !allowed(p, auth.ActReadOrg) {
 				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "your role does not allow reading usage"})
 				return
 			}
@@ -154,7 +154,7 @@ func (s *Server) writeUsageError(w http.ResponseWriter, route string, err error)
 // isSuperadmin: a signed-in user with a verified e-mail address in OPENLOG_SUPERADMIN_EMAILS.
 func (s *Server) isSuperadmin(p *auth.Principal) bool {
 	u := s.usage
-	return u != nil && u.Superadmin != nil && p.Kind == auth.KindSession && p.EmailVerified && u.Superadmin(p.Email)
+	return u != nil && u.Superadmin != nil && isUser(p) && p.EmailVerified && u.Superadmin(p.Email)
 }
 
 // ---- response shapes ----
@@ -364,7 +364,7 @@ func (s *Server) getUsageTop(w http.ResponseWriter, r *http.Request, p *auth.Pri
 }
 
 func (s *Server) exportUsage(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	if !p.Role.AtLeast(auth.RoleAdmin) {
+	if !allowed(p, auth.ActExportUsage) {
 		return &apiError{http.StatusForbidden, "permission_denied", "only admins and owners can export usage"}
 	}
 	period, until, err := s.period(r)

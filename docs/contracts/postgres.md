@@ -109,9 +109,13 @@ the audit trail and to keep the hash unusable). `last_used_at` is written asynch
 most once per minute per key per pod.
 
 ### `api_keys`
-Like `license_keys` plus `scope` (`read`, the only scope in M1) and `expires_at` (NULL = never).
-API keys authenticate the Query API only and act as `viewer`; they never authenticate ingest, and
-ingest license keys never authenticate the API.
+Like `license_keys` plus `role`, `scope` and `expires_at` (NULL = never). `role`
+(`0091_api_key_roles`, D-133) is `viewer`, `member` or `admin` (`owner` is not a key role: the
+owner-only operations are account and organization lifecycle and stay with a human); every row that
+existed before the migration got `viewer`, so no key gained a permission from it. `scope` (`read`,
+`write`) is derived from the role and kept for older clients. API keys authenticate the Query API
+only and act with their role ([api.md](api.md#roles)); they never authenticate ingest, and ingest
+license keys never authenticate the API.
 
 ### `sessions`
 `id`, `user_id`, `token_hash` (UNIQUE), `csrf_token`, `created_at`, `last_seen_at`, `expires_at`,
@@ -132,7 +136,12 @@ it (`''`: the resending admin's language).
 
 ### `audit_log`
 `id` (identity), `org_id` (NULL for user-level events such as sign-in), `actor_user_id`, `actor_email`,
-`action`, `target_type`, `target_id`, `details` (jsonb), `ip`, `created_at`.
+`actor_api_key_id` (`REFERENCES api_keys ON DELETE SET NULL`) and `actor_api_key_name` (`0091_api_key_roles`,
+D-133), `action`, `target_type`, `target_id`, `details` (jsonb), `ip`, `created_at`.
+
+A change made with an API key has `actor_user_id` NULL and an empty `actor_email` — no user is invented for it:
+the key is the actor, by id and by the name it had at the time (the name is copied rather than joined, so the
+row keeps its meaning after the key is renamed or deleted).
 
 | Action | Target |
 |---|---|
@@ -143,7 +152,7 @@ it (`''`: the resending admin's language).
 | `invitation.create`, `invitation.resend` (`details.email_sent`), `invitation.revoke`, `invitation.accept` | invitation |
 | `user.email_verified`, `user.verification_resend` (no organization) | user |
 | `license_key.create`, `license_key.revoke` | license_key (`details.name`, `details.prefix`; `details.custom = true` for an imported value) |
-| `api_key.create`, `api_key.revoke` | api_key |
+| `api_key.create` (`details.name`, `details.prefix`, `details.role`), `api_key.revoke` | api_key |
 | `user.login`, `user.logout`, `user.password_change`, `user.password_reset`, `session.revoke` | session / user |
 | `fleet.policy.update` (`details.from`/`to`) | policy (organization id) |
 | `fleet.host_override.set` (`details.action`/`version`), `fleet.host_override.delete` | agent_host |
@@ -175,7 +184,7 @@ The same table holds the other API rate-limit counters, with `key_hash = sha256(
 attempts per client IP and per e-mail (`OPENLOG_SIGNUP_MAX_PER_IP`/`_PER_EMAIL`), invitation e-mails per
 organization and per invited address, and verification e-mails per user (windows ≤ 24 h).
 
-Listing (`GET /audit-log`) filters by `actor_email` substring, `action` prefix (`starts_with`) and time, newest
+Listing (`GET /audit-log`) filters by `actor_email` or `actor_api_key_name` substring, `action` prefix (`starts_with`) and time, newest
 first with a keyset cursor on `(created_at, id)`, served by `audit_log_org_idx`.
 
 ## Single sign-on and SCIM (`0030_sso`, `0056_sso_connections_slo`, `0063_sso_sessions_index`)

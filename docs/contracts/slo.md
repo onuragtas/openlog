@@ -102,8 +102,8 @@ Defaults (configurable per rule, 1–4 windows):
 
 `GET /api/v1/slos`, `POST /api/v1/slos`, `GET|PUT|DELETE /api/v1/slos/{id}` and
 `GET /api/v1/slos/{id}/results` — shapes and roles in [api.md](api.md#service-level-objectives) and
-[openapi.yaml](openapi.yaml) (tag `slos`). Reads are telemetry reads (any role, API keys too); writes need a
-signed-in member or higher. Not available with `OPENLOG_AUTH_MODE=static` (`404`).
+[openapi.yaml](openapi.yaml) (tag `slos`). Reads are telemetry reads (any role, API keys too); writes need the
+member role or higher, an API key with that role included (D-133). Not available with `OPENLOG_AUTH_MODE=static` (`404`).
 
 ## 5. Not in this version
 

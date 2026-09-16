@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { apiKeysQuery, createApiKey, revokeApiKey, useMe, type ApiKey } from "@/api/account";
+import { apiKeysQuery, createApiKey, revokeApiKey, useMe, type ApiKey, type ApiKeyRole } from "@/api/account";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ import { parseApiTime } from "./time";
 const EXPIRY = ["never", "d30", "d90", "d365"] as const;
 type Expiry = (typeof EXPIRY)[number];
 const EXPIRY_DAYS: Record<Expiry, number | null> = { never: null, d30: 30, d90: 90, d365: 365 };
+/** Key roles, weakest first; "viewer" only reads and stays the default (D-133). */
+const KEY_ROLES: readonly ApiKeyRole[] = ["viewer", "member", "admin"];
 
 export function ApiKeysSettings() {
   const { t } = useTranslation();
@@ -29,20 +31,23 @@ export function ApiKeysSettings() {
   const me = useMe().data;
   const perms = usePermissions();
   const canCreate = perms.can("api_keys.create");
+  // Only admins and owners may hand a key a role that writes; everyone else creates read-only keys.
+  const canCreateWriting = perms.can("api_keys.create_writing");
   const canRevokeAny = perms.can("api_keys.revoke_any");
   const keys = useQuery(apiKeysQuery());
   const [name, setName] = useState("");
+  const [role, setRole] = useState<ApiKeyRole>("viewer");
   const [expiry, setExpiry] = useState<Expiry>("d90");
-  const [created, setCreated] = useState<{ name: string; key: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; key: string; role: ApiKeyRole } | null>(null);
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: apiKeysQuery().queryKey });
   const create = useMutation({
-    mutationFn: (v: { name: string; expiry: Expiry }) => {
+    mutationFn: (v: { name: string; role: ApiKeyRole; expiry: Expiry }) => {
       const days = EXPIRY_DAYS[v.expiry];
-      return createApiKey(v.name, days === null ? null : new Date(Date.now() + days * 86_400_000).toISOString());
+      return createApiKey(v.name, v.role, days === null ? null : new Date(Date.now() + days * 86_400_000).toISOString());
     },
     onSuccess: (res) => {
-      setCreated({ name: res.api_key.name, key: res.key });
+      setCreated({ name: res.api_key.name, key: res.key, role: res.api_key.role });
       setName("");
       invalidate();
     },
@@ -57,6 +62,8 @@ export function ApiKeysSettings() {
     ) : (
       <Badge variant="success">{t("settings.active")}</Badge>
     );
+  /** A key that can change configuration is marked; a read-only one stays quiet. */
+  const roleBadge = (k: ApiKey) => <Badge variant={k.scope === "write" ? "warning" : "muted"}>{t(`settings.roles.${k.role}`)}</Badge>;
   const canRevoke = (k: ApiKey) => !k.revoked_at && perms.writable && (canRevokeAny || k.created_by_user_id === me?.user?.id);
 
   return (
@@ -67,13 +74,25 @@ export function ApiKeysSettings() {
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (name.trim() !== "") create.mutate({ name: name.trim(), expiry });
+              if (name.trim() !== "") create.mutate({ name: name.trim(), role, expiry });
             }}
           >
             <div className="flex min-w-60 flex-1 flex-col gap-1.5">
               <Label htmlFor={`${id}-name`}>{t("settings.apiKeys.name")}</Label>
               <Input id={`${id}-name`} value={name} maxLength={200} placeholder={t("settings.apiKeys.namePlaceholder")} onChange={(e) => setName(e.target.value)} />
             </div>
+            {canCreateWriting && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${id}-role`}>{t("settings.apiKeys.role")}</Label>
+                <NativeSelect id={`${id}-role`} value={role} onChange={(e) => setRole(e.target.value as ApiKeyRole)}>
+                  {KEY_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {t(`settings.roles.${r}`)}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-expiry`}>{t("settings.apiKeys.expiry")}</Label>
               <NativeSelect id={`${id}-expiry`} value={expiry} onChange={(e) => setExpiry(e.target.value as Expiry)}>
@@ -92,7 +111,12 @@ export function ApiKeysSettings() {
         )}
         <FormError error={create.error ?? revoke.error} />
         {created && (
-          <SecretReveal label={t("settings.apiKeys.created", { name: created.name })} secret={created.key} note={t("settings.apiKeys.usage")} onDone={() => setCreated(null)} />
+          <SecretReveal
+            label={t("settings.apiKeys.created", { name: created.name })}
+            secret={created.key}
+            note={t(created.role === "viewer" ? "settings.apiKeys.usageRead" : "settings.apiKeys.usageWriting")}
+            onDone={() => setCreated(null)}
+          />
         )}
       </SettingsSection>
 
@@ -109,6 +133,7 @@ export function ApiKeysSettings() {
               <TableRow>
                 <TableHead>{t("settings.columns.name")}</TableHead>
                 <TableHead>{t("settings.columns.key")}</TableHead>
+                <TableHead>{t("settings.columns.role")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("settings.columns.createdBy")}</TableHead>
                 <TableHead className="hidden md:table-cell">{t("settings.columns.lastUsed")}</TableHead>
                 <TableHead className="hidden md:table-cell">{t("settings.columns.expires")}</TableHead>
@@ -125,6 +150,9 @@ export function ApiKeysSettings() {
                   <TableCell label={t("settings.columns.key")}>
                     <code className="font-mono text-xs">{k.prefix}</code>
                     <span aria-hidden="true">…</span>
+                  </TableCell>
+                  <TableCell label={t("settings.columns.role")} className="max-md:w-auto">
+                    {roleBadge(k)}
                   </TableCell>
                   <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
                     {k.created_by_email || "–"}

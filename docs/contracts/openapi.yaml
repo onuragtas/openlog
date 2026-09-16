@@ -3704,6 +3704,13 @@ paths:
               required: [name]
               properties:
                 name: { type: string, minLength: 1, maxLength: 200 }
+                role:
+                  type: string
+                  enum: [viewer, member, admin]
+                  default: viewer
+                  description: >-
+                    What the key may do (D-133). Absent means viewer, so older clients keep creating read-only keys.
+                    A role above viewer needs an admin or owner caller and never exceeds the caller's own role (403).
                 expires_at:
                   type: [string, "null"]
                   description: RFC3339 or unix milliseconds, in the future
@@ -3774,7 +3781,7 @@ paths:
           in: query
           description: Default 100, max 500.
           schema: { type: integer, minimum: 1 }
-        - { name: actor, in: query, description: "Case-insensitive substring of the actor e-mail", schema: { type: string } }
+        - { name: actor, in: query, description: "Case-insensitive substring of the actor e-mail or of the API key name", schema: { type: string } }
         - { name: action, in: query, description: "Action prefix, e.g. member. or member.remove", schema: { type: string } }
         - { name: from, in: query, description: "Inclusive start (RFC3339 or unix ms)", schema: { type: string } }
         - { name: to, in: query, description: "Exclusive end (RFC3339 or unix ms)", schema: { type: string } }
@@ -6468,7 +6475,7 @@ components:
     apiKey:
       type: http
       scheme: bearer
-      description: "`Authorization: Bearer ola_…` — read-only API key (acts as viewer)."
+      description: "`Authorization: Bearer ola_…` — API key acting with its own role: viewer (the default), member or admin (api.md \"Roles\", D-133). Identity, credentials, fleet, backend updates and own-account operations stay signed-in-user-only."
     licenseKey:
       type: apiKey
       in: header
@@ -9834,12 +9841,22 @@ components:
 
     Me:
       type: object
-      required: [auth, user, organization, role, organizations, csrf_token]
+      required: [auth, user, api_key, organization, role, organizations, csrf_token]
       properties:
         auth: { type: string, enum: [session, api_key, license_key] }
         user:
           oneOf:
             - { $ref: "#/components/schemas/User" }
+            - { type: "null" }
+        api_key:
+          description: The API key that authenticated this request and the role it acts with; null unless auth is api_key (D-133).
+          oneOf:
+            - type: object
+              required: [id, name, role]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                role: { type: string, enum: [viewer, member, admin] }
             - { type: "null" }
         organization:
           description: The organization of this request (X-Openlog-Org-Id or the default one); null without memberships.
@@ -9932,12 +9949,13 @@ components:
 
     APIKey:
       type: object
-      required: [id, name, prefix, scope, created_by_user_id, created_by_email, created_at, last_used_at, expires_at, revoked_at]
+      required: [id, name, prefix, role, scope, created_by_user_id, created_by_email, created_at, last_used_at, expires_at, revoked_at]
       properties:
         id: { type: string }
         name: { type: string }
         prefix: { type: string }
-        scope: { type: string, enum: [read] }
+        role: { type: string, enum: [viewer, member, admin], description: "What the key may do (api.md \"Roles\", D-133); owner is not a key role" }
+        scope: { type: string, enum: [read, write], description: "Derived from role and kept for older clients: read for a viewer key, write for a member or admin key" }
         created_by_user_id: { type: string }
         created_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
@@ -9959,10 +9977,19 @@ components:
 
     AuditEvent:
       type: object
-      required: [id, actor_email, action, target_type, target_id, details, ip, created_at]
+      required: [id, actor_email, actor_api_key, action, target_type, target_id, details, ip, created_at]
       properties:
         id: { type: integer }
-        actor_email: { type: string }
+        actor_email: { type: string, description: "Empty for a change made with an API key: the key is the actor (D-133)" }
+        actor_api_key:
+          description: The API key that made the change, by id and by the name it had then; null when a signed-in user did.
+          oneOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id: { type: string }
+                name: { type: string }
+            - { type: "null" }
         action: { type: string }
         target_type: { type: string }
         target_id: { type: string }

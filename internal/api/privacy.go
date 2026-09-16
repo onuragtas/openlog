@@ -84,8 +84,9 @@ func (s *Server) privacyRoutes(mux *http.ServeMux) {
 			if p == nil {
 				return
 			}
-			if p.Kind != auth.KindSession {
-				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"})
+			// Exports and deletions act on a person's own data and account, never on behalf of a key.
+			if ae := authorize(p, auth.ActManageOwnAccount); ae != nil {
+				writeError(rec, ae)
 				return
 			}
 			if err := h(rec, r, p); err != nil {
@@ -149,7 +150,7 @@ func (s *Server) writePrivacyError(w http.ResponseWriter, route string, err erro
 }
 
 func requireOwner(p *auth.Principal) error {
-	if !p.HasOrg() || p.Role != auth.RoleOwner {
+	if !allowed(p, auth.ActDeleteOrganization) {
 		return &apiError{http.StatusForbidden, "permission_denied", "only owners of the organization can do this"}
 	}
 	return nil
@@ -579,7 +580,7 @@ func (s *Server) visibleExport(ctx context.Context, p *auth.Principal, id string
 	}
 	switch e.Kind {
 	case dataexport.KindOrganization:
-		if p.HasOrg() && p.Role == auth.RoleOwner && p.OrgID == e.OrgID {
+		if allowed(p, auth.ActReadOrgExports) && p.OrgID == e.OrgID {
 			return e, nil
 		}
 	case dataexport.KindUser:

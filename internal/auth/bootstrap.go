@@ -196,7 +196,9 @@ func (s *Service) Bootstrap(ctx context.Context, spec BootstrapSpec) (BootstrapR
 				return res, errors.New("the bootstrap API key was revoked; choose another key")
 			}
 		case errors.Is(err, ErrNotFound):
-			nk := APIKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.APIKey), Hash: s.cfg.KeyHasher.Hash(spec.APIKey), Scope: "read", CreatedBy: owner.ID, CreatedAt: now}
+			// The bootstrap key is read-only, like every key that does not ask for more (D-133).
+			nk := APIKey{OrgID: org.ID, Name: "bootstrap", Prefix: DisplayPrefix(spec.APIKey), Hash: s.cfg.KeyHasher.Hash(spec.APIKey),
+				Scope: KeyScope(RoleViewer), Role: RoleViewer, CreatedBy: owner.ID, CreatedAt: now}
 			if err := s.store.CreateAPIKey(ctx, &nk); err != nil {
 				return res, err
 			}

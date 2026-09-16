@@ -22,13 +22,12 @@ func (s *Server) SetDashboards(m *dashboard.Manager) {
 
 type dashboardFunc func(w http.ResponseWriter, r *http.Request, p *auth.Principal, v dashboard.Viewer) error
 
+// dashboardViewer derives what the principal may do from the one permission gate.
+// UserID stays empty for API keys: a key owns no dashboard, so it changes one only
+// through the admin rule.
 func dashboardViewer(p *auth.Principal) dashboard.Viewer {
-	v := dashboard.Viewer{Admin: p.Role.AtLeast(auth.RoleAdmin)}
-	if p.Kind == auth.KindSession {
-		v.UserID = p.UserID
-		v.CanWrite = p.Role.AtLeast(auth.RoleMember)
-	}
-	return v
+	return dashboard.Viewer{UserID: p.UserID, Admin: allowed(p, auth.ActManageDashboards),
+		CanWrite: allowed(p, auth.ActWriteDashboards)}
 }
 
 func (s *Server) dashboardRoutes(mux *http.ServeMux) {
@@ -42,12 +41,8 @@ func (s *Server) dashboardRoutes(mux *http.ServeMux) {
 			if p == nil {
 				return
 			}
-			if !p.HasOrg() {
-				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"})
-				return
-			}
-			if !p.Role.Can(auth.ActReadTelemetry) {
-				writeError(rec, &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"})
+			if ae := authorize(p, auth.ActReadTelemetry); ae != nil {
+				writeError(rec, ae)
 				return
 			}
 			if err := h(rec, r, p, dashboardViewer(p)); err != nil {
@@ -79,14 +74,14 @@ func (s *Server) writeDashboardError(w http.ResponseWriter, route string, p *aut
 	case errors.Is(err, dashboard.ErrConflict):
 		writeError(w, &apiError{http.StatusConflict, "failed_precondition", "the dashboard was changed by someone else; reload and try again"})
 	case errors.Is(err, dashboard.ErrForbidden):
-		msg := "only the creator of this dashboard or an admin can change it"
-		switch {
-		case p.Kind != auth.KindSession:
-			msg = "this operation requires a signed-in user; API keys are read-only"
-		case !p.Role.AtLeast(auth.RoleMember):
-			msg = "your role (" + string(p.Role) + ") does not allow this operation"
+		// The manager refused: either the principal may not write at all (the gate says why),
+		// or it may write but does not own this dashboard.
+		if ae := authorize(p, auth.ActWriteDashboards); ae != nil {
+			writeError(w, ae)
+			return
 		}
-		writeError(w, &apiError{http.StatusForbidden, "permission_denied", msg})
+		writeError(w, &apiError{http.StatusForbidden, "permission_denied",
+			"only the creator of this dashboard or an admin can change it"})
 	default:
 		s.writeAccountError(w, route, err)
 	}

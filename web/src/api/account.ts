@@ -15,6 +15,8 @@ export type Invitation = S["Invitation"];
 export type InvitationLookup = S["InvitationLookup"];
 export type LicenseKey = S["LicenseKey"];
 export type ApiKey = S["APIKey"];
+/** What an API key may do; "owner" is not a key role. */
+export type ApiKeyRole = ApiKey["role"];
 export type Session = S["Session"];
 export type AuthConfig = S["AuthConfig"];
 export type AuditEvent = S["AuditEvent"];
@@ -160,8 +162,9 @@ export async function revokeLicenseKey(id: string): Promise<void> {
   expectOk(await api.DELETE("/api/v1/license-keys/{id}", { params: { path: { id } } }));
 }
 
-export async function createApiKey(name: string, expiresAt: string | null) {
-  return unwrap(await api.POST("/api/v1/api-keys", { body: { name, expires_at: expiresAt } }));
+/** Creates a query API key; a role above "viewer" also writes and needs an admin or owner. */
+export async function createApiKey(name: string, role: ApiKeyRole, expiresAt: string | null) {
+  return unwrap(await api.POST("/api/v1/api-keys", { body: { name, role, expires_at: expiresAt } }));
 }
 
 export async function revokeApiKey(id: string): Promise<void> {

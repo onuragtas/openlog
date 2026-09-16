@@ -15,26 +15,38 @@ state; the rest is a deliberate first scope (§7).
 
 ## 1. A credential that may write
 
-**This is the prerequisite to check first.** openlog API keys (`ola_…`) are today **read-only viewers** of
-their organization: telemetry endpoints answer, and every management endpoint answers `403 permission_denied`
-([api.md "Authentication"](../contracts/api.md#authentication), alerting.md §7). A provider `plan` against a
-read-only key works — reads are allowed — and the first `apply` fails with:
+**This is the prerequisite to check first.** An openlog API key (`ola_…`) carries a role of its own —
+`viewer` (the default), `member` or `admin` ([api.md "Roles"](../contracts/api.md#roles), D-133) — and the
+provider needs one whose role may write. Use **`admin`**: a key owns nothing, so a rule, SLO or dashboard
+created with a `member` key has no creator and that same key cannot change it afterwards; an `admin` key
+manages everything in the organization, which is what a provider that owns its resources does.
+
+The key is created by a signed-in admin or owner (a key never creates keys). Settings → API keys in the web
+UI creates a `viewer` key; to choose the role, call the API with an admin or owner session:
+
+```sh
+curl -sS -X POST https://openlog.example.com/api/v1/api-keys \
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -b "openlog_session=$SESSION" \
+  -d '{"name": "terraform", "role": "admin"}'
+```
+
+`role` above `viewer` needs an admin or owner and never exceeds the caller's own role (`403`); an unknown role
+is a `400`. The response shows the key once — it is `OPENLOG_API_KEY` for the provider (§3).
+
+A **read-only (`viewer`) key still fails**: `plan` works, because reads are allowed, and the first `apply`
+stops with
 
 ```
 Error: Could not create the alert rule: the API key may not write
 
-  this operation requires a signed-in user; API keys are read-only
+  this API key's role (viewer) does not allow this operation
 
   The openlog API accepts writes from a credential with write permission; a read-only API key is
   refused here. See docs/operations/terraform.md.
 ```
 
-So the provider needs an API key **with write permission**, which the API does not issue yet. Until openlog
-grows write-scoped keys, the provider is usable against a build whose API accepts writes from a key; the
-contract change itself (a scope on `POST /api/v1/api-keys`, and the roles that may create one) is a separate
-decision, not something the provider can work around. Nothing in the provider assumes a session cookie: it
-authenticates exactly as [mcp.md](mcp.md) does, with `Authorization: Bearer` and `X-Openlog-Org-Id`, so a
-write-capable key is the only missing piece.
+Nothing in the provider assumes a session cookie: it authenticates exactly as [mcp.md](mcp.md) does, with
+`Authorization: Bearer` and `X-Openlog-Org-Id`.
 
 Channels additionally need `OPENLOG_SECRETS_KEY` on the server; without it the API refuses channel writes with
 `409 failed_precondition` (alerting.md §5.4).

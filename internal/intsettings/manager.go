@@ -16,12 +16,15 @@ type AuditEntry struct {
 	OrgID       string
 	ActorUserID string
 	ActorEmail  string
-	Action      string
-	TargetType  string
-	TargetID    string
-	Details     map[string]any
-	IP          string
-	At          time.Time
+	// ActorAPIKeyID and ActorAPIKeyName name the API key that made the change (D-133); empty for users.
+	ActorAPIKeyID   string
+	ActorAPIKeyName string
+	Action          string
+	TargetType      string
+	TargetID        string
+	Details         map[string]any
+	IP              string
+	At              time.Time
 }
 
 // Store persists integration settings (PostgreSQL: PGStore).
@@ -38,11 +41,14 @@ type Store interface {
 	AddAudit(ctx context.Context, e AuditEntry) error
 }
 
-// Actor is the user performing a change (for the audit log).
+// Actor is who performed a change (for the audit log): a signed-in user, or an API
+// key acting with its own role (D-133), in which case UserID and Email are empty.
 type Actor struct {
-	UserID string
-	Email  string
-	IP     string
+	UserID     string
+	Email      string
+	IP         string
+	APIKeyID   string
+	APIKeyName string
 }
 
 // ManagerOptions configure Manager.
@@ -95,7 +101,8 @@ func (m *Manager) ForHost(ctx context.Context, orgID, hostID string) ([]Setting,
 func (m *Manager) audit(ctx context.Context, a Actor, action string, s Setting, details map[string]any) {
 	details["integration"] = s.Integration
 	details["host_id"] = nullable(s.HostID)
-	e := AuditEntry{OrgID: s.OrgID, ActorUserID: a.UserID, ActorEmail: a.Email, Action: action, TargetType: "integration_setting",
+	e := AuditEntry{OrgID: s.OrgID, ActorUserID: a.UserID, ActorEmail: a.Email, ActorAPIKeyID: a.APIKeyID,
+		ActorAPIKeyName: a.APIKeyName, Action: action, TargetType: "integration_setting",
 		TargetID: s.ID, Details: details, IP: a.IP, At: m.o.Now()}
 	if err := m.store.AddAudit(context.WithoutCancel(ctx), e); err != nil {
 		m.o.Log.Error("cannot write audit log", "action", action, "org_id", s.OrgID, "err", err)

@@ -17,7 +17,7 @@ more recent range, [config.md](config.md) "ClickHouse read-only user and per-ten
 | Credential | How | Acts as | Notes |
 |---|---|---|---|
 | Session | cookie `openlog_session` from `POST /auth/login` | the user's role in the selected organization | `HttpOnly`, `SameSite=Strict`, `Path=/api`, `Secure` (unless `OPENLOG_COOKIE_SECURE=false`). Server-side in PostgreSQL; ends after `OPENLOG_SESSION_TTL` or `OPENLOG_SESSION_IDLE_TIMEOUT` of inactivity, on logout, on revocation, or when the password changes (other sessions) |
-| API key | `Authorization: Bearer ola_…` | `viewer` of the key's organization | Read-only: telemetry endpoints, `GET /auth/me`, `GET /orgs/current`. Every other management endpoint answers `403`. Revocation is immediate |
+| API key | `Authorization: Bearer ola_…` | the key's own role in its organization: `viewer` (the default), `member` or `admin` (D-133) | Everything the role allows in [Roles](#roles) below: telemetry, organization configuration, alerting, dashboards, saved views. Identity and credentials (members, invitations, license keys, API keys), the machines of the installation (fleet, backend updates) and anything about a user's own account answer `403` whatever the role. Revocation is immediate |
 
 Ingest license keys (`olk_…`) are **not** API credentials, and API keys are not ingest credentials.
 
@@ -49,23 +49,39 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 
 ## Roles
 
-| Operation | viewer | member | admin | owner |
-|---|:-:|:-:|:-:|:-:|
-| Telemetry, `GET /orgs/current`, `GET /members`, `GET /fleet/*`, `GET /onboarding`, own sessions, leave organization | ✓ | ✓ | ✓ | ✓ |
-| `GET /license-keys`, `GET /api-keys`, `POST /api-keys`, revoke own API keys | | ✓ | ✓ | ✓ |
-| Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ |
-| Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
-| APM error inbox: change status/assignee (`PATCH /apm/errors/groups`), comment, delete **own** comments (signed-in users only) | | ✓ | ✓ | ✓ |
-| Delete any error group comment | | | ✓ | ✓ |
-| Create, change and delete service level objectives (`/slos`; signed-in users only) | | ✓ | ✓ | ✓ |
-| `GET /integrations/settings` | ✓ | ✓ | ✓ | ✓ |
-| OQL (`POST /query`, `POST /query/validate`, `GET /query/schema`), read dashboards (private ones: creator only), export | ✓ | ✓ | ✓ | ✓ |
-| Create, import and duplicate dashboards; change/delete **own** dashboards | | ✓ | ✓ | ✓ |
-| Change/delete any non-private dashboard | | | ✓ | ✓ |
-| `PATCH /orgs/current`, invitations, create/revoke license keys, revoke any API key, change roles/remove members (not owners), `GET /audit-log`, fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, deploy now, rollback), integration setting changes, any alert rule or mute, alert channels and test sends, `POST /version/check` and `POST /version/update` (signed-in users only; with `OPENLOG_SIGNUP_ENABLED=true` only superadmins, whatever their role) | | | ✓ | ✓ |
-| Grant or remove the owner role, invite owners, remove owners | | | | ✓ |
+A role is carried by a membership **and** by an API key (D-133), and one matrix decides both: every handler
+goes through the single gate `auth.Allow` (`internal/auth/roles.go`), nothing else compares a principal's kind
+or role. **Key** below says whether an API key whose role reaches the row may perform it; an empty cell there
+means the operation needs a signed-in user whatever the key's role.
+
+| Operation | viewer | member | admin | owner | Key |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Telemetry, `GET /orgs/current`, `GET /members`, `GET /fleet/*`, `GET /onboarding` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Own sessions, leave organization, own account (logout, password, language, personal data export) | ✓ | ✓ | ✓ | ✓ | |
+| `GET /license-keys`, `GET /api-keys` | | ✓ | ✓ | ✓ | ✓ |
+| `POST /api-keys`, revoke own API keys | | ✓ | ✓ | ✓ | |
+| Alerting reads (`GET /alerts/*`) and rule preview | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ | ✓ |
+| APM error inbox: change status/assignee (`PATCH /apm/errors/groups`), comment, delete **own** comments | | ✓ | ✓ | ✓ | ✓ |
+| Delete any error group comment | | | ✓ | ✓ | ✓ |
+| Create, change and delete service level objectives (`/slos`) | | ✓ | ✓ | ✓ | ✓ |
+| `GET /integrations/settings` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OQL (`POST /query`, `POST /query/validate`, `GET /query/schema`), read dashboards (private ones: creator only), export | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Create, import and duplicate dashboards; change/delete **own** dashboards | | ✓ | ✓ | ✓ | ✓ |
+| Change/delete any non-private dashboard | | | ✓ | ✓ | ✓ |
+| `PATCH /orgs/current` (also the APM Apdex settings and the tail sampling policy), `GET /audit-log`, integration setting changes, any alert rule or mute, alert channels and test sends | | | ✓ | ✓ | ✓ |
+| Invitations, create/revoke license keys, revoke any API key, create an API key above `viewer`, change roles/remove members (not owners), fleet changes (`PUT /fleet/policy`, host overrides, pause/resume, deploy now, rollback), `POST /version/check` and `POST /version/update` (signed-in users only; with `OPENLOG_SIGNUP_ENABLED=true` only superadmins, whatever their role) | | | ✓ | ✓ | |
+| Grant or remove the owner role, invite owners, remove owners, the organization's query limits | | | | ✓ | |
 
 An organization always keeps at least one owner (`409 failed_precondition`).
+
+`owner` is not an API key role: the owner-only operations are account and organization lifecycle and stay with
+a human. A key also owns nothing — a dashboard, saved view, alert rule or mute created with a key has no
+creator, so only admins (or an `admin` key) can change it afterwards; automation that must manage what it
+creates wants an `admin` key. Denials say which rule refused: `this operation requires a signed-in user; API
+keys cannot perform it` for a row without a **Key** mark, `this API key's role (viewer) does not allow this
+operation` for a key whose role is too low, and `your role (viewer) does not allow this operation` for a
+signed-in user.
 
 ## Auth endpoints
 
@@ -103,11 +119,13 @@ verified or e-mail is not configured, `429` after 5 e-mails per hour, `503` when
 **Me** object:
 ```json
 {"auth": "session", "user": {"id": "…", "email": "ada@example.com", "name": "Ada", "email_verified": true, "language": "auto"},
- "organization": {"id": "…", "tenant_id": "default", "name": "Default"}, "role": "owner",
+ "api_key": null, "organization": {"id": "…", "tenant_id": "default", "name": "Default"}, "role": "owner",
  "organizations": [{"id": "…", "tenant_id": "default", "name": "Default", "role": "owner"}],
  "csrf_token": "…"}
 ```
-For API keys: `"auth": "api_key"`, `user`/`csrf_token` `null`, `organizations: []`, `role: "viewer"`.
+For API keys: `"auth": "api_key"`, `user`/`csrf_token` `null`, `organizations: []`, `api_key: {"id", "name", "role"}`
+(the key that authenticated the request) and `role` = that key's role — `viewer`, `member` or `admin` (D-133).
+`api_key` is `null` for sessions.
 `user.language` is the user's language preference: `"auto"` (the browser's) or `"en"`/`"tr"` (D-095).
 
 ### `PATCH /api/v1/auth/me` `{"language": "auto" | "en" | "tr"}`
@@ -210,10 +228,16 @@ Revokes → `204` (idempotent). Ingest pods keep accepting the key until their c
 ## API keys
 
 ### `GET /api/v1/api-keys`
-`{"api_keys": [{"id", "name", "prefix": "ola_…", "scope": "read", "created_by_user_id", "created_by_email", "created_at", "last_used_at", "expires_at", "revoked_at"}]}`
+`{"api_keys": [{"id", "name", "prefix": "ola_…", "role": "viewer", "scope": "read", "created_by_user_id", "created_by_email", "created_at", "last_used_at", "expires_at", "revoked_at"}]}`
+`role` is what the key may do (`viewer`, `member` or `admin`; [Roles](#roles), D-133). `scope` is derived from it
+and kept for older clients: `read` for a viewer key, `write` for a member or admin key.
 
-### `POST /api/v1/api-keys` `{"name", "expires_at"?}`
+### `POST /api/v1/api-keys` `{"name", "role"?, "expires_at"?}`
 `201 {"api_key": {…}, "key": "ola_…"}` — **shown once**. `expires_at` (optional) must be in the future.
+`role` is `viewer` (the default when it is absent, so older clients keep creating read-only keys), `member` or
+`admin`; anything else → `400 invalid_argument` ("role must be one of viewer, member, admin"). A key above
+`viewer` needs an admin or owner, and nobody creates a key more capable than their own role
+(`403 permission_denied`). Audit `api_key.create` carries `details.role`.
 
 ### `DELETE /api/v1/api-keys/{id}`
 Revokes → `204`; effective immediately.
@@ -225,8 +249,10 @@ The caller's active sessions: `{"sessions": [{"id", "created_at", "last_seen_at"
 Revoking the current session also clears the cookie.
 
 ### `GET /api/v1/audit-log?limit=&actor=&action=&from=&to=&cursor=`
-Newest first (default 100, max 500): `{"events": [{"id", "actor_email", "action", "target_type", "target_id", "details", "ip", "created_at"}], "next_cursor": "…" | null}`.
-`actor`: case-insensitive substring of the actor e-mail; `action`: prefix (`member.` or `member.remove`);
+Newest first (default 100, max 500): `{"events": [{"id", "actor_email", "actor_api_key": {"id", "name"} | null, "action", "target_type", "target_id", "details", "ip", "created_at"}], "next_cursor": "…" | null}`.
+A change made with an API key has an empty `actor_email` and names the key in `actor_api_key` (no user is
+invented for it; `actor_user_id` is NULL in the database, D-133); for a signed-in user `actor_api_key` is `null`.
+`actor`: case-insensitive substring of the actor e-mail or of the key name; `action`: prefix (`member.` or `member.remove`);
 `from` (inclusive) / `to` (exclusive): RFC3339 or unix ms; `cursor`: `next_cursor` of the previous page with the same
 filters (`null` when the page was not full). Invalid values → `400`. Settings → Audit log in the web UI.
 Actions: see [postgres.md](postgres.md#audit_log).
@@ -505,8 +531,8 @@ are only returned once by `POST /api/v1/license-keys`, and a key the user pastes
 - `agent_version`: the newest verified release of `release_channel` when the release check found one, else the
   server's own release version; `null` for development builds (commands then use `latest` download URLs).
 - `cors_enabled` / `cors_allowed_origins`: `OPENLOG_INGEST_CORS_ALLOWED_ORIGINS` of this api pod (browser OTLP/JSON logs).
-- `features.can_create_license_keys`: signed-in admin or owner in postgres mode; `can_list_license_keys`: signed-in
-  member or higher; `fleet_php_install`: fleet endpoints exist (php-agent.md §7.3); `tail_sampling`:
+- `features.can_create_license_keys`: signed-in admin or owner in postgres mode; `can_list_license_keys`:
+  member or higher, API keys too; `fleet_php_install`: fleet endpoints exist (php-agent.md §7.3); `tail_sampling`:
   `OPENLOG_TAILSAMPLING_ENABLED`.
 
 ## Hosts
@@ -978,7 +1004,7 @@ empty group matches everything. At most 50 conditions and 10 groups. Invalid key
 
 Named Logs/Metrics Explorer states (PostgreSQL `saved_views`, `0080_saved_views`; D-118). PostgreSQL auth mode only
 (`404` otherwise). Reads: any role and API keys — org-wide views and the caller's own private views (admins also see
-private views whose creator was deleted). Writes: signed-in members and higher; changing or deleting another user's
+private views whose creator was deleted). Writes: members and higher, API keys too (a key owns no view, D-133); changing or deleting another user's
 view requires admin/owner and an org-wide (or orphaned) view. At most 500 views per organization (`409`).
 Audit: `saved_view.{create,update,delete}`.
 
@@ -1140,7 +1166,7 @@ the workflow fields above, `affected` (`{"versions", "hosts", "containers", "tra
 at most 50) and `workflow`.
 
 ### `PATCH /api/v1/apm/errors/groups` `{"group_ids": [...], "status"?, "assignee_user_id"?, "resolved_in_version"?}`
-Signed-in member, admin or owner (`403` for viewers and API keys; CSRF as usual; `404` in static auth mode). 1–500
+Member, admin or owner, API keys with such a role too (`403` for viewers; CSRF as usual for sessions; `404` in static auth mode). 1–500
 group ids (16 hex digits; unknown ids → `404`); at least one change. `status` `unresolved`/`resolved`/`ignored`;
 `assignee_user_id` a member's id (`400` otherwise) or `""` to unassign; `resolved_in_version` (≤ 256 bytes) only with
 `status: "resolved"`. Returns `{"groups": [{"group_id", "service_name", "service_namespace", "environment", …workflow fields}]}`.
@@ -1176,15 +1202,16 @@ the container has infra agent data (Containers); `state`, `reporting` and the la
 ### `GET /api/v1/apm/services/{service_name}/settings` · `PUT …/settings` `{"apdex_t_ms": 300}`
 `{"service_name", "service_namespace", "environment", "apdex_t_ms", "is_default", "updated_at", "updated_by_email"}`.
 The key is (`service_name`, `namespace`, `environment` query parameters, missing = `''`); a row with empty namespace and
-environment applies to all of them unless a more specific row exists. `PUT` needs a signed-in admin or owner (`403`
-otherwise; CSRF as usual), `apdex_t_ms` an integer 1..600000 (`400`), writes the audit event
+environment applies to all of them unless a more specific row exists. `PUT` needs an admin or owner, an API key with
+that role included (`403` otherwise; CSRF as usual for sessions; it is the same permission as `PATCH /orgs/current`),
+`apdex_t_ms` an integer 1..600000 (`400`), writes the audit event
 `apm.service_settings.update`; not available with `OPENLOG_AUTH_MODE=static` (`404`, `GET` returns the default).
 
 ### `GET /api/v1/apm/sampling` · `PUT /api/v1/apm/sampling` `{"policy": {…}, "version": 3}`
 The organization's tail sampling policy ([apm.md](apm.md) §4.2, D-075):
 `{"enabled": true, "policy": {"enabled", "baseline_ratio", "max_spans_per_second", "rules": [{"name", "type", "ratio", …}]}, "is_default", "version", "updated_at", "updated_by_email"}`.
 `enabled` is `OPENLOG_TAILSAMPLING_ENABLED` of the api. `is_default` (version 0) when nothing is stored.
-`PUT` requires a signed-in admin or owner (`403`), a valid policy (`400`: unknown fields, ratios outside 0..1, duplicate/reserved rule names, missing rule fields), and the version that was edited (`409 conflict` when the stored version differs). It writes the audit event `apm.tail_sampling.update` and returns the stored state. Not available with `OPENLOG_AUTH_MODE=static` (`404`; `GET` returns the keep-all default).
+`PUT` requires an admin or owner, an API key with that role included (`403`; the same permission as `PATCH /orgs/current`), a valid policy (`400`: unknown fields, ratios outside 0..1, duplicate/reserved rule names, missing rule fields), and the version that was edited (`409 conflict` when the stored version differs). It writes the audit event `apm.tail_sampling.update` and returns the stored state. Not available with `OPENLOG_AUTH_MODE=static` (`404`; `GET` returns the keep-all default).
 
 ### `POST /api/v1/apm/sampling/preview` `{"policy": {…}, "window_minutes": 60}`
 Estimates what a policy would keep of the traces stored in the last `window_minutes` (1..1440, default 60). At most 20 000 traces are examined, as a hash sample of trace ids; each weighs its adjusted count:
@@ -1381,7 +1408,7 @@ back from; a newer release does.
 Endpoints and credentials of infra agent integrations (`nginx`, `redis`, `mysql`, `postgresql`, `docker`, `mssql`, `iis`) for all hosts
 of the caller's organization or for one host, delivered to agents through sync ([releases-updates.md](releases-updates.md)
 §3, table: [postgres.md](postgres.md#integration-settings-0008_integration_settings)). Same permissions as Fleet: reads
-need any role (API keys too); changes need a signed-in admin or owner (`403` otherwise, CSRF as usual). Not available with
+need any role (API keys too); changes need an admin or owner, an API key with that role included (`403` otherwise, CSRF as usual for sessions). Not available with
 `OPENLOG_AUTH_MODE=static` (`404`). Changes reach agents within `OPENLOG_FLEET_POLICY_CACHE_TTL` plus one sync interval.
 Every change is audited (`integration_setting.*`). `host_id` is the agent's host id (the `host_id` of `/hosts` and
 `/fleet/hosts`, the `host.id` resource attribute).
@@ -1435,7 +1462,7 @@ changing to an integration without passwords clears it. `404` for an unknown id.
 
 Targets, error budgets and burn rates of APM services (PostgreSQL `slos`, `0087_slo`; semantics and math:
 [slo.md](slo.md), D-125). PostgreSQL auth mode only (`404` otherwise). Reads: any role and API keys
-(telemetry). Writes: signed-in members and higher; at most 200 SLOs per organization (`409`). Audit:
+(telemetry). Writes: members and higher, API keys too; at most 200 SLOs per organization (`409`). Audit:
 `slo.{create,update,delete}`. Budgets are computed at query time from `apm_transactions_1m`, so the
 usual telemetry errors (`422`/`429` query limits, `504` timeout) apply.
 
@@ -1477,7 +1504,7 @@ requests).
 
 Scheduled outside-in HTTP checks of the caller's organization (PostgreSQL `synthetic_checks`,
 `0090_synthetics`; the runs in ClickHouse `synthetic_runs`, 30 days; D-132). PostgreSQL auth mode only
-(`404` otherwise). Reads: any role and API keys (telemetry). Writes: signed-in members and higher; at most
+(`404` otherwise). Reads: any role and API keys (telemetry). Writes: members and higher, API keys too; at most
 100 checks per organization (`409`). Audit: `synthetic_check.{create,update,delete}`.
 
 The api **leader** runs the due checks, one run per check, interval and location; the claim advances the
@@ -1544,7 +1571,7 @@ Rules, incidents, notification channels, routing rules, mute windows and the del
 organization. Semantics
 (rule types, evaluation, state machine, notifications, payloads, secrets): [alerting.md](alerting.md); shapes:
 [openapi.yaml](openapi.yaml) tag `alerts`; tables: [postgres.md](postgres.md#alerting-0004_alerting). Reads need any role
-(API keys too); writes need a signed-in user (CSRF as usual) with the role in [Roles](#roles): members create rules and
+(API keys too); writes need the role in [Roles](#roles) — an API key whose role allows them writes too (CSRF as usual for sessions): members create rules and
 mutes and change only those they created (`403 permission_denied` otherwise), work on incidents; admins and owners change
 everything and manage channels. Not available with `OPENLOG_AUTH_MODE=static` (`404`). Every write is audited
 (`alert.*`, alerting.md §7).
@@ -1615,8 +1642,10 @@ map keys of the last hour (`attribute_keys`, `resource_keys`, ≤ 200 each) and,
 
 Custom dashboards of OQL widgets (`OPENLOG_AUTH_MODE=postgres` only; `404` otherwise). Table: [postgres.md](postgres.md#dashboards-0020_dashboards).
 Reads: any role and API keys; `visibility: "private"` dashboards are visible only to their creator (and to admins once
-the creator's account is deleted). Writes need a signed-in user (CSRF as usual): members create, import and duplicate
-dashboards and change/delete their own; admins and owners change/delete any `org` dashboard (`403` otherwise). Every
+the creator's account is deleted). Writes need the role in [Roles](#roles), API keys included (CSRF as usual for
+sessions): members create, import and duplicate dashboards and change/delete their own; admins and owners
+change/delete any `org` dashboard (`403` otherwise). A dashboard created with an API key has no creator, so only
+admins (or an `admin` key) can change it afterwards (D-133). Every
 write is audited (`dashboard.{create,update,delete,duplicate,import}`, target `dashboard`).
 
 Dashboard:

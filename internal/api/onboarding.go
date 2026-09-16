@@ -127,7 +127,6 @@ func (s *Server) onboardingInfo(r *http.Request, p *auth.Principal) onboardingJS
 	if s.accounts != nil {
 		authMode = "postgres"
 	}
-	session := p.Kind == auth.KindSession
 	agentVersion := s.onboardingAgentVersion(r.Context())
 	return onboardingJSON{
 		UIURL: ui, OTLPHTTP: httpEP, OTLPGRPC: grpcEP,
@@ -141,9 +140,10 @@ func (s *Server) onboardingInfo(r *http.Request, p *auth.Principal) onboardingJS
 		Organization:   onboardingOrgJSON{ID: p.OrgID, TenantID: p.TenantID, Name: p.OrgName},
 		Role:           string(p.Role),
 		Features: onboardingFeaturesJSON{
-			LicenseKeys:          s.accounts != nil,
-			CanCreateLicenseKeys: s.accounts != nil && session && p.Role.Can(auth.ActManageLicenseKeys),
-			CanListLicenseKeys:   s.accounts != nil && session && p.Role.Can(auth.ActListLicenseKeys),
+			LicenseKeys: s.accounts != nil,
+			// Both actions are signed-in-user-only, so an API key sees them as unavailable.
+			CanCreateLicenseKeys: s.accounts != nil && allowed(p, auth.ActManageLicenseKeys),
+			CanListLicenseKeys:   s.accounts != nil && allowed(p, auth.ActListLicenseKeys),
 			FleetPHPInstall:      s.fleet != nil,
 			TailSampling:         s.tailSamplingConf().enabled,
 		},

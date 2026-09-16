@@ -38,7 +38,7 @@ func (e *APIError) Error() string {
 	case http.StatusUnauthorized:
 		return "openlog rejected the API key (" + e.Message + "); check OPENLOG_MCP_API_KEY or the Authorization header"
 	case http.StatusForbidden:
-		return "openlog refused the request (" + e.Message + "); API keys are read-only viewers of their organization"
+		return "openlog refused the request (" + e.Message + "); check the role of the API key in its organization"
 	}
 	return fmt.Sprintf("openlog API error %d (%s): %s", e.Status, e.Code, e.Message)
 }

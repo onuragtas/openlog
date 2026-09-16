@@ -54,7 +54,7 @@ func (s *Server) saasGate(r *http.Request, p *auth.Principal) (*auth.Principal, 
 	path := r.URL.Path
 	if id := strings.TrimSpace(r.Header.Get(HeaderSupportSession)); id != "" && !strings.HasPrefix(path, "/api/v1/operator/") &&
 		!(unsafe(r.Method) && strings.HasPrefix(path, "/api/v1/auth/")) {
-		if p.Kind != auth.KindSession || !s.isSuperadmin(p) {
+		if !isUser(p) || !s.isSuperadmin(p) {
 			return p, r, &apiError{http.StatusForbidden, "permission_denied", "support sessions are for openlog operators only"}
 		}
 		ss, err := s.saas.d.Store.ResolveSupportSession(r.Context(), id, p.UserID, p.SessionID, s.now())

@@ -13,11 +13,14 @@ import (
 	"github.com/onuragtas/openlog/internal/alert/secrets"
 )
 
-// Actor is the user performing an API change.
+// Actor is who performed an API change: a signed-in user, or an API key acting
+// with its own role (D-133), in which case UserID and Email are empty.
 type Actor struct {
-	UserID string
-	Email  string
-	IP     string
+	UserID     string
+	Email      string
+	IP         string
+	APIKeyID   string
+	APIKeyName string
 }
 
 // RuleStatus is the evaluation status shown with a rule.
@@ -80,8 +83,10 @@ func audit(b *pgx.Batch, orgID string, actor Actor, action, targetType, targetID
 	if details == nil {
 		details = map[string]any{}
 	}
-	b.Queue(`INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, orgID, nullID(actor.UserID), actor.Email, action, targetType, targetID, details, actor.IP)
+	b.Queue(`INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+		action, target_type, target_id, details, ip)
+		VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10)`, orgID, nullID(actor.UserID), actor.Email,
+		nullID(actor.APIKeyID), actor.APIKeyName, action, targetType, targetID, details, actor.IP)
 }
 
 func sendBatch(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {

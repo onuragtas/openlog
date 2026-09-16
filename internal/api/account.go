@@ -137,17 +137,29 @@ func currentOrgJSON(org auth.Organization, p *auth.Principal) orgJSON {
 	return orgJSON{ID: org.ID, TenantID: org.TenantID, Name: org.Name, Role: string(p.Role), CreatedAt: &created, Language: &lang}
 }
 
+// apiKeyRefJSON names the API key that authenticated the request and the role it
+// acts with (GET /auth/me; D-133).
+type apiKeyRefJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
 type meJSON struct {
-	Auth          string    `json:"auth"`
-	User          *userJSON `json:"user"`
-	Organization  *orgJSON  `json:"organization"`
-	Role          *string   `json:"role"`
-	Organizations []orgJSON `json:"organizations"`
-	CSRFToken     *string   `json:"csrf_token"`
+	Auth          string         `json:"auth"`
+	User          *userJSON      `json:"user"`
+	APIKey        *apiKeyRefJSON `json:"api_key"`
+	Organization  *orgJSON       `json:"organization"`
+	Role          *string        `json:"role"`
+	Organizations []orgJSON      `json:"organizations"`
+	CSRFToken     *string        `json:"csrf_token"`
 }
 
 func meResponse(p *auth.Principal, ms []auth.Membership) meJSON {
 	out := meJSON{Auth: string(p.Kind), Organizations: []orgJSON{}}
+	if p.Kind == auth.KindAPIKey {
+		out.APIKey = &apiKeyRefJSON{ID: p.APIKeyID, Name: p.APIKeyName, Role: string(p.Role)}
+	}
 	if p.Kind == auth.KindSession {
 		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name, EmailVerified: p.EmailVerified, Language: auth.LanguageAuto}
 		if p.Language != "" {
@@ -555,9 +567,12 @@ func (s *Server) revokeLicenseKey(w http.ResponseWriter, r *http.Request, p *aut
 }
 
 type apiKeyJSON struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	Prefix          string  `json:"prefix"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+	// Role is what the key may do: viewer (read-only), member or admin (D-133).
+	Role string `json:"role"`
+	// Scope is derived from Role and kept for older clients: "read" or "write".
 	Scope           string  `json:"scope"`
 	CreatedByUserID string  `json:"created_by_user_id"`
 	CreatedByEmail  string  `json:"created_by_email"`
@@ -568,7 +583,13 @@ type apiKeyJSON struct {
 }
 
 func apiKeyResponse(k auth.APIKey) apiKeyJSON {
-	return apiKeyJSON{ID: k.ID, Name: k.Name, Prefix: k.Prefix, Scope: k.Scope, CreatedByUserID: k.CreatedBy, CreatedByEmail: k.CreatedByEmail,
+	// Keys created before 0091_api_key_roles have no role and are read-only viewers.
+	role := k.Role
+	if !role.ValidKeyRole() {
+		role = auth.RoleViewer
+	}
+	return apiKeyJSON{ID: k.ID, Name: k.Name, Prefix: k.Prefix, Role: string(role), Scope: auth.KeyScope(role),
+		CreatedByUserID: k.CreatedBy, CreatedByEmail: k.CreatedByEmail,
 		CreatedAt: formatTime(k.CreatedAt), LastUsedAt: optTime(k.LastUsedAt), ExpiresAt: optTime(k.ExpiresAt), RevokedAt: optTime(k.RevokedAt)}
 }
 
@@ -587,7 +608,10 @@ func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request, p *auth.Pri
 
 func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
 	var in struct {
-		Name      string  `json:"name"`
+		Name string `json:"name"`
+		// Role is optional and defaults to viewer, so a client that does not know about
+		// roles keeps creating read-only keys.
+		Role      string  `json:"role"`
 		ExpiresAt *string `json:"expires_at"`
 	}
 	if err := decodeJSON(r, &in); err != nil {
@@ -601,7 +625,7 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		}
 		expires = &t
 	}
-	k, secret, err := s.accounts.CreateAPIKey(r.Context(), p, in.Name, expires, s.accounts.Meta(r))
+	k, secret, err := s.accounts.CreateAPIKey(r.Context(), p, in.Name, auth.Role(in.Role), expires, s.accounts.Meta(r))
 	if err != nil {
 		return err
 	}
@@ -664,15 +688,21 @@ func (s *Server) listAudit(w http.ResponseWriter, r *http.Request, p *auth.Princ
 	if err != nil {
 		return err
 	}
+	// actorAPIKeyJSON names the API key that made the change; null when a user did (D-133).
+	type actorAPIKeyJSON struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
 	type eventJSON struct {
-		ID         int64          `json:"id"`
-		ActorEmail string         `json:"actor_email"`
-		Action     string         `json:"action"`
-		TargetType string         `json:"target_type"`
-		TargetID   string         `json:"target_id"`
-		Details    map[string]any `json:"details"`
-		IP         string         `json:"ip"`
-		CreatedAt  string         `json:"created_at"`
+		ID          int64            `json:"id"`
+		ActorEmail  string           `json:"actor_email"`
+		ActorAPIKey *actorAPIKeyJSON `json:"actor_api_key"`
+		Action      string           `json:"action"`
+		TargetType  string           `json:"target_type"`
+		TargetID    string           `json:"target_id"`
+		Details     map[string]any   `json:"details"`
+		IP          string           `json:"ip"`
+		CreatedAt   string           `json:"created_at"`
 	}
 	out := make([]eventJSON, 0, len(evs))
 	for _, e := range evs {
@@ -680,8 +710,12 @@ func (s *Server) listAudit(w http.ResponseWriter, r *http.Request, p *auth.Princ
 		if d == nil {
 			d = map[string]any{}
 		}
-		out = append(out, eventJSON{ID: e.ID, ActorEmail: e.ActorEmail, Action: e.Action, TargetType: e.TargetType,
-			TargetID: e.TargetID, Details: d, IP: e.IP, CreatedAt: formatTime(e.CreatedAt)})
+		ev := eventJSON{ID: e.ID, ActorEmail: e.ActorEmail, Action: e.Action, TargetType: e.TargetType,
+			TargetID: e.TargetID, Details: d, IP: e.IP, CreatedAt: formatTime(e.CreatedAt)}
+		if e.ActorAPIKeyID != "" || e.ActorAPIKeyName != "" {
+			ev.ActorAPIKey = &actorAPIKeyJSON{ID: e.ActorAPIKeyID, Name: e.ActorAPIKeyName}
+		}
+		out = append(out, ev)
 	}
 	var next *string
 	if len(evs) == f.Limit {

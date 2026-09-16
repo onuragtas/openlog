@@ -317,7 +317,7 @@ func orgSelection(t *testing.T, e *Env) {
 
 func apiKeys(t *testing.T, e *Env) {
 	org, owner := e.Bootstrap("keys")
-	k, secret, err := e.Svc.CreateAPIKey(ctx, owner.P, "ci", nil, e.Meta)
+	k, secret, err := e.Svc.CreateAPIKey(ctx, owner.P, "ci", auth.RoleViewer, nil, e.Meta)
 	ok(t, err, "create API key")
 	if !strings.HasPrefix(secret, auth.PrefixAPIKey) || len(secret) != 52 || !strings.HasPrefix(secret, k.Prefix) || k.Scope != "read" {
 		t.Fatalf("key %q %+v", secret, k)
@@ -330,19 +330,53 @@ func apiKeys(t *testing.T, e *Env) {
 	pPost, err := e.Auth(http.MethodPost, nil, WithBearer(secret))
 	ok(t, err, "bearer POST needs no CSRF token")
 	_, _, err = e.Svc.CreateLicenseKey(ctx, pPost, "x", "", e.Meta)
-	expect(t, err, auth.ErrPermissionDenied, "API keys are read-only")
-	_, _, err = e.Svc.CreateAPIKey(ctx, pPost, "x", nil, e.Meta)
+	expect(t, err, auth.ErrPermissionDenied, "viewer key creating a license key")
+	_, _, err = e.Svc.CreateAPIKey(ctx, pPost, "x", auth.RoleViewer, nil, e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "API key creating API keys")
 	_, err = e.Auth(http.MethodGet, nil, WithBearer(secret), WithOrg(uuid.NewString()))
 	expect(t, err, auth.ErrPermissionDenied, "org header mismatch")
 	_, err = e.Auth(http.MethodGet, nil, WithBearer("ola_forged"))
 	expect(t, err, auth.ErrUnauthenticated, "forged key")
 
+	// A key acts with its own role (D-133). The one above took the default and stays read-only;
+	// this one may change the organization's configuration but is still not a user.
+	wk, writeSecret, err := e.Svc.CreateAPIKey(ctx, owner.P, "writer", auth.RoleAdmin, nil, e.Meta)
+	ok(t, err, "create a writing API key")
+	if wk.Role != auth.RoleAdmin || wk.Scope != "write" {
+		t.Fatalf("writing key %+v", wk)
+	}
+	wp, err := e.Auth(http.MethodPost, nil, WithBearer(writeSecret))
+	ok(t, err, "writing key auth")
+	if wp.Role != auth.RoleAdmin || wp.APIKeyID != wk.ID || wp.APIKeyName != "writer" || wp.UserID != "" {
+		t.Fatalf("writing key principal %+v", wp)
+	}
+	_, err = e.Svc.RenameOrg(ctx, wp, "Renamed by a key", e.Meta)
+	ok(t, err, "writing key renames the organization")
+	_, _, err = e.Svc.CreateAPIKey(ctx, wp, "child", auth.RoleViewer, nil, e.Meta)
+	expect(t, err, auth.ErrPermissionDenied, "writing key creating API keys")
+	_, err = e.Svc.ListSessions(ctx, wp)
+	expect(t, err, auth.ErrPermissionDenied, "writing key lists sessions")
+	_, _, err = e.Svc.CreateAPIKey(ctx, owner.P, "bad", auth.RoleOwner, nil, e.Meta)
+	expect(t, err, auth.ErrInvalidArgument, "owner is not a key role")
+
+	// The change it made is attributed to the key, not to a user.
+	evs, err := e.Svc.ListAuditEvents(ctx, owner.P, auth.AuditFilter{Limit: 50, Action: "org.rename"})
+	ok(t, err, "audit log")
+	named := false
+	for _, ev := range evs {
+		if ev.ActorAPIKeyID == wk.ID && ev.ActorAPIKeyName == "writer" && ev.ActorUserID == "" && ev.ActorEmail == "" {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("no org.rename event naming the key: %+v", evs)
+	}
+
 	exp := e.Now().Add(time.Hour)
-	_, expSecret, err := e.Svc.CreateAPIKey(ctx, owner.P, "temp", &exp, e.Meta)
+	_, expSecret, err := e.Svc.CreateAPIKey(ctx, owner.P, "temp", auth.RoleViewer, &exp, e.Meta)
 	ok(t, err, "create expiring key")
 	past := e.Now().Add(-time.Minute)
-	_, _, err = e.Svc.CreateAPIKey(ctx, owner.P, "past", &past, e.Meta)
+	_, _, err = e.Svc.CreateAPIKey(ctx, owner.P, "past", auth.RoleViewer, &past, e.Meta)
 	expect(t, err, auth.ErrInvalidArgument, "expiry in the past")
 	e.Advance(2 * time.Hour)
 	_, err = e.Auth(http.MethodGet, nil, WithBearer(expSecret))
@@ -354,12 +388,20 @@ func apiKeys(t *testing.T, e *Env) {
 	expect(t, err, auth.ErrUnauthenticated, "revoked key")
 	list, err := e.Svc.ListAPIKeys(ctx, owner.P)
 	ok(t, err, "list")
-	if len(list) != 2 || list[0].CreatedByEmail != e.Email("owner-keys") {
+	if len(list) != 3 {
 		t.Fatalf("list %+v", list)
 	}
+	// All three were created at the same instant of the scenario clock, so the listing
+	// order between them is not defined; check the rows themselves.
 	for _, x := range list {
+		if x.CreatedByEmail != e.Email("owner-keys") {
+			t.Errorf("key %q created by %q", x.Name, x.CreatedByEmail)
+		}
 		if x.ID == k.ID && (x.RevokedAt == nil || x.LastUsedAt == nil) {
 			t.Errorf("revoked key row %+v", x)
+		}
+		if x.ID == wk.ID && (x.Role != auth.RoleAdmin || x.Scope != "write") {
+			t.Errorf("writing key row %+v", x)
 		}
 	}
 }
@@ -383,7 +425,7 @@ func roles(t *testing.T, e *Env) {
 
 	_, _, err := e.Svc.CreateLicenseKey(ctx, viewer.P, "k", "", e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "viewer creates license key")
-	_, _, err = e.Svc.CreateAPIKey(ctx, viewer.P, "k", nil, e.Meta)
+	_, _, err = e.Svc.CreateAPIKey(ctx, viewer.P, "k", auth.RoleViewer, nil, e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "viewer creates API key")
 	_, err = e.Svc.ListLicenseKeys(ctx, viewer.P)
 	expect(t, err, auth.ErrPermissionDenied, "viewer lists license keys")
@@ -396,7 +438,7 @@ func roles(t *testing.T, e *Env) {
 	_, err = e.Svc.RenameOrg(ctx, member.P, "new", e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "member renames org")
 
-	memberKey, _, err := e.Svc.CreateAPIKey(ctx, member.P, "mine", nil, e.Meta)
+	memberKey, _, err := e.Svc.CreateAPIKey(ctx, member.P, "mine", auth.RoleViewer, nil, e.Meta)
 	ok(t, err, "member creates API key")
 	_, _, err = e.Svc.CreateLicenseKey(ctx, member.P, "k", "", e.Meta)
 	expect(t, err, auth.ErrPermissionDenied, "member creates license key")
@@ -407,7 +449,7 @@ func roles(t *testing.T, e *Env) {
 	_, err = e.Svc.ListAuditEvents(ctx, member.P, auth.AuditFilter{Limit: 10})
 	expect(t, err, auth.ErrPermissionDenied, "member reads audit log")
 
-	adminKey, _, err := e.Svc.CreateAPIKey(ctx, admin.P, "admin", nil, e.Meta)
+	adminKey, _, err := e.Svc.CreateAPIKey(ctx, admin.P, "admin", auth.RoleViewer, nil, e.Meta)
 	ok(t, err, "admin creates API key")
 	_, _, err = e.Svc.CreateLicenseKey(ctx, admin.P, "prod", "", e.Meta)
 	ok(t, err, "admin creates license key")
@@ -737,7 +779,7 @@ func sessions(t *testing.T, e *Env) {
 	expect(t, e.Svc.RevokeSession(ctx, s1.P, uuid.NewString(), e.Meta), auth.ErrNotFound, "unknown session")
 	_, stranger := e.Bootstrap("sess2")
 	expect(t, e.Svc.RevokeSession(ctx, stranger.P, s1.ID, e.Meta), auth.ErrNotFound, "session of another user")
-	key, secret, err := e.Svc.CreateAPIKey(ctx, s1.P, "k", nil, e.Meta)
+	key, secret, err := e.Svc.CreateAPIKey(ctx, s1.P, "k", auth.RoleViewer, nil, e.Meta)
 	ok(t, err, "api key")
 	_ = key
 	pk, err := e.Auth(http.MethodGet, nil, WithBearer(secret))

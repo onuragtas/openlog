@@ -233,14 +233,8 @@ func (s *Server) apmGetSettings(w http.ResponseWriter, r *http.Request, _ *query
 }
 
 func (s *Server) apmPutSettings(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {
-	if !p.HasOrg() {
-		return &apiError{http.StatusForbidden, "permission_denied", "you are not a member of any organization"}
-	}
-	if p.Kind != auth.KindSession {
-		return &apiError{http.StatusForbidden, "permission_denied", "this operation requires a signed-in user; API keys are read-only"}
-	}
-	if !p.Role.Can(auth.ActUpdateOrg) {
-		return &apiError{http.StatusForbidden, "permission_denied", "your role (" + string(p.Role) + ") does not allow this operation"}
+	if ae := authorize(p, auth.ActUpdateOrg); ae != nil {
+		return ae
 	}
 	f, err := parseSvcFilter(r)
 	if err != nil {
@@ -260,7 +254,7 @@ func (s *Server) apmPutSettings(w http.ResponseWriter, r *http.Request, p *auth.
 		return notFound("apm settings are not available")
 	}
 	key := f.key()
-	st, err := conf.settings.Put(r.Context(), p.OrgID, key, int(*body.ApdexTMs), apm.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP})
+	st, err := conf.settings.Put(r.Context(), p.OrgID, key, int(*body.ApdexTMs), s.apmActor(r, p))
 	if errors.Is(err, apm.ErrInvalidSetting) {
 		return badRequest("%v", err)
 	}

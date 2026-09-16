@@ -131,7 +131,7 @@ func TestClientErrorMapping(t *testing.T) {
 		{"unauthenticated", 401, `{"error":{"code":"unauthenticated","message":"invalid or missing credentials"}}`,
 			"unauthenticated", "check OPENLOG_MCP_API_KEY"},
 		{"permission denied", 403, `{"error":{"code":"permission_denied","message":"your role does not allow reading telemetry"}}`,
-			"permission_denied", "API keys are read-only"},
+			"permission_denied", "check the role of the API key"},
 		{"query limit", 422, `{"error":{"code":"resource_exhausted","message":"query exceeded the max_rows_to_read limit"}}`,
 			"resource_exhausted", "max_rows_to_read"},
 		{"timeout", 504, `{"error":{"code":"timeout","message":"query timed out"}}`, "timeout", "query timed out"},

@@ -555,21 +555,27 @@ func (s *Store) TouchLicenseKeys(ctx context.Context, ids []string, at time.Time
 
 func (s *Store) CreateAPIKey(ctx context.Context, k *auth.APIKey) error {
 	k.CreatedAt = ts(k.CreatedAt)
-	if k.Scope == "" {
-		k.Scope = "read"
+	if !k.Role.ValidKeyRole() {
+		k.Role = auth.RoleViewer
 	}
-	err := s.pool.QueryRow(ctx, `INSERT INTO api_keys (org_id, name, key_prefix, key_hash, scope, created_by, created_at, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6::uuid, $7, $8) RETURNING id::text`,
-		k.OrgID, k.Name, k.Prefix, k.Hash, k.Scope, nullID(k.CreatedBy), k.CreatedAt, k.ExpiresAt).Scan(&k.ID)
+	if k.Scope == "" {
+		k.Scope = auth.KeyScope(k.Role)
+	}
+	err := s.pool.QueryRow(ctx, `INSERT INTO api_keys (org_id, name, key_prefix, key_hash, scope, role, created_by, created_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::uuid, $8, $9) RETURNING id::text`,
+		k.OrgID, k.Name, k.Prefix, k.Hash, k.Scope, string(k.Role), nullID(k.CreatedBy), k.CreatedAt, k.ExpiresAt).Scan(&k.ID)
 	return mapErr(err)
 }
 
-const apiKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, k.scope, coalesce(k.created_by::text, ''), k.created_at, k.last_used_at, k.expires_at, k.revoked_at`
+const apiKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, k.scope, k.role, coalesce(k.created_by::text, ''), k.created_at, k.last_used_at, k.expires_at, k.revoked_at`
 
 func scanAPIKey(r pgx.Row, extra ...any) (auth.APIKey, error) {
 	var k auth.APIKey
-	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.Scope, &k.CreatedBy, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt}, extra...)
-	return k, r.Scan(dest...)
+	var role string
+	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.Scope, &role, &k.CreatedBy, &k.CreatedAt, &k.LastUsedAt, &k.ExpiresAt, &k.RevokedAt}, extra...)
+	err := r.Scan(dest...)
+	k.Role = auth.Role(role)
+	return k, err
 }
 
 func (s *Store) ListAPIKeys(ctx context.Context, orgID string) ([]auth.APIKey, error) {
@@ -769,9 +775,11 @@ func (s *Store) AddAuditEvent(ctx context.Context, e *auth.AuditEvent) error {
 		details = b
 	}
 	e.CreatedAt = ts(e.CreatedAt)
-	err := s.pool.QueryRow(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip, created_at)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9) RETURNING id`,
-		nullID(e.OrgID), nullID(e.ActorUserID), e.ActorEmail, e.Action, e.TargetType, e.TargetID, string(details), e.IP, e.CreatedAt).Scan(&e.ID)
+	err := s.pool.QueryRow(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+		action, target_type, target_id, details, ip, created_at)
+		VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6, $7, $8, $9::jsonb, $10, $11) RETURNING id`,
+		nullID(e.OrgID), nullID(e.ActorUserID), e.ActorEmail, nullID(e.ActorAPIKeyID), e.ActorAPIKeyName,
+		e.Action, e.TargetType, e.TargetID, string(details), e.IP, e.CreatedAt).Scan(&e.ID)
 	return mapErr(err)
 }
 
@@ -780,7 +788,8 @@ func (s *Store) ListAuditEvents(ctx context.Context, orgID string, f auth.AuditF
 		return []auth.AuditEvent{}, nil
 	}
 	// audit_log_org_idx (org_id, created_at DESC) serves the order, the time range and the keyset cursor.
-	q := `SELECT id, org_id::text, coalesce(actor_user_id::text, ''), actor_email, action, target_type, target_id, details::text, ip, created_at
+	q := `SELECT id, org_id::text, coalesce(actor_user_id::text, ''), actor_email, coalesce(actor_api_key_id::text, ''),
+		actor_api_key_name, action, target_type, target_id, details::text, ip, created_at
 		FROM audit_log WHERE org_id = $1`
 	args := []any{orgID}
 	arg := func(v any) string {
@@ -788,7 +797,10 @@ func (s *Store) ListAuditEvents(ctx context.Context, orgID string, f auth.AuditF
 		return "$" + strconv.Itoa(len(args))
 	}
 	if f.Actor != "" {
-		q += ` AND strpos(lower(actor_email), lower(` + arg(f.Actor) + `::text)) > 0`
+		// The actor of a change made with an API key is the key, so its name is searched too (D-133).
+		a := arg(f.Actor)
+		q += ` AND (strpos(lower(actor_email), lower(` + a + `::text)) > 0
+			OR (actor_api_key_name <> '' AND strpos(lower(actor_api_key_name), lower(` + a + `::text)) > 0))`
 	}
 	if f.Action != "" {
 		q += ` AND starts_with(action, ` + arg(f.Action) + `::text)`
@@ -814,7 +826,8 @@ func (s *Store) ListAuditEvents(ctx context.Context, orgID string, f auth.AuditF
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (auth.AuditEvent, error) {
 		var e auth.AuditEvent
 		var details string
-		if err := r.Scan(&e.ID, &e.OrgID, &e.ActorUserID, &e.ActorEmail, &e.Action, &e.TargetType, &e.TargetID, &details, &e.IP, &e.CreatedAt); err != nil {
+		if err := r.Scan(&e.ID, &e.OrgID, &e.ActorUserID, &e.ActorEmail, &e.ActorAPIKeyID, &e.ActorAPIKeyName,
+			&e.Action, &e.TargetType, &e.TargetID, &details, &e.IP, &e.CreatedAt); err != nil {
 			return e, err
 		}
 		_ = json.Unmarshal([]byte(details), &e.Details)

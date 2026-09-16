@@ -683,7 +683,7 @@ Incident labels = series labels + rule `labels` + `alert.severity`, `alert.rule_
 
 ## 7. API roles
 
-| Operation | viewer / API key | member | admin, owner |
+| Operation | viewer | member | admin, owner |
 |---|:-:|:-:|:-:|
 | Read rules, rule types, incidents, channels (masked), mutes, routing rules, delivery log; rule preview | ✓ | ✓ | ✓ |
 | Create rules; update, enable/disable, delete **own** rules | | ✓ | ✓ |
@@ -692,7 +692,10 @@ Incident labels = series labels + rule `labels` + `alert.severity`, `alert.rule_
 | Render templates (`/alerts/templates/{id}/render`), mute schedule preview | ✓ | ✓ | ✓ |
 | Update/delete any rule or mute; channels create/update/delete/test; routing rules create/update/delete/reorder; holiday calendars create/update/delete | | | ✓ |
 
-Writes need a signed-in user (API keys are read-only) and CSRF as usual. Every write is in the audit log
+The same rows hold for an API key, which carries a role of its own (D-133): a `member` key creates rules and
+mutes and works on incidents, an `admin` key changes any rule or mute and manages channels. A key owns nothing,
+so a rule or mute created with one can afterwards be changed only through the admin rule. Sessions send CSRF as
+usual; bearer requests do not. Every write is in the audit log
 (`alert.rule.{create,update,delete,enable,disable}`, `alert.channel.{create,update,delete,test}`,
 `alert.mute.{create,update,delete}`, `alert.routing_rule.{create,update,delete,reorder}`,
 `alert.holiday_calendar.{create,update,delete}`, `alert.incident.{acknowledge,resolve}`). Not available with
