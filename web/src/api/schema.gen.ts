@@ -1215,6 +1215,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/synthetics/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Synthetic checks of the organization ordered by name, each with the last outcome per location (`status`) and, unless `summary=false`, the uptime and latency over the range (api.md "Synthetic monitoring"). `locations` lists the locations this installation offers. */
+        get: operations["listSyntheticChecks"];
+        put?: never;
+        /** @description Signed-in member or higher; audit event synthetic_check.create. Not available in static auth mode (404). At most 100 checks per organization (409). */
+        post: operations["createSyntheticCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/synthetics/checks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getSyntheticCheck"];
+        /** @description Full replacement; signed-in member or higher; audit event synthetic_check.update. */
+        put: operations["updateSyntheticCheck"];
+        post?: never;
+        /** @description Signed-in member or higher; audit event synthetic_check.delete. The schedule rows go with the check; the stored runs stay in ClickHouse until their TTL expires. */
+        delete: operations["deleteSyntheticCheck"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/synthetics/checks/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Uptime and latency percentiles over the range, the series behind them and the most recent failed runs (api.md "Synthetic monitoring"). */
+        get: operations["getSyntheticCheckResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -5912,6 +5969,137 @@ export interface components {
             step: string;
             burn: components["schemas"]["SloBurnWindowResult"][];
             series: components["schemas"]["SloPoint"][];
+        };
+        /**
+         * @description Assertion on the response body; json_path compares a dotted path of the decoded JSON (api.md "Synthetic monitoring")
+         * @enum {string}
+         */
+        SyntheticAssertionType: "none" | "contains" | "not_contains" | "json_path";
+        SyntheticCheckInput: {
+            name: string;
+            /**
+             * @default http
+             * @enum {string}
+             */
+            type: "http";
+            /** @default true */
+            enabled: boolean;
+            /** @description http(s), without credentials or a fragment */
+            url: string;
+            /**
+             * @default GET
+             * @enum {string}
+             */
+            method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
+            /** @description At most 20 headers; Host, Content-Length, Connection, Transfer-Encoding and Upgrade are rejected */
+            headers?: {
+                [key: string]: string;
+            };
+            /** @description Only with a method that sends a body */
+            body?: string;
+            /** @description The run succeeds only with one of these codes (default [200]) */
+            expected_status?: number[];
+            assertion_type?: components["schemas"]["SyntheticAssertionType"];
+            /** @description json_path only, e.g. data.items.0.status */
+            assertion_path?: string;
+            assertion_value?: string;
+            /**
+             * @description Must not be longer than interval_seconds
+             * @default 10000
+             */
+            timeout_ms: number;
+            /** @default 300 */
+            interval_seconds: number;
+            /** @description Default ["local"] (the openlog server itself) */
+            locations?: string[];
+        };
+        /** @description The schedule row of one location - the last outcome and when the next run is due. */
+        SyntheticLocationStatus: {
+            location: string;
+            next_run_at: components["schemas"]["Timestamp"];
+            last_run_at: components["schemas"]["NullableTimestamp"];
+            /** @description null until the first run */
+            last_success: boolean | null;
+            /** @description 0 when the run failed before a response */
+            last_status_code: number;
+            last_duration_ms: number;
+            /** @description dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request */
+            last_error_kind: string;
+            last_error: string;
+        };
+        SyntheticCheck: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: string;
+            enabled: boolean;
+            url: string;
+            method: string;
+            headers: {
+                [key: string]: string;
+            };
+            body: string;
+            expected_status: number[];
+            assertion_type: components["schemas"]["SyntheticAssertionType"];
+            assertion_path: string;
+            assertion_value: string;
+            timeout_ms: number;
+            interval_seconds: number;
+            locations: string[];
+            created_by_email: string;
+            updated_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            status: components["schemas"]["SyntheticLocationStatus"][];
+        };
+        SyntheticPoint: {
+            /**
+             * Format: int64
+             * @description Bucket start (unix milliseconds)
+             */
+            t: number;
+            /** Format: int64 */
+            runs: number;
+            /** Format: int64 */
+            failures: number;
+            /** @description Successful runs of the bucket in percent */
+            uptime: number | null;
+            p95_ms: number | null;
+        };
+        /** @description Uptime and latency over one range; ratios and percentiles are null without runs. */
+        SyntheticSummary: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            /** @description Bucket width of the series (Go duration) */
+            step: string;
+            /** Format: int64 */
+            runs: number;
+            /** Format: int64 */
+            failures: number;
+            /** @description Successful runs in percent */
+            uptime: number | null;
+            avg_ms: number | null;
+            p50_ms: number | null;
+            p95_ms: number | null;
+            p99_ms: number | null;
+            points: components["schemas"]["SyntheticPoint"][];
+        };
+        SyntheticCheckListItem: components["schemas"]["SyntheticCheck"] & {
+            /** @description null when it was not computed (summary=false) or the check has no run in the range */
+            summary: components["schemas"]["SyntheticSummary"] | null;
+        };
+        SyntheticFailure: {
+            timestamp: components["schemas"]["Timestamp"];
+            location: string;
+            status_code: number;
+            error_kind: string;
+            error: string;
+            duration_ms: number;
+        };
+        SyntheticResults: {
+            check: components["schemas"]["SyntheticCheck"];
+            summary: components["schemas"]["SyntheticSummary"];
+            failures: components["schemas"]["SyntheticFailure"][];
         };
         /** @description One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2). */
         TailSamplingRule: {
@@ -11121,6 +11309,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SloResults"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listSyntheticChecks: {
+        parameters: {
+            query?: {
+                /** @description Compute uptime and latency */
+                summary?: boolean;
+                /** @description Start of the summary range (RFC3339 or unix milliseconds; default now − 24 h) */
+                from?: string;
+                /** @description End of the summary range (default now) */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checks with their current status and summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        checks: components["schemas"]["SyntheticCheckListItem"][];
+                        locations: string[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    createSyntheticCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyntheticCheckInput"];
+            };
+        };
+        responses: {
+            /** @description Created check */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyntheticCheck"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSyntheticCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyntheticCheck"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSyntheticCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyntheticCheckInput"];
+            };
+        };
+        responses: {
+            /** @description Updated check */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyntheticCheck"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSyntheticCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSyntheticCheckResults: {
+        parameters: {
+            query?: {
+                /** @description Start of the range (default now − 24 h) */
+                from?: string;
+                /** @description End of the range (default now) */
+                to?: string;
+                /** @description Bucket width of the series as a Go duration (≥ 60s */
+                step?: string;
+                /** @description Recent failed runs to include; 0 omits them */
+                failures?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary, series and recent failures */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyntheticResults"];
                 };
             };
             400: components["responses"]["BadRequest"];

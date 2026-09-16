@@ -417,6 +417,31 @@ they are computed from `apm_transactions_1m` at query time.
 The migration also extends `alert_rules_type_check` with `slo_burn` (alerting.md §2.11); such rules keep the
 `slo_id` of a deleted SLO and then report an evaluation error.
 
+## Synthetic monitoring (`0090_synthetics`)
+
+### `synthetic_checks`
+Scheduled outside-in HTTP checks ([api.md](api.md#synthetic-monitoring), D-132). `id` (uuid), `org_id`
+(cascade), `name` (1–200), `type` (`http`; the CHECK is where further check types are added), `enabled`,
+`url` (1–2048), `method` (CHECK, seven verbs), `headers` (jsonb object, ≤ 20 entries), `body` (≤ 65536),
+`expected_status` (`integer[]`, 1–10 codes), `assertion_type`
+(`none`/`contains`/`not_contains`/`json_path`), `assertion_path` and `assertion_value` (≤ 1024 each),
+`timeout_ms` (500–60000), `interval_seconds` (30–86400), `locations` (`text[]`, 1–10; built-in `local` =
+the openlog server), `created_by`/`updated_by` (`ON DELETE SET NULL`), `created_at`, `updated_at`. A table
+CHECK keeps `timeout_ms <= interval_seconds * 1000`, so a slow target cannot pile runs up. Index:
+(`org_id`, `lower(name)`). At most 100 rows per organization (checked in the insert statement). Written by
+`/api/v1/synthetics/checks` together with the audit event
+`synthetic_check.create`/`update`/`delete` (target type `synthetic_check`) in one transaction.
+
+### `synthetic_check_schedule`
+One row per check and location, primary key (`check_id`, `location`), `check_id` cascading from
+`synthetic_checks`. `next_run_at` (indexed) is when the run is due; `last_run_at`, `last_success` (NULL
+until the first run), `last_status_code`, `last_duration_ms`, `last_error_kind` and `last_error` are the
+last outcome, which is what the check list shows without querying ClickHouse. The api leader claims due rows
+with `FOR UPDATE ... SKIP LOCKED` and advances `next_run_at` by the check's interval **in the same
+statement**, so two schedulers (a leadership handover) never run the same check twice. Adding a location
+needs no migration: it is a value in `synthetic_checks.locations` plus a row here. The runs themselves are
+**not** stored here; they go to ClickHouse `synthetic_runs` (30 days) and are mirrored as metric data points.
+
 ## APM error workflow (`0025_apm_error_workflow`)
 
 Error inbox state ([apm.md](apm.md) §3.4). A group without a row is unresolved and unassigned.

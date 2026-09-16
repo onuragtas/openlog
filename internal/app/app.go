@@ -331,6 +331,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	}
 	usageTasks = append(usageTasks, privacyTasks...)
 	usageTasks = append(usageTasks, startStatusPage(cfg, pgPool, conn, srv, log)...) // privacy.go: public status page (D-108)
+	// synthetics.go: scheduled outside-in checks; the scheduler and the result writer run on the leader (D-132)
+	usageTasks = append(usageTasks, startSynthetics(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)...)
 	var apmLinker func(ctx context.Context)
 	if cfg.APM.LinkEnabled {
 		apmLinker = apm.NewLinker(conn, apm.LinkerOptions{

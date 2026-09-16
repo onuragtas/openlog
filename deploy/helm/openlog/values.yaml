@@ -820,6 +820,15 @@ api:
     OPENLOG_DATA_EXPORT_ROWS_PER_SECOND: "200000"
     # Public status page (/status; saas.md §13, D-108). "" = OPENLOG_SAAS_MODE.
     OPENLOG_STATUS_PAGE_ENABLED: ""
+    # Scheduled outside-in checks (api.md "Synthetic monitoring", D-132). The api leader runs the due checks,
+    # so these limits bound one pod, not the cluster.
+    OPENLOG_SYNTHETICS_ENABLED: "true"
+    # "" = true unless signup.enabled (SSRF protection: only public addresses may be reached).
+    OPENLOG_SYNTHETICS_ALLOW_PRIVATE_NETWORKS: ""
+    OPENLOG_SYNTHETICS_MAX_CONCURRENT: "20"
+    OPENLOG_SYNTHETICS_TENANT_MAX_CONCURRENT: "5"
+    OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES: "1048576"
+    OPENLOG_SYNTHETICS_MAX_REDIRECTS: "5"
   extraEnv: []
   resources:
     requests: {cpu: 500m, memory: 512Mi}

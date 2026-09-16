@@ -41,6 +41,8 @@ tags:
   - name: alerts
   - name: slos
     description: Service level objectives, error budgets and burn rates (slo.md, D-125)
+  - name: synthetics
+    description: Scheduled outside-in HTTP checks, their uptime and latency (api.md "Synthetic monitoring", D-132)
   - name: query
     description: OQL query language (oql.md)
   - name: dashboards
@@ -2069,6 +2071,130 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SloResults" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  # ---------------------------------------------------------------- synthetics
+  /api/v1/synthetics/checks:
+    get:
+      tags: [synthetics]
+      operationId: listSyntheticChecks
+      description: >-
+        Synthetic checks of the organization ordered by name, each with the last outcome per location
+        (`status`) and, unless `summary=false`, the uptime and latency over the range (api.md
+        "Synthetic monitoring"). `locations` lists the locations this installation offers.
+      parameters:
+        - { name: summary, in: query, schema: { type: boolean, default: true }, description: Compute uptime and latency }
+        - { name: from, in: query, schema: { type: string }, description: "Start of the summary range (RFC3339 or unix milliseconds; default now − 24 h)" }
+        - { name: to, in: query, schema: { type: string }, description: "End of the summary range (default now)" }
+      responses:
+        "200":
+          description: Checks with their current status and summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checks, locations]
+                properties:
+                  checks:
+                    type: array
+                    items: { $ref: "#/components/schemas/SyntheticCheckListItem" }
+                  locations:
+                    type: array
+                    items: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "504": { $ref: "#/components/responses/Timeout" }
+    post:
+      tags: [synthetics]
+      operationId: createSyntheticCheck
+      description: >-
+        Signed-in member or higher; audit event synthetic_check.create. Not available in static auth mode
+        (404). At most 100 checks per organization (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyntheticCheckInput" }
+      responses:
+        "201":
+          description: Created check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyntheticCheck" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/synthetics/checks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [synthetics]
+      operationId: getSyntheticCheck
+      responses:
+        "200":
+          description: Check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyntheticCheck" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [synthetics]
+      operationId: updateSyntheticCheck
+      description: Full replacement; signed-in member or higher; audit event synthetic_check.update.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyntheticCheckInput" }
+      responses:
+        "200":
+          description: Updated check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyntheticCheck" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [synthetics]
+      operationId: deleteSyntheticCheck
+      description: >-
+        Signed-in member or higher; audit event synthetic_check.delete. The schedule rows go with the check;
+        the stored runs stay in ClickHouse until their TTL expires.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/synthetics/checks/{id}/results:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [synthetics]
+      operationId: getSyntheticCheckResults
+      description: >-
+        Uptime and latency percentiles over the range, the series behind them and the most recent failed
+        runs (api.md "Synthetic monitoring").
+      parameters:
+        - { name: from, in: query, schema: { type: string }, description: "Start of the range (default now − 24 h)" }
+        - { name: to, in: query, schema: { type: string }, description: "End of the range (default now)" }
+        - { name: step, in: query, schema: { type: string }, description: Bucket width of the series as a Go duration (≥ 60s, rounded up to whole minutes) }
+        - { name: failures, in: query, schema: { type: integer, default: 20, maximum: 200 }, description: "Recent failed runs to include; 0 omits them" }
+      responses:
+        "200":
+          description: Summary, series and recent failures
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyntheticResults" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -8674,6 +8800,142 @@ components:
         series:
           type: array
           items: { $ref: "#/components/schemas/SloPoint" }
+    SyntheticAssertionType:
+      type: string
+      enum: [none, contains, not_contains, json_path]
+      description: Assertion on the response body; json_path compares a dotted path of the decoded JSON (api.md "Synthetic monitoring")
+    SyntheticCheckInput:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        type: { type: string, enum: [http], default: http }
+        enabled: { type: boolean, default: true }
+        url: { type: string, maxLength: 2048, description: "http(s), without credentials or a fragment" }
+        method: { type: string, enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS], default: GET }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          description: At most 20 headers; Host, Content-Length, Connection, Transfer-Encoding and Upgrade are rejected
+        body: { type: string, maxLength: 65536, description: Only with a method that sends a body }
+        expected_status:
+          type: array
+          maxItems: 10
+          items: { type: integer, minimum: 100, maximum: 599 }
+          description: "The run succeeds only with one of these codes (default [200])"
+        assertion_type: { $ref: "#/components/schemas/SyntheticAssertionType" }
+        assertion_path: { type: string, maxLength: 1024, description: "json_path only, e.g. data.items.0.status" }
+        assertion_value: { type: string, maxLength: 1024 }
+        timeout_ms: { type: integer, minimum: 500, maximum: 60000, default: 10000, description: Must not be longer than interval_seconds }
+        interval_seconds: { type: integer, minimum: 30, maximum: 86400, default: 300 }
+        locations:
+          type: array
+          maxItems: 10
+          items: { type: string }
+          description: 'Default ["local"] (the openlog server itself)'
+    SyntheticLocationStatus:
+      type: object
+      description: The schedule row of one location - the last outcome and when the next run is due.
+      required: [location, next_run_at, last_run_at, last_success, last_status_code, last_duration_ms, last_error_kind, last_error]
+      properties:
+        location: { type: string }
+        next_run_at: { $ref: "#/components/schemas/Timestamp" }
+        last_run_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_success: { type: boolean, nullable: true, description: null until the first run }
+        last_status_code: { type: integer, description: 0 when the run failed before a response }
+        last_duration_ms: { type: number }
+        last_error_kind: { type: string, description: "dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request" }
+        last_error: { type: string }
+    SyntheticCheck:
+      type: object
+      required: [id, name, type, enabled, url, method, headers, body, expected_status, assertion_type,
+                 assertion_path, assertion_value, timeout_ms, interval_seconds, locations,
+                 created_by_email, updated_by_email, created_at, updated_at, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        enabled: { type: boolean }
+        url: { type: string }
+        method: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body: { type: string }
+        expected_status:
+          type: array
+          items: { type: integer }
+        assertion_type: { $ref: "#/components/schemas/SyntheticAssertionType" }
+        assertion_path: { type: string }
+        assertion_value: { type: string }
+        timeout_ms: { type: integer }
+        interval_seconds: { type: integer }
+        locations:
+          type: array
+          items: { type: string }
+        created_by_email: { type: string }
+        updated_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        status:
+          type: array
+          items: { $ref: "#/components/schemas/SyntheticLocationStatus" }
+    SyntheticPoint:
+      type: object
+      required: [t, runs, failures, uptime, p95_ms]
+      properties:
+        t: { type: integer, format: int64, description: Bucket start (unix milliseconds) }
+        runs: { type: integer, format: int64 }
+        failures: { type: integer, format: int64 }
+        uptime: { type: number, nullable: true, description: Successful runs of the bucket in percent }
+        p95_ms: { type: number, nullable: true }
+    SyntheticSummary:
+      type: object
+      description: Uptime and latency over one range; ratios and percentiles are null without runs.
+      required: [from, to, step, runs, failures, uptime, avg_ms, p50_ms, p95_ms, p99_ms, points]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        step: { type: string, description: Bucket width of the series (Go duration) }
+        runs: { type: integer, format: int64 }
+        failures: { type: integer, format: int64 }
+        uptime: { type: number, nullable: true, description: Successful runs in percent }
+        avg_ms: { type: number, nullable: true }
+        p50_ms: { type: number, nullable: true }
+        p95_ms: { type: number, nullable: true }
+        p99_ms: { type: number, nullable: true }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/SyntheticPoint" }
+    SyntheticCheckListItem:
+      allOf:
+        - $ref: "#/components/schemas/SyntheticCheck"
+        - type: object
+          required: [summary]
+          properties:
+            summary:
+              allOf: [{ $ref: "#/components/schemas/SyntheticSummary" }]
+              nullable: true
+              description: null when it was not computed (summary=false) or the check has no run in the range
+    SyntheticFailure:
+      type: object
+      required: [timestamp, location, status_code, error_kind, error, duration_ms]
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        location: { type: string }
+        status_code: { type: integer }
+        error_kind: { type: string }
+        error: { type: string }
+        duration_ms: { type: number }
+    SyntheticResults:
+      type: object
+      required: [check, summary, failures]
+      properties:
+        check: { $ref: "#/components/schemas/SyntheticCheck" }
+        summary: { $ref: "#/components/schemas/SyntheticSummary" }
+        failures:
+          type: array
+          items: { $ref: "#/components/schemas/SyntheticFailure" }
     TailSamplingRule:
       type: object
       description: One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2).

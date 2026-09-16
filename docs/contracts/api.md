@@ -1473,6 +1473,71 @@ requests).
              "burn_rate": 0.55, "remaining_ratio": 0.92}]}
 ```
 
+## Synthetic monitoring
+
+Scheduled outside-in HTTP checks of the caller's organization (PostgreSQL `synthetic_checks`,
+`0090_synthetics`; the runs in ClickHouse `synthetic_runs`, 30 days; D-132). PostgreSQL auth mode only
+(`404` otherwise). Reads: any role and API keys (telemetry). Writes: signed-in members and higher; at most
+100 checks per organization (`409`). Audit: `synthetic_check.{create,update,delete}`.
+
+The api **leader** runs the due checks, one run per check, interval and location; the claim advances the
+schedule row in the same statement, so a check never runs twice even while leadership moves between pods. A
+check is a request the server makes on behalf of a member, so it is guarded: only public addresses unless
+`OPENLOG_SYNTHETICS_ALLOW_PRIVATE_NETWORKS` (SSRF protection, checked per connection after DNS resolution),
+a redirect cap and a response size cap ([config.md](config.md#synthetic-monitoring-api-allinone-d-132)).
+
+Every run is also written as two gauge data points, so **metric alert rules** ([alerting.md](alerting.md)
+§2.2) and dashboards watch a check like any other metric and the 1-minute rollup keeps it for 395 days
+([apm.md](apm.md) §8):
+
+| Metric | Unit | Value |
+|---|---|---|
+| `synthetics.check.success` | `1` | `1` for a successful run, `0` for a failed one; `avg` over a window is the uptime ratio |
+| `synthetics.check.duration` | `ms` | Total run time, also recorded for a failed run |
+
+Both carry the attributes `check.id`, `check.name`, `location`, `http.request.method` and `url.full`, plus
+`http.response.status_code` when a response arrived and `error.kind` when the run failed (`dns`, `connect`,
+`tls`, `timeout`, `blocked`, `redirect`, `status`, `assertion`, `body`, `request`).
+
+### `GET /api/v1/synthetics/checks?summary=&from=&to=` · `POST /api/v1/synthetics/checks` · `GET|PUT|DELETE /api/v1/synthetics/checks/{id}`
+Body of POST/PUT: `{"name" (1–200), "type"?: "http", "enabled"? (default true), "url" (http(s), ≤ 2048, no
+credentials or fragment), "method"? (default `GET`; `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
+`OPTIONS`), "headers"? (≤ 20; `Host`, `Content-Length`, `Connection`, `Transfer-Encoding` and `Upgrade` are
+rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default `[200]`, ≤ 10
+codes of 100–599), "assertion_type"?: "none"|"contains"|"not_contains"|"json_path", "assertion_path"?
+(`json_path` only: a dotted path such as `data.items.0.status`), "assertion_value"?, "timeout_ms"? (default
+10000, 500–60000, not longer than the interval), "interval_seconds"? (default 300, 30–86400), "locations"?
+(default `["local"]`)}`. `location` `local` is the openlog server itself; the response's `locations` field
+lists the ones this installation offers.
+
+`status` is the schedule row per location: the last outcome (the current state, straight from PostgreSQL)
+and when the next run is due. The list adds `summary` per check over the range (`from`/`to`, default the
+last 24 h) unless `summary=false`; `uptime` and the percentiles are `null` without runs in the range.
+```json
+{"checks": [{"id": "…", "name": "Checkout health", "type": "http", "enabled": true,
+  "url": "https://shop.example.com/health", "method": "GET", "headers": {}, "body": "",
+  "expected_status": [200], "assertion_type": "contains", "assertion_path": "", "assertion_value": "ok",
+  "timeout_ms": 10000, "interval_seconds": 300, "locations": ["local"],
+  "created_by_email": "ada@example.com", "updated_by_email": "ada@example.com",
+  "created_at": "…", "updated_at": "…",
+  "status": [{"location": "local", "next_run_at": "…", "last_run_at": "…", "last_success": true,
+              "last_status_code": 200, "last_duration_ms": 123.5, "last_error_kind": "", "last_error": ""}],
+  "summary": {"from": "…", "to": "…", "step": "60s", "runs": 288, "failures": 3, "uptime": 98.96,
+              "avg_ms": 120.4, "p50_ms": 110, "p95_ms": 240, "p99_ms": 480,
+              "points": [{"t": 1757757600000, "runs": 12, "failures": 0, "uptime": 100, "p95_ms": 130}]}}],
+ "locations": ["local"]}
+```
+
+### `GET /api/v1/synthetics/checks/{id}/results?from=&to=&step=&failures=`
+Uptime and latency percentiles over the range (`from`/`to`, default the last 24 h; `step` ≥ `60s`, default
+≈ 60 points, rounded up to whole minutes), the series behind them and the most recent failed runs
+(`failures`, default 20, at most 200; `0` omits them).
+```json
+{"check": {…}, "summary": {…as above…},
+ "failures": [{"timestamp": "…", "location": "local", "status_code": 503, "error_kind": "status",
+               "error": "HTTP 503, expected 200", "duration_ms": 87.2}]}
+```
+
 ## Alerting
 
 Rules, incidents, notification channels, routing rules, mute windows and the delivery log of the caller's

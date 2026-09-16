@@ -57,6 +57,9 @@ var TTLTables = []TTLTable{
 	{"apm_services_local", "apm", "toDateTime(last_seen)", 0},
 	{"apm_service_hosts_local", "apm", "toDateTime(last_seen)", 0},
 	{"alert_evaluations_local", "alerts", "toDateTime(evaluated_at)", 30},
+	// Synthetic check runs (0093_synthetic_runs, D-132) are operational results of the installation like the
+	// alert evaluations, so they share their class and 30-day retention.
+	{"synthetic_runs_local", "alerts", "toDateTime(timestamp)", 30},
 }
 
 // TTLOptions are the inputs of the TTL plan.

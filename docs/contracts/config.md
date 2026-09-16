@@ -550,6 +550,30 @@ and EKS Pod Identity (`AWS_CONTAINER_CREDENTIALS_*`) and the EC2 instance profil
 | `OPENLOG_DATA_EXPORT_ROWS_PER_SECOND` | `200000` | api | Throttle of telemetry reads from ClickHouse; `0` = unthrottled (queries also run with `max_threads=2`) |
 | `OPENLOG_STATUS_PAGE_ENABLED` | `OPENLOG_SAAS_MODE` | api | Public status page: `/status`, `GET /api/v1/status` and the leader's one-minute self-checks |
 
+### Synthetic monitoring (api, allinone; D-132)
+
+Scheduled outside-in HTTP checks ([api.md](api.md#synthetic-monitoring)). Definitions are per organization in
+PostgreSQL (`0090_synthetics`); the api **leader** runs the due ones, so the limits below bound one process, not the
+cluster. Every run is stored in ClickHouse (`synthetic_runs`, 30 days) and mirrored as the gauges
+`synthetics.check.success` and `synthetics.check.duration`, which metric alert rules and dashboards use like any
+other metric. Postgres auth mode only.
+
+A check is a request the server makes on behalf of an organization **member**, so the address it resolves to is
+checked on every connection (after DNS resolution, so a rebinding answer is caught too) and redirects are limited
+and re-validated: without `OPENLOG_SYNTHETICS_ALLOW_PRIVATE_NETWORKS` only public addresses may be reached, which
+keeps loopback, private ranges, CGNAT and the link-local cloud metadata endpoints out of reach. The default follows
+`OPENLOG_SSO_ALLOW_PRIVATE_NETWORKS`: a self-hosted installation may check its own internal services, a sign-up
+installation may not.
+
+| Variable | Default | Services | Description |
+|---|---|---|---|
+| `OPENLOG_SYNTHETICS_ENABLED` | `true` | api | Offer `/api/v1/synthetics/*` and run the scheduler on the leader |
+| `OPENLOG_SYNTHETICS_ALLOW_PRIVATE_NETWORKS` | `true` unless `OPENLOG_SIGNUP_ENABLED=true` | api | Let checks reach private, loopback, CGNAT and link-local addresses (SSRF protection when unset) |
+| `OPENLOG_SYNTHETICS_MAX_CONCURRENT` | `20` | api | Concurrent runs of all organizations together on the leader (1–1000) |
+| `OPENLOG_SYNTHETICS_TENANT_MAX_CONCURRENT` | `5` | api | Concurrent runs of one organization (1–`OPENLOG_SYNTHETICS_MAX_CONCURRENT`), so one tenant cannot use the whole pool |
+| `OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES` | `1048576` | api | Response body one run reads (1024–67108864); a larger response fails the run instead of being truncated |
+| `OPENLOG_SYNTHETICS_MAX_REDIRECTS` | `5` | api | Redirects one run follows (0–10); each hop is re-validated |
+
 ## Report chart images (`openlog-renderer`, api, allinone; D-097)
 
 Optional PNG widget images in scheduled report e-mails ([operations/reports.md](../operations/reports.md)). Without

@@ -12,6 +12,7 @@ import { dashboardHandlers } from "./dashboards";
 import { dashboardSharingHandlers } from "./dashboardSharing";
 import { oqlHandlers } from "./oql";
 import { sloHandlers } from "./slos";
+import { syntheticHandlers } from "./synthetics";
 import { usageHandlers } from "./usage";
 import { operatorHandlers } from "./operator";
 import { ssoHandlers } from "./sso";
@@ -298,6 +299,7 @@ export const handlers = [
   ...apmHandlers,
   ...alertHandlers,
   ...sloHandlers, // mocks/slos.ts: service level objectives, error budgets and burn rates (D-125)
+  ...syntheticHandlers, // mocks/synthetics.ts: scheduled outside-in checks (D-132)
   ...oqlHandlers,
   ...dashboardSharingHandlers, // before dashboardHandlers: /dashboards/settings is not /dashboards/:id
   ...dashboardHandlers,

@@ -49,6 +49,8 @@ const ApmErrorsPage = lazyRouteComponent(() => import("@/routes/apm-errors"), "A
 const ApmAgentsPage = lazyRouteComponent(() => import("@/routes/apm-agents"), "ApmAgentsPage");
 const SlosPage = lazyRouteComponent(() => import("@/routes/slos"), "SlosPage");
 const SloDetailPage = lazyRouteComponent(() => import("@/routes/slos"), "SloDetailPage");
+const SyntheticsPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticsPage");
+const SyntheticDetailPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticDetailPage");
 const AlertsLayout = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsLayout");
 const AlertsIncidentsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentsPage");
 const AlertsIncidentPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentPage");
@@ -661,6 +663,25 @@ const sloDetailRoute = createRoute({
   component: SloDetailPage,
 });
 
+// ---- Synthetic monitoring (routes/synthetics.tsx, api.md "Synthetic monitoring", D-132) ----
+export interface SyntheticsSearch {
+  /** the create form instead of the list */
+  create?: boolean;
+}
+
+const syntheticsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/synthetics",
+  validateSearch: (s: Record<string, unknown>): SyntheticsSearch => ({ create: s.create === true || s.create === "true" ? true : undefined }),
+  component: SyntheticsPage,
+});
+
+const syntheticDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/synthetics/$checkId",
+  component: SyntheticDetailPage,
+});
+
 export interface InventorySearchSearch {
   category?: string;
   q?: string;
@@ -953,6 +974,8 @@ export const routeTree = rootRoute.addChildren([
     apmAgentsRoute,
     slosRoute,
     sloDetailRoute,
+    syntheticsRoute,
+    syntheticDetailRoute,
     logsRoute,
     metricsRoute,
     tracesRoute,

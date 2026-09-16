@@ -178,6 +178,8 @@ type Config struct {
 	Privacy Privacy
 	// StatusPage configures the public status page (privacy.go, D-108).
 	StatusPage StatusPage
+	// Synthetics configures the scheduled outside-in checks (synthetics.go, D-132).
+	Synthetics Synthetics
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -321,6 +323,7 @@ func Load(getenv func(string) string) (Config, error) {
 		Renderer:     loadRenderer(&p),   // renderer.go
 		Privacy:      loadPrivacy(&p),    // privacy.go
 		StatusPage:   loadStatusPage(&p), // privacy.go
+		Synthetics:   loadSynthetics(&p), // synthetics.go
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
@@ -382,6 +385,7 @@ func (c Config) validate(getenv func(string) string) error {
 	errs = append(errs, c.Onboarding.validate()...) // onboarding.go
 	errs = append(errs, c.validateRenderer()...)    // renderer.go
 	errs = append(errs, c.validatePrivacy()...)     // privacy.go
+	errs = append(errs, c.validateSynthetics()...)  // synthetics.go
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))
 	}

@@ -180,7 +180,7 @@ func TestBuildTTLPlan(t *testing.T) {
 		}
 	}
 	// APM default cold 7 equals the 7-day retention: the APM tables get no move and keep the default policy.
-	if policies != 7 || ttls != 7 {
+	if policies != 8 || ttls != 8 {
 		t.Fatalf("enable: %d policy and %d TTL steps: %+v", policies, ttls, plan.Steps)
 	}
 	want := map[string]string{
@@ -192,6 +192,8 @@ func TestBuildTTLPlan(t *testing.T) {
 		// Metric exemplars follow the traces class, so they move and expire with the spans (D-130).
 		"metric_exemplars_local":  "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 7 DAY",
 		"alert_evaluations_local": "toDateTime(evaluated_at) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(evaluated_at) + INTERVAL 30 DAY",
+		// Synthetic check runs share the alerts class (D-132).
+		"synthetic_runs_local": "toDateTime(timestamp) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 30 DAY",
 	}
 	for _, s := range plan.Steps {
 		if s.Kind == StepTTL && (want[s.Table] != s.To || s.SQL != "ALTER TABLE openlog."+s.Table+" ON CLUSTER 'openlog' MODIFY TTL "+s.To) {
@@ -226,7 +228,7 @@ func TestBuildTTLPlan(t *testing.T) {
 
 	// Disable again: the move clauses go, the policy stays.
 	plan, _ = BuildTTLPlan(apm, tiered)
-	if len(plan.Steps) != 7 || plan.Tiering {
+	if len(plan.Steps) != 8 || plan.Tiering {
 		t.Fatalf("disable: %+v", plan)
 	}
 	for _, s := range plan.Steps {
