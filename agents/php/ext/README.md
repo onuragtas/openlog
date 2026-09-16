@@ -158,7 +158,9 @@ Development helpers (copy the source to a scratch directory, build inside the of
 | `openlog.transaction_tracer.enabled` | `1` | system, perdir | function-level segments |
 | `openlog.transaction_tracer.threshold_ms` | `10` | all | segments are sent when the transaction takes at least this long or failed |
 | `openlog.transaction_tracer.max_segments` | `2000` | all | |
-| `openlog.transaction_tracer.min_segment_ms` | `1` | all | stack sampling interval; calls shorter than it appear only when a sample hits them |
+| `openlog.transaction_tracer.min_segment_ms` | `1` | all | stack sampling interval after the warm-up; calls shorter than it appear only when a sample hits them |
+| `openlog.transaction_tracer.warmup_ms` | `100` | all | how long the coarser warm-up interval is used at request start; `0` disables the warm-up (sample every `min_segment_ms` from the first instruction). Lowering it makes short requests (10–100 ms) show more function segments, at a higher CPU cost |
+| `openlog.transaction_tracer.warmup_segment_ms` | `10` | all | the sampling interval during the warm-up window; never finer than `min_segment_ms` (values below it, and `0`, mean no warm-up). Lowering it has the same trade-off as `warmup_ms` |
 | `openlog.transaction_tracer.max_memory_kb` | `4096` | all | |
 | `openlog.log_level` | `warning` | all | `off`, `error`, `warning`, `info`, `debug`; PHP error log, at most 10 lines per minute per process |
 | `openlog.userland_hooks` | `1` | system | `0` = lean mode: no fcall observer (PHP 8) / `zend_execute_ex` override (7.x), so the engine's per-call observer cost disappears; only internal functions are instrumented (PDO, mysqli, pgsql, phpredis, curl, streams, sleep). Lost: framework route names, framework-reported exceptions, Predis, long-running worker transactions; uncaught exceptions are recorded from the fatal error. See "Overhead" |
@@ -208,7 +210,8 @@ or Symfony (`HttpKernel::handleThrowable`, HTTP exceptions < 500 ignored). Excep
 the client span.
 
 **Transaction tracer** (stack sampling): a sampler thread per PHP process (idle between requests) sets
-`EG(vm_interrupt)` every `min_segment_ms` — every 10 ms during the first 100 ms of a request, since function traces are
+`EG(vm_interrupt)` every `min_segment_ms` — during the first `warmup_ms` of a request (default 100 ms) every
+`warmup_segment_ms` (default 10 ms) instead, since function traces are
 only sent for slow or failed requests and a wake-up per millisecond measurably cost fast requests (~150 µs PHP CPU on a
 7 ms Laravel request); at the next safe point the userland call stack is walked and merged into
 a segment tree (kind 1, `Class::method`, `code.function.name`, `code.namespace`, `code.file.path`,
@@ -218,7 +221,9 @@ innermost function segment. `sleep`/`usleep`/`time_nanosleep` appear as internal
 every call measured ~60 ns/call, > 1 ms per framework request). Calls shorter than the interval appear only when a
 sample hits them; consecutive calls of one function from the same frame without a sample in between form one
 segment; depth is limited to the outermost 256 frames. Segments are sent only when the transaction is slow or
-failed.
+failed. Short requests (10–100 ms) therefore show few function segments by default; `warmup_ms=0` (or a smaller
+`warmup_segment_ms`) samples them at `min_segment_ms` from the start and shows far more, at a higher CPU cost per
+request.
 
 **Long-running workers** (D-058, `src/inst_workers.c`): one transaction per request, named and attributed like a web
 request, for Laravel Octane (`Laravel\Octane\Worker::handle`; status from `SwooleClient`/`RoadRunnerClient::respond`),

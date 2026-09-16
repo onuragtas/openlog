@@ -165,7 +165,10 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
 - It is **sent only if** the transaction duration ≥ `openlog.transaction_tracer.threshold_ms` (default **10 ms**) or the
   transaction ended with an error; otherwise discarded at request end.
 - Limits: `openlog.transaction_tracer.max_segments` (default **2000**), `min_segment_ms` (default **1 ms**; the sampling
-  interval after the first 100 ms of a request, 10 ms before (D-057); calls shorter than it appear only when a sample
+  interval after the warm-up window, `warmup_segment_ms` (default **10 ms**) during the first `warmup_ms` (default
+  **100 ms**) of a request (D-057); `warmup_ms=0` disables the warm-up and samples every `min_segment_ms` from the
+  start, so short requests (10–100 ms) show more function segments at a higher CPU cost; a `warmup_segment_ms` below
+  `min_segment_ms` is not coarser and means no warm-up; calls shorter than the interval appear only when a sample
   hits them, consecutive calls of the same function from the same frame without a sample in between form one segment), memory cap `openlog.transaction_tracer.max_memory_kb`
   (default **4096**), sampled call depth 256 (outermost frames). Reaching a limit stops recording and increments
   `dropped_spans`.
@@ -193,6 +196,8 @@ get `openlog.php.incomplete=true` on the root span (or on every span if the root
 | `openlog.transaction_tracer.threshold_ms` | `10` |
 | `openlog.transaction_tracer.max_segments` | `2000` |
 | `openlog.transaction_tracer.min_segment_ms` | `1` |
+| `openlog.transaction_tracer.warmup_ms` | `100` (coarse sampling window at request start; `0`: no warm-up) |
+| `openlog.transaction_tracer.warmup_segment_ms` | `10` (sampling interval during the warm-up; never finer than `min_segment_ms`) |
 | `openlog.transaction_tracer.max_memory_kb` | `4096` |
 | `openlog.log_level` | `warning` (to the PHP error log, rate-limited) |
 | `openlog.userland_hooks` | `1`. `0` (system): lean mode — no fcall observer / `zend_execute_ex` override, only internal functions are instrumented (datastores, HTTP clients, sleep); no framework route names, no framework-reported exceptions, no Predis, no long-running worker transactions; uncaught exceptions are recorded from the fatal error (`exception.type` = `E_ERROR`) |

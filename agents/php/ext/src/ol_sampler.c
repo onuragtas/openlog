@@ -18,11 +18,13 @@
  * interrupting) for OL_SAMPLER_GRACE_NS and only then waits on its condition variable, so a worker serving
  * back-to-back requests never wakes it with a futex. `idle` / `armed` are a Dekker-style handshake on atomics.
  *
- * Warm-up: during the first OL_SAMPLER_WARMUP_NS of a request (and while idle) the thread ticks every
- * OL_SAMPLER_WARMUP_IV_NS instead of every min_segment_ms. Function traces are only sent for requests slower than the
- * threshold (default 500 ms) or failed ones, so a fast request no longer pays one thread wake-up + interrupt per
- * millisecond (measured ~150 µs PHP CPU on a 7 ms Laravel request on a VM). Blocking calls still take their own samples
- * at span start/end; calls shorter than 10 ms in the first 100 ms of a request appear only when a sample hits them.
+ * Warm-up: during the first `openlog.transaction_tracer.warmup_ms` of a request (default 100 ms; and while idle) the
+ * thread ticks every `openlog.transaction_tracer.warmup_segment_ms` (default 10 ms) instead of every min_segment_ms.
+ * Function traces are only sent for requests slower than the threshold or failed ones, so a fast request no longer pays
+ * one thread wake-up + interrupt per millisecond (measured ~150 µs PHP CPU on a 7 ms Laravel request on a VM). Blocking
+ * calls still take their own samples at span start/end; calls shorter than the warm-up interval appear only when a
+ * sample hits them. warmup_ms=0 samples every min_segment_ms from the start: short requests show more function
+ * segments, at a higher CPU cost.
  *
  * Limits: calls shorter than the interval appear only when a sample hits them; consecutive calls of the same function
  * from the same frame address without a sample in between merge into one segment (`openlog.php.samples`).
@@ -43,8 +45,6 @@
 #endif
 
 #define OL_SAMPLER_GRACE_NS     200000000ULL /* keep ticking 200 ms after the last request */
-#define OL_SAMPLER_WARMUP_NS    100000000ULL /* first 100 ms of a request … */
-#define OL_SAMPLER_WARMUP_IV_NS  10000000ULL /* … and while idle: one tick every 10 ms */
 
 typedef struct ol_sampler {
 	pthread_t th;
@@ -55,8 +55,10 @@ typedef struct ol_sampler {
 	atomic_ullong armed_at; /* monotonic ns of the current request's start */
 	atomic_int idle;     /* the thread waits (or is about to wait) on cv */
 	volatile int pending;
-	uint64_t interval_ns; /* written under mu only */
-	void *vm_interrupt;   /* written under mu only */
+	uint64_t interval_ns;  /* written under mu only */
+	uint64_t warmup_ns;    /* warm-up window of a request (0: none); written under mu only */
+	uint64_t warmup_iv_ns; /* the coarse warm-up interval (0: none); written under mu only */
+	void *vm_interrupt;    /* written under mu only */
 	int pid;
 } ol_sampler;
 
@@ -80,9 +82,9 @@ static void *ol_sampler_main(void *arg)
 		}
 		iv = s->interval_ns;
 		vi = s->vm_interrupt;
-		if (iv < OL_SAMPLER_WARMUP_IV_NS &&
-				(!atomic_load(&s->armed) || ol_mono_ns() - atomic_load(&s->armed_at) < OL_SAMPLER_WARMUP_NS)) {
-			iv = OL_SAMPLER_WARMUP_IV_NS;
+		if (s->warmup_iv_ns > iv &&
+				(!atomic_load(&s->armed) || ol_mono_ns() - atomic_load(&s->armed_at) < s->warmup_ns)) {
+			iv = s->warmup_iv_ns;
 		}
 		pthread_mutex_unlock(&s->mu);
 		ts.tv_sec = (time_t) (iv / 1000000000ULL);
@@ -123,6 +125,8 @@ bool ol_sampler_arm(void)
 		atomic_init(&s->idle, 0);
 		s->pid = pid;
 		s->interval_ns = OLG(sample_interval_ns);
+		s->warmup_ns = OLG(warmup_ns);
+		s->warmup_iv_ns = OLG(warmup_interval_ns);
 		s->vm_interrupt = &EG(vm_interrupt);
 		/* the sampler thread must never receive the process's signals (FPM, timeouts) */
 		sigfillset(&all);
@@ -137,9 +141,12 @@ bool ol_sampler_arm(void)
 		OLG(sampler) = s;
 	}
 	s->pending = 0;
-	if (s->interval_ns != OLG(sample_interval_ns) || s->vm_interrupt != (void *) &EG(vm_interrupt)) {
+	if (s->interval_ns != OLG(sample_interval_ns) || s->warmup_ns != OLG(warmup_ns) ||
+			s->warmup_iv_ns != OLG(warmup_interval_ns) || s->vm_interrupt != (void *) &EG(vm_interrupt)) {
 		pthread_mutex_lock(&s->mu);
 		s->interval_ns = OLG(sample_interval_ns);
+		s->warmup_ns = OLG(warmup_ns);
+		s->warmup_iv_ns = OLG(warmup_interval_ns);
 		s->vm_interrupt = &EG(vm_interrupt);
 		pthread_mutex_unlock(&s->mu);
 	}

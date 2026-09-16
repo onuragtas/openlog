@@ -27,6 +27,8 @@ PHP_INI_BEGIN()
 	STD_PHP_INI_ENTRY("openlog.transaction_tracer.threshold_ms", "10",PHP_INI_ALL, OnUpdateLong, tt_threshold_ms, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_ENTRY("openlog.transaction_tracer.max_segments", "2000", PHP_INI_ALL, OnUpdateLong, tt_max_segments, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_ENTRY("openlog.transaction_tracer.min_segment_ms", "1", PHP_INI_ALL, OnUpdateLong, tt_min_segment_ms, zend_openlog_globals, openlog_globals)
+	STD_PHP_INI_ENTRY("openlog.transaction_tracer.warmup_ms", "100", PHP_INI_ALL, OnUpdateLong, tt_warmup_ms, zend_openlog_globals, openlog_globals)
+	STD_PHP_INI_ENTRY("openlog.transaction_tracer.warmup_segment_ms", "10", PHP_INI_ALL, OnUpdateLong, tt_warmup_segment_ms, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_ENTRY("openlog.transaction_tracer.max_memory_kb", "4096", PHP_INI_ALL, OnUpdateLong, tt_max_memory_kb, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_ENTRY("openlog.log_level", "warning", PHP_INI_ALL, OnUpdateString, log_level, zend_openlog_globals, openlog_globals)
 	STD_PHP_INI_BOOLEAN("openlog.userland_hooks", "1", PHP_INI_SYSTEM, OnUpdateBool, userland_hooks, zend_openlog_globals, openlog_globals)
@@ -120,6 +122,14 @@ void ol_txn_start(const ol_reqinfo *ri)
 	OLG(seg_bytes) = 0;
 	OLG(seg_bytes_cap) = OLG(tt_max_memory_kb) > 0 ? (uint64_t) OLG(tt_max_memory_kb) * 1024 : 0;
 	OLG(sample_interval_ns) = (uint64_t) (OLG(tt_min_segment_ms) > 0 ? OLG(tt_min_segment_ms) : 1) * 1000000ULL;
+	/* warm-up (D-057): the coarse interval of the first warmup_ms of a request; warmup_ms=0 samples every
+	 * min_segment_ms from the start, and a warm-up interval below min_segment_ms would not be coarser */
+	OLG(warmup_ns) = OLG(tt_warmup_ms) > 0 ? (uint64_t) OLG(tt_warmup_ms) * 1000000ULL : 0;
+	OLG(warmup_interval_ns) = 0;
+	if (OLG(warmup_ns) > 0) {
+		uint64_t iv = (uint64_t) (OLG(tt_warmup_segment_ms) > 0 ? OLG(tt_warmup_segment_ms) : 1) * 1000000ULL;
+		OLG(warmup_interval_ns) = iv > OLG(sample_interval_ns) ? iv : 0;
+	}
 	OLG(path_depth) = 0;
 	OLG(tracer_full) = false;
 	OLG(route) = NULL;

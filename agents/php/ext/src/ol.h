@@ -261,6 +261,8 @@ ZEND_BEGIN_MODULE_GLOBALS(openlog)
 	zend_long tt_threshold_ms;
 	zend_long tt_max_segments;
 	zend_long tt_min_segment_ms;
+	zend_long tt_warmup_ms;
+	zend_long tt_warmup_segment_ms;
 	zend_long tt_max_memory_kb;
 	char *log_level;
 	ol_bool userland_hooks;
@@ -299,6 +301,8 @@ ZEND_BEGIN_MODULE_GLOBALS(openlog)
 	uint64_t req_mono;
 	uint64_t req_unix;
 	uint64_t sample_interval_ns;
+	uint64_t warmup_ns;          /* coarse sampling for this long at request start (0: no warm-up) */
+	uint64_t warmup_interval_ns; /* the coarse interval (0: no warm-up, it would not be coarser) */
 	void *sampler;               /* ol_sampler of this process/thread */
 	ol_pathent path[OL_PATH_MAX];
 	uint32_t path_depth;
