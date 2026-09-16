@@ -6,6 +6,9 @@ services:
   kafka:
     image: apache/kafka:4.1.0
     hostname: kafka
+    # Docker Engine 29+ does not put the container hostname in /etc/hosts; Kafka resolves its own name at startup.
+    extra_hosts:
+      - "kafka:127.0.0.1"
     environment:
       CLUSTER_ID: TUtUYWlsU2FtcGxpbmdUZXN0
       KAFKA_NODE_ID: 1

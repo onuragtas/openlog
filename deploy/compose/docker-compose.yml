@@ -212,6 +212,11 @@ services:
   kafka:
     image: apache/kafka:4.1.0
     hostname: kafka
+    # Kafka resolves its own hostname at startup (InetAddress.getLocalHost()). Docker Engine 29+ no longer writes the
+    # container hostname into /etc/hosts and its embedded DNS does not answer for it, so the broker would die with
+    # "UnknownHostException: kafka". Other containers keep resolving `kafka` to the container IP through Docker DNS.
+    extra_hosts:
+      - "kafka:127.0.0.1"
     environment:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
       KAFKA_NODE_ID: 1
