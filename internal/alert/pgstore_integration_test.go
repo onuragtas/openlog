@@ -377,6 +377,37 @@ func (r *recordingSender) keys() []string {
 	return out
 }
 
+// A rule no evaluator has claimed yet has lease_until = '-infinity' (0004_alerting.sql). Scanning that into
+// time.Time fails, so every API change of such a rule answered 500 until lockLease mapped the infinities to NULL.
+func TestRuleChangesBeforeTheFirstLease(t *testing.T) {
+	f := newFixture(t)
+	v := f.rule(t)
+	var until string
+	if err := pgPool.QueryRow(ctx, `SELECT lease_until::text FROM alert_rule_leases WHERE rule_id = $1`, v.ID).Scan(&until); err != nil {
+		t.Fatal(err)
+	}
+	if until != "-infinity" {
+		t.Fatalf("lease_until of a fresh rule = %q, want -infinity (the fixture no longer covers the case)", until)
+	}
+	if _, err := f.store.UpdateRule(ctx, f.orgID, v.ID, ruleDraft(t, "High CPU renamed"), v.Version, f.actor, ""); err != nil {
+		t.Fatalf("update before the first lease: %v", err)
+	}
+	if err := f.store.DeleteRule(ctx, f.orgID, v.ID, f.actor, ""); err != nil {
+		t.Fatalf("delete before the first lease: %v", err)
+	}
+}
+
+// ruleDraft validates a metric threshold rule definition under a given name.
+func ruleDraft(t *testing.T, name string) *alert.Definition {
+	t.Helper()
+	d, err := alert.RuleInput{Name: name, Type: alert.TypeMetricThreshold, IntervalSeconds: 60,
+		Condition: json.RawMessage(`{"metric":"system.cpu.utilization","window_seconds":60,"operator":"gt","threshold":0.9,"group_by":["host"]}`)}.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 func TestLeaseClaimsAreExclusive(t *testing.T) {
 	f := newFixture(t)
 	for i := 0; i < 12; i++ {

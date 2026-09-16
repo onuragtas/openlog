@@ -314,10 +314,16 @@ func (s *PGStore) LoadSeries(ctx context.Context, ruleID string) (map[string]Ser
 }
 
 // lockLease locks the lease row of a rule (serializing evaluator commits and API changes of the rule).
+//
+// lease_until defaults to '-infinity' for a rule no evaluator has claimed yet, and PostgreSQL's infinite timestamps
+// cannot be scanned into time.Time ("cannot scan -Infinity into *time.Time"), which failed every API change of such a
+// rule. Both infinities become NULL and then the zero time, which is what '-infinity' means here: the lease is free.
 func lockLease(ctx context.Context, tx pgx.Tx, ruleID string) (owner string, until time.Time, lastEnd *time.Time, now time.Time, err error) {
-	err = tx.QueryRow(ctx, `SELECT owner, lease_until, last_eval_end, now() FROM alert_rule_leases WHERE rule_id = $1 FOR UPDATE`, ruleID).
-		Scan(&owner, &until, &lastEnd, &now)
-	return
+	var leaseUntil *time.Time
+	err = tx.QueryRow(ctx, `SELECT owner, NULLIF(NULLIF(lease_until, '-infinity'), 'infinity'), last_eval_end, now()
+		FROM alert_rule_leases WHERE rule_id = $1 FOR UPDATE`, ruleID).
+		Scan(&owner, &leaseUntil, &lastEnd, &now)
+	return owner, timeOr(leaseUntil), lastEnd, now, err
 }
 
 func (s *PGStore) Commit(ctx context.Context, instance string, p *Plan) error {
