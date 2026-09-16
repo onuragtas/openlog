@@ -4,7 +4,7 @@ Three GitHub Actions workflows. Only `ci.yml` decides whether a commit is releas
 
 | Workflow | Trigger | Gates the release | Contents |
 |---|---|---|---|
-| `.github/workflows/ci.yml` | push to master, pull requests | yes (`release-tag` needs every job) | Go vet/test, agents (infra macOS/Windows, Go, PHP, Node, Python, Java, .NET), web typecheck/lint/Vitest/build, Helm, shellcheck/actionlint, release dry run (packages, `install.sh`). `make e2e` runs on master pushes with `continue-on-error` |
+| `.github/workflows/ci.yml` | push to master, pull requests | yes (`release-tag` needs every job) | Go vet/test of every module (root, `libs/release`, `agents/infra`, `terraform`), agents (infra macOS/Windows, Go, PHP, Node, Python, Java, .NET), web typecheck/lint/Vitest/build, Helm, shellcheck/actionlint, release dry run (packages, `install.sh`). `make e2e` runs on master pushes with `continue-on-error` |
 | `.github/workflows/long-tests.yml` | push to master (not docs-only), nightly 02:17 UTC, manual | no | the long Docker suites below |
 | `.github/workflows/release.yml` | started by `release-tag` for a new tag, or manually | — | builds, signs and publishes the release ([releasing.md](releasing.md)) |
 

@@ -50,7 +50,7 @@ jobs:
 
 
   go:
-    name: go (root, libs/release, agents/infra)
+    name: go (root, libs/release, agents/infra, terraform)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -61,6 +61,7 @@ jobs:
           cache-dependency-path: |
             go.sum
             agents/infra/go.sum
+            terraform/go.sum
       - name: gofmt
         run: make fmt-check
       - name: root vet
@@ -79,6 +80,14 @@ jobs:
           GOOS=linux GOARCH=arm64 go vet ./...
           GOOS=darwin go vet ./...
           GOOS=windows go vet ./...
+          go test ./...
+      # The Terraform provider is its own module (D-131), so it is not covered by the root gofmt/vet/test above.
+      - name: terraform provider
+        working-directory: terraform
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
+          go vet ./...
           go test ./...
 
   infra-agent-macos:

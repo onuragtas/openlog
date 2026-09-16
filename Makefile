@@ -65,6 +65,19 @@ vet:
 fmt:
 	gofmt -w $(GOFMT_DIRS)
 
+# Terraform provider (docs/operations/terraform.md, D-131). Its own Go module, so `build`, `test` and
+# `lint` above do not reach it; CI runs provider-test in the same job as libs/release and agents/infra.
+.PHONY: provider provider-test
+provider:
+	@mkdir -p $(BIN)
+	cd terraform && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" \
+		-o "$(CURDIR)/$(BIN)/terraform-provider-openlog" ./cmd/terraform-provider-openlog
+
+provider-test:
+	@cd terraform && unformatted=$$(gofmt -l .); \
+		if [ -n "$$unformatted" ]; then echo "gofmt needed:"; echo "$$unformatted"; exit 1; fi
+	cd terraform && go vet ./... && go test ./...
+
 docker:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		--build-arg OPENLOG_RELEASE_PUBLIC_KEYS=$(OPENLOG_RELEASE_PUBLIC_KEYS) -t $(IMAGE) .
