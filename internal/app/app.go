@@ -26,6 +26,7 @@ import (
 	"github.com/onuragtas/openlog/internal/logging"
 	"github.com/onuragtas/openlog/internal/processor"
 	"github.com/onuragtas/openlog/internal/queue"
+	"github.com/onuragtas/openlog/internal/slo"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/tailsampling"
@@ -288,6 +289,7 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	srv.SetAPM(apmSettings, cfg.APM.DefaultApdexT)
 	if pgPool != nil {
 		srv.SetAPMErrorStates(apm.PGErrorStates{Pool: pgPool}) // error inbox workflow (apm.md §3.4)
+		srv.SetSLOs(slo.NewPGStore(pgPool))                    // service level objectives (slo.md)
 	}
 	if err := startAlertAPI(cfg, pgPool, srv, apmSettings, log); err != nil { // alert.go
 		return err

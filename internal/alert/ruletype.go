@@ -170,7 +170,8 @@ func init() {
 	register(apmType{})
 	register(apmNoDataType{})
 	register(apmErrorType{})
-	register(oqlType{}) // cond_oql.go
+	register(oqlType{})     // cond_oql.go
+	register(sloBurnType{}) // cond_slo.go
 }
 
 // decodeStrict unmarshals raw into v rejecting unknown fields.

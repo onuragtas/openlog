@@ -47,6 +47,8 @@ const ApmServicePage = lazyRouteComponent(() => import("@/routes/apm"), "ApmServ
 const ApmMapPage = lazyRouteComponent(() => import("@/routes/apm"), "ApmMapPage");
 const ApmErrorsPage = lazyRouteComponent(() => import("@/routes/apm-errors"), "ApmErrorsPage");
 const ApmAgentsPage = lazyRouteComponent(() => import("@/routes/apm-agents"), "ApmAgentsPage");
+const SlosPage = lazyRouteComponent(() => import("@/routes/slos"), "SlosPage");
+const SloDetailPage = lazyRouteComponent(() => import("@/routes/slos"), "SloDetailPage");
 const AlertsLayout = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsLayout");
 const AlertsIncidentsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentsPage");
 const AlertsIncidentPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentPage");
@@ -633,6 +635,25 @@ const apmAgentsRoute = createRoute({
   component: ApmAgentsPage,
 });
 
+// ---- Service level objectives (routes/slos.tsx, slo.md, D-125) ----
+export interface SlosSearch {
+  /** the create form instead of the list */
+  create?: boolean;
+}
+
+const slosRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/slos",
+  validateSearch: (s: Record<string, unknown>): SlosSearch => ({ create: s.create === true || s.create === "true" ? true : undefined }),
+  component: SlosPage,
+});
+
+const sloDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/slos/$sloId",
+  component: SloDetailPage,
+});
+
 export interface InventorySearchSearch {
   category?: string;
   q?: string;
@@ -922,6 +943,8 @@ export const routeTree = rootRoute.addChildren([
     apmMapRoute,
     apmErrorsRoute,
     apmAgentsRoute,
+    slosRoute,
+    sloDetailRoute,
     logsRoute,
     metricsRoute,
     tracesRoute,

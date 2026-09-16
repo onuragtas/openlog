@@ -400,6 +400,23 @@ Written together with the audit event `apm.tail_sampling.update` (target `tail_s
 `openlog-sampler` reads all rows joined with `organizations.tenant_id` every `OPENLOG_TAILSAMPLING_POLICY_REFRESH`;
 invalid documents are skipped (the default policy applies).
 
+## SLOs (`0087_slo`)
+
+### `slos`
+Service level objectives of APM services ([slo.md](slo.md), [api.md](api.md#service-level-objectives), D-125).
+`id` (uuid), `org_id` (cascade), `name` (1–200), `description` (≤ 2000), the target service
+(`service_name` 1–512; `service_namespace` and `deployment_environment` nullable: NULL = every
+namespace/environment, `''` = exactly the services without the attribute), `sli_type`
+(`availability`/`latency`), `latency_threshold_ms` (1–600000, set exactly for `latency`, CHECK), `objective`
+(percent, 50 ≤ x < 100), `window_days` (7, 28 or 30), `created_by`/`updated_by` (`ON DELETE SET NULL`),
+`created_at`, `updated_at`. Indexes: (`org_id`, `lower(name)`), (`org_id`, `service_name`). At most 200 rows
+per organization (checked in the insert statement). Written by `/api/v1/slos` together with the audit event
+`slo.create`/`slo.update`/`slo.delete` (target type `slo`) in one transaction. Budgets are **not** stored:
+they are computed from `apm_transactions_1m` at query time.
+
+The migration also extends `alert_rules_type_check` with `slo_burn` (alerting.md §2.11); such rules keep the
+`slo_id` of a deleted SLO and then report an evaluation error.
+
 ## APM error workflow (`0025_apm_error_workflow`)
 
 Error inbox state ([apm.md](apm.md) §3.4). A group without a row is unresolved and unassigned.

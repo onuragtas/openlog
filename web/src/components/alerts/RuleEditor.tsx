@@ -15,6 +15,7 @@ import {
   type AlertRuleType,
 } from "@/api/alerts";
 import { can } from "@/api/roles";
+import { slosQuery } from "@/api/slos";
 import { FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ import { DurationField, Field, Section } from "./fields";
 // uPlot is loaded only when a preview is shown.
 const PreviewChart = lazy(() => import("./PreviewChart").then((m) => ({ default: m.PreviewChart })));
 
-const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "apm_error", "oql"];
+const TYPES: AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "apm_error", "oql", "slo_burn"];
 const AGGREGATIONS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGREGATIONS = ["avg", "sum", "min", "max"] as const;
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
@@ -104,6 +105,8 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
   const types = useQuery(alertRuleTypesQuery());
   const channels = useQuery(alertChannelsQuery());
   const metricNames = useQuery({ ...alertMetricNamesQuery(), enabled: draft.type === "metric_threshold" || draft.signal === "metric" });
+  // Budgets are not needed to pick an SLO, so the list is fetched without them (slo.md §4).
+  const slos = useQuery({ ...slosQuery(false), enabled: draft.type === "slo_burn" });
 
   const update = (patch: Partial<RuleDraft>, field?: string) => {
     setSaved(false);
@@ -496,6 +499,50 @@ export function RuleEditor({ rule, initial, onSaved, onCancel }: RuleEditorProps
             {missingField}
           </div>
           {thresholdFields}
+        </>
+      );
+      break;
+    }
+    case "slo_burn": {
+      // Multi-window multi-burn-rate (alerting.md §2.11): both windows of a pair must burn, so the rule has no
+      // threshold of its own — the factors are the thresholds.
+      const options = slos.data?.slos ?? [];
+      const windowFields = (which: "fast" | "slow") => (
+        <>
+          {numberField(`${which}_factor`, `${t(`slo.rule.${which}`)} · ${t("slo.rule.factor")}`)}
+          <DurationField
+            id={id(`${which}long`)}
+            label={`${t(`slo.rule.${which}`)} · ${t("slo.rule.long")}`}
+            seconds={draft[`${which}_long_seconds`]}
+            onChange={(s) => update({ [`${which}_long_seconds`]: s } as Partial<RuleDraft>, `${which}_long_seconds`)}
+            error={err(`${which}_long_seconds`)}
+          />
+          <DurationField
+            id={id(`${which}short`)}
+            label={`${t(`slo.rule.${which}`)} · ${t("slo.rule.short")}`}
+            seconds={draft[`${which}_short_seconds`]}
+            onChange={(s) => update({ [`${which}_short_seconds`]: s } as Partial<RuleDraft>, `${which}_short_seconds`)}
+            error={err(`${which}_short_seconds`)}
+          />
+        </>
+      );
+      condition = (
+        <>
+          <Field id={id("slo")} label={t("slo.rule.slo")} hint={t("slo.rule.sloHint")} error={err("slo_id")}>
+            <NativeSelect id={id("slo")} value={draft.slo_id} onChange={(e) => update({ slo_id: e.target.value }, "slo_id")} {...describedBy(id("slo"), err("slo_id"), t("slo.rule.sloHint"))}>
+              <option value="">{options.length === 0 ? t("slo.rule.noSlos") : "—"}</option>
+              {options.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <p className="text-sm text-muted-foreground">{t("slo.rule.windowsHint")}</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {windowFields("fast")}
+            {windowFields("slow")}
+          </div>
         </>
       );
       break;

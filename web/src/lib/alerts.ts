@@ -104,6 +104,14 @@ export interface RuleDraft {
   min_requests: string;
   /** apm_error new_group: minimum weighted occurrences in the window */
   min_count: string;
+  /** slo_burn: the SLO whose error budget is watched and its two burn windows (alerting.md §2.11) */
+  slo_id: string;
+  fast_factor: string;
+  fast_long_seconds: number;
+  fast_short_seconds: number;
+  slow_factor: string;
+  slow_long_seconds: number;
+  slow_short_seconds: number;
 }
 
 export const DEFAULT_FLAPPING: AlertFlapping = { enabled: true, transitions: 4, window_seconds: 3600, hold_seconds: 600 };
@@ -117,6 +125,7 @@ const TYPE_DEFAULTS: Record<AlertRuleType, Partial<RuleDraft>> = {
   apm_no_data: { window_seconds: 600, lookback_seconds: 86400, group_by: [], interval_seconds: 60 },
   oql: { window_seconds: 300, operator: "gt", group_by: [], interval_seconds: 60 },
   apm_error: { window_seconds: 300, group_by: [], interval_seconds: 60, event: "new_group" },
+  slo_burn: { window_seconds: 3600, group_by: [], interval_seconds: 60 },
 };
 
 /** Event rules ignore for_seconds (discovery, apm_error). */
@@ -158,6 +167,13 @@ export function emptyDraft(type: AlertRuleType = "metric_threshold"): RuleDraft 
     transaction_name: "",
     min_requests: "",
     min_count: "",
+    slo_id: "",
+    fast_factor: "14.4",
+    fast_long_seconds: 3600,
+    fast_short_seconds: 300,
+    slow_factor: "6",
+    slow_long_seconds: 21600,
+    slow_short_seconds: 1800,
     ...TYPE_DEFAULTS[type],
   };
 }
@@ -179,7 +195,7 @@ export function changeType(d: RuleDraft, type: AlertRuleType): RuleDraft {
     labels: d.labels,
     flapping: d.flapping,
     version: d.version,
-    filters: type === "apm" || type === "apm_no_data" || type === "apm_error" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
+    filters: type === "apm" || type === "apm_no_data" || type === "apm_error" || type === "slo_burn" ? [] : d.filters.filter((f) => type !== "discovery" && type !== "no_data" ? true : !f.field.startsWith("attr.")),
   };
 }
 
@@ -224,6 +240,13 @@ export function draftFromRule(rule: AlertRule): RuleDraft {
     transaction_name: c.transaction_name ?? "",
     min_requests: c.min_requests ? String(c.min_requests) : "",
     min_count: c.min_count ? String(c.min_count) : "",
+    slo_id: c.slo_id ?? "",
+    fast_factor: numStr(c.windows?.[0]?.factor) || base.fast_factor,
+    fast_long_seconds: c.windows?.[0]?.long_seconds ?? base.fast_long_seconds,
+    fast_short_seconds: c.windows?.[0]?.short_seconds ?? base.fast_short_seconds,
+    slow_factor: numStr(c.windows?.[1]?.factor) || base.slow_factor,
+    slow_long_seconds: c.windows?.[1]?.long_seconds ?? base.slow_long_seconds,
+    slow_short_seconds: c.windows?.[1]?.short_seconds ?? base.slow_short_seconds,
   };
 }
 
@@ -350,6 +373,16 @@ export function draftToInput(d: RuleDraft): AlertRuleInput {
         ...(d.event === "new_group" ? { min_count: parseNumber(d.min_count) ?? 0 } : {}),
       };
       break;
+    case "slo_burn":
+      // The comparison is fixed (gte 1): the factors of the windows carry the configuration (alerting.md §2.11).
+      condition = {
+        slo_id: d.slo_id,
+        windows: [
+          { name: "fast", factor: parseNumber(d.fast_factor) ?? 14.4, long_seconds: d.fast_long_seconds, short_seconds: d.fast_short_seconds },
+          { name: "slow", factor: parseNumber(d.slow_factor) ?? 6, long_seconds: d.slow_long_seconds, short_seconds: d.slow_short_seconds },
+        ],
+      };
+      break;
   }
   const labels: Record<string, string> = {};
   for (const l of d.labels) if (l.key.trim()) labels[l.key.trim()] = l.value;
@@ -446,6 +479,15 @@ export function validateDraft(d: RuleDraft): DraftErrors {
       inRange(e, "window_seconds", d.window_seconds, 60, 86400);
       if (d.event === "new_group" && d.min_count.trim() !== "" && (parseNumber(d.min_count) ?? -1) < 0) e.min_count = { key: "number" };
       break;
+    case "slo_burn":
+      if (!d.slo_id) e.slo_id = { key: "required" };
+      for (const w of ["fast", "slow"] as const) {
+        const factor = parseNumber(d[`${w}_factor`]);
+        if (factor === null || factor <= 0 || factor > 1000) e[`${w}_factor`] = { key: "number" };
+        inRange(e, `${w}_long_seconds`, d[`${w}_long_seconds`], 300, 86400);
+        inRange(e, `${w}_short_seconds`, d[`${w}_short_seconds`], 60, d[`${w}_long_seconds`]);
+      }
+      break;
     case "oql":
       if (!d.query.trim()) e.query = { key: "required" };
       else if (alertQueryIssues(d.query).length > 0) e.query = { key: "oqlQuery" };
@@ -493,7 +535,7 @@ export interface RuleEditorSearch {
 
 const AGGS = ["avg", "min", "max", "sum", "last", "count", "rate", "p50", "p95", "p99"] as const;
 const SERIES_AGGS = ["avg", "sum", "min", "max"] as const;
-const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "oql", "apm_error"];
+const TYPES: readonly AlertRuleType[] = ["metric_threshold", "log_match", "no_data", "discovery", "apm", "apm_no_data", "oql", "apm_error", "slo_burn"];
 const OPERATORS = ["gt", "gte", "lt", "lte"] as const;
 const SEVERITIES = ["critical", "warning", "info"] as const;
 

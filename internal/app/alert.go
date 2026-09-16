@@ -16,6 +16,7 @@ import (
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/quota"
+	"github.com/onuragtas/openlog/internal/slo"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/version"
@@ -58,7 +59,7 @@ func startAlertAPI(cfg config.Config, pool *pgxpool.Pool, srv *api.Server, apmSe
 		Keys: kr, Sender: alertSender(cfg), PublicURL: cfg.Alert.PublicURL, MaxRulesPerOrg: cfg.Alert.MaxRulesPerOrg,
 		Limits: alert.Limits{MaxSeries: cfg.Alert.MaxSeriesPerRule}, Delay: cfg.Alert.EvaluationDelay,
 		QueryTimeout: cfg.Alert.QueryTimeout, DefaultApdexT: cfg.APM.DefaultApdexT, ApdexSettings: settings,
-		ErrorStates: apm.PGErrorStates{Pool: pool},
+		ErrorStates: apm.PGErrorStates{Pool: pool}, SLOs: slo.NewPGStore(pool),
 	}))
 	return nil
 }
@@ -137,7 +138,7 @@ func RunAlert(ctx context.Context, cfg config.Config, adm *admin.Server, log *sl
 		TenantPerMinute: a.TenantEvaluationsPerMinute, QueryTimeout: a.QueryTimeout, Limits: alert.Limits{MaxSeries: a.MaxSeriesPerRule},
 		PublicURL: a.PublicURL, Log: log.With("job", "alert-evaluator"), Registerer: adm.Registry(),
 		ApdexSettings: apmSettings.List, DefaultApdexT: cfg.APM.DefaultApdexT, Summaries: summaries,
-		ErrorStates: apm.PGErrorStates{Pool: pool},
+		ErrorStates: apm.PGErrorStates{Pool: pool}, SLOs: slo.NewPGStore(pool),
 	})
 	disp := alert.NewDispatcher(store, alertSender(cfg), kr, alert.DispatcherOptions{
 		Instance: instance, Workers: a.DispatchWorkers, DeliveryTimeout: a.DeliveryTimeout, MaxAttempts: a.DeliveryMaxAttempts,

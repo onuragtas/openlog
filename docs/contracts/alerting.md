@@ -27,7 +27,7 @@ a bound query parameter. The only ClickHouse write is the evaluation history (§
 |---|---|---|---|
 | `name` | string | required | 1–200 chars |
 | `description` | string | `""` | ≤ 2000 chars |
-| `type` | enum | required | `metric_threshold`, `log_match`, `no_data`, `discovery`, `apm` (§2.6), `apm_no_data` (§2.7) |
+| `type` | enum | required | `metric_threshold`, `log_match`, `no_data`, `discovery`, `apm` (§2.6), `apm_no_data` (§2.7), `apm_error` (§2.9), `oql` (§2.10), `slo_burn` (§2.11) |
 | `severity` | enum | `warning` | `critical`, `warning`, `info` |
 | `enabled` | bool | `true` | |
 | `interval_seconds` | int | `60` | 10–3600, evaluation period |
@@ -217,6 +217,36 @@ Threshold on an OQL query ([oql.md](oql.md), D-065; `0021_alert_oql`):
 - Preview (`Range`) is exact: one query assigns every event to each window that contains it (`arrayJoin`), so windows may
   overlap; `window_seconds / step` must be at most 720.
 - Summary: `<column> over 5m is 912 (> 800) (transaction.name=GET /cart)`. `interval_seconds` default 60.
+
+### 2.11 `slo_burn`
+
+Multi-window multi-burn-rate alerting on the error budget of one SLO ([slo.md](slo.md) §3, D-125;
+`0087_slo`):
+```json
+{"slo_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+ "windows": [{"name": "fast", "factor": 14.4, "long_seconds": 3600, "short_seconds": 300},
+             {"name": "slow", "factor": 6, "long_seconds": 21600, "short_seconds": 1800}],
+ "min_requests": 0}
+```
+| Field | Default | Notes |
+|---|---|---|
+| `slo_id` | required | an SLO of the organization (api.md [Service level objectives](api.md#service-level-objectives)) |
+| `windows` | the two above | 1–4 pairs; `name` `^[a-z0-9_-]{1,32}$` (unique), `factor` > 0 and ≤ 1000, `long_seconds` 300–86400, `short_seconds` 60–`long_seconds` (default `long/12`), both rounded up to whole minutes |
+| `min_requests` | `0` | a window whose long window has fewer (weighted) requests has no value |
+
+- Value = `max over the windows of min(burn rate over long, burn rate over short) / factor`, so the comparison
+  is fixed at `gte 1`: the factors carry the configuration and 1 means "burning at the configured rate". The
+  burn rate is `(bad / requests) / (1 − objective)` over the window (slo.md §2), from `apm_transactions_1m`
+  with the SLO's SLI (availability, or latency from the duration histogram).
+- Requiring **both** windows means a burst that already stopped does not fire and a fixed incident recovers
+  within the short window. Windows end at the last complete minute.
+- One series per rule, key `slo.id=<uuid>`; labels `slo.id`, `slo.name`, `slo.window` (the window that
+  produced the value), `service.name` and, when the SLO fixes them, `service.namespace`/`environment`.
+- Without a value (no window has requests, or all are below `min_requests`) the missing-data behaviour is
+  `keep`. `for_seconds` applies; `interval_seconds` default 60.
+- Needs PostgreSQL for the definition: without it (or after the SLO was deleted) the evaluation is an error,
+  the state is unchanged. Deleting an SLO does not delete its rules.
+- Summary: `error budget of Checkout availability burns 21.6× too fast over 1h and 5m (≥ 14.4×)`.
 
 ### 2.8 Recommended templates
 

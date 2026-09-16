@@ -39,6 +39,8 @@ tags:
   - name: fleet
   - name: integrations
   - name: alerts
+  - name: slos
+    description: Service level objectives, error budgets and burn rates (slo.md, D-125)
   - name: query
     description: OQL query language (oql.md)
   - name: dashboards
@@ -1890,6 +1892,121 @@ paths:
                     items: { $ref: "#/components/schemas/ApmServiceAgents" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  # ---------------------------------------------------------------- service level objectives
+  /api/v1/slos:
+    get:
+      tags: [slos]
+      operationId: listSlos
+      description: >-
+        SLOs of the organization ordered by name (slo.md §1). Each carries the budget over its rolling window
+        unless `status=false`; the status of at most 50 SLOs is computed (`status_truncated` for the rest).
+      parameters:
+        - { name: status, in: query, schema: { type: boolean, default: true }, description: Compute the current budget }
+      responses:
+        "200":
+          description: SLOs with their current error budget
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [slos, status_truncated]
+                properties:
+                  slos:
+                    type: array
+                    items: { $ref: "#/components/schemas/SloListItem" }
+                  status_truncated: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "504": { $ref: "#/components/responses/Timeout" }
+    post:
+      tags: [slos]
+      operationId: createSlo
+      description: Signed-in member or higher; audit event slo.create. Not available in static auth mode (404).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SloInput" }
+      responses:
+        "201":
+          description: Created SLO
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Slo" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/slos/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [slos]
+      operationId: getSlo
+      responses:
+        "200":
+          description: SLO
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Slo" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [slos]
+      operationId: updateSlo
+      description: Full replacement; signed-in member or higher; audit event slo.update.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SloInput" }
+      responses:
+        "200":
+          description: Updated SLO
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Slo" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [slos]
+      operationId: deleteSlo
+      description: Signed-in member or higher; audit event slo.delete. slo_burn rules keep their (now dangling) slo_id.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/slos/{id}/results:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [slos]
+      operationId: getSloResults
+      description: >-
+        Budget over the SLO's rolling window ending at the last complete minute, the burn-rate windows of the
+        slo_burn defaults (14.4× over 1 h/5 m, 6× over 6 h/30 m) and the burndown series (slo.md §2).
+      parameters:
+        - name: step
+          in: query
+          schema: { type: string }
+          description: Bucket width of the series as a Go duration (≥ 60s, rounded up to whole minutes)
+      responses:
+        "200":
+          description: Status, burn rates and series
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SloResults" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "504": { $ref: "#/components/responses/Timeout" }
 
   # ---------------------------------------------------------------- auth
@@ -8144,6 +8261,120 @@ components:
       required: [apdex_t_ms]
       properties:
         apdex_t_ms: { type: integer, minimum: 1, maximum: 600000 }
+    SloSliType:
+      type: string
+      enum: [availability, latency]
+      description: availability = non-error requests / requests; latency = requests at or below the threshold / requests (slo.md §2)
+    SloInput:
+      type: object
+      required: [name, service_name, sli_type, objective, window_days]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        service_name: { type: string, minLength: 1, maxLength: 512 }
+        service_namespace:
+          type: string
+          nullable: true
+          description: null = every namespace (aggregated), a string (also "") = exact match
+        environment: { type: string, nullable: true, description: 'null = every environment, a string (also "") = exact match' }
+        sli_type: { $ref: "#/components/schemas/SloSliType" }
+        latency_threshold_ms:
+          type: integer
+          minimum: 1
+          maximum: 600000
+          description: Latency SLI only; rejected for availability
+        objective: { type: number, minimum: 50, exclusiveMaximum: 100, description: "Target in percent, e.g. 99.9" }
+        window_days: { type: integer, enum: [7, 28, 30] }
+    Slo:
+      type: object
+      required: [id, name, description, service_name, service_namespace, environment, sli_type, latency_threshold_ms,
+                 objective, window_days, created_by_email, updated_by_email, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        service_name: { type: string }
+        service_namespace: { type: string, nullable: true }
+        environment: { type: string, nullable: true }
+        sli_type: { $ref: "#/components/schemas/SloSliType" }
+        latency_threshold_ms: { type: number, nullable: true }
+        objective: { type: number }
+        window_days: { type: integer }
+        created_by_email: { type: string }
+        updated_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+    SloBudget:
+      type: object
+      description: Error budget over one range; ratios are null without requests (slo.md §2).
+      required: [requests, good, bad, sli, budget_requests, budget_consumed, budget_remaining, remaining_ratio, burn_rate, met]
+      properties:
+        requests: { type: number, description: Weighted requests (apm.md §4) }
+        good: { type: number }
+        bad: { type: number }
+        sli: { type: number, nullable: true, description: good / requests, 0..1 }
+        budget_requests: { type: number, description: "(1 − objective) × requests" }
+        budget_consumed: { type: number }
+        budget_remaining: { type: number, description: Negative once the objective is missed }
+        remaining_ratio: { type: number, nullable: true, description: Share of the budget left (1 = untouched, < 0 = missed) }
+        burn_rate: { type: number, nullable: true, description: "(bad / requests) / (1 − objective)" }
+        met: { type: boolean }
+    SloStatus:
+      type: object
+      required: [from, to, window_days, budget]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        window_days: { type: integer }
+        budget: { $ref: "#/components/schemas/SloBudget" }
+    SloListItem:
+      allOf:
+        - $ref: "#/components/schemas/Slo"
+        - type: object
+          required: [status]
+          properties:
+            status:
+              allOf: [{ $ref: "#/components/schemas/SloStatus" }]
+              nullable: true
+              description: null when the status was not computed (status=false or beyond the 50 SLO limit)
+    SloBurnWindowResult:
+      type: object
+      description: One long/short burn window (slo.md §3); rate and ratio are null when a window has no requests.
+      required: [name, factor, long_seconds, short_seconds, long, short, rate, ratio, breaching]
+      properties:
+        name: { type: string }
+        factor: { type: number }
+        long_seconds: { type: integer }
+        short_seconds: { type: integer }
+        long: { $ref: "#/components/schemas/SloBudget" }
+        short: { $ref: "#/components/schemas/SloBudget" }
+        rate: { type: number, nullable: true, description: min(long burn rate, short burn rate) }
+        ratio: { type: number, nullable: true, description: rate / factor (breaching at 1) }
+        breaching: { type: boolean }
+    SloPoint:
+      type: object
+      required: [t, requests, good, bad, sli, burn_rate, remaining_ratio]
+      properties:
+        t: { type: integer, format: int64, description: Bucket start (unix milliseconds) }
+        requests: { type: number }
+        good: { type: number }
+        bad: { type: number }
+        sli: { type: number, nullable: true, description: Of this bucket }
+        burn_rate: { type: number, nullable: true, description: Of this bucket }
+        remaining_ratio: { type: number, nullable: true, description: Share of the window's budget left after this bucket (burndown) }
+    SloResults:
+      type: object
+      required: [slo, status, step, burn, series]
+      properties:
+        slo: { $ref: "#/components/schemas/Slo" }
+        status: { $ref: "#/components/schemas/SloStatus" }
+        step: { type: string, description: Bucket width of the series (Go duration) }
+        burn:
+          type: array
+          items: { $ref: "#/components/schemas/SloBurnWindowResult" }
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/SloPoint" }
     TailSamplingRule:
       type: object
       description: One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2).
@@ -9687,7 +9918,7 @@ components:
         access: { type: string, description: "ok, missing, opted_out or unsupported_user (root or not a local account); unknown values are passed through" }
 
     # ---- Alerting (docs/contracts/alerting.md) ----
-    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql] }
+    AlertRuleType: { type: string, enum: [metric_threshold, log_match, no_data, discovery, apm, apm_no_data, apm_error, oql, slo_burn] }
     AlertSeverity: { type: string, enum: [critical, warning, info] }
     AlertOperator: { type: string, enum: [gt, gte, lt, lte] }
     AlertSeriesStateName: { type: string, enum: [ok, pending, firing] }
@@ -9718,6 +9949,15 @@ components:
           type: array
           items: { type: string }
 
+    AlertBurnWindow:
+      type: object
+      description: One long/short burn window of a slo_burn condition (alerting.md §2.11); both are rounded up to whole minutes.
+      required: [name, factor, long_seconds, short_seconds]
+      properties:
+        name: { type: string, pattern: "^[a-z0-9_-]{1,32}$" }
+        factor: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        long_seconds: { type: integer, minimum: 300, maximum: 86400 }
+        short_seconds: { type: integer, minimum: 60, maximum: 86400 }
     AlertCondition:
       type: object
       description: |
@@ -9734,6 +9974,8 @@ components:
         match, window_seconds, min_count (new_group only).
         oql (§2.10): query (OQL with exactly one number column; FACET = series labels; no TIMESERIES, SINCE/UNTIL,
         COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
+        slo_burn (§2.11): slo_id, windows (1-4 long/short burn windows with their factor), min_requests. The comparison
+        is fixed (gte 1): the value is the largest min(long, short) burn rate divided by the window's factor.
       properties:
         metric: { type: string }
         service_name: { type: string }
@@ -9759,6 +10001,11 @@ components:
         query: { type: string }
         severity_min: { type: string }
         signal: { type: string, enum: [host, metric, log] }
+        slo_id: { type: string, format: uuid, description: "slo_burn: the SLO whose error budget is watched" }
+        windows:
+          type: array
+          description: "slo_burn: 1-4 burn windows (alerting.md §2.11)"
+          items: { $ref: "#/components/schemas/AlertBurnWindow" }
         event: { type: string, enum: [service_disappeared, port_opened, new_group, regressed] }
         match: { type: string }
         min_count: { type: number, minimum: 0 }

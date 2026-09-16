@@ -54,6 +54,7 @@ endpoints (`openlog-license-key` header or `Authorization: Bearer`) as `viewer`;
 | Create alert rules and mutes, change/delete **own** rules and mutes, acknowledge/resolve/annotate incidents | | ✓ | ✓ | ✓ |
 | APM error inbox: change status/assignee (`PATCH /apm/errors/groups`), comment, delete **own** comments (signed-in users only) | | ✓ | ✓ | ✓ |
 | Delete any error group comment | | | ✓ | ✓ |
+| Create, change and delete service level objectives (`/slos`; signed-in users only) | | ✓ | ✓ | ✓ |
 | `GET /integrations/settings` | ✓ | ✓ | ✓ | ✓ |
 | OQL (`POST /query`, `POST /query/validate`, `GET /query/schema`), read dashboards (private ones: creator only), export | ✓ | ✓ | ✓ | ✓ |
 | Create, import and duplicate dashboards; change/delete **own** dashboards | | ✓ | ✓ | ✓ |
@@ -1374,6 +1375,48 @@ changing to an integration without passwords clears it. `404` for an unknown id.
   more than 64 `databases` or an empty entry; `host_id` over 256 bytes.
 - `409 already_exists`: another setting has the same host scope, integration and match.
 - `409 failed_precondition`: a password was given but `OPENLOG_SECRETS_KEY` is not configured.
+
+## Service level objectives
+
+Targets, error budgets and burn rates of APM services (PostgreSQL `slos`, `0087_slo`; semantics and math:
+[slo.md](slo.md), D-125). PostgreSQL auth mode only (`404` otherwise). Reads: any role and API keys
+(telemetry). Writes: signed-in members and higher; at most 200 SLOs per organization (`409`). Audit:
+`slo.{create,update,delete}`. Budgets are computed at query time from `apm_transactions_1m`, so the
+usual telemetry errors (`422`/`429` query limits, `504` timeout) apply.
+
+### `GET /api/v1/slos?status=` · `POST /api/v1/slos` · `GET|PUT|DELETE /api/v1/slos/{id}`
+Body of POST/PUT: `{"name" (1–200), "description"? (≤ 2000), "service_name", "service_namespace"?,
+"environment"?, "sli_type": "availability"|"latency", "latency_threshold_ms"? (latency only, 1–600000),
+"objective" (percent, 50 ≤ x < 100), "window_days": 7|28|30}`. `service_namespace`/`environment` are `null`
+(every namespace/environment, aggregated) or an exact value, also `""` (apm.md §1).
+The list adds the budget over each SLO's rolling window (ending at the last complete minute) unless
+`status=false`; it is computed for at most 50 SLOs (`status_truncated`).
+```json
+{"slos": [{"id": "…", "name": "Checkout availability", "description": "", "service_name": "checkout",
+  "service_namespace": null, "environment": "prod", "sli_type": "availability", "latency_threshold_ms": null,
+  "objective": 99.9, "window_days": 28, "created_by_email": "ada@example.com", "updated_by_email": "ada@example.com",
+  "created_at": "…", "updated_at": "…",
+  "status": {"from": "…", "to": "…", "window_days": 28,
+    "budget": {"requests": 1200000, "good": 1198800, "bad": 1200, "sli": 0.999, "budget_requests": 1200,
+               "budget_consumed": 1200, "budget_remaining": 0, "remaining_ratio": 0, "burn_rate": 1, "met": true}}}],
+ "status_truncated": false}
+```
+
+### `GET /api/v1/slos/{id}/results?step=`
+Budget over the rolling window, the burn-rate windows of the `slo_burn` defaults (14.4× over 1 h/5 m, 6× over
+6 h/30 m) and the burndown series (`step` ≥ `60s`, default ≈ 60 points, rounded up to whole minutes).
+`remaining_ratio` of a point is the share of the **window's** budget left after that bucket, so the last point
+equals `status.budget.remaining_ratio`; `sli` and `burn_rate` of a point are the bucket's own (null without
+requests).
+```json
+{"slo": {…}, "status": {…}, "step": "600s",
+ "burn": [{"name": "fast", "factor": 14.4, "long_seconds": 3600, "short_seconds": 300,
+           "long": {…budget…}, "short": {…budget…}, "rate": 21.6, "ratio": 1.5, "breaching": true},
+          {"name": "slow", "factor": 6, "long_seconds": 21600, "short_seconds": 1800, "long": {…}, "short": {…},
+           "rate": 3.1, "ratio": 0.52, "breaching": false}],
+ "series": [{"t": 1757757600000, "requests": 5400, "good": 5397, "bad": 3, "sli": 0.99944,
+             "burn_rate": 0.55, "remaining_ratio": 0.92}]}
+```
 
 ## Alerting
 

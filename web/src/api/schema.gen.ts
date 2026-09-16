@@ -1111,6 +1111,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/slos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description SLOs of the organization ordered by name (slo.md §1). Each carries the budget over its rolling window unless `status=false`; the status of at most 50 SLOs is computed (`status_truncated` for the rest). */
+        get: operations["listSlos"];
+        put?: never;
+        /** @description Signed-in member or higher; audit event slo.create. Not available in static auth mode (404). */
+        post: operations["createSlo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/slos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getSlo"];
+        /** @description Full replacement; signed-in member or higher; audit event slo.update. */
+        put: operations["updateSlo"];
+        post?: never;
+        /** @description Signed-in member or higher; audit event slo.delete. slo_burn rules keep their (now dangling) slo_id. */
+        delete: operations["deleteSlo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/slos/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Budget over the SLO's rolling window ending at the last complete minute, the burn-rate windows of the slo_burn defaults (14.4× over 1 h/5 m, 6× over 6 h/30 m) and the burndown series (slo.md §2). */
+        get: operations["getSloResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -5556,6 +5613,111 @@ export interface components {
         ApmSettingsInput: {
             apdex_t_ms: number;
         };
+        /**
+         * @description availability = non-error requests / requests; latency = requests at or below the threshold / requests (slo.md §2)
+         * @enum {string}
+         */
+        SloSliType: "availability" | "latency";
+        SloInput: {
+            name: string;
+            description?: string;
+            service_name: string;
+            /** @description null = every namespace (aggregated), a string (also "") = exact match */
+            service_namespace?: string | null;
+            /** @description null = every environment, a string (also "") = exact match */
+            environment?: string | null;
+            sli_type: components["schemas"]["SloSliType"];
+            /** @description Latency SLI only; rejected for availability */
+            latency_threshold_ms?: number;
+            /** @description Target in percent, e.g. 99.9 */
+            objective: number;
+            /** @enum {integer} */
+            window_days: 7 | 28 | 30;
+        };
+        Slo: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            service_name: string;
+            service_namespace: string | null;
+            environment: string | null;
+            sli_type: components["schemas"]["SloSliType"];
+            latency_threshold_ms: number | null;
+            objective: number;
+            window_days: number;
+            created_by_email: string;
+            updated_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        /** @description Error budget over one range; ratios are null without requests (slo.md §2). */
+        SloBudget: {
+            /** @description Weighted requests (apm.md §4) */
+            requests: number;
+            good: number;
+            bad: number;
+            /** @description good / requests */
+            sli: number | null;
+            /** @description (1 − objective) × requests */
+            budget_requests: number;
+            budget_consumed: number;
+            /** @description Negative once the objective is missed */
+            budget_remaining: number;
+            /** @description Share of the budget left (1 = untouched */
+            remaining_ratio: number | null;
+            /** @description (bad / requests) / (1 − objective) */
+            burn_rate: number | null;
+            met: boolean;
+        };
+        SloStatus: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            window_days: number;
+            budget: components["schemas"]["SloBudget"];
+        };
+        SloListItem: components["schemas"]["Slo"] & {
+            /** @description null when the status was not computed (status=false or beyond the 50 SLO limit) */
+            status: components["schemas"]["SloStatus"] | null;
+        };
+        /** @description One long/short burn window (slo.md §3); rate and ratio are null when a window has no requests. */
+        SloBurnWindowResult: {
+            name: string;
+            factor: number;
+            long_seconds: number;
+            short_seconds: number;
+            long: components["schemas"]["SloBudget"];
+            short: components["schemas"]["SloBudget"];
+            /** @description min(long burn rate */
+            rate: number | null;
+            /** @description rate / factor (breaching at 1) */
+            ratio: number | null;
+            breaching: boolean;
+        };
+        SloPoint: {
+            /**
+             * Format: int64
+             * @description Bucket start (unix milliseconds)
+             */
+            t: number;
+            requests: number;
+            good: number;
+            bad: number;
+            /** @description Of this bucket */
+            sli: number | null;
+            /** @description Of this bucket */
+            burn_rate: number | null;
+            /** @description Share of the window's budget left after this bucket (burndown) */
+            remaining_ratio: number | null;
+        };
+        SloResults: {
+            slo: components["schemas"]["Slo"];
+            status: components["schemas"]["SloStatus"];
+            /** @description Bucket width of the series (Go duration) */
+            step: string;
+            burn: components["schemas"]["SloBurnWindowResult"][];
+            series: components["schemas"]["SloPoint"][];
+        };
         /** @description One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2). */
         TailSamplingRule: {
             name: string;
@@ -6843,7 +7005,7 @@ export interface components {
             access: string;
         };
         /** @enum {string} */
-        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data" | "apm_error" | "oql";
+        AlertRuleType: "metric_threshold" | "log_match" | "no_data" | "discovery" | "apm" | "apm_no_data" | "apm_error" | "oql" | "slo_burn";
         /** @enum {string} */
         AlertSeverity: "critical" | "warning" | "info";
         /** @enum {string} */
@@ -6879,6 +7041,13 @@ export interface components {
             op: "eq" | "neq" | "in" | "not_in" | "contains";
             values: string[];
         };
+        /** @description One long/short burn window of a slo_burn condition (alerting.md §2.11); both are rounded up to whole minutes. */
+        AlertBurnWindow: {
+            name: string;
+            factor: number;
+            long_seconds: number;
+            short_seconds: number;
+        };
         /**
          * @description Type-specific condition (alerting.md §2.2–2.5). metric_threshold: metric, aggregation, series_aggregation,
          *     window_seconds, filters, group_by, operator, threshold, recovery_threshold, missing_data. log_match: query,
@@ -6893,6 +7062,8 @@ export interface components {
          *     match, window_seconds, min_count (new_group only).
          *     oql (§2.10): query (OQL with exactly one number column; FACET = series labels; no TIMESERIES, SINCE/UNTIL,
          *     COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
+         *     slo_burn (§2.11): slo_id, windows (1-4 long/short burn windows with their factor), min_requests. The comparison
+         *     is fixed (gte 1): the value is the largest min(long, short) burn rate divided by the window's factor.
          */
         AlertCondition: {
             metric?: string;
@@ -6919,6 +7090,13 @@ export interface components {
             severity_min?: string;
             /** @enum {string} */
             signal?: "host" | "metric" | "log";
+            /**
+             * Format: uuid
+             * @description slo_burn: the SLO whose error budget is watched
+             */
+            slo_id?: string;
+            /** @description slo_burn: 1-4 burn windows (alerting.md §2.11) */
+            windows?: components["schemas"]["AlertBurnWindow"][];
             /** @enum {string} */
             event?: "service_disappeared" | "port_opened" | "new_group" | "regressed";
             match?: string;
@@ -10410,6 +10588,170 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listSlos: {
+        parameters: {
+            query?: {
+                /** @description Compute the current budget */
+                status?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SLOs with their current error budget */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        slos: components["schemas"]["SloListItem"][];
+                        status_truncated: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    createSlo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SloInput"];
+            };
+        };
+        responses: {
+            /** @description Created SLO */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Slo"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSlo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SLO */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Slo"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSlo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SloInput"];
+            };
+        };
+        responses: {
+            /** @description Updated SLO */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Slo"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSlo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSloResults: {
+        parameters: {
+            query?: {
+                /** @description Bucket width of the series as a Go duration (≥ 60s, rounded up to whole minutes) */
+                step?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status, burn rates and series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SloResults"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
         };
     };

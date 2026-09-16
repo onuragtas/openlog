@@ -12,6 +12,7 @@ import (
 
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
+	"github.com/onuragtas/openlog/internal/slo"
 )
 
 // ScopeProvider creates tenant-bound query scopes (*query.DB).
@@ -37,6 +38,8 @@ type EvaluatorOptions struct {
 	DefaultApdexT time.Duration
 	// ErrorStates is the APM error workflow for apm_error rules (nil: regressed conditions fail).
 	ErrorStates apm.ErrorStateStore
+	// SLOs holds the SLO definitions of slo_burn rules (nil: such rules report an evaluation error).
+	SLOs slo.Store
 	// Summaries receives the rows of every committed evaluation (alert_evaluations, §3.6); nil = not recorded.
 	Summaries EvaluationSink
 }
@@ -288,6 +291,9 @@ func (e *Evaluator) plan(ctx context.Context, rule *Rule, chans []ChannelRef, l 
 	}
 	if rule.Type == TypeAPMError && e.o.ErrorStates != nil {
 		qctx = WithErrorWorkflow(qctx, ErrorWorkflow{OrgID: rule.OrgID, Store: e.o.ErrorStates})
+	}
+	if rule.Type == TypeSLOBurn && e.o.SLOs != nil {
+		qctx = WithSLOs(qctx, SLOLookup{OrgID: rule.OrgID, Store: e.o.SLOs})
 	}
 	res, err := rule.Condition.Evaluate(qctx, sc, end, e.o.Limits)
 	cancel()

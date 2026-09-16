@@ -12,6 +12,7 @@ import (
 	"github.com/onuragtas/openlog/internal/alert/secrets"
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
+	"github.com/onuragtas/openlog/internal/slo"
 )
 
 // ErrForbidden reports a write a member may not perform (someone else's rule or mute).
@@ -75,7 +76,9 @@ type ManagerOptions struct {
 	ApdexSettings  ApdexSettingsFunc
 	// ErrorStates is the APM error workflow for apm_error previews (nil: regressed previews fail).
 	ErrorStates apm.ErrorStateStore
-	Now         func() time.Time
+	// SLOs holds the SLO definitions of slo_burn previews (nil: such previews fail).
+	SLOs slo.Store
+	Now  func() time.Time
 }
 
 // Manager implements the alerting API operations (docs/contracts/alerting.md §7). Role checks that depend only
@@ -193,6 +196,9 @@ func (m *Manager) Preview(ctx context.Context, sc *query.Scope, orgID string, in
 	defer cancel()
 	if m.o.ErrorStates != nil {
 		qctx = WithErrorWorkflow(qctx, ErrorWorkflow{OrgID: orgID, Store: m.o.ErrorStates})
+	}
+	if m.o.SLOs != nil {
+		qctx = WithSLOs(qctx, SLOLookup{OrgID: orgID, Store: m.o.SLOs})
 	}
 	lim := m.o.Limits
 	return Preview(qctx, sc, d, hours, m.o.Now(), m.o.Delay, lim)

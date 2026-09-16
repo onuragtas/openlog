@@ -456,6 +456,8 @@ Pure-SQL equivalents: `err / req`; satisfied at T ms with `ok = (keys, vals)`:
 `arraySum(arrayMap((k, v) -> if(pow(2, k / 8) <= T, v, if(pow(2, (k - 1) / 8) < T, v * (T - pow(2, (k - 1) / 8)) / (pow(2, k / 8) - pow(2, (k - 1) / 8)), 0)), ok.1, ok.2))`.
 The current (incomplete) minute and the last `OPENLOG_PROCESSOR_FLUSH_INTERVAL × 1.5` of data are not final; evaluate
 complete minutes. "No data" for a service: no row in `apm_services` with `last_seen` in the window.
+Service level objectives read the same table: their SLI, error budget and burn rates (rule type `slo_burn`)
+are computed from `requests`, `errors` and `duration_hist` with the weights of §4 ([slo.md](slo.md)).
 
 ## 11. Log ↔ trace navigation
 

@@ -26,6 +26,7 @@ import (
 	"github.com/onuragtas/openlog/internal/fleet/catalog"
 	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/savedview"
+	"github.com/onuragtas/openlog/internal/slo"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
 )
@@ -71,6 +72,8 @@ type Server struct {
 	statusPage *StatusPageDeps
 	// saved explorer views (savedviews.go, D-118); nil: none
 	savedViews *savedview.Manager
+	// service level objectives and their error budgets (slos.go, slo.md); nil: none (static auth mode)
+	slos slo.Store
 	// verified release catalog of the language agent version comparison (apm_agents.go, D-124); nil: statuses unknown
 	agentReleases func() *catalog.Snapshot
 }
@@ -145,6 +148,7 @@ func (s *Server) Handler() http.Handler {
 	s.operatorRoutes(mux)     // operator.go: SaaS operator console, lifecycle, support access (D-105, D-106)
 	s.privacyRoutes(mux)      // privacy.go: data exports, account and organization deletion (D-107)
 	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
+	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})

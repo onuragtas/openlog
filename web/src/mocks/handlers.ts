@@ -11,6 +11,7 @@ import { integrationSettingsHandlers } from "./integrationSettings";
 import { dashboardHandlers } from "./dashboards";
 import { dashboardSharingHandlers } from "./dashboardSharing";
 import { oqlHandlers } from "./oql";
+import { sloHandlers } from "./slos";
 import { usageHandlers } from "./usage";
 import { operatorHandlers } from "./operator";
 import { ssoHandlers } from "./sso";
@@ -296,6 +297,7 @@ export const handlers = [
   ...kubernetesHandlers,
   ...apmHandlers,
   ...alertHandlers,
+  ...sloHandlers, // mocks/slos.ts: service level objectives, error budgets and burn rates (D-125)
   ...oqlHandlers,
   ...dashboardSharingHandlers, // before dashboardHandlers: /dashboards/settings is not /dashboards/:id
   ...dashboardHandlers,
