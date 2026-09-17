@@ -82,10 +82,9 @@ export function CloudConnectionForm({ connection, onSaved, onCancel, readOnly = 
   const credentialFields = provider?.credentials ?? [];
   const typedCredentials = hasCredentials(credentialFields, draft.credentials);
   // On an edit the stored credentials are kept when nothing was typed, so they are not required again.
-  const requiredCredentials = useMemo(
-    () => (connection?.credentials_set && !typedCredentials ? [] : credentialFields.filter((f) => f.required)),
-    [connection?.credentials_set, typedCredentials, credentialFields],
-  );
+  // Not memoized: credentialFields is a fresh array every render, so a useMemo over it cannot be preserved
+  // (react-hooks/preserve-manual-memoization) and filtering a handful of fields costs nothing.
+  const requiredCredentials = connection?.credentials_set && !typedCredentials ? [] : credentialFields.filter((f) => f.required);
 
   const toInput = (d: Draft): CloudConnectionInput => ({
     name: d.name.trim(),
