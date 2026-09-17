@@ -23,8 +23,8 @@ def test_code_start_and_sigterm_flush(capture, apps, tmp_path):
     assert app.get("/items/book")[0] == 200
     # span still buffered (5 s batch delay): SIGTERM must flush it before the process ends
     time.sleep(0.2)
-    rc = app.stop(signal.SIGTERM)
-    assert rc == -signal.SIGTERM, app.output()  # terminated by the re-raised signal, like without the agent
+    # terminated by the re-raised signal, like without the agent
+    assert not (why := app.exited_on(signal.SIGTERM)), f"{why}\n{app.output()}"
     span = next((s for s in capture.spans if s["name"] == "GET /items/<name>"), None)
     assert span is not None, app.output()
     assert span["attributes"]["http.route"] == "/items/<name>"
@@ -104,8 +104,7 @@ def test_gunicorn_prefork_workers(capture, apps, mode):
     with ThreadPoolExecutor(max_workers=8) as pool:
         worker_pids = set(pool.map(request, range(60)))
     master = app.proc.pid
-    rc = app.stop(signal.SIGTERM, timeout=40)
-    assert rc == 0, app.output()
+    assert not (why := app.exited_cleanly(signal.SIGTERM, timeout=40)), f"{why}\n{app.output()}"
     spans = [s for s in capture.spans if s["name"] == name and s["kind"] == SERVER]
     assert len(spans) == 60, (len(spans), app.output())  # nothing lost: workers flush on graceful exit
     span_pids = _pids_from_spans(capture, name)

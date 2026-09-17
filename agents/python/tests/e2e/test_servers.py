@@ -85,8 +85,7 @@ def test_uwsgi_workers(capture, apps, mode):
             assert set(pool.map(lambda _: app.get("/chain", headers={"Connection": "close"})[0], range(10))) == {200}
     master = app.proc.pid
     # no wait: the spans are still buffered in the workers and must be flushed when they exit
-    rc = app.stop(signal.SIGINT, timeout=40)
-    assert rc == 0, app.output()
+    assert not (why := app.exited_cleanly(signal.SIGINT, timeout=40)), f"{why}\n{app.output()}"
     spans = [s for s in capture.spans if s["name"] == name and s["kind"] == SERVER and "?" not in s["name"]]
     nested = 10 if mode != "code-start" else 0
     assert len(spans) == 60 + nested, (len(spans), app.output())
@@ -126,8 +125,7 @@ def test_monkey_patched_server(capture, apps, green, start):
         assert set(statuses) == {200}
         assert set(pool.map(lambda _: app.get("/chain")[0], range(8))) == {200}
     # SIGTERM right away: the flush runs in a greenlet (blocking is not allowed in the event loop's signal callback)
-    rc = app.stop(signal.SIGTERM, timeout=30)
-    assert rc == -signal.SIGTERM, app.output()
+    assert not (why := app.exited_on(signal.SIGTERM, timeout=30)), f"{why}\n{app.output()}"
     out = app.output()
     assert "BlockingSwitchOutError" not in out and "do not call blocking functions" not in out, out
 
@@ -175,8 +173,7 @@ def test_gunicorn_gevent_workers(capture, apps):
     worker_pids = _load(app, "/users/{}", 60, 16)
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert set(pool.map(lambda _: app.get("/chain", headers={"Connection": "close"})[0], range(20))) == {200}
-    rc = app.stop(signal.SIGTERM, timeout=40)
-    assert rc == 0, app.output()
+    assert not (why := app.exited_cleanly(signal.SIGTERM, timeout=40)), f"{why}\n{app.output()}"
     name = "GET /users/<int:user_id>"
     spans = [s for s in capture.spans if s["name"] == name and s["kind"] == SERVER]
     assert len(spans) == 80, (len(spans), app.output())

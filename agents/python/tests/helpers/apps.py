@@ -27,6 +27,8 @@ class App:
     def __init__(self, argv: List[str], env: Dict[str, str], port: int, instrument: bool = True) -> None:
         self.port = port
         self.url = f"http://127.0.0.1:{port}"
+        # True once stop() had to kill the process because it outlived the timeout.
+        self.killed = False
         self._out = tempfile.NamedTemporaryFile(prefix="openlog-app-", suffix=".log", delete=False)
         full_env = {k: v for k, v in os.environ.items() if not k.startswith(("OPENLOG_", "OTEL_"))}
         full_env.update(
@@ -62,14 +64,36 @@ class App:
             return e.code, e.read().decode()
 
     def stop(self, sig: int = signal.SIGTERM, timeout: float = 20.0) -> int:
+        """Signal the process and wait for it. Sets killed when it had to be killed after timeout, so a caller
+        asserting on the exit code can say "did not react to the signal" instead of reporting a bare -9."""
+        self.killed = False
         if self.proc.poll() is None:
             self.proc.send_signal(sig)
             try:
                 self.proc.wait(timeout)
             except subprocess.TimeoutExpired:
+                self.killed = True
                 self.proc.kill()
                 self.proc.wait()
         return self.proc.returncode
+
+    def exited_on(self, sig: int, timeout: float = 20.0) -> str:
+        """Stops the process and returns "" when it exited on sig, else why it did not. A loaded CI runner can
+        need longer than the timeout, which is not the same failure as a shutdown the agent blocks."""
+        return self._stopped(sig, timeout, -sig)
+
+    def exited_cleanly(self, sig: int, timeout: float = 20.0) -> str:
+        """Like exited_on, for supervisors (gunicorn, uWSGI) that stop their workers and exit 0 themselves."""
+        return self._stopped(sig, timeout, 0)
+
+    def _stopped(self, sig: int, timeout: float, want: int) -> str:
+        rc = self.stop(sig, timeout)
+        if self.killed:
+            return f"did not exit within {timeout:g}s of {signal.Signals(sig).name}, had to be killed"
+        if rc != want:
+            expected = f"-{signal.Signals(sig).name}" if want < 0 else str(want)
+            return f"exited with {rc}, expected {expected}"
+        return ""
 
     def close(self) -> None:
         self.stop(signal.SIGKILL, 5)
