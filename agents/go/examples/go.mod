@@ -3,8 +3,8 @@ module github.com/onuragtas/openlog/agents/go/examples
 go 1.26
 
 require (
-	github.com/onuragtas/openlog/agents/go v0.1.49
-	github.com/onuragtas/openlog/agents/go/instrumentation/grpc v0.1.49
+	github.com/onuragtas/openlog/agents/go v0.1.50
+	github.com/onuragtas/openlog/agents/go/instrumentation/grpc v0.1.50
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
 	google.golang.org/grpc v1.83.2
