@@ -225,6 +225,45 @@ for another backend) keep working without being redeployed:
 Revokes → `204` (idempotent). Ingest pods keep accepting the key until their cache entry expires, i.e. for up to
 `OPENLOG_AUTH_CACHE_TTL` (default 60 s).
 
+## Browser keys
+
+Public keys of the RUM browser SDK ([rum.md](rum.md) §3, D-136). PostgreSQL auth mode only. Reads need a
+member (API keys allowed); creating, editing and revoking need a **signed-in** admin or owner, like every
+other credential operation. Audit: `browser_key.{create,update,revoke}`.
+
+**A browser key is not a secret.** It ships inside a web page, so everyone who can open the page has it.
+It is a separate credential type from the ingest license key (`olb_` rather than `olk_`, its own table) and
+authenticates exactly one endpoint, `POST /v1/rum`, whose payloads are rewritten to what the key is allowed
+to say. What bounds it is capability, not confidentiality: an origin allowlist, a rate limit, a forced
+application name, and revocation. The full threat model — what a copied key can and cannot do — is
+[rum.md §3.5](rum.md).
+
+### `GET /api/v1/browser-keys`
+`{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "service_name", "environment", "origins": [],
+"rate_limit_per_minute", "sample_rate", "created_by_email", "created_at", "updated_at", "last_used_at",
+"revoked_at"}]}` (revoked keys included). The value itself is never returned by a read.
+
+### `POST /api/v1/browser-keys`
+Body: `{"name" (1–200), "service_name" (1–512), "environment"? (≤ 256), "origins" (1–50),
+"rate_limit_per_minute"? (default 6000, 60–10000000), "sample_rate"? (default 1, 0 < x ≤ 1)}`.
+
+`201 {"browser_key": {…}, "key": "olb_…"}` — the value is returned here and nowhere else.
+
+`origins` are the origins the key may be used from, as the browser sends them: exact
+(`https://app.example.com`, port included when it is not the scheme default) or a subdomain wildcard
+(`https://*.example.com`, covering any subdomain depth). An **empty list is refused** (`400`): a key without
+an allowlist accepts data from any website, and a blank field must not be the unsafe setting. `*` is refused
+for the same reason. The value is always generated; browser keys cannot be imported.
+
+### `PUT /api/v1/browser-keys/{id}`
+Full replacement of the same fields → `200`. A revoked key is never edited back into service (`404`): its
+value may still be cached in browsers that loaded the old page.
+
+### `DELETE /api/v1/browser-keys/{id}`
+Revokes → `204` (idempotent). Ingest pods keep accepting the key for up to `OPENLOG_AUTH_CACHE_TTL`
+(default 60 s), and pages already loaded keep sending it until they are reloaded. The value stays
+permanently unusable.
+
 ## API keys
 
 ### `GET /api/v1/api-keys`
@@ -1667,6 +1706,57 @@ requests).
  "series": [{"t": 1757757600000, "requests": 5400, "good": 5397, "bad": 3, "sli": 0.99944,
              "burn_rate": 0.55, "remaining_ratio": 0.92}]}
 ```
+
+## Real user monitoring
+
+Browser telemetry collected by the openlog browser SDK ([rum.md](rum.md), D-136): page views, Core Web
+Vitals, sessions and their trace links. Reads are telemetry reads (any role, API keys too) and go through the
+rollups of `0094_rum`. Key management is [Browser keys](#browser-keys).
+
+**Browser errors are not here.** A JavaScript error is an error span of the browser application's service, so
+it is already an APM error group with the same fingerprint, grouping, assignment and resolution state: the UI
+links to `GET /api/v1/apm/errors?service=<app>`. A parallel inbox would mean two places to resolve one error.
+For the same reason a browser application **appears under APM as a service** — with errors but no
+transactions, throughput or Apdex, because page views are deliberately not entry spans.
+
+### `GET /api/v1/rum/apps?from=&to=`
+`{"apps": [{"app", "environment", "views", "sessions", "errors", "last_seen"}]}`.
+
+### `GET /api/v1/rum/overview?app=&environment=&from=&to=&step=`
+The five vitals, the page view series and the totals:
+```json
+{"from": "…", "to": "…", "step": "60s",
+ "vitals": [{"name": "lcp", "unit": "ms", "count": 1240, "p50": 1800, "p75": 2400, "p95": 3900, "avg": 2010,
+             "good": 0.78, "needs_improvement": 0.17, "poor": 0.05, "rating": "good",
+             "good_threshold": 2500, "poor_threshold": 4000}],
+ "points": [{"t": 1757757600000, "views": 42, "avg_ms": 1210}],
+ "totals": {"views": 1240, "sessions": 610, "errors": 12, "avg_ms": 1180}}
+```
+Percentiles are `null` without measurements. `rating` scores the **p75**, the percentile the Core Web Vitals
+assessment is defined on, against the published thresholds ([rum.md](rum.md) §2.1); they are constants, not
+settings. All five vitals are always returned, so a browser that reported none shows as "no data" rather than
+disappearing.
+
+### `GET /api/v1/rum/pages?app=&environment=&sort=&limit=&from=&to=`
+`{"pages": [{"route", "views", "avg_ms", "p50_ms", "p75_ms", "p95_ms", "max_ms", "ttfb_avg_ms", "lcp_p75",
+"errors"}]}`. `sort` is `views` (default), `slowest` (by total time consumed, like APM's "most time
+consuming") or `avg`. `route` is the normalized route ([rum.md](rum.md) §4), never a raw URL: the query
+string and fragment never reach storage.
+
+### `GET /api/v1/rum/vitals?app=&environment=&route=&from=&to=`
+`{"from", "to", "vitals": [ … as above … ]}`, optionally for one route.
+
+### `GET /api/v1/rum/sessions?app=&environment=&limit=&from=&to=`
+`{"sessions": [{"session_id", "app", "environment", "started_at", "ended_at", "duration_ms", "page_views",
+"errors", "entry_route", "exit_route", "device_type", "browser_name", "browser_version", "os_name",
+"trace_id"}]}`, newest first. A session is a visit, not a person ([rum.md](rum.md) §1.1).
+
+### `GET /api/v1/rum/sessions/{session_id}?from=&to=`
+`{"session": {…}, "events": [{"timestamp", "event", "name", "route", "duration_ms", "trace_id", "span_id",
+"error_group_id", "status_code"}]}`. `event` is `page_view`, `vital`, `error` or `resource`;
+`error_group_id` links an error to its APM error group. The timeline is read from the stored spans, so it is
+bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
+`404` when the session is unknown.
 
 ## Synthetic monitoring
 

@@ -16,6 +16,8 @@ export type Permission =
   | "invitations.manage"
   | "license_keys.manage"
   | "api_keys.revoke_any"
+  | "browser_keys.list"
+  | "browser_keys.manage"
   | "audit.read"
   | "fleet.manage"
   | "updates.request"
@@ -35,6 +37,10 @@ const MIN_ROLE: Record<Permission, Role> = {
   "invitations.manage": "admin",
   "license_keys.manage": "admin",
   "api_keys.revoke_any": "admin",
+  "browser_keys.list": "member",
+  // A browser key is public, but issuing one decides which application name a public page may write under
+  // and how much it may send, so only admins and owners manage them (rum.md §3).
+  "browser_keys.manage": "admin",
   "audit.read": "admin",
   "fleet.manage": "admin",
   "updates.request": "admin",

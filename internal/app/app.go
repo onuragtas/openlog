@@ -153,6 +153,8 @@ func RunIngest(ctx context.Context, cfg config.Config, adm *admin.Server, log *s
 	adm.AddCheck("ingest_listener", admin.ListenerCheck(cfg.Ingest.HTTPAddr)) // OTLP/HTTP port accepts connections
 	svc := ingest.New(cfg.Ingest, cfg.KafkaTopicPrefix, res, prod, log, adm.Registry())
 	svc.SetSplitTraces(cfg.TailSampling.Enabled) // one record per trace id for openlog-sampler (D-075)
+	// rum.go: browser keys for POST /v1/rum (D-136); flushes last_used_at before the pool closes.
+	defer startRUMIngest(ctx, cfg, pgPool, svc, adm.Registry(), log)()
 	// SaaS mode quota enforcement (usage.go, D-080).
 	startIngestQuota(ctx, cfg, pgPool, svc, adm.Registry(), log)
 	// Agent sync + release mirror (internal/fleet); flushes queued reports before the pool closes.

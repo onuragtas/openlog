@@ -131,7 +131,8 @@ GRANT ON CLUSTER openlog SELECT ON openlog.* TO openlog_reader;
 | `OPENLOG_INGEST_MAX_BODY_BYTES` | `10485760` | Max **decompressed** request size; larger → `413` / `RESOURCE_EXHAUSTED` |
 | `OPENLOG_INGEST_PRODUCE_TIMEOUT` | `10s` | Kafka produce ack timeout; timeout or Kafka unavailable → `503` / `UNAVAILABLE` with `Retry-After` (D-014) |
 | `OPENLOG_INGEST_CORS_ALLOWED_ORIGINS` | `` | CORS for browser OTLP/HTTP senders: comma-separated `*`, exact origins (`https://app.example.com`) or subdomain wildcards (`https://*.example.com`). Empty = disabled. Preflights (`OPTIONS`) from allowed origins get `204` with `Access-Control-Allow-Origin`, the requested headers and `Max-Age 7200`; other origins get `403`. No credentials (auth is by key header). |
-| `OPENLOG_AUTH_CACHE_TTL` | `60s` | `postgres` mode: a resolved license key is re-checked against PostgreSQL after this long. **A revoked key keeps being accepted by an ingest pod for up to this long** |
+| `OPENLOG_RUM_ENABLED` | `true` | Serve `POST /v1/rum` (browser SDK, [rum.md](rum.md), D-136) and the `/api/v1/rum/*` reads. `postgres` mode only: browser keys live in PostgreSQL. Everything else that bounds RUM — origins, rate limit, sample rate — is set per browser key by an admin, not here. Turning this off keeps existing keys but stops accepting their data |
+| `OPENLOG_AUTH_CACHE_TTL` | `60s` | `postgres` mode: a resolved license key is re-checked against PostgreSQL after this long. **A revoked key keeps being accepted by an ingest pod for up to this long** (browser keys too, [rum.md](rum.md) §3.5) |
 | `OPENLOG_AUTH_NEGATIVE_CACHE_TTL` | `10s` | Unknown keys are re-checked after this long (a newly created key works within this delay on pods that rejected it before) |
 | `OPENLOG_AUTH_CACHE_MAX_STALE` | `15m` | While PostgreSQL is unreachable, keys resolved successfully within this window keep being accepted (`0` = never serve stale entries) |
 
@@ -286,6 +287,7 @@ in `openlog.table_settings` (`ttl:<table>`). Idempotent; nothing runs while tier
 | `OPENLOG_STORAGE_COLD_AFTER_DAYS_TRACES` | `3` | `spans_local`, `trace_index_local` (7 d) |
 | `OPENLOG_STORAGE_COLD_AFTER_DAYS_APM` | `7` | The 8 `apm_*` rollup tables of `OPENLOG_APM_RETENTION_DAYS` |
 | `OPENLOG_STORAGE_COLD_AFTER_DAYS_ALERTS` | `7` | `alert_evaluations_local` (30 d) |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_RUM` | `7` | `rum_page_views_1m_local`, `rum_vitals_1m_local`, `rum_sessions_local` (30 d, D-136) |
 | `OPENLOG_STORAGE_WARM_AFTER_DAYS_<CLASS>` | `0` | Same classes: days after which parts move to volume `warm` (must be below the cold age when both are set; requires a `warm` volume on every replica) |
 
 **ClickHouse server variables** (not read by openlog; used by `deploy/compose/clickhouse/storage-tiered.xml` through

@@ -16,6 +16,9 @@
 # Test and browser automation output.
 test-results/
 playwright-report/
+# Browser SDK build output (both are what `make -C agents/browser clean` removes).
+/agents/browser/dist/
+/agents/browser/.test-build/
 # PHP extension build output.
 /agents/php/ext/**/*.o
 /agents/php/ext/**/*.lo

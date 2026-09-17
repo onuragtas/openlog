@@ -54,6 +54,9 @@ const SlosPage = lazyRouteComponent(() => import("@/routes/slos"), "SlosPage");
 const SloDetailPage = lazyRouteComponent(() => import("@/routes/slos"), "SloDetailPage");
 const SyntheticsPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticsPage");
 const SyntheticDetailPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticDetailPage");
+const RumPage = lazyRouteComponent(() => import("@/routes/rum"), "RumPage");
+const RumAppPage = lazyRouteComponent(() => import("@/routes/rum"), "RumAppPage");
+const RumSessionPage = lazyRouteComponent(() => import("@/routes/rum"), "RumSessionPage");
 const AlertsLayout = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsLayout");
 const AlertsIncidentsPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentsPage");
 const AlertsIncidentPage = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsIncidentPage");
@@ -70,6 +73,7 @@ const ProfileSettingsPage = lazyRouteComponent(() => import("@/routes/settings")
 const MembersSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "MembersSettingsPage");
 const LicenseKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "LicenseKeysSettingsPage");
 const ApiKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "ApiKeysSettingsPage");
+const BrowserKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "BrowserKeysSettingsPage");
 const SecuritySettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SecuritySettingsPage");
 const AuditLogSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "AuditLogSettingsPage");
 const TailSamplingSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "TailSamplingSettingsPage");
@@ -712,6 +716,36 @@ const syntheticDetailRoute = createRoute({
   component: SyntheticDetailPage,
 });
 
+// ---- Real user monitoring (routes/rum.tsx, docs/contracts/rum.md §7, D-136) ----
+const RUM_TABS = ["overview", "pages", "sessions"] as const;
+const RUM_SORTS = ["views", "slowest", "avg"] as const;
+
+export interface RumSearch {
+  range?: string;
+  from?: string;
+  to?: string;
+  /** Environment of the opened browser application; a key may report more than one. */
+  env?: string;
+  tab?: (typeof RUM_TABS)[number];
+  sort?: (typeof RUM_SORTS)[number];
+}
+
+const rumRoute = createRoute({ getParentRoute: () => appRoute, path: "/rum", component: RumPage });
+
+const rumAppRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/rum/$app",
+  validateSearch: (s: Record<string, unknown>): RumSearch => ({ env: str(s.env), tab: oneOf(RUM_TABS, s.tab), sort: oneOf(RUM_SORTS, s.sort) }),
+  component: RumAppPage,
+});
+
+const rumSessionRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/rum/$app/sessions/$sessionId",
+  validateSearch: (s: Record<string, unknown>): RumSearch => ({ env: str(s.env) }),
+  component: RumSessionPage,
+});
+
 export interface InventorySearchSearch {
   category?: string;
   q?: string;
@@ -931,6 +965,7 @@ const settingsProfileRoute = createRoute({ getParentRoute: () => settingsRoute, 
 const settingsMembersRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/members", component: MembersSettingsPage });
 const settingsLicenseKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/license-keys", component: LicenseKeysSettingsPage });
 const settingsApiKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/api-keys", component: ApiKeysSettingsPage });
+const settingsBrowserKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/browser-keys", component: BrowserKeysSettingsPage });
 const settingsSecurityRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/security", component: SecuritySettingsPage });
 const settingsAuditLogRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/audit-log", component: AuditLogSettingsPage });
 const settingsTailSamplingRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/apm-sampling", component: TailSamplingSettingsPage });
@@ -1009,6 +1044,9 @@ export const routeTree = rootRoute.addChildren([
     sloDetailRoute,
     syntheticsRoute,
     syntheticDetailRoute,
+    rumRoute,
+    rumAppRoute,
+    rumSessionRoute,
     logsRoute,
     metricsRoute,
     tracesRoute,
@@ -1041,6 +1079,7 @@ export const routeTree = rootRoute.addChildren([
       settingsMembersRoute,
       settingsLicenseKeysRoute,
       settingsApiKeysRoute,
+      settingsBrowserKeysRoute,
       settingsSecurityRoute,
       settingsAuditLogRoute,
       settingsTailSamplingRoute,

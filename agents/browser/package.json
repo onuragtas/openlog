@@ -1,0 +1,56 @@
+{
+  "name": "openlog-browser",
+  "version": "0.1.0",
+  "description": "openlog browser SDK: Core Web Vitals, page load timing, SPA routes, JS errors and fetch/XHR tracing over OTLP",
+  "license": "Apache-2.0",
+  "author": "openlog",
+  "homepage": "https://github.com/onuragtas/openlog/tree/master/agents/browser#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onuragtas/openlog.git",
+    "directory": "agents/browser"
+  },
+  "bugs": "https://github.com/onuragtas/openlog/issues",
+  "keywords": [
+    "openlog",
+    "rum",
+    "real-user-monitoring",
+    "web-vitals",
+    "opentelemetry",
+    "otel",
+    "browser",
+    "observability"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint .",
+    "test": "tsc -p tsconfig.test.json && node scripts/run-tests.mjs",
+    "size": "node scripts/size.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "20.19.43",
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

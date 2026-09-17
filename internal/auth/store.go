@@ -136,6 +136,50 @@ type LicenseKey struct {
 	RevokedAt      *time.Time
 }
 
+// BrowserKey is a public key of the browser SDK (docs/contracts/rum.md §3, D-136). Unlike a LicenseKey it is
+// **not** a secret: it ships inside a web page, so everyone who can open the page has it. What bounds it is
+// not confidentiality but capability — it authenticates one endpoint (POST /v1/rum), it may only be used
+// from Origins, it carries its own RateLimitPerMinute, and every payload it delivers is rewritten to
+// ServiceName/Environment before storage (internal/rum.Sanitize).
+//
+// The value is still stored hashed like every other credential: a database dump must not become the ability
+// to write telemetry, and the unique hash is what stops one value belonging to two organizations.
+type BrowserKey struct {
+	ID     string
+	OrgID  string
+	Name   string
+	Prefix string
+	Hash   []byte
+	// ServiceName is the application every payload of this key is stored under; Environment is the
+	// optional deployment.environment.name. Both are forced server-side, never taken from the payload.
+	ServiceName string
+	Environment string
+	// Origins is the allowlist, already normalized by rum.ParseOrigins (exact origins and subdomain
+	// wildcards). Never empty: the API refuses to create a key without one.
+	Origins []string
+	// RateLimitPerMinute bounds the RUM events this key may produce per ingest pod.
+	RateLimitPerMinute int
+	// SampleRate is the share of sessions the SDK keeps (0 < x <= 1); the stored sampling weight is
+	// derived from it, so a page cannot inflate its own traffic.
+	SampleRate     float64
+	CreatedBy      string
+	CreatedByEmail string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	LastUsedAt     *time.Time
+	RevokedAt      *time.Time
+}
+
+// BrowserKeyInput is the editable part of a browser key (create and update).
+type BrowserKeyInput struct {
+	Name               string
+	ServiceName        string
+	Environment        string
+	Origins            []string
+	RateLimitPerMinute int
+	SampleRate         float64
+}
+
 // APIKey is a Query and management API key. The plaintext is never stored.
 type APIKey struct {
 	ID     string
@@ -250,6 +294,14 @@ type Store interface {
 	CreateLicenseKey(ctx context.Context, k *LicenseKey) error
 	ListLicenseKeys(ctx context.Context, orgID string) ([]LicenseKey, error)
 	RevokeLicenseKey(ctx context.Context, orgID, id, by string, at time.Time) (LicenseKey, error)
+
+	// Browser keys (rum.md §3). The ingest-side lookup is not part of this interface: it is served by
+	// rum.Store, which internal/store/postgres implements on the same pool, exactly like tenant.KeyStore.
+	CreateBrowserKey(ctx context.Context, k *BrowserKey) error
+	ListBrowserKeys(ctx context.Context, orgID string) ([]BrowserKey, error)
+	GetBrowserKey(ctx context.Context, orgID, id string) (BrowserKey, error)
+	UpdateBrowserKey(ctx context.Context, orgID, id string, in BrowserKeyInput, by string, at time.Time) (BrowserKey, error)
+	RevokeBrowserKey(ctx context.Context, orgID, id, by string, at time.Time) (BrowserKey, error)
 
 	CreateAPIKey(ctx context.Context, k *APIKey) error
 	ListAPIKeys(ctx context.Context, orgID string) ([]APIKey, error)

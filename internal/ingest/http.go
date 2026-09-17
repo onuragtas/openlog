@@ -30,6 +30,7 @@ func (s *Service) HTTPHandler() http.Handler {
 	mux.Handle("POST /v1/metrics", s.httpExport(queue.SignalMetrics))
 	mux.Handle("POST /v1/logs", s.httpExport(queue.SignalLogs))
 	mux.Handle("POST /v1/traces", s.httpExport(queue.SignalTraces))
+	s.rumRoutes(mux) // rum.go: POST /v1/rum and GET /v1/rum/config (browser keys, D-136)
 	if s.extraRoutes != nil {
 		s.extraRoutes(mux)
 	}
@@ -129,7 +130,12 @@ func (s *Service) httpExport(sig queue.Signal) http.Handler {
 // readBody reads the (optionally gzip-compressed) body enforcing the
 // decompressed size limit.
 func (s *Service) readBody(r *http.Request) ([]byte, error) {
-	limit := s.cfg.MaxBodyBytes
+	return s.readBodyLimit(r, s.cfg.MaxBodyBytes)
+}
+
+// readBodyLimit is readBody with an explicit limit, so an endpoint with its own bound (POST /v1/rum) does
+// not have to reach into the service configuration.
+func (s *Service) readBodyLimit(r *http.Request, limit int64) ([]byte, error) {
 	// Bound the wire size too; compressed payloads are never meaningfully larger than the limit.
 	var rd io.Reader = http.MaxBytesReader(nil, r.Body, limit+limit/10+1024)
 	switch enc := r.Header.Get("Content-Encoding"); enc {

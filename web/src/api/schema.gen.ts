@@ -1394,6 +1394,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rum/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Browser applications that reported in the range, with page views, sessions, errors and when they were last seen (rum.md §7). */
+        get: operations["listRumApps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rum/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The application's Core Web Vitals, its page view series and the totals of the range. */
+        get: operations["getRumOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rum/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Routes of the application with their page views and load time percentiles. `sort=slowest` orders by total time consumed, the same reasoning as APM's "most time consuming". */
+        get: operations["listRumPages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rum/vitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The five vitals of the application, optionally for one route. Percentiles are null without measurements; `rating` scores the p75, the percentile the Core Web Vitals assessment is defined on. */
+        get: operations["getRumVitals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rum/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Sessions of the application, newest first. */
+        get: operations["listRumSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rum/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 32 hex characters */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description One session with the events it produced. The timeline comes from the stored spans, so it is bounded by the trace retention: an older session still has its summary and trace links, but no timeline. */
+        get: operations["getRumSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/browser-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The organization's browser keys (member and higher; API keys allowed). A browser key is public by construction — it ships inside a web page — so what bounds it is capability, not secrecy (rum.md §3). */
+        get: operations["listBrowserKeys"];
+        put?: never;
+        /** @description Creates a browser key (signed-in admin or owner). `origins` must not be empty: a key without an allowlist accepts data from any website. The value is returned once, in `key`. Audit event browser_key.create. */
+        post: operations["createBrowserKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/browser-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Full replacement of the editable fields (signed-in admin or owner); audit event browser_key.update. A revoked key is never edited back into service. Changing the origins or the rate limit is how an operator responds to abuse without redeploying the site. */
+        put: operations["updateBrowserKey"];
+        post?: never;
+        /** @description Revokes the key (signed-in admin or owner); audit event browser_key.revoke. Ingest pods stop accepting it within OPENLOG_AUTH_CACHE_TTL, and pages already loaded keep sending it until they are reloaded. The value stays permanently unusable. */
+        delete: operations["revokeBrowserKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cloud/providers": {
         parameters: {
             query?: never;
@@ -6460,6 +6603,132 @@ export interface components {
             /** @description dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request */
             last_error_kind: string;
             last_error: string;
+        };
+        RumApp: {
+            app: string;
+            environment: string;
+            views: number;
+            /** Format: int64 */
+            sessions: number;
+            errors: number;
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        /** @description One Core Web Vital over a range. Percentiles are null without measurements. The thresholds are the published Core Web Vitals boundaries and are constants, not settings (rum.md §2.1). */
+        RumVital: {
+            /** @enum {string} */
+            name: "lcp" | "inp" | "cls" | "fcp" | "ttfb";
+            /** @description "ms", or "" for the unitless CLS */
+            unit: string;
+            count: number;
+            p50: number | null;
+            p75: number | null;
+            p95: number | null;
+            avg: number | null;
+            /** @description Share of measurements rated good */
+            good: number;
+            needs_improvement: number;
+            poor: number;
+            /** @description Rating of the p75: good, needs_improvement, poor, or "" without data */
+            rating: string;
+            good_threshold: number;
+            poor_threshold: number;
+        };
+        RumPage: {
+            /** @description The normalized route (rum.md §4) */
+            route: string;
+            views: number;
+            avg_ms: number | null;
+            p50_ms: number | null;
+            p75_ms: number | null;
+            p95_ms: number | null;
+            max_ms: number;
+            ttfb_avg_ms: number | null;
+            lcp_p75: number | null;
+            errors: number;
+        };
+        RumOverview: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            step: string;
+            vitals: components["schemas"]["RumVital"][];
+            points: {
+                /**
+                 * Format: int64
+                 * @description Bucket start (unix milliseconds)
+                 */
+                t: number;
+                views: number;
+                avg_ms: number | null;
+            }[];
+            totals: {
+                views: number;
+                /** Format: int64 */
+                sessions: number;
+                errors: number;
+                avg_ms: number | null;
+            };
+        };
+        /** @description A visit, not a person; the id is random, per tab and expiring (rum.md §1.1). */
+        RumSession: {
+            session_id: string;
+            app: string;
+            environment: string;
+            started_at: components["schemas"]["Timestamp"];
+            ended_at: components["schemas"]["Timestamp"];
+            duration_ms: number;
+            page_views: number;
+            errors: number;
+            entry_route: string;
+            exit_route: string;
+            device_type: string;
+            browser_name: string;
+            browser_version: string;
+            os_name: string;
+            /** @description The session's newest trace */
+            trace_id: string;
+        };
+        RumEvent: {
+            timestamp: components["schemas"]["Timestamp"];
+            /** @enum {string} */
+            event: "page_view" | "vital" | "error" | "resource";
+            name: string;
+            route: string;
+            duration_ms: number;
+            trace_id: string;
+            span_id: string;
+            /** @description 16 hex digits linking an error to its APM error group, or "" when not an error */
+            error_group_id: string;
+            status_code: number;
+        };
+        /** @description A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the API is not a place to read credentials back from. */
+        BrowserKey: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @example olb_1a2b3c4d */
+            prefix: string;
+            /** @description The application every payload of this key is stored under */
+            service_name: string;
+            environment: string;
+            /** @description Exact origins and subdomain wildcards; never empty */
+            origins: string[];
+            rate_limit_per_minute: number;
+            sample_rate: number;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            last_used_at: components["schemas"]["Timestamp"];
+            revoked_at: components["schemas"]["Timestamp"];
+        };
+        BrowserKeyInput: {
+            name: string;
+            service_name: string;
+            environment?: string;
+            origins: string[];
+            /** @default 6000 */
+            rate_limit_per_minute: number;
+            /** @default 1 */
+            sample_rate: number;
         };
         SyntheticCheck: {
             /** Format: uuid */
@@ -12370,6 +12639,300 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listRumApps: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Browser applications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        apps: components["schemas"]["RumApp"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getRumOverview: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                from?: string;
+                to?: string;
+                step?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RumOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listRumPages: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                sort?: "views" | "slowest" | "avg";
+                limit?: number;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pages: components["schemas"]["RumPage"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getRumVitals: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                route?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vitals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        from: components["schemas"]["Timestamp"];
+                        to: components["schemas"]["Timestamp"];
+                        vitals: components["schemas"]["RumVital"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listRumSessions: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                limit?: number;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sessions: components["schemas"]["RumSession"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getRumSession: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                /** @description 32 hex characters */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session and its events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["RumSession"];
+                        events: components["schemas"]["RumEvent"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listBrowserKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Browser keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        browser_keys: components["schemas"]["BrowserKey"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createBrowserKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserKeyInput"];
+            };
+        };
+        responses: {
+            /** @description Created key, with its value */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        browser_key: components["schemas"]["BrowserKey"];
+                        /** @description The value, e.g. olb_… — shown only here */
+                        key: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateBrowserKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserKeyInput"];
+            };
+        };
+        responses: {
+            /** @description Updated key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserKey"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeBrowserKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listCloudProviders: {

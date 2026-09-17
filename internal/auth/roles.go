@@ -45,6 +45,11 @@ const (
 	ActManageInvitations Action = "invitations.manage"
 	ActListLicenseKeys   Action = "license_keys.list"
 	ActManageLicenseKeys Action = "license_keys.manage"
+	// Browser keys of the RUM SDK (rum.md §3). Listing one reveals nothing secret — the value is public
+	// by construction — but creating one mints a credential, so it stays with a human like every other
+	// credential operation.
+	ActListBrowserKeys   Action = "browser_keys.list"
+	ActManageBrowserKeys Action = "browser_keys.manage"
 	ActListAPIKeys       Action = "api_keys.list"
 	ActCreateAPIKey      Action = "api_keys.create"
 	// ActCreateWritingAPIKey is creating a key whose role is more than viewer (admin, owner; D-133).
@@ -123,6 +128,7 @@ var matrix = map[Action]Permission{
 	ActReadOrg:                   {Min: RoleViewer},
 	ActListMembers:               {Min: RoleViewer},
 	ActListLicenseKeys:           {Min: RoleMember},
+	ActListBrowserKeys:           {Min: RoleMember},
 	ActListAPIKeys:               {Min: RoleMember},
 	ActReadAudit:                 {Min: RoleAdmin},
 	ActReadFleet:                 {Min: RoleViewer},
@@ -148,6 +154,7 @@ var matrix = map[Action]Permission{
 	ActManageMembers:       {Min: RoleAdmin, UserOnly: true},
 	ActManageInvitations:   {Min: RoleAdmin, UserOnly: true},
 	ActManageLicenseKeys:   {Min: RoleAdmin, UserOnly: true},
+	ActManageBrowserKeys:   {Min: RoleAdmin, UserOnly: true},
 	ActCreateAPIKey:        {Min: RoleMember, UserOnly: true},
 	ActCreateWritingAPIKey: {Min: RoleAdmin, UserOnly: true},
 	ActRevokeAPIKey:        {Min: RoleMember, UserOnly: true},

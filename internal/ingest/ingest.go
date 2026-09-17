@@ -55,6 +55,9 @@ type Service struct {
 	limiter Limiter
 	// gate enforces suspension and host limits (SaaS mode, gate.go); nil: none.
 	gate Gate
+	// rum resolves browser keys for POST /v1/rum (rum.go, D-136); nil: the endpoint answers 404, so an
+	// installation that never creates a browser key exposes no public ingest path at all.
+	rum RUMKeys
 }
 
 // SetHTTPRoutes adds routes to the OTLP/HTTP listener (e.g. /v1/openlog/agent/sync). Must be

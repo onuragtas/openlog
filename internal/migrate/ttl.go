@@ -56,6 +56,13 @@ var TTLTables = []TTLTable{
 	{"apm_error_groups_local", "apm", "toDateTime(last_seen)", 0},
 	{"apm_services_local", "apm", "toDateTime(last_seen)", 0},
 	{"apm_service_hosts_local", "apm", "toDateTime(last_seen)", 0},
+	// Real user monitoring rollups (0094_rum, D-136) keep a **fixed** 30-day TTL, so they get their own storage
+	// class rather than borrowing apm: per-tenant retention (D-081) widens a class as a whole, and the apm class
+	// escapes that only because its tables carry Days == 0 (OPENLOG_APM_RETENTION_DAYS, apm.md §8), which these
+	// must not — APMRetentionStatements resizes exactly the apm_* tables. Tiering still moves them (class "rum").
+	{"rum_page_views_1m_local", "rum", "timestamp", 30},
+	{"rum_vitals_1m_local", "rum", "timestamp", 30},
+	{"rum_sessions_local", "rum", "toDateTime(last_seen)", 30},
 	{"alert_evaluations_local", "alerts", "toDateTime(evaluated_at)", 30},
 	// Synthetic check runs (0093_synthetic_runs, D-132) are operational results of the installation like the
 	// alert evaluations, so they share their class and 30-day retention.

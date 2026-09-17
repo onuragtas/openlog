@@ -30,6 +30,7 @@ type Store struct {
 	members     map[[2]string]membership // {org, user}
 	sessions    map[string]auth.Session
 	licenseKeys map[string]auth.LicenseKey
+	browserKeys map[string]auth.BrowserKey
 	apiKeys     map[string]auth.APIKey
 	invitations map[string]auth.Invitation
 	audit       []auth.AuditEvent
@@ -48,7 +49,8 @@ var _ auth.Store = (*Store)(nil)
 func New() *Store {
 	return &Store{
 		orgs: map[string]auth.Organization{}, users: map[string]auth.User{}, members: map[[2]string]membership{},
-		sessions: map[string]auth.Session{}, licenseKeys: map[string]auth.LicenseKey{}, apiKeys: map[string]auth.APIKey{},
+		sessions: map[string]auth.Session{}, licenseKeys: map[string]auth.LicenseKey{},
+		browserKeys: map[string]auth.BrowserKey{}, apiKeys: map[string]auth.APIKey{},
 		invitations: map[string]auth.Invitation{}, failures: map[string][]time.Time{}, verifies: map[string]auth.EmailVerification{},
 	}
 }

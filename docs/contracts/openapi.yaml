@@ -47,6 +47,11 @@ tags:
     description: Service level objectives, error budgets and burn rates (slo.md, D-125)
   - name: synthetics
     description: Scheduled outside-in HTTP checks, their uptime and latency (api.md "Synthetic monitoring", D-132)
+  - name: rum
+    description: >-
+      Real user monitoring: page views, Core Web Vitals, sessions and their trace links, collected by the
+      browser SDK (rum.md, D-136). Browser errors are not here — they are APM error groups of the browser
+      application, read through the APM error inbox.
   - name: cloud
     description: >-
       Managed cloud service metrics: connections to AWS, Azure and GCP accounts, polled by the api leader
@@ -2407,6 +2412,259 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
         "504": { $ref: "#/components/responses/Timeout" }
+
+  # ----------------------------------------------------------------------- rum
+  /api/v1/rum/apps:
+    get:
+      tags: [rum]
+      operationId: listRumApps
+      description: >-
+        Browser applications that reported in the range, with page views, sessions, errors and when they
+        were last seen (rum.md §7).
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Browser applications
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apps]
+                properties:
+                  apps:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumApp" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/rum/overview:
+    get:
+      tags: [rum]
+      operationId: getRumOverview
+      description: The application's Core Web Vitals, its page view series and the totals of the range.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: step, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RumOverview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/rum/pages:
+    get:
+      tags: [rum]
+      operationId: listRumPages
+      description: >-
+        Routes of the application with their page views and load time percentiles. `sort=slowest` orders by
+        total time consumed, the same reasoning as APM's "most time consuming".
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [views, slowest, avg], default: views } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Pages
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pages]
+                properties:
+                  pages:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/rum/vitals:
+    get:
+      tags: [rum]
+      operationId: getRumVitals
+      description: >-
+        The five vitals of the application, optionally for one route. Percentiles are null without
+        measurements; `rating` scores the p75, the percentile the Core Web Vitals assessment is defined on.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: route, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Vitals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, to, vitals]
+                properties:
+                  from: { $ref: "#/components/schemas/Timestamp" }
+                  to: { $ref: "#/components/schemas/Timestamp" }
+                  vitals:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumVital" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/rum/sessions:
+    get:
+      tags: [rum]
+      operationId: listRumSessions
+      description: Sessions of the application, newest first.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumSession" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/rum/sessions/{session_id}:
+    parameters:
+      - { name: session_id, in: path, required: true, schema: { type: string }, description: 32 hex characters }
+    get:
+      tags: [rum]
+      operationId: getRumSession
+      description: >-
+        One session with the events it produced. The timeline comes from the stored spans, so it is bounded
+        by the trace retention: an older session still has its summary and trace links, but no timeline.
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Session and its events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session, events]
+                properties:
+                  session: { $ref: "#/components/schemas/RumSession" }
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  # -------------------------------------------------------------- browser keys
+  /api/v1/browser-keys:
+    get:
+      tags: [keys]
+      operationId: listBrowserKeys
+      description: >-
+        The organization's browser keys (member and higher; API keys allowed). A browser key is public by
+        construction — it ships inside a web page — so what bounds it is capability, not secrecy (rum.md §3).
+      responses:
+        "200":
+          description: Browser keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [browser_keys]
+                properties:
+                  browser_keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/BrowserKey" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [keys]
+      operationId: createBrowserKey
+      description: >-
+        Creates a browser key (signed-in admin or owner). `origins` must not be empty: a key without an
+        allowlist accepts data from any website. The value is returned once, in `key`.
+        Audit event browser_key.create.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrowserKeyInput" }
+      responses:
+        "201":
+          description: Created key, with its value
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [browser_key, key]
+                properties:
+                  browser_key: { $ref: "#/components/schemas/BrowserKey" }
+                  key: { type: string, description: "The value, e.g. olb_… — shown only here" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/browser-keys/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [keys]
+      operationId: updateBrowserKey
+      description: >-
+        Full replacement of the editable fields (signed-in admin or owner); audit event browser_key.update.
+        A revoked key is never edited back into service. Changing the origins or the rate limit is how an
+        operator responds to abuse without redeploying the site.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrowserKeyInput" }
+      responses:
+        "200":
+          description: Updated key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrowserKey" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [keys]
+      operationId: revokeBrowserKey
+      description: >-
+        Revokes the key (signed-in admin or owner); audit event browser_key.revoke. Ingest pods stop
+        accepting it within OPENLOG_AUTH_CACHE_TTL, and pages already loaded keep sending it until they are
+        reloaded. The value stays permanently unusable.
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------- cloud connections
   /api/v1/cloud/providers:
@@ -9381,6 +9639,152 @@ components:
         last_duration_ms: { type: number }
         last_error_kind: { type: string, description: "dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request" }
         last_error: { type: string }
+    RumApp:
+      type: object
+      required: [app, environment, views, sessions, errors, last_seen]
+      properties:
+        app: { type: string }
+        environment: { type: string }
+        views: { type: number }
+        sessions: { type: integer, format: int64 }
+        errors: { type: number }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+    RumVital:
+      type: object
+      description: >-
+        One Core Web Vital over a range. Percentiles are null without measurements. The thresholds are the
+        published Core Web Vitals boundaries and are constants, not settings (rum.md §2.1).
+      required: [name, unit, count, p50, p75, p95, avg, good, needs_improvement, poor, rating,
+                 good_threshold, poor_threshold]
+      properties:
+        name: { type: string, enum: [lcp, inp, cls, fcp, ttfb] }
+        unit: { type: string, description: "\"ms\", or \"\" for the unitless CLS" }
+        count: { type: number }
+        p50: { type: number, nullable: true }
+        p75: { type: number, nullable: true }
+        p95: { type: number, nullable: true }
+        avg: { type: number, nullable: true }
+        good: { type: number, description: Share of measurements rated good, 0..1 }
+        needs_improvement: { type: number }
+        poor: { type: number }
+        rating: { type: string, description: "Rating of the p75: good, needs_improvement, poor, or \"\" without data" }
+        good_threshold: { type: number }
+        poor_threshold: { type: number }
+    RumPage:
+      type: object
+      required: [route, views, avg_ms, p50_ms, p75_ms, p95_ms, max_ms, ttfb_avg_ms, lcp_p75, errors]
+      properties:
+        route: { type: string, description: The normalized route (rum.md §4), never a raw URL }
+        views: { type: number }
+        avg_ms: { type: number, nullable: true }
+        p50_ms: { type: number, nullable: true }
+        p75_ms: { type: number, nullable: true }
+        p95_ms: { type: number, nullable: true }
+        max_ms: { type: number }
+        ttfb_avg_ms: { type: number, nullable: true }
+        lcp_p75: { type: number, nullable: true }
+        errors: { type: number }
+    RumOverview:
+      type: object
+      required: [from, to, step, vitals, points, totals]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        step: { type: string }
+        vitals:
+          type: array
+          items: { $ref: "#/components/schemas/RumVital" }
+        points:
+          type: array
+          items:
+            type: object
+            required: [t, views, avg_ms]
+            properties:
+              t: { type: integer, format: int64, description: Bucket start (unix milliseconds) }
+              views: { type: number }
+              avg_ms: { type: number, nullable: true }
+        totals:
+          type: object
+          required: [views, sessions, errors, avg_ms]
+          properties:
+            views: { type: number }
+            sessions: { type: integer, format: int64 }
+            errors: { type: number }
+            avg_ms: { type: number, nullable: true }
+    RumSession:
+      type: object
+      description: A visit, not a person; the id is random, per tab and expiring (rum.md §1.1).
+      required: [session_id, app, environment, started_at, ended_at, duration_ms, page_views, errors,
+                 entry_route, exit_route, device_type, browser_name, browser_version, os_name, trace_id]
+      properties:
+        session_id: { type: string }
+        app: { type: string }
+        environment: { type: string }
+        started_at: { $ref: "#/components/schemas/Timestamp" }
+        ended_at: { $ref: "#/components/schemas/Timestamp" }
+        duration_ms: { type: number }
+        page_views: { type: number }
+        errors: { type: number }
+        entry_route: { type: string }
+        exit_route: { type: string }
+        device_type: { type: string }
+        browser_name: { type: string }
+        browser_version: { type: string }
+        os_name: { type: string }
+        trace_id: { type: string, description: The session's newest trace, so it always opens somewhere }
+    RumEvent:
+      type: object
+      required: [timestamp, event, name, route, duration_ms, trace_id, span_id, error_group_id, status_code]
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        event: { type: string, enum: [page_view, vital, error, resource] }
+        name: { type: string }
+        route: { type: string }
+        duration_ms: { type: number }
+        trace_id: { type: string }
+        span_id: { type: string }
+        error_group_id:
+          type: string
+          description: 16 hex digits linking an error to its APM error group, or "" when not an error
+        status_code: { type: integer }
+    BrowserKey:
+      type: object
+      description: >-
+        A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the
+        API is not a place to read credentials back from.
+      required: [id, name, prefix, service_name, environment, origins, rate_limit_per_minute, sample_rate,
+                 created_by_email, created_at, updated_at, last_used_at, revoked_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string, example: olb_1a2b3c4d }
+        service_name: { type: string, description: The application every payload of this key is stored under }
+        environment: { type: string }
+        origins:
+          type: array
+          description: Exact origins and subdomain wildcards; never empty
+          items: { type: string }
+        rate_limit_per_minute: { type: integer }
+        sample_rate: { type: number }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        last_used_at: { $ref: "#/components/schemas/Timestamp" }
+        revoked_at: { $ref: "#/components/schemas/Timestamp" }
+    BrowserKeyInput:
+      type: object
+      required: [name, service_name, origins]
+      properties:
+        name: { type: string, maxLength: 200 }
+        service_name: { type: string, maxLength: 512 }
+        environment: { type: string, maxLength: 256 }
+        origins:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string, example: "https://app.example.com" }
+        rate_limit_per_minute: { type: integer, minimum: 60, maximum: 10000000, default: 6000 }
+        sample_rate: { type: number, exclusiveMinimum: 0, maximum: 1, default: 1 }
     SyntheticCheck:
       type: object
       required: [id, name, type, enabled, url, method, headers, body, expected_status, assertion_type,

@@ -74,6 +74,9 @@ config:
   OPENLOG_APM_RELINK_ENABLED: "true"
   OPENLOG_APM_RELINK_AFTER: ""
   OPENLOG_APM_RELINK_MAX_AGE: "168h"
+  # Real user monitoring (rum.md, D-136): POST /v1/rum on ingest and the /api/v1/rum/* reads. Read by both
+  # ingest and api, so it lives here rather than in one component's config.
+  OPENLOG_RUM_ENABLED: "true"
 
 # Default scheduling policy for ingest / processor / api / envoy pods.
 scheduling:
@@ -377,7 +380,7 @@ clickhouse:
     enabled: false
     policy: openlog_tiered
     # Days after which parts move to S3; 0 = never. Must be below the retention (metrics 30, metrics_1m 395, logs 14,
-    # traces 7, apm OPENLOG_APM_RETENTION_DAYS, alerts 30), otherwise the move is left out.
+    # traces 7, apm OPENLOG_APM_RETENTION_DAYS, alerts 30, rum 30), otherwise the move is left out.
     coldAfterDays:
       metrics: 7
       metrics_1m: 30
@@ -385,6 +388,7 @@ clickhouse:
       traces: 3
       apm: 7
       alerts: 7
+      rum: 7
     # Days after which parts move to the warm volume (requires warm.enabled), e.g. {logs: 1}.
     warmAfterDays: {}
     s3:

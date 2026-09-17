@@ -65,6 +65,13 @@ func withCORS(origins []string, next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// /v1/rum carries its own CORS (rum.go): its allowlist is the browser key's, not the operator's
+		// server-wide one, so a RUM key works without OPENLOG_INGEST_CORS_ALLOWED_ORIGINS being set and is
+		// not silently widened by it either.
+		if isRUMPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		origin := r.Header.Get("Origin")
 		if origin == "" {
 			next.ServeHTTP(w, r)

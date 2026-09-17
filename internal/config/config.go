@@ -184,6 +184,8 @@ type Config struct {
 	Synthetics Synthetics
 	// CloudConnect configures the managed cloud service metrics (cloudconnect.go, D-135).
 	CloudConnect CloudConnect
+	// RUM configures real user monitoring (rum.go, docs/contracts/rum.md, D-136).
+	RUM RUM
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -330,6 +332,7 @@ func Load(getenv func(string) string) (Config, error) {
 		StatusPage:   loadStatusPage(&p),   // privacy.go
 		Synthetics:   loadSynthetics(&p),   // synthetics.go
 		CloudConnect: loadCloudConnect(&p), // cloudconnect.go
+		RUM:          loadRUM(&p),          // rum.go (D-136)
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),

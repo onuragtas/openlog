@@ -166,6 +166,8 @@ func (s *Server) Handler() http.Handler {
 	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
 	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
+	s.rumRoutes(mux)          // rum.go: real user monitoring reads (rum.md, D-136)
+	s.browserKeyRoutes(mux)   // browserkeys.go: the RUM SDK's public keys (D-136)
 	s.cloudRoutes(mux)        // cloudconnect.go: managed cloud service metrics (D-135)
 	s.costRoutes(mux)         // cost.go: per-host, per-service and per-container cost estimates (D-134)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
