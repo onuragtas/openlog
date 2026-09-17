@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, BellPlus, CircleAlert, CircleCheck, CircleMinus, CircleX, Container, Info, LineChart, Search, Settings2 } from "lucide-react";
+import { ArrowLeft, BellPlus, CircleAlert, CircleCheck, CircleMinus, CircleX, Cloud, Container, Info, LineChart, Search, Settings2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
@@ -744,19 +744,30 @@ export function IntegrationsPage() {
         title={t("integrations.title")}
         subtitle={t("integrations.subtitle")}
         actions={
-          <div className="relative w-full sm:w-72">
-            <label htmlFor={inputId} className="sr-only">
-              {t("integrations.searchLabel")}
-            </label>
-            <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" aria-hidden="true" />
-            <Input
-              id={inputId}
-              type="search"
-              className="pl-8"
-              placeholder={t("integrations.searchPlaceholder")}
-              value={q}
-              onChange={(e) => void navigate({ search: (prev) => ({ ...prev, q: e.target.value || undefined }), replace: true })}
-            />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            {/* Managed cloud services have no agent, so they are configured here rather than discovered (D-135). */}
+            <Link
+              to="/integrations/cloud"
+              title={t("cloud.openDescription")}
+              className={buttonVariants({ variant: "outline", className: "min-h-10 justify-center" })}
+            >
+              <Cloud aria-hidden="true" />
+              {t("cloud.open")}
+            </Link>
+            <div className="relative w-full sm:w-72">
+              <label htmlFor={inputId} className="sr-only">
+                {t("integrations.searchLabel")}
+              </label>
+              <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                id={inputId}
+                type="search"
+                className="pl-8"
+                placeholder={t("integrations.searchPlaceholder")}
+                value={q}
+                onChange={(e) => void navigate({ search: (prev) => ({ ...prev, q: e.target.value || undefined }), replace: true })}
+              />
+            </div>
           </div>
         }
       />

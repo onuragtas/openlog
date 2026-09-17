@@ -20,6 +20,7 @@ import (
 	"github.com/onuragtas/openlog/internal/alert"
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
+	"github.com/onuragtas/openlog/internal/cloudconnect"
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/cost"
 	"github.com/onuragtas/openlog/internal/dashboard"
@@ -78,6 +79,8 @@ type Server struct {
 	slos slo.Store
 	// scheduled outside-in checks (synthetics.go, D-132); nil: none (static auth mode)
 	synthetics synthetics.Store
+	// managed cloud service metrics (cloudconnect.go, D-135); nil: none (static auth mode)
+	cloud *cloudconnect.Manager
 	// verified release catalog of the language agent version comparison (apm_agents.go, D-124); nil: statuses unknown
 	agentReleases func() *catalog.Snapshot
 	// price table of the infrastructure cost endpoints (cost.go, cost.md, D-134); nil: no cost endpoints
@@ -163,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
 	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
+	s.cloudRoutes(mux)        // cloudconnect.go: managed cloud service metrics (D-135)
 	s.costRoutes(mux)         // cost.go: per-host, per-service and per-container cost estimates (D-134)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})

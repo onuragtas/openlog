@@ -576,6 +576,30 @@ installation may not.
 | `OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES` | `1048576` | api | Response body one run reads (1024–67108864); a larger response fails the run instead of being truncated |
 | `OPENLOG_SYNTHETICS_MAX_REDIRECTS` | `5` | api | Redirects one run follows (0–10); each hop is re-validated |
 
+## Cloud connections (api, allinone; D-135)
+
+Metrics of managed cloud services ([api.md](api.md#cloud-connections)). Connections are stored per
+organization in PostgreSQL (`0092_cloud_connections`); the api **leader** polls the due scopes, so the limits
+below bound one process, not the cluster. Every collected data point is written to ClickHouse `metrics` like
+an agent's, so nothing else has to be configured for alerting or dashboards. Postgres auth mode only.
+
+Credentials are encrypted with **`OPENLOG_SECRETS_KEY`** (the same key as alert channel secrets and
+integration settings). Without it a connection cannot be saved with credentials and nothing is polled; the
+UI says so rather than failing silently.
+
+These provider APIs are billed per request and rate-limit hard, so the cost controls are per connection
+rather than global: `max_metrics_per_poll` and `max_api_calls_per_poll` are fields of the connection
+(defaults 5000 and 200), and a poll that reaches one is reported as `partial`. The variables below bound how
+much the leader does at once.
+
+| Variable | Default | Services | Description |
+|---|---|---|---|
+| `OPENLOG_CLOUD_ENABLED` | `true` | api | Offer `/api/v1/cloud/*` and run the poller on the leader |
+| `OPENLOG_CLOUD_MAX_CONCURRENT` | `10` | api | Concurrent scope polls of all organizations together on the leader (1–1000) |
+| `OPENLOG_CLOUD_TENANT_MAX_CONCURRENT` | `4` | api | Concurrent polls of one organization (1–`OPENLOG_CLOUD_MAX_CONCURRENT`), so one tenant cannot use the whole pool |
+| `OPENLOG_CLOUD_CONNECTION_MAX_CONCURRENT` | `2` | api | Concurrent polls of one connection (1–`OPENLOG_CLOUD_TENANT_MAX_CONCURRENT`), so a connection covering many regions does not burst requests at one cloud account and trip its rate limits |
+| `OPENLOG_CLOUD_REQUEST_TIMEOUT` | `30s` | api | Bound for one provider HTTP request (1s–5m) |
+
 ## Report chart images (`openlog-renderer`, api, allinone; D-097)
 
 Optional PNG widget images in scheduled report e-mails ([operations/reports.md](../operations/reports.md)). Without

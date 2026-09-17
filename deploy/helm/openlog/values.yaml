@@ -829,6 +829,15 @@ api:
     OPENLOG_SYNTHETICS_TENANT_MAX_CONCURRENT: "5"
     OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES: "1048576"
     OPENLOG_SYNTHETICS_MAX_REDIRECTS: "5"
+    # Managed cloud service metrics (api.md "Cloud connections", D-135). Connections are per organization
+    # and their credentials are encrypted with OPENLOG_SECRETS_KEY, which must be set to save them. The api
+    # leader polls, so these limits bound one pod; the provider APIs are billed per request, so each
+    # connection also carries its own per-poll metric and request caps.
+    OPENLOG_CLOUD_ENABLED: "true"
+    OPENLOG_CLOUD_MAX_CONCURRENT: "10"
+    OPENLOG_CLOUD_TENANT_MAX_CONCURRENT: "4"
+    OPENLOG_CLOUD_CONNECTION_MAX_CONCURRENT: "2"
+    OPENLOG_CLOUD_REQUEST_TIMEOUT: "30s"
     # Infrastructure cost estimates (cost.md, D-134). A static price table in the image prices each
     # host from its cloud instance facts; the numbers are estimates, not billing data.
     OPENLOG_COST_ENABLED: "true"

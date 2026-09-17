@@ -34,6 +34,8 @@ const KubernetesWorkloadPage = lazyRouteComponent(() => import("@/routes/kuberne
 const KubernetesPodPage = lazyRouteComponent(() => import("@/routes/kubernetes-detail"), "KubernetesPodPage");
 const HostIntegrationPage = lazyRouteComponent(() => import("@/routes/integrations"), "HostIntegrationPage");
 const IntegrationsPage = lazyRouteComponent(() => import("@/routes/integrations"), "IntegrationsPage");
+const CloudPage = lazyRouteComponent(() => import("@/routes/cloud"), "CloudPage");
+const CloudDetailPage = lazyRouteComponent(() => import("@/routes/cloud"), "CloudDetailPage");
 const LogsPage = lazyRouteComponent(() => import("@/routes/logs"), "LogsPage");
 const MetricsPage = lazyRouteComponent(() => import("@/routes/metrics"), "MetricsPage");
 const TracePage = lazyRouteComponent(() => import("@/routes/trace"), "TracePage");
@@ -405,6 +407,25 @@ const integrationsRoute = createRoute({
   path: "/integrations",
   validateSearch: (s: Record<string, unknown>): IntegrationsSearch => ({ status: str(s.status), q: str(s.q), integration: str(s.integration) }),
   component: IntegrationsPage,
+});
+
+// ---- Cloud connections (routes/cloud.tsx, api.md "Cloud connections", D-135) ----
+export interface CloudSearch {
+  /** the create form instead of the list */
+  create?: boolean;
+}
+
+const cloudRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/integrations/cloud",
+  validateSearch: (s: Record<string, unknown>): CloudSearch => ({ create: s.create === true || s.create === "true" ? true : undefined }),
+  component: CloudPage,
+});
+
+const cloudDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/integrations/cloud/$connectionId",
+  component: CloudDetailPage,
 });
 
 export interface LogsSearch {
@@ -977,6 +998,8 @@ export const routeTree = rootRoute.addChildren([
     kubernetesNodesRoute,
     hostIntegrationRoute,
     integrationsRoute,
+    cloudRoute,
+    cloudDetailRoute,
     apmServicesRoute,
     apmServiceRoute,
     apmMapRoute,

@@ -182,6 +182,8 @@ type Config struct {
 	StatusPage StatusPage
 	// Synthetics configures the scheduled outside-in checks (synthetics.go, D-132).
 	Synthetics Synthetics
+	// CloudConnect configures the managed cloud service metrics (cloudconnect.go, D-135).
+	CloudConnect CloudConnect
 }
 
 // APM holds openlog-api APM variables (docs/contracts/apm.md §4, §6).
@@ -321,12 +323,13 @@ func Load(getenv func(string) string) (Config, error) {
 		Cost:         loadCost(&p),
 		TailSampling: loadTailSampling(&p),
 		Usage:        loadUsage(&p),
-		SaaS:         loadSaaS(&p),       // saas.go
-		Onboarding:   loadOnboarding(&p), // onboarding.go
-		Renderer:     loadRenderer(&p),   // renderer.go
-		Privacy:      loadPrivacy(&p),    // privacy.go
-		StatusPage:   loadStatusPage(&p), // privacy.go
-		Synthetics:   loadSynthetics(&p), // synthetics.go
+		SaaS:         loadSaaS(&p),         // saas.go
+		Onboarding:   loadOnboarding(&p),   // onboarding.go
+		Renderer:     loadRenderer(&p),     // renderer.go
+		Privacy:      loadPrivacy(&p),      // privacy.go
+		StatusPage:   loadStatusPage(&p),   // privacy.go
+		Synthetics:   loadSynthetics(&p),   // synthetics.go
+		CloudConnect: loadCloudConnect(&p), // cloudconnect.go
 		APM: APM{
 			LinkEnabled:      p.bool("OPENLOG_APM_LINK_ENABLED", true),
 			LinkInterval:     p.duration("OPENLOG_APM_LINK_INTERVAL", time.Minute),
@@ -384,11 +387,12 @@ func (c Config) validate(getenv func(string) string) error {
 	errs = append(errs, c.validateStorage()...)
 	errs = append(errs, c.TailSampling.validate()...)
 	errs = append(errs, c.validateUsage()...)
-	errs = append(errs, c.validateSaaS()...)        // saas.go
-	errs = append(errs, c.Onboarding.validate()...) // onboarding.go
-	errs = append(errs, c.validateRenderer()...)    // renderer.go
-	errs = append(errs, c.validatePrivacy()...)     // privacy.go
-	errs = append(errs, c.validateSynthetics()...)  // synthetics.go
+	errs = append(errs, c.validateSaaS()...)         // saas.go
+	errs = append(errs, c.Onboarding.validate()...)  // onboarding.go
+	errs = append(errs, c.validateRenderer()...)     // renderer.go
+	errs = append(errs, c.validatePrivacy()...)      // privacy.go
+	errs = append(errs, c.validateSynthetics()...)   // synthetics.go
+	errs = append(errs, c.validateCloudConnect()...) // cloudconnect.go
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))
 	}

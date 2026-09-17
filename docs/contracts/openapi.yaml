@@ -47,6 +47,11 @@ tags:
     description: Service level objectives, error budgets and burn rates (slo.md, D-125)
   - name: synthetics
     description: Scheduled outside-in HTTP checks, their uptime and latency (api.md "Synthetic monitoring", D-132)
+  - name: cloud
+    description: >-
+      Managed cloud service metrics: connections to AWS, Azure and GCP accounts, polled by the api leader
+      (api.md "Cloud connections", D-135). The collected data points are ordinary rows of `metrics`, read
+      through the Metrics Explorer like any other source.
   - name: query
     description: OQL query language (oql.md)
   - name: dashboards
@@ -2402,6 +2407,162 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
         "504": { $ref: "#/components/responses/Timeout" }
+
+  # ---------------------------------------------------------- cloud connections
+  /api/v1/cloud/providers:
+    get:
+      tags: [cloud]
+      operationId: listCloudProviders
+      description: >-
+        The catalog the connection form is built from: the providers, what one scope is called
+        (region, subscription, project), the credential fields to ask for and the services that can be
+        collected. Any role; not available in static auth mode (404).
+      responses:
+        "200":
+          description: Provider catalog
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudProviderCatalog" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/cloud/connections:
+    get:
+      tags: [cloud]
+      operationId: listCloudConnections
+      description: >-
+        The organization's cloud connections ordered by name, each with the last poll per scope. A credential
+        is never part of a response; `credentials_set` says whether any are stored.
+      responses:
+        "200":
+          description: Connections with the schedule state of every scope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudConnectionList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [cloud]
+      operationId: createCloudConnection
+      description: >-
+        Admin or owner (an API key with the admin role included); audit event cloud_connection.create. At
+        most 50 connections per organization (409). Storing credentials needs OPENLOG_SECRETS_KEY (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudConnectionInput" }
+      responses:
+        "201":
+          description: Created connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudConnection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/cloud/connections/test:
+    post:
+      tags: [cloud]
+      operationId: testCloudConnection
+      description: >-
+        Makes one cheap provider call with the submitted credentials, or with the stored credentials of
+        `connection_id` when none are submitted, and stores nothing. A credential the provider rejects is a
+        normal outcome: the answer is 200 with `ok: false` and the provider's message, so the form can show
+        it inline. Only a malformed request, an unknown connection or a missing secrets key is an error
+        status. Admin or owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudTestRequest" }
+      responses:
+        "200":
+          description: Whether the credentials can read metrics of the scope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/cloud/connections/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [cloud]
+      operationId: getCloudConnection
+      responses:
+        "200":
+          description: Connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudConnection" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [cloud]
+      operationId: updateCloudConnection
+      description: >-
+        Full replacement; admin or owner; audit event cloud_connection.update. Omitting `credentials` keeps
+        the stored ones, so an edit of the name or the services never has to re-send a secret; changing the
+        provider requires new credentials (400).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudConnectionInput" }
+      responses:
+        "200":
+          description: Updated connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudConnection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [cloud]
+      operationId: deleteCloudConnection
+      description: >-
+        Admin or owner; audit event cloud_connection.delete. The schedule rows and the poll history go with
+        the connection; the metrics already collected stay in ClickHouse until their TTL expires.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/cloud/connections/{id}/runs:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [cloud]
+      operationId: listCloudConnectionRuns
+      description: >-
+        The recent polls of a connection, newest first: what each scope collected, how many provider
+        requests it cost, how often the provider throttled it and what failed. At most 200 polls per
+        connection are kept.
+      parameters:
+        - { name: scope, in: query, schema: { type: string }, description: Limit to one region, subscription or project }
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 200 } }
+      responses:
+        "200":
+          description: The connection and its recent polls
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudRunList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------- auth
   /api/v1/version:
@@ -9310,6 +9471,208 @@ components:
         failures:
           type: array
           items: { $ref: "#/components/schemas/SyntheticFailure" }
+    CloudProviderName:
+      type: string
+      enum: [aws, azure, gcp]
+    CloudCredentialField:
+      type: object
+      description: One credential input of a provider. A field marked secret is a password input and is never prefilled.
+      required: [key, required, secret]
+      properties:
+        key: { type: string, description: "access_key_id, secret_access_key, session_token, tenant_id, client_id, client_secret, client_email, private_key, token_uri" }
+        required: { type: boolean }
+        secret: { type: boolean }
+    CloudProvider:
+      type: object
+      required: [id, scope_label, credentials, services]
+      properties:
+        id: { $ref: "#/components/schemas/CloudProviderName" }
+        scope_label: { type: string, description: What one scope is called - region (AWS), subscription (Azure), project (GCP) }
+        credentials:
+          type: array
+          items: { $ref: "#/components/schemas/CloudCredentialField" }
+        services:
+          type: array
+          items:
+            type: object
+            required: [id, metrics]
+            properties:
+              id: { type: string, description: "Service id stored on a connection (rds, s3, lambda, azure_sql, cloud_sql, ...)" }
+              metrics: { type: integer, description: How many metrics of this service are collected }
+    CloudProviderCatalog:
+      type: object
+      required: [providers, secrets_configured, test_supported]
+      properties:
+        providers:
+          type: array
+          items: { $ref: "#/components/schemas/CloudProvider" }
+        secrets_configured: { type: boolean, description: false when OPENLOG_SECRETS_KEY is unset, so credentials cannot be stored }
+        test_supported: { type: boolean }
+    CloudCredentials:
+      type: object
+      description: >-
+        Write-only provider secrets; the fields a provider does not use are rejected. Never part of a
+        response - CloudConnection.credentials_set says whether any are stored.
+      properties:
+        access_key_id: { type: string, description: AWS }
+        secret_access_key: { type: string, description: AWS }
+        session_token: { type: string, description: AWS, optional (temporary credentials) }
+        tenant_id: { type: string, description: Azure }
+        client_id: { type: string, description: Azure }
+        client_secret: { type: string, description: Azure }
+        client_email: { type: string, description: GCP service account }
+        private_key: { type: string, description: GCP service account private key (PEM) }
+        token_uri: { type: string, description: GCP, optional }
+    CloudConnectionInput:
+      type: object
+      required: [name, provider, scopes, services]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        provider: { $ref: "#/components/schemas/CloudProviderName" }
+        ingest_mode:
+          type: string
+          enum: [poll, push]
+          default: poll
+          description: Only poll exists; push is reserved for provider-side delivery and is not collected yet.
+        enabled: { type: boolean, default: true }
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string, maxLength: 200 }
+          description: >-
+            AWS regions, Azure subscriptions or GCP projects. Each is polled on its own schedule, so one that
+            fails or throttles never stops the others. Letters, digits, '-', '_' and '.' only.
+        services:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string }
+          description: Service ids of the provider's catalog (GET /api/v1/cloud/providers); stored in catalog order.
+        poll_interval_seconds: { type: integer, minimum: 60, maximum: 86400, default: 300 }
+        max_metrics_per_poll:
+          type: integer
+          minimum: 100
+          maximum: 200000
+          default: 5000
+          description: Data points one poll of one scope may collect; reaching it makes the poll partial, not ok.
+        max_api_calls_per_poll:
+          type: integer
+          minimum: 1
+          maximum: 5000
+          default: 200
+          description: Provider requests one poll of one scope may make. These APIs are billed per request.
+        credentials:
+          allOf: [{ $ref: "#/components/schemas/CloudCredentials" }]
+          nullable: true
+          description: Omitted on PUT keeps the stored credentials; required when the provider changes.
+    CloudScopeStatus:
+      type: object
+      description: The schedule row of one scope - the last poll and when the next one is due.
+      required: [scope, next_run_at, last_run_at, last_status, last_error, last_metrics, last_api_calls,
+                 last_duration_ms, consecutive_errors]
+      properties:
+        scope: { type: string }
+        next_run_at: { $ref: "#/components/schemas/Timestamp" }
+        last_run_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_status: { type: string, enum: ["", ok, partial, error], description: '"" until the first poll' }
+        last_error: { type: string }
+        last_metrics: { type: integer }
+        last_api_calls: { type: integer }
+        last_duration_ms: { type: number }
+        consecutive_errors: { type: integer, description: Consecutive failures; the next poll is backed off exponentially }
+    CloudConnection:
+      type: object
+      required: [id, name, provider, ingest_mode, enabled, scopes, services, poll_interval_seconds,
+                 max_metrics_per_poll, max_api_calls_per_poll, credentials_set, credentials_key_id,
+                 created_by_email, updated_by_email, created_at, updated_at, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        provider: { $ref: "#/components/schemas/CloudProviderName" }
+        ingest_mode: { type: string, enum: [poll, push] }
+        enabled: { type: boolean }
+        scopes:
+          type: array
+          items: { type: string }
+        services:
+          type: array
+          items: { type: string }
+        poll_interval_seconds: { type: integer }
+        max_metrics_per_poll: { type: integer }
+        max_api_calls_per_poll: { type: integer }
+        credentials_set: { type: boolean, description: Whether credentials are stored; the values never leave the server }
+        credentials_key_id: { type: string, description: Id of the OPENLOG_SECRETS_KEY that encrypted them (key rotation) }
+        created_by_email: { type: string }
+        updated_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        status:
+          type: array
+          items: { $ref: "#/components/schemas/CloudScopeStatus" }
+    CloudConnectionList:
+      type: object
+      required: [connections, secrets_configured, test_supported]
+      properties:
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/CloudConnection" }
+        secrets_configured: { type: boolean }
+        test_supported: { type: boolean }
+    CloudServiceRun:
+      type: object
+      required: [service, metrics, error]
+      properties:
+        service: { type: string }
+        metrics: { type: integer }
+        error: { type: string, description: '"" when the service was read completely' }
+    CloudRun:
+      type: object
+      description: One recorded poll of one scope.
+      required: [id, scope, started_at, duration_ms, status, metrics, api_calls, throttled, error, services]
+      properties:
+        id: { type: integer, format: int64 }
+        scope: { type: string }
+        started_at: { $ref: "#/components/schemas/Timestamp" }
+        duration_ms: { type: number }
+        status:
+          type: string
+          enum: [ok, partial, error]
+          description: >-
+            partial means some services or resources failed, or a per-poll cap stopped the run; error means
+            nothing was collected for this scope.
+        metrics: { type: integer, description: Data points written }
+        api_calls: { type: integer, description: Provider requests made (what the provider bills for) }
+        throttled: { type: integer, description: How often the provider rate-limited this poll }
+        error: { type: string }
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/CloudServiceRun" }
+    CloudRunList:
+      type: object
+      required: [connection, runs]
+      properties:
+        connection: { $ref: "#/components/schemas/CloudConnection" }
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/CloudRun" }
+    CloudTestRequest:
+      type: object
+      description: >-
+        Either submitted credentials (the form before saving) or connection_id alone (test what is stored).
+      properties:
+        connection_id: { type: string, format: uuid }
+        provider: { $ref: "#/components/schemas/CloudProviderName" }
+        scope: { type: string, description: The region, subscription or project to test; defaults to the connection's first scope }
+        credentials:
+          allOf: [{ $ref: "#/components/schemas/CloudCredentials" }]
+          nullable: true
+    CloudTestResult:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean }
+        error: { type: string, description: The provider's message when ok is false }
     TailSamplingRule:
       type: object
       description: One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2).

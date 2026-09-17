@@ -20,7 +20,8 @@ export type Permission =
   | "fleet.manage"
   | "updates.request"
   | "alerts.write"
-  | "alerts.manage";
+  | "alerts.manage"
+  | "cloud_connections.manage";
 
 /** Mirrors internal/auth/roles.go. The server enforces permissions; the UI only hides actions. */
 const MIN_ROLE: Record<Permission, Role> = {
@@ -40,6 +41,9 @@ const MIN_ROLE: Record<Permission, Role> = {
   // Alerting: members create rules/mutes (and change their own) and work on incidents; admins manage all + channels.
   "alerts.write": "member",
   "alerts.manage": "admin",
+  // A cloud connection stores provider credentials and spends money at the provider, so only admins and
+  // owners may change one; every role may read them (D-135).
+  "cloud_connections.manage": "admin",
 };
 
 export function atLeast(role: Role | null | undefined, min: Role): boolean {

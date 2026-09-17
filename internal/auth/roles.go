@@ -81,6 +81,12 @@ const (
 	ActReadIntegrationSettings   Action = "integration_settings.read"
 	ActManageIntegrationSettings Action = "integration_settings.manage"
 
+	// Cloud connections (api.md "Cloud connections", D-135). Reading one is reading configuration, like an
+	// integration setting; changing one stores cloud provider credentials and spends money at the provider,
+	// so it needs an admin.
+	ActReadCloudConnections   Action = "cloud_connections.read"
+	ActManageCloudConnections Action = "cloud_connections.manage"
+
 	// ActManageQueryLimits is the organization's own query limits (usage.go, D-080).
 	ActManageQueryLimits Action = "query_limits.manage"
 	// ActExportUsage is the usage report export (usage.go, D-079).
@@ -122,6 +128,7 @@ var matrix = map[Action]Permission{
 	ActReadFleet:                 {Min: RoleViewer},
 	ActReadAlerts:                {Min: RoleViewer},
 	ActReadIntegrationSettings:   {Min: RoleViewer},
+	ActReadCloudConnections:      {Min: RoleViewer},
 	ActUpdateOrg:                 {Min: RoleAdmin},
 	ActWriteAlerts:               {Min: RoleMember},
 	ActManageAlerts:              {Min: RoleAdmin},
@@ -134,6 +141,7 @@ var matrix = map[Action]Permission{
 	ActWriteSLOs:                 {Min: RoleMember},
 	ActWriteSynthetics:           {Min: RoleMember},
 	ActManageIntegrationSettings: {Min: RoleAdmin},
+	ActManageCloudConnections:    {Min: RoleAdmin},
 	ActExportUsage:               {Min: RoleAdmin},
 
 	// Identity, credentials and the installation itself: signed-in users only.

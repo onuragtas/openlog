@@ -958,3 +958,56 @@ Data points with `FLAG_NO_RECORDED_VALUE` are dropped (reason `no_recorded_value
 exponential histogram `bucket_counts` of the positive buckets only (no bounds) and summaries without quantiles.
 `metrics_1m` rolls up gauges and sums only. The hourly key index `attribute_keys` (0080, D-118) is filled from the
 attribute and resource attribute maps of `logs_local`, `spans_local` and `metrics_local` (per metric name).
+
+## 9. Cloud service metrics (cloud connections)
+
+Data points the backend collects from cloud provider APIs for a **cloud connection**
+([api.md](api.md#cloud-connections), D-135). They are written to `metrics` exactly like an agent's OTLP data
+points — same columns, same `series_id` computation — so the Metrics Explorer, metric alert rules and
+dashboards treat a managed database like any other source. No agent is involved and nothing is sent over
+OTLP; `internal/cloudconnect` writes the rows directly.
+
+**Metric name:** `cloud.<provider>.<service>.<metric>`, where `<provider>` is `aws`, `azure` or `gcp`,
+`<service>` is the connection's service id (`rds`, `s3`, `lambda`, `azure_sql`, `cloud_sql`, …) and
+`<metric>` is the provider's own metric name converted to snake_case: separators become `_` and camel and
+acronym boundaries are split, so `CPUUtilization` → `cpu_utilization`, `HTTPCode_Target_5XX_Count` →
+`http_code_target_5xx_count`, `Percentage CPU` → `percentage_cpu`, `cpu/utilization` → `cpu_utilization`.
+The provider's original spelling is kept on the data point as `cloud.metric.name`, so nothing is lost by the
+conversion.
+
+Every point is a **gauge** with `temporality` `unspecified`: the provider already aggregated the window, so
+what openlog stores is the value at that timestamp and the aggregation travels as an attribute rather than as
+an OTLP temporality openlog would have to invent. Gauges are rolled up by `metrics_1m`, so cloud metrics are
+kept for 395 days like every other metric ([apm.md](apm.md) §8).
+
+### Resource attributes
+
+| Attribute | Required | Value |
+|---|---|---|
+| `cloud.provider` | yes | `aws`, `gcp`, `azure` (§1 uses the same values) |
+| `cloud.platform` | yes | `aws_rds`, `aws_s3`, `aws_lambda`, `azure_sql`, `gcp_cloud_sql`, … — one per catalog service |
+| `cloud.region` | no | `eu-central-1`; for Azure the resource's location, for GCP the resource's `location`/`zone` label |
+| `cloud.account.id` | no | AWS account id (read once per poll from STS), Azure subscription id, GCP project id |
+| `cloud.resource.id` | no | The provider's unique id: an Azure resource id or a GCP resource name. CloudWatch does not return one, so AWS points carry only the name |
+| `cloud.resource.name` | no | The individual resource: a DB instance identifier, a bucket, a function, a queue |
+| `openlog.entity.type` | yes | `cloud_resource` |
+| `openlog.cloud.connection.id` | yes | The connection the point was collected by |
+| `openlog.cloud.connection.name` | yes | Its display name, so a chart can be grouped by account without a join |
+| `openlog.cloud.service` | yes | The catalog service id (`rds`, `azure_sql`, `cloud_sql`, …) |
+
+`service_name`, `host_id` and `host_name` are empty: a managed service is not a host and is not an APM
+service. Grouping in the UI is by the `cloud.*` resource attributes above.
+
+### Data point attributes
+
+| Attribute | Required | Value |
+|---|---|---|
+| `cloud.metric.name` | yes | The provider's own metric name (`CPUUtilization`, `cpu_percent`, `cpu/utilization`) |
+| `cloud.metric.stat` | no | The aggregation the value represents: `Average`, `Sum`, `Maximum`, `Total` |
+| `cloud.aws.dimension.<name>` | no | Every remaining CloudWatch dimension, its name converted like a metric name |
+| `cloud.azure.dimension.<name>` | no | Every Azure Monitor metadata value |
+| `cloud.gcp.resource.<label>` | no | Every remaining monitored-resource label (`project_id`, `location` and `zone` already became resource attributes) |
+| `cloud.gcp.metric.<label>` | no | Every Cloud Monitoring metric label |
+
+Adding a service is a code change in `internal/cloudconnect` with a name under this contract, not
+configuration: the catalog is what fixes the metric names an organization can build alerts and dashboards on.

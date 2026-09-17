@@ -1394,6 +1394,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cloud/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The catalog the connection form is built from: the providers, what one scope is called (region, subscription, project), the credential fields to ask for and the services that can be collected. Any role; not available in static auth mode (404). */
+        get: operations["listCloudProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cloud/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The organization's cloud connections ordered by name, each with the last poll per scope. A credential is never part of a response; `credentials_set` says whether any are stored. */
+        get: operations["listCloudConnections"];
+        put?: never;
+        /** @description Admin or owner (an API key with the admin role included); audit event cloud_connection.create. At most 50 connections per organization (409). Storing credentials needs OPENLOG_SECRETS_KEY (409). */
+        post: operations["createCloudConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cloud/connections/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Makes one cheap provider call with the submitted credentials, or with the stored credentials of `connection_id` when none are submitted, and stores nothing. A credential the provider rejects is a normal outcome: the answer is 200 with `ok: false` and the provider's message, so the form can show it inline. Only a malformed request, an unknown connection or a missing secrets key is an error status. Admin or owner. */
+        post: operations["testCloudConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cloud/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCloudConnection"];
+        /** @description Full replacement; admin or owner; audit event cloud_connection.update. Omitting `credentials` keeps the stored ones, so an edit of the name or the services never has to re-send a secret; changing the provider requires new credentials (400). */
+        put: operations["updateCloudConnection"];
+        post?: never;
+        /** @description Admin or owner; audit event cloud_connection.delete. The schedule rows and the poll history go with the connection; the metrics already collected stay in ClickHouse until their TTL expires. */
+        delete: operations["deleteCloudConnection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cloud/connections/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The recent polls of a connection, newest first: what each scope collected, how many provider requests it cost, how often the provider throttled it and what failed. At most 200 polls per connection are kept. */
+        get: operations["listCloudConnectionRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -6443,6 +6534,174 @@ export interface components {
             check: components["schemas"]["SyntheticCheck"];
             summary: components["schemas"]["SyntheticSummary"];
             failures: components["schemas"]["SyntheticFailure"][];
+        };
+        /** @enum {string} */
+        CloudProviderName: "aws" | "azure" | "gcp";
+        /** @description One credential input of a provider. A field marked secret is a password input and is never prefilled. */
+        CloudCredentialField: {
+            /** @description access_key_id, secret_access_key, session_token, tenant_id, client_id, client_secret, client_email, private_key, token_uri */
+            key: string;
+            required: boolean;
+            secret: boolean;
+        };
+        CloudProvider: {
+            id: components["schemas"]["CloudProviderName"];
+            /** @description What one scope is called - region (AWS) */
+            scope_label: string;
+            credentials: components["schemas"]["CloudCredentialField"][];
+            services: {
+                /** @description Service id stored on a connection (rds, s3, lambda, azure_sql, cloud_sql, ...) */
+                id: string;
+                /** @description How many metrics of this service are collected */
+                metrics: number;
+            }[];
+        };
+        CloudProviderCatalog: {
+            providers: components["schemas"]["CloudProvider"][];
+            /** @description false when OPENLOG_SECRETS_KEY is unset */
+            secrets_configured: boolean;
+            test_supported: boolean;
+        };
+        /** @description Write-only provider secrets; the fields a provider does not use are rejected. Never part of a response - CloudConnection.credentials_set says whether any are stored. */
+        CloudCredentials: {
+            /** @description AWS */
+            access_key_id?: string;
+            /** @description AWS */
+            secret_access_key?: string;
+            /** @description AWS */
+            session_token?: string;
+            /** @description Azure */
+            tenant_id?: string;
+            /** @description Azure */
+            client_id?: string;
+            /** @description Azure */
+            client_secret?: string;
+            /** @description GCP service account */
+            client_email?: string;
+            /** @description GCP service account private key (PEM) */
+            private_key?: string;
+            /** @description GCP */
+            token_uri?: string;
+        };
+        CloudConnectionInput: {
+            name: string;
+            provider: components["schemas"]["CloudProviderName"];
+            /**
+             * @description Only poll exists; push is reserved for provider-side delivery and is not collected yet.
+             * @default poll
+             * @enum {string}
+             */
+            ingest_mode: "poll" | "push";
+            /** @default true */
+            enabled: boolean;
+            /** @description AWS regions, Azure subscriptions or GCP projects. Each is polled on its own schedule, so one that fails or throttles never stops the others. Letters, digits, '-', '_' and '.' only. */
+            scopes: string[];
+            /** @description Service ids of the provider's catalog (GET /api/v1/cloud/providers); stored in catalog order. */
+            services: string[];
+            /** @default 300 */
+            poll_interval_seconds: number;
+            /**
+             * @description Data points one poll of one scope may collect; reaching it makes the poll partial, not ok.
+             * @default 5000
+             */
+            max_metrics_per_poll: number;
+            /**
+             * @description Provider requests one poll of one scope may make. These APIs are billed per request.
+             * @default 200
+             */
+            max_api_calls_per_poll: number;
+            /** @description Omitted on PUT keeps the stored credentials; required when the provider changes. */
+            credentials?: components["schemas"]["CloudCredentials"] | null;
+        };
+        /** @description The schedule row of one scope - the last poll and when the next one is due. */
+        CloudScopeStatus: {
+            scope: string;
+            next_run_at: components["schemas"]["Timestamp"];
+            last_run_at: components["schemas"]["NullableTimestamp"];
+            /**
+             * @description "" until the first poll
+             * @enum {string}
+             */
+            last_status: "" | "ok" | "partial" | "error";
+            last_error: string;
+            last_metrics: number;
+            last_api_calls: number;
+            last_duration_ms: number;
+            /** @description Consecutive failures; the next poll is backed off exponentially */
+            consecutive_errors: number;
+        };
+        CloudConnection: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            provider: components["schemas"]["CloudProviderName"];
+            /** @enum {string} */
+            ingest_mode: "poll" | "push";
+            enabled: boolean;
+            scopes: string[];
+            services: string[];
+            poll_interval_seconds: number;
+            max_metrics_per_poll: number;
+            max_api_calls_per_poll: number;
+            /** @description Whether credentials are stored; the values never leave the server */
+            credentials_set: boolean;
+            /** @description Id of the OPENLOG_SECRETS_KEY that encrypted them (key rotation) */
+            credentials_key_id: string;
+            created_by_email: string;
+            updated_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            status: components["schemas"]["CloudScopeStatus"][];
+        };
+        CloudConnectionList: {
+            connections: components["schemas"]["CloudConnection"][];
+            secrets_configured: boolean;
+            test_supported: boolean;
+        };
+        CloudServiceRun: {
+            service: string;
+            metrics: number;
+            /** @description "" when the service was read completely */
+            error: string;
+        };
+        /** @description One recorded poll of one scope. */
+        CloudRun: {
+            /** Format: int64 */
+            id: number;
+            scope: string;
+            started_at: components["schemas"]["Timestamp"];
+            duration_ms: number;
+            /**
+             * @description partial means some services or resources failed, or a per-poll cap stopped the run; error means nothing was collected for this scope.
+             * @enum {string}
+             */
+            status: "ok" | "partial" | "error";
+            /** @description Data points written */
+            metrics: number;
+            /** @description Provider requests made (what the provider bills for) */
+            api_calls: number;
+            /** @description How often the provider rate-limited this poll */
+            throttled: number;
+            error: string;
+            services: components["schemas"]["CloudServiceRun"][];
+        };
+        CloudRunList: {
+            connection: components["schemas"]["CloudConnection"];
+            runs: components["schemas"]["CloudRun"][];
+        };
+        /** @description Either submitted credentials (the form before saving) or connection_id alone (test what is stored). */
+        CloudTestRequest: {
+            /** Format: uuid */
+            connection_id?: string;
+            provider?: components["schemas"]["CloudProviderName"];
+            /** @description The region */
+            scope?: string;
+            credentials?: components["schemas"]["CloudCredentials"] | null;
+        };
+        CloudTestResult: {
+            ok: boolean;
+            /** @description The provider's message when ok is false */
+            error: string;
         };
         /** @description One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2). */
         TailSamplingRule: {
@@ -12111,6 +12370,216 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listCloudProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudProviderCatalog"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listCloudConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connections with the schedule state of every scope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudConnectionList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createCloudConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description Created connection */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    testCloudConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Whether the credentials can read metrics of the scope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getCloudConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudConnection"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateCloudConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description Updated connection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteCloudConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listCloudConnectionRuns: {
+        parameters: {
+            query?: {
+                /** @description Limit to one region */
+                scope?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection and its recent polls */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudRunList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getVersion: {

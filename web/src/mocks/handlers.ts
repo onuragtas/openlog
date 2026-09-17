@@ -4,6 +4,7 @@ import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import { accountHandlers, authenticate } from "./account";
 import { alertHandlers } from "./alerts";
 import { apmHandlers, transactionTraceIds } from "./apm";
+import { cloudHandlers } from "./cloud";
 import { containerHandlers, containerLogs } from "./containers";
 import { costHandlers } from "./costs";
 import { kubernetesHandlers, kubernetesLogs } from "./kubernetes";
@@ -302,6 +303,7 @@ export const handlers = [
   ...alertHandlers,
   ...sloHandlers, // mocks/slos.ts: service level objectives, error budgets and burn rates (D-125)
   ...syntheticHandlers, // mocks/synthetics.ts: scheduled outside-in checks (D-132)
+  ...cloudHandlers, // mocks/cloud.ts: managed cloud service metrics (D-135)
   ...oqlHandlers,
   ...dashboardSharingHandlers, // before dashboardHandlers: /dashboards/settings is not /dashboards/:id
   ...dashboardHandlers,

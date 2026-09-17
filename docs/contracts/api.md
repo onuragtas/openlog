@@ -1527,6 +1527,105 @@ changing to an integration without passwords clears it. `404` for an unknown id.
 - `409 already_exists`: another setting has the same host scope, integration and match.
 - `409 failed_precondition`: a password was given but `OPENLOG_SECRETS_KEY` is not configured.
 
+## Cloud connections
+
+Metrics of managed cloud services (AWS, Azure, GCP) of the caller's organization (PostgreSQL
+`cloud_connections`, `0092_cloud_connections`; D-135). PostgreSQL auth mode only (`404` otherwise). Reads: any
+role and API keys. Changes: admins and owners, an API key with the admin role included (`403` otherwise) — a
+connection stores cloud credentials and spends money at the provider. At most 50 connections per organization
+(`409`). Audit: `cloud_connection.{create,update,delete}`.
+
+A connection names one cloud account, the **scopes** to cover (AWS regions, Azure subscriptions, GCP projects)
+and the **services** to collect. The api **leader** polls every scope on its own schedule; the claim advances
+the schedule row in the same statement, so a scope is never polled twice per interval — here a duplicate poll
+is a duplicate bill at the provider. One scope failing never stops the others: each is its own schedule row
+with its own status, error and backoff.
+
+**Credentials are write-only.** They are stored encrypted (AES-256-GCM with `OPENLOG_SECRETS_KEY`, AAD
+`org_id/id`, the same mechanism as integration settings) and never appear in a response, a log or an audit
+detail; `credentials_set` says whether any are stored and `credentials_key_id` which key encrypted them.
+Saving credentials while `OPENLOG_SECRETS_KEY` is unset is `409 failed_precondition`, and a connection without
+stored credentials is never polled.
+
+**The collected data points are ordinary metrics.** Every value is written to `metrics` with the same columns
+and the same `series_id` the processor computes for OTLP data points, so the Metrics Explorer, the metric
+alert rules ([alerting.md](alerting.md) §2.2) and dashboards use them with no new path, and `metrics_1m` keeps
+them for 395 days ([apm.md](apm.md) §8). Naming and attributes:
+[semantic-conventions.md](semantic-conventions.md) §9.
+
+**Guardrails.** These provider APIs are billed per request and rate-limit hard, so one poll of one scope is
+bounded by `max_metrics_per_poll` and `max_api_calls_per_poll`; throttling is retried with an exponential
+backoff (the provider's `Retry-After` when it gives one); rejected credentials are **not** retried; and a
+scope that keeps failing is polled exponentially less often, up to 30 minutes
+([config.md](config.md#cloud-connections-api-allinone-d-135)). A poll that reached a cap, or that could not
+read some services or resources, is recorded as `partial`, never `ok`.
+
+### `GET /api/v1/cloud/providers`
+The catalog the connection form is built from: what one scope is called, the credential fields to ask for
+(`secret` fields are password inputs and are never prefilled) and the services that can be collected.
+`secrets_configured` is false when `OPENLOG_SECRETS_KEY` is unset, in which case credentials cannot be saved.
+```json
+{"providers": [{"id": "aws", "scope_label": "region",
+  "credentials": [{"key": "access_key_id", "required": true, "secret": false},
+                  {"key": "secret_access_key", "required": true, "secret": true},
+                  {"key": "session_token", "required": false, "secret": true}],
+  "services": [{"id": "rds", "metrics": 8}, {"id": "s3", "metrics": 2}, {"id": "lambda", "metrics": 5}]}],
+ "secrets_configured": true, "test_supported": true}
+```
+Services: AWS `rds`, `s3`, `lambda`, `sqs`, `dynamodb`, `elb`, `elasticache`; Azure `azure_sql`,
+`azure_storage`, `azure_vm`, `azure_functions`, `azure_cosmos`; GCP `cloud_sql`, `gcs`, `cloud_functions`,
+`pubsub`, `gce`.
+
+### `GET /api/v1/cloud/connections` · `POST` · `GET|PUT|DELETE /api/v1/cloud/connections/{id}`
+Body of POST/PUT: `{"name" (1–200), "provider": "aws"|"azure"|"gcp", "ingest_mode"?: "poll"|"push" (default
+`poll`), "enabled"? (default true), "scopes" (1–50; letters, digits, `-`, `_`, `.`), "services" (1–50 ids of
+the provider's catalog), "poll_interval_seconds"? (default 300, 60–86400), "max_metrics_per_poll"? (default
+5000, 100–200000), "max_api_calls_per_poll"? (default 200, 1–5000), "credentials"? (the provider's fields;
+omitted on `PUT` keeps the stored ones, and is required when the provider changes)}`.
+
+`status` is the schedule row per scope: the last poll (straight from PostgreSQL) and when the next one is due.
+`ingest_mode` is `poll` today; `push` is reserved for provider-side delivery and is stored but not collected,
+so a connection can gain it without a migration.
+```json
+{"connections": [{"id": "…", "name": "Production AWS", "provider": "aws", "ingest_mode": "poll",
+  "enabled": true, "scopes": ["eu-central-1", "us-east-1"], "services": ["rds", "lambda"],
+  "poll_interval_seconds": 300, "max_metrics_per_poll": 5000, "max_api_calls_per_poll": 200,
+  "credentials_set": true, "credentials_key_id": "a1b2c3d4",
+  "created_by_email": "ada@example.com", "updated_by_email": "ada@example.com",
+  "created_at": "…", "updated_at": "…",
+  "status": [{"scope": "eu-central-1", "next_run_at": "…", "last_run_at": "…", "last_status": "ok",
+              "last_error": "", "last_metrics": 412, "last_api_calls": 6, "last_duration_ms": 1830.4,
+              "consecutive_errors": 0}]}],
+ "secrets_configured": true, "test_supported": true}
+```
+- `400 invalid_argument`: an unknown provider or service, a service of another provider, an empty or
+  oversized scope list, a value outside the bounds above, or a credential field the provider does not use
+  (the field path is in the message, e.g. `credentials.tenant_id`).
+- `409 failed_precondition`: the connection limit, or `OPENLOG_SECRETS_KEY` is not configured.
+
+### `POST /api/v1/cloud/connections/test`
+`{"connection_id"?, "provider"?, "scope"?, "credentials"?}` — makes one cheap provider call and stores
+nothing. With `credentials` it tests what is being typed into the form; with `connection_id` alone it tests
+the stored credentials, so an edit never has to re-send a secret (`scope` then defaults to the connection's
+first scope). A credential the provider rejects is a **normal outcome**: `200` with `ok: false` and the
+provider's message, so the form shows it inline. Only a malformed request (`400`), an unknown connection
+(`404`) or a missing secrets key (`409`) is an error status.
+```json
+{"ok": false, "error": "aws: not authorized to perform cloudwatch:ListMetrics"}
+```
+
+### `GET /api/v1/cloud/connections/{id}/runs?scope=&limit=`
+The recent polls, newest first (at most 200 are kept per connection): what each scope collected, how many
+provider requests it cost, how often the provider throttled it and what failed, per service.
+```json
+{"connection": {…}, "runs": [
+  {"id": 4711, "scope": "eu-central-1", "started_at": "…", "duration_ms": 1830.4, "status": "partial",
+   "metrics": 412, "api_calls": 6, "throttled": 1,
+   "error": "s3: 1 of 3 resources could not be read: AccessDenied: no permission",
+   "services": [{"service": "rds", "metrics": 412, "error": ""},
+                {"service": "s3", "metrics": 0, "error": "1 of 3 resources could not be read: AccessDenied: no permission"}]}]}
+```
+
 ## Service level objectives
 
 Targets, error budgets and burn rates of APM services (PostgreSQL `slos`, `0087_slo`; semantics and math:
