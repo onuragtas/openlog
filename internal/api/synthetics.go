@@ -285,7 +285,8 @@ func decodeSyntheticInput(r *http.Request) (synthetics.Input, error) {
 }
 
 func (s *Server) syntheticsActor(r *http.Request, p *auth.Principal) synthetics.Actor {
-	return synthetics.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
+	return synthetics.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP,
+		APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 }
 
 func (s *Server) createSyntheticCheck(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {

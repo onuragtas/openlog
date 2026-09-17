@@ -175,7 +175,8 @@ func (s *Server) writeOperatorError(w http.ResponseWriter, route string, err err
 }
 
 func (s *Server) operatorActor(r *http.Request, p *auth.Principal) operator.Actor {
-	return operator.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
+	return operator.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP,
+		APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 }
 
 type reasonRequest struct {

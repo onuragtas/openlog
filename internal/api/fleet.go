@@ -88,7 +88,8 @@ func (s *Server) writeFleetError(w http.ResponseWriter, route string, err error)
 // actor is the audit actor of a fleet change. Fleet changes are user-only, so the
 // key fields stay empty; they are set for symmetry with the other actors.
 func (s *Server) actor(r *http.Request, p *auth.Principal) fleet.Actor {
-	return fleet.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
+	return fleet.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP,
+		APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 }
 
 // ---- response shapes ----

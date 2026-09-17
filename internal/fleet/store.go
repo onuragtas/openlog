@@ -82,12 +82,16 @@ type AuditEntry struct {
 	OrgID       string
 	ActorUserID string
 	ActorEmail  string
-	Action      string
-	TargetType  string
-	TargetID    string
-	Details     map[string]any
-	IP          string
-	At          time.Time
+	// ActorAPIKeyID and ActorAPIKeyName name the API key of a key-authenticated change; a key carries no user,
+	// so ActorUserID and ActorEmail stay empty then (api.md "Authentication", D-133).
+	ActorAPIKeyID   string
+	ActorAPIKeyName string
+	Action          string
+	TargetType      string
+	TargetID        string
+	Details         map[string]any
+	IP              string
+	At              time.Time
 }
 
 // Store persists fleet state (PostgreSQL: PGStore).

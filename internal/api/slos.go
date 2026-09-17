@@ -213,7 +213,8 @@ func decodeSLOInput(r *http.Request) (slo.Input, error) {
 }
 
 func (s *Server) sloActor(r *http.Request, p *auth.Principal) slo.Actor {
-	return slo.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP}
+	return slo.Actor{UserID: p.UserID, Email: p.Email, IP: s.accounts.Meta(r).IP,
+		APIKeyID: p.APIKeyID, APIKeyName: p.APIKeyName}
 }
 
 func (s *Server) createSLO(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {

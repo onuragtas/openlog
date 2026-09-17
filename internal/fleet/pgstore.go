@@ -668,8 +668,10 @@ func (s *PGStore) AddAudit(ctx context.Context, e AuditEntry) error {
 	if at.IsZero() {
 		at = time.Now()
 	}
-	_, err := s.pool.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip, created_at)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
-		nullUUID(e.OrgID), nullUUID(e.ActorUserID), e.ActorEmail, e.Action, e.TargetType, e.TargetID, string(details), e.IP, at)
+	_, err := s.pool.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+			action, target_type, target_id, details, ip, created_at)
+		VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6, $7, $8, $9::jsonb, $10, $11)`,
+		nullUUID(e.OrgID), nullUUID(e.ActorUserID), e.ActorEmail, nullUUID(e.ActorAPIKeyID), e.ActorAPIKeyName,
+		e.Action, e.TargetType, e.TargetID, string(details), e.IP, at)
 	return err
 }

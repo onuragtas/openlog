@@ -25,11 +25,14 @@ var (
 	ErrInvalidState = errors.New("invalid state")
 )
 
-// Actor is who performs an action (audit log).
+// Actor is who performs an action (audit log). An API key principal carries no user: the key names the actor
+// (api.md "Authentication", D-133).
 type Actor struct {
-	UserID string
-	Email  string
-	IP     string
+	UserID     string
+	Email      string
+	IP         string
+	APIKeyID   string
+	APIKeyName string
 }
 
 // Store is the PostgreSQL persistence of SaaS operations.
@@ -55,8 +58,10 @@ func audit(ctx context.Context, q execer, orgID string, a Actor, action, targetT
 	if err != nil {
 		return err
 	}
-	_, err = q.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, action, target_type, target_id, details, ip)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8)`, orgID, nullUUID(a.UserID), a.Email, action, targetType, targetID, string(b), a.IP)
+	_, err = q.Exec(ctx, `INSERT INTO audit_log (org_id, actor_user_id, actor_email, actor_api_key_id, actor_api_key_name,
+			action, target_type, target_id, details, ip)
+		VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6, $7, $8, $9::jsonb, $10)`,
+		orgID, nullUUID(a.UserID), a.Email, nullUUID(a.APIKeyID), a.APIKeyName, action, targetType, targetID, string(b), a.IP)
 	return err
 }
 

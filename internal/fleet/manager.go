@@ -23,11 +23,14 @@ func preconditionf(format string, args ...any) error {
 	return &PreconditionError{Msg: fmt.Sprintf(format, args...)}
 }
 
-// Actor is the user performing a management operation (for the audit log).
+// Actor is who performs a management operation (for the audit log). An API key principal carries no user: the
+// key names the actor (api.md "Authentication", D-133).
 type Actor struct {
-	UserID string
-	Email  string
-	IP     string
+	UserID     string
+	Email      string
+	IP         string
+	APIKeyID   string
+	APIKeyName string
 }
 
 // ManagerOptions configure Manager.
@@ -74,7 +77,8 @@ func (m *Manager) CatalogStatus() catalog.Status {
 }
 
 func (m *Manager) audit(ctx context.Context, orgID string, a Actor, action, targetType, targetID string, details map[string]any) {
-	e := AuditEntry{OrgID: orgID, ActorUserID: a.UserID, ActorEmail: a.Email, Action: action, TargetType: targetType,
+	e := AuditEntry{OrgID: orgID, ActorUserID: a.UserID, ActorEmail: a.Email,
+		ActorAPIKeyID: a.APIKeyID, ActorAPIKeyName: a.APIKeyName, Action: action, TargetType: targetType,
 		TargetID: targetID, Details: details, IP: a.IP, At: m.o.Now()}
 	if err := m.store.AddAudit(context.WithoutCancel(ctx), e); err != nil {
 		m.o.Log.Error("cannot write audit log", "action", action, "org_id", orgID, "err", err)
