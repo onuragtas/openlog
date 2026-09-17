@@ -829,6 +829,12 @@ api:
     OPENLOG_SYNTHETICS_TENANT_MAX_CONCURRENT: "5"
     OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES: "1048576"
     OPENLOG_SYNTHETICS_MAX_REDIRECTS: "5"
+    # Infrastructure cost estimates (cost.md, D-134). A static price table in the image prices each
+    # host from its cloud instance facts; the numbers are estimates, not billing data.
+    OPENLOG_COST_ENABLED: "true"
+    # JSON file merged over the built-in table, to correct a price without a release. Mount it with
+    # extraVolumes/extraVolumeMounts (e.g. from a ConfigMap) and point this at the mounted path.
+    OPENLOG_COST_PRICES_FILE: ""
   extraEnv: []
   resources:
     requests: {cpu: 500m, memory: 512Mi}

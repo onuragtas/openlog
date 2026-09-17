@@ -164,6 +164,8 @@ type Config struct {
 	Query Query
 	// Storage configures tiered storage (storage.go, D-066).
 	Storage Storage
+	// Cost configures infrastructure cost monitoring (cost.go, D-134).
+	Cost Cost
 	// TailSampling configures tail-based sampling (tailsampling.go, D-075).
 	TailSampling TailSampling
 	// Usage configures usage metering, plans, quotas and billing (usage.go, D-079..D-081).
@@ -316,6 +318,7 @@ func Load(getenv func(string) string) (Config, error) {
 		Alert:        loadAlert(&p),
 		Query:        loadQuery(&p),
 		Storage:      loadStorage(&p),
+		Cost:         loadCost(&p),
 		TailSampling: loadTailSampling(&p),
 		Usage:        loadUsage(&p),
 		SaaS:         loadSaaS(&p),       // saas.go

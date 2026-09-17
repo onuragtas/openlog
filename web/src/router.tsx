@@ -22,6 +22,7 @@ import { POD_PHASES, WORKLOAD_HEALTHS, WORKLOAD_KINDS, type PodPhaseParam, type 
 
 // Screens are code-split per route (uPlot only loads with host detail).
 const HostsPage = lazyRouteComponent(() => import("@/routes/hosts"), "HostsPage");
+const CostsPage = lazyRouteComponent(() => import("@/routes/costs"), "CostsPage");
 const HostDetailPage = lazyRouteComponent(() => import("@/routes/host-detail"), "HostDetailPage");
 const ContainersPage = lazyRouteComponent(() => import("@/routes/containers"), "ContainersPage");
 const ContainerDetailPage = lazyRouteComponent(() => import("@/routes/container-detail"), "ContainerDetailPage");
@@ -219,6 +220,14 @@ const hostDetailRoute = createRoute({
     lunit: str(s.lunit),
   }),
   component: HostDetailPage,
+});
+
+// ---- Costs (routes/costs.tsx, api.md "Costs", cost.md, D-134). Range comes from the root search. ----
+
+const costsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/costs",
+  component: CostsPage,
 });
 
 // ---- Containers (routes/containers.tsx, routes/container-detail.tsx) ----
@@ -956,6 +965,7 @@ export const routeTree = rootRoute.addChildren([
   appRoute.addChildren([
     indexRoute,
     hostsRoute,
+    costsRoute,
     hostDetailRoute,
     containersRoute,
     containerDetailRoute,

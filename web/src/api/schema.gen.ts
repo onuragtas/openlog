@@ -130,6 +130,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/costs/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fleet cost over the range, with the idle share
+         * @description Estimates from a static price table, not billing data. Absent when OPENLOG_COST_ENABLED=false.
+         */
+        get: operations["getCostSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/costs/hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hosts ordered by cost, most expensive first */
+        get: operations["listCostHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/costs/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** APM services ordered by cost */
+        get: operations["listCostServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/costs/containers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Containers ordered by cost */
+        get: operations["listCostContainers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/costs/hosts/{host_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One host's cost and what runs on it */
+        get: operations["getCostHost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/costs/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cost and idle cost per bucket over the range */
+        get: operations["getCostTrend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/costs/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The effective price table (built-in, with the operator's override merged in) */
+        get: operations["getCostPrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kubernetes/clusters": {
         parameters: {
             query?: never;
@@ -4677,6 +4799,227 @@ export interface components {
             last_seen: components["schemas"]["Timestamp"];
             resource_attributes: components["schemas"]["StringMap"];
         };
+        /** @description Provenance of every cost number; rendered next to the figures so an estimate is never mistaken for a bill. */
+        CostPricing: {
+            /** @description Price table version */
+            version: number;
+            /**
+             * @description Date the prices were last collected
+             * @example 2026-09-17
+             */
+            updated: string;
+            /** @example USD */
+            currency: string;
+            /** @description What the estimate ignores (discounts */
+            note: string;
+            /** @description Always true — never billing data */
+            estimated: boolean;
+            /** @description Operator override merged into the table */
+            override_file?: string;
+        };
+        /**
+         * @description Where the host's price came from: an exact instance type in the table or the operator's override, a per-vCPU/per-GB estimate, or none at all (the host is unpriced, not free).
+         * @enum {string}
+         */
+        CostSource: "table" | "override" | "fallback" | "none";
+        CostPrice: {
+            /** Format: double */
+            usd_per_hour: number;
+            source: components["schemas"]["CostSource"];
+            /** @description Caveat for this lookup */
+            note?: string;
+            /**
+             * Format: double
+             * @description Factor applied for the host's region (1.0 when unknown)
+             */
+            region_multiplier: number;
+        };
+        /** @description Fleet cost over the range. total = services + unallocated + unattributed + idle, always. */
+        CostSummary: {
+            /** @example USD */
+            currency: string;
+            /** Format: double */
+            total: number;
+            /**
+             * Format: double
+             * @description Containers linked to an APM service
+             */
+            services: number;
+            /**
+             * Format: double
+             * @description Containers with no linked service
+             */
+            unallocated: number;
+            /**
+             * Format: double
+             * @description Host usage no container explains (work outside containers)
+             */
+            unattributed: number;
+            /**
+             * Format: double
+             * @description Capacity nobody used; never spread over the services
+             */
+            idle: number;
+            /**
+             * Format: double
+             * @description idle / total (0 when total is 0)
+             */
+            idle_share: number;
+            /**
+             * Format: double
+             * @description Run rate
+             */
+            per_hour: number;
+            hosts: number;
+            priced_hosts: number;
+            /** @description Hosts with neither instance facts nor capacity */
+            unpriced_hosts: number;
+            /** Format: double */
+            host_hours: number;
+        };
+        CostHost: {
+            host_id: string;
+            host_name: string;
+            /**
+             * @description cloud.provider; empty when the host is not in a known cloud
+             * @example aws
+             */
+            provider: string;
+            /** @example m5.large */
+            instance_type: string;
+            /** @example eu-central-1 */
+            region: string;
+            /** @example eu-central-1a */
+            zone: string;
+            /**
+             * @description on-demand, spot or preemptible
+             * @example on-demand
+             */
+            lifecycle: string;
+            /** Format: double */
+            vcpus: number;
+            /** Format: double */
+            memory_bytes: number;
+            /**
+             * Format: double
+             * @description Hours the host reported within the range
+             */
+            hours: number;
+            price: components["schemas"]["CostPrice"];
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            services: number;
+            /** Format: double */
+            unallocated: number;
+            /** Format: double */
+            unattributed: number;
+            /** Format: double */
+            idle: number;
+            /**
+             * Format: double
+             * @description Fraction of the machine in use (0..1)
+             */
+            used_share: number;
+            /**
+             * Format: double
+             * @description 1 − used_share
+             */
+            idle_share: number;
+            /** @description Container shares summed above the host's usage and were scaled to fit; the host total stays exact. */
+            oversubscribed: boolean;
+            /** @description False when no price could be determined; contributes to no total */
+            priced: boolean;
+        };
+        CostService: {
+            service_name: string;
+            service_namespace: string;
+            /** @description The same service in two environments is two rows */
+            environment: string;
+            /** Format: double */
+            total: number;
+            hosts: string[];
+            containers: number;
+        };
+        CostContainer: {
+            container_id: string;
+            container_name: string;
+            host_id: string;
+            host_name: string;
+            /** @description Empty when no APM service is linked to this container */
+            service_name: string;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            cpu_share: number;
+            /** Format: double */
+            memory_share: number;
+            /**
+             * Format: double
+             * @description Fraction of its host this container holds
+             */
+            share: number;
+        };
+        CostTrendPoint: {
+            /**
+             * Format: int64
+             * @description Bucket start
+             */
+            t: number;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            idle: number;
+        };
+        CostInstancePrice: {
+            /** Format: double */
+            on_demand: number;
+            /**
+             * Format: double
+             * @description Absent when unknown; the on-demand rate is then used
+             */
+            spot?: number;
+        };
+        /** @description Prices a machine with no table entry from its capacity alone. */
+        CostFallbackRate: {
+            /** Format: double */
+            vcpu_hour: number;
+            /** Format: double */
+            gb_hour: number;
+        };
+        /** @description The effective price table (cost.md §2). Approximate list prices, not billing data. */
+        CostPriceTable: {
+            version: number;
+            /** @example 2026-09-17 */
+            updated: string;
+            /** @example USD */
+            currency: string;
+            note?: string;
+            /** @description Region each provider's prices are quoted for */
+            reference_regions?: {
+                [key: string]: string;
+            };
+            sources?: string[];
+            /** @description provider → instance type → price */
+            instances: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["CostInstancePrice"];
+                };
+            };
+            /** @description provider → region → factor applied to that provider's prices (1.0 when unlisted) */
+            region_multipliers?: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /** @description provider → per-vCPU/per-GB rate; the key "default" covers unknown providers */
+            fallback: {
+                [key: string]: components["schemas"]["CostFallbackRate"];
+            };
+            override_file?: string;
+            /** @description What the operator's override replaced, e.g. "aws/m5.large", "fallback/aws" */
+            overridden_keys?: string[];
+        };
         /**
          * @description `Pod` is accepted but the cluster agent reports no Pod workloads
          * @enum {string}
@@ -8980,6 +9323,264 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             500: components["responses"]["Internal"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    getCostSummary: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        summary: components["schemas"]["CostSummary"];
+                        pricing: components["schemas"]["CostPricing"];
+                        /**
+                         * Format: int64
+                         * @description Unix milliseconds
+                         */
+                        from: number;
+                        /**
+                         * Format: int64
+                         * @description Unix milliseconds
+                         */
+                        to: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listCostHosts: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hosts: components["schemas"]["CostHost"][];
+                        /** @description Hosts before limit */
+                        total: number;
+                        summary: components["schemas"]["CostSummary"];
+                        pricing: components["schemas"]["CostPricing"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listCostServices: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        services: components["schemas"]["CostService"][];
+                        /** @description Services before limit */
+                        total: number;
+                        summary: components["schemas"]["CostSummary"];
+                        pricing: components["schemas"]["CostPricing"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listCostContainers: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Only containers on this host */
+                host_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        containers: components["schemas"]["CostContainer"][];
+                        /** @description Containers before limit */
+                        total: number;
+                        summary: components["schemas"]["CostSummary"];
+                        pricing: components["schemas"]["CostPricing"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getCostHost: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                host_id: components["parameters"]["HostID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        host: components["schemas"]["CostHost"];
+                        services: components["schemas"]["CostService"][];
+                        containers: components["schemas"]["CostContainer"][];
+                        pricing: components["schemas"]["CostPricing"];
+                        /** Format: int64 */
+                        from: number;
+                        /** Format: int64 */
+                        to: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getCostTrend: {
+        parameters: {
+            query?: {
+                /** @description RFC3339 or unix milliseconds. Default now − 1h. */
+                from?: components["parameters"]["From"];
+                /** @description RFC3339 or unix milliseconds. Default now. */
+                to?: components["parameters"]["To"];
+                /** @description Go duration, at least 1m. Default ≈ 400 buckets; the range is always capped at 400 buckets. */
+                step?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 3600s */
+                        step: string;
+                        points: components["schemas"]["CostTrendPoint"][];
+                        pricing: components["schemas"]["CostPricing"];
+                        /** Format: int64 */
+                        from: number;
+                        /** Format: int64 */
+                        to: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getCostPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostPriceTable"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            500: components["responses"]["Internal"];
         };
     };
     listKubernetesClusters: {

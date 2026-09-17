@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import { hostQuery } from "@/api/queries";
 import { HostServices } from "@/components/apm/HostServices";
+import { HostCostCard } from "@/components/costs/HostCostCard";
 import { AttributeChips } from "@/components/AttributeChips";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -89,6 +90,7 @@ export function HostDetailPage() {
           <AttributeChips attributes={h.resource_attributes} max={12} />
         </div>
         <HostServices hostId={hostId} />
+        <HostCostCard hostId={hostId} range={{ range: search.range, from: search.from, to: search.to }} />
       </div>
 
       <Tabs value={tab} onValueChange={(v) => void navigate({ search: (prev) => ({ ...prev, tab: v === "overview" ? undefined : (v as HostTab) }) })}>

@@ -16,10 +16,27 @@ Binding contract between agents and the backend. Where an OpenTelemetry semantic
 | `os.version` | no | `/etc/os-release` `VERSION_ID`; macOS `sw_vers -productVersion`; Windows `<major>.<minor>.<build>` from the registry |
 | `os.description` | no | `/etc/os-release` `PRETTY_NAME`; e.g. `macOS 15.5 (24F74)`, `Windows Server 2022 Datacenter 21H2 (build 20348.2340)` |
 | `openlog.os.kernel_release` | no | `uname -r` equivalent (`/proc/sys/kernel/osrelease`) |
+| `cloud.provider` | no | `aws`, `gcp`, `azure` — the instance metadata service that answered (see "Cloud instance facts" below) |
+| `cloud.platform` | no | `aws_ec2`, `gcp_compute_engine`, `azure_vm` |
+| `cloud.region` | no | `eu-central-1`, `europe-west1`, `westeurope`; derived from the zone where the provider reports only a zone |
+| `cloud.availability_zone` | no | `eu-central-1a`, `europe-west1-b`, `westeurope-2` (Azure: `<location>-<zone>`) |
+| `cloud.account.id` | no | AWS account id, GCP project id, Azure subscription id |
+| `host.type` | no | instance type: `m5.large`, `n2-standard-4`, `Standard_D4s_v5` |
+| `openlog.host.lifecycle` | no | `on-demand`, `spot` or `preemptible` (GCP's legacy preemptible VMs) |
 | `openlog.entity.type` | yes | `host` |
 | `openlog.agent.name` | yes | `openlog-infra-agent` |
 | `openlog.agent.version` | yes | agent build version |
 | *user extra attributes* | no | `host.extra_attributes` from config, sent as-is |
+
+**Cloud instance facts.** The agent asks the instance metadata service **once at start-up** (`host.cloud_metadata: auto`,
+§5) and attaches the answer to every payload; the backend prices the machine from it ([cost.md](cost.md)). The probe is
+bounded to 1.5 s in total and 500 ms per request, uses the link-local address `169.254.169.254` (never DNS, never an
+HTTP proxy), and asks the provider suggested by the DMI system vendor first (AWS IMDSv2 with an IMDSv1 fallback, GCP
+`computeMetadata/v1`, Azure `metadata/instance`). A machine that is **not** in a cloud gets a refused connection, or at
+worst hits the deadline behind a firewall that drops the packets: it simply carries none of these attributes, the agent
+logs nothing at start-up and everything else proceeds unchanged. Hosts without them are priced per vCPU/GB or reported
+as unpriced — never as free. The facts are not re-read while the agent runs; an instance type changes only across a stop
+and start, which restarts the agent anyway.
 
 ### Backend extraction
 
@@ -408,6 +425,7 @@ passes a record that was not sent. An invalid label pattern disables grouping fo
 |---|---|---|
 | `process_metrics.enabled` | `true` | per-process metrics (§2) |
 | `process_metrics.top_n_cpu` / `top_n_memory` | `20` / `20` | top-N sizes; the union is reported |
+| `host.cloud_metadata` | `auto` | `auto` = ask the instance metadata service once at start-up for the cloud instance facts of §1; `off` = never probe |
 | `containers.enabled` | `true` | container inventory and metrics |
 | `containers.docker_socket` | `/var/run/docker.sock` | host path under `host.root_path`; `/run/docker.sock` is tried as a fallback |
 | `containers.cri_sockets` | `[/run/containerd/containerd.sock, /run/k3s/containerd/containerd.sock, /var/run/crio/crio.sock]` | CRI (`runtime.v1`) sockets of containerd / CRI-O, host paths under `host.root_path` (`/var/run/…` also tried as `/run/…`); containers of every answering socket are added to Docker's (union by id, Docker wins); CRI errors are ignored while Docker works; a socket without the CRI service is not asked again for 5 min; `[]` disables |

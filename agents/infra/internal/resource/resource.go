@@ -104,7 +104,10 @@ type Info struct {
 	AgentVersion  string
 	// OSType is os.type: "linux" (default when empty), "darwin" or "windows".
 	OSType string
-	Extra  map[string]string
+	// Cloud holds the instance facts of a cloud machine (cloud.go); zero when the host is
+	// not in a cloud or the metadata service did not answer.
+	Cloud CloudFacts
+	Extra map[string]string
 }
 
 // Detect gathers resource information from the host file system.
@@ -187,6 +190,14 @@ func (i Info) Proto() *resourcepb.Resource {
 	opt("os.version", i.OSVersion)
 	opt("os.description", i.OSDescription)
 	opt("openlog.os.kernel_release", i.KernelRelease)
+	// Cloud instance facts; all absent on a machine that is not in a cloud (cloud.go).
+	opt("cloud.provider", i.Cloud.Provider)
+	opt("cloud.platform", i.Cloud.Platform)
+	opt("cloud.region", i.Cloud.Region)
+	opt("cloud.availability_zone", i.Cloud.Zone)
+	opt("cloud.account.id", i.Cloud.AccountID)
+	opt("host.type", i.Cloud.InstanceType)
+	opt("openlog.host.lifecycle", i.Cloud.Lifecycle)
 	attrs = append(attrs,
 		otlputil.Str("openlog.entity.type", "host"),
 		otlputil.Str("openlog.agent.name", AgentName),

@@ -230,7 +230,14 @@ type JournaldInput struct {
 type HostConfig struct {
 	RootPath        string            `yaml:"root_path"`
 	ExtraAttributes map[string]string `yaml:"extra_attributes"`
+	// CloudMetadata is "auto" (default) or "off": ask the cloud instance metadata service once at
+	// start-up for provider, instance type, region and lifecycle (semantic-conventions §1). "off"
+	// skips the probe entirely, e.g. on a machine whose metadata address is used for something else.
+	CloudMetadata string `yaml:"cloud_metadata"`
 }
+
+// CloudMetadataEnabled reports whether the instance metadata probe should run.
+func (h HostConfig) CloudMetadataEnabled() bool { return h.CloudMetadata != "off" }
 
 // Collectors toggles metric collectors.
 type Collectors struct {
@@ -277,7 +284,7 @@ func DefaultFor(goos string) *Config {
 		InventoryInterval: Duration(time.Hour),
 		StateDir:          DefaultStateDir,
 		LogLevel:          "info",
-		Host:              HostConfig{RootPath: "/"},
+		Host:              HostConfig{RootPath: "/", CloudMetadata: "auto"},
 		Collectors: Collectors{
 			CPU: true, Memory: true, Load: true, Filesystem: true,
 			Disk: true, Network: true, Uptime: true, Processes: true,
@@ -380,6 +387,11 @@ func (c *Config) Validate(requireExport bool) error {
 	}
 	if c.Host.RootPath == "" || !isAbsPath(c.Host.RootPath) {
 		add("host.root_path must be an absolute path")
+	}
+	switch c.Host.CloudMetadata {
+	case "", "auto", "off":
+	default:
+		add("host.cloud_metadata must be auto or off (got %q)", c.Host.CloudMetadata)
 	}
 	if c.StateDir == "" {
 		add("state_dir must not be empty")

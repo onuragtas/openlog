@@ -5,6 +5,7 @@ import { accountHandlers, authenticate } from "./account";
 import { alertHandlers } from "./alerts";
 import { apmHandlers, transactionTraceIds } from "./apm";
 import { containerHandlers, containerLogs } from "./containers";
+import { costHandlers } from "./costs";
 import { kubernetesHandlers, kubernetesLogs } from "./kubernetes";
 import { fleetHandlers } from "./fleet";
 import { integrationSettingsHandlers } from "./integrationSettings";
@@ -295,6 +296,7 @@ export const handlers = [
   ...fleetHandlers,
   ...integrationSettingsHandlers,
   ...containerHandlers,
+  ...costHandlers, // mocks/costs.ts: infrastructure cost estimates (D-134)
   ...kubernetesHandlers,
   ...apmHandlers,
   ...alertHandlers,

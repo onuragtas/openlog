@@ -144,11 +144,23 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 			log.Debug("host.id not published for APM agents", "error", err)
 		}
 	}
+	var info resource.Info
 	if a.fs.NativeOS() {
-		a.res = resource.DetectNative(hostID, version, hostAttributes(cfg)).Proto()
+		info = resource.DetectNative(hostID, version, hostAttributes(cfg))
 	} else {
-		a.res = resource.Detect(a.fs, hostID, version, hostAttributes(cfg)).Proto() // php_agent.go
+		info = resource.Detect(a.fs, hostID, version, hostAttributes(cfg)) // php_agent.go
 	}
+	// Cloud instance facts: one bounded probe of the instance metadata service at start-up
+	// (semantic-conventions §1). A machine that is not in a cloud gets no cloud attributes; the
+	// probe cannot delay start-up by more than resource.CloudProbeTimeout and never fails hard.
+	if cfg.Host.CloudMetadataEnabled() {
+		info.Cloud = resource.DetectCloud(context.Background(), resource.CloudHint(a.fs))
+		if info.Cloud.Detected() {
+			log.Info("cloud instance facts detected", "provider", info.Cloud.Provider, "instance_type", info.Cloud.InstanceType,
+				"region", info.Cloud.Region, "lifecycle", info.Cloud.Lifecycle)
+		}
+	}
+	a.res = info.Proto()
 	a.stats.SetCollectionInterval(a.interval)
 	if cfg.Containers.Enabled {
 		a.ctr = containers.NewSource(a.fs, cfg.Containers.DockerSocket)

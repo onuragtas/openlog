@@ -21,6 +21,7 @@ import (
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/cost"
 	"github.com/onuragtas/openlog/internal/dashboard"
 	"github.com/onuragtas/openlog/internal/fleet"
 	"github.com/onuragtas/openlog/internal/fleet/catalog"
@@ -79,6 +80,15 @@ type Server struct {
 	synthetics synthetics.Store
 	// verified release catalog of the language agent version comparison (apm_agents.go, D-124); nil: statuses unknown
 	agentReleases func() *catalog.Snapshot
+	// price table of the infrastructure cost endpoints (cost.go, cost.md, D-134); nil: no cost endpoints
+	costs *cost.Table
+}
+
+// SetCostPrices enables /api/v1/costs/* with t as the effective price table
+// (the built-in table with the operator's override merged in). Must be called before Run.
+func (s *Server) SetCostPrices(t *cost.Table) {
+	s.costs = t
+	s.srv.Handler = s.Handler()
 }
 
 // SetUI mounts h (the embedded web UI) at "/" for every non-/api path.
@@ -153,6 +163,7 @@ func (s *Server) Handler() http.Handler {
 	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
 	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
+	s.costRoutes(mux)         // cost.go: per-host, per-service and per-container cost estimates (D-134)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})

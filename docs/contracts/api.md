@@ -610,6 +610,75 @@ over the range: `{"services": [{"service_name", "service_namespace", "environmen
 
 Container logs: `GET /api/v1/logs?container_id=…` (see Logs).
 
+## Costs
+
+Infrastructure cost estimates ([cost.md](cost.md), D-134): every host is priced from the cloud instance facts its agent
+reported (semantic-conventions.md §1) against a static price table in the repository, and that price is split over the
+services and containers on the host with the CPU and memory of the 1-minute rollup. Telemetry permissions (any role,
+API keys too); every query is tenant-scoped. Enabled with `OPENLOG_COST_ENABLED` (default on); when it is off these
+endpoints do not exist (`404 not_found`, `"no such endpoint"`).
+
+**These numbers are estimates, not billing data.** They ignore committed-use and savings-plan discounts, enterprise
+agreements, credits, taxes, licences, storage, network egress and support. Every response carries a `pricing` object
+(`{"version", "updated", "currency", "note", "estimated": true, "override_file"?}`) so a number is never rendered
+without its caveat; the UI shows the note. Use them to compare services and find idle capacity, never to reconcile
+an invoice.
+
+**How a host's cost is split** (cost.md §3 has the formula and its assumptions). Over the requested range each host
+contributes `price per hour × hours it reported`, and that total decomposes into four buckets that always add up to it:
+
+| Bucket | Meaning |
+|---|---|
+| `services` | containers linked to an APM service (`apm_service_containers`, apm.md §1) |
+| `unallocated` | containers openlog sees but cannot link to a service |
+| `unattributed` | host usage no container explains, e.g. a database running straight on the machine |
+| `idle` | capacity nobody used at all |
+
+Idle is **never** spread over the services: an idle machine is the finding, not a rounding error. A host whose instance
+type is unknown is priced per vCPU and per GB; a host with neither instance facts nor capacity is reported with
+`"priced": false` and counted in `unpriced_hosts` — never as costing nothing.
+
+**Summary object** (`CostSummary`): `{"currency", "total", "services", "unallocated", "unattributed", "idle",
+"idle_share", "per_hour", "hosts", "priced_hosts", "unpriced_hosts", "host_hours"}`. `per_hour` is the run rate
+(`total / host_hours`), `idle_share` is `idle / total`.
+
+**Host cost object** (`CostHost`): the host's identity and instance facts (`host_id`, `host_name`, `provider`,
+`instance_type`, `region`, `zone`, `lifecycle`, `vcpus`, `memory_bytes`), `hours`, the resolved `price`
+(`{"usd_per_hour", "source": "table"|"override"|"fallback"|"none", "note"?, "region_multiplier"}`), the four buckets,
+`used_share`/`idle_share`, `oversubscribed` (the containers' shares summed above the host's usage and were scaled to
+fit; the host total stays exact) and `priced`.
+
+### `GET /api/v1/costs/summary?from=&to=`
+`{"summary": CostSummary, "pricing": {…}, "from": 1757757600000, "to": 1757761200000}`.
+
+### `GET /api/v1/costs/hosts?from=&to=&limit=`
+Hosts ordered by cost, most expensive first: `{"hosts": [CostHost…], "total": 12, "summary": CostSummary, "pricing": {…}}`.
+`total` counts hosts before `limit`.
+
+### `GET /api/v1/costs/services?from=&to=&limit=`
+`{"services": [{"service_name", "service_namespace", "environment", "total", "hosts": ["…"], "containers": 3}…],
+"total": 8, "summary": CostSummary, "pricing": {…}}`, ordered by cost. The same service name in two environments is
+two rows.
+
+### `GET /api/v1/costs/containers?host_id=&from=&to=&limit=`
+`{"containers": [{"container_id", "container_name", "host_id", "host_name", "service_name", "total", "cpu_share",
+"memory_share", "share"}…], "total": 40, "summary": CostSummary, "pricing": {…}}`, ordered by cost. `share` is the
+fraction of its host the container holds; `service_name` is `""` when no service is linked.
+
+### `GET /api/v1/costs/hosts/{host_id}?from=&to=`
+One host's cost card, or `404` when the host has no record in the caller's organization:
+`{"host": CostHost, "services": [CostService…], "containers": [CostContainer…], "pricing": {…}, "from", "to"}`.
+
+### `GET /api/v1/costs/trend?from=&to=&step=`
+Run rate over time: `{"step": "3600s", "points": [{"t": 1757757600000, "total": 0.42, "idle": 0.21}…], "pricing": {…},
+"from", "to"}`. `step` is a Go duration of at least `1m` (default ≈ 400 points, capped at 400 buckets); each bucket is
+priced from the minutes and usage of that bucket alone.
+
+### `GET /api/v1/costs/prices`
+The effective price table — the built-in table with the operator's override merged in — so a correction can be
+confirmed without reading the container's filesystem: `{"version", "updated", "currency", "note", "reference_regions",
+"sources", "instances", "region_multipliers", "fallback", "override_file"?, "overridden_keys"?}`.
+
 ## Kubernetes
 
 Kubernetes clusters, nodes, workloads, pods and events reported by the infra agent in node and cluster mode

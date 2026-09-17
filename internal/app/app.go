@@ -22,6 +22,7 @@ import (
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/cost"
 	"github.com/onuragtas/openlog/internal/ingest"
 	"github.com/onuragtas/openlog/internal/logging"
 	"github.com/onuragtas/openlog/internal/processor"
@@ -287,6 +288,13 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		apmSettings = apm.PGSettings{Pool: pgPool}
 	}
 	srv.SetAPM(apmSettings, cfg.APM.DefaultApdexT)
+	if cfg.Cost.Enabled { // infrastructure cost estimates (cost.md, D-134)
+		prices, err := cost.Load(cfg.Cost.PricesFile)
+		if err != nil {
+			return err // a price override the operator meant to apply must not be ignored
+		}
+		srv.SetCostPrices(prices)
+	}
 	if pgPool != nil {
 		srv.SetAPMErrorStates(apm.PGErrorStates{Pool: pgPool}) // error inbox workflow (apm.md §3.4)
 		srv.SetSLOs(slo.NewPGStore(pgPool))                    // service level objectives (slo.md)

@@ -34,6 +34,10 @@ tags:
     description: Application performance monitoring derived from traces (apm.md)
   - name: containers
     description: Containers reported by the infra agent (semantic-conventions.md §2) and their APM services
+  - name: costs
+    description: >-
+      Infrastructure cost estimates by host, service and container, with the idle share (cost.md, D-134).
+      Estimates from a static price table, never billing data.
   - name: kubernetes
     description: Kubernetes clusters, nodes, workloads, pods and events (semantic-conventions.md §7)
   - name: fleet
@@ -252,6 +256,205 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
         "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/summary:
+    get:
+      tags: [costs]
+      operationId: getCostSummary
+      summary: Fleet cost over the range, with the idle share
+      description: Estimates from a static price table, not billing data. Absent when OPENLOG_COST_ENABLED=false.
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [summary, pricing, from, to]
+                properties:
+                  summary: { $ref: "#/components/schemas/CostSummary" }
+                  pricing: { $ref: "#/components/schemas/CostPricing" }
+                  from: { type: integer, format: int64, description: Unix milliseconds }
+                  to: { type: integer, format: int64, description: Unix milliseconds }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/hosts:
+    get:
+      tags: [costs]
+      operationId: listCostHosts
+      summary: Hosts ordered by cost, most expensive first
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hosts, total, summary, pricing]
+                properties:
+                  hosts:
+                    type: array
+                    items: { $ref: "#/components/schemas/CostHost" }
+                  total: { type: integer, description: Hosts before limit }
+                  summary: { $ref: "#/components/schemas/CostSummary" }
+                  pricing: { $ref: "#/components/schemas/CostPricing" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/services:
+    get:
+      tags: [costs]
+      operationId: listCostServices
+      summary: APM services ordered by cost
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services, total, summary, pricing]
+                properties:
+                  services:
+                    type: array
+                    items: { $ref: "#/components/schemas/CostService" }
+                  total: { type: integer, description: Services before limit }
+                  summary: { $ref: "#/components/schemas/CostSummary" }
+                  pricing: { $ref: "#/components/schemas/CostPricing" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/containers:
+    get:
+      tags: [costs]
+      operationId: listCostContainers
+      summary: Containers ordered by cost
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Limit"
+        - name: host_id
+          in: query
+          description: Only containers on this host
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [containers, total, summary, pricing]
+                properties:
+                  containers:
+                    type: array
+                    items: { $ref: "#/components/schemas/CostContainer" }
+                  total: { type: integer, description: Containers before limit }
+                  summary: { $ref: "#/components/schemas/CostSummary" }
+                  pricing: { $ref: "#/components/schemas/CostPricing" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/hosts/{host_id}:
+    get:
+      tags: [costs]
+      operationId: getCostHost
+      summary: One host's cost and what runs on it
+      parameters:
+        - $ref: "#/components/parameters/HostID"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [host, services, containers, pricing, from, to]
+                properties:
+                  host: { $ref: "#/components/schemas/CostHost" }
+                  services:
+                    type: array
+                    items: { $ref: "#/components/schemas/CostService" }
+                  containers:
+                    type: array
+                    items: { $ref: "#/components/schemas/CostContainer" }
+                  pricing: { $ref: "#/components/schemas/CostPricing" }
+                  from: { type: integer, format: int64 }
+                  to: { type: integer, format: int64 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/trend:
+    get:
+      tags: [costs]
+      operationId: getCostTrend
+      summary: Cost and idle cost per bucket over the range
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: step
+          in: query
+          description: Go duration, at least 1m. Default ≈ 400 buckets; the range is always capped at 400 buckets.
+          schema: { type: string, example: 1h }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [step, points, pricing, from, to]
+                properties:
+                  step: { type: string, example: 3600s }
+                  points:
+                    type: array
+                    items: { $ref: "#/components/schemas/CostTrendPoint" }
+                  pricing: { $ref: "#/components/schemas/CostPricing" }
+                  from: { type: integer, format: int64 }
+                  to: { type: integer, format: int64 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/costs/prices:
+    get:
+      tags: [costs]
+      operationId: getCostPrices
+      summary: The effective price table (built-in, with the operator's override merged in)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CostPriceTable" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "500": { $ref: "#/components/responses/Internal" }
 
   /api/v1/kubernetes/clusters:
     get:
@@ -7203,6 +7406,170 @@ components:
         agent_version: { type: string }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
         resource_attributes: { $ref: "#/components/schemas/StringMap" }
+
+    CostPricing:
+      type: object
+      description: Provenance of every cost number; rendered next to the figures so an estimate is never mistaken for a bill.
+      required: [version, updated, currency, note, estimated]
+      properties:
+        version: { type: integer, description: Price table version }
+        updated: { type: string, example: "2026-09-17", description: Date the prices were last collected }
+        currency: { type: string, example: USD }
+        note: { type: string, description: What the estimate ignores (discounts, taxes, storage, egress, …) }
+        estimated: { type: boolean, description: Always true — never billing data }
+        override_file: { type: string, description: Operator override merged into the table, when configured }
+
+    CostSource:
+      type: string
+      description: >-
+        Where the host's price came from: an exact instance type in the table or the operator's override,
+        a per-vCPU/per-GB estimate, or none at all (the host is unpriced, not free).
+      enum: [table, override, fallback, none]
+
+    CostPrice:
+      type: object
+      required: [usd_per_hour, source, region_multiplier]
+      properties:
+        usd_per_hour: { type: number, format: double }
+        source: { $ref: "#/components/schemas/CostSource" }
+        note: { type: string, description: Caveat for this lookup, e.g. an unknown spot price }
+        region_multiplier: { type: number, format: double, description: Factor applied for the host's region (1.0 when unknown) }
+
+    CostSummary:
+      type: object
+      description: >-
+        Fleet cost over the range. total = services + unallocated + unattributed + idle, always.
+      required: [currency, total, services, unallocated, unattributed, idle, idle_share, per_hour,
+        hosts, priced_hosts, unpriced_hosts, host_hours]
+      properties:
+        currency: { type: string, example: USD }
+        total: { type: number, format: double }
+        services: { type: number, format: double, description: Containers linked to an APM service }
+        unallocated: { type: number, format: double, description: Containers with no linked service }
+        unattributed: { type: number, format: double, description: Host usage no container explains (work outside containers) }
+        idle: { type: number, format: double, description: Capacity nobody used; never spread over the services }
+        idle_share: { type: number, format: double, description: idle / total (0 when total is 0) }
+        per_hour: { type: number, format: double, description: Run rate, total / host_hours }
+        hosts: { type: integer }
+        priced_hosts: { type: integer }
+        unpriced_hosts: { type: integer, description: Hosts with neither instance facts nor capacity }
+        host_hours: { type: number, format: double }
+
+    CostHost:
+      type: object
+      required: [host_id, host_name, provider, instance_type, region, zone, lifecycle, vcpus, memory_bytes,
+        hours, price, total, services, unallocated, unattributed, idle, used_share, idle_share, oversubscribed, priced]
+      properties:
+        host_id: { type: string }
+        host_name: { type: string }
+        provider: { type: string, example: aws, description: "cloud.provider; empty when the host is not in a known cloud" }
+        instance_type: { type: string, example: m5.large }
+        region: { type: string, example: eu-central-1 }
+        zone: { type: string, example: eu-central-1a }
+        lifecycle: { type: string, example: on-demand, description: "on-demand, spot or preemptible" }
+        vcpus: { type: number, format: double }
+        memory_bytes: { type: number, format: double }
+        hours: { type: number, format: double, description: Hours the host reported within the range }
+        price: { $ref: "#/components/schemas/CostPrice" }
+        total: { type: number, format: double }
+        services: { type: number, format: double }
+        unallocated: { type: number, format: double }
+        unattributed: { type: number, format: double }
+        idle: { type: number, format: double }
+        used_share: { type: number, format: double, description: Fraction of the machine in use (0..1) }
+        idle_share: { type: number, format: double, description: 1 − used_share }
+        oversubscribed:
+          type: boolean
+          description: Container shares summed above the host's usage and were scaled to fit; the host total stays exact.
+        priced: { type: boolean, description: False when no price could be determined; contributes to no total }
+
+    CostService:
+      type: object
+      required: [service_name, service_namespace, environment, total, hosts, containers]
+      properties:
+        service_name: { type: string }
+        service_namespace: { type: string }
+        environment: { type: string, description: The same service in two environments is two rows }
+        total: { type: number, format: double }
+        hosts:
+          type: array
+          items: { type: string }
+        containers: { type: integer }
+
+    CostContainer:
+      type: object
+      required: [container_id, container_name, host_id, host_name, service_name, total, cpu_share, memory_share, share]
+      properties:
+        container_id: { type: string }
+        container_name: { type: string }
+        host_id: { type: string }
+        host_name: { type: string }
+        service_name: { type: string, description: Empty when no APM service is linked to this container }
+        total: { type: number, format: double }
+        cpu_share: { type: number, format: double }
+        memory_share: { type: number, format: double }
+        share: { type: number, format: double, description: Fraction of its host this container holds }
+
+    CostTrendPoint:
+      type: object
+      required: [t, total, idle]
+      properties:
+        t: { type: integer, format: int64, description: Bucket start, unix milliseconds }
+        total: { type: number, format: double }
+        idle: { type: number, format: double }
+
+    CostInstancePrice:
+      type: object
+      required: [on_demand]
+      properties:
+        on_demand: { type: number, format: double }
+        spot: { type: number, format: double, description: Absent when unknown; the on-demand rate is then used }
+
+    CostFallbackRate:
+      type: object
+      description: Prices a machine with no table entry from its capacity alone.
+      required: [vcpu_hour, gb_hour]
+      properties:
+        vcpu_hour: { type: number, format: double }
+        gb_hour: { type: number, format: double }
+
+    CostPriceTable:
+      type: object
+      description: The effective price table (cost.md §2). Approximate list prices, not billing data.
+      required: [version, updated, currency, instances, fallback]
+      properties:
+        version: { type: integer }
+        updated: { type: string, example: "2026-09-17" }
+        currency: { type: string, example: USD }
+        note: { type: string }
+        reference_regions:
+          type: object
+          description: Region each provider's prices are quoted for
+          additionalProperties: { type: string }
+        sources:
+          type: array
+          items: { type: string }
+        instances:
+          type: object
+          description: provider → instance type → price
+          additionalProperties:
+            type: object
+            additionalProperties: { $ref: "#/components/schemas/CostInstancePrice" }
+        region_multipliers:
+          type: object
+          description: provider → region → factor applied to that provider's prices (1.0 when unlisted)
+          additionalProperties:
+            type: object
+            additionalProperties: { type: number, format: double }
+        fallback:
+          type: object
+          description: provider → per-vCPU/per-GB rate; the key "default" covers unknown providers
+          additionalProperties: { $ref: "#/components/schemas/CostFallbackRate" }
+        override_file: { type: string }
+        overridden_keys:
+          type: array
+          description: What the operator's override replaced, e.g. "aws/m5.large", "fallback/aws"
+          items: { type: string }
 
     KubernetesWorkloadKind:
       type: string
