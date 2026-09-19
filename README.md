@@ -7,6 +7,11 @@ Runs as a hosted service or self-hosted, from a single machine up to a horizonta
 > agents, alerting, OQL dashboards, Kubernetes, SSO/SCIM, quotas, tiered storage). Long-running validation and the
 > operational release steps are listed in [the roadmap](docs/plan/06-roadmap.md#v10--tamamlanma-kriterleri).
 
+### 👉 [What openlog does — a tour of the product, screen by screen](docs/features.md)
+
+Infrastructure, APM, logs, browser monitoring, dashboards and alerting in one installation — with what is
+deliberately **not** built named at the end.
+
 ## Install on a server (Docker Compose, single machine)
 
 This is the `single` profile: PostgreSQL, Kafka, ClickHouse and `openlog-allinone` (ingest + processor + API +
