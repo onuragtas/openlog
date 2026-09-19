@@ -29,7 +29,13 @@ func TestTTLPlanClassRetention(t *testing.T) {
 	if _, ok := got["spans_local"]; ok {
 		t.Error("spans_local changed although its class retention equals the schema")
 	}
-	if len(plan.Steps) != 2 {
-		t.Errorf("want 2 steps, got %v", got)
+	// The database monitoring tables of the metrics class (D-138) widen with it; the per-tenant job trims them.
+	for _, table := range []string{"db_query_stats_local", "db_query_plans_local"} {
+		if !strings.Contains(got[table], "INTERVAL 90 DAY") {
+			t.Errorf("%s = %q, want the metrics class retention", table, got[table])
+		}
+	}
+	if len(plan.Steps) != 4 {
+		t.Errorf("want 4 steps, got %v", got)
 	}
 }

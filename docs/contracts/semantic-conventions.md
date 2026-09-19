@@ -800,6 +800,13 @@ Resources: one per site (`iis.site`) and one per application pool (`iis.applicat
 Not collected: `iis.uptime`, `iis.application_pool.uptime` (elapsed-time counters need the performance counter timebase), `iis.request.queue.*`,
 `iis.request.rejected`, `iis.thread.active` (HTTP Service Request Queues / W3SVC_W3WP classes).
 
+### 6.8b Database query performance (`query_stats`, D-138)
+
+Turned on per database integration (`integrations.<postgresql|mysql|mssql>.query_stats.enabled`), the agent sends
+statement statistics, session samples and execution plans as OTLP **log records**, which the processor routes to
+its own tables rather than to `logs`. The records, their attributes, what each server needs and the API are the
+contract of [db-monitoring.md](db-monitoring.md); the server metrics of §6.4–6.7 are unchanged by it.
+
 ### 6.9 Prometheus and OpenMetrics endpoints (`prometheus`, D-137)
 
 Not bound to discovery: the infra agent scrapes (a) the static `prometheus.targets[]` of `config.yaml`, (b) running containers

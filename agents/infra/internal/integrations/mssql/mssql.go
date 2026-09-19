@@ -113,6 +113,8 @@ type collector struct {
 	// Previous cumulative "/sec" counters for the .rate gauges.
 	prev   map[string]int64
 	prevAt time.Time
+	// mon is the query performance monitoring state (dbmon.go).
+	mon queryMon
 }
 
 func openDB(ctx context.Context, dsn string) (*sql.DB, error) {
@@ -320,6 +322,11 @@ func (c *collector) collect(ctx context.Context, b *integrations.Batch) error {
 		partial = append(partial, "wait stats: "+c.classify(err).Error())
 	} else {
 		RecordWaits(s, rows)
+	}
+	if qs := c.inst.Settings.QueryStats; qs != nil && qs.Enabled {
+		if err := c.collectQueryStats(ctx, b); err != nil {
+			partial = append(partial, "query monitoring: "+err.Error())
+		}
 	}
 	if len(partial) > 0 {
 		return integrations.Partial(errors.New(strings.Join(partial, "; ")))

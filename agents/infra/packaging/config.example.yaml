@@ -131,6 +131,14 @@ integrations:                    # metric integrations bound to discovered servi
     #     password: env:OPENLOG_MYSQL2_PASSWORD
   postgresql:
     enabled: true                # needs credentials: GRANT pg_monitor TO openlog
+    # query_stats: query performance monitoring (Databases screen, docs/contracts/db-monitoring.md); opt-in.
+    #   enabled: true            # statements (pg_stat_statements), session samples and execution plans
+    #   top_n: 20                # statements sent per collection, by time spent in the interval (max 100)
+    #   min_calls: 1             # skip statements executed fewer times in total
+    #   sessions: true           # sample non-idle sessions (waits, blocking) every sample_interval
+    #   sample_interval: 10s
+    #   explain: true            # EXPLAIN the top statements (never executes them; read statements only)
+    #   explain_interval: 1h
     # username: openlog
     # password: env:OPENLOG_POSTGRESQL_PASSWORD
     # database: postgres         # initial database
@@ -139,6 +147,8 @@ integrations:                    # metric integrations bound to discovered servi
     # top_n_tables: 20           # largest tables and indexes per database
   docker:
     enabled: true                # reports Docker Engine API access; container.* metrics come from containers
+  # mysql and mssql take the same query_stats block as postgresql (performance_schema digests /
+  # sys.dm_exec_query_stats, sessions with their waits and blocking, EXPLAIN / cached showplan).
 
 prometheus:                      # scrape Prometheus/OpenMetrics endpoints (semantic-conventions §6.9)
   enabled: true

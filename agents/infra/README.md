@@ -205,6 +205,40 @@ Dependencies: `github.com/go-sql-driver/mysql` (MPL-2.0, used unmodified as a li
 `github.com/golang-sql/civil`, `github.com/golang-sql/sqlexp` (BSD-3-Clause), `github.com/google/uuid`, `github.com/shopspring/decimal` (MIT),
 `golang.org/x/crypto` (BSD-3-Clause), `github.com/yusufpapurcu/wmi`, `github.com/go-ole/go-ole` (MIT).
 
+## Database query performance
+
+Turned on per database integration, the agent also reports **what runs on the database server**: statement
+statistics, the sessions and their waits, and execution plans (`docs/contracts/db-monitoring.md`). It appears under
+**Databases** in openlog, and a statement links to the APM services that send it.
+
+```yaml
+# /etc/openlog-infra-agent/config.yaml
+integrations:
+  postgresql:
+    username: openlog
+    password: file:/etc/openlog-infra-agent/postgresql.password
+    query_stats:
+      enabled: true          # statements, sessions and plans
+      top_n: 20              # statements sent per collection, by time spent in the interval
+      sessions: true         # sample non-idle sessions every sample_interval
+      sample_interval: 10s
+      explain: true          # capture execution plans of the top statements
+      explain_interval: 1h
+```
+
+The same `query_stats` block works for `mysql` and `mssql`. What each server needs:
+
+| | Statements | Sessions and blocking | Plans |
+|---|---|---|---|
+| PostgreSQL | `pg_stat_statements` (`shared_preload_libraries`, `CREATE EXTENSION`), role with `pg_monitor` | `pg_stat_activity`, `pg_blocking_pids()` | `GRANT pg_read_all_data` (read statements only; PostgreSQL 16+ also plans parameterized ones) |
+| MySQL / MariaDB | `performance_schema` on with statement digests | `performance_schema.threads`, `data_lock_waits` (MySQL 8) | `SELECT` on the schemas; read statements only |
+| SQL Server | `VIEW SERVER STATE` | `sys.dm_exec_requests` | from the plan cache, no extra permission |
+
+Statement text never leaves the host with its values: literals are replaced by `?` before sending, and the
+execution plans are redacted too (MySQL conditions, SQL Server parameter values). The agent's own monitoring
+statements are excluded. Sessions are sampled every 10 s by default — set `sessions: false` to turn that off,
+`explain: false` for the plans.
+
 ## Prometheus and OpenMetrics endpoints
 
 The agent scrapes any endpoint that speaks the Prometheus text format or OpenMetrics (node_exporter, the exporters of

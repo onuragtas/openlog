@@ -67,6 +67,11 @@ var TTLTables = []TTLTable{
 	// as a whole, and a profile is the widest row openlog stores — a tenant that lengthens its trace
 	// retention must not silently multiply its profiling bill too.
 	{"profiles_local", "profiles", "toDateTime(timestamp)", 7},
+	// Database monitoring (0096_db_monitoring, D-138): statement statistics and plans are per-interval numbers like
+	// metrics and keep their class; session samples are high-volume diagnostic events like spans.
+	{"db_query_stats_local", "metrics", "toDateTime(timestamp)", 30},
+	{"db_query_plans_local", "metrics", "toDateTime(captured_at)", 30},
+	{"db_session_samples_local", "traces", "toDateTime(timestamp)", 7},
 	{"alert_evaluations_local", "alerts", "toDateTime(evaluated_at)", 30},
 	// Synthetic check runs (0093_synthetic_runs, D-132) are operational results of the installation like the
 	// alert evaluations, so they share their class and 30-day retention.

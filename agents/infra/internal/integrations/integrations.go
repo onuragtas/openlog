@@ -46,6 +46,16 @@ type Collector interface {
 	Close()
 }
 
+// Sampler is implemented by collectors that take samples more often than they collect, e.g. the active sessions
+// of a database server (db-monitoring.md §3.2). Samples only produce events; their errors do not change the
+// instance status (the collection reports connectivity and permissions).
+type Sampler interface {
+	// SampleInterval returns how often to sample; 0 disables sampling.
+	SampleInterval() time.Duration
+	// Sample records one sample into b.
+	Sample(ctx context.Context, b *Batch) error
+}
+
 // EndpointSpec tells the framework how to find an instance's endpoint.
 type EndpointSpec struct {
 	// DefaultPort is tried first among the service's ports (0: none).

@@ -21,7 +21,9 @@ const (
 // Tables lists all tables in insert order. Hosts go last so a host only
 // appears once its telemetry has been written. The re-link queue follows spans:
 // a queued minute's late spans are stored before the leader can read the row.
-var Tables = []string{TableMetrics, TableMetricExemplars, TableLogs, TableSpans, TableRelinkQueue, TableProfiles, TableInventoryItems, TableInventorySnapshots, TableHosts, TableUsageIngest}
+var Tables = []string{TableMetrics, TableMetricExemplars, TableLogs, TableSpans, TableRelinkQueue, TableProfiles,
+	TableInventoryItems, TableInventorySnapshots, TableDBQueryStats, TableDBSessionSamples, TableDBQueryPlans,
+	TableHosts, TableUsageIngest}
 
 // Columns per table; Values() of each row type follows the same order.
 var Columns = map[string][]string{
@@ -52,6 +54,15 @@ var Columns = map[string][]string{
 		"host_id", "profile_type", "unit", "stack", "leaf", "value", "duration_ns", "resource_attributes",
 		"attributes"}, // 0095_profiles
 	TableUsageIngest: {"tenant_id", "hour", "signal", "requests", "bytes"}, // usage.go
+	// 0096_db_monitoring (dbmon.go, D-138)
+	TableDBQueryStats: {"tenant_id", "timestamp", "interval_seconds", "host_id", "host_name", "db_system", "instance",
+		"server_address", "server_port", "db_name", "db_user", "query_id", "query_text", "fingerprint", "calls", "total_time_ms",
+		"rows", "rows_examined", "errors", "no_index_used", "blocks_hit", "blocks_read"},
+	TableDBSessionSamples: {"tenant_id", "timestamp", "host_id", "host_name", "db_system", "instance", "db_name", "db_user",
+		"session_id", "state", "wait_event_type", "wait_event", "query_id", "query_text", "fingerprint", "duration_ms",
+		"blocking_session_ids", "application", "client_address"},
+	TableDBQueryPlans: {"tenant_id", "captured_at", "instance", "fingerprint", "plan_hash", "db_system", "host_id", "db_name",
+		"query_text", "plan_format", "plan", "total_cost"},
 }
 
 // MetricRow is one data point.

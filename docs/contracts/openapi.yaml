@@ -47,6 +47,8 @@ tags:
     description: Service level objectives, error budgets and burn rates (slo.md, D-125)
   - name: synthetics
     description: Scheduled outside-in HTTP checks, their uptime and latency (api.md "Synthetic monitoring", D-132)
+  - name: db
+    description: Database query performance monitoring — statements, waits, blocking sessions, plans (db-monitoring.md, D-138)
   - name: rum
     description: >-
       Real user monitoring: page views, Core Web Vitals, sessions and their trace links, collected by the
@@ -2577,6 +2579,158 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  # -------------------------------------------------------------- database monitoring (D-138)
+  /api/v1/db/instances:
+    get:
+      tags: [db]
+      operationId: listDbInstances
+      description: Database instances that sent statement statistics or session samples in the range (db-monitoring.md §5).
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Instances, heaviest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [instances]
+                properties:
+                  instances: { type: array, items: { $ref: "#/components/schemas/DbInstance" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/db/queries:
+    get:
+      tags: [db]
+      operationId: listDbQueries
+      description: Statements of one instance in the range.
+      parameters:
+        - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 }, description: "service.instance.id of the database instance" }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, avg, rows, errors, reads], default: time } }
+        - { name: db, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: case-insensitive substring of the statement }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: Statements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queries, total_time_ms]
+                properties:
+                  queries: { type: array, items: { $ref: "#/components/schemas/DbQuery" } }
+                  total_time_ms: { type: number, description: statement time of the whole instance in the range }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/db/queries/{fingerprint}:
+    get:
+      tags: [db]
+      operationId: getDbQuery
+      description: One statement of an instance with its series, plans, wait events and the APM services that run it.
+      parameters:
+        - { name: fingerprint, in: path, required: true, schema: { type: string, pattern: "^[0-9]+$" } }
+        - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 }, description: "service.instance.id of the database instance" }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: step, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Statement detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DbQueryDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/db/activity:
+    get:
+      tags: [db]
+      operationId: getDbActivity
+      description: Average active sessions per wait type, top wait events and the statements with the most samples.
+      parameters:
+        - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 }, description: "service.instance.id of the database instance" }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: step, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Activity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DbActivity" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/db/sessions:
+    get:
+      tags: [db]
+      operationId: getDbSessions
+      description: >-
+        The latest session sample at or before `at` (default now, looking back 5 minutes): what every non-idle
+        session runs, waits for and blocks.
+      parameters:
+        - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 } }
+        - { name: at, in: query, schema: { type: integer, format: int64 }, description: unix milliseconds }
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sampled_at, sessions]
+                properties:
+                  sampled_at: { $ref: "#/components/schemas/NullableTimestamp" }
+                  sessions: { type: array, items: { $ref: "#/components/schemas/DbSession" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/db/lookup:
+    get:
+      tags: [db]
+      operationId: lookupDbStatement
+      description: Instances whose statistics hold a normalized statement (from APM's db_statement) — the link from a client call to the server view.
+      parameters:
+        - { name: db_system, in: query, required: true, schema: { type: string } }
+        - { name: statement, in: query, required: true, schema: { type: string, maxLength: 8192 } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Matches
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [matches]
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      type: object
+                      required: [instance, fingerprint, host_name, calls, avg_ms]
+                      properties:
+                        instance: { type: string }
+                        fingerprint: { type: string }
+                        host_name: { type: string }
+                        calls: { type: integer }
+                        avg_ms: { type: number, nullable: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
 
   # -------------------------------------------------------------- browser keys
@@ -9728,6 +9882,146 @@ components:
         last_duration_ms: { type: number }
         last_error_kind: { type: string, description: "dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request" }
         last_error: { type: string }
+    DbInstance:
+      type: object
+      required: [instance, db_system, host_id, host_name, server_address, server_port, calls, throughput, total_time_ms, avg_ms, statements, errors, avg_active_sessions, top_wait, last_seen]
+      properties:
+        instance: { type: string }
+        db_system: { type: string, example: postgresql }
+        host_id: { type: string }
+        host_name: { type: string }
+        server_address: { type: string }
+        server_port: { type: integer }
+        calls: { type: integer }
+        throughput: { type: number, description: calls per second }
+        total_time_ms: { type: number }
+        avg_ms: { type: number, nullable: true }
+        statements: { type: integer }
+        errors: { type: integer }
+        avg_active_sessions: { type: number, nullable: true, description: null without session samples }
+        top_wait: { type: string, description: 'wait type with the most samples ("CPU" = no wait)' }
+        last_seen: { type: string, format: date-time }
+    DbQuery:
+      type: object
+      required: [fingerprint, query_id, text, db_names, calls, throughput, total_time_ms, avg_ms, time_share, rows, rows_per_call, rows_examined, errors, no_index_used, blocks_hit, blocks_read, cache_hit_ratio]
+      properties:
+        fingerprint: { type: string }
+        query_id: { type: string }
+        text: { type: string }
+        db_names: { type: array, items: { type: string } }
+        calls: { type: integer }
+        throughput: { type: number }
+        total_time_ms: { type: number }
+        avg_ms: { type: number, nullable: true }
+        time_share: { type: number, description: share of the instance's statement time, 0..1 }
+        rows: { type: integer }
+        rows_per_call: { type: number, nullable: true }
+        rows_examined: { type: integer }
+        errors: { type: integer }
+        no_index_used: { type: integer }
+        blocks_hit: { type: integer }
+        blocks_read: { type: integer }
+        cache_hit_ratio: { type: number, nullable: true }
+    DbPlan:
+      type: object
+      required: [plan_hash, format, plan, total_cost, db_name, first_seen, last_seen, captures, is_current, plan_change]
+      properties:
+        plan_hash: { type: string }
+        format: { type: string, enum: [json, xml] }
+        plan: { type: string }
+        total_cost: { type: number }
+        db_name: { type: string }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        captures: { type: integer }
+        is_current: { type: boolean }
+        plan_change: { type: boolean, description: the current plan replaced an earlier one }
+    DbWait:
+      type: object
+      required: [type, event, samples, share]
+      properties:
+        type: { type: string }
+        event: { type: string }
+        samples: { type: integer }
+        share: { type: number }
+    DbQueryDetail:
+      type: object
+      required: [from, to, step, db_system, query, points, plans, waits, callers]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        step: { type: string }
+        db_system: { type: string }
+        query: { $ref: "#/components/schemas/DbQuery" }
+        points:
+          type: array
+          items:
+            type: object
+            required: [t, calls, throughput, total_time_ms, avg_ms, rows]
+            properties:
+              t: { type: integer, format: int64 }
+              calls: { type: integer }
+              throughput: { type: number }
+              total_time_ms: { type: number }
+              avg_ms: { type: number, nullable: true }
+              rows: { type: integer }
+        plans: { type: array, items: { $ref: "#/components/schemas/DbPlan" } }
+        waits: { type: array, items: { $ref: "#/components/schemas/DbWait" } }
+        callers:
+          type: array
+          items:
+            type: object
+            required: [service_name, environment, calls, avg_ms, errors]
+            properties:
+              service_name: { type: string }
+              environment: { type: string }
+              calls: { type: number }
+              avg_ms: { type: number, nullable: true }
+              errors: { type: number }
+    DbActivity:
+      type: object
+      required: [from, to, step, series, waits, top_queries]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        step: { type: string }
+        series:
+          type: array
+          items:
+            type: object
+            required: [wait_type, points]
+            properties:
+              wait_type: { type: string }
+              points: { type: array, items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }, description: "[t ms, average active sessions]" }
+        waits: { type: array, items: { $ref: "#/components/schemas/DbWait" } }
+        top_queries:
+          type: array
+          items:
+            type: object
+            required: [fingerprint, text, samples, avg_active_sessions, top_wait]
+            properties:
+              fingerprint: { type: string }
+              text: { type: string }
+              samples: { type: integer }
+              avg_active_sessions: { type: number }
+              top_wait: { type: string }
+    DbSession:
+      type: object
+      required: [session_id, state, wait_type, wait_event, db_name, user, application, client_address, duration_ms, fingerprint, text, blocking_session_ids, blocks]
+      properties:
+        session_id: { type: string }
+        state: { type: string }
+        wait_type: { type: string }
+        wait_event: { type: string }
+        db_name: { type: string }
+        user: { type: string }
+        application: { type: string }
+        client_address: { type: string }
+        duration_ms: { type: number }
+        fingerprint: { type: string }
+        text: { type: string }
+        blocking_session_ids: { type: array, items: { type: string } }
+        blocks: { type: integer, description: sessions waiting on this one, directly or transitively }
     RumApp:
       type: object
       required: [app, environment, views, sessions, errors, last_seen]

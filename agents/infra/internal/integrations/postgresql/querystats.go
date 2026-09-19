@@ -77,7 +77,7 @@ func (c *collector) collectQueryStats(ctx context.Context, b *integrations.Batch
 		return fmt.Errorf("extension not installed in database %q: run CREATE EXTENSION pg_stat_statements there "+
 			"(the server needs shared_preload_libraries = 'pg_stat_statements' and a restart)", c.mainDB())
 	}
-	rows, err = main.Query(ctx, QueryStatsQuery(str(rows[0][0]), topN, qs.MinCalls, dbs))
+	rows, err = main.Query(ctx, QueryStatsQuery(str(rows[0][0]), fetchStatements(topN), qs.MinCalls, dbs))
 	if err != nil {
 		var pe *pgconn.PgError
 		if errors.As(err, &pe) && pe.Code == "55000" { // object_not_in_prerequisite_state
@@ -88,17 +88,34 @@ func (c *collector) collectQueryStats(ctx context.Context, b *integrations.Batch
 		}
 		return c.classify(err, "")
 	}
-	if hidden := RecordQueryStats(b, rows); hidden > 0 {
-		return fmt.Errorf("%d statements of other roles are hidden (%s): grant pg_read_all_stats or pg_monitor", hidden, insufficientPrivilege)
+	// Per-statement metrics for the top statements since the last reset (dashboards and alerts on one statement),
+	// events with the interval deltas of the statements that were heaviest in the interval (db-monitoring.md §3.1).
+	hidden := RecordQueryStats(b, rows, topN)
+	c.recordStatementEvents(b, rows, topN)
+	var errs []string
+	if hidden > 0 {
+		errs = append(errs, fmt.Sprintf("%d statements of other roles are hidden (%s): grant pg_read_all_stats or pg_monitor", hidden, insufficientPrivilege))
+	}
+	if err := c.explainTop(ctx, b); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
 }
 
-// RecordQueryStats emits one resource per statement (queryid, database, role)
-// and returns the number of rows skipped for insufficient privileges.
-func RecordQueryStats(b *integrations.Batch, rows [][]any) (hidden int) {
+// RecordQueryStats emits one resource per statement (queryid, database, role) for at most topN statements and
+// returns the number of rows skipped for insufficient privileges.
+func RecordQueryStats(b *integrations.Batch, rows [][]any, topN int) (hidden int) {
 	seen := map[string]bool{}
 	for _, r := range rows {
+		if topN > 0 && len(seen) >= topN {
+			if r[0] == nil || str(r[8]) == insufficientPrivilege {
+				hidden++
+			}
+			continue
+		}
 		if len(r) < 9 {
 			continue
 		}

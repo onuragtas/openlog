@@ -106,6 +106,8 @@ func TestNormalizeStatement(t *testing.T) {
 		{"postgresql", "INSERT INTO orders (customer_id, product_id, quantity, status) VALUES ($1, $2, $3, 'new') RETURNING id",
 			"INSERT INTO orders (customer_id, product_id, quantity, status) VALUES (?, ?, ?, ?) RETURNING id"},
 		{"mysql", "insert into t values (1,'a'),(2,'b'), (3, 'c')", "insert into t values (?,?)"},
+		{"postgresql", "UPDATE orders SET status = 'paid' WHERE id = 7; ", "UPDATE orders SET status = ? WHERE id = ?"},
+		{"postgresql", "SELECT 1;;", "SELECT ?"},
 		{"postgresql", "SELECT /* hint */ a FROM t -- trailing\nWHERE x = 'it''s'", "SELECT a FROM t WHERE x = ?"},
 		{"postgresql", "SELECT col1 FROM t2 WHERE a=1.5e3 AND b=0x1F", "SELECT col1 FROM t2 WHERE a=? AND b=?"},
 		{"postgresql", "SELECT * FROM t WHERE a = :name AND b = @p1 AND c = ? AND d::text = 'x'", "SELECT * FROM t WHERE a = ? AND b = ? AND c = ? AND d::text = ?"},

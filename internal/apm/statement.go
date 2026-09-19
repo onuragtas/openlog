@@ -34,7 +34,9 @@ func NormalizeStatement(system, stmt string) string {
 	s = inListRe.ReplaceAllString(s, "$1 (?)")
 	s = valuesRe.ReplaceAllString(s, "$1 $2")
 	s = boolCmpRe.ReplaceAllString(s, "$1?")
-	s = strings.TrimSpace(s)
+	// A statement terminator is not part of the statement: `x;` and `x` are the same statement (psql and
+	// server activity views keep it, drivers usually do not).
+	s = strings.TrimRight(strings.TrimSpace(s), "; ")
 	if len(s) > MaxStatement {
 		s = Truncate(s, MaxStatement-len("…")) + "…"
 	}

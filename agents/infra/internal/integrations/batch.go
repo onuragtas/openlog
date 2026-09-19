@@ -8,12 +8,19 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/otlputil"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 )
 
 // DefaultMaxPoints caps the data points of one collection (cardinality guard).
 const DefaultMaxPoints = 20000
+
+// MaxEvents caps the log records (events) of one collection or sample.
+const MaxEvents = 5000
+
+// AttrEventName names an event record (the processor routes openlog.* events to their tables).
+const AttrEventName = "event.name"
 
 // Batch accumulates the metrics of one collection. Metrics may be split into
 // several resources (e.g. one per PostgreSQL database / table, like the OTel
@@ -27,6 +34,9 @@ type Batch struct {
 	points    int
 	maxPoints int
 	dropped   int
+	// events are log records of the instance resource (database statement statistics, session samples, plans).
+	events        []*logspb.LogRecord
+	droppedEvents int
 }
 
 // Scope collects the metrics of one resource.
@@ -62,6 +72,11 @@ func (b *Batch) SetResourceAttr(kv *commonpb.KeyValue) {
 		}
 	}
 	b.common = append(b.common, kv)
+}
+
+// ResourceAttrs returns the batch-wide resource attributes (SetResourceAttr).
+func (b *Batch) ResourceAttrs() []*commonpb.KeyValue {
+	return append([]*commonpb.KeyValue(nil), b.common...)
 }
 
 // Dropped returns the number of points dropped by the cardinality guard.
@@ -167,6 +182,38 @@ func (s *Scope) GaugeDouble(name, unit string, v float64, attrs ...*commonpb.Key
 // SumDouble records a double sum point.
 func (s *Scope) SumDouble(name, unit string, monotonic bool, v float64, attrs ...*commonpb.KeyValue) {
 	s.Sum(name, unit, monotonic, otlputil.DoublePoint(v, attrs...))
+}
+
+// Event records a log record named name on the instance resource; body may be empty. Past MaxEvents records
+// are counted as dropped.
+func (b *Batch) Event(name, body string, attrs ...*commonpb.KeyValue) {
+	if len(b.events) >= MaxEvents {
+		b.droppedEvents++
+		return
+	}
+	rec := &logspb.LogRecord{TimeUnixNano: uint64(b.now.UnixNano()), ObservedTimeUnixNano: uint64(b.now.UnixNano()),
+		Attributes: append([]*commonpb.KeyValue{otlputil.Str(AttrEventName, name)}, attrs...)}
+	if body != "" {
+		rec.Body = &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: body}}
+	}
+	b.events = append(b.events, rec)
+}
+
+// Events returns the recorded events (tests and the manager).
+func (b *Batch) Events() []*logspb.LogRecord { return b.events }
+
+// DroppedEvents returns the number of events dropped by MaxEvents.
+func (b *Batch) DroppedEvents() int { return b.droppedEvents }
+
+// ResourceLogs builds the OTLP resource of the events: base attributes, then batch-wide ones (nil without events).
+func (b *Batch) ResourceLogs(base []*commonpb.KeyValue, scope *commonpb.InstrumentationScope) *logspb.ResourceLogs {
+	if len(b.events) == 0 {
+		return nil
+	}
+	return &logspb.ResourceLogs{
+		Resource:  &resourcepb.Resource{Attributes: mergeAttrs(base, b.common)},
+		ScopeLogs: []*logspb.ScopeLogs{{Scope: scope, LogRecords: b.events}},
+	}
 }
 
 // Metrics returns all metrics of the default resource (tests).

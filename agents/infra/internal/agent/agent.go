@@ -541,6 +541,15 @@ func (a *Agent) collectRound() {
 	now := a.Now()
 	md := a.CollectMetrics(now)
 	enqueue(exporter.SignalMetrics, countPoints(md), md)
+	if a.integ != nil {
+		// Integration events since the previous round: database statement statistics, session samples and plans
+		// (db-monitoring.md §3). They are OTLP log records the backend routes to its db_* tables.
+		if rls := a.integ.DrainLogs(); len(rls) > 0 {
+			for _, part := range exporter.SplitLogs(&logspb.LogsData{ResourceLogs: rls}, a.cfg.Export.MaxRequestBytes) {
+				enqueue(exporter.SignalLogs, countRecords(part), part)
+			}
+		}
+	}
 
 	if a.cfg.Inventory.Enabled {
 		// The snapshot time is taken right before inventory is collected: it is

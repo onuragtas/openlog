@@ -84,6 +84,12 @@ var (
 	RumVitals1m    = Table{"rum_vitals_1m"}
 	RumSessions    = Table{"rum_sessions"}
 
+	// Database monitoring (schema 0096_db_monitoring, db-monitoring.md, D-138): statement statistics per interval,
+	// session samples and execution plans. DBQueryPlans is aggregating: always re-aggregate with GROUP BY.
+	DBQueryStats     = Table{"db_query_stats"}
+	DBSessionSamples = Table{"db_session_samples"}
+	DBQueryPlans     = Table{"db_query_plans"}
+
 	// AttributeKeys is the hourly attribute key index of the query builders (schema 0080_attribute_keys, D-118);
 	// aggregating table, always re-aggregate with GROUP BY.
 	AttributeKeys = Table{"attribute_keys"}
@@ -269,7 +275,7 @@ func (q *Select) fail(format string, args ...any) {
 // forbidden matches fragment content that could escape the tenant boundary:
 // references to tenant_id, other tables/databases, sub-queries, statement
 // terminators and comments.
-var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|metric_exemplars|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_error_group_dims|apm_service_versions_1m|apm_agent_versions_1h|apm_services|apm_service_hosts|containers|apm_service_containers|k8s_clusters|k8s_nodes|k8s_workloads|k8s_pods|alert_evaluations|attribute_keys|attribute_keys_logs|attribute_keys_spans|attribute_keys_metrics|log_patterns_1h|synthetic_runs|rum_page_views_1m|rum_vitals_1m|rum_sessions)(_local|_mv)?\b)`)
+var forbidden = regexp.MustCompile(`(?i)(tenant_id|;|--|/\*|\bfrom\b|\bjoin\b|\bunion\b|\binto\b|\bsettings\b|\bformat\b|\bselect\b|\bsystem\b|\bopenlog\b|\bdefault\s*\.|\bremote|\bcluster(allreplicas)?\s*\(|\bjoinget\b|\bdictget|\bgetsetting\b|\b(hosts|metrics|metrics_1m|metric_exemplars|logs|spans|trace_index|inventory_items|inventory_snapshots|schema_migrations|apm_transactions_1m|apm_service_edges_1m|apm_service_links_1m|apm_db_queries_1m|apm_errors_1m|apm_error_groups|apm_error_group_dims|apm_service_versions_1m|apm_agent_versions_1h|apm_services|apm_service_hosts|containers|apm_service_containers|k8s_clusters|k8s_nodes|k8s_workloads|k8s_pods|alert_evaluations|attribute_keys|attribute_keys_logs|attribute_keys_spans|attribute_keys_metrics|log_patterns_1h|synthetic_runs|rum_page_views_1m|rum_vitals_1m|rum_sessions|db_query_stats|db_session_samples|db_query_plans)(_local|_mv)?\b)`)
 
 func (q *Select) check(frags ...string) bool {
 	for _, f := range frags {

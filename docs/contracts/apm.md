@@ -354,7 +354,10 @@ before this rule (processor versions without it) stay until their TTL.
 - `IN (?, ?, …)` → `IN (?)`; repeated `VALUES (…), (…)` → `VALUES (…)`;
 - key/value stores (`redis`, `memcached`): the command word upper-cased, every argument → `?` (`GET products:42` →
   `GET ?`);
-- whitespace collapsed to one space, at most 2048 bytes (then `…`).
+- whitespace collapsed to one space, trailing statement terminators (`;`) removed, at most 2048 bytes (then `…`).
+
+The same function normalizes the statements of database query monitoring (db-monitoring.md §4.1), so
+`db_statement_normalized` is the join key between a service's calls and the server's statement statistics.
 
 `db_operation` = `db.operation.name` | `db.operation` | first keyword of the statement (upper-cased).
 

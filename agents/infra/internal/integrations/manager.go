@@ -21,6 +21,7 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/selfmon"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 )
@@ -37,6 +38,11 @@ const (
 
 // MaxBackoff caps the retry delay after failed collections.
 const MaxBackoff = 5 * time.Minute
+
+// maxPendingLogBatches bounds the event batches of one instance kept between two export rounds: unlike metrics
+// (only the latest sample matters), every batch of statement deltas or session samples is distinct data, so they
+// accumulate — up to this many, then the oldest are dropped.
+const maxPendingLogBatches = 64
 
 // Options configures a Manager.
 type Options struct {
@@ -73,6 +79,7 @@ type Manager struct {
 	remote   *config.RemoteIntegrations
 	runners  map[string]*runner
 	pending  map[string][]*metricspb.ResourceMetrics
+	logs     map[string][]*logspb.ResourceLogs
 	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
@@ -91,7 +98,7 @@ type Manager struct {
 func NewManager(o Options) *Manager {
 	m := &Manager{
 		o: o, base: o.Config, cfg: o.Config, registry: map[string]Integration{}, rules: map[string]*discovery.Rule{},
-		log: o.Log, runners: map[string]*runner{}, pending: map[string][]*metricspb.ResourceMetrics{},
+		log: o.Log, runners: map[string]*runner{}, pending: map[string][]*metricspb.ResourceMetrics{}, logs: map[string][]*logspb.ResourceLogs{},
 		slowdown: 1, Now: time.Now,
 	}
 	if m.log == nil {
@@ -206,6 +213,7 @@ func (m *Manager) Reconcile(services []discovery.Service, ctrs []containers.Cont
 		}
 		old.stop()
 		delete(m.pending, k)
+		delete(m.logs, k)
 		delete(m.runners, k)
 		if _, ok := want[k]; !ok {
 			m.log.Info("integration instance stopped", "integration", old.integ.ID(), "service", k)
@@ -298,10 +306,17 @@ func (m *Manager) startLocked(r *runner) {
 	ctx, cancel := context.WithCancel(m.ctx)
 	r.cancel = cancel
 	r.done = make(chan struct{})
-	m.wg.Add(1)
+	m.wg.Add(2)
+	sampled := make(chan struct{})
+	go func() {
+		defer m.wg.Done()
+		defer close(sampled)
+		r.sampleLoop(ctx)
+	}()
 	go func() {
 		defer m.wg.Done()
 		defer close(r.done)
+		defer func() { <-sampled }()
 		r.loop(ctx)
 	}()
 }
@@ -335,6 +350,34 @@ func (m *Manager) Drain() []*metricspb.ResourceMetrics {
 	}
 	clear(m.pending)
 	return out
+}
+
+// DrainLogs returns and clears the events (database statistics, session samples, plans) recorded since the last call.
+func (m *Manager) DrainLogs() []*logspb.ResourceLogs {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*logspb.ResourceLogs
+	for _, k := range SortedKeys(m.logs) {
+		out = append(out, m.logs[k]...)
+	}
+	clear(m.logs)
+	return out
+}
+
+func (m *Manager) storeLogs(key string, rl *logspb.ResourceLogs) {
+	if rl == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.runners[key]; !ok {
+		return
+	}
+	l := append(m.logs[key], rl)
+	if len(l) > maxPendingLogBatches {
+		l = l[len(l)-maxPendingLogBatches:]
+	}
+	m.logs[key] = l
 }
 
 func (m *Manager) store(key string, rms []*metricspb.ResourceMetrics) {
@@ -398,8 +441,11 @@ type runner struct {
 
 	collectMu sync.Mutex
 	collector Collector
-	current   int // index of the endpoint the collector uses
-	failures  int
+	// common are the batch-wide resource attributes of the last successful collection (e.g. the MySQL
+	// service.instance.id): samples carry them too, so their events land on the same instance.
+	common   []*commonpb.KeyValue
+	current  int // index of the endpoint the collector uses
+	failures int
 
 	mu       sync.Mutex
 	st       discovery.IntegrationStatus
@@ -500,6 +546,68 @@ func (r *runner) loop(ctx context.Context) {
 		}
 		t.Reset(next)
 	}
+}
+
+// sampleLoop runs the collector's Sampler, if it has one, between collections. It samples only once a
+// collection succeeded (the collector exists and its endpoint is known) and never opens connections itself.
+func (r *runner) sampleLoop(ctx context.Context) {
+	t := time.NewTimer(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		t.Reset(r.sample(ctx))
+	}
+}
+
+// sample takes one sample and returns the delay until the next attempt.
+func (r *runner) sample(ctx context.Context) time.Duration {
+	const idle = 5 * time.Second // how often to look again while there is no sampler (yet)
+	r.collectMu.Lock()
+	sp, ok := r.collector.(Sampler)
+	current := r.current
+	r.collectMu.Unlock()
+	if !ok || sp.SampleInterval() <= 0 {
+		return idle
+	}
+	iv := sp.SampleInterval()
+	select {
+	case r.m.sem <- struct{}{}:
+	case <-ctx.Done():
+		return iv
+	}
+	defer func() { <-r.m.sem }()
+	r.collectMu.Lock()
+	defer r.collectMu.Unlock()
+	if r.collector == nil {
+		return idle
+	}
+	sctx, cancel := context.WithTimeout(ctx, min(r.inst.Timeout, iv))
+	defer cancel()
+	batch := NewBatch(r.m.Now(), DefaultMaxPoints)
+	for _, kv := range r.common {
+		batch.SetResourceAttr(kv)
+	}
+	err := func() (err error) {
+		defer func() {
+			if p := recover(); p != nil {
+				err = fmt.Errorf("sampler panic: %v", p)
+			}
+		}()
+		return sp.Sample(sctx, batch)
+	}()
+	if err != nil {
+		r.inst.Log.Debug("sample failed", "error", r.sanitize(err))
+	}
+	var ep Endpoint
+	if current >= 0 && current < len(r.inst.Endpoints) {
+		ep = r.inst.Endpoints[current]
+	}
+	r.m.storeLogs(r.inst.Target.Key, batch.ResourceLogs(r.baseAttrs(ep), r.scope()))
+	return iv
 }
 
 // collect runs one collection: the current collector, or the endpoint
@@ -630,6 +738,12 @@ func (r *runner) finish(id string, start time.Time, err error, batch *Batch, use
 			err = Partial(fmt.Errorf("cardinality guard: %d data points dropped", batch.Dropped()))
 		}
 		r.m.store(r.inst.Target.Key, batch.ResourceMetrics(r.baseAttrs(ep), r.scope()))
+	}
+	if !failed {
+		r.common = batch.ResourceAttrs()
+	}
+	if len(batch.Events()) > 0 && (!failed || used >= 0) {
+		r.m.storeLogs(r.inst.Target.Key, batch.ResourceLogs(r.baseAttrs(ep), r.scope()))
 	}
 	hint := ""
 	var se *StatusError

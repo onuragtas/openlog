@@ -1499,6 +1499,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/db/instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Database instances that sent statement statistics or session samples in the range (db-monitoring.md §5). */
+        get: operations["listDbInstances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/db/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Statements of one instance in the range. */
+        get: operations["listDbQueries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/db/queries/{fingerprint}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One statement of an instance with its series, plans, wait events and the APM services that run it. */
+        get: operations["getDbQuery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/db/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Average active sessions per wait type, top wait events and the statements with the most samples. */
+        get: operations["getDbActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/db/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The latest session sample at or before `at` (default now, looking back 5 minutes): what every non-idle session runs, waits for and blocks. */
+        get: operations["getDbSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/db/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Instances whose statistics hold a normalized statement (from APM's db_statement) — the link from a client call to the server view. */
+        get: operations["lookupDbStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/source-maps": {
         parameters: {
             query?: never;
@@ -6645,6 +6747,133 @@ export interface components {
             /** @description dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request */
             last_error_kind: string;
             last_error: string;
+        };
+        DbInstance: {
+            instance: string;
+            /** @example postgresql */
+            db_system: string;
+            host_id: string;
+            host_name: string;
+            server_address: string;
+            server_port: number;
+            calls: number;
+            /** @description calls per second */
+            throughput: number;
+            total_time_ms: number;
+            avg_ms: number | null;
+            statements: number;
+            errors: number;
+            /** @description null without session samples */
+            avg_active_sessions: number | null;
+            /** @description wait type with the most samples ("CPU" = no wait) */
+            top_wait: string;
+            /** Format: date-time */
+            last_seen: string;
+        };
+        DbQuery: {
+            fingerprint: string;
+            query_id: string;
+            text: string;
+            db_names: string[];
+            calls: number;
+            throughput: number;
+            total_time_ms: number;
+            avg_ms: number | null;
+            /** @description share of the instance's statement time */
+            time_share: number;
+            rows: number;
+            rows_per_call: number | null;
+            rows_examined: number;
+            errors: number;
+            no_index_used: number;
+            blocks_hit: number;
+            blocks_read: number;
+            cache_hit_ratio: number | null;
+        };
+        DbPlan: {
+            plan_hash: string;
+            /** @enum {string} */
+            format: "json" | "xml";
+            plan: string;
+            total_cost: number;
+            db_name: string;
+            /** Format: date-time */
+            first_seen: string;
+            /** Format: date-time */
+            last_seen: string;
+            captures: number;
+            is_current: boolean;
+            /** @description the current plan replaced an earlier one */
+            plan_change: boolean;
+        };
+        DbWait: {
+            type: string;
+            event: string;
+            samples: number;
+            share: number;
+        };
+        DbQueryDetail: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            step: string;
+            db_system: string;
+            query: components["schemas"]["DbQuery"];
+            points: {
+                /** Format: int64 */
+                t: number;
+                calls: number;
+                throughput: number;
+                total_time_ms: number;
+                avg_ms: number | null;
+                rows: number;
+            }[];
+            plans: components["schemas"]["DbPlan"][];
+            waits: components["schemas"]["DbWait"][];
+            callers: {
+                service_name: string;
+                environment: string;
+                calls: number;
+                avg_ms: number | null;
+                errors: number;
+            }[];
+        };
+        DbActivity: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            step: string;
+            series: {
+                wait_type: string;
+                /** @description [t ms, average active sessions] */
+                points: number[][];
+            }[];
+            waits: components["schemas"]["DbWait"][];
+            top_queries: {
+                fingerprint: string;
+                text: string;
+                samples: number;
+                avg_active_sessions: number;
+                top_wait: string;
+            }[];
+        };
+        DbSession: {
+            session_id: string;
+            state: string;
+            wait_type: string;
+            wait_event: string;
+            db_name: string;
+            user: string;
+            application: string;
+            client_address: string;
+            duration_ms: number;
+            fingerprint: string;
+            text: string;
+            blocking_session_ids: string[];
+            /** @description sessions waiting on this one */
+            blocks: number;
         };
         RumApp: {
             app: string;
@@ -12882,6 +13111,198 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listDbInstances: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instances, heaviest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        instances: components["schemas"]["DbInstance"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listDbQueries: {
+        parameters: {
+            query: {
+                /** @description service.instance.id of the database instance */
+                instance: string;
+                from?: string;
+                to?: string;
+                sort?: "time" | "calls" | "avg" | "rows" | "errors" | "reads";
+                db?: string;
+                /** @description case-insensitive substring of the statement */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Statements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queries: components["schemas"]["DbQuery"][];
+                        /** @description statement time of the whole instance in the range */
+                        total_time_ms: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getDbQuery: {
+        parameters: {
+            query: {
+                /** @description service.instance.id of the database instance */
+                instance: string;
+                from?: string;
+                to?: string;
+                step?: string;
+            };
+            header?: never;
+            path: {
+                fingerprint: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Statement detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DbQueryDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getDbActivity: {
+        parameters: {
+            query: {
+                /** @description service.instance.id of the database instance */
+                instance: string;
+                from?: string;
+                to?: string;
+                step?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DbActivity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getDbSessions: {
+        parameters: {
+            query: {
+                instance: string;
+                /** @description unix milliseconds */
+                at?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sampled_at: components["schemas"]["NullableTimestamp"];
+                        sessions: components["schemas"]["DbSession"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    lookupDbStatement: {
+        parameters: {
+            query: {
+                db_system: string;
+                statement: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        matches: {
+                            instance: string;
+                            fingerprint: string;
+                            host_name: string;
+                            calls: number;
+                            avg_ms: number | null;
+                        }[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             504: components["responses"]["Timeout"];
         };
     };

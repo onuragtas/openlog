@@ -55,6 +55,9 @@ const SloDetailPage = lazyRouteComponent(() => import("@/routes/slos"), "SloDeta
 const SyntheticsPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticsPage");
 const SyntheticDetailPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticDetailPage");
 const RumPage = lazyRouteComponent(() => import("@/routes/rum"), "RumPage");
+const DatabasesPage = lazyRouteComponent(() => import("@/routes/databases"), "DatabasesPage");
+const DatabaseInstancePage = lazyRouteComponent(() => import("@/routes/databases"), "DatabaseInstancePage");
+const DatabaseQueryPage = lazyRouteComponent(() => import("@/routes/databases"), "DatabaseQueryPage");
 const RumAppPage = lazyRouteComponent(() => import("@/routes/rum"), "RumAppPage");
 const RumSessionPage = lazyRouteComponent(() => import("@/routes/rum"), "RumSessionPage");
 const AlertsLayout = lazyRouteComponent(() => import("@/routes/alerts"), "AlertsLayout");
@@ -747,6 +750,42 @@ const rumSessionRoute = createRoute({
   component: RumSessionPage,
 });
 
+// ---- Database query performance (routes/databases.tsx, docs/contracts/db-monitoring.md §5, D-138) ----
+const DATABASE_TABS = ["activity", "queries", "sessions"] as const;
+const DATABASE_SORTS = ["time", "calls", "avg", "rows", "errors", "reads"] as const;
+
+export interface DatabasesSearch {
+  range?: string;
+  from?: string;
+  to?: string;
+  /** service.instance.id of the database instance. */
+  instance?: string;
+  tab?: (typeof DATABASE_TABS)[number];
+  sort?: (typeof DATABASE_SORTS)[number];
+  q?: string;
+  /** Statement fingerprint (decimal). */
+  fp?: string;
+}
+
+const databasesRoute = createRoute({ getParentRoute: () => appRoute, path: "/databases", component: DatabasesPage });
+
+const databaseInstanceRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/databases/instance",
+  validateSearch: (s: Record<string, unknown>): DatabasesSearch => ({
+    range: str(s.range), from: str(s.from), to: str(s.to),
+    instance: str(s.instance), tab: oneOf(DATABASE_TABS, s.tab), sort: oneOf(DATABASE_SORTS, s.sort), q: str(s.q),
+  }),
+  component: DatabaseInstancePage,
+});
+
+const databaseQueryRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/databases/query",
+  validateSearch: (s: Record<string, unknown>): DatabasesSearch => ({ range: str(s.range), from: str(s.from), to: str(s.to), instance: str(s.instance), fp: str(s.fp) }),
+  component: DatabaseQueryPage,
+});
+
 export interface InventorySearchSearch {
   category?: string;
   q?: string;
@@ -1049,6 +1088,9 @@ export const routeTree = rootRoute.addChildren([
     rumRoute,
     rumAppRoute,
     rumSessionRoute,
+    databasesRoute,
+    databaseInstanceRoute,
+    databaseQueryRoute,
     logsRoute,
     metricsRoute,
     tracesRoute,

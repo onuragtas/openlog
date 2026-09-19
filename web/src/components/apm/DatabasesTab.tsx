@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { apmDatabasesQuery, type DbSort } from "@/api/apm";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
+import { ServerViewLink } from "@/components/apm/ServerViewLink";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -61,6 +62,7 @@ export function DatabasesTab({ scope, range, sort, onSort }: { scope: ServiceSco
                     <code className="block truncate font-mono text-xs max-md:max-w-[50vw]" title={d.statement}>
                       {d.statement}
                     </code>
+                    <ServerViewLink dbSystem={d.db_system} statement={d.statement} range={range} />
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Badge variant="secondary">{d.db_name ? `${d.db_system}/${d.db_name}` : d.db_system}</Badge>

@@ -138,6 +138,13 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/containers/" + strings.Repeat("ab", 32) + "/timeseries",
 		"/api/v1/containers/" + strings.Repeat("ab", 32) + "/services",
 		"/api/v1/logs?container_id=" + strings.Repeat("ab", 32) + "&compose_service=orders&compose_project=shop&attr.log.iostream=stderr",
+		// database monitoring (dbmon.go, D-138)
+		"/api/v1/db/instances",
+		"/api/v1/db/queries?instance=db1%3A5432&sort=avg&db=shop&q=orders",
+		"/api/v1/db/queries/42?instance=db1%3A5432",
+		"/api/v1/db/activity?instance=db1%3A5432",
+		"/api/v1/db/sessions?instance=db1%3A5432&at=1757757600000",
+		"/api/v1/db/lookup?db_system=postgresql&statement=SELECT%20%3F",
 	}
 	for _, p := range paths {
 		req := httptest.NewRequest(http.MethodGet, p, nil)

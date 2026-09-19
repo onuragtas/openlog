@@ -36,6 +36,11 @@ func Int(k string, v int64) *commonpb.KeyValue {
 	return &commonpb.KeyValue{Key: k, Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: v}}}
 }
 
+// Double builds a double attribute.
+func Double(k string, v float64) *commonpb.KeyValue {
+	return &commonpb.KeyValue{Key: k, Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: v}}}
+}
+
 // Point is a number data point before timestamps are applied.
 type Point struct {
 	Int    int64

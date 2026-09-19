@@ -37,6 +37,11 @@ var RetentionTables = []RetentionTable{
 	{"spans_local", SignalTraces},
 	{"trace_index_local", SignalTraces},
 	{"metrics_local", SignalMetrics},
+	// Database monitoring (0096_db_monitoring, D-138): statement statistics and plans are metrics-like, session samples
+	// are diagnostic events like spans. Their table TTL widens with the class, so they must be trimmed per tenant too.
+	{"db_query_stats_local", SignalMetrics},
+	{"db_query_plans_local", SignalMetrics},
+	{"db_session_samples_local", SignalTraces},
 }
 
 // TableRetentionDays returns the table TTL per signal when per-tenant retention is enabled: the longest effective
@@ -232,9 +237,14 @@ func (j *RetentionJob) RunOnce(ctx context.Context) (int, error) {
 }
 
 func (j *RetentionJob) partitions(ctx context.Context, db string) (map[string][]string, error) {
-	qctx := ch.Context(ctx, ch.WithParameters(ch.Parameters{"db": db}), ch.WithSettings(ch.Settings{"skip_unavailable_shards": 1}))
+	tables := make([]string, len(RetentionTables))
+	for i, t := range RetentionTables {
+		tables[i] = t.Table
+	}
+	qctx := ch.Context(ctx, ch.WithParameters(ch.Parameters{"db": db, "tables": "['" + strings.Join(tables, "','") + "']"}),
+		ch.WithSettings(ch.Settings{"skip_unavailable_shards": 1}))
 	rows, err := j.Conn.Query(qctx, fmt.Sprintf("SELECT table, groupUniqArray(partition_id) FROM clusterAllReplicas('%s', system.parts) "+
-		"WHERE database = {db:String} AND active AND table IN ('logs_local', 'spans_local', 'trace_index_local', 'metrics_local') GROUP BY table", j.Cluster))
+		"WHERE database = {db:String} AND active AND has({tables:Array(String)}, table) GROUP BY table", j.Cluster))
 	if err != nil {
 		return nil, fmt.Errorf("read partitions: %w", err)
 	}

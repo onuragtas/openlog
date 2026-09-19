@@ -170,6 +170,7 @@ func (s *Server) Handler() http.Handler {
 	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
 	s.rumRoutes(mux)          // rum.go: real user monitoring reads (rum.md, D-136)
+	s.dbRoutes(mux)           // dbmon.go: database query performance (db-monitoring.md, D-138)
 	s.browserKeyRoutes(mux)   // browserkeys.go: the RUM SDK's public keys (D-136)
 	s.sourceMapRoutes(mux)    // sourcemaps.go: source maps that un-minify browser stacks (rum.md §8)
 	s.cloudRoutes(mux)        // cloudconnect.go: managed cloud service metrics (D-135)

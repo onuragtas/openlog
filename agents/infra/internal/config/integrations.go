@@ -80,13 +80,55 @@ type InstanceSettings struct {
 	QueryStats *QueryStatsConfig `yaml:"query_stats"`
 }
 
-// QueryStatsConfig configures pg_stat_statements collection (postgresql, opt-in).
+// QueryStatsConfig configures query performance monitoring (opt-in; postgresql, mysql, mssql; db-monitoring.md §3):
+// per-statement statistics from pg_stat_statements / performance_schema / sys.dm_exec_query_stats, active session
+// samples and execution plans of the top statements.
 type QueryStatsConfig struct {
 	Enabled bool `yaml:"enabled"`
-	// TopN bounds the statements by total execution time (0 = 20, max 100).
+	// TopN bounds the statements sent per collection, by time spent in the interval (0 = 20, max 100).
 	TopN int `yaml:"top_n"`
-	// MinCalls skips statements executed fewer times (0 = 1).
+	// MinCalls skips statements executed fewer times in total (0 = 1).
 	MinCalls int `yaml:"min_calls"`
+	// Sessions samples the non-idle sessions (waits, blocking); nil = true.
+	Sessions *bool `yaml:"sessions"`
+	// SampleInterval is the session sampling interval (0 = 10s, min 1s).
+	SampleInterval Duration `yaml:"sample_interval"`
+	// Explain captures execution plans of the top statements; nil = true. EXPLAIN never executes the statement.
+	Explain *bool `yaml:"explain"`
+	// ExplainInterval is how often one statement is explained again (0 = 1h, min 5m).
+	ExplainInterval Duration `yaml:"explain_interval"`
+}
+
+// Query monitoring defaults.
+const (
+	DefaultSampleInterval  = 10 * time.Second
+	DefaultExplainInterval = time.Hour
+)
+
+// SessionsEnabled reports whether sessions are sampled.
+func (q *QueryStatsConfig) SessionsEnabled() bool {
+	return q != nil && q.Enabled && (q.Sessions == nil || *q.Sessions)
+}
+
+// ExplainEnabled reports whether plans are captured.
+func (q *QueryStatsConfig) ExplainEnabled() bool {
+	return q != nil && q.Enabled && (q.Explain == nil || *q.Explain)
+}
+
+// EffectiveSampleInterval returns the sampling interval.
+func (q *QueryStatsConfig) EffectiveSampleInterval() time.Duration {
+	if q == nil || q.SampleInterval <= 0 {
+		return DefaultSampleInterval
+	}
+	return q.SampleInterval.D()
+}
+
+// EffectiveExplainInterval returns the re-explain interval.
+func (q *QueryStatsConfig) EffectiveExplainInterval() time.Duration {
+	if q == nil || q.ExplainInterval <= 0 {
+		return DefaultExplainInterval
+	}
+	return q.ExplainInterval.D()
 }
 
 // TLSConfig configures client TLS of an integration connection.
@@ -190,11 +232,11 @@ func defaultIntegrations() IntegrationsConfig {
 var integrationKeys = map[string]map[string]bool{
 	IntegrationNginx:      {"endpoint": true, "tls": true},
 	IntegrationRedis:      {"endpoint": true, "username": true, "password": true, "tls": true},
-	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true},
+	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
 	IntegrationPostgreSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
 	IntegrationDocker:     {},
 	// mssql: top_n_tables bounds the wait types of sqlserver.os.wait.duration (default 10).
-	IntegrationMSSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true},
+	IntegrationMSSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
 	IntegrationIIS:   {},
 }
 
@@ -231,8 +273,16 @@ func (s InstanceSettings) validate(id, prefix string) []error {
 	if s.TopNTables < 0 {
 		add("top_n_tables must be >= 0")
 	}
-	if q := s.QueryStats; q != nil && (q.TopN < 0 || q.TopN > 100 || q.MinCalls < 0) {
-		add("query_stats: top_n must be 0..100 and min_calls >= 0")
+	if q := s.QueryStats; q != nil {
+		if q.TopN < 0 || q.TopN > 100 || q.MinCalls < 0 {
+			add("query_stats: top_n must be 0..100 and min_calls >= 0")
+		}
+		if q.SampleInterval != 0 && q.SampleInterval.D() < time.Second {
+			add("query_stats.sample_interval must be at least 1s")
+		}
+		if q.ExplainInterval != 0 && q.ExplainInterval.D() < 5*time.Minute {
+			add("query_stats.explain_interval must be at least 5m")
+		}
 	}
 	if s.TLS != nil && s.TLS.CAFile != "" && !isAbsPath(s.TLS.CAFile) {
 		add("tls.ca_file must be an absolute path")

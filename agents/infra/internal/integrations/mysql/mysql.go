@@ -115,6 +115,8 @@ type collector struct {
 	ep   integrations.Endpoint
 	db   *sql.DB
 	q    Querier
+	// mon is the query performance monitoring state (dbmon.go); it lives as long as the collector.
+	mon queryMon
 }
 
 func (c *collector) Close() {
@@ -249,6 +251,11 @@ func (c *collector) collect(ctx context.Context, b *integrations.Batch) error {
 		partial = append(partial, "replica status: "+c.classify(err).Error())
 	} else {
 		RecordReplicaStatus(s, cols, rows)
+	}
+	if qs := c.inst.Settings.QueryStats; qs != nil && qs.Enabled {
+		if err := c.collectQueryStats(ctx, b); err != nil {
+			partial = append(partial, "query monitoring: "+err.Error())
+		}
 	}
 	if len(partial) > 0 {
 		return integrations.Partial(errors.New(strings.Join(partial, "; ")))

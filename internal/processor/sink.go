@@ -25,8 +25,11 @@ var ShardingKeys = map[string][]string{
 	TableInventorySnapshots: {"tenant_id", "host_id"},
 	TableRelinkQueue:        {"tenant_id", "trace_id"},
 	// A flame graph is one service over one window, so a service's samples stay on one shard (0095_profiles).
-	TableProfiles:    {"tenant_id", "service_name"},
-	TableUsageIngest: {"tenant_id", "signal"},
+	TableProfiles:         {"tenant_id", "service_name"},
+	TableUsageIngest:      {"tenant_id", "signal"},
+	TableDBQueryStats:     {"tenant_id", "instance"}, // dbmon.go (D-138)
+	TableDBSessionSamples: {"tenant_id", "instance"},
+	TableDBQueryPlans:     {"tenant_id", "instance"},
 }
 
 // ShardingExpressions returns table -> "cityHash64(col, ...)" for VerifyShardingKeys.

@@ -46,6 +46,10 @@ type Rows struct {
 	Profiles           []ProfileRow
 	InventoryItems     []InventoryItemRow
 	InventorySnapshots []InventorySnapshotRow
+	// Database monitoring records of the infra agent's database integrations (dbmon.go, D-138).
+	DBQueryStats     []DBQueryStatRow
+	DBSessionSamples []DBSessionSampleRow
+	DBQueryPlans     []DBQueryPlanRow
 	// RelinkQueue is filled by the processor after conversion (relink.go), not by the Add* methods.
 	RelinkQueue []RelinkQueueRow
 	hosts       map[[2]string]*HostRow
@@ -82,6 +86,12 @@ func (r *Rows) Len(table string) int {
 		return len(r.InventoryItems)
 	case TableInventorySnapshots:
 		return len(r.InventorySnapshots)
+	case TableDBQueryStats:
+		return len(r.DBQueryStats)
+	case TableDBSessionSamples:
+		return len(r.DBSessionSamples)
+	case TableDBQueryPlans:
+		return len(r.DBQueryPlans)
 	case TableRelinkQueue:
 		return len(r.RelinkQueue)
 	case TableProfiles:
@@ -151,6 +161,21 @@ func (r *Rows) Values(table string) [][]any {
 		out = make([][]any, len(r.InventorySnapshots))
 		for i := range r.InventorySnapshots {
 			out[i] = r.InventorySnapshots[i].Values()
+		}
+	case TableDBQueryStats:
+		out = make([][]any, len(r.DBQueryStats))
+		for i := range r.DBQueryStats {
+			out[i] = r.DBQueryStats[i].Values()
+		}
+	case TableDBSessionSamples:
+		out = make([][]any, len(r.DBSessionSamples))
+		for i := range r.DBSessionSamples {
+			out[i] = r.DBSessionSamples[i].Values()
+		}
+	case TableDBQueryPlans:
+		out = make([][]any, len(r.DBQueryPlans))
+		for i := range r.DBQueryPlans {
+			out[i] = r.DBQueryPlans[i].Values()
 		}
 	case TableRelinkQueue:
 		out = make([][]any, len(r.RelinkQueue))
@@ -398,7 +423,7 @@ func (r *Rows) AddMetrics(tenant string, receivedAt time.Time, req *colmetrics.E
 }
 
 // AddLogs converts a logs export request, routing inventory events to the
-// inventory tables instead of logs.
+// inventory tables and database monitoring events to the db_* tables instead of logs.
 func (r *Rows) AddLogs(tenant string, receivedAt time.Time, req *collogs.ExportLogsServiceRequest) {
 	for _, rl := range req.GetResourceLogs() {
 		ri := newResourceInfo(rl.GetResource())
@@ -417,6 +442,15 @@ func (r *Rows) AddLogs(tenant string, receivedAt time.Time, req *collogs.ExportL
 					continue
 				case EventInventorySnapshot:
 					r.addInventorySnapshot(tenant, ri, ts, lr.GetAttributes())
+					continue
+				case EventDBQueryStats:
+					r.addDBQueryStats(tenant, ri, ts, lr.GetAttributes())
+					continue
+				case EventDBSessionSample:
+					r.addDBSessionSample(tenant, ri, ts, lr.GetAttributes())
+					continue
+				case EventDBQueryPlan:
+					r.addDBQueryPlan(tenant, ri, ts, lr.GetAttributes(), otlputil.AnyValueString(lr.GetBody()))
 					continue
 				}
 				sev := lr.GetSeverityNumber()

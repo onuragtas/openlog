@@ -20,6 +20,7 @@ import (
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/dbmon"
 	"github.com/onuragtas/openlog/agents/infra/internal/otlputil"
 )
 
@@ -100,12 +101,48 @@ func (p pgxConn) Query(ctx context.Context, sql string) ([][]any, error) {
 
 func (p pgxConn) Close(ctx context.Context) error { return p.c.Close(ctx) }
 
+// RawText runs sql with the simple query protocol exactly as written — no client-side placeholder handling, so a
+// statement text containing $1 (EXPLAIN (GENERIC_PLAN) of a pg_stat_statements entry) reaches the server as is —
+// and returns the last result's rows as text.
+func (p pgxConn) RawText(ctx context.Context, sql string) ([][]string, error) {
+	results, err := p.c.PgConn().Exec(ctx, sql).ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	var out [][]string
+	for _, r := range results {
+		if r.Err != nil {
+			return nil, r.Err
+		}
+		out = out[:0]
+		for _, row := range r.Rows {
+			vals := make([]string, len(row))
+			for i, v := range row {
+				vals[i] = string(v)
+			}
+			out = append(out, vals)
+		}
+	}
+	return out, nil
+}
+
+// rawTexter is implemented by connections that can send a statement without placeholder handling.
+type rawTexter interface {
+	RawText(ctx context.Context, sql string) ([][]string, error)
+}
+
 type collector struct {
 	inst  *integrations.Instance
 	ep    integrations.Endpoint
 	conns map[string]Conn
 	// Connect opens a connection to a database (replaceable in tests).
 	connect func(ctx context.Context, database string) (Conn, error)
+
+	// Query performance monitoring state (dbmon.go); it lives as long as the collector.
+	version    int // server_version_num of the last collection (0: none yet)
+	stmts      dbmon.Tracker
+	plans      dbmon.Plans
+	lastDeltas []dbmon.Stat
 }
 
 func (c *collector) Close() {
@@ -237,6 +274,7 @@ func (c *collector) Collect(ctx context.Context, b *integrations.Batch) error {
 	if len(verRows) == 1 {
 		version, _ = strconv.Atoi(str(verRows[0][0]))
 	}
+	c.version = version
 
 	dbs := c.databases(q(main, "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn ORDER BY datname"))
 	inst := b.Resource()

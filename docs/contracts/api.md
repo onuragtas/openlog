@@ -1862,6 +1862,73 @@ Uptime and latency percentiles over the range (`from`/`to`, default the last 24 
                "error": "HTTP 503, expected 200", "duration_ms": 87.2}]}
 ```
 
+## Database query performance
+
+What runs on the database servers the infra agents monitor (**[db-monitoring.md](db-monitoring.md)**, D-138):
+statement statistics per interval, the sampled sessions with their waits and blocking chains, and execution
+plans. Telemetry reads (any role, API keys too). An instance is addressed by its `service.instance.id`
+(`instance=`), a statement by its fingerprint. `from`/`to` default to the last hour.
+
+### `GET /api/v1/db/instances?from=&to=`
+```json
+{"instances": [{"instance": "db1.internal:5432", "db_system": "postgresql", "host_id": "h-1", "host_name": "db1",
+                "server_address": "db1.internal", "server_port": 5432, "calls": 423200, "throughput": 117.6,
+                "total_time_ms": 1000000, "avg_ms": 2.36, "statements": 312, "errors": 0,
+                "avg_active_sessions": 3.4, "top_wait": "Lock", "last_seen": "…"}]}
+```
+`avg_active_sessions` is the samples of the range divided by its sampling instants (`null` without session
+sampling); `top_wait` is `CPU` when most samples were not waiting.
+
+### `GET /api/v1/db/queries?instance=&from=&to=&sort=&db=&q=&limit=`
+`sort`: `time` (default), `calls`, `avg`, `rows`, `errors`, `reads`; `q` is a case-insensitive substring of the
+statement; `limit` ≤ 200.
+```json
+{"total_time_ms": 1000000,
+ "queries": [{"fingerprint": "696841490555676800", "query_id": "-4242", "text": "UPDATE orders SET amount = ? WHERE id = ?",
+              "db_names": ["shop"], "calls": 1200, "throughput": 0.33, "total_time_ms": 540000, "avg_ms": 450,
+              "time_share": 0.54, "rows": 1200, "rows_per_call": 1, "rows_examined": 0, "errors": 0,
+              "no_index_used": 0, "blocks_hit": 4800, "blocks_read": 24, "cache_hit_ratio": 0.995}]}
+```
+
+### `GET /api/v1/db/queries/{fingerprint}?instance=&from=&to=&step=`
+One statement: its totals, the series (`step` ≥ 60 s), every distinct execution plan (newest first, `is_current`,
+`plan_change`), the wait events of its samples and the APM services that run it (the normalized text is the join,
+db-monitoring.md §4.1). `404 not_found` when the statement did not run on the instance in the range.
+```json
+{"from": "…", "to": "…", "step": "60s", "db_system": "postgresql", "query": {…as above…},
+ "points": [{"t": 1757757600000, "calls": 20, "throughput": 0.33, "total_time_ms": 42, "avg_ms": 2.1, "rows": 20}],
+ "plans": [{"plan_hash": "9066c2e27543bd21", "format": "json", "plan": "[{\"Plan\":…}]", "total_cost": 8.3,
+            "db_name": "shop", "first_seen": "…", "last_seen": "…", "captures": 2, "is_current": true, "plan_change": false}],
+ "waits": [{"type": "Lock", "event": "transactionid", "samples": 90, "share": 0.9}],
+ "callers": [{"service_name": "checkout", "environment": "prod", "calls": 12000, "avg_ms": 3.1, "errors": 0}]}
+```
+
+### `GET /api/v1/db/activity?instance=&from=&to=&step=`
+Average active sessions per wait type per step, the top wait events and the statements with the most samples.
+```json
+{"from": "…", "to": "…", "step": "60s",
+ "series": [{"wait_type": "Lock", "points": [[1757757600000, 2.4]]}],
+ "waits": [{"type": "Lock", "event": "transactionid", "samples": 1445, "share": 0.62}],
+ "top_queries": [{"fingerprint": "…", "text": "UPDATE …", "samples": 1200, "avg_active_sessions": 2.1,
+                  "top_wait": "Lock:transactionid"}]}
+```
+
+### `GET /api/v1/db/sessions?instance=&at=`
+The latest sampling instant at or before `at` (unix ms, default now) within the last 5 minutes. `blocks` counts
+the sessions waiting for this one, directly or through a chain.
+```json
+{"sampled_at": "…",
+ "sessions": [{"session_id": "4700", "state": "idle in transaction", "wait_type": "Client", "wait_event": "ClientRead",
+               "db_name": "shop", "user": "app", "application": "checkout", "client_address": "10.0.0.7",
+               "duration_ms": 61000, "fingerprint": "", "text": "", "blocking_session_ids": [], "blocks": 2}]}
+```
+
+### `GET /api/v1/db/lookup?db_system=&statement=&from=&to=`
+Instances whose statistics hold a normalized statement — the link from an APM database call to the server view.
+```json
+{"matches": [{"instance": "db1.internal:5432", "fingerprint": "…", "host_name": "db1", "calls": 967, "avg_ms": 0.2}]}
+```
+
 ## Alerting
 
 Rules, incidents, notification channels, routing rules, mute windows and the delivery log of the caller's
