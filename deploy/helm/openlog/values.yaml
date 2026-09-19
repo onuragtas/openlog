@@ -400,6 +400,8 @@ clickhouse:
       apm: 7
       alerts: 7
       rum: 7
+      # Profiles are the widest rows stored, so they reach the cold volume earlier than everything else.
+      profiles: 3
     # Days after which parts move to the warm volume (requires warm.enabled), e.g. {logs: 1}.
     warmAfterDays: {}
     s3:

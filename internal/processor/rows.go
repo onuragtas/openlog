@@ -14,12 +14,14 @@ const (
 	TableHosts              = "hosts"
 	TableInventoryItems     = "inventory_items"
 	TableInventorySnapshots = "inventory_snapshots"
+	// TableProfiles holds continuous profiling samples (0095_profiles, OTLP profiles).
+	TableProfiles = "profiles"
 )
 
 // Tables lists all tables in insert order. Hosts go last so a host only
 // appears once its telemetry has been written. The re-link queue follows spans:
 // a queued minute's late spans are stored before the leader can read the row.
-var Tables = []string{TableMetrics, TableMetricExemplars, TableLogs, TableSpans, TableRelinkQueue, TableInventoryItems, TableInventorySnapshots, TableHosts, TableUsageIngest}
+var Tables = []string{TableMetrics, TableMetricExemplars, TableLogs, TableSpans, TableRelinkQueue, TableProfiles, TableInventoryItems, TableInventorySnapshots, TableHosts, TableUsageIngest}
 
 // Columns per table; Values() of each row type follows the same order.
 var Columns = map[string][]string{
@@ -46,7 +48,10 @@ var Columns = map[string][]string{
 	TableInventoryItems:     {"tenant_id", "host_id", "snapshot_id", "snapshot_time", "category", "item_key", "data"},
 	TableInventorySnapshots: {"tenant_id", "host_id", "snapshot_id", "snapshot_time", "item_count"},
 	TableRelinkQueue:        {"tenant_id", "minute", "trace_id", "spans", "enqueued_at"},
-	TableUsageIngest:        {"tenant_id", "hour", "signal", "requests", "bytes"}, // usage.go
+	TableProfiles: {"tenant_id", "timestamp", "service_name", "service_namespace", "deployment_environment",
+		"host_id", "profile_type", "unit", "stack", "leaf", "value", "duration_ns", "resource_attributes",
+		"attributes"}, // 0095_profiles
+	TableUsageIngest: {"tenant_id", "hour", "signal", "requests", "bytes"}, // usage.go
 }
 
 // MetricRow is one data point.
@@ -117,6 +122,33 @@ func (r *LogRow) Values() []any {
 		r.SeverityText, r.SeverityNumber, r.TraceID, r.SpanID, r.TraceFlags, r.EventName, r.Body,
 		r.PatternID, r.PatternTemplate,
 		r.ResourceAttributes, r.ScopeName, r.Attributes}
+}
+
+// ProfileRow is one profiling sample: a resolved call stack and the value measured on it (0095_profiles).
+// The stack is expanded at ingest (internal/profiles) rather than stored as the wire's dictionary indices,
+// so a flame graph is a GROUP BY instead of five joins.
+type ProfileRow struct {
+	TenantID           string
+	Timestamp          time.Time
+	ServiceName        string
+	ServiceNamespace   string
+	Environment        string
+	HostID             string
+	ProfileType        string
+	Unit               string
+	Stack              []string
+	Leaf               string
+	Value              int64
+	DurationNs         uint64
+	ResourceAttributes map[string]string
+	Attributes         map[string]string
+}
+
+// Values implements row.
+func (r *ProfileRow) Values() []any {
+	return []any{r.TenantID, r.Timestamp, r.ServiceName, r.ServiceNamespace, r.Environment, r.HostID,
+		r.ProfileType, r.Unit, nonNil(r.Stack), r.Leaf, r.Value, r.DurationNs,
+		r.ResourceAttributes, r.Attributes}
 }
 
 // SpanRow is one span.

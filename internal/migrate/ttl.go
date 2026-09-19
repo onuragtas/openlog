@@ -63,6 +63,10 @@ var TTLTables = []TTLTable{
 	{"rum_page_views_1m_local", "rum", "timestamp", 30},
 	{"rum_vitals_1m_local", "rum", "timestamp", 30},
 	{"rum_sessions_local", "rum", "toDateTime(last_seen)", 30},
+	// Profiles get their own class rather than borrowing traces: per-tenant retention (D-081) widens a class
+	// as a whole, and a profile is the widest row openlog stores — a tenant that lengthens its trace
+	// retention must not silently multiply its profiling bill too.
+	{"profiles_local", "profiles", "toDateTime(timestamp)", 7},
 	{"alert_evaluations_local", "alerts", "toDateTime(evaluated_at)", 30},
 	// Synthetic check runs (0093_synthetic_runs, D-132) are operational results of the installation like the
 	// alert evaluations, so they share their class and 30-day retention.

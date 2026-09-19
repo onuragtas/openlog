@@ -39,9 +39,11 @@ const (
 type Rows struct {
 	Metrics []MetricRow
 	// Exemplars are the trace links of metric data points (exemplars.go, D-130), capped per series and minute.
-	Exemplars          []ExemplarRow
-	Logs               []LogRow
-	Spans              []SpanRow
+	Exemplars []ExemplarRow
+	Logs      []LogRow
+	Spans     []SpanRow
+	// Profiles are continuous profiling samples (0095_profiles), expanded by internal/profiles.
+	Profiles           []ProfileRow
 	InventoryItems     []InventoryItemRow
 	InventorySnapshots []InventorySnapshotRow
 	// RelinkQueue is filled by the processor after conversion (relink.go), not by the Add* methods.
@@ -82,6 +84,8 @@ func (r *Rows) Len(table string) int {
 		return len(r.InventorySnapshots)
 	case TableRelinkQueue:
 		return len(r.RelinkQueue)
+	case TableProfiles:
+		return len(r.Profiles)
 	case TableHosts:
 		return len(r.hosts)
 	case TableUsageIngest:
@@ -152,6 +156,11 @@ func (r *Rows) Values(table string) [][]any {
 		out = make([][]any, len(r.RelinkQueue))
 		for i := range r.RelinkQueue {
 			out[i] = r.RelinkQueue[i].Values()
+		}
+	case TableProfiles:
+		out = make([][]any, len(r.Profiles))
+		for i := range r.Profiles {
+			out[i] = r.Profiles[i].Values()
 		}
 	case TableHosts:
 		hosts := r.Hosts()

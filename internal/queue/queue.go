@@ -70,10 +70,13 @@ const (
 	SignalMetrics Signal = "metrics"
 	SignalLogs    Signal = "logs"
 	SignalTraces  Signal = "traces"
+	// SignalProfiles carries OTLP profiles (continuous profiling). The signal is still v1development
+	// upstream; internal/profiles is the only package that knows its wire types.
+	SignalProfiles Signal = "profiles"
 )
 
 // AllSignals lists all signals in a stable order.
-var AllSignals = []Signal{SignalMetrics, SignalLogs, SignalTraces}
+var AllSignals = []Signal{SignalMetrics, SignalLogs, SignalTraces, SignalProfiles}
 
 // Topic returns <prefix>.otlp.<signal>.v1.
 func Topic(prefix string, s Signal) string {

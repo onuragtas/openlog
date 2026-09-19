@@ -53,7 +53,8 @@ func TestMissingTopics(t *testing.T) {
 		"p.otlp.logs.v1":    {Topic: "p.otlp.logs.v1", Err: kerr.UnknownTopicOrPartition},
 	}
 	missing, err := missingTopics(details, topics)
-	if err != nil || len(missing) != 2 || missing[0] != "p.otlp.logs.v1" || missing[1] != "p.otlp.traces.v1" {
+	if err != nil || len(missing) != 3 || missing[0] != "p.otlp.logs.v1" || missing[1] != "p.otlp.traces.v1" ||
+		missing[2] != "p.otlp.profiles.v1" {
 		t.Errorf("missing %v err %v", missing, err)
 	}
 }

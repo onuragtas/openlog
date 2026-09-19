@@ -181,7 +181,7 @@ func TestBuildTTLPlan(t *testing.T) {
 	}
 	// APM default cold 7 equals the 7-day retention: the APM tables get no move and keep the default policy.
 	// The RUM rollups keep 30 days in their own class (D-136), so they do move, like alerts and synthetics.
-	if policies != 11 || ttls != 11 {
+	if policies != 12 || ttls != 12 {
 		t.Fatalf("enable: %d policy and %d TTL steps: %+v", policies, ttls, plan.Steps)
 	}
 	want := map[string]string{
@@ -195,6 +195,8 @@ func TestBuildTTLPlan(t *testing.T) {
 		"alert_evaluations_local": "toDateTime(evaluated_at) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(evaluated_at) + INTERVAL 30 DAY",
 		// Synthetic check runs share the alerts class (D-132).
 		"synthetic_runs_local": "toDateTime(timestamp) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 30 DAY",
+		// Profiles are their own class too, and move earliest: they are the widest rows stored.
+		"profiles_local": "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 7 DAY",
 		// RUM rollups are their own class so their 30 days cannot be widened by per-tenant retention (D-136).
 		"rum_page_views_1m_local": "timestamp + INTERVAL 7 DAY TO VOLUME 'cold', timestamp + INTERVAL 30 DAY",
 		"rum_vitals_1m_local":     "timestamp + INTERVAL 7 DAY TO VOLUME 'cold', timestamp + INTERVAL 30 DAY",
@@ -233,7 +235,7 @@ func TestBuildTTLPlan(t *testing.T) {
 
 	// Disable again: the move clauses go, the policy stays. Every table that got a move above reverts.
 	plan, _ = BuildTTLPlan(apm, tiered)
-	if len(plan.Steps) != 11 || plan.Tiering {
+	if len(plan.Steps) != 12 || plan.Tiering {
 		t.Fatalf("disable: %+v", plan)
 	}
 	for _, s := range plan.Steps {
