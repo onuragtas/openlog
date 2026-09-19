@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -150,7 +151,9 @@ type rumEventJSON struct {
 	DurationMs float64 `json:"duration_ms"`
 	TraceID    string  `json:"trace_id"`
 	SpanID     string  `json:"span_id"`
-	// ErrorGroupID links a captured error to its group in the APM error inbox ("" when not an error).
+	// ErrorGroupID links a captured error to its group in the APM error inbox. It is "" when the row is not
+	// an error, and when the span is no longer the group's newest sample: a span does not carry its group,
+	// so fillRUMErrorGroups resolves it through apm_error_groups, which keeps one sample per group.
 	ErrorGroupID string `json:"error_group_id"`
 	StatusCode   int    `json:"status_code"`
 }
@@ -432,6 +435,37 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	// The page view rollup carries load time, not vitals (0094_rum.sql), so the LCP of each route comes from
+	// the vitals rollup — the same p75 the overview leads with, per route.
+	if len(pages) > 0 {
+		vq := rumRange(f.apply(sc.From(query.RumVitals1m).Columns(
+			"route",
+			"tupleElement(sumMap(value_hist), 1) AS v_hk",
+			"tupleElement(sumMap(value_hist), 2) AS v_hv",
+		)), from, to).Where("vital = {v_name:String}").Param("v_name", rum.VitalLCP).GroupBy("route").Limit(limit)
+		vrows, err := sc.Query(r.Context(), vq)
+		if err != nil {
+			return err
+		}
+		lcp := map[string]*float64{}
+		for vrows.Next() {
+			var route string
+			var hk []int16
+			var hv []float64
+			if err := vrows.Scan(&route, &hk, &hv); err != nil {
+				vrows.Close()
+				return err
+			}
+			lcp[route] = optFloat(rum.NewHist(hk, hv).Quantile(0.75))
+		}
+		vrows.Close()
+		if err := vrows.Err(); err != nil {
+			return err
+		}
+		for i := range pages {
+			pages[i].LCPP75 = lcp[pages[i].Route]
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"pages": pages})
 	return nil
 }
@@ -540,16 +574,7 @@ func (s *Server) rumSessionDetail(w http.ResponseWriter, r *http.Request, sc *qu
 	if t, err := time.Parse(timeLayout, sess.EndedAt); err == nil && t.After(end) {
 		end = t.Add(time.Minute)
 	}
-	ev := sc.From(query.Spans).Columns(
-		"timestamp", "name", "duration_ns", "trace_id", "span_id", "http_status_code", "error_group_id",
-		"attributes['openlog.rum.event'] AS e_event",
-		"attributes['openlog.rum.route'] AS e_route",
-	).
-		Where("attributes['session.id'] = {s_id:String}").Param("s_id", id).
-		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp <= fromUnixTimestamp64Nano({t_to:Int64})").
-		Param("t_from", start.UnixNano()).Param("t_to", end.UnixNano()).
-		OrderBy("timestamp").Limit(min(500, s.cfg.MaxRows))
-	erows, err := sc.Query(r.Context(), ev)
+	erows, err := sc.Query(r.Context(), rumTimelineSelect(sc, id, start, end, min(500, s.cfg.MaxRows)))
 	if err != nil {
 		return err
 	}
@@ -560,22 +585,81 @@ func (s *Server) rumSessionDetail(w http.ResponseWriter, r *http.Request, sc *qu
 		var ts time.Time
 		var dur uint64
 		var status uint16
-		var groupID uint64
-		if err := erows.Scan(&ts, &e.Name, &dur, &e.TraceID, &e.SpanID, &status, &groupID, &e.Event, &e.Route); err != nil {
+		if err := erows.Scan(&ts, &e.Name, &dur, &e.TraceID, &e.SpanID, &status, &e.Event, &e.Route); err != nil {
 			return err
 		}
 		e.Timestamp = formatTime(ts)
 		e.DurationMs = float64(dur) / 1e6
 		e.StatusCode = int(status)
-		if groupID != 0 {
-			// The same 16 hex digit id the APM error inbox uses, so the timeline links straight into it.
-			e.ErrorGroupID = apm.GroupIDString(groupID)
-		}
 		events = append(events, e)
 	}
 	if err := erows.Err(); err != nil {
 		return err
 	}
+	if err := fillRUMErrorGroups(r.Context(), sc, sess.App, events); err != nil {
+		return err
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"session": sess, "events": events})
 	return nil
+}
+
+// rumMaxErrorGroups bounds the group lookup of one timeline. A browser app's inbox is small next to a
+// backend service's, and the query exists to fill a link, not to page through errors.
+const rumMaxErrorGroups = 1000
+
+// fillRUMErrorGroups fills ErrorGroupID for the error rows of a timeline. `spans` does not store the group —
+// it is a key of apm_error_groups (rum.md §7: a browser error is an APM error group of the same
+// application) — and a group keeps only its newest sample (argMax), so an error resolves while it is that
+// sample and otherwise keeps the empty id the field documents. One query per session rather than per row,
+// and the match is made here because the query builder has no HAVING.
+func fillRUMErrorGroups(ctx context.Context, sc *query.Scope, app string, events []rumEventJSON) error {
+	wanted := map[string]int{}
+	for i, e := range events {
+		if e.Event == rum.EventError && e.SpanID != "" {
+			wanted[e.SpanID] = i
+		}
+	}
+	if len(wanted) == 0 {
+		return nil
+	}
+	q := sc.From(query.ApmErrorGroups).Columns("error_group_id", "argMaxMerge(last_span_id) AS m_span").
+		Where("service_name = {svc:String}").Param("svc", app).
+		GroupBy("error_group_id").Limit(rumMaxErrorGroups)
+	rows, err := sc.Query(ctx, q)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uint64
+		var span string
+		if err := rows.Scan(&id, &span); err != nil {
+			return err
+		}
+		if i, ok := wanted[span]; ok {
+			events[i].ErrorGroupID = apm.GroupIDString(id)
+		}
+	}
+	return rows.Err()
+}
+
+// rumTimelineSelect builds the span query behind a session timeline. It is a function of its own so a test
+// can build it without a session in the database: the handler reaches this query only after the session
+// lookup returns a row, which is how a fragment the query layer refuses shipped unnoticed.
+func rumTimelineSelect(sc *query.Scope, sessionID string, from, to time.Time, limit int) *query.Select {
+	return sc.From(query.Spans).Columns(
+		"timestamp", "name", "duration_ns", "trace_id", "span_id",
+		// spans stores neither of these as a column: the HTTP status of a fetch span is an attribute
+		// (rum.md §2.4), and the error group is a key of apm_error_groups, resolved by fillRUMErrorGroups.
+		"toUInt16OrZero(attributes['http.response.status_code']) AS e_status",
+		// The keys are bound parameters, not literals: the query layer refuses the token "openlog" anywhere
+		// in a fragment (it guards the database name), and every RUM attribute key starts with it.
+		"attributes[{a_event:String}] AS e_event",
+		"attributes[{a_route:String}] AS e_route",
+	).
+		Param("a_event", rum.AttrEvent).Param("a_route", rum.AttrRoute).
+		Where("attributes['session.id'] = {s_id:String}").Param("s_id", sessionID).
+		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp <= fromUnixTimestamp64Nano({t_to:Int64})").
+		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
+		OrderBy("timestamp").Limit(limit)
 }

@@ -6,6 +6,10 @@ deploy/
 docs/
 agents/
 **/*_test.go
+# iCloud resolves a sync conflict by writing "<name> 2.go" next to the original. The copies are untracked,
+# so git and CI stay green while the image build fails with "redeclared in this block". The *_test.go rule
+# above does not cover them either ("collector_test 2.go" does not match "*_test.go").
+**/* [0-9].*
 # Web: dependencies are installed and dist/ is rebuilt inside the image.
 web/node_modules/
 web/dist/

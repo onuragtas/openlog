@@ -6696,7 +6696,7 @@ export interface components {
             duration_ms: number;
             trace_id: string;
             span_id: string;
-            /** @description 16 hex digits linking an error to its APM error group, or "" when not an error */
+            /** @description 16 hex digits linking an error to its APM error group. "" when the row is not an error, and when the span is no longer the group's newest sample: a span does not store its group, so it is resolved through apm_error_groups, which keeps one sample per group */
             error_group_id: string;
             status_code: number;
         };
