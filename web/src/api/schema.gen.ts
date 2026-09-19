@@ -1499,6 +1499,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/source-maps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The organization's source maps (member and higher; API keys allowed), newest first. The documents themselves are never served back — they are read only to un-minify a stack (rum.md §8). */
+        get: operations["listSourceMaps"];
+        put?: never;
+        /** @description Uploads a source map (signed-in admin or owner), replacing the one held for the same script and keeping its id. The body is the raw document, not JSON: base64 would cost a third more bytes for a file a build produced. It is parsed before it is stored, so a document that is not Source Map v3, uses `sections`, or decodes to no mappings is refused while the uploader can still fix it. */
+        post: operations["uploadSourceMap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-maps/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Removes the map and its stored document (signed-in admin or owner). */
+        delete: operations["deleteSourceMap"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/browser-keys": {
         parameters: {
             query?: never;
@@ -6399,7 +6436,12 @@ export interface components {
             first_seen: components["schemas"]["Timestamp"];
             last_seen: components["schemas"]["Timestamp"];
             last_message: string;
+            /** @description The best available stack: un-minified through the uploaded source maps when any frame resolved (rum.md §8), otherwise the stored one. */
             stacktrace: string;
+            /** @description The stack as it was stored. Equal to `stacktrace` when nothing was symbolicated; kept beside it because a partly resolved stack is still read against the original. */
+            stacktrace_minified: string;
+            /** @description How many frames a source map resolved; 0 when none did. */
+            symbolicated_frames: number;
             last_trace_id: string;
             last_span_id: string;
             last_span_name: string;
@@ -6699,6 +6741,22 @@ export interface components {
             /** @description 16 hex digits linking an error to its APM error group. "" when the row is not an error, and when the span is no longer the group's newest sample: a span does not store its group, so it is resolved through apm_error_groups, which keeps one sample per group */
             error_group_id: string;
             status_code: number;
+        };
+        /** @description A stored source map (rum.md §8). Keyed by the generated file name, because a RUM span carries no build identifier and the content hash inside that name identifies one build exactly. */
+        SourceMap: {
+            /** Format: uuid */
+            id: string;
+            /** @description The browser application (the browser key's service_name) */
+            app: string;
+            /** @example main.3f2a1b9c.js */
+            script: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @description Hex digest of the stored document */
+            sha256: string;
+            created_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
         };
         /** @description A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the API is not a place to read credentials back from. */
         BrowserKey: {
@@ -12825,6 +12883,89 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listSourceMaps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source maps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        source_maps: components["schemas"]["SourceMap"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    uploadSourceMap: {
+        parameters: {
+            query: {
+                /** @description The browser application, i.e. the browser key's service_name. */
+                app: string;
+                /** @description The generated file name as a stack frame carries it ("main.3f2a1b9c.js"). A path, query string or fragment is refused rather than trimmed. */
+                script: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Stored map */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        source_map: components["schemas"]["SourceMap"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSourceMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listBrowserKeys: {

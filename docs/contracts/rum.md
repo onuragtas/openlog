@@ -314,8 +314,10 @@ not a separate browser product.
 
 Deliberately left for later, with the shape they would take:
 
-- **Source maps.** Stacks are stored minified. Un-minifying needs a map upload endpoint, storage and a
-  symbolication step; the fingerprint already tolerates content hashes so groups stay stable meanwhile.
+- **Source maps are now built** ([api.md](api.md#source-maps)): a map is uploaded per bundle file name and
+  applied at read time, so a browser stack reads in the developer's own files. The keying follows from §3.3
+  — a RUM span carries no build identifier, but the content hash in `main.3f2a1b9c.js` names one build
+  exactly, and the fingerprint strips it from the group key so groups stay stable across deploys.
 - **Geography and network.** No IP-derived country/region and no `connection.effectiveType`. Country needs a
   GeoIP database and a privacy decision that deserves its own review.
 - **User identity.** No `user.id` attribute: RUM sessions are deliberately anonymous (§1.1), and adding an

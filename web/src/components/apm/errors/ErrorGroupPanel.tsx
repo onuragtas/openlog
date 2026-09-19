@@ -79,13 +79,28 @@ export function ErrorGroupPanel({ scope, range, groupId, onClose, onOpenTransact
                 <div>
                   <p className="mb-1 text-xs font-semibold text-muted-foreground">{t("apm.errors.stacktrace")}</p>
                   {q.data.stacktrace ? (
-                    <pre className="max-h-96 overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-relaxed" data-testid="stacktrace" tabIndex={0}>
-                      {stackLines(q.data.stacktrace).map((l, i) => (
-                        <span key={i} className={cn("block whitespace-pre", l.frame && !l.inApp && "text-muted-foreground", l.inApp && "font-semibold text-foreground")}>
-                          {l.text || " "}
-                        </span>
-                      ))}
-                    </pre>
+                    <>
+                      <pre className="max-h-96 overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-relaxed" data-testid="stacktrace" tabIndex={0}>
+                        {stackLines(q.data.stacktrace).map((l, i) => (
+                          <span key={i} className={cn("block whitespace-pre", l.frame && !l.inApp && "text-muted-foreground", l.inApp && "font-semibold text-foreground")}>
+                            {l.text || " "}
+                          </span>
+                        ))}
+                      </pre>
+                      {/* Browser stacks are stored minified; uploaded source maps resolve them at read time
+                          (rum.md §8). The original stays one click away, because a partly resolved stack is
+                          still read against it. */}
+                      {q.data.symbolicated_frames > 0 && (
+                        <details className="mt-2" data-testid="stacktrace-minified">
+                          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                            {t("apm.errors.symbolicated", { n: q.data.symbolicated_frames })}
+                          </summary>
+                          <pre className="mt-1 max-h-96 overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-relaxed" tabIndex={0}>
+                            {q.data.stacktrace_minified}
+                          </pre>
+                        </details>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm text-muted-foreground">{t("apm.errors.noStack")}</p>
                   )}

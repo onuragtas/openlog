@@ -379,6 +379,16 @@ services:
       OPENLOG_INGEST_CORS_ALLOWED_ORIGINS: ${OPENLOG_INGEST_CORS_ALLOWED_ORIGINS:-}
       # Real user monitoring (docs/contracts/rum.md, D-136): POST /v1/rum and the RUM screens.
       OPENLOG_RUM_ENABLED: ${OPENLOG_RUM_ENABLED:-}
+      # Source maps that un-minify browser stacks (rum.md §8). Kept in a container directory by default, so
+      # give the path a volume if they should survive a recreate, or point them at the export bucket.
+      OPENLOG_SOURCE_MAPS_ENABLED: ${OPENLOG_SOURCE_MAPS_ENABLED:-}
+      OPENLOG_SOURCE_MAPS_STORAGE: ${OPENLOG_SOURCE_MAPS_STORAGE:-auto}
+      OPENLOG_SOURCE_MAPS_LOCAL_PATH: ${OPENLOG_SOURCE_MAPS_LOCAL_PATH:-/tmp/openlog-sourcemaps}
+      OPENLOG_SOURCE_MAPS_S3_URL: ${OPENLOG_SOURCE_MAPS_S3_URL:-}
+      OPENLOG_SOURCE_MAPS_S3_REGION: ${OPENLOG_SOURCE_MAPS_S3_REGION:-}
+      OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID: ${OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID:-}
+      OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY: ${OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY:-}
+      OPENLOG_SOURCE_MAPS_S3_CREDENTIALS: ${OPENLOG_SOURCE_MAPS_S3_CREDENTIALS:-}
       # Tail-based sampling (docs/operations/tail-sampling.md, D-075): runs in this process when true. Policies per
       # organization in Settings -> APM sampling; the default policy (JSON) applies to organizations without one.
       OPENLOG_TAILSAMPLING_ENABLED: ${OPENLOG_TAILSAMPLING_ENABLED:-false}

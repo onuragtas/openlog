@@ -617,10 +617,15 @@ func (s *Server) apmErrorGroupDetail(w http.ResponseWriter, r *http.Request, sc 
 		}
 		state.CommentCount = len(comments)
 	}
+	// A browser application's stack is minified; uploaded source maps turn it back into the developer's own
+	// files (rum.md §8). `stacktrace` stays the best available text so every reader improves for free, and
+	// the minified original is kept beside it, because a partly resolved stack is still read against it.
+	stack, symbolicated := s.symbolicate(r, p.OrgID, m.key.Name, m.stack)
 	out := map[string]any{
 		"group_id": apm.GroupIDString(id), "service_name": m.key.Name, "service_namespace": m.key.Namespace, "environment": m.key.Environment,
 		"error_type": m.typ, "message": m.msg, "count": count, "total_count": m.total,
-		"first_seen": formatTime(m.first), "last_seen": formatTime(m.last), "last_message": m.raw, "stacktrace": m.stack,
+		"first_seen": formatTime(m.first), "last_seen": formatTime(m.last), "last_message": m.raw, "stacktrace": stack,
+		"stacktrace_minified": m.stack, "symbolicated_frames": symbolicated,
 		"last_trace_id": m.traceID, "last_span_id": m.spanID, "last_span_name": m.spanName,
 		"step": formatStep(step), "series": points, "samples": samples, "affected": affected,
 		"comments": comments, "activity": activity, "workflow": workflow,

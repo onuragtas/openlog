@@ -74,6 +74,7 @@ const MembersSettingsPage = lazyRouteComponent(() => import("@/routes/settings")
 const LicenseKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "LicenseKeysSettingsPage");
 const ApiKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "ApiKeysSettingsPage");
 const BrowserKeysSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "BrowserKeysSettingsPage");
+const SourceMapsSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SourceMapsSettingsPage");
 const SecuritySettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SecuritySettingsPage");
 const AuditLogSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "AuditLogSettingsPage");
 const TailSamplingSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "TailSamplingSettingsPage");
@@ -966,6 +967,7 @@ const settingsMembersRoute = createRoute({ getParentRoute: () => settingsRoute, 
 const settingsLicenseKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/license-keys", component: LicenseKeysSettingsPage });
 const settingsApiKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/api-keys", component: ApiKeysSettingsPage });
 const settingsBrowserKeysRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/browser-keys", component: BrowserKeysSettingsPage });
+const settingsSourceMapsRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/source-maps", component: SourceMapsSettingsPage });
 const settingsSecurityRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/security", component: SecuritySettingsPage });
 const settingsAuditLogRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/audit-log", component: AuditLogSettingsPage });
 const settingsTailSamplingRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/apm-sampling", component: TailSamplingSettingsPage });
@@ -1080,6 +1082,7 @@ export const routeTree = rootRoute.addChildren([
       settingsLicenseKeysRoute,
       settingsApiKeysRoute,
       settingsBrowserKeysRoute,
+      settingsSourceMapsRoute,
       settingsSecurityRoute,
       settingsAuditLogRoute,
       settingsTailSamplingRoute,

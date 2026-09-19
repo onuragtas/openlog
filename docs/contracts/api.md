@@ -264,6 +264,45 @@ Revokes → `204` (idempotent). Ingest pods keep accepting the key for up to `OP
 (default 60 s), and pages already loaded keep sending it until they are reloaded. The value stays
 permanently unusable.
 
+## Source maps
+
+Documents that un-minify the stacks of browser applications ([rum.md](rum.md) §8). PostgreSQL auth mode
+only, and only when `OPENLOG_SOURCE_MAPS_ENABLED` is on; otherwise these answer `404`. Reads need a member
+(API keys allowed); uploading and deleting need a **signed-in** admin or owner.
+
+**A map is keyed by the bundle file name, not by a release.** A RUM span carries no build identifier — the
+ingest rebuilds the resource from an allowlist that has no `service.version`, and the browser key has no
+such field ([rum.md](rum.md) §3.3). What a stack does carry is the content hash inside the file name
+(`main.3f2a1b9c.js`), which identifies one build exactly; the error fingerprint strips it from the group key
+so groups stay stable across deploys, but it survives verbatim in the stored stack. So a deploy uploads its
+maps under the new hashed names, and nothing has to be told which release is current.
+
+Symbolication happens **at read time**, in `GET /api/v1/apm/services/{service}/errors/{group_id}`:
+`apm_error_groups` is a materialized view with no update path, so a resolved stack is never written back.
+A frame resolves or it does not; an application with no maps, a map storage cannot return, or a frame from a
+third-party bundle each leave that line exactly as it arrived.
+
+### `GET /api/v1/source-maps`
+`{"source_maps": [{"id", "app", "script", "size_bytes", "sha256", "created_by_email", "created_at",
+"updated_at"}]}`, newest first. The document itself is never served back.
+
+### `POST /api/v1/source-maps?app=&script=`
+The **raw source map document as the body** (`Content-Type` is not inspected), at most 32 MiB. This is the
+only endpoint in the product that takes a binary body: base64 inside JSON would cost a third more bytes for
+a file a build produced.
+
+`app` is the browser application (the browser key's `service_name`, 1–512). `script` is the generated file
+name as a stack frame carries it — `main.3f2a1b9c.js`, no directory, query string or fragment; a path is
+refused (`400`) rather than trimmed, because uploading `assets/main.js` and matching `main.js` later would
+look like it worked.
+
+`201 {"source_map": {…}}`. Uploading a script again **replaces** the map held for it, keeping the same id.
+The document is parsed before it is stored: a map that is not Source Map v3, that uses `sections` (index
+maps), or that decodes to no mappings is refused (`400`) while the person uploading can still fix it.
+
+### `DELETE /api/v1/source-maps/{id}`
+`204`, or `404` when the organization has no such map. Removes the row and the stored document.
+
 ## API keys
 
 ### `GET /api/v1/api-keys`

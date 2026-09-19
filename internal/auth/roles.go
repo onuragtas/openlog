@@ -50,8 +50,12 @@ const (
 	// credential operation.
 	ActListBrowserKeys   Action = "browser_keys.list"
 	ActManageBrowserKeys Action = "browser_keys.manage"
-	ActListAPIKeys       Action = "api_keys.list"
-	ActCreateAPIKey      Action = "api_keys.create"
+	// A source map is not a credential, but uploading one decides how every browser stack of an
+	// application reads, so it is managed like the key that produced those stacks (rum.md §8).
+	ActListSourceMaps   Action = "source_maps.list"
+	ActManageSourceMaps Action = "source_maps.manage"
+	ActListAPIKeys      Action = "api_keys.list"
+	ActCreateAPIKey     Action = "api_keys.create"
 	// ActCreateWritingAPIKey is creating a key whose role is more than viewer (admin, owner; D-133).
 	ActCreateWritingAPIKey Action = "api_keys.create_writing"
 	ActRevokeAPIKey        Action = "api_keys.revoke"
@@ -129,6 +133,7 @@ var matrix = map[Action]Permission{
 	ActListMembers:               {Min: RoleViewer},
 	ActListLicenseKeys:           {Min: RoleMember},
 	ActListBrowserKeys:           {Min: RoleMember},
+	ActListSourceMaps:            {Min: RoleMember},
 	ActListAPIKeys:               {Min: RoleMember},
 	ActReadAudit:                 {Min: RoleAdmin},
 	ActReadFleet:                 {Min: RoleViewer},
@@ -155,6 +160,7 @@ var matrix = map[Action]Permission{
 	ActManageInvitations:   {Min: RoleAdmin, UserOnly: true},
 	ActManageLicenseKeys:   {Min: RoleAdmin, UserOnly: true},
 	ActManageBrowserKeys:   {Min: RoleAdmin, UserOnly: true},
+	ActManageSourceMaps:    {Min: RoleAdmin, UserOnly: true},
 	ActCreateAPIKey:        {Min: RoleMember, UserOnly: true},
 	ActCreateWritingAPIKey: {Min: RoleAdmin, UserOnly: true},
 	ActRevokeAPIKey:        {Min: RoleMember, UserOnly: true},

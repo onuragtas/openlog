@@ -29,6 +29,7 @@ import (
 	"github.com/onuragtas/openlog/internal/intsettings"
 	"github.com/onuragtas/openlog/internal/savedview"
 	"github.com/onuragtas/openlog/internal/slo"
+	"github.com/onuragtas/openlog/internal/sourcemaps"
 	"github.com/onuragtas/openlog/internal/synthetics"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
@@ -71,6 +72,8 @@ type Server struct {
 	saas *saasState
 	// data exports, account and organization deletion (privacy.go, D-107); nil: none
 	privacy *PrivacyDeps
+	// source maps of browser applications (sourcemaps.go, rum.md §8); nil: the endpoints answer 404
+	sourceMaps *sourcemaps.Service
 	// public status page and its incidents (statuspage.go, D-108); nil: none
 	statusPage *StatusPageDeps
 	// saved explorer views (savedviews.go, D-118); nil: none
@@ -168,6 +171,7 @@ func (s *Server) Handler() http.Handler {
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
 	s.rumRoutes(mux)          // rum.go: real user monitoring reads (rum.md, D-136)
 	s.browserKeyRoutes(mux)   // browserkeys.go: the RUM SDK's public keys (D-136)
+	s.sourceMapRoutes(mux)    // sourcemaps.go: source maps that un-minify browser stacks (rum.md §8)
 	s.cloudRoutes(mux)        // cloudconnect.go: managed cloud service metrics (D-135)
 	s.costRoutes(mux)         // cost.go: per-host, per-service and per-container cost estimates (D-134)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

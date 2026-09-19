@@ -8,6 +8,7 @@ export { OrganizationSettings as OrganizationSettingsPage } from "@/components/s
 export { ProfileSettings as ProfileSettingsPage } from "@/components/settings/ProfileSettings";
 export { SecuritySettings as SecuritySettingsPage } from "@/components/settings/SecuritySettings";
 export { SettingsLayout } from "@/components/settings/SettingsLayout";
+export { SourceMapsSettings as SourceMapsSettingsPage } from "@/components/settings/SourceMapsSettings";
 export { SsoSettings as SsoSettingsPage } from "@/components/settings/SsoSettings";
 export { StatusPageSettings as StatusPageSettingsPage } from "@/components/settings/StatusPageSettings";
 export { TailSamplingSettings as TailSamplingSettingsPage } from "@/components/settings/TailSamplingSettings";

@@ -77,6 +77,17 @@ config:
   # Real user monitoring (rum.md, D-136): POST /v1/rum on ingest and the /api/v1/rum/* reads. Read by both
   # ingest and api, so it lives here rather than in one component's config.
   OPENLOG_RUM_ENABLED: "true"
+  # Source maps that un-minify browser stacks (rum.md §8). The default local path is a container directory:
+  # point these at the same object storage the data export uses when more than one API replica runs, or an
+  # upload lands on one pod and the symbolication on another finds nothing.
+  OPENLOG_SOURCE_MAPS_ENABLED: ""
+  OPENLOG_SOURCE_MAPS_STORAGE: "auto"
+  OPENLOG_SOURCE_MAPS_LOCAL_PATH: "/tmp/openlog-sourcemaps"
+  OPENLOG_SOURCE_MAPS_S3_URL: ""
+  OPENLOG_SOURCE_MAPS_S3_REGION: ""
+  OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID: ""
+  OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY: ""
+  OPENLOG_SOURCE_MAPS_S3_CREDENTIALS: ""
 
 # Default scheduling policy for ingest / processor / api / envoy pods.
 scheduling:

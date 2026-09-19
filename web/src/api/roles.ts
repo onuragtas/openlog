@@ -18,6 +18,8 @@ export type Permission =
   | "api_keys.revoke_any"
   | "browser_keys.list"
   | "browser_keys.manage"
+  | "source_maps.list"
+  | "source_maps.manage"
   | "audit.read"
   | "fleet.manage"
   | "updates.request"
@@ -41,6 +43,9 @@ const MIN_ROLE: Record<Permission, Role> = {
   // A browser key is public, but issuing one decides which application name a public page may write under
   // and how much it may send, so only admins and owners manage them (rum.md §3).
   "browser_keys.manage": "admin",
+  "source_maps.list": "member",
+  // Uploading a map decides how every browser stack of an application reads, so it stays with an admin.
+  "source_maps.manage": "admin",
   "audit.read": "admin",
   "fleet.manage": "admin",
   "updates.request": "admin",

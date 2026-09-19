@@ -2580,6 +2580,82 @@ paths:
         "504": { $ref: "#/components/responses/Timeout" }
 
   # -------------------------------------------------------------- browser keys
+  /api/v1/source-maps:
+    get:
+      tags: [rum]
+      operationId: listSourceMaps
+      description: >-
+        The organization's source maps (member and higher; API keys allowed), newest first. The documents
+        themselves are never served back — they are read only to un-minify a stack (rum.md §8).
+      responses:
+        "200":
+          description: Source maps
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [source_maps]
+                properties:
+                  source_maps:
+                    type: array
+                    items: { $ref: "#/components/schemas/SourceMap" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [rum]
+      operationId: uploadSourceMap
+      description: >-
+        Uploads a source map (signed-in admin or owner), replacing the one held for the same script and
+        keeping its id. The body is the raw document, not JSON: base64 would cost a third more bytes for a
+        file a build produced. It is parsed before it is stored, so a document that is not Source Map v3,
+        uses `sections`, or decodes to no mappings is refused while the uploader can still fix it.
+      parameters:
+        - name: app
+          in: query
+          required: true
+          description: The browser application, i.e. the browser key's service_name.
+          schema: { type: string, minLength: 1, maxLength: 512 }
+        - name: script
+          in: query
+          required: true
+          description: >-
+            The generated file name as a stack frame carries it ("main.3f2a1b9c.js"). A path, query string
+            or fragment is refused rather than trimmed.
+          schema: { type: string, minLength: 1, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary, description: "The source map document, at most 32 MiB" }
+      responses:
+        "201":
+          description: Stored map
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [source_map]
+                properties:
+                  source_map: { $ref: "#/components/schemas/SourceMap" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/source-maps/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [rum]
+      operationId: deleteSourceMap
+      description: Removes the map and its stored document (signed-in admin or owner).
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /api/v1/browser-keys:
     get:
       tags: [keys]
@@ -9405,7 +9481,8 @@ components:
       allOf:
         - $ref: "#/components/schemas/ApmErrorWorkflow"
       required: [group_id, service_name, service_namespace, environment, error_type, message, count, total_count, first_seen, last_seen,
-        last_message, stacktrace, last_trace_id, last_span_id, last_span_name, step, series, samples, affected, comments, activity, workflow]
+        last_message, stacktrace, stacktrace_minified, symbolicated_frames, last_trace_id, last_span_id, last_span_name, step,
+        series, samples, affected, comments, activity, workflow]
       properties:
         group_id: { type: string }
         service_name: { type: string }
@@ -9426,7 +9503,19 @@ components:
         first_seen: { $ref: "#/components/schemas/Timestamp" }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
         last_message: { type: string }
-        stacktrace: { type: string }
+        stacktrace:
+          type: string
+          description: >-
+            The best available stack: un-minified through the uploaded source maps when any frame resolved
+            (rum.md §8), otherwise the stored one.
+        stacktrace_minified:
+          type: string
+          description: >-
+            The stack as it was stored. Equal to `stacktrace` when nothing was symbolicated; kept beside it
+            because a partly resolved stack is still read against the original.
+        symbolicated_frames:
+          type: integer
+          description: How many frames a source map resolved; 0 when none did.
         last_trace_id: { type: string }
         last_span_id: { type: string }
         last_span_name: { type: string }
@@ -9750,6 +9839,21 @@ components:
             the span is no longer the group's newest sample: a span does not store its group, so it is
             resolved through apm_error_groups, which keeps one sample per group
         status_code: { type: integer }
+    SourceMap:
+      type: object
+      description: >-
+        A stored source map (rum.md §8). Keyed by the generated file name, because a RUM span carries no
+        build identifier and the content hash inside that name identifies one build exactly.
+      required: [id, app, script, size_bytes, sha256, created_by_email, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        app: { type: string, description: "The browser application (the browser key's service_name)" }
+        script: { type: string, example: "main.3f2a1b9c.js" }
+        size_bytes: { type: integer, format: int64 }
+        sha256: { type: string, description: "Hex digest of the stored document" }
+        created_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
     BrowserKey:
       type: object
       description: >-

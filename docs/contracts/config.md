@@ -132,6 +132,14 @@ GRANT ON CLUSTER openlog SELECT ON openlog.* TO openlog_reader;
 | `OPENLOG_INGEST_PRODUCE_TIMEOUT` | `10s` | Kafka produce ack timeout; timeout or Kafka unavailable → `503` / `UNAVAILABLE` with `Retry-After` (D-014) |
 | `OPENLOG_INGEST_CORS_ALLOWED_ORIGINS` | `` | CORS for browser OTLP/HTTP senders: comma-separated `*`, exact origins (`https://app.example.com`) or subdomain wildcards (`https://*.example.com`). Empty = disabled. Preflights (`OPTIONS`) from allowed origins get `204` with `Access-Control-Allow-Origin`, the requested headers and `Max-Age 7200`; other origins get `403`. No credentials (auth is by key header). |
 | `OPENLOG_RUM_ENABLED` | `true` | Serve `POST /v1/rum` (browser SDK, [rum.md](rum.md), D-136) and the `/api/v1/rum/*` reads. `postgres` mode only: browser keys live in PostgreSQL. Everything else that bounds RUM — origins, rate limit, sample rate — is set per browser key by an admin, not here. Turning this off keeps existing keys but stops accepting their data |
+| `OPENLOG_SOURCE_MAPS_ENABLED` | `OPENLOG_RUM_ENABLED` | Serve `/api/v1/source-maps` and un-minify browser stacks with the uploaded maps ([rum.md](rum.md) §8). Off: stacks stay minified, nothing else changes |
+| `OPENLOG_SOURCE_MAPS_STORAGE` | `auto` | Where maps are kept: `auto` (s3 when an S3 URL is known, else local), `local` or `s3` |
+| `OPENLOG_SOURCE_MAPS_LOCAL_PATH` | `/tmp/openlog-sourcemaps` | Directory of locally stored maps. Put it on a volume that survives a restart, or the maps go with it |
+| `OPENLOG_SOURCE_MAPS_S3_URL` | – | Object base URL, bucket and prefix included. Empty with tiered storage enabled: derived from `OPENLOG_S3_ENDPOINT` (same bucket, prefix `openlog-sourcemaps/`) |
+| `OPENLOG_SOURCE_MAPS_S3_REGION` | `OPENLOG_S3_REGION`, else `us-east-1` | Region of that bucket |
+| `OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID` | `OPENLOG_S3_ACCESS_KEY_ID` | Static key id; unset with `_S3_CREDENTIALS=auto` |
+| `OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY` | `OPENLOG_S3_SECRET_ACCESS_KEY` | Static secret; unset with `_S3_CREDENTIALS=auto` |
+| `OPENLOG_SOURCE_MAPS_S3_CREDENTIALS` | `static` with keys, else `auto` | `static` (the keys above) or `auto` (AWS credential chain: env, web identity, ECS, IMDSv2; D-116) |
 | `OPENLOG_AUTH_CACHE_TTL` | `60s` | `postgres` mode: a resolved license key is re-checked against PostgreSQL after this long. **A revoked key keeps being accepted by an ingest pod for up to this long** (browser keys too, [rum.md](rum.md) §3.5) |
 | `OPENLOG_AUTH_NEGATIVE_CACHE_TTL` | `10s` | Unknown keys are re-checked after this long (a newly created key works within this delay on pods that rejected it before) |
 | `OPENLOG_AUTH_CACHE_MAX_STALE` | `15m` | While PostgreSQL is unreachable, keys resolved successfully within this window keep being accepted (`0` = never serve stale entries) |

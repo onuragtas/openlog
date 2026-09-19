@@ -14,6 +14,7 @@ const TABS = [
   { to: "/settings/license-keys", label: "settings.tabs.licenseKeys", permission: "license_keys.list" },
   { to: "/settings/api-keys", label: "settings.tabs.apiKeys", permission: "api_keys.list" },
   { to: "/settings/browser-keys", label: "settings.tabs.browserKeys", permission: "browser_keys.list" },
+  { to: "/settings/source-maps", label: "settings.tabs.sourceMaps", permission: "source_maps.list" },
   { to: "/settings/security", label: "settings.tabs.security", permission: null },
   { to: "/settings/sso", label: "sso.tab", permission: "org.update" },
   { to: "/settings/audit-log", label: "settings.tabs.auditLog", permission: "audit.read" },
