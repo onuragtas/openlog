@@ -24,6 +24,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/collector/pdata/pprofile/pprofileotlp"
 	collogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	colmetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	coltrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -446,6 +447,16 @@ func (p *Processor) decodeRecord(rows *Rows, rec *kgo.Record) {
 			return
 		}
 		rows.AddTraces(tenantID, receivedAt, &req)
+		rows.AddIngestUsage(tenantID, string(sig), receivedAt, len(rec.Value))
+	case queue.SignalProfiles:
+		// Profiles are not a proto.Message: OTLP profiles are carried by a pdata wrapper, which ingest
+		// produced as protobuf exactly as it arrived (internal/ingest/profiles.go).
+		req := pprofileotlp.NewExportRequest()
+		if err := req.UnmarshalProto(rec.Value); err != nil {
+			reject("decode", err)
+			return
+		}
+		rows.AddProfiles(tenantID, receivedAt, req.Profiles())
 		rows.AddIngestUsage(tenantID, string(sig), receivedAt, len(rec.Value))
 	}
 }

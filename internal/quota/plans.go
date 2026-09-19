@@ -18,13 +18,14 @@ import (
 
 // Signals with a per-plan retention (queue.Signal names).
 const (
-	SignalLogs    = "logs"
-	SignalTraces  = "traces"
-	SignalMetrics = "metrics"
+	SignalLogs     = "logs"
+	SignalTraces   = "traces"
+	SignalMetrics  = "metrics"
+	SignalProfiles = "profiles"
 )
 
 // RetentionSignals lists the signals of Limits.RetentionDays.
-var RetentionSignals = []string{SignalLogs, SignalTraces, SignalMetrics}
+var RetentionSignals = []string{SignalLogs, SignalTraces, SignalMetrics, SignalProfiles}
 
 // GiB is the unit of ingest limits (ingest_gb_month is binary gigabytes).
 const GiB = 1 << 30

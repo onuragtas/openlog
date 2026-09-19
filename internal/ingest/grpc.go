@@ -8,6 +8,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	"go.opentelemetry.io/collector/pdata/pprofile/pprofileotlp"
 	collogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	colmetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	coltrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -36,6 +37,9 @@ func (s *Service) newGRPCServer() *grpc.Server {
 	colmetrics.RegisterMetricsServiceServer(srv, metricsServer{s: s})
 	collogs.RegisterLogsServiceServer(srv, logsServer{s: s})
 	coltrace.RegisterTraceServiceServer(srv, traceServer{s: s})
+	// A pointer: the sealing method of UnimplementedGRPCServer has a pointer receiver, so only
+	// *profilesServer satisfies the interface.
+	pprofileotlp.RegisterGRPCServer(srv, &profilesServer{s: s}) // profiles.go (continuous profiling)
 	return srv
 }
 

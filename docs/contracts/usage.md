@@ -53,7 +53,7 @@ ownership):
 
 | Table | Engine / key | Filled by | Content |
 |---|---|---|---|
-| `usage_signals_1h` | SummingMergeTree `(tenant_id, hour, signal, service_name, host_id)` | MVs on `spans_local`, `logs_local`, `metrics_local` | `items` (spans, log records, metric data points), `bytes` (estimated uncompressed row size: `byteSize` of the variable-size columns + fixed-size columns) |
+| `usage_signals_1h` | SummingMergeTree `(tenant_id, hour, signal, service_name, host_id)` | MVs on `spans_local`, `logs_local`, `metrics_local`, `profiles_local` | `items` (spans, log records, metric data points, profiling samples), `bytes` (estimated uncompressed row size: `byteSize` of the variable-size columns + fixed-size columns) |
 | `usage_entities_1d` | ReplacingMergeTree `(tenant_id, day, kind, entity)` | MVs on the same tables | one row per distinct `host` (host_id), `container` (lower-cased `container.id` of metric data point or resource attributes), `service` (span `service_name`) per day |
 | `usage_ingest_1h` | SummingMergeTree `(tenant_id, hour, signal)` | openlog-processor (`internal/processor/usage.go`) | `requests`, `bytes` = uncompressed OTLP protobuf bytes of each Kafka record (the payload ingest produced; OTLP/JSON is converted to protobuf at ingest) in the hour ingest received it |
 | `usage_queries_1h` | ReplacingMergeTree(`collected_at`) `(tenant_id, hour, component)` | api leader job `usage-query-collection` | `queries`, `failed`, `read_rows`, `read_bytes`, `cpu_microseconds` (User+System time), `memory_bytes` (sum of per-query peaks) from `system.query_log` |
@@ -209,7 +209,7 @@ Mechanics:
 
 - With `OPENLOG_QUOTA_RETENTION_ENABLED`, openlog-migrate sets the delete TTL of the `logs`, `traces` (`spans_local`,
   `trace_index_local`) and `metrics` (`metrics_local`) classes to the longest effective plan retention, where a plan without a
-  retention keeps the schema default (logs 14, traces 7, metrics 30 days). This goes through the TTL ownership of D-067
+  retention keeps the schema default (logs 14, traces 7, metrics 30, profiles 7 days). This goes through the TTL ownership of D-067
   (`migrate.TTLOptions.ClassRetentionDays`); tiered storage moves are unaffected.
 - The api leader job `usage-tenant-retention` (hourly) groups tenants by effective retention `N` per signal (only
   `N` shorter than the table TTL). A daily partition `D` of a table is due for a group once `D + N + 1 days ≤ today`

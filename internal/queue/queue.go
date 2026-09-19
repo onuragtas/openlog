@@ -88,8 +88,8 @@ func SampledTracesTopic(prefix string) string {
 	return prefix + ".otlp.traces.sampled.v1"
 }
 
-// ProcessorTopics returns the topics the processor consumes: metrics, logs and the raw traces topic, or the
-// sampled traces topic instead when tail sampling is enabled.
+// ProcessorTopics returns the topics the processor consumes: every signal's topic, with the raw traces topic
+// replaced by the sampled one when tail sampling is enabled.
 func ProcessorTopics(prefix string, tailSampling bool) []string {
 	topics := Topics(prefix)
 	if tailSampling {

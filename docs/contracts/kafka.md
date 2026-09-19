@@ -12,6 +12,7 @@ Producer: `openlog-ingest`. Consumer: `openlog-processor` (consumer group `openl
 | `<prefix>.otlp.logs.v1` | protobuf `ExportLogsServiceRequest` | same rule as metrics |
 | `<prefix>.otlp.traces.v1` | protobuf `ExportTraceServiceRequest` | `<tenant_id>/<hex trace_id of the first span>`; with tail sampling enabled one record **per trace id** (`<tenant_id>/<hex trace_id>`) |
 | `<prefix>.otlp.traces.sampled.v1` | protobuf `ExportTraceServiceRequest`: the kept spans of one trace (or of its late spans), tracestate `ot=th` rewritten (apm.md §4.2) | `<tenant_id>/<hex trace_id>` |
+| `<prefix>.otlp.profiles.v1` | protobuf `ExportProfilesServiceRequest` (OTLP profiles, still `v1development` upstream; produced byte-for-byte as it arrived, never re-encoded by openlog) | `<tenant_id>/<service.name>` of the first resource having one, else `<tenant_id>/` |
 
 **Tail sampling (D-075, D-076).** The sampled topic is created with the same settings as the others, whether or not tail sampling is enabled. With `OPENLOG_TAILSAMPLING_ENABLED=true`:
 - ingest splits trace export requests by trace id, so all spans of a trace go to one partition;

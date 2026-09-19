@@ -32,7 +32,7 @@ const (
 )
 
 // Signals are the exportable telemetry signals and their ClickHouse tables.
-var Signals = map[string]string{"logs": "logs", "traces": "spans", "metrics": "metrics"}
+var Signals = map[string]string{"logs": "logs", "traces": "spans", "metrics": "metrics", "profiles": "profiles"}
 
 // Errors.
 var (

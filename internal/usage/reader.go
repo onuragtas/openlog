@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	ch "github.com/ClickHouse/clickhouse-go/v2"
@@ -14,7 +15,7 @@ import (
 )
 
 // Signal names of the usage tables (queue.Signal).
-var Signals = []string{"traces", "logs", "metrics"}
+var Signals = []string{"traces", "logs", "metrics", "profiles"}
 
 // SignalUsage is the usage of one signal over a range.
 type SignalUsage struct {
@@ -314,15 +315,30 @@ func (r *Reader) Top(ctx context.Context, tenant, dim string, from, to time.Time
 	}
 	p := params(tenant, from, to)
 	out := []TopEntry{}
-	err := r.query(ctx, p, "SELECT "+col+" AS k, sum(items) AS n, sum(bytes) AS b, sumIf(bytes, signal = 'traces'), sumIf(bytes, signal = 'logs'), "+
-		"sumIf(bytes, signal = 'metrics') FROM %s WHERE tenant_id = {tenant:String} AND hour >= {from:DateTime('UTC')} AND hour < {to:DateTime('UTC')} "+
+	// One sumIf per signal, derived from Signals rather than spelled out: the breakdown used to name the
+	// three signals in the SQL and again in the scan, which is exactly the pair a fourth signal gets added
+	// to only once.
+	byCols := make([]string, len(Signals))
+	for i, s := range Signals {
+		byCols[i] = "sumIf(bytes, signal = '" + s + "')"
+	}
+	err := r.query(ctx, p, "SELECT "+col+" AS k, sum(items) AS n, sum(bytes) AS b, "+strings.Join(byCols, ", ")+
+		" FROM %s WHERE tenant_id = {tenant:String} AND hour >= {from:DateTime('UTC')} AND hour < {to:DateTime('UTC')} "+
 		"AND "+col+" != '' GROUP BY k ORDER BY b DESC, k LIMIT "+strconv.Itoa(limit), "usage_signals_1h", func(rows scanner) error {
 		var e TopEntry
-		var t, l, m uint64
-		if err := rows.Scan(&e.Key, &e.Items, &e.Bytes, &t, &l, &m); err != nil {
+		by := make([]uint64, len(Signals))
+		dest := make([]any, 0, 3+len(by))
+		dest = append(dest, &e.Key, &e.Items, &e.Bytes)
+		for i := range by {
+			dest = append(dest, &by[i])
+		}
+		if err := rows.Scan(dest...); err != nil {
 			return err
 		}
-		e.By = map[string]uint64{"traces": t, "logs": l, "metrics": m}
+		e.By = make(map[string]uint64, len(Signals))
+		for i, s := range Signals {
+			e.By[s] = by[i]
+		}
 		out = append(out, e)
 		return nil
 	})

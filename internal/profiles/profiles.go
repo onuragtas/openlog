@@ -34,6 +34,9 @@ const (
 	MaxFrameBytes = 512
 	// MaxRowsPerRequest bounds one payload's expansion.
 	MaxRowsPerRequest = 200_000
+	// MaxAttrBytes bounds one attribute key or value. Sample attributes carry thread names and frame kinds,
+	// not payloads, so anything past this is a mistake on the producer's side rather than information.
+	MaxAttrBytes = 1024
 )
 
 // ErrTooManyRows reports a payload whose samples exceed MaxRowsPerRequest.
@@ -41,11 +44,12 @@ var ErrTooManyRows = errors.New("profiles: too many samples in one request")
 
 // Row is one stored sample: a resolved stack and the value measured on it.
 type Row struct {
-	TenantID    string
-	Timestamp   time.Time
-	ServiceName string
-	Environment string
-	HostID      string
+	TenantID         string
+	Timestamp        time.Time
+	ServiceName      string
+	ServiceNamespace string
+	Environment      string
+	HostID           string
 	// ProfileType is the sample type of the profile ("cpu", "alloc_space", "goroutine"), and Unit its unit
 	// ("nanoseconds", "bytes", "count") — both from the profile's own ValueType, not invented here.
 	ProfileType string
@@ -57,6 +61,11 @@ type Row struct {
 	Value int64
 	// DurationNs is the wall time the profile covers, kept so a rate can be computed without a second query.
 	DurationNs uint64
+	// ResourceAttributes are the producing resource's attributes, the same ones a span of this service carries.
+	ResourceAttributes map[string]string
+	// Attributes are the sample's own attributes, resolved from the payload's attribute table: thread name,
+	// frame kind, and whatever else the profiler labelled the sample with. These are what a flame graph is
+	// filtered by, so they are resolved here rather than left as dictionary indices no query can read.
 	Attributes map[string]string
 }
 
@@ -68,25 +77,46 @@ func (r Row) Leaf() string {
 	return r.Stack[len(r.Stack)-1]
 }
 
+// Payload is an OTLP profiles message. The wire has two forms of it — pprofile.Profiles, which the
+// ProfilesService carries, and pprofile.ProfilesData, which persists — and they share these accessors without
+// sharing a type, so expansion is written once against what they have in common.
+type Payload interface {
+	Dictionary() pprofile.ProfilesDictionary
+	ResourceProfiles() pprofile.ResourceProfilesSlice
+}
+
+// resourceInfo is the identity every row of one resource shares.
+type resourceInfo struct {
+	service   string
+	namespace string
+	env       string
+	host      string
+	attrs     map[string]string
+}
+
 // FromOTLP expands an OTLP profiles payload into rows.
 //
 // Resource attributes decide the identity of every row (service, environment, host) exactly as they do for
 // spans, so a profile lands beside the APM service it belongs to rather than in a namespace of its own.
-func FromOTLP(pd pprofile.ProfilesData, tenantID string, received time.Time) ([]Row, error) {
+func FromOTLP(pd Payload, tenantID string, received time.Time) ([]Row, error) {
 	dict := pd.Dictionary()
 	strs := dict.StringTable()
 	var out []Row
 	for i := 0; i < pd.ResourceProfiles().Len(); i++ {
 		rp := pd.ResourceProfiles().At(i)
 		res := rp.Resource().Attributes()
-		service := stringAttr(res, "service.name")
-		env := stringAttr(res, "deployment.environment.name")
-		host := stringAttr(res, "host.id")
+		ri := resourceInfo{
+			service:   stringAttr(res, "service.name"),
+			namespace: stringAttr(res, "service.namespace"),
+			env:       stringAttr(res, "deployment.environment.name"),
+			host:      stringAttr(res, "host.id"),
+			attrs:     attrMap(res),
+		}
 		for j := 0; j < rp.ScopeProfiles().Len(); j++ {
 			sp := rp.ScopeProfiles().At(j)
 			for k := 0; k < sp.Profiles().Len(); k++ {
 				p := sp.Profiles().At(k)
-				rows, err := profileRows(p, dict, strs, tenantID, service, env, host, received)
+				rows, err := profileRows(p, dict, strs, tenantID, ri, received)
 				if err != nil {
 					return nil, err
 				}
@@ -101,7 +131,7 @@ func FromOTLP(pd pprofile.ProfilesData, tenantID string, received time.Time) ([]
 }
 
 func profileRows(p pprofile.Profile, dict pprofile.ProfilesDictionary, strs pcommon.StringSlice,
-	tenantID, service, env, host string, received time.Time,
+	tenantID string, ri resourceInfo, received time.Time,
 ) ([]Row, error) {
 	typ := lookupString(strs, p.SampleType().TypeStrindex())
 	unit := lookupString(strs, p.SampleType().UnitStrindex())
@@ -110,8 +140,9 @@ func profileRows(p pprofile.Profile, dict pprofile.ProfilesDictionary, strs pcom
 	if typ == "" {
 		return nil, errors.New("profiles: a profile carries no sample type")
 	}
-	base := Row{TenantID: tenantID, ServiceName: service, Environment: env, HostID: host,
-		ProfileType: typ, Unit: unit, DurationNs: p.DurationNano()}
+	base := Row{TenantID: tenantID, ServiceName: ri.service, ServiceNamespace: ri.namespace,
+		Environment: ri.env, HostID: ri.host, ProfileType: typ, Unit: unit,
+		DurationNs: p.DurationNano(), ResourceAttributes: ri.attrs}
 	when := received
 	if t := p.Time().AsTime(); !t.IsZero() {
 		when = t
@@ -125,15 +156,56 @@ func profileRows(p pprofile.Profile, dict pprofile.ProfilesDictionary, strs pcom
 			// nameless block to every flame graph.
 			continue
 		}
+		attrs := sampleAttrs(dict, strs, s.AttributeIndices())
 		for v := 0; v < s.Values().Len(); v++ {
 			r := base
 			r.Timestamp = when
 			r.Stack = stack
 			r.Value = s.Values().At(v)
+			r.Attributes = attrs
 			rows = append(rows, r)
 		}
 	}
 	return rows, nil
+}
+
+// sampleAttrs resolves a sample's attribute indices against the payload's attribute table. An index that
+// points outside the table is skipped rather than failing the profile: one unreadable label is not a reason
+// to lose a minute of samples.
+func sampleAttrs(dict pprofile.ProfilesDictionary, strs pcommon.StringSlice, idx pcommon.Int32Slice) map[string]string {
+	if idx.Len() == 0 {
+		return nil
+	}
+	table := dict.AttributeTable()
+	var out map[string]string
+	for i := 0; i < idx.Len(); i++ {
+		j := idx.At(i)
+		if j < 0 || int(j) >= table.Len() {
+			continue
+		}
+		kv := table.At(int(j))
+		key := lookupString(strs, kv.KeyStrindex())
+		if key == "" {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]string, idx.Len())
+		}
+		out[truncate(key, MaxAttrBytes)] = truncate(kv.Value().AsString(), MaxAttrBytes)
+	}
+	return out
+}
+
+// attrMap copies a resource's attributes, which are stored beside every row of that resource.
+func attrMap(m pcommon.Map) map[string]string {
+	if m.Len() == 0 {
+		return nil
+	}
+	out := make(map[string]string, m.Len())
+	for k, v := range m.All() {
+		out[truncate(k, MaxAttrBytes)] = truncate(v.AsString(), MaxAttrBytes)
+	}
+	return out
 }
 
 // resolveStack walks stack → locations → lines → function → string and returns the frame names root first.

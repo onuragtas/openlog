@@ -56,8 +56,13 @@ func TestParseCatalog(t *testing.T) {
 	if err != nil || empty.Default != UnlimitedPlanID || empty.Plans[0].Limits.IngestGBMonth != 0 {
 		t.Errorf("empty catalog %+v %v", empty, err)
 	}
-	if got := TableRetentionDays(empty); got["logs"] != 14 || got["traces"] != 7 || got["metrics"] != 30 {
+	if got := TableRetentionDays(empty); got["logs"] != 14 || got["traces"] != 7 || got["metrics"] != 30 || got["profiles"] != 7 {
 		t.Errorf("default table retention %v", got)
+	}
+	// A signal registered in RetentionSignals must be settable per plan; this is the assertion a new signal
+	// added to the storage half but forgotten in the quota half fails on.
+	if _, err := ParseCatalog(`{"plans":[{"id":"a","limits":{"retention_days":{"profiles":3}}}]}`, ""); err != nil {
+		t.Errorf("profiles retention: %v", err)
 	}
 	if c, err := ParseCatalog(testCatalog, "pro"); err != nil || c.Default != "pro" {
 		t.Errorf("OPENLOG_DEFAULT_PLAN: %v %v", c, err)
@@ -68,7 +73,7 @@ func TestParseCatalog(t *testing.T) {
 		"duplicate":       `{"plans":[{"id":"a"},{"id":"a"}]}`,
 		"no plans":        `{"plans":[]}`,
 		"unknown field":   `{"plans":[{"id":"a","limits":{"gb":1}}]}`,
-		"bad signal":      `{"plans":[{"id":"a","limits":{"retention_days":{"profiles":3}}}]}`,
+		"bad signal":      `{"plans":[{"id":"a","limits":{"retention_days":{"bogus":3}}}]}`,
 		"negative":        `{"plans":[{"id":"a","limits":{"hosts":-1}}]}`,
 		"unknown default": `{"default":"x","plans":[{"id":"a"}]}`,
 	} {

@@ -22,8 +22,10 @@ import (
 // mutations: ALTER TABLE <t>_local ON CLUSTER DELETE IN PARTITION ID '<day>' WHERE tenant_id IN (…). Only one day
 // partition per (table, retention group) is rewritten per day in steady state.
 
-// DefaultRetentionDays are the schema TTLs of the raw signal tables (schema/clickhouse 0002-0004).
-var DefaultRetentionDays = map[string]int{SignalLogs: 14, SignalTraces: 7, SignalMetrics: 30}
+// DefaultRetentionDays are the schema TTLs of the raw signal tables (schema/clickhouse 0002-0004, 0095).
+// Profiles are the widest rows openlog stores — a minute of CPU samples is thousands of stacks — so their
+// default is the shortest of the four, and a tenant that wants less can still shorten it.
+var DefaultRetentionDays = map[string]int{SignalLogs: 14, SignalTraces: 7, SignalMetrics: 30, SignalProfiles: 7}
 
 // RetentionTable is a raw table with a per-tenant retention; all are partitioned by toDate of their time column.
 type RetentionTable struct {
@@ -42,6 +44,9 @@ var RetentionTables = []RetentionTable{
 	{"db_query_stats_local", SignalMetrics},
 	{"db_query_plans_local", SignalMetrics},
 	{"db_session_samples_local", SignalTraces},
+	// Profiles carry a signal and a class of their own (0095_profiles), so trimming them is not a side effect
+	// of anyone else's retention.
+	{"profiles_local", SignalProfiles},
 }
 
 // TableRetentionDays returns the table TTL per signal when per-tenant retention is enabled: the longest effective

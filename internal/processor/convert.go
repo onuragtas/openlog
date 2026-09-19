@@ -18,6 +18,7 @@ import (
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/logpattern"
 	"github.com/onuragtas/openlog/internal/otlputil"
+	"github.com/onuragtas/openlog/internal/profiles"
 )
 
 // Inventory event names and attributes (semantic-conventions.md §3).
@@ -534,6 +535,32 @@ var statusCodes = map[tracepb.Status_StatusCode]string{
 	tracepb.Status_STATUS_CODE_UNSET: "unset",
 	tracepb.Status_STATUS_CODE_OK:    "ok",
 	tracepb.Status_STATUS_CODE_ERROR: "error",
+}
+
+// AddProfiles converts a continuous profiling payload (0095_profiles). The wire is a dictionary plus indices
+// (sample → stack → location → line → function → string); internal/profiles expands it into one row per
+// sample here, once, so a flame graph is a GROUP BY rather than five joins at read time.
+//
+// A payload that cannot be expanded is dropped whole rather than partially: a profile is one measurement of
+// one process over one window, and half of it is not a smaller truth — it is a wrong one, because the
+// percentages a flame graph shows are of the samples it holds.
+func (r *Rows) AddProfiles(tenant string, receivedAt time.Time, pd profiles.Payload) {
+	rows, err := profiles.FromOTLP(pd, tenant, receivedAt)
+	if err != nil {
+		r.Dropped["invalid_profile"]++
+		return
+	}
+	for i := range rows {
+		p := &rows[i]
+		r.Profiles = append(r.Profiles, ProfileRow{
+			TenantID: p.TenantID, Timestamp: p.Timestamp,
+			ServiceName: p.ServiceName, ServiceNamespace: p.ServiceNamespace,
+			Environment: p.Environment, HostID: p.HostID,
+			ProfileType: p.ProfileType, Unit: p.Unit,
+			Stack: p.Stack, Leaf: p.Leaf(), Value: p.Value, DurationNs: p.DurationNs,
+			ResourceAttributes: p.ResourceAttributes, Attributes: p.Attributes,
+		})
+	}
 }
 
 // localSpanKey identifies a span within one export request.

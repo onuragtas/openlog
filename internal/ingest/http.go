@@ -30,7 +30,8 @@ func (s *Service) HTTPHandler() http.Handler {
 	mux.Handle("POST /v1/metrics", s.httpExport(queue.SignalMetrics))
 	mux.Handle("POST /v1/logs", s.httpExport(queue.SignalLogs))
 	mux.Handle("POST /v1/traces", s.httpExport(queue.SignalTraces))
-	s.rumRoutes(mux) // rum.go: POST /v1/rum and GET /v1/rum/config (browser keys, D-136)
+	s.profileRoutes(mux) // profiles.go: POST /v1/profiles (continuous profiling)
+	s.rumRoutes(mux)     // rum.go: POST /v1/rum and GET /v1/rum/config (browser keys, D-136)
 	if s.extraRoutes != nil {
 		s.extraRoutes(mux)
 	}

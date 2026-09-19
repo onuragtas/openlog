@@ -112,7 +112,7 @@ func TestRequestValidationAndFormat(t *testing.T) {
 	s := &Service{Limits: Limits{MaxRange: 24 * time.Hour}, Now: func() time.Time { return time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC) }}
 	now := s.now()
 	var inv *InvalidError
-	if _, err := s.RequestOrg(context.Background(), "o", "u", "en", now.Add(-time.Hour), now, []string{"logs", "profiles"}); !errors.As(err, &inv) {
+	if _, err := s.RequestOrg(context.Background(), "o", "u", "en", now.Add(-time.Hour), now, []string{"logs", "bogus"}); !errors.As(err, &inv) {
 		t.Fatalf("unknown signal: %v", err)
 	}
 	if _, err := s.RequestOrg(context.Background(), "o", "u", "en", now.Add(-48*time.Hour), now, []string{"logs"}); !errors.As(err, &inv) || !strings.Contains(inv.Msg, "OPENLOG_DATA_EXPORT_MAX_RANGE") {
