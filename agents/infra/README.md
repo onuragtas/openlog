@@ -205,6 +205,44 @@ Dependencies: `github.com/go-sql-driver/mysql` (MPL-2.0, used unmodified as a li
 `github.com/golang-sql/civil`, `github.com/golang-sql/sqlexp` (BSD-3-Clause), `github.com/google/uuid`, `github.com/shopspring/decimal` (MIT),
 `golang.org/x/crypto` (BSD-3-Clause), `github.com/yusufpapurcu/wmi`, `github.com/go-ole/go-ole` (MIT).
 
+## Prometheus and OpenMetrics endpoints
+
+The agent scrapes any endpoint that speaks the Prometheus text format or OpenMetrics (node_exporter, the exporters of
+databases and brokers, an application's own `/metrics`) and sends the samples as OTLP metrics, so they show up in the
+Metrics Explorer, OQL, dashboards and alerts like every other metric (semantic-conventions §6.9). Three ways to add a target:
+
+```yaml
+# config.yaml: static targets
+prometheus:
+  targets:
+    - url: http://127.0.0.1:9100/metrics
+      job: node
+```
+
+```yaml
+# docker-compose.yml: a container opts in with labels (the agent needs Docker access, see above)
+services:
+  api:
+    labels:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9090"        # optional when the container declares exactly one port
+      prometheus.io/path: /metrics      # default
+```
+
+```yaml
+# Kubernetes (node mode): the usual pod annotations
+metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+```
+
+Every target also gets `up`, `scrape_duration_seconds` and `scrape_samples_scraped`, so an exporter that stops answering
+can be alerted on (`SELECT latest(up) FROM Metric FACET service.name`). A target exposing more than `sample_limit`
+samples or a larger body than `body_limit_bytes` is rejected as a whole and reports `up = 0`; use `metrics.exclude` to
+drop families you do not need (`go_*`, `process_*`). Counters keep their Prometheus names (`http_requests_total`),
+histograms and summaries become OTLP histograms and summaries, OpenMetrics exemplars link a chart to its traces.
+
 ## Logs
 
 Logs are sent as plain OTLP LogRecords (never inventory events). See `semantic-conventions.md` §4 for fields and attributes.

@@ -238,3 +238,20 @@ func TestKubeletMetrics(t *testing.T) {
 		}
 	}
 }
+
+func TestPodInfoScrapeFields(t *testing.T) {
+	pod := podJSON(t, `{"metadata":{"name":"api-1","namespace":"shop","uid":"u1","annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"8080","other/key":"x"}},
+		"spec":{"nodeName":"n","containers":[{"name":"app","ports":[{"containerPort":8080},{"containerPort":53,"protocol":"UDP"}]},{"name":"side","ports":[{"containerPort":9102,"protocol":"TCP"}]}]},
+		"status":{"phase":"Running","podIP":"10.1.2.3"}}`)
+	pi := (&PodCache{}).info(&pod)
+	if pi.IP != "10.1.2.3" || pi.Phase != "Running" || len(pi.Scrape) != 2 || pi.Scrape["prometheus.io/port"] != "8080" {
+		t.Fatalf("pod info = %+v", pi)
+	}
+	if len(pi.TCPPorts) != 2 || pi.TCPPorts[0] != 8080 || pi.TCPPorts[1] != 9102 {
+		t.Fatalf("tcp ports = %v", pi.TCPPorts)
+	}
+	bare := podJSON(t, `{"metadata":{"name":"b","uid":"u2"}}`)
+	if (&PodCache{}).info(&bare).Scrape != nil {
+		t.Fatal("pod without annotations has scrape settings")
+	}
+}

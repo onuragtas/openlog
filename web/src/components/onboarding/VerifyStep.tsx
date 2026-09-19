@@ -15,6 +15,7 @@ import {
   VERIFY_TIMEOUT_MS,
   type VerifyLogsFilter,
 } from "@/api/onboarding";
+import { prometheusTargetsQuery } from "@/api/prometheus";
 import { buttonVariants } from "@/components/ui/button";
 import { useNow } from "@/lib/hooks";
 import { agentLog, agentSelfTest, SYSTEM_LOG_INPUT, type HostOs } from "@/lib/host-os";
@@ -38,6 +39,7 @@ function tipsFor(target: InstallTarget): TipKey[] {
       return ["phpForwarder", "serviceName", "journal"];
     case "logs/host":
     case "logs/containers":
+    case "integrations/prometheus":
       return ["agentConfig", "journal"];
     case "logs/browser":
       return ["cors", "endpoint", "key"];
@@ -331,6 +333,33 @@ function IntegrationVerify({ common }: { common: Common }) {
   );
 }
 
+/** Prometheus: the first target scraped since the flow started (up); a failing one is named while waiting. */
+function PrometheusVerify({ common }: { common: Common }) {
+  const { t } = useTranslation();
+  const live = useQuery({ ...prometheusTargetsQuery(), refetchInterval: common.intervalMs });
+  // The minute-step `last` point of a scrape can be up to one step older than the scrape itself.
+  const fresh = (live.data?.targets ?? []).filter((x) => x.lastSeen >= common.startedAt - 60_000);
+  const found = fresh.find((x) => x.up);
+  const failing = found ? undefined : fresh.find((x) => !x.up);
+  return (
+    <Panel
+      common={common}
+      found={!!found}
+      waiting={
+        failing
+          ? t("addData.verify.successPrometheusDown", { job: failing.job, instance: failing.instance, hint: t("addData.verify.prometheusDownHint") })
+          : t("addData.verify.prometheus")
+      }
+      success={found ? t("addData.verify.successPrometheus", { job: found.job, instance: found.instance }) : ""}
+      action={
+        <Link to="/integrations" className={buttonVariants({ size: "sm", variant: found ? "default" : "outline" })} data-testid="verify-open">
+          {t("addData.verify.openIntegrations")}
+        </Link>
+      }
+    />
+  );
+}
+
 /** Step 4: "Waiting for data…" until the new host, service, cluster or log records show up. */
 export function VerifyStep({ intervalMs = VERIFY_POLL_MS, timeoutMs = VERIFY_TIMEOUT_MS, ...props }: VerifyStepProps) {
   const common: Common = { ...props, intervalMs, timeoutMs };
@@ -345,6 +374,8 @@ export function VerifyStep({ intervalMs = VERIFY_POLL_MS, timeoutMs = VERIFY_TIM
       return <OtelVerify common={common} />;
     case "logs":
       return <LogsVerify common={common} />;
+    case "prometheus":
+      return <PrometheusVerify common={common} />;
     default:
       return <IntegrationVerify common={common} />;
   }

@@ -30,6 +30,7 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/logs"
 	"github.com/onuragtas/openlog/agents/infra/internal/metrics"
 	"github.com/onuragtas/openlog/agents/infra/internal/phpforwarder"
+	"github.com/onuragtas/openlog/agents/infra/internal/promscrape"
 	"github.com/onuragtas/openlog/agents/infra/internal/resource"
 	"github.com/onuragtas/openlog/agents/infra/internal/selfmon"
 	"github.com/onuragtas/openlog/agents/infra/rules"
@@ -86,8 +87,9 @@ type Agent struct {
 	ctr     *containers.Source
 	logs    *logs.Manager
 	integ   *integrations.Manager
-	php     *phpModule // nil unless exporting
-	k8s     *k8sNode   // nil outside Kubernetes node mode (kubernetes.go)
+	prom    *promscrape.Manager // nil when prometheus.enabled is false (prometheus.go)
+	php     *phpModule          // nil unless exporting
+	k8s     *k8sNode            // nil outside Kubernetes node mode (kubernetes.go)
 
 	// apm_hint.status of PHP services in the last inventory snapshot ("active" = true).
 	apmActive bool
@@ -194,6 +196,7 @@ func New(cfg *config.Config, version string, log *slog.Logger, forExport bool) (
 			RemoteStatePath: filepath.Join(cfg.StateDir, integrations.RemoteStateFile),
 		})
 	}
+	a.prom = a.setupPrometheus()
 	for _, w := range cfg.Warnings() {
 		log.Warn("configuration warning", "warning", w)
 	}
@@ -315,6 +318,10 @@ func (a *Agent) CollectMetrics(now time.Time) *metricspb.MetricsData {
 		// Integration samples collected since the previous round (one resource per instance / entity).
 		md.ResourceMetrics = append(md.ResourceMetrics, a.integ.Drain()...)
 	}
+	if a.prom != nil {
+		// Scrapes since the previous round (one resource per scrape and target).
+		md.ResourceMetrics = append(md.ResourceMetrics, a.prom.Drain()...)
+	}
 	return md
 }
 
@@ -372,6 +379,10 @@ func (a *Agent) Once(ctx context.Context, w io.Writer) error {
 		if ld, services, err = a.CollectInventory(a.Now()); err != nil {
 			return err
 		}
+	}
+	if a.prom != nil {
+		a.prom.Refresh(ctx)
+		a.prom.CollectOnce(ctx)
 	}
 	select {
 	case <-ctx.Done():
@@ -433,12 +444,18 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a.integ != nil {
 		a.integ.Start(ctx)
 	}
+	if a.prom != nil {
+		a.prom.Start(ctx)
+	}
 	// Kubernetes pod watch (node mode); stops with the log collection.
 	a.k8s.start(logsCtx)
 	a.php.arm() // explicit php_forwarder.enabled: true starts now; auto waits for the first discovery
 	a.collectLoop(ctx)
 	if a.integ != nil {
 		a.integ.Stop()
+	}
+	if a.prom != nil {
+		a.prom.Stop()
 	}
 	a.php.shutdown() // pending PHP spans go into the export queue before it is drained
 	cancelLogs()
@@ -628,6 +645,9 @@ func (a *Agent) checkBudget(now time.Time) {
 		if a.integ != nil {
 			a.integ.SetSlowdown(float64(a.interval) / float64(a.cfg.Interval.D()))
 		}
+		if a.prom != nil {
+			a.prom.SetSlowdown(float64(a.interval) / float64(a.cfg.Interval.D()))
+		}
 		a.log.Warn("resource budget exceeded; increasing collection interval",
 			"collect_fraction", frac, "budget", cpuBudget, "old_interval", old, "new_interval", a.interval)
 	}
@@ -672,6 +692,10 @@ func countPoints(md *metricspb.MetricsData) int {
 					n += len(d.Gauge.DataPoints)
 				case *metricspb.Metric_Sum:
 					n += len(d.Sum.DataPoints)
+				case *metricspb.Metric_Histogram:
+					n += len(d.Histogram.DataPoints)
+				case *metricspb.Metric_Summary:
+					n += len(d.Summary.DataPoints)
 				}
 			}
 		}

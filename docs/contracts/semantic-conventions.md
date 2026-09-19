@@ -800,6 +800,46 @@ Resources: one per site (`iis.site`) and one per application pool (`iis.applicat
 Not collected: `iis.uptime`, `iis.application_pool.uptime` (elapsed-time counters need the performance counter timebase), `iis.request.queue.*`,
 `iis.request.rejected`, `iis.thread.active` (HTTP Service Request Queues / W3SVC_W3WP classes).
 
+### 6.9 Prometheus and OpenMetrics endpoints (`prometheus`, D-137)
+
+Not bound to discovery: the infra agent scrapes (a) the static `prometheus.targets[]` of `config.yaml`, (b) running containers
+labelled `prometheus.io/scrape: "true"` (`prometheus.containers`, default on) and (c) in Kubernetes node mode the `Running` pods of the node
+annotated `prometheus.io/scrape: "true"` (`prometheus.kubernetes_pods`, default on; containers of a pod are then not scraped through their
+labels, so a pod is never scraped twice). Opt-in keys, the same on labels and annotations: `prometheus.io/port` (default: the only declared TCP
+port; none or several declared is a skipped target with a warning), `prometheus.io/path` (default `/metrics`, may carry a query),
+`prometheus.io/scheme` (`http` default, `https`), `prometheus.io/job`. Address: the pod IP, the container's first network address, or
+`127.0.0.1:<published port>` for a container without an address of its own. Targets are refreshed every `prometheus.interval`; static targets
+come first and at most `prometheus.max_targets` (64) are scraped.
+
+Scrape: `GET` with `Accept: application/openmetrics-text;version=1.0.0;q=0.75,text/plain;version=0.0.4;q=0.5,*/*;q=0.1`,
+`X-Prometheus-Scrape-Timeout-Seconds`, gzip, same-host redirects only, bearer token or basic auth and TLS (`ca_file`, `server_name`,
+`insecure_skip_verify`) for static targets. The whole scrape is rejected (no partial families) when the body exceeds `body_limit_bytes`
+(32 MiB), the target exposes more than `sample_limit` (20 000) samples or the exposition does not parse. Text format 0.0.4 and OpenMetrics
+1.0 (including UTF-8 metric names in quotes) are parsed by the agent itself (`internal/promscrape`); `prometheus.metrics.include`/`exclude`
+(globs on family names) drop families before conversion.
+
+Conversion (the OTel Collector `prometheus` receiver's mapping):
+
+| Exposition | OTLP | Notes |
+|---|---|---|
+| counter | Sum, cumulative, monotonic, double | name = sample name (`http_requests_total`) |
+| gauge, unknown/untyped, info (`x_info` = 1), stateset (one point per state) | Gauge, double | gaugehistogram: `x_bucket`, `x_gsum`, `x_gcount` gauges |
+| histogram | Histogram, cumulative | cumulative `le` buckets become per-bucket counts, the last one `(max, +Inf]`; `count` from `_count` (else the `+Inf` bucket) |
+| summary | Summary | `quantile` label → quantile values |
+
+Every label becomes a data point attribute; `le` and `quantile` are consumed. Sample timestamps are kept (text: ms, OpenMetrics: s). Start
+time of cumulative points: `_created` when exposed, else the first scrape that saw the series; a value lower than the previous one is a reset
+and starts a new run at the previous scrape. OpenMetrics exemplars become OTLP exemplars (`trace_id`/`span_id` labels → trace and span id, other
+labels filtered attributes), stored like every exemplar (§8, D-130). UNIT `seconds`/`bytes`/`ratio`/… is mapped to UCUM (`s`, `By`, `1`).
+
+Resource (one per scrape): the host resource of §1, then the target's `labels` (static) or container attributes (`container.id`,
+`container.name`, `container.image.name`, Kubernetes pod attributes of §7.2) or pod attributes (§7.2), then `service.name` = job (static: `job`
+or the URL host; container: `prometheus.io/job`, the Compose service or the container name; pod: `prometheus.io/job` or
+`<namespace>/<workload>`), `service.instance.id` = `host:port`, `server.address`, `server.port`, `url.scheme`, `openlog.integration.id` =
+`prometheus`, `openlog.scrape.source` = `static`/`container`/`pod`. Every scrape, successful or not, adds the Prometheus health gauges `up`
+(1/0), `scrape_duration_seconds` and `scrape_samples_scraped`, so an unreachable exporter is visible and alertable (`up == 0`). Agent
+self-telemetry counts scrapes as `openlog.agent.integration.*{integration="prometheus"}`.
+
 ## 7. Kubernetes (infra agent, M4, D-070, D-071)
 
 The infra agent runs in Kubernetes from the `deploy/helm/openlog-agent` chart in two modes ([operations/kubernetes.md](../operations/kubernetes.md)):

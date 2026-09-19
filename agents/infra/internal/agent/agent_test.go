@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -278,5 +279,28 @@ func TestRunTailsLogFiles(t *testing.T) {
 	fi, _ := os.Stat(logPath)
 	if err != nil || !bytes.Contains(state, []byte(`"offset":`+strconv.FormatInt(fi.Size(), 10))) {
 		t.Errorf("state = %s (size %d) %v", state, fi.Size(), err)
+	}
+}
+
+func TestOnceScrapesPrometheusTargets(t *testing.T) {
+	exporter := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("# TYPE app_jobs_total counter\napp_jobs_total 7\n"))
+	}))
+	defer exporter.Close()
+	fs := hostfstest.Build(t, testfixtures.ServiceHost())
+	cfg := testConfig(t, fs.Root(), "")
+	cfg.Prometheus.Targets = []config.ScrapeTarget{{URL: exporter.URL + "/metrics", Job: "app"}}
+	a, err := New(cfg, "test", quiet(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := a.Once(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"app_jobs_total"`, `"stringValue": "app"`, `"stringValue": "prometheus"`} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("once output lacks %s", want)
+		}
 	}
 }

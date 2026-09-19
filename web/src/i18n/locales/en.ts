@@ -1265,6 +1265,7 @@ export const en = {
       "integrations/postgresql": { title: "PostgreSQL", description: "pg_stat metrics with a pg_monitor user." },
       "integrations/mssql": { title: "SQL Server", description: "Performance counters, database sizes and wait statistics with a monitoring login, local or remote." },
       "integrations/iis": { title: "IIS", description: "Requests, connections and traffic per site from Windows performance counters, no credentials." },
+      "integrations/prometheus": { title: "Prometheus / OpenMetrics", description: "Scrape any /metrics endpoint: exporters, applications, labelled containers and annotated pods." },
     },
     steps: {
       label: "Setup steps",
@@ -1401,6 +1402,9 @@ export const en = {
       sqlUser: "Monitoring user",
       passwordFile: "Password file",
       iisCheck: "Check the IIS counters",
+      scrapeTargets: "Static targets",
+      scrapeLabels: "Or: label a container",
+      scrapeAnnotations: "Or: annotate a pod",
       verify: "Check the agent",
     },
     notes: {
@@ -1454,6 +1458,8 @@ export const en = {
       mssqlRemote: "To monitor a server without the agent (another host, Azure SQL Managed Instance), set endpoint in config.yaml or in the integration form in openlog.",
       iisNoCredentials: "IIS needs no credentials: the agent service (LocalSystem) reads the Web Service and application pool performance counters through WMI.",
       iisDiscovery: "Nothing to configure: the agent discovers W3SVC and w3wp.exe automatically and starts collecting within a minute. If the check returns no rows, run lodctr /R.",
+      prometheusDiscovery: "Containers labelled and pods annotated prometheus.io/scrape=true are found by themselves (port: prometheus.io/port or the only declared port); static targets need the restart.",
+      prometheusLimits: "A target with more than 20 000 samples or a body over 32 MiB is rejected and reports up = 0: drop what you do not need with prometheus.metrics.exclude.",
     },
     verify: {
       title: "Waiting for data",
@@ -1497,6 +1503,10 @@ export const en = {
       integration: "Integrations start by themselves when the infra agent discovers the service; their status appears on the host's Services tab and under Integrations.",
       openIntegrations: "Open integrations",
       openHosts: "Open hosts",
+      prometheus: "Waiting for a scraped target…",
+      successPrometheus: "Target {{job}} ({{instance}}) is scraped.",
+      successPrometheusDown: "Target {{job}} ({{instance}}) is configured but its scrape fails: {{hint}}",
+      prometheusDownHint: "open Integrations to see the targets; the agent log shows the error.",
     },
     empty: {
       hosts: "Install the infra agent",
@@ -3446,6 +3456,22 @@ export const en = {
     },
   },
 
+  prometheus: {
+    title: "Prometheus targets",
+    description: "Endpoints the infra agents scrape: prometheus.targets in config.yaml, containers labelled and pods annotated prometheus.io/scrape=true. A target is down when its last scrape failed (unreachable, HTTP error, unparsable or over the sample or size limit).",
+    up: "Up",
+    downOne: "Down",
+    down_one: "{{count}} down",
+    down_other: "{{count}} down",
+    allUp_one: "{{count}} target up",
+    allUp_other: "All {{count}} targets up",
+    empty: "No target was scraped in the last 15 minutes.",
+    truncated: "Only the first {{count}} targets are shown.",
+    openMetrics: "Metrics",
+    openMetricsFor: "Metrics of {{job}} {{instance}}",
+    columns: { state: "State", job: "Job", instance: "Instance", host: "Host", source: "Source", lastScrape: "Last scrape" },
+    sources: { static: "config.yaml", container: "Container label", pod: "Pod annotation" },
+  },
   cloud: {
     title: "Cloud",
     subtitle: "Metrics of managed services from your AWS, Azure and Google Cloud accounts",

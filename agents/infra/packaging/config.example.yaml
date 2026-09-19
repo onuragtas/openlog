@@ -140,6 +140,30 @@ integrations:                    # metric integrations bound to discovered servi
   docker:
     enabled: true                # reports Docker Engine API access; container.* metrics come from containers
 
+prometheus:                      # scrape Prometheus/OpenMetrics endpoints (semantic-conventions §6.9)
+  enabled: true
+  interval: 30s                  # default scrape interval (min 1s)
+  timeout: 10s                   # per scrape, <= interval
+  sample_limit: 20000            # a target exposing more samples is rejected as a whole (up = 0)
+  body_limit_bytes: 33554432     # uncompressed response size limit (32 MiB)
+  max_targets: 64                # static targets first, then discovered ones
+  max_concurrent: 4
+  containers: true               # scrape containers labelled prometheus.io/scrape=true (+ prometheus.io/port, /path, /scheme, /job)
+  kubernetes_pods: true          # node mode: scrape Running pods of this node annotated prometheus.io/scrape=true
+  metrics: {}                    # e.g. { exclude: ["go_*", "process_*"] } for every target
+  targets: []
+  # targets:
+  #   - url: http://127.0.0.1:9100/metrics      # node_exporter
+  #     job: node                                # service.name of the metrics (default: the URL host)
+  #   - url: https://app.internal:8443/metrics
+  #     job: app
+  #     interval: 15s
+  #     labels: { env: prod }                    # added as resource attributes
+  #     bearer_token: env:APP_METRICS_TOKEN      # or username + password (env:/file:/literal)
+  #     tls: { ca_file: /etc/ssl/app-ca.pem, server_name: app.internal, insecure_skip_verify: false }
+  #     sample_limit: 5000
+  #     metrics: { include: ["app_*", "http_*"] }
+
 php_forwarder:                   # receives spans from the openlog PHP extension (docs/contracts/php-agent.md §6)
   # enabled: unset = on while discovery finds PHP (php-fpm, Apache mod_php, a php CLI binary); true/false wins
   socket: /run/openlog-infra-agent/php.sock   # unix datagram socket (systemd RuntimeDirectory); "" = UDP only

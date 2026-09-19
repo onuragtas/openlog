@@ -29,6 +29,7 @@ export const TARGET_IDS = [
   "integrations/postgresql",
   "integrations/mssql",
   "integrations/iis",
+  "integrations/prometheus",
 ] as const;
 export type TargetId = (typeof TARGET_IDS)[number];
 
@@ -36,7 +37,7 @@ export const TARGET_GROUPS = ["infrastructure", "apm", "logs", "opentelemetry", 
 export type TargetGroup = (typeof TARGET_GROUPS)[number];
 
 /** What the verification step waits for. */
-export type VerifyKind = "host" | "kubernetes" | "apm" | "otel" | "logs" | "integration";
+export type VerifyKind = "host" | "kubernetes" | "apm" | "otel" | "logs" | "integration" | "prometheus";
 
 export type OptionKey =
   | "hostName"
@@ -106,6 +107,14 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   // SQL Server over TDS from any OS (also a remote server); IIS through Windows performance counters only.
   { id: "integrations/mssql", group: "integrations", verify: "integration", integration: "mssql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/iis", group: "integrations", verify: "integration", integration: "iis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: ["windows"] },
+  {
+    id: "integrations/prometheus",
+    group: "integrations",
+    verify: "prometheus",
+    options: ["hostOs"],
+    docs: blob("agents/infra/README.md#prometheus-and-openmetrics-endpoints"),
+    requires: [...INFRA_HOSTS, "docker", "kubernetes"],
+  },
 ];
 
 export function findTarget(id: string | undefined): InstallTarget | undefined {
@@ -253,6 +262,9 @@ export type BlockLabel =
   | "sqlUser"
   | "passwordFile"
   | "iisCheck"
+  | "scrapeTargets"
+  | "scrapeLabels"
+  | "scrapeAnnotations"
   | "verify";
 
 export interface CommandBlock {
@@ -314,7 +326,9 @@ export type NoteKey =
   | "mssqlAuth"
   | "mssqlRemote"
   | "iisNoCredentials"
-  | "iisDiscovery";
+  | "iisDiscovery"
+  | "prometheusDiscovery"
+  | "prometheusLimits";
 
 export interface InstallCommands {
   blocks: CommandBlock[];
@@ -1028,6 +1042,42 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
   if (os === "darwin") note(c, "macosRoot");
 }
 
+/** Prometheus/OpenMetrics scraping (semantic-conventions §6.9): static targets, container labels, pod annotations. */
+function prometheus(c: Ctx) {
+  const os = osOf(c);
+  add(
+    c,
+    "scrapeTargets",
+    "yaml",
+    [
+      `# ${AGENT_CONFIG_PATH[os]}`,
+      "prometheus:",
+      "  targets:",
+      "    - url: http://127.0.0.1:9100/metrics   # e.g. node_exporter",
+      "      job: node                           # becomes service.name",
+      "    # - url: https://app.internal:8443/metrics",
+      "    #   job: app",
+      `    #   bearer_token: ${os === "windows" ? yamlPath(`file:${AGENT_CONFIG_DIR.windows}\\app.token`) : `file:${AGENT_CONFIG_DIR[os]}/app.token`}`,
+    ].join("\n"),
+  );
+  restartAgent(c, os);
+  add(
+    c,
+    "scrapeLabels",
+    "yaml",
+    ["# docker-compose.yml: no agent change needed", "services:", "  api:", "    labels:", '      prometheus.io/scrape: "true"', '      prometheus.io/port: "9090"', "      prometheus.io/path: /metrics"].join("\n"),
+  );
+  add(
+    c,
+    "scrapeAnnotations",
+    "yaml",
+    ["# Kubernetes pod template (node agent of the openlog-agent chart)", "metadata:", "  annotations:", '    prometheus.io/scrape: "true"', '    prometheus.io/port: "8080"'].join("\n"),
+  );
+  note(c, "prometheusDiscovery");
+  note(c, "prometheusLimits");
+  note(c, "mergeConfig");
+}
+
 /**
  * Commands for one Add data card. Pure: the same inputs give the same text. Values are shell-quoted, YAML-quoted or
  * code-string-escaped where they are inserted; the license key never appears in a URL.
@@ -1101,10 +1151,13 @@ export function buildInstallCommands(target: TargetId, options: InstallOptions, 
     case "otel/collector":
       collector(c);
       break;
+    case "integrations/prometheus":
+      prometheus(c);
+      break;
     default:
       if (def.integration) integration(c, def.integration);
   }
-  const usesKey = def.verify !== "integration" && target !== "logs/host" && target !== "logs/containers" && !(target === "apm/php");
+  const usesKey = def.verify !== "integration" && def.verify !== "prometheus" && target !== "logs/host" && target !== "logs/containers" && !(target === "apm/php");
   if (!c.hasKey && usesKey) c.notes.unshift("placeholderKey");
   return { blocks: c.blocks, notes: c.notes };
 }
@@ -1113,7 +1166,7 @@ export function buildInstallCommands(target: TargetId, options: InstallOptions, 
 export function targetNeedsKey(target: TargetId): boolean {
   const def = findTarget(target);
   if (!def) return false;
-  return def.verify !== "integration" && target !== "logs/host" && target !== "logs/containers" && target !== "apm/php";
+  return def.verify !== "integration" && def.verify !== "prometheus" && target !== "logs/host" && target !== "logs/containers" && target !== "apm/php";
 }
 
 /** The service name the verification step looks for (PHP defaults to php-app when the ini setting is not used). */

@@ -30,6 +30,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { ApplyNotice, HostIntegrationToggle, IntegrationConfigPanel, useApplyState } from "@/components/integrations/IntegrationConfig";
 import { isConfigurable } from "@/lib/integration-settings";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
+import { PrometheusTargetsCard } from "@/components/integrations/PrometheusTargets";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -784,6 +785,8 @@ export function IntegrationsPage() {
         </div>
       )}
       {integration && !query.isPending && <IntegrationDashboard key={integration} integration={integration} rows={rows} range={range} />}
+      {/* Scraped endpoints are not discovered services, so they have their own card (D-137). */}
+      {!integration && <PrometheusTargetsCard />}
       <div role="group" aria-label={t("integrations.filterLabel")} className="mb-3 flex flex-wrap gap-2" data-testid="integration-counts">
         <Button variant={status ? "outline" : "secondary"} size="sm" className="min-h-10" aria-pressed={!status} onClick={() => setStatus(undefined)}>
           {t("integrations.all")} <span className="tabular-nums text-muted-foreground">{rows.length}</span>

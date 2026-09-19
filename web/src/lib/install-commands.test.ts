@@ -515,6 +515,23 @@ describe("integrations", () => {
   });
 });
 
+describe("Prometheus", () => {
+  it("static targets, container labels and pod annotations without a license key", () => {
+    const r = build("integrations/prometheus");
+    expect(r.blocks.map((b) => b.id)).toEqual(["scrapeTargets", "restart", "scrapeLabels", "scrapeAnnotations"]);
+    expect(r.blocks[0]!.code).toContain("# /etc/openlog-infra-agent/config.yaml\nprometheus:\n  targets:\n    - url: http://127.0.0.1:9100/metrics");
+    expect(r.blocks[2]!.code).toContain('prometheus.io/scrape: "true"');
+    expect(r.notes).toEqual(expect.arrayContaining(["prometheusDiscovery", "prometheusLimits", "mergeConfig"]));
+    expect(targetNeedsKey("integrations/prometheus")).toBe(false);
+    expect(findTarget("integrations/prometheus")).toMatchObject({ verify: "prometheus", requires: ["linux", "macos", "windows", "docker", "kubernetes"] });
+
+    const win = build("integrations/prometheus", { hostOs: "windows" });
+    expect(win.blocks[0]!.code).toContain("# C:\\ProgramData\\openlog\\infra-agent\\config.yaml");
+    expect(win.blocks[0]!.code).toContain("'file:C:\\ProgramData\\openlog\\infra-agent\\app.token'");
+    expect(win.blocks[1]).toMatchObject({ lang: "powershell", code: "Restart-Service openlog-infra-agent" });
+  });
+});
+
 describe("every target", () => {
   it("never puts the license key into a URL and marks blocks that contain it", () => {
     for (const t of INSTALL_TARGETS) {

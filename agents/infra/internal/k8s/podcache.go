@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,26 @@ type PodInfo struct {
 	// ContainerIDs maps container name → runtime container id (prefix removed); empty before the container started.
 	ContainerIDs map[string]string
 	StartTime    time.Time
+	// IP and Phase locate a pod for Prometheus scraping; Scrape holds its prometheus.io/* annotations
+	// (nil when it has none) and TCPPorts its declared TCP container ports.
+	IP       string
+	Phase    string
+	Scrape   map[string]string
+	TCPPorts []int
+}
+
+// ScrapeAnnotationPrefix selects the annotations kept in PodInfo.Scrape.
+const ScrapeAnnotationPrefix = "prometheus.io/"
+
+// Pods returns the cached pods (a snapshot; the entries must not be modified).
+func (p *PodCache) Pods() []*PodInfo {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]*PodInfo, 0, len(p.pods))
+	for _, pi := range p.pods {
+		out = append(out, pi)
+	}
+	return out
 }
 
 // PodCache keeps the pods of one node from a list + watch of the API server (node mode, §7.2).
@@ -93,6 +114,22 @@ func (p *PodCache) info(pod *Pod) *PodInfo {
 	}
 	for _, cs := range pod.Status.ContainerStatuses {
 		pi.ContainerIDs[cs.Name] = trimRuntimePrefix(cs.ContainerID)
+	}
+	pi.IP, pi.Phase = pod.Status.PodIP, pod.Status.Phase
+	for k, v := range pod.Metadata.Annotations {
+		if strings.HasPrefix(k, ScrapeAnnotationPrefix) {
+			if pi.Scrape == nil {
+				pi.Scrape = map[string]string{}
+			}
+			pi.Scrape[k] = v
+		}
+	}
+	for _, c := range pod.Spec.Containers {
+		for _, port := range c.Ports {
+			if port.Protocol == "" || port.Protocol == "TCP" {
+				pi.TCPPorts = append(pi.TCPPorts, port.ContainerPort)
+			}
+		}
 	}
 	return pi
 }

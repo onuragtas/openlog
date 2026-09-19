@@ -59,6 +59,7 @@ type Config struct {
 	Containers        Containers         `yaml:"containers"`
 	Logs              LogsConfig         `yaml:"logs"`
 	Integrations      IntegrationsConfig `yaml:"integrations"`
+	Prometheus        PrometheusConfig   `yaml:"prometheus"` // prometheus.go
 	Update            UpdateConfig       `yaml:"update"`
 	Release           ReleaseConfig      `yaml:"release"`
 	PHPForwarder      PHPForwarder       `yaml:"php_forwarder"`
@@ -307,6 +308,7 @@ func DefaultFor(goos string) *Config {
 			},
 		},
 		Integrations: defaultIntegrations(),
+		Prometheus:   defaultPrometheus(),
 		Update:       UpdateConfig{Enabled: true, InstallRoot: DefaultInstallRoot},
 		PHPForwarder: PHPForwarder{
 			Socket: DefaultPHPSocket, SocketGroup: "auto", SocketMode: "0660",
@@ -432,6 +434,7 @@ func (c *Config) Validate(requireExport bool) error {
 	}
 	errs = append(errs, c.Logs.validate()...)
 	errs = append(errs, c.Integrations.validate()...)
+	errs = append(errs, c.Prometheus.validate()...)
 	errs = append(errs, c.PHPForwarder.validate()...)
 	errs = append(errs, c.PHPAgent.validate()...)
 	errs = append(errs, c.JavaAgent.validate()...)

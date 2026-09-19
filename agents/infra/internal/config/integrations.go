@@ -297,6 +297,7 @@ func (c *IntegrationsConfig) validate() []error {
 func (c *Config) Warnings() []string {
 	var out []string
 	out = append(out, c.platformWarnings(runtime.GOOS)...)
+	out = append(out, c.Prometheus.warnings()...)
 	for _, id := range IntegrationIDs {
 		ic := c.Integrations.Integration(id)
 		if ic.Password.IsLiteral() {

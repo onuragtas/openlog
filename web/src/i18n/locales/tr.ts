@@ -1266,6 +1266,7 @@ export const tr: Messages = {
       "integrations/postgresql": { title: "PostgreSQL", description: "pg_monitor kullanıcısıyla pg_stat metrikleri." },
       "integrations/mssql": { title: "SQL Server", description: "İzleme login'iyle performans sayaçları, veritabanı boyutları ve bekleme istatistikleri; yerel veya uzak sunucu." },
       "integrations/iis": { title: "IIS", description: "Windows performans sayaçlarından site bazında istek, bağlantı ve trafik; kimlik bilgisi gerekmez." },
+      "integrations/prometheus": { title: "Prometheus / OpenMetrics", description: "Herhangi bir /metrics uç noktasını tarayın: exporter'lar, uygulamalar, etiketli container'lar ve annotation'lı pod'lar." },
     },
     steps: {
       label: "Kurulum adımları",
@@ -1402,6 +1403,9 @@ export const tr: Messages = {
       sqlUser: "İzleme kullanıcısı",
       passwordFile: "Parola dosyası",
       iisCheck: "IIS sayaçlarını kontrol edin",
+      scrapeTargets: "Statik hedefler",
+      scrapeLabels: "Ya da: container'a etiket ekleyin",
+      scrapeAnnotations: "Ya da: pod'a annotation ekleyin",
       verify: "Agent'ı kontrol edin",
     },
     notes: {
@@ -1455,6 +1459,8 @@ export const tr: Messages = {
       mssqlRemote: "Agent kurulu olmayan bir sunucuyu (başka bir sunucu, Azure SQL Managed Instance) izlemek için config.yaml'da ya da openlog'daki entegrasyon formunda endpoint değerini girin.",
       iisNoCredentials: "IIS kimlik bilgisi istemez: agent servisi (LocalSystem) Web Service ve uygulama havuzu performans sayaçlarını WMI üzerinden okur.",
       iisDiscovery: "Yapılandırılacak bir şey yok: agent W3SVC servisini ve w3wp.exe süreçlerini kendiliğinden keşfeder, bir dakika içinde toplamaya başlar. Kontrol komutu satır döndürmezse lodctr /R çalıştırın.",
+      prometheusDiscovery: "prometheus.io/scrape=true etiketli container'lar ve annotation'lı pod'lar kendiliğinden bulunur (port: prometheus.io/port ya da tanımlı tek port); statik hedefler için yeniden başlatma gerekir.",
+      prometheusLimits: "20 000'den fazla örnek ya da 32 MiB'tan büyük gövde döndüren hedef reddedilir ve up = 0 bildirir: gereksiz aileleri prometheus.metrics.exclude ile atın.",
     },
     verify: {
       title: "Veri bekleniyor",
@@ -1498,6 +1504,10 @@ export const tr: Messages = {
       integration: "Entegrasyonlar infra agent servisi keşfettiğinde kendiliğinden başlar; durumları sunucunun Servisler sekmesinde ve Entegrasyonlar sayfasında görünür.",
       openIntegrations: "Entegrasyonları aç",
       openHosts: "Sunucuları aç",
+      prometheus: "Taranan bir hedef bekleniyor…",
+      successPrometheus: "{{job}} ({{instance}}) hedefi taranıyor.",
+      successPrometheusDown: "{{job}} ({{instance}}) hedefi tanımlı ama taraması başarısız: {{hint}}",
+      prometheusDownHint: "hedefleri görmek için Entegrasyonlar'ı açın; hata agent logunda.",
     },
     empty: {
       hosts: "Infra agent'ı kurun",
@@ -3447,6 +3457,22 @@ export const tr: Messages = {
     },
   },
 
+  prometheus: {
+    title: "Prometheus hedefleri",
+    description: "Infra agent'ların taradığı uç noktalar: config.yaml'daki prometheus.targets, prometheus.io/scrape=true etiketli container'lar ve annotation'lı pod'lar. Son taraması başarısız olan hedef kapalı görünür (erişilemez, HTTP hatası, ayrıştırılamaz ya da örnek/boyut sınırını aşmış).",
+    up: "Açık",
+    downOne: "Kapalı",
+    down_one: "{{count}} kapalı",
+    down_other: "{{count}} kapalı",
+    allUp_one: "{{count}} hedef açık",
+    allUp_other: "{{count}} hedefin tümü açık",
+    empty: "Son 15 dakikada taranan hedef yok.",
+    truncated: "Yalnızca ilk {{count}} hedef gösteriliyor.",
+    openMetrics: "Metrikler",
+    openMetricsFor: "{{job}} {{instance}} metrikleri",
+    columns: { state: "Durum", job: "Job", instance: "Instance", host: "Sunucu", source: "Kaynak", lastScrape: "Son tarama" },
+    sources: { static: "config.yaml", container: "Container etiketi", pod: "Pod annotation" },
+  },
   cloud: {
     title: "Bulut",
     subtitle: "AWS, Azure ve Google Cloud hesaplarınızdaki yönetilen servislerin metrikleri",
