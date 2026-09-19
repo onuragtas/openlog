@@ -99,6 +99,11 @@ func testRows(tenant string, n int, now time.Time) map[string][][]any {
 				Name: "op", Kind: "server", StatusCode: "ok", HostID: host}
 			rows[TableSpans] = append(rows[TableSpans], sp.Values())
 		}
+		// metric_exemplars is sharded by cityHash64(tenant_id, trace_id) (D-130), so an exemplar rides on the
+		// same trace id as the log and the spans above and lands on the same shard they do.
+		ex := ExemplarRow{TenantID: tenant, MetricName: "system.cpu.utilization", MetricType: "gauge", HostID: host, HostName: host,
+			SeriesID: uint64(i), Timestamp: ts, Value: float64(i), TraceID: trace, SpanID: fmt.Sprintf("%016x", i*10)}
+		rows[TableMetricExemplars] = append(rows[TableMetricExemplars], ex.Values())
 		q := RelinkQueueRow{TenantID: tenant, Minute: ts.Truncate(time.Minute), TraceID: trace, Spans: 1, EnqueuedAt: ts}
 		rows[TableRelinkQueue] = append(rows[TableRelinkQueue], q.Values())
 		h := HostRow{TenantID: tenant, HostID: host, HostName: host, LastSeen: ts}
