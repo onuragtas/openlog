@@ -428,6 +428,11 @@ The migration also extends `alert_rules_type_check` with `slo_burn` (alerting.md
 
 ## Synthetic monitoring (`0090_synthetics`)
 
+Extended by `0095_synthetic_check_types` (D-140): `type` accepts `http`, `tcp`, `dns` and `tls`, and the
+non-HTTP kinds use `target` (`host:port`, or the name a dns check resolves) with `dns_record_type`,
+`dns_expected` and `tls_warning_days`. `synthetic_checks_target_per_type` is the constraint that keeps a row
+describing one kind: an `http` check has a `url` and an empty `target`, every other kind the reverse.
+
 ### `synthetic_checks`
 Scheduled outside-in HTTP checks ([api.md](api.md#synthetic-monitoring), D-132). `id` (uuid), `org_id`
 (cascade), `name` (1–200), `type` (`http`; the CHECK is where further check types are added), `enabled`,

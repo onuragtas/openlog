@@ -587,6 +587,7 @@ installation may not.
 | `OPENLOG_SYNTHETICS_TENANT_MAX_CONCURRENT` | `5` | api | Concurrent runs of one organization (1–`OPENLOG_SYNTHETICS_MAX_CONCURRENT`), so one tenant cannot use the whole pool |
 | `OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES` | `1048576` | api | Response body one run reads (1024–67108864); a larger response fails the run instead of being truncated |
 | `OPENLOG_SYNTHETICS_MAX_REDIRECTS` | `5` | api | Redirects one run follows (0–10); each hop is re-validated |
+| `OPENLOG_SYNTHETICS_CA_FILE` | — | api | PEM bundle trusted in addition to the system roots, for internal endpoints whose certificates come from the installation's own CA. There is no per-check "skip verification": a tls check that does not verify checks nothing (D-140) |
 
 ## Cloud connections (api, allinone; D-135)
 

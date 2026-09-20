@@ -3,6 +3,7 @@ package synthetics
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +35,11 @@ const (
 	ErrorAssertion = "assertion" // the body assertion failed
 	ErrorBody      = "body"      // the response exceeded the size cap or could not be read
 	ErrorRequest   = "request"   // the request could not be built or sent
+	// ErrorCertificate is a tls check whose certificate is invalid, expired, or expiring within the warning
+	// window; the handshake itself succeeding is what makes this different from ErrorTLS (D-140).
+	ErrorCertificate = "certificate"
+	// ErrorRecord is a dns check that resolved nothing, or nothing the check expected.
+	ErrorRecord = "record"
 )
 
 // Guard limits of every run; the configuration (OPENLOG_SYNTHETICS_*) overrides the defaults.
@@ -67,6 +73,9 @@ type CheckerOptions struct {
 	MaxRedirects int
 	// UserAgent identifies the checker to the target.
 	UserAgent string
+	// RootCAs is trusted in addition to the system roots (OPENLOG_SYNTHETICS_CA_FILE), for an installation
+	// whose internal endpoints carry certificates of its own CA. nil = the system roots only.
+	RootCAs *x509.CertPool
 	// Transport replaces the guarded transport (tests only).
 	Transport http.RoundTripper
 	Now       func() time.Time
@@ -129,7 +138,7 @@ func (c *Checker) httpClient() *http.Client {
 				ResponseHeaderTimeout: 30 * time.Second,
 				// A check is a fresh request every interval; keeping connections would hide connect and TLS time.
 				DisableKeepAlives: true,
-				TLSClientConfig:   &tls.Config{MinVersion: tls.VersionTLS12},
+				TLSClientConfig:   &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: c.opts.RootCAs},
 			}
 		}
 		c.client = &http.Client{
@@ -211,13 +220,25 @@ func (t *timings) fill(r *Result, end time.Time) {
 // top of it).
 func (c *Checker) Run(ctx context.Context, due Due) Result {
 	chk := due.Check
+	typ := chk.Type
+	if typ == "" {
+		typ = TypeHTTP
+	}
 	// The definition is copied onto the result: the stored row and the emitted metrics describe the run
 	// without joining PostgreSQL, and keep describing it after the check was edited or deleted.
 	r := Result{CheckID: chk.ID, TenantID: due.TenantID, Location: due.Location, Name: chk.Name,
-		URL: chk.URL, Method: chk.Method, At: c.now().UTC()}
+		URL: chk.URL, Method: chk.Method, Type: typ, Target: chk.Target, At: c.now().UTC()}
 
 	rctx, cancel := context.WithTimeout(ctx, chk.Timeout())
 	defer cancel()
+	switch typ {
+	case TypeTCP:
+		return c.runTCP(rctx, chk, r)
+	case TypeTLS:
+		return c.runTLS(rctx, chk, r)
+	case TypeDNS:
+		return c.runDNS(rctx, chk, r)
+	}
 	t := &timings{start: time.Now()}
 	req, err := c.request(httptrace.WithClientTrace(rctx, t.trace()), chk)
 	if err != nil {
@@ -232,6 +253,11 @@ func (c *Checker) Run(ctx context.Context, due Due) Result {
 	}
 	defer res.Body.Close()
 	r.StatusCode = res.StatusCode
+	// An https check completes the same handshake a tls check does, so the certificate it already saw is
+	// recorded: one alert rule then covers the expiry of every endpoint that is checked at all (D-140).
+	if res.TLS != nil && len(res.TLS.PeerCertificates) > 0 {
+		r.CertExpiresAt = res.TLS.PeerCertificates[0].NotAfter.UTC()
+	}
 
 	// The body is read (and capped) even without an assertion: it measures the response and frees the
 	// connection; a body over the cap fails the run instead of being silently truncated.

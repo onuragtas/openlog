@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
+  checkKind,
   checkState,
   checkTarget,
   formatCount,
@@ -70,6 +71,7 @@ export function SyntheticDetail({ id, canWrite = false, onDeleted }: SyntheticDe
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold">{check.name}</h2>
         <Badge variant={stateBadgeVariant(state)}>{t(`synthetics.state.${state}`)}</Badge>
+        <Badge variant="outline">{t(`synthetics.kinds.${checkKind(check.type)}`)}</Badge>
         <span className="font-mono text-xs text-muted-foreground">{checkTarget(check)}</span>
         {canWrite && (
           <div className="ml-auto flex gap-2">

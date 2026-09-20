@@ -23,6 +23,10 @@ type Synthetics struct {
 	MaxResponseBytes int64
 	// MaxRedirects caps the redirects one run follows (OPENLOG_SYNTHETICS_MAX_REDIRECTS).
 	MaxRedirects int
+	// CAFile is a PEM bundle trusted in addition to the system roots (OPENLOG_SYNTHETICS_CA_FILE). An
+	// installation whose internal endpoints carry certificates of its own CA needs it; there is deliberately
+	// no per-check "skip verification", because a tls check that does not verify checks nothing (D-140).
+	CAFile string
 }
 
 func loadSynthetics(p *parser) Synthetics {
@@ -32,6 +36,7 @@ func loadSynthetics(p *parser) Synthetics {
 		TenantMaxConcurrent: int(p.int64("OPENLOG_SYNTHETICS_TENANT_MAX_CONCURRENT", 5)),
 		MaxResponseBytes:    p.int64("OPENLOG_SYNTHETICS_MAX_RESPONSE_BYTES", 1<<20),
 		MaxRedirects:        int(p.int64("OPENLOG_SYNTHETICS_MAX_REDIRECTS", 5)),
+		CAFile:              p.str("OPENLOG_SYNTHETICS_CA_FILE", ""),
 	}
 	if v, ok := p.raw("OPENLOG_SYNTHETICS_ALLOW_PRIVATE_NETWORKS"); ok {
 		b, err := strconv.ParseBool(v)

@@ -43,6 +43,11 @@ const FAILURE_RATIO: Record<string, number> = { [CHECK_IDS.up]: 0.002, [CHECK_ID
 function seed(): SyntheticCheck[] {
   const now = Date.now();
   const base = {
+    // The fields of the other check kinds; an http check stores them empty (see D-140).
+    target: "",
+    dns_record_type: "",
+    dns_expected: [],
+    tls_warning_days: 0,
     created_by_email: "admin@openlog.local",
     updated_by_email: "admin@openlog.local",
     created_at: formatTs(now - 20 * 86_400_000),
@@ -176,12 +181,24 @@ function failures(check: SyntheticCheck): SyntheticFailure[] {
 
 function validate(body: Partial<SyntheticCheckInput>): string | null {
   if (!body.name || typeof body.name !== "string" || body.name.trim() === "") return "name: must be 1-200 characters";
-  if (!body.url || typeof body.url !== "string") return "url: required";
-  try {
-    const u = new URL(body.url);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return "url: must be an http or https URL";
-  } catch {
-    return "url: invalid URL";
+  const type = body.type ?? "http";
+  const target = (body.target ?? "").trim();
+  if (type === "http") {
+    if (!body.url || typeof body.url !== "string") return "url: required";
+    try {
+      const u = new URL(body.url);
+      if (u.protocol !== "http:" && u.protocol !== "https:") return "url: must be an http or https URL";
+    } catch {
+      return "url: invalid URL";
+    }
+  } else if (type === "dns") {
+    if (!target) return "target: required: the name to resolve";
+  } else {
+    if (!target) return "target: required: host:port";
+    const port = Number(target.slice(target.lastIndexOf(":") + 1));
+    if (!target.includes(":") || !Number.isInteger(port) || port < 1 || port > 65535) {
+      return "target: must be host:port (e.g. example.com:443)";
+    }
   }
   const timeout = body.timeout_ms ?? 10000;
   const interval = body.interval_seconds ?? 300;
@@ -199,8 +216,12 @@ function stored(body: SyntheticCheckInput, existing?: SyntheticCheck): Synthetic
     name: body.name.trim(),
     type: body.type ?? "http",
     enabled: body.enabled ?? true,
-    url: body.url.trim(),
+    url: (body.url ?? "").trim(),
     method: body.method ?? "GET",
+    target: (body.target ?? "").trim(),
+    dns_record_type: body.dns_record_type ?? (body.type === "dns" ? "A" : ""),
+    dns_expected: body.dns_expected ?? [],
+    tls_warning_days: body.tls_warning_days ?? (body.type === "tls" ? 14 : 0),
     headers: body.headers ?? {},
     body: body.body ?? "",
     expected_status: body.expected_status?.length ? body.expected_status : [200],

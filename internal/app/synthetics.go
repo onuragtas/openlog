@@ -44,9 +44,16 @@ func startSynthetics(ctx context.Context, cfg config.Config, pool *pgxpool.Pool,
 	writers.runCtx = context.WithoutCancel(ctx)
 
 	writer := synthetics.NewWriter(writers, synthetics.WriterOptions{Log: log.With("job", "synthetics-results"), Registerer: reg})
+	// An installation whose internal endpoints carry certificates of its own CA trusts it here; without the
+	// file only the system roots are trusted, and a tls check of such an endpoint reports it as untrusted.
+	roots, err := synthetics.RootCAs(s.CAFile)
+	if err != nil {
+		log.Error("synthetic monitoring: OPENLOG_SYNTHETICS_CA_FILE could not be read; only the system roots are trusted",
+			"file", s.CAFile, "error", err)
+	}
 	checker := synthetics.NewChecker(synthetics.CheckerOptions{
 		AllowPrivateNetworks: allowPrivate, MaxResponseBytes: s.MaxResponseBytes, MaxRedirects: s.MaxRedirects,
-		UserAgent: "openlog-synthetics/" + version.String(),
+		UserAgent: "openlog-synthetics/" + version.String(), RootCAs: roots,
 	})
 	runner := synthetics.NewRunner(store, checker, writer, synthetics.RunnerOptions{
 		MaxConcurrent: s.MaxConcurrent, TenantMaxConcurrent: s.TenantMaxConcurrent,

@@ -1799,8 +1799,21 @@ bounded by the **trace** retention: an older session still has its summary and `
 
 ## Synthetic monitoring
 
-Scheduled outside-in HTTP checks of the caller's organization (PostgreSQL `synthetic_checks`,
-`0090_synthetics`; the runs in ClickHouse `synthetic_runs`, 30 days; D-132). PostgreSQL auth mode only
+Scheduled outside-in checks of the caller's organization (PostgreSQL `synthetic_checks`,
+`0090_synthetics`; the runs in ClickHouse `synthetic_runs`, 30 days; D-132, D-140). Four kinds, one row and
+one schedule per location each:
+
+| `type` | Addresses | Succeeds when |
+|---|---|---|
+| `http` | `url` | the status is one of `expected_status` and the body assertion holds |
+| `tcp` | `target` (`host:port`) | the connection is accepted (nothing is written to the socket) |
+| `dns` | `target` (a name) + `dns_record_type` | the name resolves, and every answer in `dns_expected` is among the records |
+| `tls` | `target` (`host:port`) | the handshake completes, the chain and the name verify, and the certificate is not expiring within `tls_warning_days` |
+
+A check addresses exactly one thing: an `http` check has a `url` and no `target`, every other kind a
+`target` and no `url`; the fields of the other kinds are stored empty and the database repeats that as a
+constraint. The `tls` check verifies against the system roots plus `OPENLOG_SYNTHETICS_CA_FILE` — there is
+deliberately no per-check "skip verification", because a tls check that does not verify checks nothing. PostgreSQL auth mode only
 (`404` otherwise). Reads: any role and API keys (telemetry). Writes: members and higher, API keys too; at most
 100 checks per organization (`409`). Audit: `synthetic_check.{create,update,delete}`.
 
@@ -1818,14 +1831,19 @@ Every run is also written as two gauge data points, so **metric alert rules** ([
 |---|---|---|
 | `synthetics.check.success` | `1` | `1` for a successful run, `0` for a failed one; `avg` over a window is the uptime ratio |
 | `synthetics.check.duration` | `ms` | Total run time, also recorded for a failed run |
+| `synthetics.certificate.expiry` | `d` | Days left on the certificate the run saw, negative once expired. Emitted for `tls` checks **and** for `https` checks, which complete the same handshake anyway, so one rule ("below 14") covers the expiry of every endpoint that is checked at all |
 
-Both carry the attributes `check.id`, `check.name`, `location`, `http.request.method` and `url.full`, plus
-`http.response.status_code` when a response arrived and `error.kind` when the run failed (`dns`, `connect`,
-`tls`, `timeout`, `blocked`, `redirect`, `status`, `assertion`, `body`, `request`).
+They carry the attributes `check.id`, `check.name`, `check.type` and `location`, plus `url.full` and
+`http.request.method` for an http check, `server.address` for the other kinds, `http.response.status_code`
+when a response arrived and `error.kind` when the run failed (`dns`, `connect`, `tls`, `certificate`,
+`record`, `timeout`, `blocked`, `redirect`, `status`, `assertion`, `body`, `request`).
 
 ### `GET /api/v1/synthetics/checks?summary=&from=&to=` · `POST /api/v1/synthetics/checks` · `GET|PUT|DELETE /api/v1/synthetics/checks/{id}`
-Body of POST/PUT: `{"name" (1–200), "type"?: "http", "enabled"? (default true), "url" (http(s), ≤ 2048, no
-credentials or fragment), "method"? (default `GET`; `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
+Body of POST/PUT: `{"name" (1–200), "type"?: `http`|`tcp`|`dns`|`tls` (default `http`), "enabled"? (default
+true), "url" (http only: http(s), ≤ 2048, no credentials or fragment), "target" (tcp and tls: `host:port`
+with an explicit port; dns: the name to resolve; ≤ 512), "dns_record_type"? (dns only: `A` (default),
+`AAAA`, `CNAME`, `MX`, `NS`, `TXT`), "dns_expected"? (dns only: ≤ 10 answers, empty = any answer),
+"tls_warning_days"? (tls only: default 14, 0–365; 0 = only an expired certificate fails), "method"? (default `GET`; `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
 `OPTIONS`), "headers"? (≤ 20; `Host`, `Content-Length`, `Connection`, `Transfer-Encoding` and `Upgrade` are
 rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default `[200]`, ≤ 10
 codes of 100–599), "assertion_type"?: "none"|"contains"|"not_contains"|"json_path", "assertion_path"?
@@ -1841,6 +1859,7 @@ last 24 h) unless `summary=false`; `uptime` and the percentiles are `null` witho
 {"checks": [{"id": "…", "name": "Checkout health", "type": "http", "enabled": true,
   "url": "https://shop.example.com/health", "method": "GET", "headers": {}, "body": "",
   "expected_status": [200], "assertion_type": "contains", "assertion_path": "", "assertion_value": "ok",
+  "target": "", "dns_record_type": "", "dns_expected": [], "tls_warning_days": 0,
   "timeout_ms": 10000, "interval_seconds": 300, "locations": ["local"],
   "created_by_email": "ada@example.com", "updated_by_email": "ada@example.com",
   "created_at": "…", "updated_at": "…",

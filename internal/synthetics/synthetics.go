@@ -12,6 +12,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/netip"
 	"net/url"
 	"sort"
 	"strconv"
@@ -20,10 +22,27 @@ import (
 	"unicode/utf8"
 )
 
-// Check types. Only http exists; the column and this list are the extension point (tcp, dns, browser).
+// Check types (D-140). A check addresses exactly one thing: an http check has a URL, every other type has a
+// target (host:port, or the name a dns check resolves).
 const (
 	TypeHTTP = "http"
+	// TypeTCP opens a TCP connection and measures how long the handshake took.
+	TypeTCP = "tcp"
+	// TypeDNS resolves a name and compares the answer with what the check expects.
+	TypeDNS = "dns"
+	// TypeTLS completes a TLS handshake and fails while the certificate is invalid, expired, or expiring
+	// within TLSWarningDays — the alert that has to arrive before the outage does.
+	TypeTLS = "tls"
 )
+
+// Types are the check types in display order.
+var Types = []string{TypeHTTP, TypeTCP, TypeDNS, TypeTLS}
+
+// DNS record types a dns check may ask for.
+var dnsRecordTypes = map[string]bool{"A": true, "AAAA": true, "CNAME": true, "MX": true, "NS": true, "TXT": true}
+
+// DNSRecordTypes are the record types in display order.
+var DNSRecordTypes = []string{"A", "AAAA", "CNAME", "MX", "NS", "TXT"}
 
 // LocationLocal is the built-in location: the openlog server itself. Locations are stored as an array on the
 // check and as one schedule row per check and location, so a remote runner can be added without changing the
@@ -65,6 +84,14 @@ const (
 	MaxPerOrg        = 100
 	DefaultTimeoutMs = 10000
 	DefaultInterval  = 300
+	// MaxTargetBytes bounds the host:port or name of a tcp, dns or tls check.
+	MaxTargetBytes = 512
+	// MaxDNSExpected bounds the expected answers of a dns check.
+	MaxDNSExpected = 10
+	// MaxTLSWarningDays bounds the certificate warning window; DefaultTLSWarningDays is a fortnight, which is
+	// longer than the renewal period of every automated issuer.
+	MaxTLSWarningDays     = 365
+	DefaultTLSWarningDays = 14
 )
 
 var (
@@ -115,7 +142,20 @@ type Input struct {
 	TimeoutMs       int               `json:"timeout_ms"`
 	IntervalSeconds int               `json:"interval_seconds"`
 	Locations       []string          `json:"locations"`
+
+	// Target is what a tcp or tls check connects to (host:port) and what a dns check resolves (a name).
+	Target string `json:"target"`
+	// DNSRecordType is the record a dns check asks for (default A).
+	DNSRecordType string `json:"dns_record_type"`
+	// DNSExpected are the answers that make a dns check succeed; empty means any answer does.
+	DNSExpected []string `json:"dns_expected"`
+	// TLSWarningDays fails a tls check while the certificate expires within that many days (0 = only an
+	// expired certificate fails).
+	TLSWarningDays int `json:"tls_warning_days"`
 }
+
+// IsHTTP reports whether the check makes an HTTP request.
+func (in Input) IsHTTP() bool { return in.Type == TypeHTTP || in.Type == "" }
 
 // Check is a stored definition with the last run per location.
 type Check struct {
@@ -171,13 +211,10 @@ func (in *Input) Validate() error {
 	if in.Type == "" {
 		in.Type = TypeHTTP
 	}
-	if in.Type != TypeHTTP {
-		return invalid("type", "must be http")
+	if !knownType(in.Type) {
+		return invalid("type", "must be one of "+strings.Join(Types, ", "))
 	}
-	if err := in.validateRequest(); err != nil {
-		return err
-	}
-	if err := in.validateAssertion(); err != nil {
+	if err := in.validateTarget(); err != nil {
 		return err
 	}
 	if in.TimeoutMs == 0 {
@@ -197,6 +234,134 @@ func (in *Input) Validate() error {
 		return invalid("timeout_ms", "must not be longer than interval_seconds")
 	}
 	return in.validateLocations()
+}
+
+// validateTarget checks the fields of the check's own type and clears the fields of the other types, so a
+// stored row never carries a target and a URL at once (the database repeats that as a constraint).
+func (in *Input) validateTarget() error {
+	in.Target = strings.TrimSpace(in.Target)
+	if in.Type != TypeHTTP {
+		in.URL, in.Method, in.Headers, in.Body = "", "", nil, ""
+		in.ExpectedStatus = nil
+		in.AssertionType, in.AssertionPath, in.AssertionValue = AssertNone, "", ""
+	}
+	switch in.Type {
+	case TypeHTTP:
+		in.Target, in.DNSRecordType, in.DNSExpected, in.TLSWarningDays = "", "", nil, 0
+		if err := in.validateRequest(); err != nil {
+			return err
+		}
+		return in.validateAssertion()
+	case TypeTCP:
+		in.DNSRecordType, in.DNSExpected, in.TLSWarningDays = "", nil, 0
+		return in.validateHostPort()
+	case TypeTLS:
+		in.DNSRecordType, in.DNSExpected = "", nil
+		if err := in.validateHostPort(); err != nil {
+			return err
+		}
+		if in.TLSWarningDays == 0 {
+			in.TLSWarningDays = DefaultTLSWarningDays
+		}
+		if in.TLSWarningDays < 0 || in.TLSWarningDays > MaxTLSWarningDays {
+			return invalid("tls_warning_days", "must be between 0 and 365 days")
+		}
+		return nil
+	case TypeDNS:
+		in.TLSWarningDays = 0
+		return in.validateDNS()
+	}
+	return invalid("type", "must be one of "+strings.Join(Types, ", "))
+}
+
+// validateHostPort accepts host:port, where the port is explicit: a tcp or tls check is about one port, and
+// guessing 443 would make the check mean something the person did not write.
+func (in *Input) validateHostPort() error {
+	if in.Target == "" {
+		return invalid("target", "required: host:port")
+	}
+	if len(in.Target) > MaxTargetBytes {
+		return invalid("target", "the target is too long")
+	}
+	host, port, err := net.SplitHostPort(in.Target)
+	if err != nil {
+		return invalid("target", "must be host:port (e.g. example.com:443)")
+	}
+	if !validHost(host) {
+		return invalid("target", "the host must be a name or an IP address")
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return invalid("target", "the port must be between 1 and 65535")
+	}
+	return nil
+}
+
+func (in *Input) validateDNS() error {
+	if in.Target == "" {
+		return invalid("target", "required: the name to resolve")
+	}
+	if len(in.Target) > MaxTargetBytes {
+		return invalid("target", "the name is too long")
+	}
+	if strings.ContainsAny(in.Target, " \t/:") || !validHost(strings.TrimSuffix(in.Target, ".")) {
+		return invalid("target", "must be a name such as example.com")
+	}
+	if in.DNSRecordType == "" {
+		in.DNSRecordType = "A"
+	}
+	in.DNSRecordType = strings.ToUpper(strings.TrimSpace(in.DNSRecordType))
+	if !dnsRecordTypes[in.DNSRecordType] {
+		return invalid("dns_record_type", "must be one of "+strings.Join(DNSRecordTypes, ", "))
+	}
+	if len(in.DNSExpected) > MaxDNSExpected {
+		return invalid("dns_expected", "at most 10 expected answers")
+	}
+	out := make([]string, 0, len(in.DNSExpected))
+	for _, v := range in.DNSExpected {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if len(v) > MaxAssertBytes {
+			return invalid("dns_expected", "an expected answer is at most 1024 bytes")
+		}
+		out = append(out, v)
+	}
+	in.DNSExpected = out
+	return nil
+}
+
+// validHost accepts a DNS name or an IP address; an empty label, a space or a scheme is not a host.
+func validHost(h string) bool {
+	if h == "" || len(h) > 253 {
+		return false
+	}
+	if _, err := netip.ParseAddr(h); err == nil {
+		return true
+	}
+	for _, label := range strings.Split(h, ".") {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		for _, r := range label {
+			switch {
+			case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '*':
+			default:
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func knownType(t string) bool {
+	for _, k := range Types {
+		if k == t {
+			return true
+		}
+	}
+	return false
 }
 
 func (in *Input) validateRequest() error {

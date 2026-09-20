@@ -30,6 +30,15 @@ type Result struct {
 	Name   string
 	URL    string
 	Method string
+	// Type, Target and the certificate fields describe the non-HTTP checks (D-140).
+	Type   string
+	Target string
+	// Answer is the run's evidence: the records a dns check resolved, the address a tcp check reached, the
+	// certificate subject a tls check saw.
+	Answer string
+	// CertExpiresAt is the notAfter of the certificate the run saw (tls checks and https checks); zero when
+	// the run saw none.
+	CertExpiresAt time.Time
 
 	At            time.Time
 	Success       bool
@@ -71,6 +80,10 @@ const (
 	MetricSuccess = "synthetics.check.success"
 	// MetricDuration is the total run time in milliseconds (also recorded for a failed run).
 	MetricDuration = "synthetics.check.duration"
+	// MetricCertExpiry is the days left on the certificate the run saw — negative once it has expired. Emitted
+	// for tls checks and for https checks, which complete the same handshake anyway, so "warn me two weeks
+	// before any certificate expires" is one alert rule over every check (D-140).
+	MetricCertExpiry = "synthetics.certificate.expiry"
 )
 
 // scopeName marks the emitted data points as openlog's own (they have no OTLP sender).
@@ -81,9 +94,9 @@ type BlockInserter interface {
 	Insert(ctx context.Context, table string, keyColumns, columns []string, token string, rows [][]any) error
 }
 
-var runColumns = []string{"tenant_id", "check_id", "check_name", "location", "timestamp", "success",
+var runColumns = []string{"tenant_id", "check_id", "check_name", "check_type", "location", "timestamp", "success",
 	"status_code", "error_kind", "error_message", "duration_ms", "dns_ms", "connect_ms", "tls_ms",
-	"first_byte_ms", "response_bytes", "url", "method"}
+	"first_byte_ms", "response_bytes", "url", "method", "target", "answer", "cert_expires_at"}
 
 // metricColumns is the column list of `metrics` (schema 0002_metrics, 0081); the order matches the values
 // built by metricRows.
@@ -237,9 +250,14 @@ func (w *Writer) Flush(ctx context.Context) int {
 func runRows(rows []Result) [][]any {
 	out := make([][]any, len(rows))
 	for i, r := range rows {
-		out[i] = []any{r.TenantID, r.CheckID, r.Name, r.Location, r.At.UTC(), r.Success, uint16(clampStatus(r.StatusCode)),
+		typ := r.Type
+		if typ == "" {
+			typ = TypeHTTP
+		}
+		out[i] = []any{r.TenantID, r.CheckID, r.Name, typ, r.Location, r.At.UTC(), r.Success, uint16(clampStatus(r.StatusCode)),
 			r.ErrorKind, r.Error, float32(r.DurationMs), float32(r.DNSMs), float32(r.ConnectMs), float32(r.TLSMs),
-			float32(r.FirstByteMs), uint32(max(r.ResponseBytes, 0)), r.URL, r.Method}
+			float32(r.FirstByteMs), uint32(max(r.ResponseBytes, 0)), r.URL, r.Method, r.Target, r.Answer,
+			r.CertExpiresAt.UTC()}
 	}
 	return out
 }
@@ -251,12 +269,27 @@ func clampStatus(code int) int {
 	return code
 }
 
-// metricRows mirrors every result as two gauge data points (MetricSuccess, MetricDuration).
+// metricRows mirrors every result as gauge data points: MetricSuccess and MetricDuration for every run, and
+// MetricCertExpiry whenever the run saw a certificate.
 func metricRows(rows []Result) [][]any {
 	out := make([][]any, 0, 2*len(rows))
 	for _, r := range rows {
-		attrs := map[string]string{"check.id": r.CheckID, "check.name": r.Name, "location": r.Location,
-			"http.request.method": r.Method, "url.full": r.URL}
+		typ := r.Type
+		if typ == "" {
+			typ = TypeHTTP
+		}
+		attrs := map[string]string{"check.id": r.CheckID, "check.name": r.Name, "check.type": typ, "location": r.Location}
+		// The target of the check, under the attribute that names it: an http check has a URL, the others a
+		// host:port or a name. A new attribute key would split the series of existing http checks.
+		if r.URL != "" {
+			attrs["url.full"] = r.URL
+		}
+		if r.Method != "" {
+			attrs["http.request.method"] = r.Method
+		}
+		if r.Target != "" {
+			attrs["server.address"] = r.Target
+		}
 		if r.StatusCode > 0 {
 			attrs["http.response.status_code"] = fmt.Sprintf("%d", r.StatusCode)
 		}
@@ -268,6 +301,12 @@ func metricRows(rows []Result) [][]any {
 			success = 1
 		}
 		out = append(out, metricRow(r, MetricSuccess, "1", success, attrs), metricRow(r, MetricDuration, "ms", r.DurationMs, attrs))
+		if !r.CertExpiresAt.IsZero() {
+			// Days left, negative once expired: an alert reads "below 14" whether the certificate is about to
+			// expire or already has.
+			days := r.CertExpiresAt.Sub(r.At).Hours() / 24
+			out = append(out, metricRow(r, MetricCertExpiry, "d", days, attrs))
+		}
 	}
 	return out
 }

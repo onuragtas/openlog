@@ -67,6 +67,61 @@ describe("Synthetics", () => {
     });
   });
 
+  // Switching the kind swaps the fields the form asks for and what it validates: a TLS check is about a
+  // host, a port and a certificate, and must not carry the URL of a draft that started as HTTP.
+  it("creates a TLS certificate check", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderWithClient(<SyntheticForm onSaved={onSaved} />);
+
+    await user.type(screen.getByLabelText("Name"), "Shop certificate");
+    await user.type(screen.getByLabelText("URL"), "https://shop.example.com");
+    await user.selectOptions(screen.getByLabelText("Check type"), "tls");
+    expect(screen.queryByLabelText("URL")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Host and port"), "shop.example.com");
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+    expect(screen.getByText("Enter host:port, e.g. shop.example.com:443.")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText("Host and port"), ":443");
+    await user.clear(screen.getByLabelText("Warn before (days)"));
+    await user.type(screen.getByLabelText("Warn before (days)"), "30");
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onSaved.mock.calls[0]![0]).toMatchObject({
+      name: "Shop certificate",
+      type: "tls",
+      target: "shop.example.com:443",
+      tls_warning_days: 30,
+      url: "",
+    });
+  });
+
+  it("creates a DNS check with expected answers", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderWithClient(<SyntheticForm onSaved={onSaved} />);
+
+    await user.type(screen.getByLabelText("Name"), "Shop DNS");
+    await user.selectOptions(screen.getByLabelText("Check type"), "dns");
+    await user.type(screen.getByLabelText("Hostname"), "shop.example.com");
+    await user.selectOptions(screen.getByLabelText("Record"), "AAAA");
+    await user.type(screen.getByLabelText("Expected answers"), "2001:db8::1, 2001:db8::2");
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onSaved.mock.calls[0]![0]).toMatchObject({
+      type: "dns",
+      target: "shop.example.com",
+      dns_record_type: "AAAA",
+      dns_expected: ["2001:db8::1", "2001:db8::2"],
+    });
+  });
+
   it("rejects a timeout longer than the interval", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();

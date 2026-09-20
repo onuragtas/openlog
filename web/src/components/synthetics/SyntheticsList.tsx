@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { checkState, checkTarget, formatDuration, formatRunAgo, formatUptime, lastRunAt, latencyPoints, stateBadgeVariant } from "@/lib/synthetics";
+import { checkKind, checkState, checkTarget, formatDuration, formatRunAgo, formatUptime, lastRunAt, latencyPoints, stateBadgeVariant } from "@/lib/synthetics";
 
 export interface SyntheticsListProps {
   onOpen: (check: SyntheticCheckListItem) => void;
@@ -72,7 +72,14 @@ export function SyntheticsList({ onOpen, onNew, canWrite = false }: SyntheticsLi
                         {` · ${c.interval_seconds}s`}
                       </div>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell font-mono text-xs">{checkTarget(c)}</TableCell>
+                    <TableCell className="hidden md:table-cell text-xs">
+                      {/* The kind before the target: "shop.example.com:443" means something different for a
+                          TCP check than for a TLS one. */}
+                      <Badge variant="outline" className="mr-1.5 align-middle">
+                        {t(`synthetics.kinds.${checkKind(c.type)}`)}
+                      </Badge>
+                      <span className="font-mono">{checkTarget(c)}</span>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={stateBadgeVariant(state)}>{t(`synthetics.state.${state}`)}</Badge>
                     </TableCell>

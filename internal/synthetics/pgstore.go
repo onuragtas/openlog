@@ -25,7 +25,8 @@ func NewPGStore(pool *pgxpool.Pool) *PGStore { return &PGStore{pool: pool} }
 
 const checkColumns = `c.id::text, c.org_id::text, c.name, c.type, c.enabled, c.url, c.method, c.headers,
 	c.body, c.expected_status, c.assertion_type, c.assertion_path, c.assertion_value, c.timeout_ms,
-	c.interval_seconds, c.locations, coalesce(cu.email, ''), coalesce(uu.email, ''), c.created_at, c.updated_at`
+	c.interval_seconds, c.locations, c.target, c.dns_record_type, c.dns_expected, c.tls_warning_days,
+	coalesce(cu.email, ''), coalesce(uu.email, ''), c.created_at, c.updated_at`
 
 const checkFrom = ` FROM synthetic_checks c
 	LEFT JOIN users cu ON cu.id = c.created_by
@@ -40,7 +41,8 @@ func scanCheck(row pgx.Row, extra ...any) (*Check, error) {
 	)
 	dest := []any{&c.ID, &c.OrgID, &c.Name, &c.Type, &c.Enabled, &c.URL, &c.Method, &headers, &c.Body,
 		&expected, &c.AssertionType, &c.AssertionPath, &c.AssertionValue, &c.TimeoutMs, &c.IntervalSeconds,
-		&c.Locations, &c.CreatedByEmail, &c.UpdatedByEmail, &c.CreatedAt, &c.UpdatedAt}
+		&c.Locations, &c.Target, &c.DNSRecordType, &c.DNSExpected, &c.TLSWarningDays,
+		&c.CreatedByEmail, &c.UpdatedByEmail, &c.CreatedAt, &c.UpdatedAt}
 	if err := row.Scan(append(dest, extra...)...); err != nil {
 		return nil, err
 	}
@@ -76,6 +78,15 @@ func expectedParam(in Input) []int32 {
 	return out
 }
 
+// expectedRecords is the dns_expected array parameter; a nil slice would be written as NULL, and the column
+// is NOT NULL with an empty-array default.
+func expectedRecords(in Input) []string {
+	if in.DNSExpected == nil {
+		return []string{}
+	}
+	return in.DNSExpected
+}
+
 func actorID(a Actor) any {
 	if a.UserID == "" {
 		return nil
@@ -84,7 +95,7 @@ func actorID(a Actor) any {
 }
 
 func auditDetails(in Input) []byte {
-	b, _ := json.Marshal(map[string]any{"name": in.Name, "type": in.Type, "url": in.URL, "method": in.Method,
+	b, _ := json.Marshal(map[string]any{"name": in.Name, "type": in.Type, "url": in.URL, "method": in.Method, "target": in.Target,
 		"enabled": in.Enabled, "interval_seconds": in.IntervalSeconds, "timeout_ms": in.TimeoutMs,
 		"locations": in.Locations, "assertion_type": in.AssertionType})
 	return b
@@ -205,13 +216,14 @@ func (s *PGStore) Create(ctx context.Context, orgID string, in Input, actor Acto
 		var stored string
 		err := tx.QueryRow(ctx, `INSERT INTO synthetic_checks (id, org_id, name, type, enabled, url, method, headers,
 			body, expected_status, assertion_type, assertion_path, assertion_value, timeout_ms, interval_seconds,
-			locations, created_by, updated_by)
-			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17
-			WHERE (SELECT count(*) FROM synthetic_checks WHERE org_id = $2) < $18
+			locations, target, dns_record_type, dns_expected, tls_warning_days, created_by, updated_by)
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $21
+			WHERE (SELECT count(*) FROM synthetic_checks WHERE org_id = $2) < $22
 			RETURNING id::text`,
 			id, orgID, in.Name, in.Type, in.Enabled, in.URL, in.Method, headers, in.Body, expectedParam(in),
 			in.AssertionType, in.AssertionPath, in.AssertionValue, in.TimeoutMs, in.IntervalSeconds,
-			in.Locations, actorID(actor), MaxPerOrg).Scan(&stored)
+			in.Locations, in.Target, in.DNSRecordType, expectedRecords(in), in.TLSWarningDays,
+			actorID(actor), MaxPerOrg).Scan(&stored)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrLimit
 		}
@@ -242,11 +254,12 @@ func (s *PGStore) Update(ctx context.Context, orgID, id string, in Input, actor 
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE synthetic_checks SET name = $3, type = $4, enabled = $5, url = $6, method = $7,
 			headers = $8, body = $9, expected_status = $10, assertion_type = $11, assertion_path = $12,
-			assertion_value = $13, timeout_ms = $14, interval_seconds = $15, locations = $16, updated_by = $17,
+			assertion_value = $13, timeout_ms = $14, interval_seconds = $15, locations = $16, target = $17,
+			dns_record_type = $18, dns_expected = $19, tls_warning_days = $20, updated_by = $21,
 			updated_at = now() WHERE org_id = $1 AND id = $2`,
 			orgID, id, in.Name, in.Type, in.Enabled, in.URL, in.Method, headers, in.Body, expectedParam(in),
 			in.AssertionType, in.AssertionPath, in.AssertionValue, in.TimeoutMs, in.IntervalSeconds,
-			in.Locations, actorID(actor))
+			in.Locations, in.Target, in.DNSRecordType, expectedRecords(in), in.TLSWarningDays, actorID(actor))
 		if err != nil {
 			return err
 		}

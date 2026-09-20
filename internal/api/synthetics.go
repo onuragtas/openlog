@@ -97,6 +97,10 @@ type syntheticCheckJSON struct {
 	TimeoutMs       int                     `json:"timeout_ms"`
 	IntervalSeconds int                     `json:"interval_seconds"`
 	Locations       []string                `json:"locations"`
+	Target          string                  `json:"target"`
+	DNSRecordType   string                  `json:"dns_record_type"`
+	DNSExpected     []string                `json:"dns_expected"`
+	TLSWarningDays  int                     `json:"tls_warning_days"`
 	CreatedByEmail  string                  `json:"created_by_email"`
 	UpdatedByEmail  string                  `json:"updated_by_email"`
 	CreatedAt       string                  `json:"created_at"`
@@ -121,7 +125,8 @@ func syntheticCheckResponse(c *synthetics.Check) syntheticCheckJSON {
 		Method: c.Method, Headers: nonNilMap(c.Headers), Body: c.Body, ExpectedStatus: c.ExpectedStatus,
 		AssertionType: c.AssertionType, AssertionPath: c.AssertionPath, AssertionValue: c.AssertionValue,
 		TimeoutMs: c.TimeoutMs, IntervalSeconds: c.IntervalSeconds, Locations: c.Locations,
-		CreatedByEmail: c.CreatedByEmail, UpdatedByEmail: c.UpdatedByEmail,
+		Target: c.Target, DNSRecordType: c.DNSRecordType, DNSExpected: c.DNSExpected,
+		TLSWarningDays: c.TLSWarningDays, CreatedByEmail: c.CreatedByEmail, UpdatedByEmail: c.UpdatedByEmail,
 		CreatedAt: formatTime(c.CreatedAt), UpdatedAt: formatTime(c.UpdatedAt),
 		Status: make([]syntheticLocationJSON, 0, len(c.Status))}
 	if out.ExpectedStatus == nil {
@@ -129,6 +134,9 @@ func syntheticCheckResponse(c *synthetics.Check) syntheticCheckJSON {
 	}
 	if out.Locations == nil {
 		out.Locations = []string{}
+	}
+	if out.DNSExpected == nil {
+		out.DNSExpected = []string{}
 	}
 	for _, st := range c.Status {
 		out.Status = append(out.Status, syntheticLocationJSON{Location: st.Location,

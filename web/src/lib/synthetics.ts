@@ -76,9 +76,22 @@ export function formatRunAgo(iso: string | null | undefined, locale?: string, no
   return rtf.format(seconds, "second");
 }
 
-/** "GET https://shop.example.com/health" — what the check actually calls. */
-export function checkTarget(check: Pick<SyntheticCheck, "method" | "url">): string {
-  return `${check.method} ${check.url}`;
+/** The check's kind, falling back to http for a type an older or newer server sent. */
+export function checkKind(type: string | undefined): SyntheticCheckKind {
+  return (CHECK_TYPES as readonly string[]).includes(type ?? "") ? (type as SyntheticCheckKind) : "http";
+}
+
+/** What the check actually addresses: the request for http, the target for tcp, dns and tls. */
+export function checkTarget(check: Pick<SyntheticCheck, "method" | "url" | "type" | "target" | "dns_record_type">): string {
+  switch (check.type) {
+    case "tcp":
+    case "tls":
+      return check.target;
+    case "dns":
+      return `${check.dns_record_type || "A"} ${check.target}`;
+    default:
+      return `${check.method} ${check.url}`;
+  }
 }
 
 /** Latency sparkline points ([x, y]); buckets without a p95 are skipped. */
@@ -142,7 +155,36 @@ export type SyntheticValidationKey =
   | "timeout"
   | "interval"
   | "assertionValue"
-  | "assertionPath";
+  | "assertionPath"
+  | "hostPort"
+  | "hostname"
+  | "warningDays";
+
+/** Check types, in the order the form offers them. */
+export const CHECK_TYPES = ["http", "tcp", "dns", "tls"] as const;
+export type SyntheticCheckKind = (typeof CHECK_TYPES)[number];
+
+/** DNS record types a dns check may ask for. */
+export const DNS_RECORD_TYPES = ["A", "AAAA", "CNAME", "MX", "NS", "TXT"] as const;
+
+/** A name or an IP address, mirroring the server's host check. */
+function validHost(host: string): boolean {
+  if (!host || host.length > 253) return false;
+  if (/^[0-9a-fA-F:.]+$/.test(host) && (host.includes(":") || /^\d+\.\d+\.\d+\.\d+$/.test(host))) return true;
+  return host.split(".").every((label) => label.length > 0 && label.length <= 63 && /^[A-Za-z0-9_*-]+$/.test(label));
+}
+
+/** host:port with an explicit port: a tcp or tls check is about one port, and guessing 443 would make the
+ * check mean something the person did not write. */
+export function parseHostPort(target: string): { host: string; port: number } | null {
+  const v = target.trim();
+  const at = v.lastIndexOf(":");
+  if (at <= 0 || at === v.length - 1) return null;
+  const host = v.slice(0, at).replace(/^\[|\]$/g, "");
+  const port = Number(v.slice(at + 1));
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !validHost(host)) return null;
+  return { host, port };
+}
 
 export type SyntheticFormErrors = Partial<Record<keyof SyntheticCheckInput, SyntheticValidationKey>>;
 
@@ -150,22 +192,37 @@ export type SyntheticFormErrors = Partial<Record<keyof SyntheticCheckInput, Synt
 export function validateSyntheticInput(input: SyntheticCheckInput): SyntheticFormErrors {
   const e: SyntheticFormErrors = {};
   if (!input.name.trim()) e.name = "required";
-  const url = input.url.trim();
-  if (!url) {
-    e.url = "required";
-  } else {
-    try {
-      const u = new URL(url);
-      if ((u.protocol !== "http:" && u.protocol !== "https:") || u.username || u.password || u.hash) e.url = "url";
-    } catch {
-      e.url = "url";
+  const type = input.type ?? "http";
+  const target = (input.target ?? "").trim();
+  if (type === "http") {
+    const url = (input.url ?? "").trim();
+    if (!url) {
+      e.url = "required";
+    } else {
+      try {
+        const u = new URL(url);
+        if ((u.protocol !== "http:" && u.protocol !== "https:") || u.username || u.password || u.hash) e.url = "url";
+      } catch {
+        e.url = "url";
+      }
     }
+    if (input.expected_status !== undefined && input.expected_status.length === 0) e.expected_status = "expectedStatus";
+  } else if (type === "dns") {
+    if (!target) e.target = "required";
+    else if (!validHost(target.replace(/\.$/, ""))) e.target = "hostname";
+  } else {
+    if (!target) e.target = "required";
+    else if (!parseHostPort(target)) e.target = "hostPort";
   }
-  if (input.expected_status !== undefined && input.expected_status.length === 0) e.expected_status = "expectedStatus";
+  if (type === "tls") {
+    const days = input.tls_warning_days ?? 14;
+    if (!Number.isInteger(days) || days < 0 || days > 365) e.tls_warning_days = "warningDays";
+  }
   const timeout = input.timeout_ms ?? 10000;
   const interval = input.interval_seconds ?? 300;
   if (!Number.isInteger(timeout) || timeout < 500 || timeout > 60000 || timeout > interval * 1000) e.timeout_ms = "timeout";
   if (!Number.isInteger(interval) || interval < 30 || interval > 86400) e.interval_seconds = "interval";
+  if (type !== "http") return e;
   if (input.assertion_type === "contains" || input.assertion_type === "not_contains") {
     if (!input.assertion_value) e.assertion_value = "assertionValue";
   }

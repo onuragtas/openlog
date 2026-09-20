@@ -6747,17 +6747,24 @@ export interface components {
          * @enum {string}
          */
         SyntheticAssertionType: "none" | "contains" | "not_contains" | "json_path";
+        /** @description A check addresses exactly one thing: an http check has a url, every other type has a target. The fields of the other types are ignored and stored empty. */
         SyntheticCheckInput: {
             name: string;
-            /**
-             * @default http
-             * @enum {string}
-             */
-            type: "http";
+            type?: components["schemas"]["SyntheticCheckType"];
             /** @default true */
             enabled: boolean;
-            /** @description http(s), without credentials or a fragment */
-            url: string;
+            /** @description http only: http(s), without credentials or a fragment */
+            url?: string;
+            /** @description tcp and tls: host:port; dns: the name to resolve */
+            target?: string;
+            dns_record_type?: components["schemas"]["SyntheticDnsRecordType"];
+            /** @description dns only: the answers that make the run succeed (empty = any answer does) */
+            dns_expected?: string[];
+            /**
+             * @description tls only: the run fails while the certificate expires within this many days (0 = only an expired one)
+             * @default 14
+             */
+            tls_warning_days: number;
             /**
              * @default GET
              * @enum {string}
@@ -6785,6 +6792,18 @@ export interface components {
             /** @description Default ["local"] (the openlog server itself) */
             locations?: string[];
         };
+        /**
+         * @description http requests a URL, tcp opens a connection, dns resolves a name and compares the answer, and tls completes a handshake and fails while the certificate is expired or expiring (D-140).
+         * @default http
+         * @enum {string}
+         */
+        SyntheticCheckType: "http" | "tcp" | "dns" | "tls";
+        /**
+         * @description dns only: the record the check asks for
+         * @default A
+         * @enum {string}
+         */
+        SyntheticDnsRecordType: "A" | "AAAA" | "CNAME" | "MX" | "NS" | "TXT";
         /** @description The schedule row of one location - the last outcome and when the next run is due. */
         SyntheticLocationStatus: {
             location: string;
@@ -6795,7 +6814,7 @@ export interface components {
             /** @description 0 when the run failed before a response */
             last_status_code: number;
             last_duration_ms: number;
-            /** @description dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request */
+            /** @description dns, connect, tls, certificate, record, timeout, blocked, redirect, status, assertion, body, request */
             last_error_kind: string;
             last_error: string;
         };
@@ -7113,6 +7132,13 @@ export interface components {
             timeout_ms: number;
             interval_seconds: number;
             locations: string[];
+            /** @description tcp and tls: host:port; dns: the name; empty for http */
+            target: string;
+            /** @description dns only */
+            dns_record_type: string;
+            dns_expected: string[];
+            /** @description tls only */
+            tls_warning_days: number;
             created_by_email: string;
             updated_by_email: string;
             created_at: components["schemas"]["Timestamp"];

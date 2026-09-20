@@ -9935,12 +9935,31 @@ components:
       description: Assertion on the response body; json_path compares a dotted path of the decoded JSON (api.md "Synthetic monitoring")
     SyntheticCheckInput:
       type: object
-      required: [name, url]
+      required: [name]
+      description: >
+        A check addresses exactly one thing: an http check has a url, every other type has a target.
+        The fields of the other types are ignored and stored empty.
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
-        type: { type: string, enum: [http], default: http }
+        type: { $ref: "#/components/schemas/SyntheticCheckType" }
         enabled: { type: boolean, default: true }
-        url: { type: string, maxLength: 2048, description: "http(s), without credentials or a fragment" }
+        url: { type: string, maxLength: 2048, description: "http only: http(s), without credentials or a fragment" }
+        target:
+          type: string
+          maxLength: 512
+          description: "tcp and tls: host:port; dns: the name to resolve"
+        dns_record_type: { $ref: "#/components/schemas/SyntheticDnsRecordType" }
+        dns_expected:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 1024 }
+          description: "dns only: the answers that make the run succeed (empty = any answer does)"
+        tls_warning_days:
+          type: integer
+          minimum: 0
+          maximum: 365
+          default: 14
+          description: "tls only: the run fails while the certificate expires within this many days (0 = only an expired one)"
         method: { type: string, enum: [GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS], default: GET }
         headers:
           type: object
@@ -9962,6 +9981,18 @@ components:
           maxItems: 10
           items: { type: string }
           description: 'Default ["local"] (the openlog server itself)'
+    SyntheticCheckType:
+      type: string
+      enum: [http, tcp, dns, tls]
+      default: http
+      description: >
+        http requests a URL, tcp opens a connection, dns resolves a name and compares the answer, and tls
+        completes a handshake and fails while the certificate is expired or expiring (D-140).
+    SyntheticDnsRecordType:
+      type: string
+      enum: [A, AAAA, CNAME, MX, NS, TXT]
+      default: A
+      description: "dns only: the record the check asks for"
     SyntheticLocationStatus:
       type: object
       description: The schedule row of one location - the last outcome and when the next run is due.
@@ -9973,7 +10004,7 @@ components:
         last_success: { type: boolean, nullable: true, description: null until the first run }
         last_status_code: { type: integer, description: 0 when the run failed before a response }
         last_duration_ms: { type: number }
-        last_error_kind: { type: string, description: "dns, connect, tls, timeout, blocked, redirect, status, assertion, body, request" }
+        last_error_kind: { type: string, description: "dns, connect, tls, certificate, record, timeout, blocked, redirect, status, assertion, body, request" }
         last_error: { type: string }
     DbInstance:
       type: object
@@ -10312,7 +10343,8 @@ components:
     SyntheticCheck:
       type: object
       required: [id, name, type, enabled, url, method, headers, body, expected_status, assertion_type,
-                 assertion_path, assertion_value, timeout_ms, interval_seconds, locations,
+                 assertion_path, assertion_value, timeout_ms, interval_seconds, locations, target,
+                 dns_record_type, dns_expected, tls_warning_days,
                  created_by_email, updated_by_email, created_at, updated_at, status]
       properties:
         id: { type: string, format: uuid }
@@ -10336,6 +10368,12 @@ components:
         locations:
           type: array
           items: { type: string }
+        target: { type: string, description: "tcp and tls: host:port; dns: the name; empty for http" }
+        dns_record_type: { type: string, description: "dns only" }
+        dns_expected:
+          type: array
+          items: { type: string }
+        tls_warning_days: { type: integer, description: "tls only" }
         created_by_email: { type: string }
         updated_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
