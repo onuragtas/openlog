@@ -725,6 +725,8 @@ export const tr: Messages = {
       originsHelp: "Tam kökenler ya da alt alan adı joker'leri, virgülle ayrılır. Boş liste reddedilir: boş bir alan güvensiz ayar olmamalı.",
       rateLimit: "Olay/dk",
       sampleRate: "Örnekleme",
+      rateLimitHelp: "Dakikada {{min}} ile {{max}} olay arasında olmalı.",
+      sampleRateHelp: "0'dan büyük, en fazla 1 olmalı (1 = her olay gönderilir).",
       create: "Anahtar oluştur",
       created: "{{name}} tarayıcı anahtarı oluşturuldu",
       usage: "Bu değeri sayfadaki init({ key: … }) çağrısına verin. Yalnızca burada gösterilir; kaybolan anahtar geri okunmaz, yenisiyle değiştirilir.",

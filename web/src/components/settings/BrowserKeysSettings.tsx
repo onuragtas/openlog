@@ -19,6 +19,11 @@ import { SecretReveal } from "./SecretReveal";
 
 const DEFAULT_RATE_LIMIT = 6000;
 
+// The range the server enforces (internal/auth/browserkeys.go): the form mirrors it so a value it accepts is
+// a value the API accepts, and so the browser's own number validation never refuses one that is legal.
+const MIN_RATE_LIMIT = 60;
+const MAX_RATE_LIMIT = 10_000_000;
+
 interface Draft {
   name: string;
   serviceName: string;
@@ -51,7 +56,20 @@ const toInput = (d: Draft): BrowserKeyInput => ({
   sample_rate: Number(d.sampleRate),
 });
 
-const complete = (d: Draft) => d.name.trim() !== "" && d.serviceName.trim() !== "" && parseOrigins(d.origins).length > 0;
+/** Events/min: a whole number in the server's range. */
+const rateLimitError = (d: Draft): boolean => {
+  const v = Number(d.rateLimit.trim());
+  return !Number.isInteger(v) || v < MIN_RATE_LIMIT || v > MAX_RATE_LIMIT;
+};
+
+/** Sampling: a fraction above 0 and at most 1 (1 = keep every event). */
+const sampleRateError = (d: Draft): boolean => {
+  const v = Number(d.sampleRate.trim());
+  return !Number.isFinite(v) || v <= 0 || v > 1;
+};
+
+const complete = (d: Draft) =>
+  d.name.trim() !== "" && d.serviceName.trim() !== "" && parseOrigins(d.origins).length > 0 && !rateLimitError(d) && !sampleRateError(d);
 
 function KeyFields({ id, draft, onChange, showName }: { id: string; draft: Draft; onChange: (d: Draft) => void; showName: boolean }) {
   const { t } = useTranslation();
@@ -82,13 +100,34 @@ function KeyFields({ id, draft, onChange, showName }: { id: string; draft: Draft
         <Label htmlFor={`${id}-origins`}>{t("settings.browserKeys.origins")}</Label>
         <Input id={`${id}-origins`} value={draft.origins} placeholder={t("settings.browserKeys.originsPlaceholder")} onChange={(e) => set({ origins: e.target.value })} />
       </div>
-      <div className="flex w-28 flex-col gap-1.5">
+      <div className="flex w-32 flex-col gap-1.5">
         <Label htmlFor={`${id}-rate`}>{t("settings.browserKeys.rateLimit")}</Label>
-        <Input id={`${id}-rate`} type="number" min={1} step={100} value={draft.rateLimit} onChange={(e) => set({ rateLimit: e.target.value })} />
+        <Input
+          id={`${id}-rate`}
+          type="number"
+          inputMode="numeric"
+          min={MIN_RATE_LIMIT}
+          max={MAX_RATE_LIMIT}
+          step={1}
+          aria-invalid={rateLimitError(draft)}
+          value={draft.rateLimit}
+          onChange={(e) => set({ rateLimit: e.target.value })}
+        />
+        {rateLimitError(draft) && <p className="text-xs text-destructive">{t("settings.browserKeys.rateLimitHelp", { min: MIN_RATE_LIMIT, max: MAX_RATE_LIMIT })}</p>}
       </div>
       <div className="flex w-28 flex-col gap-1.5">
         <Label htmlFor={`${id}-sample`}>{t("settings.browserKeys.sampleRate")}</Label>
-        <Input id={`${id}-sample`} type="number" min={0.01} max={1} step={0.05} value={draft.sampleRate} onChange={(e) => set({ sampleRate: e.target.value })} />
+        <Input
+          id={`${id}-sample`}
+          type="number"
+          min={0}
+          max={1}
+          step="any"
+          aria-invalid={sampleRateError(draft)}
+          value={draft.sampleRate}
+          onChange={(e) => set({ sampleRate: e.target.value })}
+        />
+        {sampleRateError(draft) && <p className="text-xs text-destructive">{t("settings.browserKeys.sampleRateHelp")}</p>}
       </div>
     </div>
   );

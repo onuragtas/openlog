@@ -724,6 +724,8 @@ export const en = {
       originsHelp: "Exact origins or subdomain wildcards, separated by commas. An empty list is refused: a blank field must not be the unsafe setting.",
       rateLimit: "Events/min",
       sampleRate: "Sampling",
+      rateLimitHelp: "Between {{min}} and {{max}} events per minute.",
+      sampleRateHelp: "A fraction above 0 and at most 1 (1 keeps every event).",
       create: "Create key",
       created: "Browser key {{name}} created",
       usage: "Pass this value to init({ key: … }) in the page. It is shown only here; a lost key is replaced, not looked up.",
