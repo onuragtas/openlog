@@ -49,6 +49,7 @@ variable   := '{{' name '}}'
 | `Metric` | `metrics` or `metrics_1m` | `timestamp` | 1-minute rollup chosen automatically (§4) |
 | `Host` | `hosts FINAL` | `last_seen` | hosts seen in the range |
 | `Container` | `containers` (merged per container) | `last_seen` | containers seen in the range |
+| `Profile` | `profiles` | `timestamp` | 7-day retention; one row per profiling sample, so every query aggregates |
 
 Attributes (`GET /api/v1/query/schema` lists them with types):
 
@@ -59,6 +60,7 @@ Attributes (`GET /api/v1/query/schema` lists them with types):
 | `Metric` | `metricName` (= `metric.name`), `metric.type`, `unit`, `service.name`, `host.id`, `host.name`\*, `value` (number), `count`\* (number), `sum`\* (number), `scope.name`\* |
 | `Host` | `host.id`, `host.name`, `os.type`, `os.description`, `arch`, `agent.name`, `agent.version` |
 | `Container` | `container.id`, `container.name`, `host.id`, `host.name`, `image.name`, `image.tags`, `runtime`, `compose.project`, `compose.service`, `k8s.pod.name`, `k8s.namespace.name`, `k8s.container.name`, `state`, `health`, `restarts` (number) |
+| `Profile` | `service.name`, `service.namespace`, `deployment.environment`, `host.id`, `profile.type`, `unit`, `function` (= `leaf`, the innermost frame self time is attributed to), `stack` (the whole stack folded as `main;handleRequest;db.Query`), `stack.depth` (number), `value` (number, in `unit`), `profile.duration` (number, seconds) |
 
 \* raw data points only (prevents the rollup).
 

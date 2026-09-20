@@ -193,6 +193,30 @@ var eventTypes = []*eventType{
 			n("restarts", "c_restarts"),
 		},
 	},
+	{
+		// Continuous profiling samples (0095_profiles). One row per sample, so every query aggregates —
+		// `SELECT sum(value) FROM Profile FACET function` is the self-time table the API serves, written by hand.
+		name: "Profile", desc: "Profiling samples (profiles)", table: query.Profiles, timeCol: "timestamp",
+		attrMap: "attributes", resource: "resource_attributes", maxRange: maxRawRange,
+		attrs: []attrDef{
+			s("service.name", "service_name"),
+			s("service.namespace", "service_namespace"),
+			s("deployment.environment", "deployment_environment"),
+			s("host.id", "host_id"),
+			// The profile's own sample type and unit; never invented, so a chart can say what its numbers mean.
+			s("profile.type", "profile_type"),
+			s("unit", "unit"),
+			// The innermost frame, which is what self time is attributed to (a stored column, not the last
+			// element of the stack array, because that is the question a profile is asked first).
+			s("function", "leaf", "leaf"),
+			// The whole stack as folded text (`main;handleRequest;db.Query`), the classic flame graph format:
+			// it makes a stack groupable without exposing an array type to the query language.
+			s("stack", "arrayStringConcat(stack, ';')"),
+			n("stack.depth", "length(stack)"),
+			n("value", "value"),
+			n("profile.duration", "duration_ns / 1e9"),
+		},
+	},
 }
 
 // containerColumns merge the aggregating containers table to one row per container (0009_containers.sql).
