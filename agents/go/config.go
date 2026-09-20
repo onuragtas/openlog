@@ -24,6 +24,8 @@ const (
 	defaultHTTPEndpoint    = "http://localhost:4318"
 	defaultGRPCEndpoint    = "http://localhost:4317"
 	defaultMetricInterval  = 60 * time.Second
+	defaultProfileInterval = 60 * time.Second
+	minProfileInterval     = 10 * time.Second
 	defaultShutdownTimeout = 5 * time.Second
 	defaultExportTimeout   = 10 * time.Second
 	defaultInfraStateDir   = "/var/lib/openlog-infra-agent"
@@ -54,12 +56,16 @@ type Config struct {
 	HostID             string // explicit host.id; empty = detect
 	RuntimeMetrics     bool
 	MetricInterval     time.Duration
-	ShutdownTimeout    time.Duration
-	ExportTimeout      time.Duration
-	HostRoot           string // prefix for host files (/etc/machine-id, …); "/" by default
-	InfraStateDir      string // infra agent state dir holding a generated host-id
-	InfraRuntimeDir    string // infra agent runtime dir where the running agent publishes its host-id
-	StateDir           string // where the Go agent persists a generated host id; "" = user cache dir
+	// Profiling exports a CPU profile of this process on an interval (profiler.go). Off by default: unlike
+	// runtime metrics it costs CPU in the profiled process, and that is not a default anyone chose.
+	Profiling       bool
+	ProfileInterval time.Duration
+	ShutdownTimeout time.Duration
+	ExportTimeout   time.Duration
+	HostRoot        string // prefix for host files (/etc/machine-id, …); "/" by default
+	InfraStateDir   string // infra agent state dir holding a generated host-id
+	InfraRuntimeDir string // infra agent runtime dir where the running agent publishes its host-id
+	StateDir        string // where the Go agent persists a generated host id; "" = user cache dir
 
 	retry retrySettings
 }
@@ -134,6 +140,13 @@ func WithRuntimeMetrics(enabled bool) Option { return func(c *Config) { c.Runtim
 // WithMetricInterval sets the metric export interval (default 60s).
 func WithMetricInterval(d time.Duration) Option { return func(c *Config) { c.MetricInterval = d } }
 
+// WithProfiling enables continuous CPU profiling (default disabled). Requires the HTTP protocol.
+func WithProfiling(enabled bool) Option { return func(c *Config) { c.Profiling = enabled } }
+
+// WithProfileInterval sets how long each CPU profile covers and how often one is exported (default 60s,
+// minimum 10s).
+func WithProfileInterval(d time.Duration) Option { return func(c *Config) { c.ProfileInterval = d } }
+
 // WithShutdownTimeout bounds the final flush when the shutdown context has no deadline (default 5s).
 func WithShutdownTimeout(d time.Duration) Option { return func(c *Config) { c.ShutdownTimeout = d } }
 
@@ -159,6 +172,7 @@ func loadConfig(lookup lookupFunc, opts []Option) (*Config, []string, error) {
 		ResourceAttributes: map[string]string{},
 		RuntimeMetrics:     true,
 		MetricInterval:     defaultMetricInterval,
+		ProfileInterval:    defaultProfileInterval,
 		ShutdownTimeout:    defaultShutdownTimeout,
 		ExportTimeout:      defaultExportTimeout,
 		HostRoot:           "/",
@@ -296,6 +310,8 @@ func loadConfig(lookup lookupFunc, opts []Option) (*Config, []string, error) {
 	}
 	boolVar(&c.RuntimeMetrics, "OPENLOG_RUNTIME_METRICS")
 	durVar(&c.MetricInterval, "OPENLOG_METRIC_EXPORT_INTERVAL")
+	boolVar(&c.Profiling, "OPENLOG_PROFILING")
+	durVar(&c.ProfileInterval, "OPENLOG_PROFILE_INTERVAL")
 	durVar(&c.ShutdownTimeout, "OPENLOG_SHUTDOWN_TIMEOUT")
 	if v, _, ok := get("OPENLOG_HOST_ROOT"); ok {
 		c.HostRoot = v
@@ -370,6 +386,14 @@ func loadConfig(lookup lookupFunc, opts []Option) (*Config, []string, error) {
 	}
 	if c.MetricInterval <= 0 {
 		c.MetricInterval = defaultMetricInterval
+	}
+	if c.ProfileInterval < minProfileInterval {
+		// The interval is also how long each profile covers: below a few seconds the samples are too few to
+		// mean anything and the export overhead starts to dominate what is being measured.
+		if c.ProfileInterval > 0 {
+			warn("OPENLOG_PROFILE_INTERVAL is below the %s minimum; using %s", minProfileInterval, minProfileInterval)
+		}
+		c.ProfileInterval = max(c.ProfileInterval, minProfileInterval)
 	}
 	if c.ShutdownTimeout <= 0 {
 		c.ShutdownTimeout = defaultShutdownTimeout

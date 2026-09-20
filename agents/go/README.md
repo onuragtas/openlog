@@ -3,8 +3,8 @@
 Apache-2.0 · module `github.com/onuragtas/openlog/agents/go` · Go 1.26+
 
 This is a thin distribution of the OpenTelemetry Go SDK (D-033). One call sends traces, metrics (including Go runtime
-metrics) and logs to openlog over OTLP. The resource carries the same `host.id` as the openlog infra agent, so a
-service is linked to the host it runs on.
+metrics) and logs to openlog over OTLP, and can also send continuous CPU profiles (opt-in, see below). The resource
+carries the same `host.id` as the openlog infra agent, so a service is linked to the host it runs on.
 
 ## Quick start
 
@@ -42,6 +42,33 @@ Runnable examples live in the `examples` module (`cd examples`):
 | `go run ./http-sql -load 2m` | ServeMux routes, SQLite through `openlogsql`, slog bridge, instrumented client load generator |
 | `go run ./grpc -n 50` | gRPC server and client (health service) with linked spans |
 
+## Continuous profiling
+
+Off by default. Turn it on to see which function spent the time *inside* a slow span:
+
+```go
+shutdown, err := openlog.Start(ctx, openlog.WithServiceName("checkout"), openlog.WithProfiling(true))
+```
+
+```sh
+OPENLOG_PROFILING=true go run .
+```
+
+The agent takes a CPU profile of the process over each `OPENLOG_PROFILE_INTERVAL` (60 s by default, 10 s minimum) and
+sends it to `/v1/profiles` as OTLP profiles ([profiles.md](../../docs/contracts/profiles.md)). The flame graph appears
+under Profiling in the UI. `shutdown` ends the open window and exports what it holds, so the last minutes before a
+deploy are not the ones that go missing.
+
+Two things are worth knowing before enabling it:
+
+- **It costs CPU in your process.** The runtime interrupts every running thread about a hundred times a second to
+  record a stack. That is why this is opt-in while runtime metrics are on by default.
+- **HTTP only.** The OTLP profiles signal has no gRPC client yet, so with `OPENLOG_PROTOCOL=grpc` the profiler stays
+  off and logs one line saying so, rather than posting to a port that speaks gRPC.
+
+A process can only have one CPU profile running at a time. If something else is already profiling (`net/http/pprof`, a
+benchmark), the agent logs one warning and tries again on the next interval instead of fighting for it.
+
 ## Configuration
 
 Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**.
@@ -67,6 +94,8 @@ Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**.
 | `OPENLOG_STATE_DIR` | — | user cache dir `/openlog` | Where this agent persists a generated host id (last resort) |
 | `OPENLOG_RUNTIME_METRICS` | `WithRuntimeMetrics` | `true` | Go runtime metrics |
 | `OPENLOG_METRIC_EXPORT_INTERVAL` (`OTEL_METRIC_EXPORT_INTERVAL`, ms) | `WithMetricInterval` | `60s` | Metric export interval |
+| `OPENLOG_PROFILING` | `WithProfiling` | `false` | Continuous CPU profiling (HTTP protocol only) |
+| `OPENLOG_PROFILE_INTERVAL` | `WithProfileInterval` | `60s` | How long each CPU profile covers, and how often one is sent (minimum 10s) |
 | `OPENLOG_SHUTDOWN_TIMEOUT` | `WithShutdownTimeout` | `5s` | Final flush bound when the shutdown context has no deadline |
 | `OPENLOG_LOG_LEVEL` (`OTEL_LOG_LEVEL`) | `WithLogLevel` | `warn` | Agent diagnostics on stderr: `debug`, `info`, `warn`, `error`, `off` |
 | `OPENLOG_ENABLED` (`OTEL_SDK_DISABLED`) | `WithEnabled` | `true` | `false`: `Start` installs nothing |

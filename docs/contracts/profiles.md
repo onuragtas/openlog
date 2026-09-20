@@ -35,6 +35,15 @@ what the bytes mean.
 A payload carrying no profile at all is accepted and produces nothing — an agent whose process was idle has
 nothing to report, and an error would make it retry forever.
 
+**Producers.** The Go agent (`agents/go`) is the first: `OPENLOG_PROFILING=true` takes a CPU profile of the
+process over `OPENLOG_PROFILE_INTERVAL` and posts it here. It is **off by default** — unlike runtime metrics,
+a CPU profile costs CPU in the profiled process, and that is not a default anyone chose — and it requires the
+HTTP protocol, because the published OTLP profiles modules ship message types without gRPC service stubs, so
+there is no generated profiles client to dial. The conversion from the Go runtime's pprof output happens in
+the agent (`agents/go/internal/otlpprofiles`): pprof declares two sample types over the same samples
+(`samples/count` and `cpu/nanoseconds`) while an OTLP profile declares one, so each becomes a profile of its
+own and "one profile, one unit" stays true.
+
 ## 2. Storage
 
 `schema/clickhouse/0095_profiles.sql`. One row per sample: the resolved call stack and the value measured on

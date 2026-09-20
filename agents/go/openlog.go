@@ -111,6 +111,25 @@ func start(ctx context.Context, lookup lookupFunc, diagOut io.Writer, opts []Opt
 	otel.SetTracerProvider(randomTracerProvider{tp: tp})
 	otel.SetMeterProvider(mp)
 	global.SetLoggerProvider(lp)
+
+	// Continuous profiling (profiler.go). It has no OTel provider to hang off: profiles are not part of the
+	// SDK's stable surface, so the agent runs and exports them itself.
+	var prof *profiler
+	if cfg.Profiling {
+		switch {
+		case cfg.Protocol == ProtocolGRPC:
+			log.Warn("profiling is disabled: the OTLP profiles signal has no gRPC client yet; set OPENLOG_PROTOCOL=http/protobuf to profile")
+		default:
+			prof, err = newProfiler(cfg, res, log)
+			if err != nil {
+				log.Warn("profiling is disabled", "error", err)
+				prof = nil
+			} else {
+				prof.start()
+				log.Info("profiling", "interval", cfg.ProfileInterval)
+			}
+		}
+	}
 	running = true
 
 	log.Info("started", "service.name", cfg.ServiceName, "endpoint", cfg.Endpoint, "protocol", cfg.Protocol,
@@ -126,8 +145,14 @@ func start(ctx context.Context, lookup lookupFunc, diagOut io.Writer, opts []Opt
 				defer cancel()
 			}
 			var wg sync.WaitGroup
-			errs := make([]error, 3)
-			for i, f := range []func(context.Context) error{tp.Shutdown, mp.Shutdown, lp.Shutdown} {
+			shutdowns := []func(context.Context) error{tp.Shutdown, mp.Shutdown, lp.Shutdown}
+			if prof != nil {
+				// The profiler is stopped with the rest: it ends the open window and exports what it holds,
+				// so the last minute before a deploy is not the one that goes missing.
+				shutdowns = append(shutdowns, prof.Shutdown)
+			}
+			errs := make([]error, len(shutdowns))
+			for i, f := range shutdowns {
 				wg.Go(func() { errs[i] = f(ctx) })
 			}
 			wg.Wait()
