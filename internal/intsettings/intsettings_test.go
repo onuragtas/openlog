@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 		{"mysql unix", intsettings.Input{Integration: "mysql", Endpoint: "unix:/var/run/mysqld/mysqld.sock"}, ""},
 		{"postgresql dbs", intsettings.Input{Integration: "postgresql", Endpoint: "[::1]:5432", Database: "app", Databases: []string{"a", "b"}}, ""},
 		{"instance 512", intsettings.Input{Integration: "docker", Match: &intsettings.Match{Instance: strings.Repeat("a", 512)}}, ""},
-		{"unknown integration", intsettings.Input{Integration: "apache"}, "integration must be one of"},
+		{"unknown integration", intsettings.Input{Integration: "cassandra"}, "integration must be one of"},
 		{"nginx not url", intsettings.Input{Integration: "nginx", Endpoint: "127.0.0.1:80"}, "http(s) URL"},
 		{"nginx ftp", intsettings.Input{Integration: "nginx", Endpoint: "ftp://h/x"}, "http(s) URL"},
 		{"nginx password", intsettings.Input{Integration: "nginx", Password: ptr("p")}, "password is not used by the nginx"},

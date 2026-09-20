@@ -31,6 +31,12 @@ const (
 	Docker     = "docker"
 	MSSQL      = "mssql"
 	IIS        = "iis"
+
+	Apache        = "apache"
+	Memcached     = "memcached"
+	HAProxy       = "haproxy"
+	RabbitMQ      = "rabbitmq"
+	Elasticsearch = "elasticsearch"
 )
 
 // RevisionDisabled is reported by agents configured with integrations.remote_config: false.
@@ -80,7 +86,26 @@ var allowedFields = map[string]field{
 	Docker:     0,
 	MSSQL:      fEndpoint | fUsername | fPassword,
 	IIS:        0,
+
+	Apache:        fEndpoint,
+	Memcached:     fEndpoint,
+	HAProxy:       fEndpoint,
+	RabbitMQ:      fEndpoint | fUsername | fPassword,
+	Elasticsearch: fEndpoint | fUsername | fPassword,
 }
+
+// urlEndpoints are the integrations whose endpoint is an http(s) URL — a status page or a management API —
+// rather than host:port; the value is the example shown in the error message.
+var urlEndpoints = map[string]string{
+	Nginx:         "http://127.0.0.1/nginx_status",
+	Apache:        "http://127.0.0.1/server-status?auto",
+	HAProxy:       "http://127.0.0.1:8404/;csv",
+	RabbitMQ:      "http://127.0.0.1:15672",
+	Elasticsearch: "http://127.0.0.1:9200",
+}
+
+// socketEndpoints are the url integrations that also read a unix socket (HAProxy's runtime API).
+var socketEndpoints = map[string]bool{HAProxy: true}
 
 // Integrations returns the supported integration names, sorted.
 func Integrations() []string {
@@ -235,10 +260,11 @@ func normalize(in Input) (Setting, error) {
 }
 
 func checkEndpoint(integration, ep string) error {
-	if integration == Nginx {
+	example, isURL := urlEndpoints[integration]
+	if isURL && !(socketEndpoints[integration] && strings.HasPrefix(ep, "unix:")) {
 		u, err := url.Parse(ep)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Hostname() == "" {
-			return invalidf("endpoint must be an http(s) URL with a host (e.g. http://127.0.0.1/nginx_status)")
+			return invalidf("endpoint must be an http(s) URL with a host (e.g. %s)", example)
 		}
 		return nil
 	}

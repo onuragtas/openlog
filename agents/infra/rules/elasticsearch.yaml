@@ -13,4 +13,5 @@ endpoints:
   - from: listening_port
 integration:
   id: elasticsearch
-  requires: ["credentials"]
+  auto_enable: true         # read the REST API on 9200; a secured cluster answers 401 → needs_configuration
+  requires: []              # a cluster with security disabled needs none, so the cluster decides

@@ -8227,7 +8227,7 @@ export interface components {
             created_at: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        IntegrationName: "nginx" | "redis" | "mysql" | "postgresql" | "docker" | "mssql" | "iis";
+        IntegrationName: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "docker" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
         IntegrationMatch: {
             port: number | null;
             container: string;

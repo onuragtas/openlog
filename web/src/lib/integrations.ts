@@ -4,7 +4,7 @@
 import type { DiscoveredService, MetricSeries } from "@/api/types";
 import type { RuleEditorSearch } from "@/lib/alerts";
 
-export const INTEGRATION_IDS = ["nginx", "redis", "mysql", "postgresql", "mssql", "iis"] as const;
+export const INTEGRATION_IDS = ["nginx", "apache", "redis", "memcached", "mysql", "postgresql", "mssql", "iis", "haproxy", "rabbitmq", "elasticsearch"] as const;
 export type IntegrationId = (typeof INTEGRATION_IDS)[number];
 
 export const INTEGRATION_STATUSES = ["enabled", "needs_configuration", "error", "not_available"] as const;
@@ -72,10 +72,16 @@ export function integrationOf(s: DiscoveredService | undefined): IntegrationStat
   return { id: raw.id || undefined, status, error: raw.error || undefined, hint: raw.hint || undefined, endpoint: raw.endpoint || undefined };
 }
 
-/** Integration of a discovery rule when the service is not in the snapshot (rule `mariadb` uses integration `mysql`). */
+/** Discovery rules whose integration has another id (`mariadb` is collected by `mysql`). */
+const RULE_INTEGRATION: Record<string, IntegrationId> = {
+  mariadb: "mysql",
+  "apache-httpd": "apache",
+  opensearch: "elasticsearch",
+};
+
+/** Integration of a discovery rule when the service is not in the snapshot. */
 export function integrationForRule(ruleId: string): IntegrationId | undefined {
-  if (ruleId === "mariadb") return "mysql";
-  return isIntegrationId(ruleId) ? ruleId : undefined;
+  return RULE_INTEGRATION[ruleId] ?? (isIntegrationId(ruleId) ? ruleId : undefined);
 }
 
 /** Whether a service has a panel: a supported integration id (or docker, whose panel shows engine reachability) that is not unavailable. */

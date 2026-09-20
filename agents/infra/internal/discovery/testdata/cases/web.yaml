@@ -23,6 +23,6 @@ packages:
 expect:
   - { rule_id: nginx, instance: /usr/sbin/nginx, version: 1.24.0, pids: [900, 901], ports: [80], units: [nginx.service], matched_by: [process, systemd_unit, package], status: enabled }
   - { rule_id: apache-httpd, instance: /usr/sbin/apache2, version: 2.4.58, ports: [8080], status: enabled }
-  - { rule_id: haproxy, instance: /usr/sbin/haproxy, version: 2.8.5, status: needs_configuration }
+  - { rule_id: haproxy, instance: /usr/sbin/haproxy, version: 2.8.5, status: enabled }
   - { rule_id: caddy, instance: /usr/bin/caddy, version: 2.6.2, ports: [2019] }
 forbid: [redis, mysql, postgresql]

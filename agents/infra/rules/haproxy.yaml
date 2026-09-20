@@ -12,4 +12,5 @@ endpoints:
   - from: listening_port
 integration:
   id: haproxy
-  requires: ["stats_endpoint"]
+  auto_enable: true         # probe the usual stats pages (/;csv, /stats;csv, …) and the runtime socket
+  requires: []              # the statistics need no credentials; no stats page → needs_configuration

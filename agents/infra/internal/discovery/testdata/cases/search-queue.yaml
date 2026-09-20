@@ -17,7 +17,7 @@ packages:
   - { name: elasticsearch, version: 8.12.2 }
   - { name: rabbitmq-server, version: 3.12.1-1ubuntu1 }
 expect:
-  - { rule_id: elasticsearch, instance: /usr/share/elasticsearch/jdk/bin/java, version: 8.12.2, ports: [9200], status: needs_configuration }
+  - { rule_id: elasticsearch, instance: /usr/share/elasticsearch/jdk/bin/java, version: 8.12.2, ports: [9200], status: enabled }
   - { rule_id: opensearch, instance: /usr/share/opensearch/jdk/bin/java, version: 2.12.0 }
   - { rule_id: kafka, instance: /usr/lib/jvm/java-17-openjdk-amd64/bin/java, version: 3.7.0, ports: [9092], matched_by: [process, systemd_unit] }
   - { rule_id: jvm, instance: /usr/lib/jvm/java-17-openjdk-amd64/bin/java, version: "17" }

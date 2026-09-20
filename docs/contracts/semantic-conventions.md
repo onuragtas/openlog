@@ -497,10 +497,10 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 | `integrations.enabled` | `true` | master switch (requires `discovery.enabled`) |
 | `integrations.interval` / `timeout` | `30s` / `10s` | default collection interval (≥ 5 s) and per-collection timeout (≤ interval) |
 | `integrations.max_concurrent` / `max_instances` | `4` / `32` | concurrency limit; instance limit (later instances: `not_available`) |
-| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `redis`, `mysql`, `postgresql`, `docker`, `mssql`, `iis`) |
+| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `apache`, `redis`, `memcached`, `mysql`, `postgresql`, `docker`, `mssql`, `iis`, `haproxy`, `rabbitmq`, `elasticsearch`) |
 | `integrations.<id>.interval` | — | overrides the default interval |
-| `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql) or the `http(s)://…` status URL (nginx: stub_status page, NGINX Plus API `/api/` or `/api/<n>`, or VTS JSON page; the format is detected, §6.3) |
-| `integrations.<id>.username` / `password` | — | redis, mysql, postgresql, mssql (SQL Server authentication; Windows authentication is not supported). `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
+| `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql, memcached; haproxy: its runtime socket) or an `http(s)://…` URL (nginx: stub_status page, NGINX Plus API `/api/` or `/api/<n>`, or VTS JSON page, the format is detected, §6.3; apache: mod_status page §6.10; haproxy: stats page §6.12; rabbitmq: management API §6.13; elasticsearch: REST API §6.14) |
+| `integrations.<id>.username` / `password` | — | redis, mysql, postgresql, mssql (SQL Server authentication; Windows authentication is not supported), rabbitmq, elasticsearch (HTTP basic auth). `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
 | `integrations.<id>.tls` | — | `{enabled, insecure_skip_verify, ca_file, server_name}`; PostgreSQL without `tls` uses `sslmode=prefer` over TCP |
 | `integrations.postgresql.database` | `postgres` | initial database |
 | `integrations.postgresql.databases` / `exclude_databases` | `[]` | database allow/deny lists (default: every non-template database with `datallowconn`, max 32) |
@@ -846,6 +846,155 @@ or the URL host; container: `prometheus.io/job`, the Compose service or the cont
 `prometheus`, `openlog.scrape.source` = `static`/`container`/`pod`. Every scrape, successful or not, adds the Prometheus health gauges `up`
 (1/0), `scrape_duration_seconds` and `scrape_samples_scraped`, so an unreachable exporter is visible and alertable (`up == 0`). Agent
 self-telemetry counts scrapes as `openlog.agent.integration.*{integration="prometheus"}`.
+
+### 6.10 Apache HTTP Server (`apache`, D-139)
+
+Source: the `mod_status` page in its machine-readable form (`?auto`). Integration id `apache` (rule `apache-httpd`), `auto_enable: true`: with no
+configured `endpoint` the paths `/server-status?auto`, `/status?auto`, `/apache-status?auto`, `/httpd-status?auto` are probed on every candidate
+endpoint over `http`, then `https` (certificates are not verified only for loopback endpoints). The first page carrying `Total Accesses` and `Uptime`
+is the instance's page and is remembered across collector restarts. A port that answers HTTP without such a page, or a page `mod_status` does not
+serve, is `needs_configuration` with the hint; a port that does not answer is the next candidate. No credentials: a page behind authentication is
+configured with `integrations.apache.endpoint`. `ExtendedStatus On` (the default when `mod_status` is loaded on most distributions) is what adds
+request counts, traffic, CPU and the scoreboard; without it only workers and connections are reported.
+
+Resource: one per instance (§6.1) plus `apache.server.version` (e.g. `Apache/2.4.58 (Unix)`). Counters are cumulative from the server's start, which
+`Uptime` gives as the start time.
+
+| Metric | Type | Unit | Attributes | mod_status field |
+|---|---|---|---|---|
+| `apache.uptime` | Sum, monotonic, int | `s` | — | `Uptime` |
+| `apache.requests` | Sum, monotonic, int | `{requests}` | — | `Total Accesses` |
+| `apache.traffic` | Sum, monotonic, int | `By` | — | `Total kBytes` × 1024 |
+| `apache.request.time` | Sum, monotonic, int | `ms` | — | `Total Duration` (2.4.37+) |
+| `apache.workers` | Sum, non-monotonic, int | `{workers}` | `state` = `busy`, `idle` | `BusyWorkers`, `IdleWorkers` |
+| `apache.current_connections` | Sum, non-monotonic, int | `{connections}` | — | `ConnsTotal` (event/worker MPM) |
+| `apache.connections.async` | Sum, non-monotonic, int | `{connections}` | `state` = `writing`, `keep-alive`, `closing` | `ConnsAsync*` |
+| `apache.scoreboard` | Sum, non-monotonic, int | `{workers}` | `state` = `waiting`, `starting`, `reading`, `sending`, `keepalive`, `dnslookup`, `closing`, `logging`, `finishing`, `idle_cleanup`, `open`, `unknown` | `Scoreboard`, one character per worker slot |
+| `apache.cpu.load` | Gauge, double | `%` | — | `CPULoad` |
+| `apache.cpu.time` | Sum, monotonic, double | `s` | `level` = `self`, `children`; `mode` = `user`, `system` | `CPUUser`, `CPUSystem`, `CPUChildren*` |
+| `apache.load.1` / `.5` / `.15` | Gauge, double | `%` | — | `Load1`, `Load5`, `Load15` (2.4.31+) |
+
+### 6.11 Memcached (`memcached`, D-139)
+
+Source: the `stats` command of the text protocol on the discovered port (11211), `auto_enable: true`, no credentials. A server with SASL
+authentication answers `CLIENT_ERROR` and is reported `needs_configuration`: the agent does not authenticate to Memcached. Counters are cumulative
+from the server's start (`uptime` gives the start time).
+
+| Metric | Type | Unit | Attributes | `stats` field |
+|---|---|---|---|---|
+| `memcached.uptime` | Sum, monotonic, int | `s` | — | `uptime` |
+| `memcached.bytes` | Sum, non-monotonic, int | `By` | — | `bytes` |
+| `memcached.connections.current` | Sum, non-monotonic, int | `{connections}` | — | `curr_connections` |
+| `memcached.connections.total` | Sum, monotonic, int | `{connections}` | — | `total_connections` |
+| `memcached.current_items` | Sum, non-monotonic, int | `{items}` | — | `curr_items` |
+| `memcached.evictions` | Sum, monotonic, int | `{evictions}` | — | `evictions` |
+| `memcached.threads` | Sum, non-monotonic, int | `{threads}` | — | `threads` |
+| `memcached.network` | Sum, monotonic, int | `By` | `direction` = `sent`, `received` | `bytes_written`, `bytes_read` |
+| `memcached.commands` | Sum, monotonic, int | `{commands}` | `command` = `get`, `set`, `flush`, `touch` | `cmd_*` |
+| `memcached.operations` | Sum, monotonic, int | `{operations}` | `operation` = `get`, `increment`, `decrement`, `delete`; `type` = `hit`, `miss` | `*_hits`, `*_misses` |
+| `memcached.operation_hit_ratio` | Gauge, double | `%` | `operation` | derived: hits / (hits + misses) |
+| `memcached.cpu.usage` | Sum, monotonic, double | `s` | `state` = `user`, `system` | `rusage_user`, `rusage_system` |
+
+### 6.12 HAProxy (`haproxy`, D-139)
+
+Source: the CSV statistics, read either from the stats page over HTTP (`;csv`) or from the runtime API socket (`show stat`). `auto_enable: true`:
+the paths `/;csv`, `/stats;csv`, `/haproxy?stats;csv`, `/haproxy_stats;csv` are probed on the candidate endpoints (default port 8404) and the
+well-known runtime sockets (`/run/haproxy/admin.sock`, `/var/run/haproxy/admin.sock`, `/run/haproxy.sock`, `/var/lib/haproxy/stats`) are tried as
+endpoints; the source that answered is remembered. The socket needs at least level `operator` and a group the agent's user is in. A configured
+`endpoint` is either the `http(s)://…` stats URL or `unix:/path`. No credentials.
+
+Resources: one per CSV row — a frontend, a backend or one of its servers — with `haproxy.proxy.name` (`pxname`), `haproxy.service.name` (`svname`)
+and `haproxy.proxy.type` = `frontend`, `backend`, `server`, `listener`. At most 500 rows are stored per collection (`MaxProxies`); beyond that the
+collection is partial, so the cardinality of a busy load balancer is a property of its configuration, not a surprise on the backend.
+
+| Metric | Type | Unit | Attributes | CSV column |
+|---|---|---|---|---|
+| `haproxy.status` | Gauge, int (1) | `{status}` | `state` = `up`, `down`, `open`, `maint`, `drain`, `nolb`, … | `status` (first word; `UP 2/3` → `up`) |
+| `haproxy.sessions.count` | Sum, monotonic, int | `{sessions}` | — | `stot` |
+| `haproxy.sessions.current` / `.limit` | Sum, non-monotonic, int | `{sessions}` | — | `scur`, `slim` |
+| `haproxy.sessions.rate` | Gauge, int | `{sessions}/s` | — | `rate` |
+| `haproxy.connections.total` | Sum, monotonic, int | `{connections}` | — | `conn_tot` |
+| `haproxy.connections.rate` | Gauge, int | `{connections}/s` | — | `conn_rate` |
+| `haproxy.connections.denied` / `.errors` | Sum, monotonic, int | `{connections}` | — | `dcon`, `econ` |
+| `haproxy.requests.total` | Sum, monotonic, int | `{requests}` | — | `req_tot` |
+| `haproxy.requests.rate` | Gauge, int | `{requests}/s` | — | `req_rate` |
+| `haproxy.requests.denied` / `.errors` | Sum, monotonic, int | `{requests}` | — | `dreq`, `ereq` |
+| `haproxy.responses.count` | Sum, monotonic, int | `{responses}` | `status_code` = `1xx`…`5xx`, `other` | `hrsp_*` |
+| `haproxy.responses.errors` | Sum, monotonic, int | `{responses}` | — | `eresp` |
+| `haproxy.bytes` | Sum, monotonic, int | `By` | `direction` = `received`, `sent` | `bin`, `bout` |
+| `haproxy.server.retries` / `.redispatches` | Sum, monotonic, int | `{retries}` / `{redispatches}` | — | `wretr`, `wredis` |
+| `haproxy.health_check.failures` | Sum, monotonic, int | `{checks}` | — | `chkfail` |
+| `haproxy.queue.current` | Gauge, int | `{requests}` | — | `qcur` |
+| `haproxy.queue.time`, `.connect.time`, `.response.time`, `.session.time` | Gauge, int | `ms` | — | `qtime`, `ctime`, `rtime`, `ttime` (last 1024 requests) |
+| `haproxy.servers` | Gauge, int | `{servers}` | `state` = `active`, `backup` | `act`, `bck` |
+
+An empty column emits nothing: a frontend has no queue or backend timings, and absence must not read as zero.
+
+### 6.13 RabbitMQ (`rabbitmq`, D-139)
+
+Source: the management plugin's HTTP API (`/api/overview`, `/api/nodes`, `/api/queues`) on port 15672 — discovery finds the AMQP port (5672), so the
+integration moves to the management port unless an `endpoint` says otherwise. `auto_enable: true` with `requires: []`: the broker itself answers
+whether credentials are needed (HTTP 401 → `needs_configuration` with the hint), so an anonymous or differently secured broker is not assumed to need
+a login. The recommended user is `monitoring`-tagged with read-only permissions. The queue listing asks for the columns it uses and at most 500
+queues (`MaxQueues`); more is a partial collection, as is a broker whose node or queue listing fails while the overview succeeded.
+
+Resources: the instance resource (§6.1) with `rabbitmq.version` and `rabbitmq.cluster.name`; one per node (`rabbitmq.node.name`); one per queue
+(`rabbitmq.queue.name`, `rabbitmq.vhost.name`, `rabbitmq.node.name`). Message and consumer metrics are the queue's, as in the OTel
+`rabbitmqreceiver`: the broker's own totals are **not** emitted under the same names, because summing an instance would then count every message
+twice — once in its queue and once in the total.
+
+| Metric | Type | Unit | Attributes | Resource / API field |
+|---|---|---|---|---|
+| `rabbitmq.connection.count`, `.channel.count`, `.exchange.count`, `.queue.count` | Sum, non-monotonic, int | `{connections}`, `{channels}`, `{exchanges}`, `{queues}` | — | instance, `/api/overview` `object_totals` |
+| `rabbitmq.message.current` | Sum, non-monotonic, int | `{messages}` | `state` = `ready`, `unacknowledged` | queue |
+| `rabbitmq.message.published`, `.delivered`, `.acknowledged`, `.redelivered`, `.dropped` | Sum, monotonic, int | `{messages}` | — | queue, `message_stats` (`delivered` = `deliver` + `deliver_get`, `dropped` = unroutable) |
+| `rabbitmq.consumer.count` | Sum, non-monotonic, int | `{consumers}` | — | queue |
+| `rabbitmq.queue.state` | Gauge, int (1) | `{status}` | `state` = `running`, `idle`, `flow`, … | queue |
+| `rabbitmq.node.up` | Gauge, int | `{status}` | `type` = `disc`, `ram` | node, `running` |
+| `rabbitmq.node.memory.used` / `.limit` | Sum, non-monotonic, int | `By` | — | node |
+| `rabbitmq.node.disk.free` / `.free_limit` | Sum, non-monotonic, int | `By` | — | node |
+| `rabbitmq.node.file_descriptors.used` / `.limit`, `.sockets.used` / `.limit`, `.processes.used` / `.limit` | Sum, non-monotonic, int | `{file_descriptors}`, `{sockets}`, `{processes}` | — | node |
+| `rabbitmq.node.run_queue` | Gauge, int | `{processes}` | — | node |
+| `rabbitmq.node.uptime` | Sum, monotonic, int | `s` | — | node (ms / 1000) |
+| `rabbitmq.node.alarm` | Gauge, int (0/1) | `{status}` | `kind` = `memory`, `disk` | node; an alarm is why the broker stops accepting publishes |
+| `rabbitmq.node.partitions` | Gauge, int | `{partitions}` | — | node, network partitions seen |
+
+### 6.14 Elasticsearch and OpenSearch (`elasticsearch`, D-139)
+
+Source: the REST API on port 9200 — `/` (version and distribution), `/_cluster/health` and `/_nodes/_local/stats`. Only the local node's statistics
+are read: an agent runs on every node, and asking each node about all the others would multiply the same series by the size of the cluster. The
+transport port (9300) is never offered as an endpoint. `auto_enable: true` with `requires: []`: a cluster with security disabled needs no
+credentials, and a secured one answers HTTP 401, which becomes `needs_configuration` with the hint (`monitoring_user` is the built-in read-only
+role). The OpenSearch discovery rule uses this integration; `elasticsearch.distribution` tells the two apart. Reachable cluster, unreadable node
+statistics: partial, with the cluster health kept.
+
+Resources: the instance resource (§6.1) with `elasticsearch.cluster.name`, `elasticsearch.version` and `elasticsearch.distribution`
+(`elasticsearch`, `opensearch`); one per node (`elasticsearch.node.name`).
+
+| Metric | Type | Unit | Attributes | API field |
+|---|---|---|---|---|
+| `elasticsearch.cluster.health` | Gauge, int | `{status}` | `status` = `green`, `yellow`, `red` | `status`, as 0, 1, 2 so a chart and an alert can use it |
+| `elasticsearch.cluster.nodes` / `.data_nodes` | Sum, non-monotonic, int | `{nodes}` | — | `number_of_nodes`, `number_of_data_nodes` |
+| `elasticsearch.cluster.shards` | Sum, non-monotonic, int | `{shards}` | `state` = `active`, `active_primary`, `relocating`, `initializing`, `unassigned`, `delayed_unassigned` | health shard counts |
+| `elasticsearch.cluster.pending_tasks` | Sum, non-monotonic, int | `{tasks}` | — | `number_of_pending_tasks` |
+| `elasticsearch.cluster.in_flight_fetch` | Gauge, int | `ms` | — | `task_max_waiting_in_queue_millis` |
+| `elasticsearch.node.documents` | Sum, non-monotonic, int | `{documents}` | `state` = `active`, `deleted` | `indices.docs` |
+| `elasticsearch.node.disk.usage` | Sum, non-monotonic, int | `By` | — | `indices.store.size_in_bytes` |
+| `elasticsearch.node.operations.completed` / `.time` | Sum, monotonic, int | `{operations}` / `ms` | `operation` = `index`, `query`, `fetch`, `merge` | `indices.indexing`, `.search`, `.merges` |
+| `elasticsearch.node.operations.failed` | Sum, monotonic, int | `{operations}` | `operation` = `index` | `indices.indexing.index_failed` |
+| `elasticsearch.node.translog.operations` / `.size` | Sum, non-monotonic, int | `{operations}` / `By` | — | `indices.translog` |
+| `elasticsearch.node.cache.memory.usage`, `.evictions` | Sum (non-monotonic / monotonic), int | `By` / `{evictions}` | `cache_name` = `query`, `fielddata` | `indices.query_cache`, `.fielddata` |
+| `elasticsearch.node.cache.count` | Sum, monotonic, int | `{hits}` | `type` = `hit`, `miss` | `indices.query_cache` |
+| `elasticsearch.node.thread_pool.threads`, `.threads.active`, `.tasks.queued`, `.tasks.rejected`, `.tasks.finished` | Sum (monotonic for rejected and finished), int | `{threads}` / `{tasks}` | `thread_pool_name` | `thread_pool.*`, at most 32 pools |
+| `elasticsearch.node.open_files` | Sum, non-monotonic, int | `{files}` | — | `process.open_file_descriptors` |
+| `elasticsearch.node.cpu.usage` | Gauge, int | `%` | — | `process.cpu.percent` |
+| `elasticsearch.node.fs.disk.free` / `.total` | Sum, non-monotonic, int | `By` | — | `fs.total` |
+| `elasticsearch.breaker.tripped` | Sum, monotonic, int | `{breaks}` | `circuit_breaker_name` | `breakers.*.tripped` |
+| `elasticsearch.breaker.memory.estimated` / `.limit` | Sum, non-monotonic, int | `By` | `circuit_breaker_name` | `breakers.*` |
+| `jvm.memory.heap.used` / `.max`, `.nonheap.used` | Sum, non-monotonic, int | `By` | — | `jvm.mem` |
+| `jvm.memory.heap.utilization` | Gauge, int | `%` | — | `jvm.mem.heap_used_percent` |
+| `jvm.threads.count` | Sum, non-monotonic, int | `{threads}` | — | `jvm.threads.count` |
+| `jvm.gc.collections.count` / `.elapsed` | Sum, monotonic, int | `{collections}` / `ms` | `name` = `young`, `old` | `jvm.gc.collectors` |
 
 ## 7. Kubernetes (infra agent, M4, D-070, D-071)
 

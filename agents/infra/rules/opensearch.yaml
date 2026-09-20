@@ -12,5 +12,6 @@ version:
 endpoints:
   - from: listening_port
 integration:
-  id: opensearch
-  requires: ["credentials"]
+  id: elasticsearch         # the same REST API (as mariadb uses the mysql integration)
+  auto_enable: true
+  requires: []

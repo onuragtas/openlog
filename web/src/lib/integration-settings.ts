@@ -8,13 +8,24 @@ export type ConfigField = "endpoint" | "username" | "password" | "database";
 /** Fields per integration (semantic-conventions §6.2; docker and iis have none besides enabled). */
 export const CONFIG_FIELDS: Record<IntegrationName, readonly ConfigField[]> = {
   nginx: ["endpoint"],
+  apache: ["endpoint"],
   redis: ["endpoint", "username", "password"],
+  memcached: ["endpoint"],
   mysql: ["endpoint", "username", "password"],
   postgresql: ["endpoint", "username", "password", "database"],
   docker: [],
   mssql: ["endpoint", "username", "password"],
   iis: [],
+  haproxy: ["endpoint"],
+  rabbitmq: ["endpoint", "username", "password"],
+  elasticsearch: ["endpoint", "username", "password"],
 };
+
+/** Integrations whose endpoint is an http(s) URL (a status page or a management API) rather than host:port. */
+const URL_ENDPOINTS: ReadonlySet<string> = new Set<IntegrationName>(["nginx", "apache", "haproxy", "rabbitmq", "elasticsearch"]);
+
+/** The url integrations that also read a unix socket (HAProxy's runtime API). */
+const SOCKET_ENDPOINTS: ReadonlySet<string> = new Set<IntegrationName>(["haproxy"]);
 
 export function isConfigurable(id: string | undefined): id is IntegrationName {
   return !!id && Object.hasOwn(CONFIG_FIELDS, id);
@@ -22,21 +33,30 @@ export function isConfigurable(id: string | undefined): id is IntegrationName {
 
 export const ENDPOINT_PLACEHOLDER: Record<IntegrationName, string> = {
   nginx: "http://127.0.0.1:8080/nginx_status",
+  apache: "http://127.0.0.1/server-status?auto",
   redis: "127.0.0.1:6379",
+  memcached: "127.0.0.1:11211",
   mysql: "127.0.0.1:3306",
   postgresql: "127.0.0.1:5432",
   docker: "",
   mssql: "127.0.0.1:1433",
   iis: "",
+  haproxy: "http://127.0.0.1:8404/;csv",
+  rabbitmq: "http://127.0.0.1:15672",
+  elasticsearch: "http://127.0.0.1:9200",
 };
 
 export type EndpointError = "url" | "hostPort";
 
-/** nginx: http(s) URL with a host; others: host:port, [v6]:port or unix:/absolute/path. Empty is valid (derived by the agent). */
+/**
+ * Status-page and management-API integrations take an http(s) URL with a host; the rest take host:port,
+ * [v6]:port or unix:/absolute/path (HAProxy takes either, its runtime socket being a unix socket). Empty is
+ * valid: the agent derives the endpoint from discovery.
+ */
 export function endpointError(integration: IntegrationName, value: string): EndpointError | null {
   const v = value.trim();
   if (!v) return null;
-  if (integration === "nginx") {
+  if (URL_ENDPOINTS.has(integration) && !(SOCKET_ENDPOINTS.has(integration) && v.startsWith("unix:"))) {
     try {
       const u = new URL(v);
       return (u.protocol === "http:" || u.protocol === "https:") && u.hostname ? null : "url";

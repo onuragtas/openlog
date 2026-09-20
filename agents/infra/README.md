@@ -114,6 +114,11 @@ receivers, so OTel Collector data fits the same panels):
 | `docker` | docker | Docker Engine API reachability (no own metrics: `container.*` come from cgroups, OTel has no engine-level `docker.*` names) | socket access | — |
 | `mssql` | mssql | `sys.dm_os_performance_counters` (connections, batch requests, deadlocks, lock waits, buffer cache hit ratio, page life expectancy), `sys.master_files` sizes, top-N `sys.dm_os_wait_stats`; any OS, also remote servers via `endpoint` | required (SQL Server authentication) | `sqlserver.*` |
 | `iis` | iis | Windows performance counters through WMI (Web Service per site: connections, requests per method, bytes and files sent/received, not-found errors; application pool state) | none (Windows only) | `iis.*` |
+| `apache` | apache-httpd | `mod_status` in its machine-readable form, probed on discovered ports (`/server-status?auto`, `/status?auto`, `/apache-status?auto`, `/httpd-status?auto`) | none | `apache.*` |
+| `memcached` | memcached | `stats` over the text protocol (SASL servers: `needs_configuration`) | none | `memcached.*` |
+| `haproxy` | haproxy | CSV statistics: the stats page (`/;csv`, `/stats;csv`, …) or the runtime socket's `show stat`; one resource per frontend, backend and server (max 500) | none | `haproxy.*` |
+| `rabbitmq` | rabbitmq | management API (`/api/overview`, `/api/nodes`, `/api/queues`, max 500 queues) on 15672 | required when the broker asks for them (HTTP 401) | `rabbitmq.*` |
+| `elasticsearch` | elasticsearch, opensearch | REST API on 9200: `/_cluster/health` and the local node's `/_nodes/_local/stats` | required when security is on (HTTP 401) | `elasticsearch.*`, `jvm.*` |
 
 How it works: an integration instance starts when discovery finds a service whose rule has the integration id and stops when the service
 disappears. Each instance runs on its own goroutine (`integrations.interval`, default 30 s; `integrations.timeout` 10 s; at most
@@ -160,6 +165,17 @@ integrations:
     instances:
       - match: { port: 8080 }
         endpoint: http://127.0.0.1:8080/nginx_status
+  rabbitmq:
+    username: openlog                              # rabbitmqctl set_user_tags openlog monitoring
+    password: env:OPENLOG_RABBITMQ_PASSWORD
+  elasticsearch:
+    username: openlog                              # built-in role monitoring_user
+    password: env:OPENLOG_ELASTICSEARCH_PASSWORD
+    tls: { enabled: true, ca_file: /etc/elasticsearch/certs/http_ca.crt }
+  haproxy:
+    instances:
+      - match: { unit: haproxy.service }
+        endpoint: unix:/run/haproxy/admin.sock     # or http://127.0.0.1:8404/;csv
 ```
 
 Least-privilege monitoring users:

@@ -22,10 +22,21 @@ const (
 	IntegrationMSSQL = "mssql"
 	// IntegrationIIS is Microsoft IIS (Windows performance counters; not_available elsewhere).
 	IntegrationIIS = "iis"
+	// IntegrationApache is the Apache HTTP Server (mod_status).
+	IntegrationApache = "apache"
+	// IntegrationMemcached is Memcached (text protocol "stats").
+	IntegrationMemcached = "memcached"
+	// IntegrationHAProxy is HAProxy (CSV statistics of the stats page or the runtime socket).
+	IntegrationHAProxy = "haproxy"
+	// IntegrationRabbitMQ is RabbitMQ (management HTTP API).
+	IntegrationRabbitMQ = "rabbitmq"
+	// IntegrationElasticsearch is Elasticsearch and OpenSearch (REST API).
+	IntegrationElasticsearch = "elasticsearch"
 )
 
 // IntegrationIDs lists the implemented integrations in a stable order.
-var IntegrationIDs = []string{IntegrationDocker, IntegrationIIS, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx, IntegrationPostgreSQL, IntegrationRedis}
+var IntegrationIDs = []string{IntegrationApache, IntegrationDocker, IntegrationElasticsearch, IntegrationHAProxy, IntegrationIIS,
+	IntegrationMemcached, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx, IntegrationPostgreSQL, IntegrationRabbitMQ, IntegrationRedis}
 
 // IntegrationsConfig configures the metric integrations bound to discovered services.
 type IntegrationsConfig struct {
@@ -43,13 +54,18 @@ type IntegrationsConfig struct {
 	// delivered by agent sync over this file (remote wins per field, D-039).
 	RemoteConfig bool `yaml:"remote_config"`
 
-	Nginx      IntegrationConfig `yaml:"nginx"`
-	Redis      IntegrationConfig `yaml:"redis"`
-	MySQL      IntegrationConfig `yaml:"mysql"`
-	PostgreSQL IntegrationConfig `yaml:"postgresql"`
-	Docker     IntegrationConfig `yaml:"docker"`
-	MSSQL      IntegrationConfig `yaml:"mssql"`
-	IIS        IntegrationConfig `yaml:"iis"`
+	Apache        IntegrationConfig `yaml:"apache"`
+	Elasticsearch IntegrationConfig `yaml:"elasticsearch"`
+	HAProxy       IntegrationConfig `yaml:"haproxy"`
+	RabbitMQ      IntegrationConfig `yaml:"rabbitmq"`
+	Memcached     IntegrationConfig `yaml:"memcached"`
+	Nginx         IntegrationConfig `yaml:"nginx"`
+	Redis         IntegrationConfig `yaml:"redis"`
+	MySQL         IntegrationConfig `yaml:"mysql"`
+	PostgreSQL    IntegrationConfig `yaml:"postgresql"`
+	Docker        IntegrationConfig `yaml:"docker"`
+	MSSQL         IntegrationConfig `yaml:"mssql"`
+	IIS           IntegrationConfig `yaml:"iis"`
 }
 
 // IntegrationConfig configures one integration. Settings apply to every
@@ -161,6 +177,16 @@ func (m InstanceMatch) IsZero() bool { return m == InstanceMatch{} }
 // Integration returns the configuration of an integration id, or nil.
 func (c *IntegrationsConfig) Integration(id string) *IntegrationConfig {
 	switch id {
+	case IntegrationApache:
+		return &c.Apache
+	case IntegrationElasticsearch:
+		return &c.Elasticsearch
+	case IntegrationHAProxy:
+		return &c.HAProxy
+	case IntegrationRabbitMQ:
+		return &c.RabbitMQ
+	case IntegrationMemcached:
+		return &c.Memcached
 	case IntegrationNginx:
 		return &c.Nginx
 	case IntegrationRedis:
@@ -224,17 +250,25 @@ func defaultIntegrations() IntegrationsConfig {
 	return IntegrationsConfig{
 		Enabled: true, Interval: Duration(30 * time.Second), Timeout: Duration(10 * time.Second),
 		MaxConcurrent: 4, MaxInstances: 32, RemoteConfig: true,
-		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on,
+		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on,
 	}
 }
 
 // integrationKeys lists which settings each integration accepts.
 var integrationKeys = map[string]map[string]bool{
-	IntegrationNginx:      {"endpoint": true, "tls": true},
-	IntegrationRedis:      {"endpoint": true, "username": true, "password": true, "tls": true},
-	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
-	IntegrationPostgreSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
-	IntegrationDocker:     {},
+	IntegrationNginx: {"endpoint": true, "tls": true},
+	// apache: the endpoint is the mod_status URL, like nginx's stub_status; memcached needs nothing.
+	IntegrationApache:    {"endpoint": true, "tls": true},
+	IntegrationMemcached: {"endpoint": true},
+	// The management APIs: an endpoint (host:port or a full URL) and, except HAProxy's open stats page,
+	// credentials.
+	IntegrationHAProxy:       {"endpoint": true, "username": true, "password": true, "tls": true},
+	IntegrationRabbitMQ:      {"endpoint": true, "username": true, "password": true, "tls": true},
+	IntegrationElasticsearch: {"endpoint": true, "username": true, "password": true, "tls": true},
+	IntegrationRedis:         {"endpoint": true, "username": true, "password": true, "tls": true},
+	IntegrationMySQL:         {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
+	IntegrationPostgreSQL:    {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
+	IntegrationDocker:        {},
 	// mssql: top_n_tables bounds the wait types of sqlserver.os.wait.duration (default 10).
 	IntegrationMSSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
 	IntegrationIIS:   {},
@@ -288,15 +322,20 @@ func (s InstanceSettings) validate(id, prefix string) []error {
 		add("tls.ca_file must be an absolute path")
 	}
 	if e := s.Endpoint; e != "" {
+		what, isURL := urlEndpoints[id]
 		switch {
-		case id == IntegrationNginx:
-			u, err := url.Parse(e)
-			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-				add("endpoint must be the http(s) URL of the stub_status page (got %q)", e)
-			}
 		case strings.HasPrefix(e, "unix:"):
+			if isURL && !socketEndpoints[id] {
+				add("endpoint must be the http(s) URL of %s (got %q)", what, e)
+				break
+			}
 			if !isAbsPath(strings.TrimPrefix(e, "unix:")) {
 				add("endpoint unix:<path> needs an absolute path")
+			}
+		case isURL:
+			u, err := url.Parse(e)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				add("endpoint must be the http(s) URL of %s (got %q)", what, e)
 			}
 		default:
 			if _, _, err := net.SplitHostPort(e); err != nil {
@@ -306,6 +345,19 @@ func (s InstanceSettings) validate(id, prefix string) []error {
 	}
 	return errs
 }
+
+// urlEndpoints are the integrations whose endpoint is an http(s) URL — a status page or a management API —
+// rather than a host:port; the value names the page in the error message.
+var urlEndpoints = map[string]string{
+	IntegrationNginx:         "the stub_status page",
+	IntegrationApache:        "the mod_status page",
+	IntegrationHAProxy:       "the stats page",
+	IntegrationRabbitMQ:      "the management API",
+	IntegrationElasticsearch: "the REST API",
+}
+
+// socketEndpoints are the url integrations that also read a unix socket (HAProxy's runtime API).
+var socketEndpoints = map[string]bool{IntegrationHAProxy: true}
 
 func (c *IntegrationsConfig) validate() []error {
 	var errs []error

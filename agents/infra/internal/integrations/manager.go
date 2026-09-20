@@ -263,7 +263,8 @@ func (m *Manager) build(cfg *config.IntegrationsConfig, integ Integration, t Tar
 	inst.Endpoints = derived
 	if settings.Endpoint != "" && !spec.NoEndpoint {
 		inst.Explicit = true
-		if id == config.IntegrationNginx {
+		if id == config.IntegrationNginx || id == config.IntegrationApache {
+			// Their endpoint is the status page's URL, not an address to connect to.
 			inst.Endpoints = []Endpoint{{Network: "url", Address: settings.Endpoint, Display: settings.Endpoint}}
 		} else {
 			inst.Endpoints = []Endpoint{ExplicitEndpoint(settings.Endpoint, m.o.FS)}

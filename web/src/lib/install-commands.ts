@@ -24,11 +24,16 @@ export const TARGET_IDS = [
   "otel/sdk",
   "otel/collector",
   "integrations/nginx",
+  "integrations/apache",
   "integrations/redis",
+  "integrations/memcached",
   "integrations/mysql",
   "integrations/postgresql",
   "integrations/mssql",
   "integrations/iis",
+  "integrations/haproxy",
+  "integrations/rabbitmq",
+  "integrations/elasticsearch",
   "integrations/prometheus",
 ] as const;
 export type TargetId = (typeof TARGET_IDS)[number];
@@ -68,7 +73,7 @@ export interface InstallTarget {
   /** Options shown in the options step, in order. */
   options: OptionKey[];
   /** Integration id for integration targets (lib/integrations.ts ids). */
-  integration?: "nginx" | "redis" | "mysql" | "postgresql" | "mssql" | "iis";
+  integration?: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
   /** Documentation in the repository. */
   docs: string;
   /** Cards of which one must be set up first (e.g. the infra agent for PHP and host logs); several = any of them. */
@@ -101,12 +106,17 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "otel/sdk", group: "opentelemetry", verify: "apm", options: ["serviceName", "environment", "otelLanguage", "protocol"], docs: blob("README.md") },
   { id: "otel/collector", group: "opentelemetry", verify: "otel", options: ["protocol"], docs: blob("README.md") },
   { id: "integrations/nginx", group: "integrations", verify: "integration", integration: "nginx", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/apache", group: "integrations", verify: "integration", integration: "apache", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/redis", group: "integrations", verify: "integration", integration: "redis", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/memcached", group: "integrations", verify: "integration", integration: "memcached", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   // SQL Server over TDS from any OS (also a remote server); IIS through Windows performance counters only.
   { id: "integrations/mssql", group: "integrations", verify: "integration", integration: "mssql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/iis", group: "integrations", verify: "integration", integration: "iis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: ["windows"] },
+  { id: "integrations/haproxy", group: "integrations", verify: "integration", integration: "haproxy", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/rabbitmq", group: "integrations", verify: "integration", integration: "rabbitmq", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/elasticsearch", group: "integrations", verify: "integration", integration: "elasticsearch", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   {
     id: "integrations/prometheus",
     group: "integrations",
@@ -258,6 +268,11 @@ export type BlockLabel =
   | "collectorConfig"
   | "collectorRun"
   | "stubStatus"
+  | "modStatus"
+  | "statsSection"
+  | "managementPlugin"
+  | "brokerUser"
+  | "esUser"
   | "redisAcl"
   | "sqlUser"
   | "passwordFile"
@@ -327,6 +342,11 @@ export type NoteKey =
   | "mssqlRemote"
   | "iisNoCredentials"
   | "iisDiscovery"
+  | "apacheAuto"
+  | "memcachedAuto"
+  | "haproxySocket"
+  | "rabbitmqGuest"
+  | "esSecurity"
   | "prometheusDiscovery"
   | "prometheusLimits";
 
@@ -923,6 +943,18 @@ function integrationConfig(os: HostOs, name: string): string {
   return [`# ${AGENT_CONFIG_PATH[os]}`, "integrations:", `  ${name}:`, "    username: openlog", `    password: ${os === "windows" ? yamlPath(`file:${file}`) : `file:${file}`}`].join("\n");
 }
 
+const APACHE_RELOAD: Record<HostOs, string> = {
+  linux: "sudo apachectl configtest && sudo systemctl reload apache2 || sudo systemctl reload httpd",
+  darwin: "sudo apachectl configtest && sudo apachectl graceful",
+  windows: "httpd.exe -t; if ($LASTEXITCODE -eq 0) { Restart-Service -Name Apache2.4 }",
+};
+
+const HAPROXY_RELOAD: Record<HostOs, string> = {
+  linux: "sudo haproxy -c -f /etc/haproxy/haproxy.cfg && sudo systemctl reload haproxy",
+  darwin: "haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg && brew services restart haproxy",
+  windows: "haproxy.exe -c -f haproxy.cfg",
+};
+
 const NGINX_RELOAD: Record<HostOs, string> = {
   linux: "sudo nginx -t && sudo systemctl reload nginx",
   darwin: "nginx -t && nginx -s reload",
@@ -978,6 +1010,84 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
       );
       add(c, "restart", shell, NGINX_RELOAD[os]);
       note(c, "integrationAuto");
+      break;
+    case "apache":
+      add(
+        c,
+        "modStatus",
+        "nginx",
+        [
+          "# Apache: mod_status (the agent probes /server-status?auto on the discovered ports and never edits the configuration)",
+          "# Debian/Ubuntu: a2enmod status; RHEL: the module is built in",
+          "ExtendedStatus On",
+          "<Location /server-status>",
+          "    SetHandler server-status",
+          "    Require local",
+          "</Location>",
+        ].join("\n"),
+      );
+      add(c, "restart", shell, APACHE_RELOAD[os]);
+      note(c, "apacheAuto");
+      break;
+    case "memcached":
+      add(c, "agentConfig", "yaml", [`# ${AGENT_CONFIG_PATH[os]}`, "integrations:", "  memcached:", "    # endpoint: 127.0.0.1:11211   # only when the server is not on this host", "    enabled: true"].join("\n"));
+      note(c, "memcachedAuto");
+      break;
+    case "haproxy":
+      add(
+        c,
+        "statsSection",
+        "ini",
+        [
+          "# /etc/haproxy/haproxy.cfg — a stats page on localhost, or the runtime socket below",
+          "frontend stats",
+          "    bind 127.0.0.1:8404",
+          "    stats enable",
+          "    stats uri /",
+          "",
+          "# Or the runtime API, readable by the agent's user:",
+          "global",
+          "    stats socket /run/haproxy/admin.sock mode 660 group openlog-agent level operator",
+        ].join("\n"),
+      );
+      add(c, "restart", shell, HAPROXY_RELOAD[os]);
+      note(c, "haproxySocket");
+      break;
+    case "rabbitmq":
+      add(c, "managementPlugin", shell, "sudo rabbitmq-plugins enable rabbitmq_management");
+      add(
+        c,
+        "brokerUser",
+        shell,
+        [
+          "sudo rabbitmqctl add_user openlog '<password>'",
+          "sudo rabbitmqctl set_user_tags openlog monitoring",
+          'sudo rabbitmqctl set_permissions -p / openlog "" "" ".*"   # read only',
+        ].join("\n"),
+      );
+      add(c, "passwordFile", shell, passwordFile(os, "rabbitmq"));
+      add(c, "agentConfig", "yaml", integrationConfigWithEndpoint(os, "rabbitmq", "openlog", "endpoint: http://127.0.0.1:15672   # only when the management API is elsewhere"));
+      restartAgent(c, os);
+      note(c, "passwordPlaceholder");
+      note(c, "rabbitmqGuest");
+      break;
+    case "elasticsearch":
+      add(
+        c,
+        "esUser",
+        "sh",
+        [
+          "# Elasticsearch 8 with security on: a read-only monitoring user (OpenSearch: create it the same way)",
+          "curl -u elastic:<elastic-password> -X POST https://127.0.0.1:9200/_security/user/openlog \\",
+          "  -H 'Content-Type: application/json' \\",
+          '  -d \'{"password":"<password>","roles":["monitoring_user"]}\'',
+        ].join("\n"),
+      );
+      add(c, "passwordFile", shell, passwordFile(os, "elasticsearch"));
+      add(c, "agentConfig", "yaml", integrationConfigWithEndpoint(os, "elasticsearch", "openlog", "endpoint: https://127.0.0.1:9200   # with TLS: tls: { enabled: true, ca_file: /etc/elasticsearch/certs/http_ca.crt }"));
+      restartAgent(c, os);
+      note(c, "passwordPlaceholder");
+      note(c, "esSecurity");
       break;
     case "redis":
       add(c, "redisAcl", shell, "redis-cli ACL SETUSER openlog on '><password>' +info +ping");

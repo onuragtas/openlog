@@ -14,4 +14,5 @@ endpoints:
   - from: listening_port
 integration:
   id: rabbitmq
-  requires: ["credentials"]
+  auto_enable: true         # read the management API on 15672; HTTP 401 → needs_configuration with the hint
+  requires: []              # the broker answers whether credentials are needed; the agent does not guess

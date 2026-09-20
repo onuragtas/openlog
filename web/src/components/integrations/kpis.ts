@@ -23,7 +23,20 @@ export type KpiId =
   | "deadlocks"
   | "notFound"
   | "bytesSent"
-  | "poolsNotRunning";
+  | "poolsNotRunning"
+  | "busyWorkers"
+  | "evictions"
+  | "sessions"
+  | "serverErrors"
+  | "downServers"
+  | "messagesReady"
+  | "publishRate"
+  | "consumers"
+  | "documents"
+  | "searchRate"
+  | "indexRate"
+  | "heapUsage"
+  | "unassignedShards";
 
 export interface KpiSpec {
   id: KpiId;
@@ -101,6 +114,89 @@ export const KPIS: Record<IntegrationId, KpiSpec[]> = {
       compute: (d) => lastValue(percentToRatio(sumSeries(get(d, "h")))),
     },
     { id: "deadlocks", queries: { d: { name: "sqlserver.deadlock.count", agg: "rate" } }, unit: "number", compute: (d) => last(d, "d") },
+  ],
+  apache: [
+    { id: "requests", queries: { r: { name: "apache.requests", agg: "rate" } }, unit: "number", compute: (d) => last(d, "r") },
+    {
+      id: "busyWorkers",
+      queries: { w: { name: "apache.workers", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "w"), "state", ["busy"]))),
+    },
+    { id: "bytesSent", queries: { t: { name: "apache.traffic", agg: "rate" } }, unit: "bytesPerSec", compute: (d) => last(d, "t") },
+    { id: "activeConnections", queries: { c: { name: "apache.current_connections", agg: "last" } }, unit: "number", compute: (d) => last(d, "c") },
+  ],
+  memcached: [
+    { id: "ops", queries: { c: { name: "memcached.commands", agg: "rate", groupBy: ["command"] } }, unit: "number", compute: (d) => last(d, "c") },
+    {
+      id: "hitRatio",
+      queries: { h: { name: "memcached.operation_hit_ratio", agg: "avg", groupBy: ["operation"] } },
+      unit: "percent",
+      compute: (d) => lastValue(percentToRatio(sumSeries(pickSeries(get(d, "h"), "operation", ["get"])))),
+    },
+    { id: "connections", queries: { c: { name: "memcached.connections.current", agg: "last" } }, unit: "number", compute: (d) => last(d, "c") },
+    { id: "memory", queries: { b: { name: "memcached.bytes", agg: "last" } }, unit: "bytes", compute: (d) => last(d, "b") },
+    { id: "evictions", queries: { e: { name: "memcached.evictions", agg: "rate" } }, unit: "number", compute: (d) => last(d, "e") },
+  ],
+  haproxy: [
+    { id: "requests", queries: { r: { name: "haproxy.requests.total", agg: "rate" } }, unit: "number", compute: (d) => last(d, "r") },
+    { id: "sessions", queries: { s: { name: "haproxy.sessions.current", agg: "last" } }, unit: "number", compute: (d) => last(d, "s") },
+    {
+      id: "serverErrors",
+      queries: { r: { name: "haproxy.responses.count", agg: "rate", groupBy: ["status_code"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "r"), "status_code", ["5xx"]))),
+    },
+    {
+      // Every row reports 1 for its state, so the sum over "down" is how many backends and servers are down.
+      id: "downServers",
+      queries: { s: { name: "haproxy.status", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "s"), "state", ["down"]))),
+    },
+  ],
+  rabbitmq: [
+    {
+      id: "messagesReady",
+      queries: { m: { name: "rabbitmq.message.current", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "m"), "state", ["ready"]))),
+    },
+    { id: "publishRate", queries: { p: { name: "rabbitmq.message.published", agg: "rate" } }, unit: "number", compute: (d) => last(d, "p") },
+    { id: "consumers", queries: { c: { name: "rabbitmq.consumer.count", agg: "last" } }, unit: "number", compute: (d) => last(d, "c") },
+    { id: "connections", queries: { c: { name: "rabbitmq.connection.count", agg: "last" } }, unit: "number", compute: (d) => last(d, "c") },
+  ],
+  elasticsearch: [
+    {
+      id: "documents",
+      queries: { d: { name: "elasticsearch.node.documents", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "d"), "state", ["active"]))),
+    },
+    {
+      id: "searchRate",
+      queries: { o: { name: "elasticsearch.node.operations.completed", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "o"), "operation", ["query"]))),
+    },
+    {
+      id: "indexRate",
+      queries: { o: { name: "elasticsearch.node.operations.completed", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "o"), "operation", ["index"]))),
+    },
+    {
+      id: "heapUsage",
+      queries: { h: { name: "jvm.memory.heap.utilization", agg: "avg" } },
+      unit: "percent",
+      compute: (d) => lastValue(percentToRatio(sumSeries(get(d, "h")))),
+    },
+    {
+      id: "unassignedShards",
+      queries: { s: { name: "elasticsearch.cluster.shards", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "s"), "state", ["unassigned"]))),
+    },
   ],
   iis: [
     { id: "requests", queries: { r: { name: "iis.request.count", agg: "rate" } }, unit: "number", compute: (d) => last(d, "r") },

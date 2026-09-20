@@ -61,7 +61,39 @@ export type SeriesLabelKey =
   | "attempts"
   | "anonymous"
   | "notFound"
-  | "site";
+  | "site"
+  | "busy"
+  | "idle"
+  | "traffic"
+  | "get"
+  | "set"
+  | "items"
+  | "evictions"
+  | "expiredUnfetched"
+  | "sessions"
+  | "current"
+  | "ready"
+  | "unacknowledged"
+  | "published"
+  | "delivered"
+  | "acknowledged"
+  | "redelivered"
+  | "messages"
+  | "consumers"
+  | "queued"
+  | "rejected"
+  | "indexed"
+  | "searched"
+  | "fetched"
+  | "merged"
+  | "heapUsed"
+  | "heapMax"
+  | "active"
+  | "unassigned"
+  | "relocating"
+  | "initializing"
+  | "documents"
+  | "deletedDocuments";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -109,7 +141,33 @@ export type PanelChartId =
   | "iisNotFound"
   | "iisRequestsBySite"
   | "iisNotFoundBySite"
-  | "iisBytesBySite";
+  | "iisBytesBySite"
+  | "apacheRequests"
+  | "apacheWorkers"
+  | "apacheTraffic"
+  | "apacheScoreboard"
+  | "memcachedCommands"
+  | "memcachedHitRatio"
+  | "memcachedConnections"
+  | "memcachedItems"
+  | "memcachedNetwork"
+  | "haproxySessions"
+  | "haproxyRequests"
+  | "haproxyResponses"
+  | "haproxyErrors"
+  | "haproxyTimings"
+  | "haproxyStatus"
+  | "rabbitmqMessages"
+  | "rabbitmqRates"
+  | "rabbitmqConsumers"
+  | "rabbitmqObjects"
+  | "rabbitmqNodeMemory"
+  | "esClusterShards"
+  | "esOperations"
+  | "esOperationTime"
+  | "esDocuments"
+  | "esHeap"
+  | "esThreadPool";
 
 export interface PanelQuery {
   name: string;
@@ -478,6 +536,248 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
       stacked: true,
       optional: true,
       build: (d, L) => by(get(d, "w"), [MSSQL_WAIT_TYPE], L("waitTime")),
+    },
+  ],
+  apache: [
+    {
+      id: "apacheRequests",
+      queries: { r: { name: "apache.requests", agg: "rate" } },
+      unit: "number",
+      alert: "r",
+      build: (d, L) => one(L("requests"), sumSeries(get(d, "r"))),
+    },
+    {
+      id: "apacheWorkers",
+      queries: { w: { name: "apache.workers", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      stacked: true,
+      order: ["busy", "idle"],
+      alert: "w",
+      build: (d, L) => by(get(d, "w"), ["state"], L("busy")),
+    },
+    {
+      id: "apacheTraffic",
+      queries: { t: { name: "apache.traffic", agg: "rate" } },
+      unit: "bytesPerSec",
+      build: (d, L) => one(L("traffic"), sumSeries(get(d, "t"))),
+    },
+    {
+      // The scoreboard is what mod_status shows as a row of letters: how many workers are in each state.
+      id: "apacheScoreboard",
+      queries: { s: { name: "apache.scoreboard", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      stacked: true,
+      order: ["waiting", "open", "sending", "reading", "keepalive", "dnslookup", "closing", "logging", "finishing", "idle_cleanup"],
+      build: (d, L) => by(get(d, "s"), ["state"], L("busy")),
+    },
+  ],
+  memcached: [
+    {
+      id: "memcachedCommands",
+      queries: { c: { name: "memcached.commands", agg: "rate", groupBy: ["command"] } },
+      unit: "number",
+      stacked: true,
+      order: ["get", "set", "flush", "touch"],
+      alert: "c",
+      build: (d, L) => by(get(d, "c"), ["command"], L("commands")),
+    },
+    {
+      id: "memcachedHitRatio",
+      queries: { h: { name: "memcached.operation_hit_ratio", agg: "avg", groupBy: ["operation"] } },
+      unit: "percent",
+      yMax: 1,
+      build: (d, L) =>
+        by(get(d, "h"), ["operation"], L("hitRatio")).map((sr) => ({ ...sr, points: percentToRatio(sr.points) })),
+    },
+    {
+      id: "memcachedConnections",
+      queries: { c: { name: "memcached.connections.current", agg: "last" }, t: { name: "memcached.threads", agg: "last" } },
+      unit: "number",
+      alert: "c",
+      build: (d, L) => [...one(L("connected"), sumSeries(get(d, "c"))), ...one(L("limit"), sumSeries(get(d, "t")))],
+    },
+    {
+      id: "memcachedItems",
+      queries: { i: { name: "memcached.current_items", agg: "last" }, e: { name: "memcached.evictions", agg: "rate" } },
+      unit: "number",
+      alert: "e",
+      build: (d, L) => [...one(L("items"), sumSeries(get(d, "i"))), ...one(L("evictions"), sumSeries(get(d, "e")))],
+    },
+    {
+      id: "memcachedNetwork",
+      queries: { n: { name: "memcached.network", agg: "rate", groupBy: ["direction"] } },
+      unit: "bytesPerSec",
+      order: ["sent", "received"],
+      build: (d, L) => by(get(d, "n"), ["direction"], L("sent")),
+    },
+  ],
+  // HAProxy (§6.12): one resource per proxy row (frontend, backend, server), so the charts sum the rows of
+  // the instance; the status chart counts the rows in each state.
+  haproxy: [
+    {
+      id: "haproxyRequests",
+      queries: { r: { name: "haproxy.requests.total", agg: "rate" } },
+      unit: "number",
+      alert: "r",
+      build: (d, L) => one(L("requests"), sumSeries(get(d, "r"))),
+    },
+    {
+      id: "haproxySessions",
+      queries: { c: { name: "haproxy.sessions.current", agg: "last" }, l: { name: "haproxy.sessions.limit", agg: "last" } },
+      unit: "number",
+      alert: "c",
+      build: (d, L) => [...one(L("sessions"), sumSeries(get(d, "c"))), ...one(L("limit"), sumSeries(get(d, "l")))],
+    },
+    {
+      id: "haproxyResponses",
+      queries: { r: { name: "haproxy.responses.count", agg: "rate", groupBy: ["status_code"] } },
+      unit: "number",
+      stacked: true,
+      order: ["2xx", "3xx", "4xx", "5xx", "1xx", "other"],
+      alert: "r",
+      build: (d, L) => by(get(d, "r"), ["status_code"], L("requests")),
+    },
+    {
+      id: "haproxyErrors",
+      queries: {
+        c: { name: "haproxy.connections.errors", agg: "rate" },
+        r: { name: "haproxy.responses.errors", agg: "rate" },
+        q: { name: "haproxy.requests.errors", agg: "rate" },
+      },
+      unit: "number",
+      alert: "r",
+      build: (d, L) => [
+        ...one(L("connections"), sumSeries(get(d, "c"))),
+        ...one(L("requests"), sumSeries(get(d, "q"))),
+        ...one(L("received"), sumSeries(get(d, "r"))),
+      ],
+    },
+    {
+      id: "haproxyTimings",
+      queries: { q: { name: "haproxy.queue.time", agg: "avg" }, c: { name: "haproxy.connect.time", agg: "avg" }, r: { name: "haproxy.response.time", agg: "avg" } },
+      unit: "ms",
+      build: (d, L) => [
+        ...one(L("queued"), sumSeries(get(d, "q"))),
+        ...one(L("connections"), sumSeries(get(d, "c"))),
+        ...one(L("requests"), sumSeries(get(d, "r"))),
+      ],
+    },
+    {
+      // Each row reports 1 for its own state, so the sum per state is how many are up, down or in maintenance.
+      id: "haproxyStatus",
+      queries: { s: { name: "haproxy.status", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      stacked: true,
+      order: ["up", "open", "down", "maint", "drain", "nolb"],
+      alert: "s",
+      build: (d, L) => by(get(d, "s"), ["state"], L("sessions")),
+    },
+  ],
+  // RabbitMQ (§6.13): one resource per queue and one per node; the message charts sum the queues.
+  rabbitmq: [
+    {
+      id: "rabbitmqMessages",
+      queries: { m: { name: "rabbitmq.message.current", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      stacked: true,
+      order: ["ready", "unacknowledged"],
+      alert: "m",
+      build: (d, L) => by(get(d, "m"), ["state"], L("messages")),
+    },
+    {
+      id: "rabbitmqRates",
+      queries: {
+        p: { name: "rabbitmq.message.published", agg: "rate" },
+        d: { name: "rabbitmq.message.delivered", agg: "rate" },
+        a: { name: "rabbitmq.message.acknowledged", agg: "rate" },
+      },
+      unit: "number",
+      alert: "p",
+      build: (d, L) => [
+        ...one(L("published"), sumSeries(get(d, "p"))),
+        ...one(L("delivered"), sumSeries(get(d, "d"))),
+        ...one(L("acknowledged"), sumSeries(get(d, "a"))),
+      ],
+    },
+    {
+      id: "rabbitmqConsumers",
+      queries: { c: { name: "rabbitmq.consumer.count", agg: "last" }, r: { name: "rabbitmq.message.redelivered", agg: "rate" } },
+      unit: "number",
+      alert: "c",
+      build: (d, L) => [...one(L("consumers"), sumSeries(get(d, "c"))), ...one(L("redelivered"), sumSeries(get(d, "r")))],
+    },
+    {
+      id: "rabbitmqObjects",
+      queries: {
+        c: { name: "rabbitmq.connection.count", agg: "last" },
+        h: { name: "rabbitmq.channel.count", agg: "last" },
+        q: { name: "rabbitmq.queue.count", agg: "last" },
+      },
+      unit: "number",
+      build: (d, L) => [
+        ...one(L("connections"), sumSeries(get(d, "c"))),
+        ...one(L("commands"), sumSeries(get(d, "h"))),
+        ...one(L("queries"), sumSeries(get(d, "q"))),
+      ],
+    },
+    {
+      id: "rabbitmqNodeMemory",
+      queries: { u: { name: "rabbitmq.node.memory.used", agg: "avg" }, l: { name: "rabbitmq.node.memory.limit", agg: "last" } },
+      unit: "bytes",
+      alert: "u",
+      build: (d, L) => [...one(L("used"), sumSeries(get(d, "u"))), ...one(L("limit"), sumSeries(get(d, "l")))],
+    },
+  ],
+  // Elasticsearch and OpenSearch (§6.14): the cluster metrics come from the node that reports the health, the
+  // rest from the local node.
+  elasticsearch: [
+    {
+      id: "esClusterShards",
+      queries: { s: { name: "elasticsearch.cluster.shards", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      stacked: true,
+      order: ["active", "active_primary", "relocating", "initializing", "unassigned", "delayed_unassigned"],
+      alert: "s",
+      build: (d, L) => by(get(d, "s"), ["state"], L("active")),
+    },
+    {
+      id: "esOperations",
+      queries: { o: { name: "elasticsearch.node.operations.completed", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      order: ["query", "fetch", "index", "merge"],
+      alert: "o",
+      build: (d, L) => by(get(d, "o"), ["operation"], L("searched")),
+    },
+    {
+      id: "esOperationTime",
+      queries: { t: { name: "elasticsearch.node.operations.time", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      order: ["query", "fetch", "index", "merge"],
+      build: (d, L) => by(get(d, "t"), ["operation"], L("waitTime")),
+    },
+    {
+      id: "esDocuments",
+      queries: { d: { name: "elasticsearch.node.documents", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      order: ["active", "deleted"],
+      build: (d, L) => by(get(d, "d"), ["state"], L("documents")),
+    },
+    {
+      id: "esHeap",
+      queries: { u: { name: "jvm.memory.heap.used", agg: "avg" }, m: { name: "jvm.memory.heap.max", agg: "last" } },
+      unit: "bytes",
+      alert: "u",
+      build: (d, L) => [...one(L("heapUsed"), sumSeries(get(d, "u"))), ...one(L("heapMax"), sumSeries(get(d, "m")))],
+    },
+    {
+      id: "esThreadPool",
+      queries: {
+        q: { name: "elasticsearch.node.thread_pool.tasks.queued", agg: "last" },
+        r: { name: "elasticsearch.node.thread_pool.tasks.rejected", agg: "rate" },
+      },
+      unit: "number",
+      alert: "r",
+      build: (d, L) => [...one(L("queued"), sumSeries(get(d, "q"))), ...one(L("rejected"), sumSeries(get(d, "r")))],
     },
   ],
   // IIS (§6.8): one resource per site; the charts sum all sites of the instance, or show the selected site
