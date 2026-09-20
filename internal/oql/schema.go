@@ -217,6 +217,106 @@ var eventTypes = []*eventType{
 			n("profile.duration", "duration_ns / 1e9"),
 		},
 	},
+	// Real user monitoring rollups (0094_rum). Their aggregate columns are SimpleAggregateFunction, so they
+	// are read with plain sum()/max() rather than the merge machinery the containers table needs. The
+	// histogram columns are tuples of arrays and are deliberately left out: OQL has no array type, and the
+	// percentiles they carry are served by the RUM API, which knows the bucket scale.
+	//
+	// The weighted sums are exposed as they are stored rather than pre-divided, because the average of a
+	// rollup is sum/sum — `sum(duration.sum.ms) / sum(views)` — and a column that pretended to be an average
+	// would be wrong the moment it was faceted.
+	{
+		name: "RumPageView", desc: "Browser page views per minute (rum_page_views_1m)", table: query.RumPageViews1m,
+		timeCol: "timestamp", maxRange: maxRawRange,
+		attrs: []attrDef{
+			s("app", "app"),
+			s("deployment.environment", "deployment_environment"),
+			s("route", "route"),
+			// 'load' (a document navigation) or 'route_change' (an SPA history change).
+			s("page.kind", "page_view_kind"),
+			s("device.type", "device_type"),
+			s("browser.name", "browser_name"),
+			n("views", "views"),
+			n("samples", "toFloat64(samples)"),
+			n("duration.sum.ms", "duration_sum_ms"),
+			n("duration.max.ms", "duration_max_ms"),
+			n("ttfb.sum.ms", "ttfb_sum_ms"),
+			n("dns.sum.ms", "dns_sum_ms"),
+			n("connect.sum.ms", "connect_sum_ms"),
+			n("tls.sum.ms", "tls_sum_ms"),
+			n("response.sum.ms", "response_sum_ms"),
+			n("dom.interactive.sum.ms", "dom_interactive_sum_ms"),
+			n("dom.content_loaded.sum.ms", "dom_content_loaded_sum_ms"),
+			n("load.event.sum.ms", "load_event_sum_ms"),
+		},
+	},
+	{
+		name: "RumVital", desc: "Core Web Vitals per minute (rum_vitals_1m)", table: query.RumVitals1m,
+		timeCol: "timestamp", maxRange: maxRawRange,
+		attrs: []attrDef{
+			s("app", "app"),
+			s("deployment.environment", "deployment_environment"),
+			// lcp, inp, cls, fcp, ttfb (rum.md §2).
+			s("vital", "vital"),
+			s("route", "route"),
+			s("device.type", "device_type"),
+			n("count", "count"),
+			n("samples", "toFloat64(samples)"),
+			n("value.sum", "value_sum"),
+			n("value.max", "value_max"),
+			// The Core Web Vitals rating counters; their share of count is the good/poor split.
+			n("good", "good"),
+			n("needs_improvement", "needs_improvement"),
+			n("poor", "poor"),
+		},
+	},
+	{
+		// A session is an entity with a lifetime, like a host: the time column is last_seen, not a bucket.
+		// entry_route, exit_route and last_trace_id are real AggregateFunction columns (argMin/argMax) and
+		// are left out — they need a merge that only makes sense grouped by session.
+		name: "RumSession", desc: "Browser sessions (rum_sessions, by last_seen)", table: query.RumSessions,
+		timeCol: "last_seen", maxRange: maxRawRange,
+		attrs: []attrDef{
+			s("app", "app"),
+			s("deployment.environment", "deployment_environment"),
+			s("session.id", "session_id"),
+			n("page.views", "page_views"),
+			n("errors", "errors"),
+			n("spans", "toFloat64(spans)"),
+			s("device.type", "device_type"),
+			s("browser.name", "browser_name"),
+			s("browser.version", "browser_version"),
+			s("os.name", "os_name"),
+		},
+	},
+	{
+		// Database statement statistics (0096_db_monitoring): deltas per collection interval, plain columns.
+		name: "DbQuery", desc: "Database statement statistics per interval (db_query_stats)", table: query.DBQueryStats,
+		timeCol: "timestamp", maxRange: maxRawRange,
+		attrs: []attrDef{
+			s("db.system", "db_system"),
+			s("instance", "instance"),
+			s("db.name", "db_name"),
+			s("db.user", "db_user"),
+			s("host.id", "host_id"),
+			s("host.name", "host_name"),
+			s("server.address", "server_address"),
+			n("server.port", "server_port"),
+			s("query.id", "query_id"),
+			s("query.text", "query_text"),
+			// UInt64 as text: a float64 cannot hold it without losing digits, and it is an identifier anyway.
+			s("fingerprint", "toString(fingerprint)"),
+			n("calls", "toFloat64(calls)"),
+			n("total_time.ms", "total_time_ms"),
+			n("rows", "toFloat64(rows)"),
+			n("rows_examined", "toFloat64(rows_examined)"),
+			n("errors", "toFloat64(errors)"),
+			n("no_index_used", "toFloat64(no_index_used)"),
+			n("blocks.hit", "toFloat64(blocks_hit)"),
+			n("blocks.read", "toFloat64(blocks_read)"),
+			n("interval.seconds", "interval_seconds"),
+		},
+	},
 }
 
 // containerColumns merge the aggregating containers table to one row per container (0009_containers.sql).

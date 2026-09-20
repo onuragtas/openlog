@@ -110,7 +110,12 @@ func (p *Plan) Table() string {
 	if p.Rollup {
 		return "metrics_1m"
 	}
-	return map[string]string{"Log": "logs", "Span": "spans", "Transaction": "spans", "Metric": "metrics", "Host": "hosts", "Container": "containers", "Profile": "profiles"}[p.Event.name]
+	return map[string]string{
+		"Log": "logs", "Span": "spans", "Transaction": "spans", "Metric": "metrics", "Host": "hosts",
+		"Container": "containers", "Profile": "profiles",
+		"RumPageView": "rum_page_views_1m", "RumVital": "rum_vitals_1m", "RumSession": "rum_sessions",
+		"DbQuery": "db_query_stats",
+	}[p.Event.name]
 }
 
 // FacetNames returns the facet attribute names as written.

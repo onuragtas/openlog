@@ -224,13 +224,17 @@ func TestOQLValidateAndSchema(t *testing.T) {
 		} `json:"event_types"`
 		Functions []struct{ Name string }
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &sch); err != nil || rec.Code != 200 || len(sch.EventTypes) != 7 || len(sch.Functions) < 10 {
+	if err := json.Unmarshal(rec.Body.Bytes(), &sch); err != nil || rec.Code != 200 || len(sch.EventTypes) != 11 || len(sch.Functions) < 10 {
 		t.Fatalf("schema %d %s", rec.Code, rec.Body)
 	}
 	if len(conn.sql) != 0 {
 		t.Errorf("schema without event_type queried ClickHouse")
 	}
-	for et, statements := range map[string]int{"Log": 2, "Metric": 3, "Host": 1, "Container": 1, "Profile": 2} {
+	// The rollup event types carry no attributes/resource map, so their schema needs no sampling query at all.
+	for et, statements := range map[string]int{
+		"Log": 2, "Metric": 3, "Host": 1, "Container": 1, "Profile": 2,
+		"RumPageView": 0, "RumVital": 0, "RumSession": 0, "DbQuery": 0,
+	} {
 		conn.sql = nil
 		if rec := get("/api/v1/query/schema?event_type=" + et); rec.Code != 200 {
 			t.Errorf("%s: %d %s", et, rec.Code, rec.Body)

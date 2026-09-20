@@ -50,6 +50,10 @@ variable   := '{{' name '}}'
 | `Host` | `hosts FINAL` | `last_seen` | hosts seen in the range |
 | `Container` | `containers` (merged per container) | `last_seen` | containers seen in the range |
 | `Profile` | `profiles` | `timestamp` | 7-day retention; one row per profiling sample, so every query aggregates |
+| `RumPageView` | `rum_page_views_1m` | `timestamp` | 30-day retention; per-minute rollup, always aggregate |
+| `RumVital` | `rum_vitals_1m` | `timestamp` | 30-day retention; per-minute rollup, always aggregate |
+| `RumSession` | `rum_sessions` | `last_seen` | 30-day retention; sessions seen in the range |
+| `DbQuery` | `db_query_stats` | `timestamp` | statement statistics per collection interval |
 
 Attributes (`GET /api/v1/query/schema` lists them with types):
 
@@ -61,11 +65,20 @@ Attributes (`GET /api/v1/query/schema` lists them with types):
 | `Host` | `host.id`, `host.name`, `os.type`, `os.description`, `arch`, `agent.name`, `agent.version` |
 | `Container` | `container.id`, `container.name`, `host.id`, `host.name`, `image.name`, `image.tags`, `runtime`, `compose.project`, `compose.service`, `k8s.pod.name`, `k8s.namespace.name`, `k8s.container.name`, `state`, `health`, `restarts` (number) |
 | `Profile` | `service.name`, `service.namespace`, `deployment.environment`, `host.id`, `profile.type`, `unit`, `function` (= `leaf`, the innermost frame self time is attributed to), `stack` (the whole stack folded as `main;handleRequest;db.Query`), `stack.depth` (number), `value` (number, in `unit`), `profile.duration` (number, seconds) |
+| `RumPageView` | `app`, `deployment.environment`, `route`, `page.kind` (`load` or `route_change`), `device.type`, `browser.name`, and the numbers `views`, `samples`, `duration.sum.ms`, `duration.max.ms`, `ttfb.sum.ms`, `dns.sum.ms`, `connect.sum.ms`, `tls.sum.ms`, `response.sum.ms`, `dom.interactive.sum.ms`, `dom.content_loaded.sum.ms`, `load.event.sum.ms` |
+| `RumVital` | `app`, `deployment.environment`, `vital` (`lcp`, `inp`, `cls`, `fcp`, `ttfb`), `route`, `device.type`, and the numbers `count`, `samples`, `value.sum`, `value.max`, `good`, `needs_improvement`, `poor` |
+| `RumSession` | `app`, `deployment.environment`, `session.id`, `device.type`, `browser.name`, `browser.version`, `os.name`, and the numbers `page.views`, `errors`, `spans` |
+| `DbQuery` | `db.system`, `instance`, `db.name`, `db.user`, `host.id`, `host.name`, `server.address`, `query.id`, `query.text`, `fingerprint`, and the numbers `server.port`, `calls`, `total_time.ms`, `rows`, `rows_examined`, `errors`, `no_index_used`, `blocks.hit`, `blocks.read`, `interval.seconds` |
+
+The rollup types (`RumPageView`, `RumVital`, `RumSession`, `DbQuery`) store weighted sums, not averages: an
+average is `sum(duration.sum.ms) / sum(views)`. A stored "average" column would be wrong the moment it was
+faceted. Their histogram columns are tuples of arrays and are deliberately not exposed — OQL has no array
+type, and the percentiles they hold are served by the RUM API, which knows the bucket scale.
 
 \* raw data points only (prevents the rollup).
 
-Maps: `attributes['k']` (Log, Span, Transaction, Metric, Container) and `resource['k']` or `resource.k` (Log, Span,
-Transaction, Metric\*, Host). Any other identifier on an event type with `attributes` is read as `attributes['<identifier>']`
+Maps: `attributes['k']` (Log, Span, Transaction, Metric, Container, Profile) and `resource['k']` or `resource.k` (Log, Span,
+Transaction, Metric\*, Host, Profile). The rollup types carry neither. Any other identifier on an event type with `attributes` is read as `attributes['<identifier>']`
 (e.g. `http.route`); validation reports a warning for it. `tenant_id` and names starting with `_` are rejected.
 Map values are strings: compared with a number, or used in `sum`/`average`/`min`/`max`/`percentile`/`histogram`, they are
 converted with `toFloat64OrNull` (non-numeric values are ignored).

@@ -149,7 +149,7 @@ func (p *parser) query() (*Query, error) {
 	}
 	def := lookupEventType(et.text)
 	if def == nil {
-		return nil, errAt(et.pos, et.end, "unknown event type %q (expected Log, Span, Transaction, Metric, Host, Container or Profile)", truncate(et.text, 64))
+		return nil, errAt(et.pos, et.end, "unknown event type %q (expected Log, Span, Transaction, Metric, Host, Container, Profile, RumPageView, RumVital, RumSession or DbQuery)", truncate(et.text, 64))
 	}
 	q.EventType, q.EventSpan = def.name, Span{et.pos, et.end}
 

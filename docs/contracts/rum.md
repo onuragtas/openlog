@@ -325,6 +325,9 @@ Deliberately left for later, with the shape they would take:
 - **Resource timing for static assets.** Only `fetch`/`XHR` are captured, not every image and script; the
   volume is an order of magnitude larger and needs its own sampling.
 - **Custom events and timings.** No `recordEvent`/`recordTiming` API yet.
-- **Alerting on vitals.** The rollups are queryable but there is no `rum` alert rule type; the values are not
-  yet exposed to OQL either (`rum_*` are not OQL event types).
+- **Alerting on vitals.** ~~Not in this slice.~~ Done, and without a `rum` rule type: `RumPageView`,
+  `RumVital` and `RumSession` are OQL event types ([oql.md](oql.md)), and the `oql` alert rule type compiles
+  any OQL query — so `SELECT sum(value.sum) / sum(count) FROM RumVital WHERE vital = 'lcp'` is an alert
+  condition. An event type OQL knows is alertable the moment it is added, which is why signals are wired into
+  OQL rather than given a rule type each.
 - **Session replay.** Out of scope by a wide margin.
