@@ -78,6 +78,9 @@ var (
 	// SyntheticRuns holds the runs of the synthetic checks (schema 0093_synthetic_runs, D-132).
 	SyntheticRuns = Table{"synthetic_runs"}
 
+	// JobRuns holds the concluded runs of the cron and heartbeat monitors (schema 0099_job_runs, D-141).
+	JobRuns = Table{"job_runs"}
+
 	// Real user monitoring rollups (schema 0094_rum, rum.md §5, D-136); aggregating tables fed by
 	// materialized views on spans_local, so every read must re-aggregate with GROUP BY.
 	RumPageViews1m = Table{"rum_page_views_1m"}

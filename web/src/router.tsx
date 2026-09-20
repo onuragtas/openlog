@@ -54,6 +54,8 @@ const SlosPage = lazyRouteComponent(() => import("@/routes/slos"), "SlosPage");
 const SloDetailPage = lazyRouteComponent(() => import("@/routes/slos"), "SloDetailPage");
 const SyntheticsPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticsPage");
 const SyntheticDetailPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticDetailPage");
+const JobsPage = lazyRouteComponent(() => import("@/routes/jobs"), "JobsPage");
+const JobDetailPage = lazyRouteComponent(() => import("@/routes/jobs"), "JobDetailPage");
 const RumPage = lazyRouteComponent(() => import("@/routes/rum"), "RumPage");
 const ProfilesPage = lazyRouteComponent(() => import("@/routes/profiles"), "ProfilesPage");
 const DatabasesPage = lazyRouteComponent(() => import("@/routes/databases"), "DatabasesPage");
@@ -721,6 +723,25 @@ const syntheticDetailRoute = createRoute({
   component: SyntheticDetailPage,
 });
 
+// ---- Job monitoring (routes/jobs.tsx, api.md "Job monitoring", D-141) ----
+export interface JobsSearch {
+  /** the create form instead of the list */
+  create?: boolean;
+}
+
+const jobsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/jobs",
+  validateSearch: (s: Record<string, unknown>): JobsSearch => ({ create: s.create === true || s.create === "true" ? true : undefined }),
+  component: JobsPage,
+});
+
+const jobDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/jobs/$monitorId",
+  component: JobDetailPage,
+});
+
 // ---- Real user monitoring (routes/rum.tsx, docs/contracts/rum.md §7, D-136) ----
 const RUM_TABS = ["overview", "pages", "sessions"] as const;
 const RUM_SORTS = ["views", "slowest", "avg"] as const;
@@ -1112,6 +1133,8 @@ export const routeTree = rootRoute.addChildren([
     sloDetailRoute,
     syntheticsRoute,
     syntheticDetailRoute,
+    jobsRoute,
+    jobDetailRoute,
     rumRoute,
     rumAppRoute,
     rumSessionRoute,

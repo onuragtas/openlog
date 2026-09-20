@@ -56,6 +56,7 @@ const ROUTES = [
   "/databases",
   "/slos",
   "/synthetics",
+  "/jobs",
   "/profiles",
   "/costs",
   "/traces",

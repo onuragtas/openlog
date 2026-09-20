@@ -848,6 +848,10 @@ api:
     OPENLOG_SYNTHETICS_MAX_REDIRECTS: "5"
     # PEM bundle trusted in addition to the system roots (mount it and name the path here).
     OPENLOG_SYNTHETICS_CA_FILE: ""
+    # Job monitoring: cron and heartbeat monitors (D-141).
+    OPENLOG_JOBS_ENABLED: "true"
+    OPENLOG_JOBS_SWEEP_INTERVAL: "30s"
+    OPENLOG_JOBS_MAX_PER_SWEEP: "200"
     # Managed cloud service metrics (api.md "Cloud connections", D-135). Connections are per organization
     # and their credentials are encrypted with OPENLOG_SECRETS_KEY, which must be set to save them. The api
     # leader polls, so these limits bound one pod; the provider APIs are billed per request, so each

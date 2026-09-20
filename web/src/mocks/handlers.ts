@@ -18,6 +18,7 @@ import { profileHandlers } from "./profiles";
 import { rumHandlers } from "./rum";
 import { dbHandlers } from "./db";
 import { sloHandlers } from "./slos";
+import { jobHandlers } from "./jobs";
 import { syntheticHandlers } from "./synthetics";
 import { usageHandlers } from "./usage";
 import { operatorHandlers } from "./operator";
@@ -307,6 +308,7 @@ export const handlers = [
   ...alertHandlers,
   ...sloHandlers, // mocks/slos.ts: service level objectives, error budgets and burn rates (D-125)
   ...syntheticHandlers, // mocks/synthetics.ts: scheduled outside-in checks (D-132)
+  ...jobHandlers, // mocks/jobs.ts: cron and heartbeat monitoring (D-141)
   ...rumHandlers, // mocks/rum.ts: browser applications, vitals, pages and sessions (D-136)
   ...profileHandlers, // mocks/profiles.ts: continuous profiling flame graphs (profiles.md)
   ...dbHandlers, // mocks/db.ts: database query performance (D-138)

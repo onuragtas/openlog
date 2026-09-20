@@ -1797,6 +1797,85 @@ string and fragment never reach storage.
 bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
 `404` when the session is unknown.
 
+## Job monitoring
+
+Cron and heartbeat monitors of the caller's organization (PostgreSQL `job_monitors` + `job_monitor_state`,
+`0096_job_monitors`; the concluded runs in ClickHouse `job_runs`, 90 days; D-141). PostgreSQL auth mode only
+(`404` otherwise). Reads: any role and API keys. Writes: members and higher, API keys too; at most 200
+monitors per organization (`409`). Audit: `job_monitor.{create,update,delete,rotate_token}`.
+
+This is the signal a metrics pipeline cannot produce, because it is about something that did **not** happen.
+A backup script that stops running sends nothing at all — no logs, no spans, no metric that falls to zero —
+and "no data" is indistinguishable from "the host is being rebuilt". A monitor writes the schedule down in
+advance, so silence becomes a fact.
+
+| `kind` | Schedule | Next run is due |
+|---|---|---|
+| `cron` | `cron` (five fields or a macro) read in `time_zone` | at the expression's next occurrence |
+| `interval` | `interval_seconds` | that long after the last report |
+
+A run is concluded by the ping that finishes it, or by the api **leader**'s sweeper when nothing arrives
+within `grace_seconds` of the expected time (`missed`, or `overrun` when a start ping had arrived and no end
+followed). The claim advances the state row in the same statement, so a missed run is concluded once even
+while leadership moves between pods.
+
+Every concluded run is also written as gauge data points, so **metric alert rules** ([alerting.md](alerting.md)
+§2.2) and dashboards watch a job like any other signal:
+
+| Metric | Unit | Value |
+|---|---|---|
+| `jobs.run.success` | `1` | `1` for a successful run, `0` for a failed or missed one |
+| `jobs.run.missed` | `1` | `1` for a run that never reported; `max over 10m > 0` is the alert for a job that stopped running |
+| `jobs.run.late` | `s` | Seconds past the expected time the run was concluded — the number that says "the nightly backup finishes later every week" before it starts failing |
+| `jobs.run.duration` | `ms` | How long the run took, **only** when openlog saw both ends of it |
+
+All carry the attributes `job.id`, `job.name` and `job.status`.
+
+### `GET /api/v1/jobs/monitors?summary=` · `POST /api/v1/jobs/monitors` · `GET|PUT|DELETE /api/v1/jobs/monitors/{id}` · `POST /api/v1/jobs/monitors/{id}/rotate`
+Body of POST/PUT: `{"name" (1–200), "description"? (≤ 1000), "kind"?: `cron`|`interval` (default `cron`),
+"cron" (cron only: five fields or @yearly/@monthly/@weekly/@daily/@hourly), "time_zone"? (cron only: an IANA
+name, default UTC), "interval_seconds" (interval only: 60–7776000), "grace_seconds"? (default 300, 0–86400),
+"enabled"? (default true), "tags"? (≤ 10)}`. The response carries `ping_url` and `state`; `rotate` issues a
+new token, and the old URL stops working at once.
+
+```json
+{"monitors": [{"id": "…", "name": "Nightly backup", "kind": "cron", "cron": "0 3 * * *",
+  "time_zone": "Europe/Istanbul", "interval_seconds": 0, "grace_seconds": 900, "enabled": true,
+  "tags": ["backup"], "ping_url": "https://openlog.example.com/api/v1/jobs/ping/olj_…",
+  "state": {"status": "success", "last_ping_at": "…", "last_started_at": "…", "last_finished_at": "…",
+            "last_duration_ms": 148000, "last_exit_code": 0, "last_message": "42 GB written",
+            "expected_at": "…", "consecutive_failures": 0, "late": false},
+  "summary": {"runs": 7, "failures": 0, "missed": 0, "avg_ms": 151000, "max_ms": 162000, "last_at": "…"}}]}
+```
+
+### `GET /api/v1/jobs/monitors/{id}/runs?from=&to=&limit=`
+The concluded runs, newest first (`status`, `started_at`, `duration_ms`, `exit_code`, `late_seconds`,
+`message`, `source`), with the same `summary` over the range. The range is at most 90 days, the run history's
+retention.
+
+### `GET|POST /api/v1/jobs/ping/{token}[/start|/fail]`
+**Not authenticated.** The caller is a line in a crontab on a machine that has no openlog credentials; the
+token in the URL identifies the monitor. `GET` is what `curl` and `wget` send by default; `POST` may carry
+the job's output (≤ 4 KiB) and `?exit=<code>` reports the exit status — a non-zero code is a failure however
+the event was spelled. `?msg=` is the output when sending a body is inconvenient. The answer is plain text
+(`ok success next expected …`), because what the caller can do with it is print it into a log.
+
+```sh
+# the whole reporting line of a crontab entry
+0 3 * * * /usr/local/bin/backup.sh; curl -fsS -m 10 --retry 3 "$OPENLOG_PING/$?" >/dev/null
+
+# with a start ping, so an overrun (started, never finished) is visible
+0 3 * * * curl -fsS "$OPENLOG_PING/start" >/dev/null; /usr/local/bin/backup.sh 2>&1 | tail -c 4000 | curl -fsS --data-binary @- "$OPENLOG_PING/$?" >/dev/null
+```
+
+**Threat model.** The ping URL is public by construction: it sits in crontabs, in CI configuration and in
+process listings, and it is shown in openlog rather than hidden, because a URL nobody can re-read is a URL
+nobody can fix. What a copy of it can do is report a run of **that one monitor** — reporting a success that
+did not happen, which is the same outcome as the job simply not pinging, or reporting a failure, which makes
+noise. It cannot read anything, write any other signal, or name another monitor. A leaked URL is replaced
+with `rotate`. A wrong token and a deleted monitor answer the same `404`, so a probe cannot learn which
+tokens exist.
+
 ## Synthetic monitoring
 
 Scheduled outside-in checks of the caller's organization (PostgreSQL `synthetic_checks`,

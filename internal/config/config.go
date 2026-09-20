@@ -182,6 +182,8 @@ type Config struct {
 	StatusPage StatusPage
 	// Synthetics configures the scheduled outside-in checks (synthetics.go, D-132).
 	Synthetics Synthetics
+	// Jobs configures cron and heartbeat monitoring (jobs.go, D-141).
+	Jobs Jobs
 	// CloudConnect configures the managed cloud service metrics (cloudconnect.go, D-135).
 	CloudConnect CloudConnect
 	// RUM configures real user monitoring (rum.go, docs/contracts/rum.md, D-136).
@@ -331,6 +333,7 @@ func Load(getenv func(string) string) (Config, error) {
 		Privacy:      loadPrivacy(&p),      // privacy.go
 		StatusPage:   loadStatusPage(&p),   // privacy.go
 		Synthetics:   loadSynthetics(&p),   // synthetics.go
+		Jobs:         loadJobs(&p),         // jobs.go
 		CloudConnect: loadCloudConnect(&p), // cloudconnect.go
 		RUM:          loadRUM(&p),          // rum.go (D-136)
 		APM: APM{
@@ -395,6 +398,7 @@ func (c Config) validate(getenv func(string) string) error {
 	errs = append(errs, c.validateRenderer()...)     // renderer.go
 	errs = append(errs, c.validatePrivacy()...)      // privacy.go
 	errs = append(errs, c.validateSynthetics()...)   // synthetics.go
+	errs = append(errs, c.validateJobs()...)         // jobs.go
 	errs = append(errs, c.validateCloudConnect()...) // cloudconnect.go
 	if c.Ingest.MaxBodyBytes <= 0 {
 		errs = append(errs, errors.New("OPENLOG_INGEST_MAX_BODY_BYTES must be > 0"))

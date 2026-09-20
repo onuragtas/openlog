@@ -589,6 +589,19 @@ installation may not.
 | `OPENLOG_SYNTHETICS_MAX_REDIRECTS` | `5` | api | Redirects one run follows (0–10); each hop is re-validated |
 | `OPENLOG_SYNTHETICS_CA_FILE` | — | api | PEM bundle trusted in addition to the system roots, for internal endpoints whose certificates come from the installation's own CA. There is no per-check "skip verification": a tls check that does not verify checks nothing (D-140) |
 
+### Job monitoring (api, allinone; D-141)
+
+Cron and heartbeat monitors ([api.md](api.md#job-monitoring)). The definitions and the current state live in
+PostgreSQL (`0096_job_monitors`), the concluded runs in ClickHouse (`job_runs`, 90 days). The ping endpoint
+is served by **every** api pod, because a crontab must not depend on which pod holds a lock; the sweeper that
+concludes the runs nothing reported is a leader task.
+
+| Variable | Default | Service | Meaning |
+|---|---|---|---|
+| `OPENLOG_JOBS_ENABLED` | `true` | api | Offer `/api/v1/jobs/*` and sweep overdue monitors (postgres auth mode only) |
+| `OPENLOG_JOBS_SWEEP_INTERVAL` | `30s` | api | How often overdue monitors are looked for (5s–10m); it bounds how late an alert can be beyond a monitor's own grace period |
+| `OPENLOG_JOBS_MAX_PER_SWEEP` | `200` | api | Monitors concluded in one pass (1–10000); a full pass is followed immediately by another, so this is a batch size, not a ceiling |
+
 ## Cloud connections (api, allinone; D-135)
 
 Metrics of managed cloud services ([api.md](api.md#cloud-connections)). Connections are stored per

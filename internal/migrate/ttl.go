@@ -76,6 +76,9 @@ var TTLTables = []TTLTable{
 	// Synthetic check runs (0093_synthetic_runs, D-132) are operational results of the installation like the
 	// alert evaluations, so they share their class and 30-day retention.
 	{"synthetic_runs_local", "alerts", "toDateTime(timestamp)", 30},
+	// Job runs (0099_job_runs, D-141) share that class; 90 days rather than 30 because a monthly job needs
+	// three occurrences before a pattern is visible at all.
+	{"job_runs_local", "alerts", "toDateTime(timestamp)", 90},
 }
 
 // TTLOptions are the inputs of the TTL plan.

@@ -30,6 +30,7 @@ import (
 	"github.com/onuragtas/openlog/internal/savedview"
 	"github.com/onuragtas/openlog/internal/slo"
 	"github.com/onuragtas/openlog/internal/sourcemaps"
+	"github.com/onuragtas/openlog/internal/jobs"
 	"github.com/onuragtas/openlog/internal/synthetics"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
@@ -82,6 +83,12 @@ type Server struct {
 	slos slo.Store
 	// scheduled outside-in checks (synthetics.go, D-132); nil: none (static auth mode)
 	synthetics synthetics.Store
+	// cron and heartbeat monitors (jobs.go, D-141); nil: none (static auth mode)
+	jobs jobs.Store
+	// the ping path of job monitoring: token lookup and the state write it concludes
+	jobPings jobs.PingStore
+	// where a concluded run goes (ClickHouse writer); nil: runs are not stored, only the state is
+	jobRuns jobs.RunSink
 	// managed cloud service metrics (cloudconnect.go, D-135); nil: none (static auth mode)
 	cloud *cloudconnect.Manager
 	// verified release catalog of the language agent version comparison (apm_agents.go, D-124); nil: statuses unknown
@@ -169,6 +176,7 @@ func (s *Server) Handler() http.Handler {
 	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
 	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
+	s.jobRoutes(mux)          // jobs.go: cron and heartbeat monitoring (D-141)
 	s.rumRoutes(mux)          // rum.go: real user monitoring reads (rum.md, D-136)
 	s.dbRoutes(mux)           // dbmon.go: database query performance (db-monitoring.md, D-138)
 	s.profileRoutes(mux)      // profiles.go: continuous profiling flame graphs (schema 0095_profiles)

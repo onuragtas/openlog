@@ -1337,6 +1337,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/monitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Cron and heartbeat monitors of the organization ordered by name, each with its current state and, unless `summary=false`, the outcome of its runs over the last 7 days (api.md "Job monitoring"). */
+        get: operations["listJobMonitors"];
+        put?: never;
+        /** @description Signed-in member or higher; audit event job_monitor.create. Not available in static auth mode (404). At most 200 monitors per organization (409). The response carries the ping URL the job calls. */
+        post: operations["createJobMonitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/monitors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getJobMonitor"];
+        /** @description Full replacement; signed-in member or higher; audit event job_monitor.update. The ping token is unchanged, so the crontab that uses it keeps working. */
+        put: operations["updateJobMonitor"];
+        post?: never;
+        /** @description Signed-in member or higher; audit event job_monitor.delete. The state row goes with the monitor; the stored runs stay in ClickHouse until their TTL expires. */
+        delete: operations["deleteJobMonitor"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/monitors/{id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Issue a new ping token for a monitor whose URL leaked; audit event job_monitor.rotate_token. The old URL stops working at once, so the crontab has to be updated with the new one. */
+        post: operations["rotateJobMonitorToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/monitors/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Concluded runs over the range, newest first, with the outcome summary. */
+        get: operations["getJobMonitorRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/ping/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor's ping token (olj_…) */
+                token: string;
+            };
+            cookie?: never;
+        };
+        /** @description Report that the job ran. **Not authenticated**: the caller is a line in a crontab and the token in the URL identifies the monitor. `POST` may carry the job's output as the body (at most 4 KiB), and `?exit=<code>` reports the exit status — a non-zero code is a failure however the event was spelled. `/start` and `/fail` are the other two events (api.md "Job monitoring"). The answer is plain text. */
+        get: operations["pingJobMonitor"];
+        put?: never;
+        /** @description As the GET, with the job's output as the body. */
+        post: operations["pingJobMonitorWithOutput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/ping/{token}/{event}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                event: "start" | "success" | "fail";
+            };
+            cookie?: never;
+        };
+        /** @description `start` marks the run as running (so an overrun is visible), `fail` marks it failed, `success` is the same as no suffix. Not authenticated; see the ping endpoint above. */
+        get: operations["pingJobMonitorEvent"];
+        put?: never;
+        /** @description As the GET, with the job's output as the body. */
+        post: operations["pingJobMonitorEventWithOutput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/synthetics/checks": {
         parameters: {
             query?: never;
@@ -6791,6 +6909,94 @@ export interface components {
             interval_seconds: number;
             /** @description Default ["local"] (the openlog server itself) */
             locations?: string[];
+        };
+        /**
+         * @description cron: the crontab expression that starts the job. interval: the job reports at least this often, which is what a daemon's heartbeat is.
+         * @default cron
+         * @enum {string}
+         */
+        JobScheduleKind: "cron" | "interval";
+        /**
+         * @description running and success/failure are what the job reports; missed (nothing arrived in time) and overrun (a run started and never reported an end) are what openlog concludes.
+         * @enum {string}
+         */
+        JobRunStatus: "running" | "success" | "failure" | "missed" | "overrun";
+        JobMonitorInput: {
+            name: string;
+            description?: string;
+            kind?: components["schemas"]["JobScheduleKind"];
+            /** @description cron only: five fields (minute hour day month weekday) or a macro (@daily, @hourly, …) */
+            cron?: string;
+            /** @description cron only: the IANA zone the expression is read in (empty = UTC) */
+            time_zone?: string;
+            /** @description interval only: how often the job is expected to report */
+            interval_seconds?: number;
+            /**
+             * @description How long after the expected time a run may still arrive before it counts as missed
+             * @default 300
+             */
+            grace_seconds: number;
+            /** @default true */
+            enabled: boolean;
+            tags?: string[];
+        };
+        JobMonitorState: {
+            /** @description The last concluded status, '' until the first run */
+            status: string;
+            last_ping_at: components["schemas"]["NullableTimestamp"];
+            last_started_at: components["schemas"]["NullableTimestamp"];
+            last_finished_at: components["schemas"]["NullableTimestamp"];
+            last_duration_ms: number;
+            last_exit_code: number;
+            last_message: string;
+            expected_at: components["schemas"]["Timestamp"];
+            consecutive_failures: number;
+            /** @description Past the expected time plus grace */
+            late: boolean;
+        };
+        JobSummary: {
+            /** Format: int64 */
+            runs: number;
+            /** Format: int64 */
+            failures: number;
+            /** Format: int64 */
+            missed: number;
+            avg_ms: number | null;
+            max_ms: number | null;
+            last_at: components["schemas"]["NullableTimestamp"];
+        };
+        JobMonitor: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            kind: string;
+            cron: string;
+            time_zone: string;
+            interval_seconds: number;
+            grace_seconds: number;
+            enabled: boolean;
+            tags: string[];
+            /** @description The URL the job calls. It is public by construction — it lives in a crontab — and what it authorizes is this monitor's own status (D-141). */
+            ping_url: string;
+            created_by_email: string;
+            updated_by_email: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+            state: components["schemas"]["JobMonitorState"];
+            summary?: components["schemas"]["JobSummary"];
+        };
+        JobRun: {
+            timestamp: components["schemas"]["Timestamp"];
+            status: components["schemas"]["JobRunStatus"];
+            started_at: components["schemas"]["NullableTimestamp"];
+            duration_ms: number;
+            exit_code: number;
+            /** @description Seconds past the expected time; negative means early */
+            late_seconds: number;
+            message: string;
+            /** @description The address the ping came from */
+            source: string;
         };
         /**
          * @description http requests a URL, tcp opens a connection, dns resolves a name and compares the answer, and tls completes a handshake and fails while the certificate is expired or expiring (D-140).
@@ -12855,6 +13061,345 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listJobMonitors: {
+        parameters: {
+            query?: {
+                /** @description Summarize the last 7 days of runs */
+                summary?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Monitors with their state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        monitors: components["schemas"]["JobMonitor"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    createJobMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobMonitorInput"];
+            };
+        };
+        responses: {
+            /** @description Created monitor */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMonitor"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getJobMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Monitor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMonitor"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateJobMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobMonitorInput"];
+            };
+        };
+        responses: {
+            /** @description Updated monitor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMonitor"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteJobMonitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    rotateJobMonitorToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Monitor with its new ping URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMonitor"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getJobMonitorRuns: {
+        parameters: {
+            query?: {
+                /** @description Start of the range (RFC3339 or unix milliseconds; default now − 7 days) */
+                from?: string;
+                /** @description End of the range (default now) */
+                to?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs of the monitor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        monitor: components["schemas"]["JobMonitor"];
+                        runs: components["schemas"]["JobRun"][];
+                        summary: components["schemas"]["JobSummary"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    pingJobMonitor: {
+        parameters: {
+            query?: {
+                exit?: number;
+                /** @description Output */
+                msg?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The monitor's ping token (olj_…) */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Invalid exit code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Unknown token */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    pingJobMonitorWithOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The monitor's ping token (olj_…) */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Unknown token */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    pingJobMonitorEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                event: "start" | "success" | "fail";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Unknown token or event */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    pingJobMonitorEventWithOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                event: "start" | "success" | "fail";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Unknown token or event */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     listSyntheticChecks: {

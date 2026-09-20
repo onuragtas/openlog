@@ -46,7 +46,9 @@ tags:
   - name: slos
     description: Service level objectives, error budgets and burn rates (slo.md, D-125)
   - name: synthetics
-    description: Scheduled outside-in HTTP checks, their uptime and latency (api.md "Synthetic monitoring", D-132)
+    description: Scheduled outside-in checks — HTTP, TCP, DNS and TLS certificates (api.md "Synthetic monitoring", D-132, D-140)
+  - name: jobs
+    description: Cron and heartbeat monitoring — the job reports, openlog notices the silence (api.md "Job monitoring", D-141)
   - name: db
     description: Database query performance monitoring — statements, waits, blocking sessions, plans (db-monitoring.md, D-138)
   - name: rum
@@ -2292,6 +2294,204 @@ paths:
         "504": { $ref: "#/components/responses/Timeout" }
 
   # ---------------------------------------------------------------- synthetics
+  /api/v1/jobs/monitors:
+    get:
+      tags: [jobs]
+      operationId: listJobMonitors
+      description: >-
+        Cron and heartbeat monitors of the organization ordered by name, each with its current state and,
+        unless `summary=false`, the outcome of its runs over the last 7 days (api.md "Job monitoring").
+      parameters:
+        - { name: summary, in: query, schema: { type: boolean, default: true }, description: Summarize the last 7 days of runs }
+      responses:
+        "200":
+          description: Monitors with their state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [monitors]
+                properties:
+                  monitors:
+                    type: array
+                    items: { $ref: "#/components/schemas/JobMonitor" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "504": { $ref: "#/components/responses/Timeout" }
+    post:
+      tags: [jobs]
+      operationId: createJobMonitor
+      description: >-
+        Signed-in member or higher; audit event job_monitor.create. Not available in static auth mode (404).
+        At most 200 monitors per organization (409). The response carries the ping URL the job calls.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobMonitorInput" }
+      responses:
+        "201":
+          description: Created monitor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobMonitor" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/jobs/monitors/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [jobs]
+      operationId: getJobMonitor
+      responses:
+        "200":
+          description: Monitor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobMonitor" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [jobs]
+      operationId: updateJobMonitor
+      description: >-
+        Full replacement; signed-in member or higher; audit event job_monitor.update. The ping token is
+        unchanged, so the crontab that uses it keeps working.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobMonitorInput" }
+      responses:
+        "200":
+          description: Updated monitor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobMonitor" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [jobs]
+      operationId: deleteJobMonitor
+      description: >-
+        Signed-in member or higher; audit event job_monitor.delete. The state row goes with the monitor; the
+        stored runs stay in ClickHouse until their TTL expires.
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/jobs/monitors/{id}/rotate:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [jobs]
+      operationId: rotateJobMonitorToken
+      description: >-
+        Issue a new ping token for a monitor whose URL leaked; audit event job_monitor.rotate_token. The old
+        URL stops working at once, so the crontab has to be updated with the new one.
+      responses:
+        "200":
+          description: Monitor with its new ping URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobMonitor" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/jobs/monitors/{id}/runs:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [jobs]
+      operationId: getJobMonitorRuns
+      description: Concluded runs over the range, newest first, with the outcome summary.
+      parameters:
+        - { name: from, in: query, schema: { type: string }, description: "Start of the range (RFC3339 or unix milliseconds; default now − 7 days)" }
+        - { name: to, in: query, schema: { type: string }, description: "End of the range (default now)" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 50 } }
+      responses:
+        "200":
+          description: Runs of the monitor
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [monitor, runs, summary]
+                properties:
+                  monitor: { $ref: "#/components/schemas/JobMonitor" }
+                  runs:
+                    type: array
+                    items: { $ref: "#/components/schemas/JobRun" }
+                  summary: { $ref: "#/components/schemas/JobSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/jobs/ping/{token}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string }, description: "The monitor's ping token (olj_…)" }
+    get:
+      tags: [jobs]
+      operationId: pingJobMonitor
+      security: []
+      description: >-
+        Report that the job ran. **Not authenticated**: the caller is a line in a crontab and the token in
+        the URL identifies the monitor. `POST` may carry the job's output as the body (at most 4 KiB), and
+        `?exit=<code>` reports the exit status — a non-zero code is a failure however the event was spelled.
+        `/start` and `/fail` are the other two events (api.md "Job monitoring"). The answer is plain text.
+      parameters:
+        - { name: exit, in: query, schema: { type: integer, minimum: 0, maximum: 255 } }
+        - { name: msg, in: query, schema: { type: string }, description: Output, when sending a body is inconvenient }
+      responses:
+        "200": { description: Recorded, content: { text/plain: { schema: { type: string } } } }
+        "400": { description: Invalid exit code, content: { text/plain: { schema: { type: string } } } }
+        "404": { description: Unknown token, content: { text/plain: { schema: { type: string } } } }
+    post:
+      tags: [jobs]
+      operationId: pingJobMonitorWithOutput
+      security: []
+      description: As the GET, with the job's output as the body.
+      requestBody:
+        required: false
+        content:
+          text/plain:
+            schema: { type: string, maxLength: 4096 }
+      responses:
+        "200": { description: Recorded, content: { text/plain: { schema: { type: string } } } }
+        "404": { description: Unknown token, content: { text/plain: { schema: { type: string } } } }
+
+  /api/v1/jobs/ping/{token}/{event}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+      - { name: event, in: path, required: true, schema: { type: string, enum: [start, success, fail] } }
+    get:
+      tags: [jobs]
+      operationId: pingJobMonitorEvent
+      security: []
+      description: >-
+        `start` marks the run as running (so an overrun is visible), `fail` marks it failed, `success` is the
+        same as no suffix. Not authenticated; see the ping endpoint above.
+      responses:
+        "200": { description: Recorded, content: { text/plain: { schema: { type: string } } } }
+        "404": { description: Unknown token or event, content: { text/plain: { schema: { type: string } } } }
+    post:
+      tags: [jobs]
+      operationId: pingJobMonitorEventWithOutput
+      security: []
+      description: As the GET, with the job's output as the body.
+      responses:
+        "200": { description: Recorded, content: { text/plain: { schema: { type: string } } } }
+        "404": { description: Unknown token or event, content: { text/plain: { schema: { type: string } } } }
+
   /api/v1/synthetics/checks:
     get:
       tags: [synthetics]
@@ -9981,6 +10181,115 @@ components:
           maxItems: 10
           items: { type: string }
           description: 'Default ["local"] (the openlog server itself)'
+    JobScheduleKind:
+      type: string
+      enum: [cron, interval]
+      default: cron
+      description: >-
+        cron: the crontab expression that starts the job. interval: the job reports at least this often,
+        which is what a daemon's heartbeat is.
+    JobRunStatus:
+      type: string
+      enum: [running, success, failure, missed, overrun]
+      description: >-
+        running and success/failure are what the job reports; missed (nothing arrived in time) and overrun
+        (a run started and never reported an end) are what openlog concludes.
+    JobMonitorInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 1000 }
+        kind: { $ref: "#/components/schemas/JobScheduleKind" }
+        cron:
+          type: string
+          maxLength: 200
+          description: "cron only: five fields (minute hour day month weekday) or a macro (@daily, @hourly, …)"
+        time_zone:
+          type: string
+          maxLength: 64
+          description: "cron only: the IANA zone the expression is read in (empty = UTC)"
+        interval_seconds:
+          type: integer
+          minimum: 60
+          maximum: 7776000
+          description: "interval only: how often the job is expected to report"
+        grace_seconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          default: 300
+          description: How long after the expected time a run may still arrive before it counts as missed
+        enabled: { type: boolean, default: true }
+        tags:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 64 }
+    JobMonitorState:
+      type: object
+      required: [status, last_ping_at, last_started_at, last_finished_at, last_duration_ms, last_exit_code,
+                 last_message, expected_at, consecutive_failures, late]
+      properties:
+        status: { type: string, description: "The last concluded status, '' until the first run" }
+        last_ping_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_started_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_finished_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        last_duration_ms: { type: number }
+        last_exit_code: { type: integer }
+        last_message: { type: string }
+        expected_at: { $ref: "#/components/schemas/Timestamp" }
+        consecutive_failures: { type: integer }
+        late: { type: boolean, description: Past the expected time plus grace, not yet concluded }
+    JobSummary:
+      type: object
+      required: [runs, failures, missed, avg_ms, max_ms, last_at]
+      properties:
+        runs: { type: integer, format: int64 }
+        failures: { type: integer, format: int64 }
+        missed: { type: integer, format: int64 }
+        avg_ms: { type: number, nullable: true }
+        max_ms: { type: number, nullable: true }
+        last_at: { $ref: "#/components/schemas/NullableTimestamp" }
+    JobMonitor:
+      type: object
+      required: [id, name, description, kind, cron, time_zone, interval_seconds, grace_seconds, enabled,
+                 tags, ping_url, created_by_email, updated_by_email, created_at, updated_at, state]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        kind: { type: string }
+        cron: { type: string }
+        time_zone: { type: string }
+        interval_seconds: { type: integer }
+        grace_seconds: { type: integer }
+        enabled: { type: boolean }
+        tags:
+          type: array
+          items: { type: string }
+        ping_url:
+          type: string
+          description: >-
+            The URL the job calls. It is public by construction — it lives in a crontab — and what it
+            authorizes is this monitor's own status (D-141).
+        created_by_email: { type: string }
+        updated_by_email: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
+        state: { $ref: "#/components/schemas/JobMonitorState" }
+        summary: { $ref: "#/components/schemas/JobSummary" }
+    JobRun:
+      type: object
+      required: [timestamp, status, started_at, duration_ms, exit_code, late_seconds, message, source]
+      properties:
+        timestamp: { $ref: "#/components/schemas/Timestamp" }
+        status: { $ref: "#/components/schemas/JobRunStatus" }
+        started_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        duration_ms: { type: number }
+        exit_code: { type: integer }
+        late_seconds: { type: number, description: "Seconds past the expected time; negative means early" }
+        message: { type: string }
+        source: { type: string, description: The address the ping came from }
     SyntheticCheckType:
       type: string
       enum: [http, tcp, dns, tls]

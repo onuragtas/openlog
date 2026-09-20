@@ -426,6 +426,17 @@ they are computed from `apm_transactions_1m` at query time.
 The migration also extends `alert_rules_type_check` with `slo_burn` (alerting.md §2.11); such rules keep the
 `slo_id` of a deleted SLO and then report an evaluation error.
 
+## Job monitoring (`0096_job_monitors`)
+
+`job_monitors` is the definition (name, schedule kind, cron expression and its time zone or the reporting
+interval, grace period, tags) plus `ping_token`, the value in the URL the job calls. `job_monitor_state` is
+one row per monitor: what the last ping said and when the next run is due. The sweeper claims overdue rows
+with `FOR UPDATE ... SKIP LOCKED` and advances `expected_at` in the same statement, so a missed run is
+concluded once (D-141). The runs themselves live in ClickHouse (`job_runs`, 90 days).
+
+The token is stored as it is rather than hashed: the URL lives in a crontab and has to stay re-readable, and
+what it authorizes is one monitor's own status — the threat model is in [api.md](api.md#job-monitoring).
+
 ## Synthetic monitoring (`0090_synthetics`)
 
 Extended by `0095_synthetic_check_types` (D-140): `type` accepts `http`, `tcp`, `dns` and `tls`, and the
