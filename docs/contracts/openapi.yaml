@@ -2733,6 +2733,99 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  # ---------------------------------------------------------------- profiling
+  /api/v1/profiles/services:
+    get:
+      tags: [profiles]
+      operationId: listProfileServices
+      description: >-
+        What has been profiled in the window, one entry per service, environment and profile type. This is
+        what tells a caller which types the other endpoints accept — nanoseconds and bytes do not add up, so
+        a type is never guessed (profiles.md §5).
+      parameters:
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Profiled services
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProfileService" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/profiles/flame:
+    get:
+      tags: [profiles]
+      operationId: getProfileFlame
+      description: >-
+        The flame graph of one service and profile type over the window. Identical stacks are folded in
+        ClickHouse, which is the whole reason the stack is a column; the tree is capped at 20000 distinct
+        stacks ordered by value, so what falls off the end is the narrowest slivers.
+      parameters:
+        - { name: service, in: query, required: true, schema: { type: string } }
+        - { name: type, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: host, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20000, maximum: 20000 } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Flame graph
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unit, type, flame]
+                properties:
+                  unit: { type: string, description: The unit the profile's own ValueType declared }
+                  type: { type: string }
+                  flame: { $ref: "#/components/schemas/FlameNode" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/profiles/functions:
+    get:
+      tags: [profiles]
+      operationId: listProfileFunctions
+      description: >-
+        Functions ranked by self time, the value attributed to the innermost frame. `total` is the sum of the
+        rows returned, not of the window, so a percentage is of something the caller can see.
+      parameters:
+        - { name: service, in: query, required: true, schema: { type: string } }
+        - { name: type, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: host, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Functions by self time
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unit, type, total, functions]
+                properties:
+                  unit: { type: string }
+                  type: { type: string }
+                  total: { type: integer, format: int64 }
+                  functions:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProfileFunction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   # -------------------------------------------------------------- browser keys
   /api/v1/source-maps:
     get:
@@ -10053,6 +10146,36 @@ components:
         rating: { type: string, description: "Rating of the p75: good, needs_improvement, poor, or \"\" without data" }
         good_threshold: { type: number }
         poor_threshold: { type: number }
+    ProfileService:
+      type: object
+      required: [service, environment, type, unit, samples, total, last_seen]
+      properties:
+        service: { type: string }
+        environment: { type: string }
+        type: { type: string, description: The sample type of the profile such as cpu or alloc_space }
+        unit: { type: string, description: The unit of the profile such as nanoseconds or bytes }
+        samples: { type: integer }
+        total: { type: integer, format: int64 }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+    ProfileFunction:
+      type: object
+      required: [function, self, samples]
+      properties:
+        function: { type: string, description: The innermost frame the value is attributed to }
+        self: { type: integer, format: int64 }
+        samples: { type: integer }
+    FlameNode:
+      type: object
+      description: >-
+        One block of a flame graph — a frame, the total value below it, and the frames it called. The root is
+        named "all" and holds the total of every stack returned.
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: integer, format: int64 }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/FlameNode" }
     RumPage:
       type: object
       required: [route, views, avg_ms, p50_ms, p75_ms, p95_ms, max_ms, ttfb_avg_ms, lcp_p75, errors]

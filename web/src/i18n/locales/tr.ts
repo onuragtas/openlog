@@ -124,6 +124,7 @@ export const tr: Messages = {
     integrations: "Entegrasyonlar",
     apm: "APM",
     rum: "Tarayıcı",
+    profiles: "Profilleme",
     databases: "Veritabanları",
     slos: "SLO'lar",
     synthetics: "Sentetik izleme",
@@ -3300,6 +3301,27 @@ export const tr: Messages = {
     },
   },
 
+  profiles: {
+    title: "Profilleme",
+    subtitle: "Yavaş işlemin içinde zamanı hangi fonksiyon harcadı",
+    empty: "Henüz profil verisi gelmedi.",
+    emptyHint: "Alev grafiklerini burada görmek için /v1/profiles adresine OTLP profilleri gönderin.",
+    typeHint: "Tür asla varsayılmaz: nanosaniye ile bayt toplanmaz.",
+    tabs: { flame: "Alev grafiği", functions: "Fonksiyonlar" },
+    services: {
+      columns: { service: "Servis", environment: "Ortam", type: "Tür", samples: "Örnek", total: "Toplam", lastSeen: "Son görülme" },
+    },
+    flame: {
+      empty: "Bu aralıkta örnek yok.",
+      reset: "Profilin tamamına dön",
+      zoomHint: "Yakınlaşmak için bir çerçeve seçin.",
+    },
+    functions: {
+      empty: "Bu aralıkta örnek yok.",
+      hint: "Self süre, en içteki çerçeveye atfedilen değerdir — bir profile sorulan ilk soru.",
+      columns: { function: "Fonksiyon", self: "Self", samples: "Örnek", share: "Pay" },
+    },
+  },
   rum: {
     title: "Tarayıcı",
     subtitle: "Gerçek ziyaretçilerden gelen Core Web Vitals, sayfa yüklemeleri, hatalar ve istekler",

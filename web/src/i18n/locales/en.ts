@@ -123,6 +123,7 @@ export const en = {
     integrations: "Integrations",
     apm: "APM",
     rum: "Browser",
+    profiles: "Profiling",
     databases: "Databases",
     slos: "SLOs",
     synthetics: "Synthetics",
@@ -3299,6 +3300,27 @@ export const en = {
     },
   },
 
+  profiles: {
+    title: "Profiling",
+    subtitle: "Which function spent the time inside the slow span",
+    empty: "Nothing has been profiled yet.",
+    emptyHint: "Send OTLP profiles to /v1/profiles to see flame graphs here.",
+    typeHint: "A type is never guessed: nanoseconds and bytes do not add up.",
+    tabs: { flame: "Flame graph", functions: "Functions" },
+    services: {
+      columns: { service: "Service", environment: "Environment", type: "Type", samples: "Samples", total: "Total", lastSeen: "Last seen" },
+    },
+    flame: {
+      empty: "No samples in this range.",
+      reset: "Back to the whole profile",
+      zoomHint: "Select a frame to zoom into it.",
+    },
+    functions: {
+      empty: "No samples in this range.",
+      hint: "Self time is the value attributed to the innermost frame — the first question asked of a profile.",
+      columns: { function: "Function", self: "Self", samples: "Samples", share: "Share" },
+    },
+  },
   rum: {
     title: "Browser",
     subtitle: "Core Web Vitals, page loads, errors and requests from real visitors",

@@ -55,6 +55,7 @@ const SloDetailPage = lazyRouteComponent(() => import("@/routes/slos"), "SloDeta
 const SyntheticsPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticsPage");
 const SyntheticDetailPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticDetailPage");
 const RumPage = lazyRouteComponent(() => import("@/routes/rum"), "RumPage");
+const ProfilesPage = lazyRouteComponent(() => import("@/routes/profiles"), "ProfilesPage");
 const DatabasesPage = lazyRouteComponent(() => import("@/routes/databases"), "DatabasesPage");
 const DatabaseInstancePage = lazyRouteComponent(() => import("@/routes/databases"), "DatabaseInstancePage");
 const DatabaseQueryPage = lazyRouteComponent(() => import("@/routes/databases"), "DatabaseQueryPage");
@@ -750,6 +751,32 @@ const rumSessionRoute = createRoute({
   component: RumSessionPage,
 });
 
+// ---- Continuous profiling (routes/profiles.tsx, docs/contracts/profiles.md §5) ----
+const PROFILE_TABS = ["flame", "functions"] as const;
+
+export interface ProfilesSearch {
+  range?: string;
+  from?: string;
+  to?: string;
+  /** The selected service and profile type. A type is never defaulted: nanoseconds and bytes do not add up. */
+  service?: string;
+  type?: string;
+  env?: string;
+  tab?: (typeof PROFILE_TABS)[number];
+}
+
+const profilesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/profiles",
+  validateSearch: (s: Record<string, unknown>): ProfilesSearch => ({
+    service: str(s.service),
+    type: str(s.type),
+    env: str(s.env),
+    tab: oneOf(PROFILE_TABS, s.tab),
+  }),
+  component: ProfilesPage,
+});
+
 // ---- Database query performance (routes/databases.tsx, docs/contracts/db-monitoring.md §5, D-138) ----
 const DATABASE_TABS = ["activity", "queries", "sessions"] as const;
 const DATABASE_SORTS = ["time", "calls", "avg", "rows", "errors", "reads"] as const;
@@ -1088,6 +1115,7 @@ export const routeTree = rootRoute.addChildren([
     rumRoute,
     rumAppRoute,
     rumSessionRoute,
+    profilesRoute,
     databasesRoute,
     databaseInstanceRoute,
     databaseQueryRoute,

@@ -1929,6 +1929,39 @@ Instances whose statistics hold a normalized statement — the link from an APM 
 {"matches": [{"instance": "db1.internal:5432", "fingerprint": "…", "host_name": "db1", "calls": 967, "avg_ms": 0.2}]}
 ```
 
+## Continuous profiling
+
+Which function spent the time *inside* a slow span ([profiles.md](profiles.md)). Reads are telemetry reads
+(any role, API keys too) and go through `profiles` (`0095_profiles`), where the call stack was already
+expanded at ingest — so a flame graph is one aggregation, not five joins.
+
+A **profile type is required** wherever values are summed, and is deliberately not defaulted to `cpu`:
+nanoseconds and bytes do not add up, so a chart over an unstated type would be a number with no unit. Every
+response repeats the `unit` the profile's own `ValueType` declared, so a chart never hard-codes "ns".
+
+### `GET /api/v1/profiles/services?from=&to=`
+`{"services": [{"service", "environment", "type", "unit", "samples", "total", "last_seen"}]}`.
+
+One entry per service, environment and profile type — this is what tells a caller which types the other two
+endpoints will accept.
+
+### `GET /api/v1/profiles/flame?service=&type=&environment=&host=&limit=&from=&to=`
+```json
+{"unit": "nanoseconds", "type": "cpu",
+ "flame": {"name": "all", "value": 4200000,
+           "children": [{"name": "main", "value": 4200000,
+                         "children": [{"name": "handleRequest", "value": 3100000}]}]}}
+```
+The tree a flame graph draws, root first. Identical stacks are folded in ClickHouse; `limit` caps the
+distinct stacks at 20000, ordered by value, so what falls off the end is the narrowest slivers.
+
+### `GET /api/v1/profiles/functions?service=&type=&environment=&host=&limit=&from=&to=`
+`{"unit", "type", "total", "functions": [{"function", "self", "samples"}]}`.
+
+Functions ranked by **self time**: the value attributed to the innermost frame, which is the first question
+asked of a profile. `total` is the sum of the rows returned, not of the window, so a percentage is of
+something the caller can see.
+
 ## Alerting
 
 Rules, incidents, notification channels, routing rules, mute windows and the delivery log of the caller's

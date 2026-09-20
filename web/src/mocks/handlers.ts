@@ -14,6 +14,7 @@ import { dashboardHandlers } from "./dashboards";
 import { dashboardSharingHandlers } from "./dashboardSharing";
 import { oqlHandlers } from "./oql";
 import { browserKeyHandlers } from "./browserKeys";
+import { profileHandlers } from "./profiles";
 import { rumHandlers } from "./rum";
 import { dbHandlers } from "./db";
 import { sloHandlers } from "./slos";
@@ -307,6 +308,7 @@ export const handlers = [
   ...sloHandlers, // mocks/slos.ts: service level objectives, error budgets and burn rates (D-125)
   ...syntheticHandlers, // mocks/synthetics.ts: scheduled outside-in checks (D-132)
   ...rumHandlers, // mocks/rum.ts: browser applications, vitals, pages and sessions (D-136)
+  ...profileHandlers, // mocks/profiles.ts: continuous profiling flame graphs (profiles.md)
   ...dbHandlers, // mocks/db.ts: database query performance (D-138)
   ...browserKeyHandlers, // mocks/browserKeys.ts: the public keys of the RUM SDK (D-136)
   ...cloudHandlers, // mocks/cloud.ts: managed cloud service metrics (D-135)

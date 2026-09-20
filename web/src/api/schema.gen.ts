@@ -1601,6 +1601,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profiles/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What has been profiled in the window, one entry per service, environment and profile type. This is what tells a caller which types the other endpoints accept — nanoseconds and bytes do not add up, so a type is never guessed (profiles.md §5). */
+        get: operations["listProfileServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/flame": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The flame graph of one service and profile type over the window. Identical stacks are folded in ClickHouse, which is the whole reason the stack is a column; the tree is capped at 20000 distinct stacks ordered by value, so what falls off the end is the narrowest slivers. */
+        get: operations["getProfileFlame"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/functions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Functions ranked by self time, the value attributed to the innermost frame. `total` is the sum of the rows returned, not of the window, so a percentage is of something the caller can see. */
+        get: operations["listProfileFunctions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/source-maps": {
         parameters: {
             query?: never;
@@ -6903,6 +6954,32 @@ export interface components {
             rating: string;
             good_threshold: number;
             poor_threshold: number;
+        };
+        ProfileService: {
+            service: string;
+            environment: string;
+            /** @description The sample type of the profile such as cpu or alloc_space */
+            type: string;
+            /** @description The unit of the profile such as nanoseconds or bytes */
+            unit: string;
+            samples: number;
+            /** Format: int64 */
+            total: number;
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        ProfileFunction: {
+            /** @description The innermost frame the value is attributed to */
+            function: string;
+            /** Format: int64 */
+            self: number;
+            samples: number;
+        };
+        /** @description One block of a flame graph — a frame, the total value below it, and the frames it called. The root is named "all" and holds the total of every stack returned. */
+        FlameNode: {
+            name: string;
+            /** Format: int64 */
+            value: number;
+            children?: components["schemas"]["FlameNode"][];
         };
         RumPage: {
             /** @description The normalized route (rum.md §4) */
@@ -13298,6 +13375,106 @@ export interface operations {
                             calls: number;
                             avg_ms: number | null;
                         }[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listProfileServices: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profiled services */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        services: components["schemas"]["ProfileService"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getProfileFlame: {
+        parameters: {
+            query: {
+                service: string;
+                type: string;
+                environment?: string;
+                host?: string;
+                limit?: number;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flame graph */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description The unit the profile's own ValueType declared */
+                        unit: string;
+                        type: string;
+                        flame: components["schemas"]["FlameNode"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listProfileFunctions: {
+        parameters: {
+            query: {
+                service: string;
+                type: string;
+                environment?: string;
+                host?: string;
+                limit?: number;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Functions by self time */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        unit: string;
+                        type: string;
+                        /** Format: int64 */
+                        total: number;
+                        functions: components["schemas"]["ProfileFunction"][];
                     };
                 };
             };

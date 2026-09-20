@@ -145,6 +145,10 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/db/activity?instance=db1%3A5432",
 		"/api/v1/db/sessions?instance=db1%3A5432&at=1757757600000",
 		"/api/v1/db/lookup?db_system=postgresql&statement=SELECT%20%3F",
+		// Continuous profiling (profiles.go, schema 0095_profiles)
+		"/api/v1/profiles/services",
+		"/api/v1/profiles/flame?service=orders&type=cpu&environment=prod",
+		"/api/v1/profiles/functions?service=orders&type=cpu&host=h1&sort=self",
 	}
 	for _, p := range paths {
 		req := httptest.NewRequest(http.MethodGet, p, nil)
