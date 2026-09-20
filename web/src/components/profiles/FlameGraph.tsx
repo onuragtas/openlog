@@ -75,8 +75,10 @@ export function FlameGraph({ flame, unit }: { flame: FlameNode; unit: string }) 
           </Button>
         )}
       </div>
+      {/* The frames are laid out in percentages, so the graph itself fits any width; the minimum only keeps
+          labels readable on a wide screen and is dropped below sm, where it would force the page sideways. */}
       <div className="overflow-x-auto">
-        <div className="relative min-w-[480px]" style={{ height: depth * ROW_H }} role="tree" aria-label={t("profiles.tabs.flame")}>
+        <div className="relative sm:min-w-[480px]" style={{ height: depth * ROW_H }} role="tree" aria-label={t("profiles.tabs.flame")}>
           {rows.map((row, i) => {
             const share = root.value ? (row.node.value / root.value) * 100 : 0;
             const label = `${row.node.name} · ${formatValue(row.node.value, unit, i18n.language)} · ${share.toFixed(1)}%`;

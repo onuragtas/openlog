@@ -61,7 +61,7 @@ export function WorkloadTable({ workloads, showCluster = true }: { workloads: Ku
   const navigate = useNavigate();
   const locale = i18n.resolvedLanguage ?? "en";
   return (
-    <Table data-testid="k8s-workload-table">
+    <Table mobile="stack" data-testid="k8s-workload-table">
       <TableHeader>
         <TableRow>
           <TableHead>{t("kubernetes.columns.name")}</TableHead>
@@ -94,21 +94,35 @@ export function WorkloadTable({ workloads, showCluster = true }: { workloads: Ku
               <WorkloadLink w={w} className="block truncate font-medium hover:underline" />
               <div className="truncate text-xs text-muted-foreground">{w.namespace}</div>
             </TableCell>
-            <TableCell className="text-xs">{w.kind}</TableCell>
-            <TableCell>
+            <TableCell label={t("kubernetes.columns.kind")} className="text-xs">
+              {w.kind}
+            </TableCell>
+            <TableCell className="max-md:w-auto">
               <WorkloadHealthBadge health={w.health} />
             </TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{w.kind === "CronJob" ? <Dash /> : replicasText(w.ready, w.desired)}</TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{w.restarts}</TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{formatCores(w.cpu_usage, locale)}</TableCell>
-            <TableCell>
+            <TableCell label={t("kubernetes.columns.replicas")} className="text-right font-mono tabular-nums">
+              {w.kind === "CronJob" ? <Dash /> : replicasText(w.ready, w.desired)}
+            </TableCell>
+            <TableCell label={t("kubernetes.columns.restarts")} className="text-right font-mono tabular-nums">
+              {w.restarts}
+            </TableCell>
+            <TableCell label={t("kubernetes.columns.cpu")} className="text-right font-mono tabular-nums">
+              {formatCores(w.cpu_usage, locale)}
+            </TableCell>
+            <TableCell className="max-md:hidden">
               <Sparkline points={w.cpu_sparkline} label={t("kubernetes.columns.cpuTrend")} width={96} />
             </TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{w.memory_working_set == null ? <Dash /> : formatBytes(w.memory_working_set)}</TableCell>
-            <TableCell>
+            <TableCell label={t("kubernetes.columns.memory")} className="text-right font-mono tabular-nums">
+              {w.memory_working_set == null ? <Dash /> : formatBytes(w.memory_working_set)}
+            </TableCell>
+            <TableCell className="max-md:hidden">
               <Sparkline points={w.memory_sparkline} label={t("kubernetes.columns.memoryTrend")} width={96} />
             </TableCell>
-            {showCluster && <TableCell className="text-xs">{w.cluster_name || w.cluster_uid}</TableCell>}
+            {showCluster && (
+              <TableCell label={t("kubernetes.columns.cluster")} className="text-xs">
+                {w.cluster_name || w.cluster_uid}
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>
@@ -130,7 +144,7 @@ export function PodTable({ pods, showWorkload = true, showCluster = true }: { po
   const navigate = useNavigate();
   const locale = i18n.resolvedLanguage ?? "en";
   return (
-    <Table data-testid="k8s-pod-table">
+    <Table mobile="stack" data-testid="k8s-pod-table">
       <TableHeader>
         <TableRow>
           <TableHead>{t("kubernetes.columns.name")}</TableHead>
@@ -159,14 +173,20 @@ export function PodTable({ pods, showWorkload = true, showCluster = true }: { po
               <PodLink pod={p} className="block truncate font-medium hover:underline" />
               <div className="truncate text-xs text-muted-foreground">{p.namespace}</div>
             </TableCell>
-            <TableCell>
+            <TableCell className="max-md:w-auto">
               <PodStatusBadge pod={p} />
             </TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{p.restarts}</TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{formatCores(p.cpu_usage, locale)}</TableCell>
-            <TableCell className="text-right font-mono tabular-nums">{p.memory_working_set == null ? <Dash /> : formatBytes(p.memory_working_set)}</TableCell>
+            <TableCell label={t("kubernetes.columns.restarts")} className="text-right font-mono tabular-nums">
+              {p.restarts}
+            </TableCell>
+            <TableCell label={t("kubernetes.columns.cpu")} className="text-right font-mono tabular-nums">
+              {formatCores(p.cpu_usage, locale)}
+            </TableCell>
+            <TableCell label={t("kubernetes.columns.memory")} className="text-right font-mono tabular-nums">
+              {p.memory_working_set == null ? <Dash /> : formatBytes(p.memory_working_set)}
+            </TableCell>
             {showWorkload && (
-              <TableCell className="text-xs">
+              <TableCell label={t("kubernetes.columns.workload")} className="text-xs">
                 {p.workload_kind && p.workload_kind !== "Pod" ? (
                   <WorkloadLink w={{ cluster_uid: p.cluster_uid, namespace: p.namespace, kind: p.workload_kind, name: p.workload_name }}>
                     <span className="text-muted-foreground">{p.workload_kind}</span> {p.workload_name}
@@ -176,12 +196,20 @@ export function PodTable({ pods, showWorkload = true, showCluster = true }: { po
                 )}
               </TableCell>
             )}
-            <TableCell className="text-xs">{p.node_name || <Dash />}</TableCell>
-            <TableCell className="font-mono text-xs">{p.pod_ip || <Dash />}</TableCell>
-            <TableCell className="text-xs whitespace-nowrap">
+            <TableCell label={t("kubernetes.columns.node")} className="text-xs">
+              {p.node_name || <Dash />}
+            </TableCell>
+            <TableCell label={t("kubernetes.columns.ip")} className="font-mono text-xs">
+              {p.pod_ip || <Dash />}
+            </TableCell>
+            <TableCell label={t("kubernetes.columns.age")} className="text-xs whitespace-nowrap">
               <Since at={p.created_at} />
             </TableCell>
-            {showCluster && <TableCell className="text-xs">{p.cluster_name || p.cluster_uid}</TableCell>}
+            {showCluster && (
+              <TableCell label={t("kubernetes.columns.cluster")} className="text-xs">
+                {p.cluster_name || p.cluster_uid}
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>
@@ -192,7 +220,7 @@ export function PodTable({ pods, showWorkload = true, showCluster = true }: { po
 export function NodeTable({ nodes, showCluster = true }: { nodes: KubernetesNode[]; showCluster?: boolean }) {
   const { t } = useTranslation();
   return (
-    <Table data-testid="k8s-node-table">
+    <Table mobile="stack" data-testid="k8s-node-table">
       <TableHeader>
         <TableRow>
           <TableHead>{t("kubernetes.columns.name")}</TableHead>
@@ -215,21 +243,21 @@ export function NodeTable({ nodes, showCluster = true }: { nodes: KubernetesNode
                 <span className="block truncate font-medium">{n.node_name}</span>
                 <div className="truncate text-xs text-muted-foreground">{[n.roles.join(", "), n.internal_ip].filter(Boolean).join(" · ") || "–"}</div>
               </TableCell>
-              <TableCell>
+              <TableCell className="max-md:w-auto">
                 <NodeStatusBadge node={n} />
                 {problems.length > 0 && <div className="mt-1 text-xs text-destructive-text">{problems.join(", ")}</div>}
               </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
+              <TableCell label={t("kubernetes.columns.pods")} className="text-right font-mono tabular-nums">
                 {n.pods}
                 {n.allocatable_pods != null && <span className="text-muted-foreground">/{n.allocatable_pods}</span>}
               </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
+              <TableCell label={t("kubernetes.columns.cpu")} className="text-right font-mono tabular-nums">
                 <UsageOf used={n.cpu_usage} total={n.allocatable_cpu} cores />
               </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
+              <TableCell label={t("kubernetes.columns.memory")} className="text-right font-mono tabular-nums">
                 <UsageOf used={n.memory_working_set} total={n.allocatable_memory} />
               </TableCell>
-              <TableCell className="text-xs">
+              <TableCell label={t("kubernetes.columns.host")} className="text-xs">
                 {n.host_id ? (
                   <Link
                     to="/hosts/$hostId"
@@ -244,11 +272,17 @@ export function NodeTable({ nodes, showCluster = true }: { nodes: KubernetesNode
                   <Dash />
                 )}
               </TableCell>
-              <TableCell className="text-xs">{n.kubelet_version || <Dash />}</TableCell>
-              <TableCell className="text-xs whitespace-nowrap">
+              <TableCell label={t("kubernetes.columns.kubelet")} className="text-xs">
+                {n.kubelet_version || <Dash />}
+              </TableCell>
+              <TableCell label={t("kubernetes.columns.lastSeen")} className="text-xs whitespace-nowrap">
                 <Since at={n.last_seen} />
               </TableCell>
-              {showCluster && <TableCell className="text-xs">{n.cluster_name || n.cluster_uid}</TableCell>}
+              {showCluster && (
+                <TableCell label={t("kubernetes.columns.cluster")} className="text-xs">
+                  {n.cluster_name || n.cluster_uid}
+                </TableCell>
+              )}
             </TableRow>
           );
         })}

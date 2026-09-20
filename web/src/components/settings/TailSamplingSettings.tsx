@@ -25,6 +25,10 @@ import { DateTimeText, FormError, SettingsSection } from "./common";
 const pct = (v: number, locale: string) => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(v);
 
 /** Settings → APM sampling: the organization's tail sampling policy with a preview on last hour's traces. */
+// CELL is one editable cell: a table cell on md and up, a labelled block below it.
+const CELL =
+  "py-2 pr-2 max-md:block max-md:w-full max-md:pr-0 max-md:before:mb-1 max-md:before:block max-md:before:text-xs max-md:before:text-muted-foreground max-md:before:content-[attr(data-label)]";
+
 export function TailSamplingSettings() {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
@@ -119,9 +123,11 @@ export function TailSamplingSettings() {
           </div>
         </fieldset>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] text-sm" aria-label={t("settings.tailSampling.rules")}>
-            <thead>
+        {/* A rule is edited, not just read: below md each row becomes a card of labelled fields, so the name
+            and the ratio of the same rule are visible at once instead of a form scrolling sideways. */}
+        <div className="overflow-x-auto max-md:overflow-x-visible">
+          <table className="w-full text-sm max-md:block md:min-w-[48rem]" aria-label={t("settings.tailSampling.rules")}>
+            <thead className="max-md:sr-only">
               <tr className="border-b text-left text-xs text-muted-foreground">
                 <th className="py-2 pr-2 font-medium">#</th>
                 <th className="py-2 pr-2 font-medium">{t("settings.tailSampling.ruleName")}</th>
@@ -133,21 +139,25 @@ export function TailSamplingSettings() {
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="max-md:block">
               {policy.rules.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-3 text-muted-foreground">
+                  <td colSpan={6} className="py-3 text-muted-foreground max-md:block">
                     {t("settings.tailSampling.noRules")}
                   </td>
                 </tr>
               )}
               {policy.rules.map((r, i) => (
-                <tr key={i} className="border-b align-top" data-testid="tail-sampling-rule">
-                  <td className="py-2 pr-2 font-mono text-xs">{i + 1}</td>
-                  <td className="py-2 pr-2">
+                <tr
+                  key={i}
+                  className="border-b align-top max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:p-3"
+                  data-testid="tail-sampling-rule"
+                >
+                  <td className="py-2 pr-2 font-mono text-xs max-md:block">{i + 1}</td>
+                  <td className={CELL} data-label={t("settings.tailSampling.ruleName")}>
                     <Input aria-label={t("settings.tailSampling.ruleName")} value={r.name} maxLength={64} disabled={!canEdit} onChange={(e) => updateRule(i, { name: e.target.value })} />
                   </td>
-                  <td className="py-2 pr-2">
+                  <td className={CELL} data-label={t("settings.tailSampling.ruleType")}>
                     <NativeSelect
                       aria-label={t("settings.tailSampling.ruleType")}
                       value={r.type}
@@ -161,10 +171,10 @@ export function TailSamplingSettings() {
                       ))}
                     </NativeSelect>
                   </td>
-                  <td className="py-2 pr-2">
+                  <td className={CELL} data-label={t("settings.tailSampling.ruleMatch")}>
                     <RuleFields rule={r} disabled={!canEdit} onChange={(patch) => updateRule(i, patch)} />
                   </td>
-                  <td className="py-2 pr-2">
+                  <td className={CELL} data-label={t("settings.tailSampling.ruleRatio")}>
                     <Input
                       aria-label={t("settings.tailSampling.ruleRatio")}
                       type="number"
@@ -177,7 +187,7 @@ export function TailSamplingSettings() {
                       onChange={(e) => updateRule(i, { ratio: num(e.target.value, 1) })}
                     />
                   </td>
-                  <td className="py-2 whitespace-nowrap">
+                  <td className="py-2 whitespace-nowrap max-md:block">
                     {canEdit && (
                       <>
                         <Button type="button" variant="ghost" size="icon" aria-label={t("settings.tailSampling.moveUp", { name: r.name })} disabled={i === 0} onClick={() => moveRule(i, -1)}>

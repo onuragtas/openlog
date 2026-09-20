@@ -142,7 +142,7 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
         </ul>
       ) : (
         <div className="rounded-xl border bg-card">
-          <Table>
+          <Table mobile="stack">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("dashboards.columns.name")}</TableHead>
@@ -162,15 +162,19 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
                     {nameLink(d)}
                     {d.description && <p className="truncate text-xs text-muted-foreground">{d.description}</p>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-md:w-auto">
                     <Badge variant={d.visibility === "private" ? "outline" : "muted"}>{t(`dashboards.visibility.${d.visibility}`)}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm">{t("dashboards.counts", { pages: d.page_count, widgets: d.widget_count })}</TableCell>
-                  <TableCell className="text-sm">{d.created_by_email}</TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell label={t("dashboards.columns.widgets")} className="text-sm">
+                    {t("dashboards.counts", { pages: d.page_count, widgets: d.widget_count })}
+                  </TableCell>
+                  <TableCell label={t("dashboards.columns.owner")} className="text-sm">
+                    {d.created_by_email}
+                  </TableCell>
+                  <TableCell label={t("dashboards.columns.updated")} className="text-sm">
                     <DateTimeText value={d.updated_at} relative />
                   </TableCell>
-                  <TableCell>{actions(d)}</TableCell>
+                  <TableCell className="max-md:w-auto">{actions(d)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

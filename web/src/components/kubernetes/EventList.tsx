@@ -45,7 +45,7 @@ export function EventList({ events, showObject = true, emptyText }: { events: Ku
   const now = useNow();
   if (events.length === 0) return <EmptyState>{emptyText ?? t("kubernetes.events.empty")}</EmptyState>;
   return (
-    <Table data-testid="k8s-events">
+    <Table mobile="stack" data-testid="k8s-events">
       <TableHeader>
         <TableRow>
           <TableHead>{t("kubernetes.events.columns.time")}</TableHead>
@@ -65,7 +65,7 @@ export function EventList({ events, showObject = true, emptyText }: { events: Ku
                   {formatRelative(ms, now, locale)}
                 </time>
               </TableCell>
-              <TableCell>
+              <TableCell className="max-md:w-auto">
                 <EventTypeBadge type={e.type} />
               </TableCell>
               <TableCell className="text-xs font-medium">
@@ -73,12 +73,14 @@ export function EventList({ events, showObject = true, emptyText }: { events: Ku
                 {e.count > 1 && <span className="ml-1 text-muted-foreground">{t("kubernetes.events.count", { count: e.count })}</span>}
               </TableCell>
               {showObject && (
-                <TableCell className="text-xs">
+                <TableCell label={t("kubernetes.events.columns.object")} className="text-xs">
                   <EventObject e={e} />
                   {e.namespace && <div className="text-muted-foreground">{e.namespace}</div>}
                 </TableCell>
               )}
-              <TableCell className="min-w-64 text-xs max-md:whitespace-normal">{e.message}</TableCell>
+              <TableCell label={t("kubernetes.events.columns.message")} className="min-w-64 text-xs max-md:min-w-0 max-md:whitespace-normal">
+                {e.message}
+              </TableCell>
             </TableRow>
           );
         })}

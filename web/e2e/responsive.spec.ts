@@ -48,6 +48,19 @@ const ROUTES = [
   "/settings/license-keys",
   "/settings/api-keys",
   "/settings/security",
+  "/settings/apm-sampling",
+  "/settings/usage",
+  "/kubernetes",
+  "/metrics",
+  "/rum",
+  "/databases",
+  "/slos",
+  "/synthetics",
+  "/profiles",
+  "/costs",
+  "/traces",
+  "/dashboards",
+  "/integrations",
 ];
 
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -60,9 +73,7 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/hosts/);
 }
 
-test("main screens fit a 390px wide phone without horizontal scrolling", async ({ page }) => {
-  test.setTimeout(120_000);
-  await signIn(page);
+async function expectNoHorizontalOverflow(page: Page, width: string) {
   for (const route of ROUTES) {
     await page.goto(route);
     await expect(page.locator("main h1").first()).toBeVisible();
@@ -77,9 +88,28 @@ test("main screens fit a 390px wide phone without horizontal scrolling", async (
         main: main ? main.scrollWidth - main.clientWidth : 0,
       };
     })()`);
-    expect.soft(overflow.document, `${route}: document.documentElement.scrollWidth <= window.innerWidth`).toBeLessThanOrEqual(0);
-    expect.soft(overflow.main, `${route}: <main> must not scroll horizontally`).toBeLessThanOrEqual(0);
+    expect.soft(overflow.document, `${width} ${route}: document.documentElement.scrollWidth <= window.innerWidth`).toBeLessThanOrEqual(0);
+    expect.soft(overflow.main, `${width} ${route}: <main> must not scroll horizontally`).toBeLessThanOrEqual(0);
   }
+}
+
+test("main screens fit a 390px wide phone without horizontal scrolling", async ({ page }) => {
+  test.setTimeout(180_000);
+  await signIn(page);
+  await expectNoHorizontalOverflow(page, "390px");
+});
+
+// 768px is the awkward width: `md` classes are on (stacked tables become tables again, hidden columns come
+// back) while the sidebar is still a drawer, so it is the one width where a layout can be wide and
+// unconstrained at the same time.
+test.describe("tablet", () => {
+  test.use({ viewport: { width: 768, height: 1024 }, isMobile: true, hasTouch: true });
+
+  test("main screens fit a 768px wide tablet without horizontal scrolling", async ({ page }) => {
+    test.setTimeout(180_000);
+    await signIn(page);
+    await expectNoHorizontalOverflow(page, "768px");
+  });
 });
 
 test("navigation drawer and compact top bar", async ({ page }) => {

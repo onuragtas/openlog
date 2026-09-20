@@ -181,7 +181,7 @@ export function UsageSettings() {
               <Stat label={t("usage.stats.stored")} value={formatBytes(o.stored.reduce((sum, s) => sum + s.compressed_bytes, 0))} />
             </div>
             <div className="overflow-x-auto">
-              <Table>
+              <Table mobile="stack">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("usage.table.signal")}</TableHead>
@@ -197,11 +197,19 @@ export function UsageSettings() {
                     const st = o.stored.find((x) => x.signal === s);
                     return (
                       <TableRow key={s}>
-                        <TableCell>{t(`usage.signals.${s}`)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(u?.items ?? 0, locale)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatBytes(u?.ingest_bytes ?? 0)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatBytes(st?.compressed_bytes ?? 0)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{t("usage.retentionDays", { count: st?.retention_days ?? 0 })}</TableCell>
+                        <TableCell className="max-md:w-full max-md:font-medium">{t(`usage.signals.${s}`)}</TableCell>
+                        <TableCell label={t("usage.table.items")} className="text-right tabular-nums">
+                          {formatNumber(u?.items ?? 0, locale)}
+                        </TableCell>
+                        <TableCell label={t("usage.table.ingest")} className="text-right tabular-nums">
+                          {formatBytes(u?.ingest_bytes ?? 0)}
+                        </TableCell>
+                        <TableCell label={t("usage.table.stored")} className="text-right tabular-nums">
+                          {formatBytes(st?.compressed_bytes ?? 0)}
+                        </TableCell>
+                        <TableCell label={t("usage.table.retention")} className="text-right tabular-nums">
+                          {t("usage.retentionDays", { count: st?.retention_days ?? 0 })}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
