@@ -24,10 +24,15 @@ Tek bir agent kurulumuyla bir makinede **ne var ne yok** görünür olsun; uygul
 
 ## Kapsam dışı (şimdilik)
 
-- Windows ve macOS infra agent (Linux sonrası)
-- Real User Monitoring (tarayıcı) ve mobil
-- Synthetic monitoring
-- Kendi wire protokolümüz (OTLP kullanılır)
+Bu liste ilk kapsam kararıydı; sonradan yapılanlar aşağıda işaretli. Güncel durum için
+[06-roadmap.md](06-roadmap.md).
+
+- ~~Windows ve macOS infra agent~~ — yapıldı (D-104).
+- ~~Real User Monitoring (tarayıcı)~~ — yapıldı (D-136). **Mobil hâlâ kapsam dışı**: sunucu tarafı mobil
+  uygulama kimliğine bağlı bir anahtar türü ve kendi olay tipleri gerektiriyor (tarayıcı anahtarı origin'e
+  bağlı, mobilde origin yok).
+- ~~Synthetic monitoring~~ — yapıldı (D-132).
+- Kendi wire protokolümüz (OTLP kullanılır) — hâlâ geçerli, bilinçli karar.
 
 ## Başarı ölçütleri
 

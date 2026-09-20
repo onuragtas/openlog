@@ -111,6 +111,16 @@ doğrulamalar (proje sahibi çalıştırır) ve hesap/altyapı gerektiren operas
   SSH'sız uzaktan yapılandırma, imzalı kendini güncelleme + root `-apply`/`-reconcile`, PHP agent filo kurulumu).
 - APM: Go, Node.js, Python, Java, .NET, PHP agent'ları; hata gelen kutusu, servis haritası, log ↔ trace, deployment
   işaretleri, tail-based sampling.
+- Tarayıcı izleme (RUM, D-136): tarayıcı SDK'sı, Core Web Vitals, sayfa yükleme zamanlaması, SPA rota değişimleri,
+  oturumlar, tarayıcı anahtarları ve kaynak haritaları (minify edilmiş yığınların çözülmesi).
+- Synthetic monitoring (D-132): zamanlanmış dışarıdan kontroller ve sonuçları.
+- Veritabanı sorgu performansı (D-138): PostgreSQL, MySQL ve SQL Server için ifade istatistikleri, oturum örnekleri
+  ve yürütme planları.
+- Sürekli profilleme (`docs/contracts/profiles.md`): OTLP profiles alımı, pprof→OTLP çeviren Go agent üreticisi,
+  alev grafiği ekranı ve fonksiyon başına self süre.
+- Yeni sinyallerin sorgu ve alarm entegrasyonu: `Profile`, `RumPageView`, `RumVital`, `RumSession` ve `DbQuery`
+  OQL olay tipleri. `oql` alarm kural tipi herhangi bir OQL sorgusunu koştuğu için bu tipler aynı anda alarma da
+  bağlanabilir; sinyal başına ayrı kural tipi yazılmadı.
 - Platform: çok kiracılı PostgreSQL + ClickHouse, OQL sorgu dili ve dashboard'lar (filtre, sürüm geçmişi, paylaşım,
   zamanlanmış rapor + PNG renderer), alarmlar ve şablonlar, SSO/SCIM (OIDC, SAML, SLO, back-channel), kota ve kullanım
   ölçümü, katmanlı saklama (S3), Kubernetes entegrasyonu, "Veri ekle" rehberli kurulum, TR/EN arayüz ve e-postalar.
