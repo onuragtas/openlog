@@ -198,6 +198,40 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 	if len(conn.sql) < len(paths) {
 		t.Fatalf("only %d statements executed", len(conn.sql))
 	}
+
+	// The explorer and OQL query endpoints are POSTs, so the walk above cannot reach them — and a route
+	// nothing calls has never had its SQL built. They run here, before the scoping check below, so their
+	// statements are held to the same tenant predicate as every other read.
+	posts := []struct{ path, body string }{
+		{"/api/v1/logs/query", `{}`},
+		{"/api/v1/logs/aggregate", `{}`},
+		{"/api/v1/logs/patterns", `{}`},
+		{"/api/v1/traces/query", `{}`},
+		{"/api/v1/traces/aggregate", `{}`},
+		{"/api/v1/metrics/query", `{"metric":"system.cpu.utilization"}`},
+		{"/api/v1/metrics/exemplars", `{"metric":"http.server.request.duration","limit":10}`},
+		{"/api/v1/query", `{"query":"SELECT count(*) FROM Log SINCE 1 hour ago"}`},
+		{"/api/v1/query/validate", `{"query":"SELECT count(*) FROM Log SINCE 1 hour ago"}`},
+		// An empty policy is a valid one (tailsampling.ParsePolicy): no rules, baseline ratio 0.
+		{"/api/v1/apm/sampling/preview", `{"policy":{}}`},
+	}
+	beforePosts := len(conn.sql)
+	for _, p := range posts {
+		req := httptest.NewRequest(http.MethodPost, p.path, strings.NewReader(p.body))
+		req.Header.Set("openlog-license-key", "key-a")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code >= 500 {
+			t.Errorf("POST %s: status %d %s", p.path, rec.Code, rec.Body)
+		}
+	}
+	// A body the handler rejects returns 400 and runs nothing, which would still count as "walked" above —
+	// coverage that proves nothing. Not every one of these must reach ClickHouse (validate only parses, and
+	// a metric the fake does not know is a legitimate 404), but if none of them did, the bodies are wrong.
+	if len(conn.sql) == beforePosts {
+		t.Error("no POST endpoint reached a query: the request bodies are being rejected")
+	}
 	for _, sql := range conn.sql {
 		refs := tableRef.FindAllStringIndex(sql, -1)
 		if len(refs) == 0 {
@@ -213,9 +247,16 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 	// Every tenant-scoped route must be walked above. GET /api/v1/vulnerabilities shipped returning 500 for
 	// every request — a query that could not even be built — because its route was missing from this list:
 	// a route nobody calls here is a route whose SQL has never been constructed, let alone executed.
+	walkedPaths := make([]string, 0, len(paths)+len(posts))
+	for _, p := range paths {
+		walkedPaths = append(walkedPaths, "GET "+p)
+	}
+	for _, p := range posts {
+		walkedPaths = append(walkedPaths, "POST "+p.path)
+	}
 	var uncovered []string
 	for _, pattern := range s.tenantScopedRoutes() {
-		if !walked(pattern, paths) && !knownUncovered[pattern] {
+		if !walked(pattern, walkedPaths) && !knownUncovered[pattern] {
 			uncovered = append(uncovered, pattern)
 		}
 	}
@@ -224,7 +265,7 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 			strings.Join(uncovered, "\n\t"))
 	}
 	for pattern := range knownUncovered {
-		if walked(pattern, paths) {
+		if walked(pattern, walkedPaths) {
 			t.Errorf("%s is covered now: remove it from knownUncovered (the list may shrink, never grow)", pattern)
 		}
 	}
@@ -233,36 +274,33 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 // knownUncovered are tenant-scoped routes this test does not walk yet. It is a ratchet: entries may be
 // removed as paths are added above, never added for a new route. Every line here is an endpoint whose query
 // has never been built by anything — the state GET /api/v1/vulnerabilities was in when it shipped broken.
-var knownUncovered = map[string]bool{
-	// The walk issues GET requests, so a POST route is unreachable by it — not an exemption on merit, a
-	// limit of this test. Their queries are still built by nothing, and a walk with bodies is the follow-up.
-	"POST /api/v1/logs/query":           true,
-	"POST /api/v1/logs/aggregate":       true,
-	"POST /api/v1/logs/patterns":        true,
-	"POST /api/v1/traces/query":         true,
-	"POST /api/v1/traces/aggregate":     true,
-	"POST /api/v1/metrics/query":        true,
-	"POST /api/v1/metrics/exemplars":    true,
-	"POST /api/v1/query":                true,
-	"POST /api/v1/query/validate":       true,
-	"POST /api/v1/apm/sampling/preview": true,
-}
+var knownUncovered = map[string]bool{}
 
-// walked reports whether any tested path matches the route pattern ("GET /api/v1/hosts/{host_id}").
-func walked(pattern string, paths []string) bool {
-	segs := strings.Split(strings.Trim(strings.TrimPrefix(pattern, "GET "), "/"), "/")
-	for _, p := range paths {
-		got := strings.Split(strings.Trim(strings.SplitN(p, "?", 2)[0], "/"), "/")
-		if len(got) != len(segs) {
+// walked reports whether any walked request matches the route pattern. Both are "<METHOD> <path>", and a
+// {param} segment of the pattern matches any non-empty segment: "GET /api/v1/hosts/{host_id}" is walked by
+// "GET /api/v1/hosts/h1?x=1", but never by a POST to the same path.
+func walked(pattern string, walkedPaths []string) bool {
+	want := strings.Fields(pattern)
+	if len(want) != 2 {
+		return false
+	}
+	segs := strings.Split(strings.Trim(want[1], "/"), "/")
+	for _, p := range walkedPaths {
+		got := strings.Fields(p)
+		if len(got) != 2 || got[0] != want[0] {
+			continue
+		}
+		xs := strings.Split(strings.Trim(strings.SplitN(got[1], "?", 2)[0], "/"), "/")
+		if len(xs) != len(segs) {
 			continue
 		}
 		match := true
 		for i, seg := range segs {
 			if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") {
-				match = match && got[i] != ""
+				match = match && xs[i] != ""
 				continue
 			}
-			if seg != got[i] {
+			if seg != xs[i] {
 				match = false
 			}
 		}
