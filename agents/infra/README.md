@@ -119,6 +119,8 @@ receivers, so OTel Collector data fits the same panels):
 | `haproxy` | haproxy | CSV statistics: the stats page (`/;csv`, `/stats;csv`, …) or the runtime socket's `show stat`; one resource per frontend, backend and server (max 500) | none | `haproxy.*` |
 | `rabbitmq` | rabbitmq | management API (`/api/overview`, `/api/nodes`, `/api/queues`, max 500 queues) on 15672 | required when the broker asks for them (HTTP 401) | `rabbitmq.*` |
 | `elasticsearch` | elasticsearch, opensearch | REST API on 9200: `/_cluster/health` and the local node's `/_nodes/_local/stats` | required when security is on (HTTP 401) | `elasticsearch.*`, `jvm.*` |
+| `jvm` | jvm | the `java.lang` MBeans of any JVM, read over Jolokia in one bulk request (heap, GC, threads, classes, CPU) | only if the Jolokia bridge asks for them | `jvm.*` |
+| `kafka` | kafka | the broker's own MBeans over the same bridge: throughput, partitions, controller, request latency | only if the bridge asks for them | `kafka.*` |
 | `mongodb` | mongodb | `serverStatus`, `listDatabases`, `dbStats` (max 32 databases) and `replSetGetStatus` on a replica set member; the connection is direct, so the numbers are this process's | required (`clusterMonitor`) | `mongodb.*` |
 
 How it works: an integration instance starts when discovery finds a service whose rule has the integration id and stops when the service
@@ -173,6 +175,13 @@ integrations:
     username: openlog                              # built-in role monitoring_user
     password: env:OPENLOG_ELASTICSEARCH_PASSWORD
     tls: { enabled: true, ca_file: /etc/elasticsearch/certs/http_ca.crt }
+  jvm:
+    # The JVM needs the Jolokia agent on its start command; openlog only reads it:
+    #   java -javaagent:/opt/jolokia/jolokia-agent-jvm.jar=port=8778,host=127.0.0.1 -jar app.jar
+    # endpoint: http://127.0.0.1:8778/jolokia   # only when it is not on the usual port or path
+  kafka:
+    # KAFKA_OPTS="-javaagent:/opt/jolokia/jolokia-agent-jvm.jar=port=8778,host=127.0.0.1"
+    # endpoint: http://127.0.0.1:8778/jolokia
   mongodb:
     username: openlog                              # db.createUser(... roles: [{role: "clusterMonitor", db: "admin"}])
     password: env:OPENLOG_MONGODB_PASSWORD

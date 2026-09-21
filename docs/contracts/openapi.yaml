@@ -12196,7 +12196,7 @@ components:
         ip: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
 
-    IntegrationName: { type: string, enum: [nginx, apache, redis, memcached, mysql, postgresql, mongodb, docker, mssql, iis, haproxy, rabbitmq, elasticsearch] }
+    IntegrationName: { type: string, enum: [nginx, apache, redis, memcached, mysql, postgresql, mongodb, docker, mssql, iis, haproxy, rabbitmq, elasticsearch, jvm, kafka] }
 
     IntegrationMatch:
       type: object

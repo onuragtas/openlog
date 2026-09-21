@@ -20,10 +20,12 @@ export const CONFIG_FIELDS: Record<IntegrationName, readonly ConfigField[]> = {
   haproxy: ["endpoint"],
   rabbitmq: ["endpoint", "username", "password"],
   elasticsearch: ["endpoint", "username", "password"],
+  jvm: ["endpoint", "username", "password"],
+  kafka: ["endpoint", "username", "password"],
 };
 
 /** Integrations whose endpoint is an http(s) URL (a status page or a management API) rather than host:port. */
-const URL_ENDPOINTS: ReadonlySet<string> = new Set<IntegrationName>(["nginx", "apache", "haproxy", "rabbitmq", "elasticsearch"]);
+const URL_ENDPOINTS: ReadonlySet<string> = new Set<IntegrationName>(["nginx", "apache", "haproxy", "rabbitmq", "elasticsearch", "jvm", "kafka"]);
 
 /** The url integrations that also read a unix socket (HAProxy's runtime API). */
 const SOCKET_ENDPOINTS: ReadonlySet<string> = new Set<IntegrationName>(["haproxy"]);
@@ -46,6 +48,8 @@ export const ENDPOINT_PLACEHOLDER: Record<IntegrationName, string> = {
   haproxy: "http://127.0.0.1:8404/;csv",
   rabbitmq: "http://127.0.0.1:15672",
   elasticsearch: "http://127.0.0.1:9200",
+  jvm: "http://127.0.0.1:8778/jolokia",
+  kafka: "http://127.0.0.1:8778/jolokia",
 };
 
 export type EndpointError = "url" | "hostPort";

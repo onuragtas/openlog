@@ -38,6 +38,8 @@ const (
 	RabbitMQ      = "rabbitmq"
 	Elasticsearch = "elasticsearch"
 	MongoDB       = "mongodb"
+	JVM           = "jvm"
+	Kafka         = "kafka"
 )
 
 // RevisionDisabled is reported by agents configured with integrations.remote_config: false.
@@ -95,6 +97,9 @@ var allowedFields = map[string]field{
 	Elasticsearch: fEndpoint | fUsername | fPassword,
 	// MongoDB's database is the authentication source, and the two database lists bound the dbStats reads.
 	MongoDB: fEndpoint | fUsername | fPassword | fDatabase | fDatabases,
+	// The JVM and Kafka are read over Jolokia: an http(s) endpoint, and credentials when the bridge asks.
+	JVM:   fEndpoint | fUsername | fPassword,
+	Kafka: fEndpoint | fUsername | fPassword,
 }
 
 // urlEndpoints are the integrations whose endpoint is an http(s) URL — a status page or a management API —
@@ -105,6 +110,8 @@ var urlEndpoints = map[string]string{
 	HAProxy:       "http://127.0.0.1:8404/;csv",
 	RabbitMQ:      "http://127.0.0.1:15672",
 	Elasticsearch: "http://127.0.0.1:9200",
+	JVM:           "http://127.0.0.1:8778/jolokia",
+	Kafka:         "http://127.0.0.1:8778/jolokia",
 }
 
 // socketEndpoints are the url integrations that also read a unix socket (HAProxy's runtime API).

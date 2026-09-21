@@ -34,11 +34,15 @@ const (
 	IntegrationElasticsearch = "elasticsearch"
 	// IntegrationMongoDB is MongoDB (serverStatus and dbStats over the wire protocol).
 	IntegrationMongoDB = "mongodb"
+	// IntegrationJVM is any Java runtime that exposes Jolokia (the java.lang MBeans).
+	IntegrationJVM = "jvm"
+	// IntegrationKafka is Apache Kafka's broker MBeans, read over Jolokia.
+	IntegrationKafka = "kafka"
 )
 
 // IntegrationIDs lists the implemented integrations in a stable order.
 var IntegrationIDs = []string{IntegrationApache, IntegrationDocker, IntegrationElasticsearch, IntegrationHAProxy, IntegrationIIS,
-	IntegrationMemcached, IntegrationMongoDB, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx,
+	IntegrationJVM, IntegrationKafka, IntegrationMemcached, IntegrationMongoDB, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx,
 	IntegrationPostgreSQL, IntegrationRabbitMQ, IntegrationRedis}
 
 // IntegrationsConfig configures the metric integrations bound to discovered services.
@@ -63,6 +67,8 @@ type IntegrationsConfig struct {
 	RabbitMQ      IntegrationConfig `yaml:"rabbitmq"`
 	Memcached     IntegrationConfig `yaml:"memcached"`
 	MongoDB       IntegrationConfig `yaml:"mongodb"`
+	JVM           IntegrationConfig `yaml:"jvm"`
+	Kafka         IntegrationConfig `yaml:"kafka"`
 	Nginx         IntegrationConfig `yaml:"nginx"`
 	Redis         IntegrationConfig `yaml:"redis"`
 	MySQL         IntegrationConfig `yaml:"mysql"`
@@ -187,6 +193,10 @@ func (c *IntegrationsConfig) Integration(id string) *IntegrationConfig {
 		return &c.Elasticsearch
 	case IntegrationMongoDB:
 		return &c.MongoDB
+	case IntegrationJVM:
+		return &c.JVM
+	case IntegrationKafka:
+		return &c.Kafka
 	case IntegrationHAProxy:
 		return &c.HAProxy
 	case IntegrationRabbitMQ:
@@ -256,7 +266,7 @@ func defaultIntegrations() IntegrationsConfig {
 	return IntegrationsConfig{
 		Enabled: true, Interval: Duration(30 * time.Second), Timeout: Duration(10 * time.Second),
 		MaxConcurrent: 4, MaxInstances: 32, RemoteConfig: true,
-		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on, MongoDB: on,
+		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on, MongoDB: on, JVM: on, Kafka: on,
 	}
 }
 
@@ -272,6 +282,10 @@ var integrationKeys = map[string]map[string]bool{
 	IntegrationRabbitMQ:      {"endpoint": true, "username": true, "password": true, "tls": true},
 	IntegrationElasticsearch: {"endpoint": true, "username": true, "password": true, "tls": true},
 	IntegrationRedis:         {"endpoint": true, "username": true, "password": true, "tls": true},
+	// The JVM and Kafka are read over Jolokia: an http(s) endpoint and, when the bridge asks for them,
+	// credentials.
+	IntegrationJVM:   {"endpoint": true, "username": true, "password": true, "tls": true},
+	IntegrationKafka: {"endpoint": true, "username": true, "password": true, "tls": true},
 	// MongoDB takes a database as the authentication source, like PostgreSQL's initial database.
 	IntegrationMongoDB:    {"endpoint": true, "username": true, "password": true, "tls": true, "database": true, "databases": true, "exclude_databases": true},
 	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},

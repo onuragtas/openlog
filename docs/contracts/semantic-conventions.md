@@ -497,7 +497,7 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 | `integrations.enabled` | `true` | master switch (requires `discovery.enabled`) |
 | `integrations.interval` / `timeout` | `30s` / `10s` | default collection interval (≥ 5 s) and per-collection timeout (≤ interval) |
 | `integrations.max_concurrent` / `max_instances` | `4` / `32` | concurrency limit; instance limit (later instances: `not_available`) |
-| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `apache`, `redis`, `memcached`, `mysql`, `postgresql`, `mongodb`, `docker`, `mssql`, `iis`, `haproxy`, `rabbitmq`, `elasticsearch`) |
+| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `apache`, `redis`, `memcached`, `mysql`, `postgresql`, `mongodb`, `docker`, `mssql`, `iis`, `haproxy`, `rabbitmq`, `elasticsearch`, `jvm`, `kafka`) |
 | `integrations.<id>.interval` | — | overrides the default interval |
 | `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql, memcached; haproxy: its runtime socket) or an `http(s)://…` URL (nginx: stub_status page, NGINX Plus API `/api/` or `/api/<n>`, or VTS JSON page, the format is detected, §6.3; apache: mod_status page §6.10; haproxy: stats page §6.12; rabbitmq: management API §6.13; elasticsearch: REST API §6.14) |
 | `integrations.<id>.username` / `password` | — | redis, mysql, postgresql, mssql (SQL Server authentication; Windows authentication is not supported), rabbitmq, elasticsearch (HTTP basic auth). `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
@@ -1043,6 +1043,79 @@ start, which `uptime` gives as the start time.
 `replSetGetStatus` fails on a standalone server (`not running with --replSet`), which is not reported as a
 problem: most MongoDB servers people monitor are standalone. The lag is emitted **only** when the answer
 names a primary — without one there is nothing to be behind, and reporting 0 would be a lie.
+
+### 6.16 Java runtimes (`jvm`, D-144)
+
+Source: the `java.lang` MBeans of any JVM that exposes Jolokia, read as **one bulk POST** per collection
+(`internal/integrations/jolokia`). Integration id `jvm` (rule `jvm`: any `java` process), `auto_enable: true`
+with `requires: []`: the JVM itself answers whether the bridge is there. The paths `/jolokia`,
+`/actuator/jolokia`, `/jmx` and `/api/jolokia` are probed on the candidate endpoints and on port 8778 (the
+standalone Jolokia agent's own port); the one that answers `/version` is remembered. No Jolokia, or a
+bridge whose access policy hides `java.lang`, is `needs_configuration` with the hint.
+
+Why Jolokia rather than JMX directly: reaching MBeans over JMX means Java RMI plus object serialization —
+thousands of lines with no mature Go implementation, breaking on a Java release. Jolokia turns the same
+MBeans into one HTTP request, and the cost moves to a `-javaagent` line the operator adds once, where it is
+visible and revertible (D-144).
+
+Resource: one per instance (§6.1) plus `jvm.version` (`Runtime.VmVersion`). Counters are cumulative from
+the JVM's start, which `Runtime.Uptime` gives as the start time.
+
+| Metric | Type | Unit | Attributes | MBean attribute |
+|---|---|---|---|---|
+| `jvm.uptime` | Sum, monotonic, int | `ms` | — | `Runtime.Uptime` |
+| `jvm.memory.used` / `.committed` / `.limit` | Sum, non-monotonic, int | `By` | `jvm.memory.type` = `heap`, `non_heap` | `Memory.{Heap,NonHeap}MemoryUsage` |
+| `jvm.memory.pool.used` / `.limit` | Sum, non-monotonic, int | `By` | `jvm.memory.pool.name` | `MemoryPool.Usage` (pattern read) |
+| `jvm.thread.count` | Sum, non-monotonic, int | `{threads}` | `jvm.thread.daemon` = `true`, `false` | `Threading.{Thread,DaemonThread}Count` |
+| `jvm.thread.peak` | Sum, non-monotonic, int | `{threads}` | — | `Threading.PeakThreadCount` |
+| `jvm.class.count` | Sum, non-monotonic, int | `{classes}` | — | `ClassLoading.LoadedClassCount` |
+| `jvm.class.unloaded` | Sum, monotonic, int | `{classes}` | — | `ClassLoading.UnloadedClassCount` |
+| `jvm.gc.collections` | Sum, monotonic, int | `{collections}` | `jvm.gc.name` | `GarbageCollector.CollectionCount` (pattern read) |
+| `jvm.gc.duration` | Sum, monotonic, int | `ms` | `jvm.gc.name` | `GarbageCollector.CollectionTime` |
+| `jvm.cpu.recent_utilization` | Gauge, double | `1` | — | `OperatingSystem.ProcessCpuLoad` |
+| `jvm.system.cpu.utilization` | Gauge, double | `1` | — | `OperatingSystem.SystemCpuLoad` |
+| `jvm.file_descriptor.count` / `.limit` | Sum, non-monotonic, int | `{file_descriptors}` | — | `OperatingSystem.{Open,Max}FileDescriptorCount` |
+
+Three modelling rules: a maximum of `-1` (a pool with no limit) is **not** emitted as a limit; a CPU share
+of `-1` (the MXBean before its second sample) is not emitted at all; and the thread count is partitioned
+into daemon and non-daemon rather than emitted as a total plus a subset, so summing the series gives the
+total instead of counting the daemons twice.
+
+### 6.17 Apache Kafka (`kafka`, D-144)
+
+Source: the broker's own MBeans over the same Jolokia bridge, in one bulk read. Integration id `kafka`
+(rule `kafka`), `auto_enable: true`. Discovery finds the broker's listener port (9092/9093/9094); the
+bridge is elsewhere, so the endpoint moves to Jolokia's 8778 unless an `endpoint` says otherwise.
+
+The JVM metrics of the same process are **not** repeated here: a broker is a JVM, `jvm` reads `java.lang`,
+and both bind to the same endpoint. What this adds is what makes the process a broker.
+
+| Metric | Type | Unit | Attributes | MBean |
+|---|---|---|---|---|
+| `kafka.messages.in` | Sum, monotonic, int | `{messages}` | — | `BrokerTopicMetrics.MessagesInPerSec.Count` |
+| `kafka.network.io` | Sum, monotonic, int | `By` | `direction` = `in`, `out` | `BrokerTopicMetrics.Bytes{In,Out}PerSec.Count` |
+| `kafka.request.count` / `.failed` | Sum, monotonic, int | `{requests}` | `type` = `fetch`, `produce` | `BrokerTopicMetrics.Total*/Failed*RequestsPerSec` |
+| `kafka.request.total` | Sum, monotonic, int | `{requests}` | `type` (request name) | `RequestMetrics.RequestsPerSec` (pattern read) |
+| `kafka.request.time.avg` | Gauge, double | `ms` | `type` (request name) | `RequestMetrics.TotalTimeMs.Mean` |
+| `kafka.request.queue` / `kafka.response.queue` | Sum, non-monotonic, int | `{requests}` / `{responses}` | — | `RequestChannel.{Request,Response}QueueSize` |
+| `kafka.request.handler.busy` | Gauge, double | `1` | — | `1 −` `KafkaRequestHandlerPool.RequestHandlerAvgIdlePercent` |
+| `kafka.network.processor.busy` | Gauge, double | `1` | — | `1 −` `SocketServer.NetworkProcessorAvgIdlePercent` |
+| `kafka.partition.count` / `.global` | Sum, non-monotonic, int | `{partitions}` | — | `ReplicaManager.PartitionCount`, `KafkaController.GlobalPartitionCount` |
+| `kafka.partition.under_replicated` | Sum, non-monotonic, int | `{partitions}` | — | `ReplicaManager.UnderReplicatedPartitions` |
+| `kafka.partition.under_min_isr` | Sum, non-monotonic, int | `{partitions}` | — | `ReplicaManager.UnderMinIsrPartitionCount` |
+| `kafka.partition.offline` | Sum, non-monotonic, int | `{partitions}` | — | `KafkaController.OfflinePartitionsCount` |
+| `kafka.leader.count` | Sum, non-monotonic, int | `{partitions}` | — | `ReplicaManager.LeaderCount` |
+| `kafka.leader.election.count` / `.unclean` | Sum, monotonic, int | `{elections}` | — | `ControllerStats.*` |
+| `kafka.isr.operation.count` | Sum, monotonic, int | `{operations}` | `operation` = `shrink`, `expand` | `ReplicaManager.Isr{Shrinks,Expands}PerSec` |
+| `kafka.controller.active.count` | Sum, non-monotonic, int | `{controllers}` | — | `KafkaController.ActiveControllerCount` |
+| `kafka.topic.count` | Sum, non-monotonic, int | `{topics}` | — | `KafkaController.GlobalTopicCount` |
+| `kafka.purgatory.size` | Sum, non-monotonic, int | `{operations}` | `operation` = `produce`, `fetch` | `DelayedOperationPurgatory.PurgatorySize` |
+| `kafka.logs.flush.count` | Sum, monotonic, int | `{flushes}` | — | `LogFlushStats.LogFlushRateAndTimeMs.Count` |
+| `kafka.broker.state` | Gauge, int | `{state}` | — | `KafkaServer.BrokerState` (3 = running) |
+
+The `Count` attribute is read rather than the `*Rate` ones: a rate the broker computed over its own window
+cannot be re-aggregated, while a monotonic total can. `kafka.request.handler.busy` inverts the broker's own
+idle share, because "how busy is it" is the question an operator asks.
 
 ## 7. Kubernetes (infra agent, M4, D-070, D-071)
 

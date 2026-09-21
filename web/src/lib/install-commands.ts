@@ -30,6 +30,8 @@ export const TARGET_IDS = [
   "integrations/mysql",
   "integrations/postgresql",
   "integrations/mongodb",
+  "integrations/jvm",
+  "integrations/kafka",
   "integrations/mssql",
   "integrations/iis",
   "integrations/haproxy",
@@ -74,7 +76,7 @@ export interface InstallTarget {
   /** Options shown in the options step, in order. */
   options: OptionKey[];
   /** Integration id for integration targets (lib/integrations.ts ids). */
-  integration?: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mongodb" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
+  integration?: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mongodb" | "jvm" | "kafka" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
   /** Documentation in the repository. */
   docs: string;
   /** Cards of which one must be set up first (e.g. the infra agent for PHP and host logs); several = any of them. */
@@ -113,6 +115,9 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/mongodb", group: "integrations", verify: "integration", integration: "mongodb", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  // The JVM and Kafka are the same endpoint: Jolokia, which the JVM has to be started with (D-144).
+  { id: "integrations/jvm", group: "integrations", verify: "integration", integration: "jvm", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/kafka", group: "integrations", verify: "integration", integration: "kafka", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   // SQL Server over TDS from any OS (also a remote server); IIS through Windows performance counters only.
   { id: "integrations/mssql", group: "integrations", verify: "integration", integration: "mssql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/iis", group: "integrations", verify: "integration", integration: "iis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: ["windows"] },
@@ -276,6 +281,8 @@ export type BlockLabel =
   | "brokerUser"
   | "esUser"
   | "mongoUser"
+  | "jolokiaAgent"
+  | "jolokiaKafka"
   | "redisAcl"
   | "sqlUser"
   | "passwordFile"
@@ -351,6 +358,8 @@ export type NoteKey =
   | "rabbitmqGuest"
   | "esSecurity"
   | "mongoAuthSource"
+  | "jolokiaRestart"
+  | "jolokiaLocalhost"
   | "prometheusDiscovery"
   | "prometheusLimits";
 
@@ -1074,6 +1083,43 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
       restartAgent(c, os);
       note(c, "passwordPlaceholder");
       note(c, "rabbitmqGuest");
+      break;
+    case "jvm":
+      add(
+        c,
+        "jolokiaAgent",
+        shell,
+        [
+          "# openlog reads a JVM's MBeans over Jolokia, which the JVM serves itself.",
+          "# Download the agent once (jolokia.org) and add it to the start command:",
+          "sudo mkdir -p /opt/jolokia && sudo curl -fsSL -o /opt/jolokia/jolokia-agent-jvm.jar \\",
+          "  https://repo1.maven.org/maven2/org/jolokia/jolokia-agent-jvm/2.1.0/jolokia-agent-jvm-2.1.0-javaagent.jar",
+          "",
+          "# Then start the application with it:",
+          "java -javaagent:/opt/jolokia/jolokia-agent-jvm.jar=port=8778,host=127.0.0.1 -jar app.jar",
+        ].join("\n"),
+      );
+      note(c, "jolokiaRestart");
+      note(c, "jolokiaLocalhost");
+      break;
+    case "kafka":
+      add(
+        c,
+        "jolokiaKafka",
+        shell,
+        [
+          "# Kafka publishes its metrics as JMX MBeans; openlog reads them over Jolokia.",
+          "sudo mkdir -p /opt/jolokia && sudo curl -fsSL -o /opt/jolokia/jolokia-agent-jvm.jar \\",
+          "  https://repo1.maven.org/maven2/org/jolokia/jolokia-agent-jvm/2.1.0/jolokia-agent-jvm-2.1.0-javaagent.jar",
+          "",
+          "# Add it to the broker's JVM options (systemd: an override, or /etc/default/kafka):",
+          'KAFKA_OPTS="-javaagent:/opt/jolokia/jolokia-agent-jvm.jar=port=8778,host=127.0.0.1"',
+          "",
+          "sudo systemctl restart kafka",
+        ].join("\n"),
+      );
+      note(c, "jolokiaRestart");
+      note(c, "jolokiaLocalhost");
       break;
     case "mongodb":
       add(

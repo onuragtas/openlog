@@ -36,9 +36,16 @@ export type KpiId =
   | "indexRate"
   | "heapUsage"
   | "unassignedShards"
+  | "cpu"
+  | "partitions"
   | "documents"
   | "operations"
-  | "replicaLagSeconds";
+  | "replicaLagSeconds"
+  | "heapUsed"
+  | "gcTime"
+  | "threads"
+  | "underReplicated"
+  | "messagesIn";
 
 export interface KpiSpec {
   id: KpiId;
@@ -149,6 +156,59 @@ export const KPIS: Record<IntegrationId, KpiSpec[]> = {
       queries: { l: { name: "mongodb.replica_set.lag", agg: "last" } },
       unit: "number",
       compute: (d) => last(d, "l"),
+    },
+  ],
+  jvm: [
+    {
+      id: "heapUsed",
+      queries: { u: { name: "jvm.memory.used", agg: "avg", groupBy: ["jvm.memory.type"] } },
+      unit: "bytes",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "u"), "jvm.memory.type", ["heap"]))),
+    },
+    {
+      id: "gcTime",
+      queries: { g: { name: "jvm.gc.duration", agg: "rate" } },
+      unit: "number",
+      compute: (d) => last(d, "g"),
+    },
+    {
+      id: "threads",
+      queries: { t: { name: "jvm.thread.count", agg: "last", groupBy: ["jvm.thread.daemon"] } },
+      unit: "number",
+      compute: (d) => last(d, "t"),
+    },
+    {
+      id: "cpu",
+      queries: { c: { name: "jvm.cpu.recent_utilization", agg: "avg" } },
+      unit: "percent",
+      compute: (d) => last(d, "c"),
+    },
+  ],
+  kafka: [
+    {
+      id: "messagesIn",
+      queries: { m: { name: "kafka.messages.in", agg: "rate" } },
+      unit: "number",
+      compute: (d) => last(d, "m"),
+    },
+    {
+      id: "bytesSent",
+      queries: { n: { name: "kafka.network.io", agg: "rate", groupBy: ["direction"] } },
+      unit: "bytesPerSec",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "n"), "direction", ["out"]))),
+    },
+    {
+      // The number an operator watches: a partition without its replicas is one failure from data loss.
+      id: "underReplicated",
+      queries: { u: { name: "kafka.partition.under_replicated", agg: "last" } },
+      unit: "number",
+      compute: (d) => last(d, "u"),
+    },
+    {
+      id: "partitions",
+      queries: { p: { name: "kafka.partition.count", agg: "last" } },
+      unit: "number",
+      compute: (d) => last(d, "p"),
     },
   ],
   apache: [

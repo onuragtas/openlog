@@ -106,7 +106,24 @@ export type SeriesLabelKey =
   | "storageSize"
   | "objects"
   | "read"
-  | "write";
+  | "write"
+  | "heap"
+  | "nonHeap"
+  | "daemon"
+  | "other"
+  | "gcCount"
+  | "gcTime"
+  | "process"
+  | "system"
+  | "in"
+  | "out"
+  | "underReplicated"
+  | "underMinIsr"
+  | "offline"
+  | "partitions"
+  | "leaders"
+  | "handler"
+  | "processor";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -187,7 +204,18 @@ export type PanelChartId =
   | "mongoMemory"
   | "mongoCache"
   | "mongoStorage"
-  | "mongoLatency";
+  | "mongoLatency"
+  | "jvmHeap"
+  | "jvmPools"
+  | "jvmGc"
+  | "jvmThreads"
+  | "jvmCpu"
+  | "kafkaThroughput"
+  | "kafkaRequests"
+  | "kafkaPartitions"
+  | "kafkaController"
+  | "kafkaLatency"
+  | "kafkaBusy";
 
 export interface PanelQuery {
   name: string;
@@ -559,6 +587,135 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
       stacked: true,
       optional: true,
       build: (d, L) => by(get(d, "w"), [MSSQL_WAIT_TYPE], L("waitTime")),
+    },
+  ],
+  // Java runtimes (§6.16): the java.lang MBeans of any JVM that exposes Jolokia.
+  jvm: [
+    {
+      id: "jvmHeap",
+      queries: {
+        u: { name: "jvm.memory.used", agg: "avg", groupBy: ["jvm.memory.type"] },
+        l: { name: "jvm.memory.limit", agg: "last", groupBy: ["jvm.memory.type"] },
+      },
+      unit: "bytes",
+      alert: "u",
+      build: (d, L) => [
+        ...one(L("heap"), sumSeries(pickSeries(get(d, "u"), "jvm.memory.type", ["heap"]))),
+        ...one(L("nonHeap"), sumSeries(pickSeries(get(d, "u"), "jvm.memory.type", ["non_heap"]))),
+        ...one(L("max"), sumSeries(pickSeries(get(d, "l"), "jvm.memory.type", ["heap"]))),
+      ],
+    },
+    {
+      id: "jvmPools",
+      queries: { p: { name: "jvm.memory.pool.used", agg: "avg", groupBy: ["jvm.memory.pool.name"] } },
+      unit: "bytes",
+      stacked: true,
+      build: (d, L) => by(get(d, "p"), ["jvm.memory.pool.name"], L("used")),
+    },
+    {
+      id: "jvmGc",
+      queries: {
+        c: { name: "jvm.gc.collections", agg: "rate", groupBy: ["jvm.gc.name"] },
+        t: { name: "jvm.gc.duration", agg: "rate", groupBy: ["jvm.gc.name"] },
+      },
+      unit: "number",
+      alert: "t",
+      build: (d, L) => [...one(L("gcCount"), sumSeries(get(d, "c"))), ...one(L("gcTime"), sumSeries(get(d, "t")))],
+    },
+    {
+      id: "jvmThreads",
+      queries: {
+        t: { name: "jvm.thread.count", agg: "last", groupBy: ["jvm.thread.daemon"] },
+        p: { name: "jvm.thread.peak", agg: "last" },
+      },
+      unit: "number",
+      stacked: true,
+      alert: "t",
+      build: (d, L) => [
+        ...one(L("daemon"), sumSeries(pickSeries(get(d, "t"), "jvm.thread.daemon", ["true"]))),
+        ...one(L("other"), sumSeries(pickSeries(get(d, "t"), "jvm.thread.daemon", ["false"]))),
+      ],
+    },
+    {
+      id: "jvmCpu",
+      queries: {
+        p: { name: "jvm.cpu.recent_utilization", agg: "avg" },
+        s: { name: "jvm.system.cpu.utilization", agg: "avg" },
+      },
+      unit: "percent",
+      yMax: 1,
+      alert: "p",
+      build: (d, L) => [...one(L("process"), sumSeries(get(d, "p"))), ...one(L("system"), sumSeries(get(d, "s")))],
+    },
+  ],
+  // Apache Kafka (§6.17): the broker's own MBeans; its JVM is the jvm integration on the same endpoint.
+  kafka: [
+    {
+      id: "kafkaThroughput",
+      queries: { n: { name: "kafka.network.io", agg: "rate", groupBy: ["direction"] } },
+      unit: "bytesPerSec",
+      order: ["in", "out"],
+      alert: "n",
+      build: (d, L) => by(get(d, "n"), ["direction"], L("sent")),
+    },
+    {
+      id: "kafkaRequests",
+      queries: {
+        r: { name: "kafka.request.count", agg: "rate", groupBy: ["type"] },
+        f: { name: "kafka.request.failed", agg: "rate", groupBy: ["type"] },
+      },
+      unit: "number",
+      alert: "f",
+      build: (d, L) => [...by(get(d, "r"), ["type"], L("requests")), ...one(L("notFound"), sumSeries(get(d, "f")))],
+    },
+    {
+      // The chart an operator opens first: anything above zero on the last two lines is a cluster problem.
+      id: "kafkaPartitions",
+      queries: {
+        p: { name: "kafka.partition.count", agg: "last" },
+        u: { name: "kafka.partition.under_replicated", agg: "last" },
+        o: { name: "kafka.partition.offline", agg: "last" },
+      },
+      unit: "number",
+      alert: "u",
+      build: (d, L) => [
+        ...one(L("partitions"), sumSeries(get(d, "p"))),
+        ...one(L("underReplicated"), sumSeries(get(d, "u"))),
+        ...one(L("offline"), sumSeries(get(d, "o"))),
+      ],
+    },
+    {
+      id: "kafkaLatency",
+      queries: { t: { name: "kafka.request.time.avg", agg: "avg", groupBy: ["type"] } },
+      unit: "ms",
+      alert: "t",
+      build: (d, L) => by(get(d, "t"), ["type"], L("waitTime")),
+    },
+    {
+      id: "kafkaBusy",
+      queries: {
+        h: { name: "kafka.request.handler.busy", agg: "avg" },
+        n: { name: "kafka.network.processor.busy", agg: "avg" },
+      },
+      unit: "percent",
+      yMax: 1,
+      alert: "h",
+      build: (d, L) => [...one(L("handler"), sumSeries(get(d, "h"))), ...one(L("processor"), sumSeries(get(d, "n")))],
+    },
+    {
+      id: "kafkaController",
+      queries: {
+        c: { name: "kafka.controller.active.count", agg: "last" },
+        t: { name: "kafka.topic.count", agg: "last" },
+        e: { name: "kafka.leader.election.unclean", agg: "rate" },
+      },
+      unit: "number",
+      alert: "e",
+      build: (d, L) => [
+        ...one(L("leaders"), sumSeries(get(d, "c"))),
+        ...one(L("queries"), sumSeries(get(d, "t"))),
+        ...one(L("deadlocks"), sumSeries(get(d, "e"))),
+      ],
     },
   ],
   // MongoDB (§6.15): the server metrics are the instance resource, the sizes are per database.

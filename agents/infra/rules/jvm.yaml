@@ -6,4 +6,10 @@ match:
 version:
   - cmdline_regex: "/jvm/(?:java-|jdk-?|temurin-)?([0-9]+(?:\\.[0-9]+)*)[^/\\s]*/bin/java"
   - package_regex: "^(openjdk-[0-9]+-jre-headless|openjdk-[0-9]+-jdk-headless|java-[0-9.]+-openjdk-headless|temurin-[0-9]+-jdk)$"
+endpoints:
+  - from: listening_port
+integration:
+  id: jvm
+  auto_enable: true         # probe the usual Jolokia paths; no endpoint → needs_configuration with the hint
+  requires: []              # the JVM itself says whether the bridge is there
 apm_hint: { language: java, agent: openlog-agent-java }

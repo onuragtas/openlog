@@ -172,6 +172,12 @@ integrations:                    # metric integrations bound to discovered servi
     # password: env:OPENLOG_ELASTICSEARCH_PASSWORD
     # endpoint: https://127.0.0.1:9200
     # tls: { enabled: true, ca_file: /etc/elasticsearch/certs/http_ca.crt }
+  jvm:
+    enabled: true                # any JVM that exposes Jolokia: -javaagent:jolokia-agent-jvm.jar=port=8778,host=127.0.0.1
+    # endpoint: http://127.0.0.1:8778/jolokia
+  kafka:
+    enabled: true                # the broker's own MBeans over the same Jolokia bridge
+    # endpoint: http://127.0.0.1:8778/jolokia
   mongodb:
     enabled: true                # needs credentials: db.createUser with the clusterMonitor role
     # username: openlog

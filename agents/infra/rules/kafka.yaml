@@ -13,4 +13,5 @@ endpoints:
   - from: listening_port
 integration:
   id: kafka
-  requires: ["jmx"]
+  auto_enable: true         # probe the usual Jolokia paths on 8778; no endpoint → needs_configuration
+  requires: []              # the broker's Jolokia bridge answers whether it is there (D-144)
