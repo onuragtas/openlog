@@ -170,6 +170,37 @@ function KeyFields({ id, draft, onChange, showName }: { id: string; draft: Draft
   );
 }
 
+/**
+ * The key in full, with a copy button.
+ *
+ * Every other credential in these settings shows a prefix and is revealed once, and that is right for them.
+ * A browser key is the exception on purpose: it ships inside the page, so everyone who can open the site
+ * already has it (rum.md §3.5) and hiding it here only forced a rotation of something the internet knew.
+ * Keys created before the value was stored have none, and those still show their prefix.
+ */
+function KeyValue({ value }: { value: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <code className="font-mono text-xs break-all">{value}</code>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          navigator.clipboard
+            .writeText(value)
+            .then(() => setCopied(true))
+            .catch(() => undefined);
+        }}
+      >
+        {copied ? t("settings.copied") : t("common.copy")}
+      </Button>
+    </div>
+  );
+}
+
 export function BrowserKeysSettings() {
   const { t } = useTranslation();
   const id = useId();
@@ -254,8 +285,14 @@ export function BrowserKeysSettings() {
                 <TableRow key={k.id}>
                   <TableCell className="font-medium">{k.name}</TableCell>
                   <TableCell label={t("settings.columns.key")}>
-                    <code className="font-mono text-xs">{k.prefix}</code>
-                    <span aria-hidden="true">…</span>
+                    {k.key !== "" ? (
+                      <KeyValue value={k.key} />
+                    ) : (
+                      <>
+                        <code className="font-mono text-xs">{k.prefix}</code>
+                        <span aria-hidden="true">…</span>
+                      </>
+                    )}
                   </TableCell>
                   <TableCell label={t("settings.browserKeys.application")}>
                     {k.service_name}

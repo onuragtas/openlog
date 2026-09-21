@@ -150,6 +150,15 @@ type BrowserKey struct {
 	Name   string
 	Prefix string
 	Hash   []byte
+	// Value is the key in plaintext (0099_browser_key_value). **This is deliberate and unique to browser
+	// keys**: the value ships inside a web page, so everyone who can open the page already has it, and
+	// refusing to repeat it only forced an operator to rotate a key the internet already knew. Every other
+	// credential openlog issues stays hash-only — a license key or API key readable from the database
+	// would be a real escalation.
+	//
+	// Empty for keys created before that migration: their plaintext was never stored and cannot be
+	// recovered. It never appears in the audit log (browserKeyDetails).
+	Value string
 	// ServiceName is the application every payload of this key is stored under; Environment is the
 	// optional deployment.environment.name. Both are forced server-side, never taken from the payload.
 	ServiceName string

@@ -7448,6 +7448,10 @@ export interface components {
             os_name: string;
             /** @description The session's newest trace */
             trace_id: string;
+            /** @description The last identity the session declared through the SDK's identify() (rum.md §3.7) — last because a visit can sign in part-way through. **Filled by the session detail only**: it lives on the spans, not on the session rollup the list reads, which returns it empty rather than running a second query per row. Empty when the application never identified anyone. */
+            user_id: string;
+            /** @description ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page. Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved one — openlog stores no visitor address and derives nothing itself. */
+            country: string;
         };
         RumEvent: {
             timestamp: components["schemas"]["Timestamp"];
@@ -7485,6 +7489,8 @@ export interface components {
             name: string;
             /** @example olb_1a2b3c4d */
             prefix: string;
+            /** @description The key in plaintext. **Browser keys are the one credential openlog reads back**, because the value ships inside a web page and is public by construction (rum.md §3.5) — withholding it only forced a rotation of something the internet already had. License keys, API keys and SSO secrets remain hash-only and are still shown once. Empty for browser keys created before the value was stored; those can only be rotated. */
+            key: string;
             /** @description The application every payload of this key is stored under */
             service_name: string;
             environment: string;

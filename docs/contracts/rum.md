@@ -233,6 +233,13 @@ What they **cannot** do, by construction:
 - Escape the organization. The tenant comes from the key, and the query layer binds every read to it.
 - Survive revocation for more than `OPENLOG_AUTH_CACHE_TTL` (60 s by default).
 
+**The value is readable, and that follows from the paragraph above rather than contradicting it.** Since
+nothing here depends on the key being secret, openlog stores it in the clear and the settings screen shows
+it in full — `GET /api/v1/browser-keys` returns `key`. Refusing to repeat a value that is printed in the
+operator's own HTML only forced them to rotate a key the internet already had. This is the one credential
+openlog reads back: license keys, API keys and SSO client secrets are real secrets, stay hash-only, and are
+still shown exactly once. Keys issued before this was stored return an empty `key` and can only be rotated.
+
 **How an operator responds.** Revoke the key (Settings → Browser keys, or `DELETE /api/v1/browser-keys/{id}`)
 and issue a new one in the page. Revocation is a soft delete: the value stays permanently unusable, which
 matters because the plaintext is still cached in browsers that loaded the old page. Ingest pods stop accepting

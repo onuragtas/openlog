@@ -21,13 +21,13 @@ var _ rum.Store = (*Store)(nil)
 
 // browserKeyCols and scanBrowserKey are positional: every column here has its destination at the same index
 // below, and a column inserted in one but not the other corrupts silently rather than failing.
-const browserKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, k.service_name, k.environment,
+const browserKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, k.key_value, k.service_name, k.environment,
 	k.kind, k.origins, k.app_ids, k.rate_limit_per_minute, k.sample_rate, coalesce(k.created_by::text, ''),
 	k.created_at, k.updated_at, k.last_used_at, k.revoked_at`
 
 func scanBrowserKey(r pgx.Row, extra ...any) (auth.BrowserKey, error) {
 	var k auth.BrowserKey
-	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.ServiceName, &k.Environment,
+	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.Value, &k.ServiceName, &k.Environment,
 		&k.Kind, &k.Origins, &k.AppIDs, &k.RateLimitPerMinute, &k.SampleRate, &k.CreatedBy,
 		&k.CreatedAt, &k.UpdatedAt, &k.LastUsedAt, &k.RevokedAt}, extra...)
 	return k, r.Scan(dest...)
@@ -37,10 +37,10 @@ func (s *Store) CreateBrowserKey(ctx context.Context, k *auth.BrowserKey) error 
 	k.CreatedAt = ts(k.CreatedAt)
 	k.UpdatedAt = ts(k.UpdatedAt)
 	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO browser_keys
-		(org_id, name, key_prefix, key_hash, service_name, environment, kind, origins, app_ids,
+		(org_id, name, key_prefix, key_hash, key_value, service_name, environment, kind, origins, app_ids,
 		 rate_limit_per_minute, sample_rate, created_by, created_at, updated_at, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid, $13, $14, $12::uuid) RETURNING id::text`,
-		k.OrgID, k.Name, k.Prefix, k.Hash, k.ServiceName, k.Environment, k.Kind, k.Origins, k.AppIDs,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::uuid, $14, $15, $13::uuid) RETURNING id::text`,
+		k.OrgID, k.Name, k.Prefix, k.Hash, k.Value, k.ServiceName, k.Environment, k.Kind, k.Origins, k.AppIDs,
 		k.RateLimitPerMinute, k.SampleRate, nullID(k.CreatedBy), k.CreatedAt, k.UpdatedAt).Scan(&k.ID))
 }
 

@@ -238,6 +238,14 @@ to say. What bounds it is capability, not confidentiality: an origin allowlist, 
 application name, and revocation. The full threat model — what a copied key can and cannot do — is
 [rum.md §3.5](rum.md).
 
+**The value is readable.** Unlike every other credential here, a browser key is returned in full by the
+reads above (`key`), not only once at creation. That is not a convenience exception: the value ships inside
+a web page, so everyone who can open the page already has it, and refusing to repeat it only forced an
+operator to rotate a key the internet already knew. License keys, API keys and SSO client secrets are real
+secrets, stay hash-only, and are still shown exactly once. Browser keys created before this was stored
+return `key: ""` — their plaintext was never kept and cannot be recovered, so those can only be rotated.
+The value never appears in the audit log, which records the prefix.
+
 **Two kinds.** `kind` is `browser` (the default, and what a key without one is) or `mobile`. A browser key
 carries `origins` and no `app_ids`; a mobile key carries `app_ids` — Android package names and iOS bundle
 identifiers, sent in the `openlog-app-id` header — and no `origins`. Sending the allowlist that does not

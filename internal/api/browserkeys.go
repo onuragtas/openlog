@@ -37,9 +37,12 @@ func (s *Server) browserKeyRoutes(mux *http.ServeMux) {
 }
 
 type browserKeyJSON struct {
-	ID                 string   `json:"id"`
-	Name               string   `json:"name"`
-	Prefix             string   `json:"prefix"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+	// Key is the value in plaintext, readable by anyone who may list browser keys — it ships in the page,
+	// so withholding it protected nothing (rum.md §3). Empty for keys created before 0099.
+	Key                string   `json:"key"`
 	ServiceName        string   `json:"service_name"`
 	Environment        string   `json:"environment"`
 	Kind               string   `json:"kind"`
@@ -67,7 +70,8 @@ func browserKeyResponse(k auth.BrowserKey) browserKeyJSON {
 		kind = auth.KeyKindBrowser // rows written before 0098_mobile_keys
 	}
 	return browserKeyJSON{
-		ID: k.ID, Name: k.Name, Prefix: k.Prefix, ServiceName: k.ServiceName, Environment: k.Environment,
+		ID: k.ID, Name: k.Name, Prefix: k.Prefix, Key: k.Value,
+		ServiceName: k.ServiceName, Environment: k.Environment,
 		Kind: kind, Origins: origins, AppIDs: appIDs,
 		RateLimitPerMinute: k.RateLimitPerMinute, SampleRate: k.SampleRate,
 		CreatedByEmail: k.CreatedByEmail, CreatedAt: formatTime(k.CreatedAt), UpdatedAt: formatTime(k.UpdatedAt),

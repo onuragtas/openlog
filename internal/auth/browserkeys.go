@@ -179,6 +179,9 @@ func (s *Service) CreateBrowserKey(ctx context.Context, p *Principal, in Browser
 	now := s.now()
 	k := BrowserKey{
 		OrgID: p.OrgID, Name: in.Name, Prefix: DisplayPrefix(secret), Hash: hash,
+		// Stored in the clear on purpose, and only here: see BrowserKey.Value and 0099. The hash is still
+		// what the ingest path resolves, so this is additional, never a replacement.
+		Value:       secret,
 		ServiceName: in.ServiceName, Environment: in.Environment, Kind: in.Kind,
 		Origins: in.Origins, AppIDs: in.AppIDs,
 		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate,
