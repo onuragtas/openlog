@@ -725,6 +725,16 @@ export const tr: Messages = {
       origins: "Kökenler",
       originsPlaceholder: "https://shop.example.com, https://*.example.com",
       originsHelp: "Tam kökenler ya da alt alan adı joker'leri, virgülle ayrılır. Boş liste reddedilir: boş bir alan güvensiz ayar olmamalı.",
+      kind: "Anahtar türü",
+      kindBrowser: "Tarayıcı",
+      kindMobile: "Mobil uygulama",
+      kindHelp:
+        "Tarayıcı anahtarını kökenler sınırlar; kökeni tarayıcı belirler ve sayfa onu taklit edemez. Mobil uygulamanın kökeni yoktur, bunun yerine kendi uygulama kimliğini bildirir — bu daha zayıf bir denetimdir, çünkü herhangi bir şey herhangi bir kimliği iddia edebilir.",
+      scope: "Kapsam",
+      appIds: "Uygulamalar",
+      appIdsPlaceholder: "com.example.shop, com.example.shop.ios",
+      appIdsHelp:
+        "Android paket adları ve iOS paket kimlikleri, virgülle ayrılır. Bu liste kopyalanmış bir anahtarın gelişigüzel kullanımını daraltır; bir programın sizin uygulama kimliğinizi iddia etmesini engellemez.",
       rateLimit: "Olay/dk",
       sampleRate: "Örnekleme",
       rateLimitHelp: "Dakikada {{min}} ile {{max}} olay arasında olmalı.",

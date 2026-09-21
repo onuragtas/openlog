@@ -724,6 +724,16 @@ export const en = {
       origins: "Origins",
       originsPlaceholder: "https://shop.example.com, https://*.example.com",
       originsHelp: "Exact origins or subdomain wildcards, separated by commas. An empty list is refused: a blank field must not be the unsafe setting.",
+      kind: "Key type",
+      kindBrowser: "Browser",
+      kindMobile: "Mobile app",
+      kindHelp:
+        "A browser key is scoped by origins, which the browser sets and a page cannot forge. A mobile app has no origin, so it declares its own application id instead — a weaker check, because anything can claim any id.",
+      scope: "Scope",
+      appIds: "Applications",
+      appIdsPlaceholder: "com.example.shop, com.example.shop.ios",
+      appIdsHelp:
+        "Android package names and iOS bundle identifiers, separated by commas. This narrows casual reuse of a copied key; it does not stop a program from claiming your app id.",
       rateLimit: "Events/min",
       sampleRate: "Sampling",
       rateLimitHelp: "Between {{min}} and {{max}} events per minute.",

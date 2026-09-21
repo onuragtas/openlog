@@ -38,7 +38,9 @@ function seed(): BrowserKey[] {
       prefix: "olb_1a2b3c4d",
       service_name: "shop-web",
       environment: "production",
+      kind: "browser",
       origins: ["https://shop.example.com", "https://*.example.com"],
+      app_ids: [],
       rate_limit_per_minute: 6000,
       sample_rate: 1,
       created_by_email: "owner@example.com",
@@ -60,9 +62,19 @@ export function resetMockBrowserKeys() {
 function validate(input: BrowserKeyInput): Response | null {
   if (input.name.trim() === "") return fail("invalid_argument", "name is required", 400);
   if (input.service_name.trim() === "") return fail("invalid_argument", "service_name is required", 400);
-  // An empty allowlist accepts data from any page on the internet, so it is refused rather than defaulted (§3.2).
-  if (input.origins.length === 0) return fail("invalid_argument", "at least one origin is required", 400);
-  if (input.origins.includes("*")) return fail("invalid_argument", `"*" is not an allowed origin`, 400);
+  // Exactly the allowlist of the kind, and only that one: a key carrying both would have a scope that
+  // depends on which check ran first, so the server refuses it and so does this (§3.6).
+  const kind = input.kind ?? "browser";
+  if (kind === "mobile") {
+    if (!input.app_ids?.length) return fail("invalid_argument", "at least one application id is required", 400);
+    if (input.app_ids.includes("*")) return fail("invalid_argument", `"*" is not a valid application id`, 400);
+    if (input.origins?.length) return fail("invalid_argument", "origins belong to a browser key", 400);
+  } else {
+    // An empty allowlist accepts data from any page on the internet, so it is refused rather than defaulted (§3.2).
+    if (!input.origins?.length) return fail("invalid_argument", "at least one origin is required", 400);
+    if (input.origins.includes("*")) return fail("invalid_argument", `"*" is not an allowed origin`, 400);
+    if (input.app_ids?.length) return fail("invalid_argument", "app_ids belong to a mobile key", 400);
+  }
   if (input.sample_rate <= 0 || input.sample_rate > 1) return fail("invalid_argument", "sample_rate must be between 0 and 1", 400);
   return null;
 }
@@ -83,7 +95,9 @@ export const browserKeyHandlers = [
       prefix: "olb_9f8e7d6c",
       service_name: input.service_name,
       environment: input.environment ?? "",
-      origins: input.origins,
+      kind: input.kind ?? "browser",
+      origins: input.origins ?? [],
+      app_ids: input.app_ids ?? [],
       rate_limit_per_minute: input.rate_limit_per_minute,
       sample_rate: input.sample_rate,
       created_by_email: "owner@example.com",
@@ -109,7 +123,9 @@ export const browserKeyHandlers = [
       name: input.name,
       service_name: input.service_name,
       environment: input.environment ?? "",
-      origins: input.origins,
+      kind: input.kind ?? "browser",
+      origins: input.origins ?? [],
+      app_ids: input.app_ids ?? [],
       rate_limit_per_minute: input.rate_limit_per_minute,
       sample_rate: input.sample_rate,
       updated_at: formatTs(Date.now()),

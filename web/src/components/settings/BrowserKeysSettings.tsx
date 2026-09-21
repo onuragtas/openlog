@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
@@ -24,34 +25,56 @@ const DEFAULT_RATE_LIMIT = 6000;
 const MIN_RATE_LIMIT = 60;
 const MAX_RATE_LIMIT = 10_000_000;
 
+/** Which allowlist bounds the key. A mobile app has no origin, so it declares its own id (rum.md §3.6). */
+type Kind = BrowserKey["kind"];
+
 interface Draft {
   name: string;
   serviceName: string;
   environment: string;
+  kind: Kind;
   origins: string;
+  appIds: string;
   rateLimit: string;
   sampleRate: string;
 }
 
-const newDraft = (): Draft => ({ name: "", serviceName: "", environment: "", origins: "", rateLimit: String(DEFAULT_RATE_LIMIT), sampleRate: "1" });
+const newDraft = (): Draft => ({
+  name: "",
+  serviceName: "",
+  environment: "",
+  kind: "browser",
+  origins: "",
+  appIds: "",
+  rateLimit: String(DEFAULT_RATE_LIMIT),
+  sampleRate: "1",
+});
 
 const draftOf = (k: BrowserKey): Draft => ({
   name: k.name,
   serviceName: k.service_name,
   environment: k.environment,
+  kind: k.kind,
   origins: k.origins.join(", "),
+  appIds: k.app_ids.join(", "),
   rateLimit: String(k.rate_limit_per_minute),
   sampleRate: String(k.sample_rate),
 });
 
-/** Origins are typed as a list. The server refuses an empty one: a blank field must not be the unsafe setting (rum.md §3.2). */
-const parseOrigins = (s: string): string[] => s.split(/[\s,]+/).filter((o) => o !== "");
+/** Both allowlists are typed as a list. The server refuses an empty one: a blank field must not be the unsafe setting (rum.md §3.2). */
+const parseList = (s: string): string[] => s.split(/[\s,]+/).filter((o) => o !== "");
+
+/** The list that bounds this draft: origins for a browser key, application ids for a mobile one. */
+const scopeOf = (d: Draft): string[] => parseList(d.kind === "mobile" ? d.appIds : d.origins);
 
 const toInput = (d: Draft): BrowserKeyInput => ({
   name: d.name.trim(),
   service_name: d.serviceName.trim(),
   environment: d.environment.trim() || undefined,
-  origins: parseOrigins(d.origins),
+  kind: d.kind,
+  // Exactly the allowlist belonging to the kind. Sending both is refused by the server, so the form never
+  // offers it: a key whose scope depends on which check ran first is not a scope at all.
+  ...(d.kind === "mobile" ? { app_ids: scopeOf(d) } : { origins: scopeOf(d) }),
   rate_limit_per_minute: Number(d.rateLimit) || DEFAULT_RATE_LIMIT,
   sample_rate: Number(d.sampleRate),
 });
@@ -69,7 +92,7 @@ const sampleRateError = (d: Draft): boolean => {
 };
 
 const complete = (d: Draft) =>
-  d.name.trim() !== "" && d.serviceName.trim() !== "" && parseOrigins(d.origins).length > 0 && !rateLimitError(d) && !sampleRateError(d);
+  d.name.trim() !== "" && d.serviceName.trim() !== "" && scopeOf(d).length > 0 && !rateLimitError(d) && !sampleRateError(d);
 
 function KeyFields({ id, draft, onChange, showName }: { id: string; draft: Draft; onChange: (d: Draft) => void; showName: boolean }) {
   const { t } = useTranslation();
@@ -96,10 +119,24 @@ function KeyFields({ id, draft, onChange, showName }: { id: string; draft: Draft
         <Label htmlFor={`${id}-env`}>{t("settings.browserKeys.environment")}</Label>
         <Input id={`${id}-env`} value={draft.environment} maxLength={200} placeholder={t("settings.browserKeys.environmentPlaceholder")} onChange={(e) => set({ environment: e.target.value })} />
       </div>
-      <div className="flex min-w-60 flex-[2] flex-col gap-1.5">
-        <Label htmlFor={`${id}-origins`}>{t("settings.browserKeys.origins")}</Label>
-        <Input id={`${id}-origins`} value={draft.origins} placeholder={t("settings.browserKeys.originsPlaceholder")} onChange={(e) => set({ origins: e.target.value })} />
+      <div className="flex w-40 flex-col gap-1.5">
+        <Label htmlFor={`${id}-kind`}>{t("settings.browserKeys.kind")}</Label>
+        <NativeSelect id={`${id}-kind`} value={draft.kind} onChange={(e) => set({ kind: e.target.value as Kind })}>
+          <option value="browser">{t("settings.browserKeys.kindBrowser")}</option>
+          <option value="mobile">{t("settings.browserKeys.kindMobile")}</option>
+        </NativeSelect>
       </div>
+      {draft.kind === "mobile" ? (
+        <div className="flex min-w-60 flex-[2] flex-col gap-1.5">
+          <Label htmlFor={`${id}-app-ids`}>{t("settings.browserKeys.appIds")}</Label>
+          <Input id={`${id}-app-ids`} value={draft.appIds} placeholder={t("settings.browserKeys.appIdsPlaceholder")} onChange={(e) => set({ appIds: e.target.value })} />
+        </div>
+      ) : (
+        <div className="flex min-w-60 flex-[2] flex-col gap-1.5">
+          <Label htmlFor={`${id}-origins`}>{t("settings.browserKeys.origins")}</Label>
+          <Input id={`${id}-origins`} value={draft.origins} placeholder={t("settings.browserKeys.originsPlaceholder")} onChange={(e) => set({ origins: e.target.value })} />
+        </div>
+      )}
       <div className="flex w-32 flex-col gap-1.5">
         <Label htmlFor={`${id}-rate`}>{t("settings.browserKeys.rateLimit")}</Label>
         <Input
@@ -179,7 +216,9 @@ export function BrowserKeysSettings() {
                 {create.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Plus aria-hidden="true" />}
                 {t("settings.browserKeys.create")}
               </Button>
-              <p className="text-xs text-muted-foreground">{t("settings.browserKeys.originsHelp")}</p>
+              <p className="text-xs text-muted-foreground">
+                {draft.kind === "mobile" ? t("settings.browserKeys.appIdsHelp") : t("settings.browserKeys.originsHelp")}
+              </p>
             </div>
           </form>
         )}
@@ -201,7 +240,7 @@ export function BrowserKeysSettings() {
                 <TableHead>{t("settings.columns.name")}</TableHead>
                 <TableHead>{t("settings.columns.key")}</TableHead>
                 <TableHead>{t("settings.browserKeys.application")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("settings.browserKeys.origins")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("settings.browserKeys.scope")}</TableHead>
                 <TableHead className="hidden md:table-cell text-right">{t("settings.browserKeys.sampleRate")}</TableHead>
                 <TableHead className="hidden md:table-cell">{t("settings.columns.lastUsed")}</TableHead>
                 <TableHead>{t("settings.columns.status")}</TableHead>
@@ -222,8 +261,8 @@ export function BrowserKeysSettings() {
                     {k.service_name}
                     {k.environment !== "" && <span className="text-muted-foreground"> · {k.environment}</span>}
                   </TableCell>
-                  <TableCell label={t("settings.browserKeys.origins")} className="hidden break-all lg:table-cell">
-                    {k.origins.join(", ")}
+                  <TableCell label={t("settings.browserKeys.scope")} className="hidden break-all lg:table-cell">
+                    {k.kind === "mobile" ? k.app_ids.join(", ") : k.origins.join(", ")}
                   </TableCell>
                   <TableCell label={t("settings.browserKeys.sampleRate")} className="hidden md:table-cell text-right tabular-nums">
                     {Math.round(k.sample_rate * 100)}%
