@@ -13,6 +13,7 @@ import {
   type AlertSeverity,
 } from "@/api/alerts";
 import { AttributeChips } from "@/components/AttributeChips";
+import { Correlations } from "@/components/metrics/Correlations";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
@@ -166,6 +167,23 @@ function fmtNum(v: number | null): string {
   return v === null ? "–" : String(Math.round(v * 10_000) / 10_000);
 }
 
+/**
+ * The window the correlation panel explains (D-146).
+ *
+ * It starts when the incident opened, because that is the moment something changed. It is floored at five
+ * minutes so there are one-minute buckets to compare at all, and capped at an hour: the question is what
+ * happened when this broke, and the mean over three days of an outage no longer answers it.
+ */
+const CORRELATION_MIN_MS = 5 * 60_000;
+const CORRELATION_MAX_MS = 60 * 60_000;
+
+export function correlationWindow(openedAt: string, resolvedAt: string | null | undefined, now: number): { from: string; to: string } {
+  const start = parse(openedAt);
+  const end = resolvedAt ? parse(resolvedAt) : now;
+  const span = Math.min(Math.max(end - start, CORRELATION_MIN_MS), CORRELATION_MAX_MS);
+  return { from: new Date(start).toISOString(), to: new Date(start + span).toISOString() };
+}
+
 export function IncidentDetail({ id }: { id: string }) {
   const { t } = useTranslation();
   const uid = useId();
@@ -174,6 +192,8 @@ export function IncidentDetail({ id }: { id: string }) {
   const q = useQuery(alertIncidentQuery(id));
   const [resolving, setResolving] = useState(false);
   const [note, setNote] = useState("");
+  // Pinned at mount: the correlation window must not slide under the reader while they are looking at it.
+  const [openedView] = useState(() => Date.now());
   const [resolveNote, setResolveNote] = useState("");
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["alerts"] });
   const ack = useMutation({ mutationFn: () => acknowledgeIncident(id), onSuccess: refresh });
@@ -184,6 +204,7 @@ export function IncidentDetail({ id }: { id: string }) {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   const inc = q.data;
   const labels = Object.fromEntries(Object.entries(inc.labels).filter(([k]) => !k.startsWith("alert.")));
+  const corrWindow = correlationWindow(inc.opened_at, inc.resolved_at, openedView);
 
   return (
     <div className="flex flex-col gap-4">
@@ -352,6 +373,10 @@ export function IncidentDetail({ id }: { id: string }) {
           <DeliveriesTable deliveries={inc.deliveries} />
         </Section>
       </div>
+
+      <Section title={t("correlations.title")} description={t("correlations.description")}>
+        <Correlations {...corrWindow} hostId={inc.labels["host.id"] || undefined} />
+      </Section>
     </div>
   );
 }

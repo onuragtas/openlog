@@ -1,5 +1,6 @@
 // Realistic fixtures shaped exactly like the openlog-api responses
 // (internal/api handlers; values modelled on cmd/openlog-loadgen).
+import type { MetricCorrelation } from "@/api/correlate";
 import type { DiscoveredService, Host, InventoryItem, LogRecord, Span } from "@/api/types";
 
 export const VALID_LICENSE_KEYS = ["dev-license-key", "demo"];
@@ -587,4 +588,24 @@ function integrationMetrics(): Record<string, MetricDef> {
       series: ([["DefaultAppPool", 3], ["api", 6], ["legacy-reports", 5]] as const).map(([pool, state]) => gauge({ ...I, "iis.application_pool": pool }, {}, () => state)),
     },
   };
+}
+
+/**
+ * Correlations for a window (D-146): one plausible story, told by the metrics that back it.
+ *
+ * A checkout service slowed down because its database's disk started queueing — so disk latency and queue
+ * depth moved most, connection pool waits followed, and CPU idled *down* while the host waited on I/O.
+ */
+export function correlations(hostId: string): MetricCorrelation[] {
+  const all: MetricCorrelation[] = [
+    { metric_name: "system.disk.operation_time", series_id: "9214336012882015", host_id: "db-1", attributes: { device: "nvme0n1", direction: "write" }, unit: "s", baseline_mean: 0.0021, window_mean: 0.0412, change_ratio: 18.62, score: 27.4, direction: "up", points: 12 },
+    { metric_name: "system.disk.pending_operations", series_id: "5540110320093114", host_id: "db-1", attributes: { device: "nvme0n1" }, unit: "{operations}", baseline_mean: 0.8, window_mean: 41.2, change_ratio: 50.5, score: 19.1, direction: "up", points: 12 },
+    { metric_name: "postgresql.backends", series_id: "1180453122870104", host_id: "db-1", attributes: { "postgresql.database.name": "checkout" }, unit: "{backends}", baseline_mean: 14.2, window_mean: 96.7, change_ratio: 5.81, score: 11.8, direction: "up", points: 12 },
+    { metric_name: "http.server.request.duration", series_id: "7723901554330281", host_id: "web-1", attributes: { "http.route": "/api/checkout", "http.response.status_code": "200" }, unit: "s", baseline_mean: 0.089, window_mean: 1.94, change_ratio: 20.79, score: 8.6, direction: "up", points: 12 },
+    { metric_name: "system.cpu.utilization", series_id: "3301998760014425", host_id: "db-1", attributes: { state: "idle" }, unit: "1", baseline_mean: 0.71, window_mean: 0.22, change_ratio: -0.69, score: 6.2, direction: "down", points: 12 },
+    { metric_name: "system.cpu.utilization", series_id: "3301998760014426", host_id: "db-1", attributes: { state: "iowait" }, unit: "1", baseline_mean: 0.02, window_mean: 0.48, change_ratio: 23, score: 5.4, direction: "up", points: 12 },
+    // A baseline of exactly 0: the ratio is null rather than infinite, and the panel prints "–".
+    { metric_name: "postgresql.deadlocks", series_id: "8890120774410331", host_id: "db-1", attributes: { "postgresql.database.name": "checkout" }, unit: "{deadlocks}", baseline_mean: 0, window_mean: 3.4, change_ratio: null, score: 3.4, direction: "up", points: 12 },
+  ];
+  return hostId === "" ? all : all.filter((c) => c.host_id === hostId);
 }

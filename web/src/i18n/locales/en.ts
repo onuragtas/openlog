@@ -3555,6 +3555,16 @@ export const en = {
       events: { page_view: "Page view", vital: "Vital", error: "Error", resource: "Request" },
     },
   },
+  correlations: {
+    title: "What else changed",
+    description:
+      "Series whose average over this window differs from their own average before it, strongest first. The score is how many of the series' own standard deviations the difference is; both averages are shown so it can be checked.",
+    compared: "{{series}} series compared against their own baseline.",
+    empty: "None of the {{series}} compared series moved away from its baseline.",
+    noData: "No series had enough data on both sides of this window to compare.",
+    columns: { metric: "Metric", baseline: "Baseline", window: "Window", change: "Change", score: "Score" },
+    direction: { up: "rose", down: "fell" },
+  },
   jobs: {
     title: "Job monitoring",
     subtitle: "Cron jobs and heartbeats: the job reports that it ran, openlog notices when it does not.",

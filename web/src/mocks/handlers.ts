@@ -111,6 +111,29 @@ export const handlers = [
     return HttpResponse.json({ names });
   })),
 
+  // What else changed in a window (internal/api/correlate.go, D-146). The fixture answers with a handful of
+  // series whose means moved, so the panel can be read end to end; the baseline defaults to four window
+  // lengths before it, exactly as the server computes it.
+  http.get(`${API}/metrics/correlate`, authed(({ request }) => {
+    const url = new URL(request.url);
+    const r = timeRange(url);
+    if (r instanceof Response) return r;
+    const span = r.to - r.from;
+    if (span > 6 * 3600_000) return apiError("invalid_argument", "the window is longer than 6h0m0s; correlate the part of it that matters");
+    const limit = Number(url.searchParams.get("limit") ?? 20);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) return apiError("invalid_argument", "limit must be between 1 and 200");
+    const hostId = url.searchParams.get("host_id") ?? "";
+    const all = fx.correlations(hostId);
+    return HttpResponse.json({
+      from: fx.formatTs(r.from),
+      to: fx.formatTs(r.to),
+      baseline_from: fx.formatTs(r.from - 4 * span),
+      baseline_to: fx.formatTs(r.from),
+      series_compared: 1842,
+      correlations: all.slice(0, limit),
+    });
+  })),
+
   http.get(`${API}/hosts/:hostId/metrics`, authed(({ request, params }) => {
     const url = new URL(request.url);
     const name = url.searchParams.get("name") ?? "";

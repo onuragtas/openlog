@@ -2391,6 +2391,33 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v1/metrics/correlate:
+    get:
+      tags: [metrics]
+      operationId: correlateMetrics
+      description: >-
+        Which series behaved differently in this window than they did before it (api.md "Metric
+        correlation"). The comparison is a mean over the window against a mean over the baseline, scored by
+        how many of the baseline's own standard deviations the difference is; both means are returned so the
+        score can be checked.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string }, description: Start of the window (RFC3339 or unix milliseconds) }
+        - { name: to, in: query, required: true, schema: { type: string }, description: "End of the window; at most 6 hours after from" }
+        - { name: baseline_from, in: query, schema: { type: string }, description: "Start of the baseline (default: four window-lengths before it)" }
+        - { name: baseline_to, in: query, schema: { type: string }, description: "End of the baseline (default: the start of the window)" }
+        - { name: host_id, in: query, schema: { type: string }, description: Only this host's series }
+        - { name: metric, in: query, schema: { type: string }, description: Only this metric's series }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 20 } }
+      responses:
+        "200":
+          description: The series that changed, strongest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MetricCorrelations" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   /api/v1/jobs/monitors:
     get:
       tags: [jobs]
@@ -10293,6 +10320,37 @@ components:
           maxItems: 10
           items: { type: string }
           description: 'Default ["local"] (the openlog server itself)'
+    MetricCorrelation:
+      type: object
+      required: [metric_name, series_id, host_id, attributes, unit, baseline_mean, window_mean,
+                 change_ratio, score, direction, points]
+      properties:
+        metric_name: { type: string }
+        series_id: { type: string, description: The series hash, as a string because it does not fit a JSON number }
+        host_id: { type: string }
+        attributes: { $ref: "#/components/schemas/StringMap" }
+        unit: { type: string }
+        baseline_mean: { type: number }
+        window_mean: { type: number }
+        change_ratio:
+          type: number
+          nullable: true
+          description: "(window − baseline) / |baseline|; null when the baseline is 0, where a ratio would be infinite rather than large"
+        score: { type: number, description: How many of the baseline's own standard deviations the difference is }
+        direction: { type: string, enum: [up, down] }
+        points: { type: integer, format: int64, description: One-minute buckets the series had in the window }
+    MetricCorrelations:
+      type: object
+      required: [from, to, baseline_from, baseline_to, series_compared, correlations]
+      properties:
+        from: { $ref: "#/components/schemas/Timestamp" }
+        to: { $ref: "#/components/schemas/Timestamp" }
+        baseline_from: { $ref: "#/components/schemas/Timestamp" }
+        baseline_to: { $ref: "#/components/schemas/Timestamp" }
+        series_compared: { type: integer, description: How many series had enough data on both sides to be scored }
+        correlations:
+          type: array
+          items: { $ref: "#/components/schemas/MetricCorrelation" }
     VulnSeverity:
       type: string
       enum: [critical, high, medium, low, none]

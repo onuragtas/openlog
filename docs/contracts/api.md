@@ -1813,6 +1813,39 @@ string and fragment never reach storage.
 bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
 `404` when the session is unknown.
 
+## Metric correlation
+
+### `GET /api/v1/metrics/correlate?from=&to=&baseline_from=&baseline_to=&host_id=&metric=&limit=`
+Which series behaved differently in a window than they did before it (D-146). This is the question every
+incident starts with and no chart answers: a dashboard shows what its author expected to matter, and the
+metric that explains this outage is the one nobody put on it.
+
+The comparison is deliberately simple, and both halves of it are returned so a person can check the result:
+
+| | |
+|---|---|
+| window | the mean of each series over `from`–`to` (at most 6 hours; longer stops meaning "during the incident") |
+| baseline | the mean over `baseline_from`–`baseline_to`, by default the four window-lengths before it — long enough to know what normal was, recent enough to be the same system |
+| score | how many of the **baseline's own standard deviations** the difference is, so a series that always swings by 100 does not rank for swinging by 100 again |
+| direction | `up` or `down`, reported separately from the strength: a request rate falling off a cliff is as interesting as one spiking |
+
+A series needs at least three one-minute buckets on each side to be scored; one that appeared during the
+window has no baseline to compare with. The denominator has a floor of one percent of the baseline's
+magnitude, which keeps a perfectly flat series that moved by a rounding error from out-ranking one that
+doubled, and a series that did not move at all scores 0 and is left out — "nothing happened here" is not a
+correlation.
+
+```json
+{"from": "…", "to": "…", "baseline_from": "…", "baseline_to": "…", "series_compared": 4182,
+ "correlations": [{"metric_name": "system.disk.io", "series_id": "12278…", "host_id": "…",
+   "attributes": {"disk.io.direction": "read", "device": "nvme0n1"}, "unit": "By",
+   "baseline_mean": 1048576, "window_mean": 83886080, "change_ratio": 79, "score": 41.2,
+   "direction": "up", "points": 30}]}
+```
+
+It reads the 1-minute rollup, so the answer costs one query whatever the number of series, and it is scoped
+to the caller's organization like every other metric read.
+
 ## Vulnerabilities
 
 The vulnerable packages found on the caller's hosts (ClickHouse `host_vulnerabilities`, 90 days; the

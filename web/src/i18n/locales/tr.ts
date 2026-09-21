@@ -3556,6 +3556,16 @@ export const tr: Messages = {
       events: { page_view: "Sayfa görüntüleme", vital: "Vital", error: "Hata", resource: "İstek" },
     },
   },
+  correlations: {
+    title: "Başka ne değişti",
+    description:
+      "Bu aralıktaki ortalaması, aralıktan önceki kendi ortalamasından farklı olan seriler; en belirgini üstte. Puan, farkın serinin kendi standart sapmasının kaç katı olduğudur; kontrol edilebilsin diye iki ortalama da gösterilir.",
+    compared: "{{series}} seri kendi geçmişiyle karşılaştırıldı.",
+    empty: "Karşılaştırılan {{series}} serinin hiçbiri kendi geçmişinden ayrılmadı.",
+    noData: "Bu aralığın iki yanında da karşılaştırmaya yetecek verisi olan seri yok.",
+    columns: { metric: "Metrik", baseline: "Geçmiş", window: "Aralık", change: "Değişim", score: "Puan" },
+    direction: { up: "yükseldi", down: "düştü" },
+  },
   jobs: {
     title: "İş izleme",
     subtitle: "Cron işleri ve heartbeat'ler: iş çalıştığını bildirir, openlog bildirmediğini fark eder.",

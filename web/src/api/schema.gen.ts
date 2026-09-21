@@ -1410,6 +1410,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/metrics/correlate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Which series behaved differently in this window than they did before it (api.md "Metric correlation"). The comparison is a mean over the window against a mean over the baseline, scored by how many of the baseline's own standard deviations the difference is; both means are returned so the score can be checked. */
+        get: operations["correlateMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/monitors": {
         parameters: {
             query?: never;
@@ -6996,6 +7013,36 @@ export interface components {
             interval_seconds: number;
             /** @description Default ["local"] (the openlog server itself) */
             locations?: string[];
+        };
+        MetricCorrelation: {
+            metric_name: string;
+            /** @description The series hash */
+            series_id: string;
+            host_id: string;
+            attributes: components["schemas"]["StringMap"];
+            unit: string;
+            baseline_mean: number;
+            window_mean: number;
+            /** @description (window − baseline) / |baseline|; null when the baseline is 0, where a ratio would be infinite rather than large */
+            change_ratio: number | null;
+            /** @description How many of the baseline's own standard deviations the difference is */
+            score: number;
+            /** @enum {string} */
+            direction: "up" | "down";
+            /**
+             * Format: int64
+             * @description One-minute buckets the series had in the window
+             */
+            points: number;
+        };
+        MetricCorrelations: {
+            from: components["schemas"]["Timestamp"];
+            to: components["schemas"]["Timestamp"];
+            baseline_from: components["schemas"]["Timestamp"];
+            baseline_to: components["schemas"]["Timestamp"];
+            /** @description How many series had enough data on both sides to be scored */
+            series_compared: number;
+            correlations: components["schemas"]["MetricCorrelation"][];
         };
         /**
          * @description The CVSS base score bucket; "none" is an advisory the feed carries no score for.
@@ -13330,6 +13377,43 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    correlateMetrics: {
+        parameters: {
+            query: {
+                /** @description Start of the window (RFC3339 or unix milliseconds) */
+                from: string;
+                /** @description End of the window; at most 6 hours after from */
+                to: string;
+                /** @description Start of the baseline (default: four window-lengths before it) */
+                baseline_from?: string;
+                /** @description End of the baseline (default: the start of the window) */
+                baseline_to?: string;
+                /** @description Only this host's series */
+                host_id?: string;
+                /** @description Only this metric's series */
+                metric?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The series that changed, strongest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricCorrelations"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
         };
     };
     listJobMonitors: {

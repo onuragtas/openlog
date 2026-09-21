@@ -109,6 +109,7 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/hosts",
 		"/api/v1/hosts/h1",
 		"/api/v1/metrics/names?host_id=h1",
+		"/api/v1/metrics/correlate?from=2026-01-01T00:00:00Z&to=2026-01-01T00:30:00Z",
 		"/api/v1/hosts/h1/metrics?name=system.cpu.utilization",
 		"/api/v1/hosts/h1/metrics?name=postgresql.table.size&agg=last&resource.openlog.discovery.id=postgresql&resource.openlog.discovery.instance=%2Fusr%2Fbin%2Fpostgres&group_by=resource.postgresql.table.name",
 		"/api/v1/hosts/h1/inventory?category=package",

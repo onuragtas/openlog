@@ -270,6 +270,7 @@ type Select struct {
 	where   []string
 	subs    []*Select // sub-selects used in WhereIn, rendered inline
 	groupBy []string
+	having  []string
 	orderBy []string
 	limitBy string
 	limit   int
@@ -342,6 +343,15 @@ func (q *Select) WhereIn(expr string, sub *Select) *Select {
 func (q *Select) GroupBy(exprs ...string) *Select {
 	if q.check(exprs...) {
 		q.groupBy = append(q.groupBy, exprs...)
+	}
+	return q
+}
+
+// Having adds a HAVING condition, which is how an aggregate is filtered: a WHERE cannot see a column the
+// GROUP BY produced.
+func (q *Select) Having(expr string) *Select {
+	if q.check(expr) {
+		q.having = append(q.having, expr)
 	}
 	return q
 }
@@ -476,6 +486,9 @@ func (q *Select) render(params map[string]string) (string, error) {
 	}
 	if len(q.groupBy) > 0 {
 		b.WriteString(" GROUP BY " + strings.Join(q.groupBy, ", "))
+	}
+	if len(q.having) > 0 {
+		b.WriteString(" HAVING " + strings.Join(q.having, " AND "))
 	}
 	if len(q.orderBy) > 0 {
 		b.WriteString(" ORDER BY " + strings.Join(q.orderBy, ", "))

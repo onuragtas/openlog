@@ -160,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/v1/hosts", s.listHosts)
 	route("GET /api/v1/hosts/{host_id}", s.getHost)
 	route("GET /api/v1/metrics/names", s.metricNames)
+	route("GET /api/v1/metrics/correlate", s.correlate) // correlate.go: what else changed in this window (D-146)
 	route("GET /api/v1/hosts/{host_id}/metrics", s.hostMetrics)
 	route("GET /api/v1/hosts/{host_id}/inventory", s.hostInventory)
 	route("GET /api/v1/hosts/{host_id}/services", s.hostServices)
