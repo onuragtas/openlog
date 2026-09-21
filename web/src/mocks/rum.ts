@@ -35,7 +35,11 @@ const PAGES: RumPage[] = [
   { route: "/checkout", views: 280, avg_ms: 2240, p50_ms: 2010, p75_ms: 2980, p95_ms: 4800, max_ms: 9100, ttfb_avg_ms: 560, lcp_p75: 3310, errors: 2 },
 ];
 
-/** Both sessions are visits of the same tab-scoped kind; nothing identifies a visitor (rum.md §1.1). */
+/**
+ * Two visits of the same tab-scoped kind. The first carries an identity and a country, the second carries
+ * neither — the ordinary case, since user_id is set only when the application calls identify() and country
+ * only when a trusted proxy resolved one (rum.md §3.7). Both are filled by the detail endpoint alone.
+ */
 function sessions(now: number): RumSession[] {
   return [
     {
@@ -54,6 +58,8 @@ function sessions(now: number): RumSession[] {
       browser_version: "131",
       os_name: "macOS",
       trace_id: TRACE_ID,
+      user_id: "acct_8f3a2b",
+      country: "TR",
     },
     {
       session_id: "5c81de0742ab4f93b6207e5ac1d9f384",
@@ -71,6 +77,8 @@ function sessions(now: number): RumSession[] {
       browser_version: "18",
       os_name: "iOS",
       trace_id: "b41e7d62f8a34c95d1e07ab68f23c4a1",
+      user_id: "",
+      country: "",
     },
   ];
 }
