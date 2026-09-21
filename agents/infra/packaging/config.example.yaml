@@ -21,6 +21,8 @@ collectors:
   network: true
   uptime: true
   processes: true
+  sensors: true                  # /sys/class/hwmon: temperatures, fans, voltages, power (Linux only)
+  # max_sensors: 200             # readings stored per collection; a big chassis exposes hundreds
 
 inventory:
   enabled: true

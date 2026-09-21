@@ -180,6 +180,36 @@ above, and state, health and start time of the latest status point (API: [api.md
 | `openlog.agent.php.reassembly_timeouts` | Sum, cumulative, monotonic | `{trace}` | — (split traces exported incomplete after `reassembly_timeout`) |
 | `openlog.agent.php.pending_traces` | Gauge | `{trace}` | — (traces waiting for missing parts) |
 
+### 2.9 Hardware sensors (`sensors`, Linux, D-145)
+
+Source: `/sys/class/hwmon`, the kernel interface `sensors(1)` reads. Linux only; on macOS and Windows the
+collector is not part of the set rather than failing every interval, and a machine without hwmon (a
+container, a VM with no sensors passed through) reports nothing rather than an error.
+
+This is the layer below everything else the agent collects: a thermally throttled CPU shows up in every
+other metric as "slower" with nothing saying why, and a stopped fan shows up as nothing at all until the
+machine does.
+
+| Metric | Type | Unit | Attributes | hwmon file |
+|---|---|---|---|---|
+| `system.hardware.temperature` | Gauge, double | `Cel` | `hw.chip`, `hw.sensor`, `hw.label` | `temp<n>_input` (millidegrees → °C) |
+| `system.hardware.fan.speed` | Gauge, double | `rpm` | `hw.chip`, `hw.sensor`, `hw.label` | `fan<n>_input` |
+| `system.hardware.voltage` | Gauge, double | `V` | `hw.chip`, `hw.sensor`, `hw.label` | `in<n>_input` (mV → V) |
+| `system.hardware.current` | Gauge, double | `A` | `hw.chip`, `hw.sensor`, `hw.label` | `curr<n>_input` (mA → A) |
+| `system.hardware.power` | Gauge, double | `W` | `hw.chip`, `hw.sensor`, `hw.label` | `power<n>_input` (µW → W) |
+| `<metric>.limit` | Gauge, double | the reading's unit | the reading's attributes plus `hw.limit` = `high`, `critical` | `*_max`, `*_crit` |
+
+`hw.chip` is the chip's `name` file (`coretemp`, `nct6798`), `hw.sensor` the reading's own file prefix
+(`temp1`), and `hw.label` its label when the kernel publishes one (`Package id 0`, `Core 0`) — without the
+label a reading is a number nobody can place.
+
+Three rules make the readings trustworthy: a threshold is its own series rather than a field of the
+reading, because "how hot is it" and "how hot may it get" are two facts and an alert needs both; a value
+outside what any machine produces (−274 °C from a disconnected sensor) is dropped, while a fan at **0 rpm
+is kept**, because a stopped fan is the most important reading on the list; and at most
+`collectors.max_sensors` (200) readings are stored per collection, so a chassis with hundreds of sensors is
+a bounded number of series.
+
 ## 3. Inventory and discovery (OTLP logs)
 
 Inventory and discovery results are sent as OTLP **LogRecords** on the logs signal, in the same resource as host metrics.

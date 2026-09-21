@@ -78,6 +78,9 @@ func NewSet(fs *hostfs.FS, cfg *config.Config, stats *selfmon.Stats, log *slog.L
 	if c.Processes {
 		cs = append(cs, &Processes{FS: fs.ForCollector("processes")})
 	}
+	if c.Sensors {
+		cs = append(cs, &Sensors{FS: fs.ForCollector("sensors"), MaxSensors: c.MaxSensors})
+	}
 	s := &Set{stats: stats, log: log, lastErrs: map[string]string{}}
 	if cfg.ProcessMetrics.Enabled && (cfg.ProcessMetrics.TopNCPU > 0 || cfg.ProcessMetrics.TopNMemory > 0) {
 		s.procTop = &ProcessTop{FS: fs.ForCollector("process_metrics"), TopCPU: cfg.ProcessMetrics.TopNCPU, TopMemory: cfg.ProcessMetrics.TopNMemory}

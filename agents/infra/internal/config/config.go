@@ -250,6 +250,11 @@ type Collectors struct {
 	Network    bool `yaml:"network"`
 	Uptime     bool `yaml:"uptime"`
 	Processes  bool `yaml:"processes"`
+	// Sensors reads /sys/class/hwmon (temperatures, fans, voltages, power); Linux only.
+	Sensors bool `yaml:"sensors"`
+	// MaxSensors bounds the readings of one collection (0 = the default 200): a chassis with many drives
+	// and power supplies exposes hundreds, and each reading is a series.
+	MaxSensors int `yaml:"max_sensors"`
 }
 
 // InventoryConfig toggles inventory collection.
@@ -288,7 +293,7 @@ func DefaultFor(goos string) *Config {
 		Host:              HostConfig{RootPath: "/", CloudMetadata: "auto"},
 		Collectors: Collectors{
 			CPU: true, Memory: true, Load: true, Filesystem: true,
-			Disk: true, Network: true, Uptime: true, Processes: true,
+			Disk: true, Network: true, Uptime: true, Processes: true, Sensors: true,
 		},
 		Inventory: InventoryConfig{Enabled: true},
 		Discovery: DiscoveryConfig{Enabled: true, RulesDir: DefaultRulesDir},

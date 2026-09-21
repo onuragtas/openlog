@@ -14,6 +14,11 @@ CPU time and utilization, logical CPU count, load average, memory and paging usa
 disk I/O and operations, network I/O, packets, errors and drops, uptime, and process counts by status.
 Filesystems exclude bind-mounted files (Docker's `/etc/hosts`, `/etc/hostname`, `/etc/resolv.conf`).
 
+**Hardware sensors** (`sensors`, Linux): `system.hardware.temperature`, `.fan.speed`, `.voltage`, `.current` and `.power` from
+`/sys/class/hwmon` — the same readings `sensors(1)` shows — with the kernel's high and critical thresholds as their own series.
+A machine without hwmon reports nothing rather than an error; a fan at 0 rpm is reported, because a stopped fan is the reading
+that matters most.
+
 **Process metrics** (`process_metrics`): `process.cpu.utilization`, `process.memory.usage` (RSS), `process.memory.virtual`,
 `process.threads` and `process.open_file_descriptors` for the union of the top 20 processes by CPU and the top 20 by memory, with
 `process.pid`, `process.executable.name`, `process.executable.path`, `process.owner` and `openlog.discovery.id` (the rule id of the
