@@ -1358,3 +1358,62 @@ service. Grouping in the UI is by the `cloud.*` resource attributes above.
 
 Adding a service is a code change in `internal/cloudconnect` with a name under this contract, not
 configuration: the catalog is what fixes the metric names an organization can build alerts and dashboards on.
+
+## 10. Real user monitoring (browser SDK)
+
+Spans the browser SDK sends to `POST /v1/rum` ([rum.md](rum.md), D-136). They ride the ordinary traces topic
+and land in `spans`, so nothing downstream has a RUM-specific path — but what may appear on them is a
+**closed list**, not a convention the page is trusted to follow. `rum.Sanitize` rebuilds the resource from
+the browser key and keeps only the span attributes below; everything else is dropped before anything reaches
+Kafka. That is why this section reads as a contract rather than as guidance: an attribute that is not here
+does not survive.
+
+Three kinds of attribute appear, and the difference is the security model rather than a naming detail:
+
+- **Forced** — written by the server from the key or from the request, overwriting whatever the page sent.
+  A copied key cannot use them to claim to be something else.
+- **Assigned** — derived by the server from what the page sent (a route normalized from a URL, a vital's
+  rating recomputed from its value), so a page cannot decide how its own data is bucketed.
+- **Accepted** — taken from the payload and bounded. Only facts that describe the page itself.
+
+### Resource attributes
+
+Rebuilt for every request, never merged with what the page sent.
+
+| Attribute | Kind | Value |
+|---|---|---|
+| `service.name` | forced | The application the browser key is bound to. Never from the payload: this is what stops a copied key writing under a backend service's name |
+| `deployment.environment.name` | forced | The key's environment, when it has one |
+| `openlog.entity.type` | forced | `browser_app`, so the UI tells a RUM application from a host or a deployed service without a second table |
+| `telemetry.sdk.name` | forced | `openlog-browser` |
+| `telemetry.sdk.language` | forced | `webjs` |
+| `telemetry.sdk.version` | accepted | The SDK version the page reports, bounded to 64 bytes. Informational |
+| `browser.brands`, `browser.platform`, `browser.mobile`, `browser.language` | accepted | User-Agent Client Hints, as the browser reports them |
+| `user_agent.original` | accepted | The full User-Agent string |
+| `os.name`, `os.version` | accepted | As the browser reports them |
+
+### Span attributes
+
+| Attribute | Kind | Value |
+|---|---|---|
+| `openlog.rum.event` | accepted | `page_view`, `vital`, `error`, `custom` or `request`. A span without one is not RUM and is dropped |
+| `session.id` | accepted | 32 hex characters, the visit (rum.md §1.1). A span without one is unattributable and is dropped |
+| `openlog.rum.page_view.id` | accepted | 16 hex characters tying a page view's spans together |
+| `openlog.rum.route` | assigned | Normalized from the SDK's route or the URL with the same segment rules as an APM transaction name (rum.md §4). The page cannot choose its own rollup key |
+| `openlog.rum.page_view.kind` | assigned | `load` or `route_change`; anything else becomes `load` |
+| `openlog.rum.vital.name` | accepted | `lcp`, `cls`, `inp`, `fcp`, `ttfb`. An unknown vital drops the span |
+| `openlog.rum.vital.value` | accepted | The measurement, `0`–`1e9` |
+| `openlog.rum.vital.rating` | assigned | `good`/`needs_improvement`/`poor`, recomputed from the value: a page cannot rate itself |
+| `openlog.rum.error.source` | accepted | `error`, `unhandledrejection` or `console`; anything else becomes `error` |
+| `openlog.rum.custom.name` | accepted | The application's own event name. Required for a custom event |
+| `openlog.rum.custom.value`, `…custom.unit` | accepted | An optional number and its unit, for a timing |
+| `openlog.rum.custom.param.<key>` | accepted | Up to 16 application-defined parameters per event, keys `[a-z0-9_.-]`, stored as text. Sorted before the cap, so which 16 survive does not depend on map order |
+| `device.type` | assigned | `mobile`, `tablet` or `desktop`, derived server-side |
+| `url.path`, `url.full`, `url.domain` | accepted | The page's own URL, query and fragment already dropped |
+| `openlog.rum.timing.*` | accepted | Navigation Timing phases in milliseconds: `ttfb_ms`, `dns_ms`, `connect_ms`, `tls_ms`, `response_ms`, `dom_interactive_ms`, `dom_content_loaded_ms`, `load_event_ms` |
+| `user.id` | accepted | The application's own identifier for the person, set through `identify()` and bounded to 128 bytes. **openlog never derives it and cannot tell an opaque account key from an e-mail address** — rum.md §3.7 asks the operator for the former |
+| `geo.country.iso_code` | forced | ISO 3166-1 alpha-2, read from the header named by `OPENLOG_RUM_GEO_HEADER` and written by the server. A value the page sent is dropped: a country a page can send is a country a page can invent. Empty when no trusted proxy resolved one; **no visitor address is ever stored** |
+| `http.request.method`, `http.response.status_code`, `server.address`, `error.type` | accepted | On a `request` span, so a browser fetch/XHR looks like any other HTTP client span |
+
+`sampling.ratio` is stamped from the browser key, never from the payload, so weighted counts cannot be
+inflated by a page claiming its own sample rate (rum.md §3.3).

@@ -27,8 +27,13 @@ without monitoring. A second `init()` returns the first instance.
 
 A session is a **visit, not a person**: 32 random hex characters in `sessionStorage`, expiring after 30
 minutes of inactivity and capped at 4 hours. It is never derived from anything about the visitor, is per tab,
-and disappears with the tab — so it cannot recognise someone across visits, which is what makes it collectable
-without a consent banner. `sessionStorage` being unavailable (private modes, sandboxed frames) degrades to an
+and disappears with the tab — so on its own it cannot recognise someone across visits, which is what makes it
+collectable without a consent banner.
+
+**That last sentence stops being true the moment an application calls `identify()`** (§3.7). A session tied to
+an account id recognises a person across visits by construction, and whether that is lawful without consent is
+the application's question, not openlog's — openlog neither derives an identity nor sets one by default. The
+session id itself stays what it is described as above; identity is a field an application fills deliberately. `sessionStorage` being unavailable (private modes, sandboxed frames) degrades to an
 in-memory id; it never throws.
 
 Sampling is decided **once per session**, not per event. Half a session is not a cheaper session, it is an
@@ -276,6 +281,50 @@ attestation (Play Integrity, App Attest) is the upgrade path, and pretending to 
 be worse than saying plainly that this bounds damage rather than preventing forgery — the same position
 §3.5 takes for browsers.
 
+### 3.7 Who and where
+
+Two fields describe the person rather than the page, and they arrive from opposite directions. The direction
+is the design:
+
+| Field | Set by | Why that way |
+|---|---|---|
+| `user.id` | the application, through `identify(userId)` | nothing on the server can know it |
+| `geo.country.iso_code` | the server, from a trusted proxy's header | a value a page can send is a value a page can invent |
+
+**Identity.** `identify(userId)` records an identifier on every later span of the session, so "which sessions
+did this account have, and what broke in them" is a query rather than an investigation. What goes in it is
+the operator's choice and **openlog cannot police it**: the contract asks for an opaque, stable id — the key
+the backend already uses for the account — and not an e-mail address, a name, or anything that identifies a
+person directly. openlog bounds the length at 128 bytes, stores the value and never interprets it; it cannot
+tell an account id from an e-mail address, so the discipline has to live in the application. A session that
+never identifies anyone carries no `user.id` at all, rather than an empty one: "signed out" and "identified
+as nothing" must not look alike.
+
+**Country.** There is no GeoIP database here, and that is deliberate — one would mean a data file to ship,
+license and keep fresh, and an address to resolve. Instead the country arrives already resolved, in a header
+a CDN or proxy in front of ingest wrote, named by `OPENLOG_RUM_GEO_HEADER` (`CF-IPCountry` behind
+Cloudflare). **No visitor address is ever stored**, and none reaches openlog's own code. The trust argument
+is short: anything openlog is fronted by can be trusted to write that header exactly as far as it can be
+trusted to forward the request at all. An installation that names no header records no country — an honest
+blank rather than a guess — and a header openlog was not told to trust is ignored even when it is present.
+Values that are not two ASCII letters are discarded, as are the CDN placeholders `XX` (no answer) and `T1`
+(Tor): both would otherwise sit at the top of every geography breakdown dressed as countries.
+
+**Retention, stated rather than discovered.** Both live on spans, not on the session rollup, so both reach
+back only as far as the **7-day trace retention** — not the 30 days of `rum_sessions`. `rum_sessions_local`
+is written by a materialized view, and a view cannot be altered: putting these on the rollup would mean
+dropping and recreating it, which no migration here may do, and a second view aimed at the same target would
+count every row twice. Carrying identity for thirty days needs its own table, which is a decision about
+retaining personal data and should be made on purpose rather than arrived at through a migration.
+
+**Querying them.** Neither needs anything new: `Span` carries arbitrary attributes in OQL, so
+`SELECT count(*) FROM Span WHERE user.id = 'acct_8f3a2b'` and
+`... FROM Span WHERE openlog.rum.event = 'page_view' FACET geo.country.iso_code` work as they are — and
+anything OQL can express, the `oql` alert rule type can alert on. A bloom filter on `user.id`
+(0101_rum_identity_geo) keeps a lookup from reading every span of the tenant. There is deliberately none on
+the country: about two hundred distinct values means nearly every granule holds nearly every country, so the
+index would carry the write cost of a useful one and skip almost nothing.
+
 ## 4. Route normalization
 
 The cardinality of the rollups is the cardinality of the stored route, and its input is a URL chosen by a page
@@ -387,10 +436,14 @@ Deliberately left for later, with the shape they would take:
   applied at read time, so a browser stack reads in the developer's own files. The keying follows from §3.3
   — a RUM span carries no build identifier, but the content hash in `main.3f2a1b9c.js` names one build
   exactly, and the fingerprint strips it from the group key so groups stay stable across deploys.
-- **Geography and network.** No IP-derived country/region and no `connection.effectiveType`. Country needs a
-  GeoIP database and a privacy decision that deserves its own review.
-- **User identity.** No `user.id` attribute: RUM sessions are deliberately anonymous (§1.1), and adding an
-  identity field is a data protection question, not a schema one.
+- **Geography and network.** ~~Not in this slice.~~ Country: done, without a GeoIP database. openlog
+  resolves no addresses itself — it reads an already-resolved ISO 3166-1 alpha-2 code from the header named
+  by `OPENLOG_RUM_GEO_HEADER` and **never stores a visitor address** (§3.7). Unset, or with no proxy writing
+  it, the field stays empty. Region and city are still absent, and so is `connection.effectiveType`.
+- **User identity.** ~~Not in this slice.~~ Done: `identify(userId)` sets `user.id` on the session's later
+  spans (§3.7). It remains a data protection question rather than a schema one, which is why the answer is a
+  field the application fills deliberately and openlog never derives — and why the retention is the 7-day
+  trace window, not the 30 days of the session rollup.
 - **Resource timing for static assets.** Only `fetch`/`XHR` are captured, not every image and script; the
   volume is an order of magnitude larger and needs its own sampling.
 - **Custom events and timings.** ~~Not in this slice.~~ Done: `recordEvent(name)` and

@@ -73,6 +73,11 @@ type Scope struct {
 	Origin string
 	// AppID is the openlog-app-id header: an Android package name or iOS bundle identifier (mobile keys).
 	AppID string
+	// Country is the ISO 3166-1 alpha-2 code a trusted proxy or CDN wrote into the header named by
+	// OPENLOG_RUM_GEO_HEADER, already validated. It authorizes nothing — unlike the two fields above it is
+	// not consulted by Resolve — and travels here only because it is the same thing: a fact about the
+	// request that the server establishes rather than the payload claims.
+	Country string
 }
 
 // Store is the persistent browser key store (PostgreSQL).

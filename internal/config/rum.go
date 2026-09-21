@@ -17,6 +17,16 @@ type RUM struct {
 	// off leaves existing browser keys in place but stops accepting their data, which is the switch an
 	// operator wants when a page is flooding them and revoking one key at a time is not fast enough.
 	Enabled bool
+	// GeoHeader names the request header a trusted proxy or CDN writes the visitor's ISO 3166-1 alpha-2
+	// country into (OPENLOG_RUM_GEO_HEADER; e.g. CF-IPCountry behind Cloudflare). Empty — the default —
+	// means no country is recorded at all.
+	//
+	// It is a header name rather than a switch because openlog does not resolve addresses itself: there is
+	// no GeoIP database to ship, license and refresh, and **no visitor address is ever stored**. The cost
+	// of that choice is stated rather than hidden: without a proxy that writes the header, the field stays
+	// empty. Anything openlog is fronted by can be trusted to write it exactly as far as it can be trusted
+	// to forward the request at all.
+	GeoHeader string
 	// SourceMaps configures where the maps that un-minify browser stacks are stored (rum.md §8).
 	SourceMaps SourceMaps
 }
@@ -56,6 +66,7 @@ func (s SourceMaps) MapStorage() string {
 
 func loadRUM(p *parser) RUM {
 	enabled := p.bool("OPENLOG_RUM_ENABLED", true)
+	geoHeader := p.str("OPENLOG_RUM_GEO_HEADER", "")
 	m := SourceMaps{
 		Enabled:           p.bool("OPENLOG_SOURCE_MAPS_ENABLED", enabled),
 		Storage:           p.str("OPENLOG_SOURCE_MAPS_STORAGE", "auto"),
@@ -87,5 +98,5 @@ func loadRUM(p *parser) RUM {
 			m.S3Credentials = "static"
 		}
 	}
-	return RUM{Enabled: enabled, SourceMaps: m}
+	return RUM{Enabled: enabled, GeoHeader: geoHeader, SourceMaps: m}
 }

@@ -21,7 +21,7 @@ func TestSanitizeKeepsCustomParams(t *testing.T) {
 		param("step.index", "2"),
 		param("ab_test", "variant-b"),
 	))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
@@ -44,7 +44,7 @@ func TestSanitizeDropsUnusableParamNames(t *testing.T) {
 		param(strings.Repeat("x", 65), ""), // longer than MaxCustomParamKeyBytes
 		param("kept", "yes"),
 	))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
@@ -68,7 +68,7 @@ func TestSanitizeCapsParamsDeterministically(t *testing.T) {
 	}
 	for run := 0; run < 5; run++ {
 		req := request(nil, customSpan(attrs...))
-		if res := Sanitize(req, testKey()); res.Kept != 1 {
+		if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 			t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 		}
 		got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
@@ -95,7 +95,7 @@ func TestSanitizeCapsParamsDeterministically(t *testing.T) {
 func TestSanitizeBoundsParamValues(t *testing.T) {
 	long := strings.Repeat("v", MaxCustomParamValueBytes+500)
 	req := request(nil, customSpan(attr(AttrCustomName, "checkout_started"), param("blob", long)))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
@@ -109,7 +109,7 @@ func TestSanitizeBoundsParamValues(t *testing.T) {
 // onto a page view.
 func TestSanitizeDropsParamsOnOtherEvents(t *testing.T) {
 	req := request(nil, rumSpan(param("plan", "pro")))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	if got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes()); got[AttrCustomParamPrefix+"plan"] != "" {

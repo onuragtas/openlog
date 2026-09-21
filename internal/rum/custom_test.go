@@ -16,7 +16,7 @@ func customSpan(attrs ...*commonpb.KeyValue) *tracepb.Span {
 
 func TestSanitizeKeepsNamedCustomEvent(t *testing.T) {
 	req := request(nil, customSpan(attr(AttrCustomName, "checkout_started")))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
@@ -35,7 +35,7 @@ func TestSanitizeKeepsCustomTiming(t *testing.T) {
 		attr(AttrCustomValue, "42.5"),
 		attr(AttrCustomUnit, "ms"),
 	))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
@@ -51,7 +51,7 @@ func TestSanitizeRefusesUnnamedCustomEvent(t *testing.T) {
 		customSpan(),
 		customSpan(attr(AttrCustomName, "   ")),
 	} {
-		res := Sanitize(request(nil, span), testKey())
+		res := Sanitize(request(nil, span), testKey(), Scope{})
 		if res.Kept != 0 || res.Dropped[ReasonBadCustom] != 1 {
 			t.Errorf("kept %d, dropped %v; want the span refused", res.Kept, res.Dropped)
 		}
@@ -63,7 +63,7 @@ func TestSanitizeRefusesUnnamedCustomEvent(t *testing.T) {
 func TestSanitizeRefusesUnusableCustomValue(t *testing.T) {
 	for _, bad := range []string{"not-a-number", "NaN", "Inf", "-Inf", "1e13", "-1e13"} {
 		span := customSpan(attr(AttrCustomName, "cart_priced"), attr(AttrCustomValue, bad))
-		res := Sanitize(request(nil, span), testKey())
+		res := Sanitize(request(nil, span), testKey(), Scope{})
 		if res.Kept != 0 || res.Dropped[ReasonBadCustom] != 1 {
 			t.Errorf("value %q: kept %d, dropped %v; want the span refused", bad, res.Kept, res.Dropped)
 		}
@@ -74,7 +74,7 @@ func TestSanitizeRefusesUnusableCustomValue(t *testing.T) {
 // chart claim a measurement that was never taken.
 func TestSanitizeDropsCustomUnitWithoutValue(t *testing.T) {
 	req := request(nil, customSpan(attr(AttrCustomName, "checkout_started"), attr(AttrCustomUnit, "ms")))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	if got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes()); got[AttrCustomUnit] != "" {
@@ -89,7 +89,7 @@ func TestSanitizeDropsForeignAttributesOnCustomEvents(t *testing.T) {
 		attr("host.id", "prod-db-1"),
 		attr("openlog.entity.type", "host"),
 	))
-	if res := Sanitize(req, testKey()); res.Kept != 1 {
+	if res := Sanitize(req, testKey(), Scope{}); res.Kept != 1 {
 		t.Fatalf("kept %d, dropped %v", res.Kept, res.Dropped)
 	}
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())

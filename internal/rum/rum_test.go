@@ -160,7 +160,7 @@ func TestSanitizeForcesServiceIdentity(t *testing.T) {
 		attr("openlog.agent.name", "openlog-infra-agent"),
 		attr("browser.platform", "macOS"),
 	}, rumSpan())
-	Sanitize(req, testKey())
+	Sanitize(req, testKey(), Scope{})
 
 	res := otlputil.AttrsToMap(req.GetResourceSpans()[0].GetResource().GetAttributes())
 	if res["service.name"] != "shop-web" {
@@ -188,7 +188,7 @@ func TestSanitizeDropsNonRUMSpans(t *testing.T) {
 	// The endpoint must not be usable as a general-purpose trace writer.
 	plain := &tracepb.Span{Name: "SELECT users", Attributes: []*commonpb.KeyValue{attr("db.system", "postgresql")}}
 	req := request(nil, plain, rumSpan())
-	res := Sanitize(req, testKey())
+	res := Sanitize(req, testKey(), Scope{})
 	if res.Kept != 1 || res.Dropped[ReasonNotRUM] != 1 {
 		t.Fatalf("kept %d, dropped %v; want 1 kept and 1 not_rum_event", res.Kept, res.Dropped)
 	}
@@ -199,7 +199,7 @@ func TestSanitizeDropsNonRUMSpans(t *testing.T) {
 
 func TestSanitizeRequiresSessionID(t *testing.T) {
 	bad := &tracepb.Span{Name: "pageview", Attributes: []*commonpb.KeyValue{attr(AttrEvent, EventPageView), attr(AttrSessionID, "nope")}}
-	res := Sanitize(request(nil, bad), testKey())
+	res := Sanitize(request(nil, bad), testKey(), Scope{})
 	if res.Kept != 0 || res.Dropped[ReasonNoSession] != 1 {
 		t.Fatalf("kept %d, dropped %v; want the span dropped for a malformed session id", res.Kept, res.Dropped)
 	}
@@ -213,7 +213,7 @@ func TestSanitizeRecomputesVitalRating(t *testing.T) {
 		attr(AttrVitalRating, RatingGood), // a lie: 9 s is poor
 	}}
 	req := request(nil, span)
-	Sanitize(req, testKey())
+	Sanitize(req, testKey(), Scope{})
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
 	if got[AttrVitalRating] != RatingPoor {
 		t.Errorf("rating = %q, want %q (recomputed from the published thresholds)", got[AttrVitalRating], RatingPoor)
@@ -225,7 +225,7 @@ func TestSanitizeDropsUnknownVitals(t *testing.T) {
 		{Name: "vital x", Attributes: []*commonpb.KeyValue{attr(AttrEvent, EventVital), attr(AttrSessionID, testSession), attr(AttrVitalName, "made_up"), attr(AttrVitalValue, "1")}},
 		{Name: "vital lcp", Attributes: []*commonpb.KeyValue{attr(AttrEvent, EventVital), attr(AttrSessionID, testSession), attr(AttrVitalName, "lcp"), attr(AttrVitalValue, "not-a-number")}},
 	} {
-		if res := Sanitize(request(nil, bad), testKey()); res.Kept != 0 {
+		if res := Sanitize(request(nil, bad), testKey(), Scope{}); res.Kept != 0 {
 			t.Errorf("an invalid vital was stored: %+v", res)
 		}
 	}
@@ -238,7 +238,7 @@ func TestSanitizeSetsSamplingWeightFromTheKey(t *testing.T) {
 	key := testKey()
 	key.SampleRate = 0.25
 	req := request(nil, span)
-	Sanitize(req, key)
+	Sanitize(req, key, Scope{})
 
 	got := firstSpan(t, req)
 	if got.GetTraceState() != "" {
@@ -254,7 +254,7 @@ func TestSanitizeAssignsSpanKind(t *testing.T) {
 	span := rumSpan()
 	span.Kind = tracepb.Span_SPAN_KIND_SERVER
 	req := request(nil, span)
-	Sanitize(req, testKey())
+	Sanitize(req, testKey(), Scope{})
 	if k := firstSpan(t, req).GetKind(); k != tracepb.Span_SPAN_KIND_INTERNAL {
 		t.Errorf("kind = %v, want INTERNAL so it cannot become a transaction", k)
 	}
@@ -272,7 +272,7 @@ func TestSanitizeErrorBecomesGroupableError(t *testing.T) {
 		{Name: "custom", Attributes: []*commonpb.KeyValue{attr("k", "v")}},
 	}}
 	req := request(nil, span)
-	Sanitize(req, testKey())
+	Sanitize(req, testKey(), Scope{})
 	got := firstSpan(t, req)
 	if got.GetStatus().GetCode() != tracepb.Status_STATUS_CODE_ERROR {
 		t.Error("an error event must get status ERROR, or apm.Derive computes no error group for it")
@@ -291,7 +291,7 @@ func TestSanitizeBoundsSpanCount(t *testing.T) {
 	for i := range spans {
 		spans[i] = rumSpan()
 	}
-	res := Sanitize(request(nil, spans...), testKey())
+	res := Sanitize(request(nil, spans...), testKey(), Scope{})
 	if res.Kept != MaxSpansPerRequest || res.Dropped[ReasonTooManySpans] != 25 {
 		t.Fatalf("kept %d, dropped %v; want %d kept and 25 rejected", res.Kept, res.Dropped, MaxSpansPerRequest)
 	}
@@ -306,7 +306,7 @@ func TestSanitizeNormalizesRouteAndDropsUnknownAttributes(t *testing.T) {
 		attr(AttrURLFull, "https://shop.example.com/orders/42?token=secret"),
 		attr("evil.attribute", "x"),
 	))
-	Sanitize(req, testKey())
+	Sanitize(req, testKey(), Scope{})
 	got := otlputil.AttrsToMap(firstSpan(t, req).GetAttributes())
 	if got[AttrRoute] != "/orders/{id}" {
 		t.Errorf("route = %q, want the normalized /orders/{id}", got[AttrRoute])

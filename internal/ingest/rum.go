@@ -42,6 +42,10 @@ type RUMKeys interface {
 	Rejected(reason string, n int)
 }
 
+// SetRUMGeoHeader names the header a trusted proxy writes the visitor's country into
+// (OPENLOG_RUM_GEO_HEADER). Empty — the default — records no country at all. Must be called before Run.
+func (s *Service) SetRUMGeoHeader(name string) { s.rumGeoHeader = name }
+
 // SetRUM enables POST /v1/rum. Must be called before Run.
 func (s *Service) SetRUM(k RUMKeys) {
 	s.rum = k
@@ -128,13 +132,25 @@ func rumKeyFrom(r *http.Request) string {
 	return strings.TrimSpace(r.URL.Query().Get(rumKeyParam))
 }
 
+// rumScope is what the server established about the request, as opposed to what the payload claims: the
+// origin the browser sent, the application a mobile key's caller declared, and the country a trusted proxy
+// resolved. Built in one place so the key check and the payload rewrite cannot disagree about it.
+func (s *Service) rumScope(r *http.Request) rum.Scope {
+	sc := rum.Scope{
+		Origin: r.Header.Get("Origin"),
+		AppID:  strings.TrimSpace(r.Header.Get(rumAppIDHeader)),
+	}
+	if s.rumGeoHeader != "" {
+		sc.Country = rum.ParseCountry(r.Header.Get(s.rumGeoHeader))
+	}
+	return sc
+}
+
 // rumResolve authenticates the request and answers the error itself when it fails. The second result says
 // whether the caller may continue.
 func (s *Service) rumResolve(w http.ResponseWriter, r *http.Request) (rum.Key, string, bool) {
 	origin := r.Header.Get("Origin")
-	key, err := s.rum.Resolve(r.Context(), rumKeyFrom(r), rum.Scope{
-		Origin: origin, AppID: strings.TrimSpace(r.Header.Get(rumAppIDHeader)),
-	})
+	key, err := s.rum.Resolve(r.Context(), rumKeyFrom(r), s.rumScope(r))
 	switch {
 	case err == nil:
 		return key, origin, true
@@ -222,7 +238,7 @@ func (s *Service) rumExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate and rewrite before anything else looks at the content (rum.Sanitize).
-	res := rum.Sanitize(req, key)
+	res := rum.Sanitize(req, key, s.rumScope(r))
 	for reason, n := range res.Dropped {
 		s.rum.Rejected(reason, n)
 	}

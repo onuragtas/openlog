@@ -29,3 +29,7 @@ playwright-report/
 # Release signing keys must never be committed (docs/operations/releasing.md).
 openlog-release-key-*.env
 *.release-key.env
+
+# Installed dependencies and compiled test output of the JavaScript packages (web, agents/*).
+node_modules/
+.test-build/

@@ -58,6 +58,8 @@ type Service struct {
 	// rum resolves browser keys for POST /v1/rum (rum.go, D-136); nil: the endpoint answers 404, so an
 	// installation that never creates a browser key exposes no public ingest path at all.
 	rum RUMKeys
+	// rumGeoHeader names the header a trusted proxy writes the visitor's country into; "" records none.
+	rumGeoHeader string
 }
 
 // SetHTTPRoutes adds routes to the OTLP/HTTP listener (e.g. /v1/openlog/agent/sync). Must be

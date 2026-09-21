@@ -64,6 +64,24 @@ const (
 	AttrURLFull   = "url.full"
 	AttrURLDomain = "url.domain"
 
+	// AttrUserID is the application's own identifier for the person using it, set through the SDK's
+	// identify() and kept on every later span of the session (rum.md §3.7).
+	//
+	// **What goes in it is the operator's choice and openlog cannot police it.** The contract asks for an
+	// opaque, stable id — the key a backend already uses for the account — and not an e-mail address, a
+	// name or anything else that identifies a person directly. openlog bounds the length and stores the
+	// value; it cannot tell an account id from an e-mail address.
+	AttrUserID = "user.id"
+
+	// AttrGeoCountry is the ISO 3166-1 alpha-2 country of the visitor, **set by the server** from a header
+	// a trusted proxy or CDN wrote (OPENLOG_RUM_GEO_HEADER). It is forced like service.name rather than
+	// allowlisted: a value a page could send would be a value a page could invent.
+	//
+	// Country only, and the address it was derived from is never stored — that is the whole privacy
+	// position. Without a CDN in front the header is absent and the field stays empty, which is an honest
+	// blank rather than a guess.
+	AttrGeoCountry = "geo.country.iso_code"
+
 	// Navigation Timing phases in milliseconds (§2.2).
 	AttrTimingTTFB             = "openlog.rum.timing.ttfb_ms"
 	AttrTimingDNS              = "openlog.rum.timing.dns_ms"
@@ -94,6 +112,10 @@ const (
 	SDKName     = "openlog-browser"
 	SDKLanguage = "webjs"
 )
+
+// MaxUserIDBytes bounds a user id. It is generous for an opaque account key and far too short for a
+// document: the value decides nothing on the server, so the only risk it carries is size.
+const MaxUserIDBytes = 128
 
 // Event kinds of AttrEvent.
 const (

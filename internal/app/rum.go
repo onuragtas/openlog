@@ -30,9 +30,10 @@ func startRUMIngest(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, 
 		TTL: cfg.AuthCache.TTL, NegativeTTL: cfg.AuthCache.NegativeTTL, MaxStale: cfg.AuthCache.MaxStale,
 		Hasher: KeyHasher(cfg), Registerer: reg, Log: log,
 	})
+	svc.SetRUMGeoHeader(cfg.RUM.GeoHeader)
 	svc.SetRUM(keys)
 	done := make(chan struct{})
 	go func() { defer close(done); keys.Run(ctx) }()
-	log.Info("real user monitoring ingest enabled", "path", "/v1/rum")
+	log.Info("real user monitoring ingest enabled", "path", "/v1/rum", "geo_header", cfg.RUM.GeoHeader)
 	return func() { <-done }
 }

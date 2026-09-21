@@ -131,7 +131,12 @@ var spanAllowed = map[string]bool{
 	AttrRoute: true, AttrPageViewKind: true,
 	AttrVitalName: true, AttrVitalValue: true, AttrVitalRating: true,
 	AttrErrorSource: true,
-	AttrCustomName:  true, AttrCustomValue: true, AttrCustomUnit: true,
+	// The application's own identifier for the person using it (identify()). Accepted from the payload —
+	// unlike the country, which is forced — because nothing on the server can know it. Bounded, never
+	// interpreted: openlog cannot tell an opaque account key from an e-mail address, which is why rum.md
+	// §3.7 asks the operator for the former.
+	AttrUserID:     true,
+	AttrCustomName: true, AttrCustomValue: true, AttrCustomUnit: true,
 	AttrDeviceType: true, AttrBrowserName: true, AttrBrowserVersion: true, AttrOSName: true,
 	AttrURLPath: true, AttrURLFull: true, AttrURLDomain: true,
 	AttrTimingTTFB: true, AttrTimingDNS: true, AttrTimingConnect: true, AttrTimingTLS: true,
@@ -147,7 +152,11 @@ var spanAllowed = map[string]bool{
 
 // Sanitize rewrites req in place to exactly what key is allowed to write, dropping everything else. It
 // returns what happened; req may end up with no spans at all.
-func Sanitize(req *coltrace.ExportTraceServiceRequest, key Key) Result {
+//
+// sc is what the server established about the request rather than what the payload claims — currently the
+// visitor's country, resolved by a trusted proxy. It is written onto every span here, where a value the
+// payload also sent cannot win.
+func Sanitize(req *coltrace.ExportTraceServiceRequest, key Key, sc Scope) Result {
 	var res Result
 	budget := MaxSpansPerRequest
 	kept := req.ResourceSpans[:0]
@@ -164,7 +173,7 @@ func Sanitize(req *coltrace.ExportTraceServiceRequest, key Key) Result {
 					res.drop(ReasonTooManySpans, 1)
 					continue
 				}
-				reason := sanitizeSpan(sp, key)
+				reason := sanitizeSpan(sp, key, sc)
 				if reason != "" {
 					res.drop(reason, 1)
 					continue
@@ -216,7 +225,7 @@ func buildResource(in *resourcepb.Resource, key Key) *resourcepb.Resource {
 }
 
 // sanitizeSpan rewrites one span and returns a drop reason, or "" to keep it.
-func sanitizeSpan(sp *tracepb.Span, key Key) string {
+func sanitizeSpan(sp *tracepb.Span, key Key, sc Scope) string {
 	in := otlputil.AttrsToMap(sp.GetAttributes())
 	event := in[AttrEvent]
 	if !Events(event) {
@@ -243,6 +252,9 @@ func sanitizeSpan(sp *tracepb.Span, key Key) string {
 	route := RouteFromURL(in[AttrRoute], firstNonEmpty(in[AttrURLPath], in[AttrURLFull]))
 	add(AttrRoute, route)
 	add(AttrDeviceType, Device(in[AttrDeviceType]))
+	// Forced like service.name: a country a page could send is a country a page could invent. Empty when no
+	// trusted proxy resolved one, which is an honest blank rather than a guess.
+	add(AttrGeoCountry, sc.Country)
 
 	switch event {
 	case EventPageView:
@@ -322,8 +334,11 @@ func sanitizeSpan(sp *tracepb.Span, key Key) string {
 			continue
 		}
 		limit := MaxAttrValueBytes
-		if k == AttrURLFull {
+		switch k {
+		case AttrURLFull:
 			limit = MaxURLBytes
+		case AttrUserID:
+			limit = MaxUserIDBytes
 		}
 		add(k, truncate(v, limit))
 	}

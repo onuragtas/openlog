@@ -393,6 +393,7 @@ services:
       OPENLOG_INGEST_CORS_ALLOWED_ORIGINS: ${OPENLOG_INGEST_CORS_ALLOWED_ORIGINS:-}
       # Real user monitoring (docs/contracts/rum.md, D-136): POST /v1/rum and the RUM screens.
       OPENLOG_RUM_ENABLED: ${OPENLOG_RUM_ENABLED:-}
+      OPENLOG_RUM_GEO_HEADER: ${OPENLOG_RUM_GEO_HEADER:-}
       # Source maps that un-minify browser stacks (rum.md §8). Kept in a container directory by default, so
       # give the path a volume if they should survive a recreate, or point them at the export bucket.
       OPENLOG_SOURCE_MAPS_ENABLED: ${OPENLOG_SOURCE_MAPS_ENABLED:-}
