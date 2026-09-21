@@ -79,6 +79,9 @@ var TTLTables = []TTLTable{
 	// Job runs (0099_job_runs, D-141) share that class; 90 days rather than 30 because a monthly job needs
 	// three occurrences before a pattern is visible at all.
 	{"job_runs_local", "alerts", "toDateTime(timestamp)", 90},
+	// Vulnerability findings (0100_host_vulns, D-142) are per host and expire with the inventory they came
+	// from; 90 days in the alerts class, like the job runs.
+	{"host_vulnerabilities_local", "alerts", "toDateTime(last_seen)", 90},
 }
 
 // TTLOptions are the inputs of the TTL plan.

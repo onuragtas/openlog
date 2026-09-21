@@ -602,6 +602,25 @@ concludes the runs nothing reported is a leader task.
 | `OPENLOG_JOBS_SWEEP_INTERVAL` | `30s` | api | How often overdue monitors are looked for (5s–10m); it bounds how late an alert can be beyond a monitor's own grace period |
 | `OPENLOG_JOBS_MAX_PER_SWEEP` | `200` | api | Monitors concluded in one pass (1–10000); a full pass is followed immediately by another, so this is a batch size, not a ceiling |
 
+### Vulnerabilities (api, allinone; D-142)
+
+Matching the packages the infra agent already reports against a vulnerability feed
+([api.md](api.md#vulnerabilities)). The catalog is installation-wide (OSV advisories are public data,
+`0097_vulnerabilities`); the findings are per host (ClickHouse `host_vulnerabilities`, 90 days). The feed
+sync and the matcher are leader tasks.
+
+| Variable | Default | Service | Meaning |
+|---|---|---|---|
+| `OPENLOG_VULN_ENABLED` | `true` | api | Offer `/api/v1/vulnerabilities/*` and run the matcher (postgres auth mode only) |
+| `OPENLOG_VULN_FEED_URL` | `https://osv-vulnerabilities.storage.googleapis.com` | api | Where the per-ecosystem OSV exports are downloaded from. Set it to a mirror to keep the download inside the network; set it **empty** to disable downloading entirely — an air-gapped installation fills the catalog itself and matching still runs against what is stored |
+| `OPENLOG_VULN_FEED_TIMEOUT` | `10m` | api | Bounds one ecosystem download (1m–1h) |
+| `OPENLOG_VULN_SYNC_INTERVAL` | `12h` | api | How often the feed is downloaded (1h–168h) |
+| `OPENLOG_VULN_MATCH_INTERVAL` | `1h` | api | How often hosts are matched again (5m–24h); the inventory changes when a package is installed, not by the minute |
+
+Only the ecosystems the installation actually runs are downloaded: the ecosystem of a host is derived from
+its operating system item and its package manager (`Debian:12`, `Ubuntu:22.04`, `Alpine:v3.19`, …), so a
+Debian-only installation never fetches Alpine's export.
+
 ## Cloud connections (api, allinone; D-135)
 
 Metrics of managed cloud services ([api.md](api.md#cloud-connections)). Connections are stored per

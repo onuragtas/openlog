@@ -426,6 +426,15 @@ they are computed from `apm_transactions_1m` at query time.
 The migration also extends `alert_rules_type_check` with `slo_burn` (alerting.md §2.11); such rules keep the
 `slo_id` of a deleted SLO and then report an evaluation error.
 
+## Vulnerability catalog (`0097_vulnerabilities`)
+
+`vulnerabilities` and `vulnerability_affected` hold the advisories openlog matches installed packages
+against, and `vulnerability_sync` the last sync per ecosystem. Unlike almost everything else in this
+database the catalog has **no `org_id`**: OSV advisories are public data, identical for every tenant, and a
+copy per organization would multiply tens of megabytes by the number of tenants for no difference in the
+answer. The findings — which host runs which vulnerable version — are tenant data and live in ClickHouse
+(`host_vulnerabilities`, D-142).
+
 ## Job monitoring (`0096_job_monitors`)
 
 `job_monitors` is the definition (name, schedule kind, cron expression and its time zone or the reporting

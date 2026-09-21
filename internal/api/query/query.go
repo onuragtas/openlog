@@ -81,6 +81,10 @@ var (
 	// JobRuns holds the concluded runs of the cron and heartbeat monitors (schema 0099_job_runs, D-141).
 	JobRuns = Table{"job_runs"}
 
+	// HostVulnerabilities holds the vulnerable packages found on each host (schema 0100_host_vulns, D-142);
+	// a ReplacingMergeTree, so every read is FINAL or re-aggregates.
+	HostVulnerabilities = Table{"host_vulnerabilities"}
+
 	// Real user monitoring rollups (schema 0094_rum, rum.md §5, D-136); aggregating tables fed by
 	// materialized views on spans_local, so every read must re-aggregate with GROUP BY.
 	RumPageViews1m = Table{"rum_page_views_1m"}

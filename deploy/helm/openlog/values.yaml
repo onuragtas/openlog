@@ -852,6 +852,12 @@ api:
     OPENLOG_JOBS_ENABLED: "true"
     OPENLOG_JOBS_SWEEP_INTERVAL: "30s"
     OPENLOG_JOBS_MAX_PER_SWEEP: "200"
+    # Vulnerability matching: the OSV feed and the per-host findings (D-142).
+    OPENLOG_VULN_ENABLED: "true"
+    OPENLOG_VULN_FEED_URL: "https://osv-vulnerabilities.storage.googleapis.com"
+    OPENLOG_VULN_FEED_TIMEOUT: "10m"
+    OPENLOG_VULN_SYNC_INTERVAL: "12h"
+    OPENLOG_VULN_MATCH_INTERVAL: "1h"
     # Managed cloud service metrics (api.md "Cloud connections", D-135). Connections are per organization
     # and their credentials are encrypted with OPENLOG_SECRETS_KEY, which must be set to save them. The api
     # leader polls, so these limits bound one pod; the provider APIs are billed per request, so each

@@ -346,6 +346,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	usageTasks = append(usageTasks, startSynthetics(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)...)
 	// jobs.go: cron and heartbeat monitoring; pings are served by every pod, the sweeper runs on the leader (D-141)
 	usageTasks = append(usageTasks, startJobs(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)...)
+	// vuln.go: vulnerable packages per host; the feed sync and the matcher run on the leader (D-142)
+	usageTasks = append(usageTasks, startVulnerabilities(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)...)
 	// cloudconnect.go: managed cloud service metrics; the poller and the metric writer run on the leader (D-135)
 	cloudTasks, err := startCloudConnect(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)
 	if err != nil {

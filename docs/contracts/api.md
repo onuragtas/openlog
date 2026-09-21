@@ -1797,6 +1797,52 @@ string and fragment never reach storage.
 bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
 `404` when the session is unknown.
 
+## Vulnerabilities
+
+The vulnerable packages found on the caller's hosts (ClickHouse `host_vulnerabilities`, 90 days; the
+advisory catalog in PostgreSQL `0097_vulnerabilities`; D-142). PostgreSQL auth mode only for the catalog
+status (`404` otherwise). Reads only: a finding is produced by the matcher, and what a person does about it
+happens on the host.
+
+The inventory has known every installed package and its version since M1. What was missing was the other
+half of the sentence — which of those versions are known to be vulnerable — and that half is a feed. openlog
+downloads the OSV exports (osv.dev) of the ecosystems its hosts actually run, and the api **leader** matches
+every host's packages against them:
+
+| Step | What it means |
+|---|---|
+| ecosystem | derived per host from its operating system item and package manager: `Debian:12`, `Ubuntu:22.04`, `Alpine:v3.19`, `Rocky Linux:9`. The release is part of it because the same package is patched at different versions on different releases |
+| version | compared in the ecosystem's own scheme — dpkg's `epoch:upstream-revision`, rpm's `rpmvercmp`, apk's suffixes, SemVer elsewhere. `1.2.3-4ubuntu0.2 < 1.2.3-4ubuntu0.3` is a fact about dpkg, not about strings |
+| finding | one row per (host, advisory, package). It carries the version the host has and the version that fixes it |
+| resolution | the next match run that no longer finds the package vulnerable sets `resolved_at`; `first_seen` survives, because "since when" is the question about a vulnerability nobody has patched yet |
+
+A distribution's advisory carries the **distribution's** fixed version, which is what makes "1.2.3-4+deb12u2
+is patched" answerable at all; an upstream feed would report every backported fix as still vulnerable.
+
+The feed URL is configurable ([config.md](config.md#vulnerabilities-api-allinone-d-142)): a mirror keeps the
+download inside the network, and an empty value disables downloading entirely for an air-gapped
+installation, which fills the catalog itself and still gets matching.
+
+### `GET /api/v1/vulnerabilities?severity=&host_id=`
+The open findings grouped by advisory, most serious first and, within a severity, the advisory affecting the
+most hosts first. `severity_counts` is the fleet summary the header shows.
+```json
+{"vulnerabilities": [{"vuln_id": "DSA-5600-1", "cve": "CVE-2026-0001", "severity": "critical", "score": 9.8,
+  "summary": "buffer overflow in libexample", "hosts": 12, "packages": ["libexample"],
+  "first_seen": "…", "last_seen": "…"}],
+ "severity_counts": {"critical": 1, "high": 4, "medium": 9, "low": 2, "none": 0}}
+```
+
+### `GET /api/v1/vulnerabilities/{id}?limit=` · `GET /api/v1/hosts/{host_id}/vulnerabilities?limit=`
+The findings of one advisory, or of one host: `host_name`, `package`, the installed `version` and the
+`fixed_in` that resolves it (`""` when the feed knows no fix — the case that matters most).
+
+### `GET /api/v1/vulnerabilities/catalog/status`
+What the catalog holds and when each ecosystem was last synced. This is what tells an empty list apart from
+a feed that never synced: `{"vulnerabilities": 61234, "affected_ranges": 98211, "ecosystems": 3,
+"last_synced_at": "…", "sources": [{"source": "osv", "ecosystem": "Debian:12", "synced_at": "…",
+"count": 41022, "error": ""}]}`.
+
 ## Job monitoring
 
 Cron and heartbeat monitors of the caller's organization (PostgreSQL `job_monitors` + `job_monitor_state`,

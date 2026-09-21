@@ -1337,6 +1337,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vulnerabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The open findings of the organization grouped by advisory, most serious first and, within a severity, the advisory affecting the most hosts first (api.md "Vulnerabilities"). */
+        get: operations["listVulnerabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vulnerabilities/catalog/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What the catalog holds and when each ecosystem was last synced, so "no findings" can be told from "the feed never synced". */
+        get: operations["getVulnerabilityCatalogStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vulnerabilities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The advisory id (CVE-…, DSA-…, GHSA-…) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The hosts one advisory was found on, with the installed and the fixed version of each. */
+        get: operations["getVulnerability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hosts/{host_id}/vulnerabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The open findings of one host, most serious first. */
+        get: operations["getHostVulnerabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/monitors": {
         parameters: {
             query?: never;
@@ -6909,6 +6982,61 @@ export interface components {
             interval_seconds: number;
             /** @description Default ["local"] (the openlog server itself) */
             locations?: string[];
+        };
+        /**
+         * @description The CVSS base score bucket; "none" is an advisory the feed carries no score for.
+         * @enum {string}
+         */
+        VulnSeverity: "critical" | "high" | "medium" | "low" | "none";
+        VulnGroup: {
+            /** @description The advisory id as the feed publishes it (CVE-…, DSA-…, GHSA-…) */
+            vuln_id: string;
+            /** @description The CVE it is known by, '' when it has none */
+            cve: string;
+            severity: components["schemas"]["VulnSeverity"];
+            /** @description CVSS base score (0 when the feed carries none) */
+            score: number;
+            summary: string;
+            /**
+             * Format: int64
+             * @description Hosts with an open finding
+             */
+            hosts: number;
+            /** @description The affected package names, at most 20 */
+            packages: string[];
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        VulnFinding: {
+            host_id: string;
+            host_name: string;
+            vuln_id: string;
+            cve: string;
+            severity: components["schemas"]["VulnSeverity"];
+            score: number;
+            /** @description The OSV ecosystem including its release (Debian:12, Alpine:v3.19) */
+            ecosystem: string;
+            package: string;
+            /** @description The version the host has installed */
+            version: string;
+            /** @description The version that resolves it, '' when the feed knows none */
+            fixed_in: string;
+            summary: string;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+        };
+        VulnCatalogStatus: {
+            vulnerabilities: number;
+            affected_ranges: number;
+            ecosystems: number;
+            last_synced_at: components["schemas"]["NullableTimestamp"];
+            sources: {
+                source: string;
+                ecosystem: string;
+                synced_at: components["schemas"]["Timestamp"];
+                count: number;
+                error: string;
+            }[];
         };
         /**
          * @description cron: the crontab expression that starts the job. interval: the job reports at least this often, which is what a daemon's heartbeat is.
@@ -13061,6 +13189,119 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listVulnerabilities: {
+        parameters: {
+            query?: {
+                severity?: components["schemas"]["VulnSeverity"];
+                /** @description Only the findings of this host */
+                host_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Advisories with the number of hosts each affects */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        vulnerabilities: components["schemas"]["VulnGroup"][];
+                        severity_counts: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getVulnerabilityCatalogStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Catalog status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnCatalogStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getVulnerability: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The advisory id (CVE-…, DSA-…, GHSA-…) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Findings of the advisory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        vuln_id: string;
+                        findings: components["schemas"]["VulnFinding"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getHostVulnerabilities: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Findings of the host */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        host_id: string;
+                        findings: components["schemas"]["VulnFinding"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
         };
     };
     listJobMonitors: {

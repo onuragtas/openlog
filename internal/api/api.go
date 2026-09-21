@@ -27,13 +27,14 @@ import (
 	"github.com/onuragtas/openlog/internal/fleet"
 	"github.com/onuragtas/openlog/internal/fleet/catalog"
 	"github.com/onuragtas/openlog/internal/intsettings"
+	"github.com/onuragtas/openlog/internal/jobs"
 	"github.com/onuragtas/openlog/internal/savedview"
 	"github.com/onuragtas/openlog/internal/slo"
 	"github.com/onuragtas/openlog/internal/sourcemaps"
-	"github.com/onuragtas/openlog/internal/jobs"
 	"github.com/onuragtas/openlog/internal/synthetics"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
+	"github.com/onuragtas/openlog/internal/vuln"
 )
 
 // Server is the API HTTP server.
@@ -85,6 +86,9 @@ type Server struct {
 	synthetics synthetics.Store
 	// cron and heartbeat monitors (jobs.go, D-141); nil: none (static auth mode)
 	jobs jobs.Store
+	// the vulnerability catalog behind /api/v1/vulnerabilities/catalog/status (vulnerabilities.go, D-142);
+	// nil: the findings are still readable, only the catalog's own freshness is not
+	vulnCatalog vuln.Catalog
 	// the ping path of job monitoring: token lookup and the state write it concludes
 	jobPings jobs.PingStore
 	// where a concluded run goes (ClickHouse writer); nil: runs are not stored, only the state is
@@ -177,6 +181,7 @@ func (s *Server) Handler() http.Handler {
 	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
 	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
 	s.jobRoutes(mux)          // jobs.go: cron and heartbeat monitoring (D-141)
+	s.vulnRoutes(mux)         // vulnerabilities.go: vulnerable packages per host (D-142)
 	s.rumRoutes(mux)          // rum.go: real user monitoring reads (rum.md, D-136)
 	s.dbRoutes(mux)           // dbmon.go: database query performance (db-monitoring.md, D-138)
 	s.profileRoutes(mux)      // profiles.go: continuous profiling flame graphs (schema 0095_profiles)
@@ -380,6 +385,15 @@ func (s *Server) Run(ctx context.Context, addr string, shutdownTimeout time.Dura
 const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
 
 func formatTime(t time.Time) string { return t.UTC().Format(timeLayout) }
+
+// formatMillis formats a unix-millisecond timestamp as a ClickHouse read returns it; 0 is the zero time,
+// which the API reports as an empty string rather than 1970.
+func formatMillis(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	return formatTime(time.UnixMilli(ms))
+}
 
 // parseTime accepts RFC3339 or unix milliseconds.
 func parseTime(v string) (time.Time, error) {

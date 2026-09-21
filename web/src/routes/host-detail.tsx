@@ -13,6 +13,7 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { hostHasContainers } from "@/lib/host-os";
 import { useNow } from "@/lib/hooks";
 import { parseTimeParam } from "@/lib/time";
+import { HostVulnerabilities } from "@/components/vulnerabilities/HostVulnerabilities";
 import { HOST_TABS, type HostTab } from "@/router";
 import { HostContainersTab } from "./host/containers-tab";
 import { HostInventoryTab } from "./host/inventory-tab";
@@ -110,6 +111,12 @@ export function HostDetailPage() {
         <TabsContent value="containers">{tab === "containers" && <HostContainersTab hostId={hostId} />}</TabsContent>
         <TabsContent value="inventory">
           <HostInventoryTab hostId={hostId} />
+        </TabsContent>
+        {/* What is installed and what is dangerous about it are two tabs of the same screen (D-142). */}
+        <TabsContent value="vulnerabilities">
+          {tab === "vulnerabilities" && (
+            <HostVulnerabilities hostId={hostId} onOpen={(vulnId) => void navigate({ to: "/vulnerabilities/$vulnId", params: { vulnId } })} />
+          )}
         </TabsContent>
         <TabsContent value="logs">
           <HostLogsTab hostId={hostId} />

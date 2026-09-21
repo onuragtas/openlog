@@ -56,6 +56,8 @@ const SyntheticsPage = lazyRouteComponent(() => import("@/routes/synthetics"), "
 const SyntheticDetailPage = lazyRouteComponent(() => import("@/routes/synthetics"), "SyntheticDetailPage");
 const JobsPage = lazyRouteComponent(() => import("@/routes/jobs"), "JobsPage");
 const JobDetailPage = lazyRouteComponent(() => import("@/routes/jobs"), "JobDetailPage");
+const VulnerabilitiesPage = lazyRouteComponent(() => import("@/routes/vulnerabilities"), "VulnerabilitiesPage");
+const VulnerabilityDetailPage = lazyRouteComponent(() => import("@/routes/vulnerabilities"), "VulnerabilityDetailPage");
 const RumPage = lazyRouteComponent(() => import("@/routes/rum"), "RumPage");
 const ProfilesPage = lazyRouteComponent(() => import("@/routes/profiles"), "ProfilesPage");
 const DatabasesPage = lazyRouteComponent(() => import("@/routes/databases"), "DatabasesPage");
@@ -198,7 +200,7 @@ const hostsRoute = createRoute({
   component: HostsPage,
 });
 
-export const HOST_TABS = ["overview", "services", "containers", "inventory", "logs"] as const;
+export const HOST_TABS = ["overview", "services", "containers", "inventory", "vulnerabilities", "logs"] as const;
 export type HostTab = (typeof HOST_TABS)[number];
 
 export interface HostDetailSearch extends EmbeddedLogsSearch {
@@ -742,6 +744,29 @@ const jobDetailRoute = createRoute({
   component: JobDetailPage,
 });
 
+// ---- Vulnerabilities (routes/vulnerabilities.tsx, api.md "Vulnerabilities", D-142) ----
+const VULN_SEVERITIES = ["critical", "high", "medium", "low", "none"] as const;
+
+export interface VulnerabilitiesSearch {
+  /** only the findings of this severity */
+  severity?: (typeof VULN_SEVERITIES)[number];
+}
+
+const vulnerabilitiesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/vulnerabilities",
+  validateSearch: (s: Record<string, unknown>): VulnerabilitiesSearch => ({
+    severity: (VULN_SEVERITIES as readonly string[]).includes(String(s.severity)) ? (String(s.severity) as VulnerabilitiesSearch["severity"]) : undefined,
+  }),
+  component: VulnerabilitiesPage,
+});
+
+const vulnerabilityDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/vulnerabilities/$vulnId",
+  component: VulnerabilityDetailPage,
+});
+
 // ---- Real user monitoring (routes/rum.tsx, docs/contracts/rum.md §7, D-136) ----
 const RUM_TABS = ["overview", "pages", "sessions"] as const;
 const RUM_SORTS = ["views", "slowest", "avg"] as const;
@@ -1135,6 +1160,8 @@ export const routeTree = rootRoute.addChildren([
     syntheticDetailRoute,
     jobsRoute,
     jobDetailRoute,
+    vulnerabilitiesRoute,
+    vulnerabilityDetailRoute,
     rumRoute,
     rumAppRoute,
     rumSessionRoute,
