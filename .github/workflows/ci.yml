@@ -397,6 +397,20 @@ jobs:
       - run: dart analyze --fatal-infos
       - run: dart test
 
+  swift-agent:
+    name: swift-agent (OpenLog, Apple platforms)
+    # macOS because that is where this package is used and where it is verified. It has no Apple-only
+    # APIs and would most likely build on Linux too, but "most likely" is not a platform to claim.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agents/swift
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: swift build
+      - run: swift test
+
   node-agent:
     name: node-agent (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
