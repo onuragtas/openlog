@@ -37,6 +37,13 @@ const (
 	// "unhandledrejection" or "console" (console.error, opt-in).
 	AttrErrorSource = "openlog.rum.error.source"
 
+	// AttrCustomName, AttrCustomValue and AttrCustomUnit carry one application-defined event or timing
+	// (recordEvent / recordTiming). The name is required and bounded; the value is optional, so "checkout
+	// started" and "cart priced in 42 ms" are the same kind of event with and without a number.
+	AttrCustomName  = "openlog.rum.custom.name"
+	AttrCustomValue = "openlog.rum.custom.value"
+	AttrCustomUnit  = "openlog.rum.custom.unit"
+
 	// Device and browser facets of the rollups.
 	AttrDeviceType     = "device.type"
 	AttrBrowserName    = "browser.name"
@@ -86,13 +93,26 @@ const (
 	EventVital    = "vital"
 	EventError    = "error"
 	EventResource = "resource"
+	// EventCustom is an application-defined event or timing (recordEvent / recordTiming). It is stored as a
+	// span like the others and has no rollup of its own: what an application counts is not something the
+	// server can pre-aggregate without knowing what it means, so these are read through OQL.
+	EventCustom = "custom"
+)
+
+// MaxCustomNameBytes and MaxCustomUnitBytes bound an application-defined event. The name becomes a grouping
+// key in every query written against it, so it is bounded like a route rather than like a message.
+const (
+	MaxCustomNameBytes = 128
+	MaxCustomUnitBytes = 32
+	// MaxCustomValue bounds the measurement. Beyond this a value is a bug or an attack, not a timing.
+	MaxCustomValue = 1e12
 )
 
 // Events reports whether v is a known event kind. Anything else is rejected: an unknown kind would be stored
 // as a span nothing ever reads, which is exactly the free storage a public key must not buy.
 func Events(v string) bool {
 	switch v {
-	case EventPageView, EventVital, EventError, EventResource:
+	case EventPageView, EventVital, EventError, EventResource, EventCustom:
 		return true
 	}
 	return false

@@ -113,6 +113,24 @@ Every `fetch` and `XMLHttpRequest` becomes a `client` span with `http.request.me
 `http.response.status_code`, `server.address` and `url.full`. The URL keeps **path only** — query string and
 fragment are dropped before sending, because that is where applications put tokens and personal data.
 
+### 2.5 Custom events and timings
+
+`recordEvent(name)` and `recordTiming(name, ms)` send a span with `openlog.rum.event = custom`, carrying
+`openlog.rum.custom.name` and — for a timing — `openlog.rum.custom.value` and `openlog.rum.custom.unit`.
+
+The name is required (bounded to 128 bytes) and the whole span is refused without one: it is the key every
+query written against the event groups by, so an unnamed event is not a smaller event but a row nothing can
+ask for. The value is optional, because counting is as valid as timing; when present it must be a finite
+number within ±10¹², since anything past that is a bug or an attack rather than a measurement. A unit without
+a value is dropped — "ms" on a counted event would claim a measurement that was never taken.
+
+There is **no rollup**: what an application counts is not something the server can pre-aggregate without
+knowing what it means. They are read through OQL, e.g.
+`SELECT count(*) FROM Span WHERE openlog.rum.custom.name = 'checkout_started' FACET openlog.rum.route`.
+
+The SDK takes only a name and a number, deliberately. The server keeps an attribute allowlist (§3.3), so an
+API that accepted arbitrary attributes would promise storage it does not provide.
+
 ## 3. The browser key
 
 **A browser key is public by construction.** It ships inside a web page; everyone who can open the page has
@@ -324,7 +342,13 @@ Deliberately left for later, with the shape they would take:
   identity field is a data protection question, not a schema one.
 - **Resource timing for static assets.** Only `fetch`/`XHR` are captured, not every image and script; the
   volume is an order of magnitude larger and needs its own sampling.
-- **Custom events and timings.** No `recordEvent`/`recordTiming` API yet.
+- **Custom events and timings.** ~~Not in this slice.~~ Done: `recordEvent(name)` and
+  `recordTiming(name, ms)` send an `openlog.rum.event = custom` span carrying `openlog.rum.custom.name` and,
+  for a timing, `…custom.value` and `…custom.unit`. They have **no rollup of their own** — what an
+  application counts is not something the server can pre-aggregate without knowing what it means — so they
+  are read through OQL (`FROM Span WHERE openlog.rum.custom.name = 'checkout_started'`). The SDK takes only a
+  name (and a number): the server keeps an attribute allowlist, so an API that accepted arbitrary attributes
+  would promise storage it does not provide.
 - **Alerting on vitals.** ~~Not in this slice.~~ Done, and without a `rum` rule type: `RumPageView`,
   `RumVital` and `RumSession` are OQL event types ([oql.md](oql.md)), and the `oql` alert rule type compiles
   any OQL query — so `SELECT sum(value.sum) / sum(count) FROM RumVital WHERE vital = 'lcp'` is an alert

@@ -43,6 +43,28 @@ Never put an `olk_…` ingest license key here. The SDK refuses it, because that
 The full threat model — what someone who copies your key can and cannot do, and how to respond — is in
 [rum.md §3.5](../../docs/contracts/rum.md).
 
+## Custom events and timings
+
+Everything above is automatic. When you want to record something only your application knows:
+
+```js
+const openlog = init({ key: 'olb_…', endpoint: 'https://ingest.example.com:4318' });
+
+openlog.recordEvent('checkout_started');
+openlog.recordTiming('cart_priced', 42);
+```
+
+They are stored as spans and have no rollup of their own — what your application counts is not something the
+server can pre-aggregate without knowing what it means — so you read them with OQL:
+
+```sql
+SELECT count(*) FROM Span WHERE openlog.rum.custom.name = 'checkout_started' FACET openlog.rum.route
+```
+
+The API takes a name and, for a timing, a number. It deliberately does not take arbitrary attributes: the
+server keeps an allowlist of what a browser key may write ([rum.md §3.3](../../docs/contracts/rum.md)), so
+anything else would be accepted here and dropped there.
+
 ## Options
 
 | Option | Default | What it does |

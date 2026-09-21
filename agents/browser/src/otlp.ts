@@ -8,7 +8,7 @@ import { spanId, traceId } from './ids.js';
 import { VERSION } from './version.js';
 
 /** RUM event kinds (`openlog.rum.event`). */
-export type RumEvent = 'page_view' | 'vital' | 'error' | 'resource';
+export type RumEvent = 'page_view' | 'vital' | 'error' | 'resource' | 'custom';
 
 export interface AnyAttr {
   [key: string]: string | number | boolean | undefined | null;

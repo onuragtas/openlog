@@ -28,6 +28,14 @@ export interface OpenLogBrowser {
   sessionId(): string;
   /** Reports an error the application caught itself. */
   recordError(error: unknown): void;
+  /**
+   * Records an application-defined event, e.g. `recordEvent('checkout_started')`. The name is the only thing
+   * stored: the server keeps an allowlist of attributes, so an API that accepted arbitrary ones here would be
+   * promising storage it does not provide. Query them with OQL: `FROM Span WHERE openlog.rum.custom.name = …`.
+   */
+  recordEvent(name: string): void;
+  /** Records an application-defined timing in milliseconds, e.g. `recordTiming('cart_priced', 42)`. */
+  recordTiming(name: string, milliseconds: number): void;
 }
 
 const NOOP: OpenLogBrowser = {
@@ -35,6 +43,8 @@ const NOOP: OpenLogBrowser = {
   shutdown() {},
   sessionId: () => '',
   recordError() {},
+  recordEvent() {},
+  recordTiming() {},
 };
 
 let active: OpenLogBrowser | null = null;
@@ -216,6 +226,23 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
         error: true,
         exception: { type: e.name, message: e.message, stacktrace: e.stack ?? '' },
         attributes: { 'openlog.rum.error.source': 'error' },
+      });
+    },
+    recordEvent: (name: string) => {
+      const n = String(name ?? '').trim();
+      if (!n) return; // an unnamed event is an unqueryable row, and the server refuses it anyway
+      emit('custom', n, { attributes: { 'openlog.rum.custom.name': n } });
+    },
+    recordTiming: (name: string, milliseconds: number) => {
+      const n = String(name ?? '').trim();
+      if (!n || !Number.isFinite(milliseconds)) return;
+      emit('custom', n, {
+        durationMs: milliseconds,
+        attributes: {
+          'openlog.rum.custom.name': n,
+          'openlog.rum.custom.value': milliseconds,
+          'openlog.rum.custom.unit': 'ms',
+        },
       });
     },
   };

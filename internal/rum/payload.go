@@ -1,6 +1,7 @@
 package rum
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -61,6 +62,7 @@ const (
 	ReasonNotRUM       = "not_rum_event"
 	ReasonTooManySpans = "too_many_spans"
 	ReasonBadVital     = "invalid_vital"
+	ReasonBadCustom    = "invalid_custom_event"
 	ReasonNoSession    = "missing_session_id"
 )
 
@@ -128,7 +130,8 @@ var spanAllowed = map[string]bool{
 	AttrRoute: true, AttrPageViewKind: true,
 	AttrVitalName: true, AttrVitalValue: true, AttrVitalRating: true,
 	AttrErrorSource: true,
-	AttrDeviceType:  true, AttrBrowserName: true, AttrBrowserVersion: true, AttrOSName: true,
+	AttrCustomName:  true, AttrCustomValue: true, AttrCustomUnit: true,
+	AttrDeviceType: true, AttrBrowserName: true, AttrBrowserVersion: true, AttrOSName: true,
 	AttrURLPath: true, AttrURLFull: true, AttrURLDomain: true,
 	AttrTimingTTFB: true, AttrTimingDNS: true, AttrTimingConnect: true, AttrTimingTLS: true,
 	AttrTimingResponse: true, AttrTimingDOMInteractive: true, AttrTimingDOMContentLoaded: true,
@@ -265,13 +268,32 @@ func sanitizeSpan(sp *tracepb.Span, key Key) string {
 		} else {
 			add(AttrErrorSource, "error")
 		}
+	case EventCustom:
+		// The name is what every query written against a custom event groups by, so an unnamed one is not a
+		// smaller event — it is an unqueryable row. The value is optional: counting is as valid as timing.
+		name := truncate(strings.TrimSpace(in[AttrCustomName]), MaxCustomNameBytes)
+		if name == "" {
+			return ReasonBadCustom
+		}
+		add(AttrCustomName, name)
+		if raw, ok := in[AttrCustomValue]; ok && strings.TrimSpace(raw) != "" {
+			value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+			if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < -MaxCustomValue || value > MaxCustomValue {
+				return ReasonBadCustom
+			}
+			add(AttrCustomValue, strconv.FormatFloat(value, 'g', -1, 64))
+			if unit := truncate(strings.TrimSpace(in[AttrCustomUnit]), MaxCustomUnitBytes); unit != "" {
+				add(AttrCustomUnit, unit)
+			}
+		}
 	}
 
 	// The remaining allowlisted attributes, bounded.
 	for k, v := range in {
 		switch k {
 		case AttrEvent, AttrSessionID, AttrPageViewID, AttrRoute, AttrDeviceType,
-			AttrPageViewKind, AttrVitalName, AttrVitalValue, AttrVitalRating, AttrErrorSource:
+			AttrPageViewKind, AttrVitalName, AttrVitalValue, AttrVitalRating, AttrErrorSource,
+			AttrCustomName, AttrCustomValue, AttrCustomUnit:
 			continue // already decided above
 		}
 		if !spanAllowed[k] {
