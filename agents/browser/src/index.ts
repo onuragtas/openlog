@@ -29,13 +29,16 @@ export interface OpenLogBrowser {
   /** Reports an error the application caught itself. */
   recordError(error: unknown): void;
   /**
-   * Records an application-defined event, e.g. `recordEvent('checkout_started')`. The name is the only thing
-   * stored: the server keeps an allowlist of attributes, so an API that accepted arbitrary ones here would be
-   * promising storage it does not provide. Query them with OQL: `FROM Span WHERE openlog.rum.custom.name = …`.
+   * Records an application-defined event, e.g. `recordEvent('checkout_started', { plan: 'pro' })`.
+   *
+   * Parameters are stored under `openlog.rum.custom.param.<key>` — a namespace of their own, so they can
+   * never collide with a field openlog later learns to interpret. At most 16 are kept per event; keys are
+   * `[a-z0-9_.-]`, values are stored as text. Query with OQL:
+   * `FROM Span WHERE openlog.rum.custom.name = 'checkout_started' FACET openlog.rum.custom.param.plan`.
    */
-  recordEvent(name: string): void;
+  recordEvent(name: string, params?: CustomParams): void;
   /** Records an application-defined timing in milliseconds, e.g. `recordTiming('cart_priced', 42)`. */
-  recordTiming(name: string, milliseconds: number): void;
+  recordTiming(name: string, milliseconds: number, params?: CustomParams): void;
 }
 
 const NOOP: OpenLogBrowser = {
@@ -228,12 +231,12 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
         attributes: { 'openlog.rum.error.source': 'error' },
       });
     },
-    recordEvent: (name: string) => {
+    recordEvent: (name: string, params?: CustomParams) => {
       const n = String(name ?? '').trim();
       if (!n) return; // an unnamed event is an unqueryable row, and the server refuses it anyway
-      emit('custom', n, { attributes: { 'openlog.rum.custom.name': n } });
+      emit('custom', n, { attributes: { 'openlog.rum.custom.name': n, ...customParams(params) } });
     },
-    recordTiming: (name: string, milliseconds: number) => {
+    recordTiming: (name: string, milliseconds: number, params?: CustomParams) => {
       const n = String(name ?? '').trim();
       if (!n || !Number.isFinite(milliseconds)) return;
       emit('custom', n, {
@@ -242,10 +245,37 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
           'openlog.rum.custom.name': n,
           'openlog.rum.custom.value': milliseconds,
           'openlog.rum.custom.unit': 'ms',
+          ...customParams(params),
         },
       });
     },
   };
+}
+
+/** Parameters of a custom event: the application's own vocabulary, stored in a namespace of its own. */
+export type CustomParams = Record<string, string | number | boolean>;
+
+const CUSTOM_PARAM_PREFIX = 'openlog.rum.custom.param.';
+const MAX_CUSTOM_PARAMS = 16;
+
+/**
+ * customParams prefixes and bounds the caller's parameters. Keys are lower-cased and limited to
+ * [a-z0-9_.-]; anything else is dropped here because the server drops it there — sending it would only cost
+ * bandwidth to produce the same result.
+ */
+function customParams(params?: CustomParams): Record<string, string> {
+  if (!params) return {};
+  const out: Record<string, string> = {};
+  let n = 0;
+  for (const [rawKey, value] of Object.entries(params)) {
+    if (n >= MAX_CUSTOM_PARAMS) break;
+    if (value === undefined || value === null) continue;
+    const key = rawKey.trim().toLowerCase();
+    if (!/^[a-z0-9_.-]{1,64}$/.test(key)) continue;
+    out[CUSTOM_PARAM_PREFIX + key] = String(value);
+    n++;
+  }
+  return out;
 }
 
 /** Coarse device class, from the user agent hints when present and the user agent string otherwise. */

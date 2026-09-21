@@ -128,8 +128,22 @@ There is **no rollup**: what an application counts is not something the server c
 knowing what it means. They are read through OQL, e.g.
 `SELECT count(*) FROM Span WHERE openlog.rum.custom.name = 'checkout_started' FACET openlog.rum.route`.
 
-The SDK takes only a name and a number, deliberately. The server keeps an attribute allowlist (§3.3), so an
-API that accepted arbitrary attributes would promise storage it does not provide.
+**Parameters.** `recordEvent('checkout_started', { plan: 'pro' })` sends each parameter as
+`openlog.rum.custom.param.<key>`. A prefix rather than allowlist entries, because the parameters are the
+application's vocabulary and cannot be enumerated in advance — and confining them to a namespace keeps the
+rule of §3.3 intact all the same: a parameter can never occupy a name openlog might later define and
+interpret.
+
+At most 16 are kept per event, keys are `[a-z0-9_.-]` up to 64 bytes and values are truncated at 512. A key
+outside that is dropped rather than escaped: the application chose it, and a name that cannot be written in a
+`FACET` is not a usable dimension. The cap is applied **after sorting the keys** — Go map order is random, so
+taking them as they come would mean a different 16 survived on every request.
+
+They belong to custom events only. On a page view or a vital the namespace falls to the allowlist, which does
+not know it, so it cannot become a way to write arbitrary attributes onto any event.
+
+This is what makes product analytics answerable from RUM — `FACET openlog.rum.custom.param.plan` over an
+event is a breakdown — without giving a public key a free-form attribute store.
 
 ## 3. The browser key
 

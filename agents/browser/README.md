@@ -50,9 +50,13 @@ Everything above is automatic. When you want to record something only your appli
 ```js
 const openlog = init({ key: 'olb_…', endpoint: 'https://ingest.example.com:4318' });
 
-openlog.recordEvent('checkout_started');
-openlog.recordTiming('cart_priced', 42);
+openlog.recordEvent('checkout_started', { plan: 'pro', step: 2 });
+openlog.recordTiming('cart_priced', 42, { currency: 'try' });
 ```
+
+Parameters are stored under `openlog.rum.custom.param.<key>`, so they can never collide with a field openlog
+defines. At most 16 per event; keys are lower-case `[a-z0-9_.-]`, values are stored as text. Anything else is
+dropped by the SDK because the server drops it too.
 
 They are stored as spans and have no rollup of their own — what your application counts is not something the
 server can pre-aggregate without knowing what it means — so you read them with OQL:

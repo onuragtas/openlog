@@ -2,6 +2,7 @@ package rum
 
 import (
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -286,6 +287,26 @@ func sanitizeSpan(sp *tracepb.Span, key Key) string {
 				add(AttrCustomUnit, unit)
 			}
 		}
+		// Parameters are sorted before the cap is applied, not taken as they come: Go map order is random,
+		// so "the first 16" would otherwise mean a different 16 on every request, and which parameter
+		// survived would depend on the run rather than on the payload.
+		keys := make([]string, 0, MaxCustomParams)
+		for k := range in {
+			if strings.HasPrefix(k, AttrCustomParamPrefix) {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for i, k := range keys {
+			if i >= MaxCustomParams {
+				break
+			}
+			name := strings.TrimPrefix(k, AttrCustomParamPrefix)
+			if name == "" || len(name) > MaxCustomParamKeyBytes || !validParamKey(name) {
+				continue
+			}
+			add(k, truncate(in[k], MaxCustomParamValueBytes))
+		}
 	}
 
 	// The remaining allowlisted attributes, bounded.
@@ -296,7 +317,8 @@ func sanitizeSpan(sp *tracepb.Span, key Key) string {
 			AttrCustomName, AttrCustomValue, AttrCustomUnit:
 			continue // already decided above
 		}
-		if !spanAllowed[k] {
+		// Custom event parameters were decided above, in a namespace no allowlist entry could cover.
+		if strings.HasPrefix(k, AttrCustomParamPrefix) || !spanAllowed[k] {
 			continue
 		}
 		limit := MaxAttrValueBytes
@@ -326,6 +348,20 @@ func sanitizeSpan(sp *tracepb.Span, key Key) string {
 
 	sanitizeEvents(sp, event)
 	return ""
+}
+
+// validParamKey reports whether a custom event parameter name is one a query can address without quoting:
+// lower-case letters, digits, dot, underscore and hyphen. A name outside that is dropped rather than escaped
+// — the application chose it, and a name that cannot be written in a FACET is not a usable dimension.
+func validParamKey(k string) bool {
+	for _, r := range k {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // sanitizeEvents keeps only `exception` events, bounded, and forces the span status of an error so it reaches

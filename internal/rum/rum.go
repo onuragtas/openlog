@@ -44,6 +44,14 @@ const (
 	AttrCustomValue = "openlog.rum.custom.value"
 	AttrCustomUnit  = "openlog.rum.custom.unit"
 
+	// AttrCustomParamPrefix namespaces an application's own event parameters:
+	// recordEvent('checkout_started', {plan: 'pro'}) arrives as openlog.rum.custom.param.plan.
+	//
+	// A prefix rather than allowlist entries, because the parameters are the application's vocabulary and
+	// cannot be enumerated in advance. Confining them to a namespace keeps the rule of payload.go intact all
+	// the same: a parameter can never occupy a name openlog might later define and interpret.
+	AttrCustomParamPrefix = "openlog.rum.custom.param."
+
 	// Device and browser facets of the rollups.
 	AttrDeviceType     = "device.type"
 	AttrBrowserName    = "browser.name"
@@ -106,6 +114,11 @@ const (
 	MaxCustomUnitBytes = 32
 	// MaxCustomValue bounds the measurement. Beyond this a value is a bug or an attack, not a timing.
 	MaxCustomValue = 1e12
+	// MaxCustomParams bounds the parameters kept on one event, and the two below one key and one value.
+	// The caps are what keeps a public key from turning an event into a storage device.
+	MaxCustomParams          = 16
+	MaxCustomParamKeyBytes   = 64
+	MaxCustomParamValueBytes = 512
 )
 
 // Events reports whether v is a known event kind. Anything else is rejected: an unknown kind would be stored
