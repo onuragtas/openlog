@@ -12,6 +12,7 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/haproxy"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/iis"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/memcached"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mongodb"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mssql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mysql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/nginx"
@@ -39,5 +40,6 @@ func Registry(cfg *config.Config, ctr *containers.Source) []integrations.Integra
 		haproxy.Integration{},
 		rabbitmq.Integration{},
 		elasticsearch.Integration{},
+		mongodb.Integration{},
 	}
 }

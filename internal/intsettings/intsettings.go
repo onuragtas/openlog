@@ -37,6 +37,7 @@ const (
 	HAProxy       = "haproxy"
 	RabbitMQ      = "rabbitmq"
 	Elasticsearch = "elasticsearch"
+	MongoDB       = "mongodb"
 )
 
 // RevisionDisabled is reported by agents configured with integrations.remote_config: false.
@@ -92,6 +93,8 @@ var allowedFields = map[string]field{
 	HAProxy:       fEndpoint,
 	RabbitMQ:      fEndpoint | fUsername | fPassword,
 	Elasticsearch: fEndpoint | fUsername | fPassword,
+	// MongoDB's database is the authentication source, and the two database lists bound the dbStats reads.
+	MongoDB: fEndpoint | fUsername | fPassword | fDatabase | fDatabases,
 }
 
 // urlEndpoints are the integrations whose endpoint is an http(s) URL — a status page or a management API —

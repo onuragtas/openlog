@@ -32,11 +32,13 @@ export type KpiId =
   | "messagesReady"
   | "publishRate"
   | "consumers"
-  | "documents"
   | "searchRate"
   | "indexRate"
   | "heapUsage"
-  | "unassignedShards";
+  | "unassignedShards"
+  | "documents"
+  | "operations"
+  | "replicaLagSeconds";
 
 export interface KpiSpec {
   id: KpiId;
@@ -114,6 +116,40 @@ export const KPIS: Record<IntegrationId, KpiSpec[]> = {
       compute: (d) => lastValue(percentToRatio(sumSeries(get(d, "h")))),
     },
     { id: "deadlocks", queries: { d: { name: "sqlserver.deadlock.count", agg: "rate" } }, unit: "number", compute: (d) => last(d, "d") },
+  ],
+  mongodb: [
+    {
+      id: "operations",
+      queries: { o: { name: "mongodb.operation.count", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      compute: (d) => last(d, "o"),
+    },
+    {
+      id: "connections",
+      queries: { c: { name: "mongodb.connection.count", agg: "last", groupBy: ["type"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "c"), "type", ["current"]))),
+    },
+    {
+      id: "memory",
+      queries: { m: { name: "mongodb.memory.usage", agg: "last", groupBy: ["type"] } },
+      unit: "bytes",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "m"), "type", ["resident"]))),
+    },
+    {
+      id: "documents",
+      queries: { d: { name: "mongodb.object.count", agg: "last" } },
+      unit: "number",
+      compute: (d) => last(d, "d"),
+    },
+    {
+      // A replica set member that falls behind is the failure people watch for; a standalone server has no
+      // such metric and the tile stays empty.
+      id: "replicaLagSeconds",
+      queries: { l: { name: "mongodb.replica_set.lag", agg: "last" } },
+      unit: "number",
+      compute: (d) => last(d, "l"),
+    },
   ],
   apache: [
     { id: "requests", queries: { r: { name: "apache.requests", agg: "rate" } }, unit: "number", compute: (d) => last(d, "r") },

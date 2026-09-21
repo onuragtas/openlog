@@ -38,7 +38,7 @@ func TestApplyRemote(t *testing.T) {
 		{Integration: "docker", Enabled: false},                                       // disable on this host
 		{Integration: "nginx", Enabled: true, Endpoint: "127.0.0.1:80"},               // invalid: not a URL
 		{Integration: "redis", Enabled: true, Database: "x", Password: "leak-me-not"}, // invalid: database unsupported
-		{Integration: "mongodb", Enabled: true},                                       // unknown
+		{Integration: "cassandra", Enabled: true},                                     // unknown
 		{Integration: "postgresql", Enabled: true, Match: &RemoteMatch{Container: "db"}, Username: "a"},
 		{Integration: "postgresql", Enabled: true, Match: &RemoteMatch{Container: "db"}, Databases: []string{"app"}}, // merges into the previous
 	}

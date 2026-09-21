@@ -172,6 +172,13 @@ integrations:                    # metric integrations bound to discovered servi
     # password: env:OPENLOG_ELASTICSEARCH_PASSWORD
     # endpoint: https://127.0.0.1:9200
     # tls: { enabled: true, ca_file: /etc/elasticsearch/certs/http_ca.crt }
+  mongodb:
+    enabled: true                # needs credentials: db.createUser with the clusterMonitor role
+    # username: openlog
+    # password: env:OPENLOG_MONGODB_PASSWORD
+    # database: admin            # the authentication source, not a database to monitor
+    # databases: []              # empty = every database, at most 32
+    # exclude_databases: [local]
   # mysql and mssql take the same query_stats block as postgresql (performance_schema digests /
   # sys.dm_exec_query_stats, sessions with their waits and blocking, EXPLAIN / cached showplan).
 

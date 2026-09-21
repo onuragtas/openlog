@@ -93,7 +93,20 @@ export type SeriesLabelKey =
   | "relocating"
   | "initializing"
   | "documents"
-  | "deletedDocuments";
+  | "deletedDocuments"
+  | "insert"
+  | "update"
+  | "delete"
+  | "getmore"
+  | "command"
+  | "resident"
+  | "virtual"
+  | "dataSize"
+  | "indexSize"
+  | "storageSize"
+  | "objects"
+  | "read"
+  | "write";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -167,7 +180,14 @@ export type PanelChartId =
   | "esOperationTime"
   | "esDocuments"
   | "esHeap"
-  | "esThreadPool";
+  | "esThreadPool"
+  | "mongoOperations"
+  | "mongoConnections"
+  | "mongoDocuments"
+  | "mongoMemory"
+  | "mongoCache"
+  | "mongoStorage"
+  | "mongoLatency";
 
 export interface PanelQuery {
   name: string;
@@ -192,6 +212,9 @@ export interface PanelChart {
   siteBreakdown?: boolean;
   build: (d: PanelData, label: (k: SeriesLabelKey) => string) => ChartSeriesInput[];
 }
+
+/** MongoDB's per-database resource attribute (§6.15). */
+export const MONGO_DATABASE = "resource.db.namespace";
 
 /** PostgreSQL database/table resource attributes, grouped via `group_by=resource.<key>`. */
 export const PG_DATABASE = "resource.postgresql.database.name";
@@ -536,6 +559,74 @@ export const PANELS: Record<IntegrationId, PanelChart[]> = {
       stacked: true,
       optional: true,
       build: (d, L) => by(get(d, "w"), [MSSQL_WAIT_TYPE], L("waitTime")),
+    },
+  ],
+  // MongoDB (§6.15): the server metrics are the instance resource, the sizes are per database.
+  mongodb: [
+    {
+      id: "mongoOperations",
+      queries: { o: { name: "mongodb.operation.count", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      stacked: true,
+      order: ["query", "insert", "update", "delete", "getmore", "command"],
+      alert: "o",
+      build: (d, L) => by(get(d, "o"), ["operation"], L("queries")),
+    },
+    {
+      id: "mongoLatency",
+      // The server reports latency in microseconds as a monotonic total; the rate of it against the rate of
+      // the operations is the average one, which is what the chart shows.
+      queries: { l: { name: "mongodb.operation.latency.time", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      order: ["read", "write", "command"],
+      alert: "l",
+      build: (d, L) => by(get(d, "l"), ["operation"], L("waitTime")),
+    },
+    {
+      id: "mongoConnections",
+      queries: { c: { name: "mongodb.connection.count", agg: "last", groupBy: ["type"] } },
+      unit: "number",
+      order: ["current", "active", "available"],
+      alert: "c",
+      build: (d, L) => by(get(d, "c"), ["type"], L("connections")),
+    },
+    {
+      id: "mongoMemory",
+      queries: { m: { name: "mongodb.memory.usage", agg: "last", groupBy: ["type"] } },
+      unit: "bytes",
+      order: ["resident", "virtual"],
+      alert: "m",
+      build: (d, L) => by(get(d, "m"), ["type"], L("used")),
+    },
+    {
+      id: "mongoCache",
+      queries: { c: { name: "mongodb.cache.operations", agg: "rate", groupBy: ["type"] } },
+      unit: "number",
+      order: ["hit", "miss"],
+      build: (d, L) => by(get(d, "c"), ["type"], L("hitRatio")),
+    },
+    {
+      id: "mongoDocuments",
+      queries: { d: { name: "mongodb.document.operation.count", agg: "rate", groupBy: ["operation"] } },
+      unit: "number",
+      stacked: true,
+      order: ["query", "insert", "update", "delete"],
+      build: (d, L) => by(get(d, "d"), ["operation"], L("documents")),
+    },
+    {
+      id: "mongoStorage",
+      queries: {
+        d: { name: "mongodb.data.size", agg: "last", groupBy: [MONGO_DATABASE] },
+        s: { name: "mongodb.storage.size", agg: "last", groupBy: [MONGO_DATABASE] },
+        i: { name: "mongodb.index.size", agg: "last", groupBy: [MONGO_DATABASE] },
+      },
+      unit: "bytes",
+      alert: "s",
+      build: (d, L) => [
+        ...one(L("dataSize"), sumSeries(get(d, "d"))),
+        ...one(L("storageSize"), sumSeries(get(d, "s"))),
+        ...one(L("indexSize"), sumSeries(get(d, "i"))),
+      ],
     },
   ],
   apache: [

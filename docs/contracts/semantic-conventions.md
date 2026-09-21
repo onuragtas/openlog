@@ -497,12 +497,14 @@ Endpoint derivation (in order, at most 8 candidates, the first that answers is u
 | `integrations.enabled` | `true` | master switch (requires `discovery.enabled`) |
 | `integrations.interval` / `timeout` | `30s` / `10s` | default collection interval (≥ 5 s) and per-collection timeout (≤ interval) |
 | `integrations.max_concurrent` / `max_instances` | `4` / `32` | concurrency limit; instance limit (later instances: `not_available`) |
-| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `apache`, `redis`, `memcached`, `mysql`, `postgresql`, `docker`, `mssql`, `iis`, `haproxy`, `rabbitmq`, `elasticsearch`) |
+| `integrations.<id>.enabled` | `true` | per integration (`nginx`, `apache`, `redis`, `memcached`, `mysql`, `postgresql`, `mongodb`, `docker`, `mssql`, `iis`, `haproxy`, `rabbitmq`, `elasticsearch`) |
 | `integrations.<id>.interval` | — | overrides the default interval |
 | `integrations.<id>.endpoint` | — | `host:port`, `unix:/path` (redis, mysql, postgresql, memcached; haproxy: its runtime socket) or an `http(s)://…` URL (nginx: stub_status page, NGINX Plus API `/api/` or `/api/<n>`, or VTS JSON page, the format is detected, §6.3; apache: mod_status page §6.10; haproxy: stats page §6.12; rabbitmq: management API §6.13; elasticsearch: REST API §6.14) |
 | `integrations.<id>.username` / `password` | — | redis, mysql, postgresql, mssql (SQL Server authentication; Windows authentication is not supported), rabbitmq, elasticsearch (HTTP basic auth). `password`: `env:NAME`, `file:/abs/path` (trailing newline removed; re-read on every connection) or a literal (startup warning) |
 | `integrations.<id>.tls` | — | `{enabled, insecure_skip_verify, ca_file, server_name}`; PostgreSQL without `tls` uses `sslmode=prefer` over TCP |
 | `integrations.postgresql.database` | `postgres` | initial database |
+| `integrations.mongodb.database` | `admin` | the authentication source, not a database to monitor (§6.15) |
+| `integrations.mongodb.databases` / `exclude_databases` | `[]` | which databases get `dbStats` (max 32) |
 | `integrations.postgresql.databases` / `exclude_databases` | `[]` | database allow/deny lists (default: every non-template database with `datallowconn`, max 32) |
 | `integrations.{mysql,postgresql}.top_n_tables` | `50` / `20` | cardinality guard: largest tables/indexes (PostgreSQL, per database) or tables/indexes with most io wait time (MySQL) |
 | `integrations.mssql.top_n_tables` | `10` | wait types with the most total wait time in `sqlserver.os.wait.duration` (§6.7) |
@@ -995,6 +997,52 @@ Resources: the instance resource (§6.1) with `elasticsearch.cluster.name`, `ela
 | `jvm.memory.heap.utilization` | Gauge, int | `%` | — | `jvm.mem.heap_used_percent` |
 | `jvm.threads.count` | Sum, non-monotonic, int | `{threads}` | — | `jvm.threads.count` |
 | `jvm.gc.collections.count` / `.elapsed` | Sum, monotonic, int | `{collections}` / `ms` | `name` = `young`, `old` | `jvm.gc.collectors` |
+
+### 6.15 MongoDB (`mongodb`, D-143)
+
+Sources: `serverStatus` (the server), `listDatabases` and `dbStats` (per database) and, on a replica set
+member, `replSetGetStatus`. Integration id `mongodb` (rule `mongodb`), default port 27017, credentials
+required: MongoDB answers nothing useful to an unauthenticated client on a secured deployment, and the
+monitoring user is the built-in `clusterMonitor` role.
+
+The connection is **direct** (`directConnection`): the agent runs next to this `mongod` and is asking about
+*this* process, so following the topology to a primary elsewhere would report another machine's numbers
+under this host's name. `integrations.mongodb.database` is the authentication source (default `admin`), not
+a database to monitor; `databases` / `exclude_databases` bound which ones get `dbStats`, at most 32
+(`MaxDatabases`), because a database is a set of series and an installation with one per tenant has
+thousands.
+
+Resources: one per instance (§6.1) with `db.version`, `mongodb.process` (`mongod` or `mongos` — a router
+reports no storage numbers, and saying which it is explains why) and, on a replica set,
+`mongodb.replica_set.name`; one per database (`db.namespace`). Counters are cumulative from the server's
+start, which `uptime` gives as the start time.
+
+| Metric | Type | Unit | Attributes | serverStatus / dbStats field |
+|---|---|---|---|---|
+| `mongodb.uptime` | Sum, monotonic, int | `s` | — | `uptime` |
+| `mongodb.connection.count` | Sum, non-monotonic, int | `{connections}` | `type` = `current`, `available`, `active` | `connections.*` |
+| `mongodb.memory.usage` | Sum, non-monotonic, int | `By` | `type` = `resident`, `virtual` | `mem.*` (MiB → bytes) |
+| `mongodb.operation.count` | Sum, monotonic, int | `{operations}` | `operation` = `insert`, `query`, `update`, `delete`, `getmore`, `command` | `opcounters.*` |
+| `mongodb.document.operation.count` | Sum, monotonic, int | `{documents}` | `operation` = `insert`, `query`, `update`, `delete` | `metrics.document.*` |
+| `mongodb.operation.latency.time` | Sum, monotonic, int | `us` | `operation` = `read`, `write`, `command` | `opLatencies.*.latency` |
+| `mongodb.network.io.receive` / `.transmit` | Sum, monotonic, int | `By` | — | `network.bytesIn`, `network.bytesOut` |
+| `mongodb.network.request.count` | Sum, monotonic, int | `{requests}` | — | `network.numRequests` |
+| `mongodb.global_lock.time` | Sum, monotonic, int | `ms` | — | `globalLock.totalTime` (µs → ms) |
+| `mongodb.cursor.count` | Sum, non-monotonic, int | `{cursors}` | `type` = `open`, `no_timeout` | `metrics.cursor.open.*` |
+| `mongodb.cursor.timeout.count` | Sum, monotonic, int | `{cursors}` | — | `metrics.cursor.timedOut` |
+| `mongodb.cache.operations` | Sum, monotonic, int | `{operations}` | `type` = `hit`, `miss` | WiredTiger pages requested minus pages read in, and pages read in |
+| `mongodb.session.count` | Sum, non-monotonic, int | `{sessions}` | — | `logicalSessionRecordCache.activeSessionsCount` |
+| `mongodb.asserts` | Sum, monotonic, int | `{asserts}` | `type` = `regular`, `warning` | `asserts.*` |
+| `mongodb.database.count` | Sum, non-monotonic, int | `{databases}` | — | `listDatabases` |
+| `mongodb.collection.count`, `.index.count`, `.object.count`, `.view.count` | Sum, non-monotonic, int | `{collections}`, `{indexes}`, `{objects}`, `{views}` | — (resource `db.namespace`) | `dbStats` |
+| `mongodb.data.size`, `.storage.size`, `.index.size` | Sum, non-monotonic, int | `By` | — (resource `db.namespace`) | `dbStats` |
+| `mongodb.replica_set.member` | Gauge, int (1) | `{status}` | `state` = `primary`, `secondary`, … | `replSetGetStatus` |
+| `mongodb.replica_set.members` | Sum, non-monotonic, int | `{members}` | — | `replSetGetStatus` |
+| `mongodb.replica_set.lag` | Gauge, int | `s` | — | the primary's `optimeDate` minus this member's |
+
+`replSetGetStatus` fails on a standalone server (`not running with --replSet`), which is not reported as a
+problem: most MongoDB servers people monitor are standalone. The lag is emitted **only** when the answer
+names a primary — without one there is nothing to be behind, and reporting 0 would be a lie.
 
 ## 7. Kubernetes (infra agent, M4, D-070, D-071)
 

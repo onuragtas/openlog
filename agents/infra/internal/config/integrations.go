@@ -32,11 +32,14 @@ const (
 	IntegrationRabbitMQ = "rabbitmq"
 	// IntegrationElasticsearch is Elasticsearch and OpenSearch (REST API).
 	IntegrationElasticsearch = "elasticsearch"
+	// IntegrationMongoDB is MongoDB (serverStatus and dbStats over the wire protocol).
+	IntegrationMongoDB = "mongodb"
 )
 
 // IntegrationIDs lists the implemented integrations in a stable order.
 var IntegrationIDs = []string{IntegrationApache, IntegrationDocker, IntegrationElasticsearch, IntegrationHAProxy, IntegrationIIS,
-	IntegrationMemcached, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx, IntegrationPostgreSQL, IntegrationRabbitMQ, IntegrationRedis}
+	IntegrationMemcached, IntegrationMongoDB, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx,
+	IntegrationPostgreSQL, IntegrationRabbitMQ, IntegrationRedis}
 
 // IntegrationsConfig configures the metric integrations bound to discovered services.
 type IntegrationsConfig struct {
@@ -59,6 +62,7 @@ type IntegrationsConfig struct {
 	HAProxy       IntegrationConfig `yaml:"haproxy"`
 	RabbitMQ      IntegrationConfig `yaml:"rabbitmq"`
 	Memcached     IntegrationConfig `yaml:"memcached"`
+	MongoDB       IntegrationConfig `yaml:"mongodb"`
 	Nginx         IntegrationConfig `yaml:"nginx"`
 	Redis         IntegrationConfig `yaml:"redis"`
 	MySQL         IntegrationConfig `yaml:"mysql"`
@@ -181,6 +185,8 @@ func (c *IntegrationsConfig) Integration(id string) *IntegrationConfig {
 		return &c.Apache
 	case IntegrationElasticsearch:
 		return &c.Elasticsearch
+	case IntegrationMongoDB:
+		return &c.MongoDB
 	case IntegrationHAProxy:
 		return &c.HAProxy
 	case IntegrationRabbitMQ:
@@ -250,7 +256,7 @@ func defaultIntegrations() IntegrationsConfig {
 	return IntegrationsConfig{
 		Enabled: true, Interval: Duration(30 * time.Second), Timeout: Duration(10 * time.Second),
 		MaxConcurrent: 4, MaxInstances: 32, RemoteConfig: true,
-		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on,
+		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on, MongoDB: on,
 	}
 }
 
@@ -266,9 +272,11 @@ var integrationKeys = map[string]map[string]bool{
 	IntegrationRabbitMQ:      {"endpoint": true, "username": true, "password": true, "tls": true},
 	IntegrationElasticsearch: {"endpoint": true, "username": true, "password": true, "tls": true},
 	IntegrationRedis:         {"endpoint": true, "username": true, "password": true, "tls": true},
-	IntegrationMySQL:         {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
-	IntegrationPostgreSQL:    {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
-	IntegrationDocker:        {},
+	// MongoDB takes a database as the authentication source, like PostgreSQL's initial database.
+	IntegrationMongoDB:    {"endpoint": true, "username": true, "password": true, "tls": true, "database": true, "databases": true, "exclude_databases": true},
+	IntegrationMySQL:      {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
+	IntegrationPostgreSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "database": true, "databases": true, "exclude_databases": true, "query_stats": true},
+	IntegrationDocker:     {},
 	// mssql: top_n_tables bounds the wait types of sqlserver.os.wait.duration (default 10).
 	IntegrationMSSQL: {"endpoint": true, "username": true, "password": true, "tls": true, "top_n_tables": true, "query_stats": true},
 	IntegrationIIS:   {},

@@ -119,6 +119,7 @@ receivers, so OTel Collector data fits the same panels):
 | `haproxy` | haproxy | CSV statistics: the stats page (`/;csv`, `/stats;csv`, …) or the runtime socket's `show stat`; one resource per frontend, backend and server (max 500) | none | `haproxy.*` |
 | `rabbitmq` | rabbitmq | management API (`/api/overview`, `/api/nodes`, `/api/queues`, max 500 queues) on 15672 | required when the broker asks for them (HTTP 401) | `rabbitmq.*` |
 | `elasticsearch` | elasticsearch, opensearch | REST API on 9200: `/_cluster/health` and the local node's `/_nodes/_local/stats` | required when security is on (HTTP 401) | `elasticsearch.*`, `jvm.*` |
+| `mongodb` | mongodb | `serverStatus`, `listDatabases`, `dbStats` (max 32 databases) and `replSetGetStatus` on a replica set member; the connection is direct, so the numbers are this process's | required (`clusterMonitor`) | `mongodb.*` |
 
 How it works: an integration instance starts when discovery finds a service whose rule has the integration id and stops when the service
 disappears. Each instance runs on its own goroutine (`integrations.interval`, default 30 s; `integrations.timeout` 10 s; at most
@@ -172,6 +173,10 @@ integrations:
     username: openlog                              # built-in role monitoring_user
     password: env:OPENLOG_ELASTICSEARCH_PASSWORD
     tls: { enabled: true, ca_file: /etc/elasticsearch/certs/http_ca.crt }
+  mongodb:
+    username: openlog                              # db.createUser(... roles: [{role: "clusterMonitor", db: "admin"}])
+    password: env:OPENLOG_MONGODB_PASSWORD
+    # database: admin                              # the authentication source, not a database to monitor
   haproxy:
     instances:
       - match: { unit: haproxy.service }

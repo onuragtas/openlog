@@ -8601,7 +8601,7 @@ export interface components {
             created_at: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        IntegrationName: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "docker" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
+        IntegrationName: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mongodb" | "docker" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
         IntegrationMatch: {
             port: number | null;
             container: string;

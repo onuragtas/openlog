@@ -29,6 +29,7 @@ export const TARGET_IDS = [
   "integrations/memcached",
   "integrations/mysql",
   "integrations/postgresql",
+  "integrations/mongodb",
   "integrations/mssql",
   "integrations/iis",
   "integrations/haproxy",
@@ -73,7 +74,7 @@ export interface InstallTarget {
   /** Options shown in the options step, in order. */
   options: OptionKey[];
   /** Integration id for integration targets (lib/integrations.ts ids). */
-  integration?: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
+  integration?: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mongodb" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch";
   /** Documentation in the repository. */
   docs: string;
   /** Cards of which one must be set up first (e.g. the infra agent for PHP and host logs); several = any of them. */
@@ -111,6 +112,7 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { id: "integrations/memcached", group: "integrations", verify: "integration", integration: "memcached", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/mysql", group: "integrations", verify: "integration", integration: "mysql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/postgresql", group: "integrations", verify: "integration", integration: "postgresql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
+  { id: "integrations/mongodb", group: "integrations", verify: "integration", integration: "mongodb", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   // SQL Server over TDS from any OS (also a remote server); IIS through Windows performance counters only.
   { id: "integrations/mssql", group: "integrations", verify: "integration", integration: "mssql", options: ["hostOs"], docs: blob("agents/infra/README.md#integrations"), requires: INFRA_HOSTS },
   { id: "integrations/iis", group: "integrations", verify: "integration", integration: "iis", options: [], docs: blob("agents/infra/README.md#integrations"), requires: ["windows"] },
@@ -273,6 +275,7 @@ export type BlockLabel =
   | "managementPlugin"
   | "brokerUser"
   | "esUser"
+  | "mongoUser"
   | "redisAcl"
   | "sqlUser"
   | "passwordFile"
@@ -347,6 +350,7 @@ export type NoteKey =
   | "haproxySocket"
   | "rabbitmqGuest"
   | "esSecurity"
+  | "mongoAuthSource"
   | "prometheusDiscovery"
   | "prometheusLimits";
 
@@ -1070,6 +1074,24 @@ function integration(c: Ctx, id: NonNullable<InstallTarget["integration"]>) {
       restartAgent(c, os);
       note(c, "passwordPlaceholder");
       note(c, "rabbitmqGuest");
+      break;
+    case "mongodb":
+      add(
+        c,
+        "mongoUser",
+        "sh",
+        [
+          "# In mongosh, as a user that may create users:",
+          "use admin",
+          `db.createUser({user: "openlog", pwd: "<password>", roles: [`,
+          `  {role: "clusterMonitor", db: "admin"}, {role: "read", db: "local"}]})`,
+        ].join("\n"),
+      );
+      add(c, "passwordFile", shell, passwordFile(os, "mongodb"));
+      add(c, "agentConfig", "yaml", integrationConfigWithEndpoint(os, "mongodb", "openlog", "database: admin   # the authentication source, not a database to monitor"));
+      restartAgent(c, os);
+      note(c, "passwordPlaceholder");
+      note(c, "mongoAuthSource");
       break;
     case "elasticsearch":
       add(
