@@ -44,14 +44,19 @@ Runnable examples live in the `examples` module (`cd examples`):
 
 ## Continuous profiling
 
-Off by default. Turn it on to see which function spent the time *inside* a slow span:
+On by default: `Start` profiles the process, so a slow span can be opened as the function that spent the time
+inside it without anyone having enabled anything.
 
 ```go
-shutdown, err := openlog.Start(ctx, openlog.WithServiceName("checkout"), openlog.WithProfiling(true))
+// Nothing to switch on — this already profiles.
+shutdown, err := openlog.Start(ctx, openlog.WithServiceName("checkout"))
+
+// Turn it off when the process needs net/http/pprof (see below):
+shutdown, err := openlog.Start(ctx, openlog.WithServiceName("checkout"), openlog.WithProfiling(false))
 ```
 
 ```sh
-OPENLOG_PROFILING=true go run .
+OPENLOG_PROFILING=false go run .
 ```
 
 The agent takes a CPU profile of the process over each `OPENLOG_PROFILE_INTERVAL` (60 s by default, 10 s minimum) and
@@ -94,7 +99,7 @@ Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**.
 | `OPENLOG_STATE_DIR` | — | user cache dir `/openlog` | Where this agent persists a generated host id (last resort) |
 | `OPENLOG_RUNTIME_METRICS` | `WithRuntimeMetrics` | `true` | Go runtime metrics |
 | `OPENLOG_METRIC_EXPORT_INTERVAL` (`OTEL_METRIC_EXPORT_INTERVAL`, ms) | `WithMetricInterval` | `60s` | Metric export interval |
-| `OPENLOG_PROFILING` | `WithProfiling` | `false` | Continuous CPU profiling (HTTP protocol only) |
+| `OPENLOG_PROFILING` | `WithProfiling` | `true` | Continuous CPU profiling (HTTP protocol only). Set `false` when the process needs `net/http/pprof` |
 | `OPENLOG_PROFILE_INTERVAL` | `WithProfileInterval` | `60s` | How long each CPU profile covers, and how often one is sent (minimum 10s) |
 | `OPENLOG_SHUTDOWN_TIMEOUT` | `WithShutdownTimeout` | `5s` | Final flush bound when the shutdown context has no deadline |
 | `OPENLOG_LOG_LEVEL` (`OTEL_LOG_LEVEL`) | `WithLogLevel` | `warn` | Agent diagnostics on stderr: `debug`, `info`, `warn`, `error`, `off` |

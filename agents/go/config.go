@@ -56,8 +56,10 @@ type Config struct {
 	HostID             string // explicit host.id; empty = detect
 	RuntimeMetrics     bool
 	MetricInterval     time.Duration
-	// Profiling exports a CPU profile of this process on an interval (profiler.go). Off by default: unlike
-	// runtime metrics it costs CPU in the profiled process, and that is not a default anyone chose.
+	// Profiling exports a CPU profile of this process on an interval (profiler.go). On by default: a service
+	// nobody profiled is a service whose slow span has no answer, and the sampling cost is a few percent of
+	// one core. OPENLOG_PROFILING=false turns it off — which matters because Go allows one CPU profile per
+	// process, so while this runs, net/http/pprof's own /debug/pprof/profile cannot.
 	Profiling       bool
 	ProfileInterval time.Duration
 	ShutdownTimeout time.Duration
@@ -140,7 +142,9 @@ func WithRuntimeMetrics(enabled bool) Option { return func(c *Config) { c.Runtim
 // WithMetricInterval sets the metric export interval (default 60s).
 func WithMetricInterval(d time.Duration) Option { return func(c *Config) { c.MetricInterval = d } }
 
-// WithProfiling enables continuous CPU profiling (default disabled). Requires the HTTP protocol.
+// WithProfiling enables or disables continuous CPU profiling (default enabled). Requires the HTTP protocol.
+// Turn it off when the process needs net/http/pprof: Go allows one CPU profile at a time, so the two cannot
+// both run.
 func WithProfiling(enabled bool) Option { return func(c *Config) { c.Profiling = enabled } }
 
 // WithProfileInterval sets how long each CPU profile covers and how often one is exported (default 60s,
@@ -172,6 +176,7 @@ func loadConfig(lookup lookupFunc, opts []Option) (*Config, []string, error) {
 		ResourceAttributes: map[string]string{},
 		RuntimeMetrics:     true,
 		MetricInterval:     defaultMetricInterval,
+		Profiling:          true,
 		ProfileInterval:    defaultProfileInterval,
 		ShutdownTimeout:    defaultShutdownTimeout,
 		ExportTimeout:      defaultExportTimeout,

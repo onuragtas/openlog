@@ -3,8 +3,11 @@ package openlog
 // Continuous CPU profiling: a profile of this process, taken over a window and exported as OTLP profiles
 // (docs/contracts/profiles.md).
 //
-// Off by default. Runtime metrics are nearly free, so they are on; a CPU profile costs CPU *in the profiled
-// process*, and switching that on in someone's production binary without being asked is a cost nobody chose.
+// On by default: a service nobody profiled is a service whose slow span has no answer, and the sampling cost
+// is a few percent of one core. It can be turned off (OPENLOG_PROFILING=false), and that escape hatch is not
+// decoration — Go allows one CPU profile per process, so while this runs, net/http/pprof's own
+// /debug/pprof/profile returns "cpu profiling already in use". A process that needs that endpoint turns this
+// off; without the switch its only way out would be to drop the SDK.
 //
 // HTTP only. The published OTLP profiles modules ship message types without gRPC service stubs, so there is
 // no generated profiles client to dial — and posting protobuf over HTTP to a port that speaks gRPC would
