@@ -122,6 +122,16 @@ var resourceAllowed = map[string]bool{
 	"user_agent.original": true,
 	AttrOSName:            true,
 	"os.version":          true,
+	// A mobile application has no user agent and no browser, so nothing above describes it. These are the
+	// OTel names for what it can say about itself (mobile-agent.md).
+	//
+	// `service.version` is accepted from the payload while `service.name` is forced from the key, and the
+	// asymmetry is deliberate: the name decides which application's data this is and must not be claimable,
+	// while the version only labels the build within that application — a key that lies about it pollutes
+	// its own release health and nothing else. It is also what release health will group by.
+	"service.version":         true,
+	"device.model.identifier": true,
+	"device.manufacturer":     true,
 }
 
 // spanAllowed are the span attributes kept on a RUM span. Values are bounded; the ones that decide a rollup
@@ -148,6 +158,10 @@ var spanAllowed = map[string]bool{
 	"http.response.status_code": true,
 	"server.address":            true,
 	"error.type":                true,
+	// Static asset timing. Accepted rather than derived: only the browser knows what it fetched and
+	// whether the cache answered.
+	AttrResourceInitiator: true, AttrResourceTransferSize: true,
+	AttrResourceEncodedSize: true, AttrResourceCached: true,
 }
 
 // Sanitize rewrites req in place to exactly what key is allowed to write, dropping everything else. It

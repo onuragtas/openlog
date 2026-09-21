@@ -1390,13 +1390,15 @@ Rebuilt for every request, never merged with what the page sent.
 | `telemetry.sdk.version` | accepted | The SDK version the page reports, bounded to 64 bytes. Informational |
 | `browser.brands`, `browser.platform`, `browser.mobile`, `browser.language` | accepted | User-Agent Client Hints, as the browser reports them |
 | `user_agent.original` | accepted | The full User-Agent string |
-| `os.name`, `os.version` | accepted | As the browser reports them |
+| `os.name`, `os.version` | accepted | As the browser or the mobile platform reports them |
+| `service.version` | accepted | The application build (mobile-agent.md). `service.name` is forced from the key and this is not, deliberately: the name decides whose data this is and must not be claimable, while the version only labels a build within that application — a key that lies about it pollutes its own release health and nothing else |
+| `device.model.identifier`, `device.manufacturer` | accepted | The device, as a mobile application reports itself. A browser sends neither |
 
 ### Span attributes
 
 | Attribute | Kind | Value |
 |---|---|---|
-| `openlog.rum.event` | accepted | `page_view`, `vital`, `error`, `custom` or `request`. A span without one is not RUM and is dropped |
+| `openlog.rum.event` | accepted | `page_view`, `vital`, `error`, `resource` or `custom`. A span without one is not RUM and is dropped |
 | `session.id` | accepted | 32 hex characters, the visit (rum.md §1.1). A span without one is unattributable and is dropped |
 | `openlog.rum.page_view.id` | accepted | 16 hex characters tying a page view's spans together |
 | `openlog.rum.route` | assigned | Normalized from the SDK's route or the URL with the same segment rules as an APM transaction name (rum.md §4). The page cannot choose its own rollup key |
@@ -1413,7 +1415,11 @@ Rebuilt for every request, never merged with what the page sent.
 | `openlog.rum.timing.*` | accepted | Navigation Timing phases in milliseconds: `ttfb_ms`, `dns_ms`, `connect_ms`, `tls_ms`, `response_ms`, `dom_interactive_ms`, `dom_content_loaded_ms`, `load_event_ms` |
 | `user.id` | accepted | The application's own identifier for the person, set through `identify()` and bounded to 128 bytes. **openlog never derives it and cannot tell an opaque account key from an e-mail address** — rum.md §3.7 asks the operator for the former |
 | `geo.country.iso_code` | forced | ISO 3166-1 alpha-2, read from the header named by `OPENLOG_RUM_GEO_HEADER` and written by the server. A value the page sent is dropped: a country a page can send is a country a page can invent. Empty when no trusted proxy resolved one; **no visitor address is ever stored** |
-| `http.request.method`, `http.response.status_code`, `server.address`, `error.type` | accepted | On a `request` span, so a browser fetch/XHR looks like any other HTTP client span |
+| `http.request.method`, `http.response.status_code`, `server.address`, `error.type` | accepted | On a `resource` span, so a browser fetch/XHR looks like any other HTTP client span |
+| `openlog.rum.resource.initiator` | accepted | What loaded the asset: `script`, `link`, `img`, `css`, `font`, … — the browser's own `initiatorType` |
+| `openlog.rum.resource.transfer_bytes` | accepted | Bytes over the network, `0` when the cache answered |
+| `openlog.rum.resource.encoded_bytes` | accepted | Bytes of the resource as encoded, whether or not it was transferred |
+| `openlog.rum.resource.cached` | accepted | `true` when the browser served it without a transfer. Without this a 0 ms asset is indistinguishable from a very fast one |
 
 `sampling.ratio` is stamped from the browser key, never from the payload, so weighted counts cannot be
 inflated by a page claiming its own sample rate (rum.md §3.3).

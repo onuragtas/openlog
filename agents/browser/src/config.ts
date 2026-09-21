@@ -39,6 +39,13 @@ export interface OpenLogBrowserOptions {
   /** Also report `console.error(...)` calls. Off by default: it is noisy and often intentional. */
   captureConsoleErrors?: boolean;
   captureRequests?: boolean;
+  /**
+   * Also time the static assets the page loaded — scripts, stylesheets, images, fonts — not only fetch and
+   * XHR. **Off by default**, and that is about volume rather than value: a page loads an order of magnitude
+   * more assets than it makes requests, so turning this on without meaning to would multiply what an
+   * installation stores and is billed for. Only the slowest few of each page view are sent when it is on.
+   */
+  captureResources?: boolean;
   /** Log what the SDK does to the console. Never on by default. */
   debug?: boolean;
 }
@@ -62,6 +69,7 @@ const DEFAULTS = {
   captureErrors: true,
   captureConsoleErrors: false,
   captureRequests: true,
+  captureResources: false,
   debug: false,
 };
 

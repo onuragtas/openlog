@@ -11,6 +11,7 @@ import { captureErrors } from './errors.js';
 import { cleanURL, instrumentRequests, type RequestSpan } from './fetch.js';
 import { afterLoad, navigationTimings, onRouteChange } from './navigation.js';
 import { buildSpan, type AnyAttr, type OtlpSpan, type RumEvent } from './otlp.js';
+import { collectResources } from './resources.js';
 import { SessionState } from './session.js';
 import { onPageHidden, Transport } from './transport.js';
 import { collectVitals, type VitalSample } from './vitals.js';
@@ -18,6 +19,13 @@ import { VERSION } from './version.js';
 
 export type { OpenLogBrowserOptions, TracePropagationTarget } from './config.js';
 export { VERSION };
+
+/**
+ * Static assets kept per page view (rum.md §2.6). A cap rather than a ratio: the same page then always
+ * costs the same, and ten is enough to find what a screen is waiting on without making asset timing the
+ * largest thing stored about the application.
+ */
+const MAX_RESOURCES_PER_PAGE_VIEW = 10;
 
 /** Matches rum.MaxUserIDBytes: generous for an opaque account key, far too short for a document. */
 const MAX_USER_ID_LENGTH = 128;
@@ -162,6 +170,25 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
     : { finalize: () => {}, stop: () => {} };
   teardown.push(vitals.stop);
 
+  // ---- static assets ----
+  // Off unless asked for: a page loads far more assets than it makes requests (rum.md §2.6).
+  const resources = cfg.captureResources
+    ? collectResources(MAX_RESOURCES_PER_PAGE_VIEW, (r) =>
+        emit('resource', `${r.initiator || 'resource'} ${cleanURL(r.url).full.replace(location.origin, '') || '/'}`, {
+          startMs: r.startMs,
+          durationMs: r.durationMs,
+          attributes: {
+            'url.full': r.url,
+            'openlog.rum.resource.initiator': r.initiator,
+            'openlog.rum.resource.transfer_bytes': r.transferBytes,
+            'openlog.rum.resource.encoded_bytes': r.encodedBytes,
+            'openlog.rum.resource.cached': r.cached ? 'true' : 'false',
+          },
+        }),
+      )
+    : { flush: () => {}, stop: () => {} };
+  teardown.push(resources.stop);
+
   // ---- page views ----
   const sendPageView = (kind: 'load' | 'route_change', durationMs: number, attributes: AnyAttr = {}) => {
     emit('page_view', `pageview ${location.pathname}`, {
@@ -181,6 +208,8 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
         // A route change is a new page view, and therefore a new trace: the requests it causes belong to it,
         // not to the document load that happened minutes ago.
         vitals.finalize();
+        // Before the page view changes: these assets belong to the screen that loaded them.
+        resources.flush();
         session.newPageView();
         sendPageView('route_change', 0);
       }),
@@ -230,6 +259,8 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
   teardown.push(
     onPageHidden(() => {
       vitals.finalize();
+      // The last page view never gets a route change, so this is its only chance to account for its assets.
+      resources.flush();
       transport.flush(true);
     }),
   );

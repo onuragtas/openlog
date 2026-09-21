@@ -115,7 +115,12 @@ Change the rate on the key (Settings → Browser keys) and pages pick it up with
 ## What it collects
 
 Page views, web vitals, errors and requests — with the URL **path only**: the query string and fragment are
-dropped before anything is sent, because that is where applications put tokens and personal data. The
+dropped before anything is sent, because that is where applications put tokens and personal data.
+
+Static asset timing (scripts, stylesheets, images, fonts) is available but **off by default**:
+`captureResources: true` turns it on, and only the slowest few assets of each page view are sent. It is off
+because a page loads far more assets than it makes requests, so switching it on multiplies what an
+installation stores and is billed for — not something to inherit from an upgrade. The
 session id is random, per tab, and expires; it is never derived from anything about the visitor, so it
 cannot identify anyone across visits.
 

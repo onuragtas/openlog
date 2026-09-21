@@ -91,6 +91,16 @@ const (
 	AttrTimingDOMInteractive   = "openlog.rum.timing.dom_interactive_ms"
 	AttrTimingDOMContentLoaded = "openlog.rum.timing.dom_content_loaded_ms"
 	AttrTimingLoadEvent        = "openlog.rum.timing.load_event_ms"
+
+	// Static asset timing (rum.md §2.6). One span per asset would be an order of magnitude more rows than
+	// the page views themselves, so the SDK sends only the slowest few of each page view; these describe
+	// what was fetched rather than how the page performed overall.
+	AttrResourceInitiator    = "openlog.rum.resource.initiator"
+	AttrResourceTransferSize = "openlog.rum.resource.transfer_bytes"
+	AttrResourceEncodedSize  = "openlog.rum.resource.encoded_bytes"
+	// AttrResourceCached is "true" when the browser served the asset without a transfer. It is the fact
+	// that makes a duration readable: a 0 ms script is a cache hit, not a fast network.
+	AttrResourceCached = "openlog.rum.resource.cached"
 )
 
 // Resource attributes the ingest sets on every RUM resource (semantic-conventions.md §10). They are set, not

@@ -150,6 +150,29 @@ not know it, so it cannot become a way to write arbitrary attributes onto any ev
 This is what makes product analytics answerable from RUM — `FACET openlog.rum.custom.param.plan` over an
 event is a breakdown — without giving a public key a free-form attribute store.
 
+### 2.6 Static asset timing
+
+Scripts, stylesheets, images and fonts, from `PerformanceObserver`'s `resource` entries. **Off by default**
+(`captureResources`), and bounded by a **cap rather than a ratio** when it is on: the slowest ten assets of
+each page view.
+
+A cap is the honest answer to the volume problem here. A ratio makes a page's cost a lottery — the same
+screen is cheap for one visitor and expensive for the next, and the asset that explains a slow load is
+missing exactly when it was slowest. Ten slowest per page view always costs the same and always keeps the
+ones somebody opened the screen to find.
+
+`fetch` and `XHR` are excluded even though the browser lists them as resources: they are already sent by the
+request instrumentation (§2.4) with a trace id and a status code the timing API cannot see, and counting
+them twice would double every request in the session timeline.
+
+Each asset is a `resource` span carrying `url.full` (path only, as always),
+`openlog.rum.resource.initiator`, `…transfer_bytes`, `…encoded_bytes` and `…cached`. The last matters more
+than it looks: without it a 0 ms asset is indistinguishable from an impossibly fast one, when it simply
+never crossed the network.
+
+Assets are flushed when the page view ends — a route change, or the page being hidden — so a single-page
+application does not attribute the whole session's loading to its first screen.
+
 ## 3. The browser key
 
 **A browser key is public by construction.** It ships inside a web page; everyone who can open the page has
@@ -252,6 +275,9 @@ from writing junk into one application's RUM data. That is inherent to accepting
 client, and any vendor claiming otherwise with a public key is describing the same origin check.
 
 ### 3.6 Mobile keys
+
+What a mobile application actually sends — endpoint, headers, attributes, limits — is
+[mobile-agent.md](mobile-agent.md). This section is only the key that authorises it.
 
 A mobile application is not a page on a site; it is a binary on a device, and it has no `Origin`. So a key
 may be issued as one of two **kinds** (`browser_keys.kind`, 0098_mobile_keys):
@@ -451,8 +477,13 @@ Deliberately left for later, with the shape they would take:
   spans (§3.7). It remains a data protection question rather than a schema one, which is why the answer is a
   field the application fills deliberately and openlog never derives — and why the retention is the 7-day
   trace window, not the 30 days of the session rollup.
-- **Resource timing for static assets.** Only `fetch`/`XHR` are captured, not every image and script; the
-  volume is an order of magnitude larger and needs its own sampling.
+- **Resource timing for static assets.** ~~Not in this slice.~~ Done, with the sampling this bullet asked
+  for and a different answer than expected: a **deterministic cap** rather than a ratio. `captureResources`
+  (off by default) keeps only the slowest few assets of each page view, so the same page always costs the
+  same and the assets that survive are the ones somebody opens this screen to find. `fetch`/`XHR` are
+  excluded there because fetch.ts already reports them with a trace id and a status code the timing API
+  cannot see. It stays off by default because turning it on multiplies what an installation stores and is
+  billed for, which is not a thing to inherit from an upgrade.
 - **Custom events and timings.** ~~Not in this slice.~~ Done: `recordEvent(name)` and
   `recordTiming(name, ms)` send an `openlog.rum.event = custom` span carrying `openlog.rum.custom.name` and,
   for a timing, `…custom.value` and `…custom.unit`. They have **no rollup of their own** — what an

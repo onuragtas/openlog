@@ -23,7 +23,13 @@ interface LayoutShift extends PerformanceEntry {
   hadRecentInput: boolean;
 }
 
-function observe(type: string, buffered: boolean, cb: (entries: PerformanceEntry[]) => void): PerformanceObserver | null {
+/**
+ * Starts a PerformanceObserver, or returns null on a browser that does not know the entry type.
+ *
+ * Exported because resource timing needs exactly this and a second copy would drift from it — the silent
+ * failure here (an unsupported type throws) is the part worth having in one place.
+ */
+export function observe(type: string, buffered: boolean, cb: (entries: PerformanceEntry[]) => void): PerformanceObserver | null {
   try {
     const po = new PerformanceObserver((list) => cb(list.getEntries()));
     // `durationThreshold` is only meaningful for 'event'; unknown options are ignored by the browser.
