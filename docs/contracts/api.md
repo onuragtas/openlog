@@ -1813,6 +1813,13 @@ string and fragment never reach storage.
 bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
 `404` when the session is unknown.
 
+`session.user_id` and `session.country` are filled **here only** ([rum.md](rum.md) §3.7). Both live on the
+spans rather than on the session rollup, so the list above — which reads the rollup — returns them empty
+rather than running a second query per row. `user_id` is the last identity the session declared, because a
+visit can sign in part-way through; `country` is the ISO 3166-1 alpha-2 code the server resolved from a
+trusted proxy header, empty when none did. Both are empty once the session's spans have expired with the
+trace retention, even though the summary survives.
+
 ## Metric correlation
 
 ### `GET /api/v1/metrics/correlate?from=&to=&baseline_from=&baseline_to=&host_id=&metric=&limit=`

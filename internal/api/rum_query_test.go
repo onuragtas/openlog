@@ -29,6 +29,11 @@ func TestRUMTimelineQueryBuilds(t *testing.T) {
 	if params["a_event"] != rum.AttrEvent || params["a_route"] != rum.AttrRoute {
 		t.Errorf("attribute keys are not bound as parameters: %v", params)
 	}
+	// Identity and country travel the same way. Neither key happens to contain a token the guard refuses
+	// today, which is exactly why they are pinned here: the next key added by copying these might.
+	if params["a_user"] != rum.AttrUserID || params["a_country"] != rum.AttrGeoCountry {
+		t.Errorf("identity keys are not bound as parameters: %v", params)
+	}
 	// The keys must reach ClickHouse as parameters, not as text in the statement.
 	if strings.Contains(sql, rum.AttrEvent) || strings.Contains(sql, rum.AttrRoute) {
 		t.Errorf("attribute key embedded in the statement: %s", sql)

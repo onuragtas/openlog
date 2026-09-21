@@ -10788,7 +10788,8 @@ components:
       type: object
       description: A visit, not a person; the id is random, per tab and expiring (rum.md §1.1).
       required: [session_id, app, environment, started_at, ended_at, duration_ms, page_views, errors,
-                 entry_route, exit_route, device_type, browser_name, browser_version, os_name, trace_id]
+                 entry_route, exit_route, device_type, browser_name, browser_version, os_name, trace_id,
+                 user_id, country]
       properties:
         session_id: { type: string }
         app: { type: string }
@@ -10805,6 +10806,19 @@ components:
         browser_version: { type: string }
         os_name: { type: string }
         trace_id: { type: string, description: The session's newest trace, so it always opens somewhere }
+        user_id:
+          type: string
+          description: >-
+            The last identity the session declared through the SDK's identify() (rum.md §3.7) — last because
+            a visit can sign in part-way through. **Filled by the session detail only**: it lives on the
+            spans, not on the session rollup the list reads, which returns it empty rather than running a
+            second query per row. Empty when the application never identified anyone.
+        country:
+          type: string
+          description: >-
+            ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page.
+            Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved
+            one — openlog stores no visitor address and derives nothing itself.
     RumEvent:
       type: object
       required: [timestamp, event, name, route, duration_ms, trace_id, span_id, error_group_id, status_code]

@@ -140,6 +140,11 @@ type rumSessionJSON struct {
 	// TraceID opens the session's newest trace, so the detail always has somewhere to go even after the
 	// page view spans have expired with the 7-day trace retention.
 	TraceID string `json:"trace_id"`
+	// UserID and Country are **only filled by the session detail**, never by the list. They live on the
+	// spans, not on rum_sessions (rum.md §3.7), so the list — which reads the rollup — has no way to know
+	// them and leaves both empty rather than running a second query per row.
+	UserID  string `json:"user_id"`
+	Country string `json:"country"`
 }
 
 // rumEventJSON is one stored span of a session (the detail view's timeline).
@@ -585,8 +590,19 @@ func (s *Server) rumSessionDetail(w http.ResponseWriter, r *http.Request, sc *qu
 		var ts time.Time
 		var dur uint64
 		var status uint16
-		if err := erows.Scan(&ts, &e.Name, &dur, &e.TraceID, &e.SpanID, &status, &e.Event, &e.Route); err != nil {
+		var user, country string
+		if err := erows.Scan(&ts, &e.Name, &dur, &e.TraceID, &e.SpanID, &status, &e.Event, &e.Route,
+			&user, &country); err != nil {
 			return err
+		}
+		// Last non-empty wins: a visit can sign in part-way through, and the identity the session ended
+		// with is the one worth showing. The country is stamped identically on every span, so the same
+		// rule costs nothing there.
+		if user != "" {
+			sess.UserID = user
+		}
+		if country != "" {
+			sess.Country = country
 		}
 		e.Timestamp = formatTime(ts)
 		e.DurationMs = float64(dur) / 1e6
@@ -656,8 +672,13 @@ func rumTimelineSelect(sc *query.Scope, sessionID string, from, to time.Time, li
 		// in a fragment (it guards the database name), and every RUM attribute key starts with it.
 		"attributes[{a_event:String}] AS e_event",
 		"attributes[{a_route:String}] AS e_route",
+		// Who and where (rum.md §3.7). They are on the spans rather than on rum_sessions, so the detail is
+		// the only read that can answer them — and it already has these rows in hand.
+		"attributes[{a_user:String}] AS e_user",
+		"attributes[{a_country:String}] AS e_country",
 	).
 		Param("a_event", rum.AttrEvent).Param("a_route", rum.AttrRoute).
+		Param("a_user", rum.AttrUserID).Param("a_country", rum.AttrGeoCountry).
 		Where("attributes['session.id'] = {s_id:String}").Param("s_id", sessionID).
 		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp <= fromUnixTimestamp64Nano({t_to:Int64})").
 		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
