@@ -44,6 +44,12 @@ func mapErr(err error) error {
 			return auth.ErrAlreadyExists
 		case "23503", "22P02": // foreign_key_violation, invalid_text_representation (bad uuid)
 			return auth.ErrNotFound
+		case "23502", "23514": // not_null_violation, check_violation
+			// The row openlog built is not one the schema accepts. That is a fault in the request or in the
+			// code that shaped it, never an outage, so it must not read as one: a 503 "backend unavailable"
+			// sends an operator to the database logs for what is a 400. The constraint is named because it
+			// is the only part of this an operator can act on.
+			return &auth.Error{Code: auth.CodeInvalidArgument, Message: "the database refused this row" + constraintSuffix(pe)}
 		case "42703", "42P01": // undefined_column, undefined_table
 			// Not an outage: the binary is asking for something the schema does not have yet, which only
 			// happens when a migration was skipped or failed. Reported as itself so the answer is "run the
@@ -52,6 +58,17 @@ func mapErr(err error) error {
 		}
 	}
 	return err
+}
+
+// constraintSuffix names the constraint or column a statement violated, when the driver reported one.
+func constraintSuffix(pe *pgconn.PgError) string {
+	switch {
+	case pe.ConstraintName != "":
+		return " (" + pe.ConstraintName + ")"
+	case pe.ColumnName != "":
+		return " (column " + pe.ColumnName + ")"
+	}
+	return ""
 }
 
 func validID(ids ...string) bool {

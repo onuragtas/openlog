@@ -83,6 +83,11 @@ func (in *BrowserKeyInput) normalize() error {
 		if len(in.AppIDs) > 0 {
 			return invalid("app_ids belong to a mobile key; a browser key is scoped by origins")
 		}
+		// Empty, never nil. Both allowlists are `text[] NOT NULL DEFAULT '{}'`, and a nil slice reaches
+		// PostgreSQL as NULL — which the column refuses, failing every create and update of a browser key
+		// with an error that reads like an outage. The kind decides which list is used; neither may be
+		// absent from the row.
+		in.AppIDs = []string{}
 	case KeyKindMobile:
 		if len(in.AppIDs) == 0 {
 			return invalid("at least one application id is required; a mobile key without one would accept data from any application")
@@ -93,6 +98,7 @@ func (in *BrowserKeyInput) normalize() error {
 		if len(in.Origins) > 0 {
 			return invalid("origins belong to a browser key; a mobile key is scoped by application ids")
 		}
+		in.Origins = []string{} // see above: NOT NULL, so empty rather than nil
 	default:
 		return invalid("kind must be %q or %q", KeyKindBrowser, KeyKindMobile)
 	}
