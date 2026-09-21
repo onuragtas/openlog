@@ -411,6 +411,28 @@ jobs:
       - run: swift build
       - run: swift test
 
+  kotlin-agent:
+    name: kotlin-agent (JDK ${{ matrix.java }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["17", "21"]
+    defaults:
+      run:
+        working-directory: agents/kotlin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: gradle
+      # The library targets Java 11 bytecode on whatever JDK runs the build, so the matrix is about the
+      # build being reproducible on both, not about producing two artifacts.
+      - run: ./gradlew --no-daemon --console=plain test
+
   node-agent:
     name: node-agent (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
