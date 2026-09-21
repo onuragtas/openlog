@@ -3,7 +3,7 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { AlignJustify, ArrowDownWideNarrow, ArrowUpNarrowWide, BarChart3, Columns3, GitBranch, RotateCcw, Timer, WrapText } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { fieldKeysQuery, tracesExplorerQuery, type QueryFilter } from "@/api/explorer";
+import { fieldKeysQuery, tracesExplorerQuery, type QueryFilter, type SpanQueryRow } from "@/api/explorer";
 import { PageHeader } from "@/components/AppShell";
 import { TopValuesPanel } from "@/components/explorer/TopValuesPanel";
 import { CopyLinkButton } from "@/components/querybuilder/CopyLinkButton";
@@ -49,7 +49,8 @@ export function TracesPage() {
   const rootOnly = search.root === true;
   const groupBy = search.gb ?? DEFAULT_SPAN_GROUP_BY;
   const [prefs, setPrefs] = useState(() => storedPrefs(SPAN_STORAGE.prefs));
-  const [selected, setSelected] = useState<number | null>(null);
+  // The opened span itself, not its position (see LogsExplorerView): a live list shifts under an index.
+  const [selected, setSelected] = useState<SpanQueryRow | null>(null);
   const [topOpen, setTopOpen] = useState(!!search.tv);
 
   const setSearch = (patch: Partial<TracesSearch & RangeSpec>, replace = false) => {
@@ -155,7 +156,7 @@ export function TracesPage() {
               columns={columns}
               onColumnsChange={setColumns}
               onOpen={setSelected}
-              selectedIndex={selected}
+              selectedId={selected?.id ?? null}
               order={order}
               byDuration={byDuration}
               wrap={prefs.wrap}
@@ -186,7 +187,7 @@ export function TracesPage() {
         )}
       </div>
       <SpanDetailPanel
-        row={selected !== null ? rows?.[selected] : undefined}
+        row={selected ?? undefined}
         onClose={() => setSelected(null)}
         columns={columns}
         onToggleColumn={(k) => setColumns(toggleColumn(columns, k))}

@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { AlignJustify, ArrowDownWideNarrow, ArrowUpNarrowWide, BarChart3, Columns3, ExternalLink, Layers, RotateCcw, WrapText, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { fieldKeysQuery, logsExplorerQuery, type ExplorerContext, type FilterState, type QueryFilter, type SavedView } from "@/api/explorer";
+import { fieldKeysQuery, logsExplorerQuery, type ExplorerContext, type FilterState, type LogQueryRow, type QueryFilter, type SavedView } from "@/api/explorer";
 import { PageHeader } from "@/components/AppShell";
 import { TopValuesPanel } from "@/components/explorer/TopValuesPanel";
 import { ExplorerTable } from "@/components/logs-explorer/ExplorerTable";
@@ -87,7 +87,9 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
   const order = params.order ?? "desc";
   const groupBy = params.gb ?? DEFAULT_GROUP_BY;
   const [prefs, setPrefs] = useState(() => storedPrefs());
-  const [selected, setSelected] = useState<number | null>(null);
+  // The opened record itself, not its position: new records arrive at the top of a live list, and an index
+  // would then point at a different row — the detail panel would silently swap under the reader.
+  const [selected, setSelected] = useState<LogQueryRow | null>(null);
   const [topOpen, setTopOpen] = useState(!!params.tv);
   // Kept locally as well as in the URL: the embedded explorers map their own parameters and may not carry `pv`.
   const [patternsView, setPatternsView] = useState(!!params.pv);
@@ -233,7 +235,7 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
               columns={columns}
               onColumnsChange={setColumns}
               onOpen={setSelected}
-              selectedIndex={selected}
+              selectedId={selected?.id ?? null}
               order={order}
               wrap={prefs.wrap}
               density={prefs.density}
@@ -263,7 +265,7 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
         )}
       </div>
       <LogDetailPanel
-        row={selected !== null ? rows?.[selected] : undefined}
+        row={selected ?? undefined}
         onClose={() => setSelected(null)}
         columns={columns}
         onToggleColumn={(k) => setColumns(toggleColumn(columns, k))}

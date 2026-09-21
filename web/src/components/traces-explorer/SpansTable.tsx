@@ -24,8 +24,8 @@ export interface SpansTableProps extends TablePrefs {
   rows: SpanQueryRow[];
   columns: string[];
   onColumnsChange: (columns: string[]) => void;
-  onOpen: (index: number) => void;
-  selectedIndex?: number | null;
+  onOpen: (row: SpanQueryRow) => void;
+  selectedId?: string | null;
   order: "asc" | "desc";
   /** slowest first: one page, no "load more" */
   byDuration: boolean;

@@ -37,8 +37,10 @@ export interface DataTableProps<R extends { id: string; timestamp: string }> ext
   rows: R[];
   columns: string[];
   onColumnsChange: (columns: string[]) => void;
-  onOpen: (index: number) => void;
-  selectedIndex?: number | null;
+  /** The opened row, not its position: new records arriving must not move the selection. */
+  onOpen: (row: R) => void;
+  /** `id` of the opened row (rows carry a stable id; an index would drift as rows are prepended). */
+  selectedId?: string | null;
   /** Row order: "load more" continues with older (desc) or newer (asc) records. */
   order: "asc" | "desc";
   hasMore?: boolean;
@@ -67,7 +69,7 @@ export function DataTable<R extends { id: string; timestamp: string }>({
   columns,
   onColumnsChange,
   onOpen,
-  selectedIndex,
+  selectedId,
   wrap,
   density,
   hasMore,
@@ -116,7 +118,7 @@ export function DataTable<R extends { id: string; timestamp: string }>({
       return next;
     });
 
-  const helpers = (row: R, index: number): CellHelpers => ({
+  const helpers = (row: R): CellHelpers => ({
     text: (value, mono = true) => (
       <span className={cn(mono && "font-mono", "text-xs", wrap ? "break-all whitespace-pre-wrap" : "block truncate")} title={wrap ? undefined : value}>
         {value}
@@ -130,7 +132,7 @@ export function DataTable<R extends { id: string; timestamp: string }>({
           className="rounded-sm text-left font-mono text-xs whitespace-nowrap hover:underline pointer-coarse:py-1"
           onClick={(e) => {
             e.stopPropagation();
-            onOpen(index);
+            onOpen(row);
           }}
           aria-label={openLabel(time)}
         >
@@ -191,15 +193,15 @@ export function DataTable<R extends { id: string; timestamp: string }>({
           <div role="rowgroup" className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((vi) => {
               const row = rows[vi.index]!;
-              const selected = vi.index === selectedIndex;
-              const h = helpers(row, vi.index);
+              const selected = row.id === selectedId;
+              const h = helpers(row);
               const common = {
                 "data-index": vi.index,
                 ref: virtualizer.measureElement,
                 role: "row",
                 "aria-rowindex": vi.index + 2,
                 "data-selected": selected || undefined,
-                onClick: () => onOpen(vi.index),
+                onClick: () => onOpen(row),
                 style: { transform: `translateY(${vi.start}px)` },
               };
               if (cards) {

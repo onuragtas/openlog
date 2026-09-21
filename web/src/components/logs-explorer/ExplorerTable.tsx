@@ -17,8 +17,8 @@ export interface ExplorerTableProps extends TablePrefs {
   rows: LogQueryRow[];
   columns: string[];
   onColumnsChange: (columns: string[]) => void;
-  onOpen: (index: number) => void;
-  selectedIndex?: number | null;
+  onOpen: (row: LogQueryRow) => void;
+  selectedId?: string | null;
   /** Row order: "load more" continues with older (desc) or newer (asc) records. */
   order: "asc" | "desc";
   hasMore?: boolean;
