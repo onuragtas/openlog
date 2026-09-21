@@ -238,6 +238,13 @@ to say. What bounds it is capability, not confidentiality: an origin allowlist, 
 application name, and revocation. The full threat model — what a copied key can and cannot do — is
 [rum.md §3.5](rum.md).
 
+**Two kinds.** `kind` is `browser` (the default, and what a key without one is) or `mobile`. A browser key
+carries `origins` and no `app_ids`; a mobile key carries `app_ids` — Android package names and iOS bundle
+identifiers, sent in the `openlog-app-id` header — and no `origins`. Sending the allowlist that does not
+belong to the kind is `400`, as is a `mobile` key without one. The two are **not equally strong**: a browser
+cannot forge `Origin`, while an application declares its own identifier, so `app_ids` narrows casual reuse
+rather than stopping a program ([rum.md §3.6](rum.md)).
+
 ### `GET /api/v1/browser-keys`
 `{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "service_name", "environment", "origins": [],
 "rate_limit_per_minute", "sample_rate", "created_by_email", "created_at", "updated_at", "last_used_at",

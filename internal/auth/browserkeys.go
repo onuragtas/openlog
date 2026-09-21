@@ -26,8 +26,19 @@ const (
 	// page: at roughly 8 events per page view it is about 750 page views a minute per ingest pod.
 	DefaultBrowserRateLimit = 6000
 	MaxBrowserOrigins       = 50
-	maxServiceNameRunes     = 512
-	maxEnvironmentRunes     = 256
+	// MaxBrowserAppIDs bounds a mobile key's application allowlist, matching MaxBrowserOrigins: the two are
+	// the same kind of list and there is no reason for one to be longer.
+	MaxBrowserAppIDs    = 50
+	maxServiceNameRunes = 512
+	maxEnvironmentRunes = 256
+)
+
+// Key kinds. They are strings rather than a named type because they cross a package boundary as data (the
+// PostgreSQL `kind` column and the JSON field), and because internal/auth cannot import internal/rum — the
+// same cycle that keeps origin syntax validation in internal/api.
+const (
+	KeyKindBrowser = "browser"
+	KeyKindMobile  = "mobile"
 )
 
 // normalize validates and cleans a browser key input. Origins must already be normalized by the caller.
@@ -57,11 +68,33 @@ func (in *BrowserKeyInput) normalize() error {
 		return invalid("environment must not contain control characters")
 	}
 
-	if len(in.Origins) == 0 {
-		return invalid("at least one origin is required; a browser key without an origin allowlist would accept data from any website")
-	}
-	if len(in.Origins) > MaxBrowserOrigins {
-		return invalid("at most %d origins are allowed", MaxBrowserOrigins)
+	// The two allowlists are mutually exclusive. Requiring exactly the one that belongs to the kind — and
+	// refusing the other — means a key's scope never depends on which check happens to run first, and that
+	// leaving a field blank can never be the permissive setting.
+	switch in.Kind {
+	case "", KeyKindBrowser:
+		in.Kind = KeyKindBrowser
+		if len(in.Origins) == 0 {
+			return invalid("at least one origin is required; a browser key without an origin allowlist would accept data from any website")
+		}
+		if len(in.Origins) > MaxBrowserOrigins {
+			return invalid("at most %d origins are allowed", MaxBrowserOrigins)
+		}
+		if len(in.AppIDs) > 0 {
+			return invalid("app_ids belong to a mobile key; a browser key is scoped by origins")
+		}
+	case KeyKindMobile:
+		if len(in.AppIDs) == 0 {
+			return invalid("at least one application id is required; a mobile key without one would accept data from any application")
+		}
+		if len(in.AppIDs) > MaxBrowserAppIDs {
+			return invalid("at most %d application ids are allowed", MaxBrowserAppIDs)
+		}
+		if len(in.Origins) > 0 {
+			return invalid("origins belong to a browser key; a mobile key is scoped by application ids")
+		}
+	default:
+		return invalid("kind must be %q or %q", KeyKindBrowser, KeyKindMobile)
 	}
 
 	if in.RateLimitPerMinute == 0 {
@@ -94,7 +127,7 @@ func hasControl(v string) bool {
 func browserKeyDetails(k BrowserKey) map[string]any {
 	return map[string]any{
 		"name": k.Name, "prefix": k.Prefix, "service_name": k.ServiceName,
-		"environment": k.Environment, "origins": k.Origins,
+		"environment": k.Environment, "kind": k.Kind, "origins": k.Origins, "app_ids": k.AppIDs,
 		"rate_limit_per_minute": k.RateLimitPerMinute, "sample_rate": k.SampleRate,
 	}
 }
@@ -146,7 +179,8 @@ func (s *Service) CreateBrowserKey(ctx context.Context, p *Principal, in Browser
 	now := s.now()
 	k := BrowserKey{
 		OrgID: p.OrgID, Name: in.Name, Prefix: DisplayPrefix(secret), Hash: hash,
-		ServiceName: in.ServiceName, Environment: in.Environment, Origins: in.Origins,
+		ServiceName: in.ServiceName, Environment: in.Environment, Kind: in.Kind,
+		Origins: in.Origins, AppIDs: in.AppIDs,
 		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate,
 		CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: now, UpdatedAt: now,
 	}

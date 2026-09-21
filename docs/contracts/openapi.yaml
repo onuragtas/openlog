@@ -10785,7 +10785,8 @@ components:
       description: >-
         A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the
         API is not a place to read credentials back from.
-      required: [id, name, prefix, service_name, environment, origins, rate_limit_per_minute, sample_rate,
+      required: [id, name, prefix, service_name, environment, kind, origins, app_ids,
+                 rate_limit_per_minute, sample_rate,
                  created_by_email, created_at, updated_at, last_used_at, revoked_at]
       properties:
         id: { type: string, format: uuid }
@@ -10793,9 +10794,16 @@ components:
         prefix: { type: string, example: olb_1a2b3c4d }
         service_name: { type: string, description: The application every payload of this key is stored under }
         environment: { type: string }
+        kind: { $ref: "#/components/schemas/BrowserKeyKind" }
         origins:
           type: array
-          description: Exact origins and subdomain wildcards; never empty
+          description: Exact origins and subdomain wildcards. Non-empty for a browser key, empty for a mobile one.
+          items: { type: string }
+        app_ids:
+          type: array
+          description: >-
+            Android package names and iOS bundle identifiers. Non-empty for a mobile key, empty for a
+            browser one. Self-declared by the application and therefore weaker than origins (rum.md §3.6).
           items: { type: string }
         rate_limit_per_minute: { type: integer }
         sample_rate: { type: number }
@@ -10804,18 +10812,35 @@ components:
         updated_at: { $ref: "#/components/schemas/Timestamp" }
         last_used_at: { $ref: "#/components/schemas/Timestamp" }
         revoked_at: { $ref: "#/components/schemas/Timestamp" }
+    BrowserKeyKind:
+      type: string
+      enum: [browser, mobile]
+      default: browser
+      description: >-
+        Which allowlist bounds the key. A browser key is scoped by origins, which a browser sets and page
+        JavaScript cannot forge; a mobile key is scoped by application ids, which the application declares
+        about itself. The two are mutually exclusive and not equally strong (rum.md §3.6).
     BrowserKeyInput:
       type: object
-      required: [name, service_name, origins]
+      description: >-
+        Exactly one allowlist must be sent, the one belonging to `kind`: `origins` for a browser key,
+        `app_ids` for a mobile one. Sending the other, or neither, is 400.
+      required: [name, service_name]
       properties:
         name: { type: string, maxLength: 200 }
         service_name: { type: string, maxLength: 512 }
         environment: { type: string, maxLength: 256 }
+        kind: { $ref: "#/components/schemas/BrowserKeyKind" }
         origins:
           type: array
-          minItems: 1
+          description: Required when kind is browser; must be absent or empty when kind is mobile.
           maxItems: 50
           items: { type: string, example: "https://app.example.com" }
+        app_ids:
+          type: array
+          description: Required when kind is mobile; must be absent or empty when kind is browser.
+          maxItems: 50
+          items: { type: string, example: "com.example.shop" }
         rate_limit_per_minute: { type: integer, minimum: 60, maximum: 10000000, default: 6000 }
         sample_rate: { type: number, exclusiveMinimum: 0, maximum: 1, default: 1 }
     SyntheticCheck:

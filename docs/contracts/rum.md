@@ -239,6 +239,43 @@ refresh without touching the site. To stop all RUM immediately, `OPENLOG_RUM_ENA
 from writing junk into one application's RUM data. That is inherent to accepting telemetry from a public
 client, and any vendor claiming otherwise with a public key is describing the same origin check.
 
+### 3.6 Mobile keys
+
+A mobile application is not a page on a site; it is a binary on a device, and it has no `Origin`. So a key
+may be issued as one of two **kinds** (`browser_keys.kind`, 0098_mobile_keys):
+
+| Kind | Scoped by | Declared by | Forgeable |
+|---|---|---|---|
+| `browser` | `origins` — exact origins and subdomain wildcards | the browser, in the `Origin` header | not by page JavaScript |
+| `mobile` | `app_ids` — Android package names and iOS bundle identifiers | the application, in `openlog-app-id` | **by anyone** |
+
+The two are mutually exclusive: a key carries exactly the allowlist of its kind, enforced in
+`BrowserKeyInput.normalize`, in the API's request decoding and by a `CHECK` constraint. A row carrying both
+would be a key whose scope depends on which check happened to run first. A key stored before
+0098_mobile_keys has an empty kind and is a browser key, which is also why the resolver's default arm is the
+origin check rather than an error.
+
+**The app allowlist is weaker than the origin allowlist, and the difference is not a detail.** `Origin` is
+set by the browser and page JavaScript cannot forge it, so that allowlist genuinely stops a copied key from
+working on another *website*. An application identifier is *self-declared*: the app sends its own package
+name, and `curl` sends whatever it likes. The app allowlist narrows casual reuse — a key lifted from one
+app's build does not work in another developer's app by accident — and nothing more. It is not a second
+authentication factor and must not be described as one.
+
+What actually bounds a mobile key is therefore exactly what bounds a copied browser key (§3.5): it
+authenticates one endpoint, every payload is rewritten server-side from the key's own row, the rate limit is
+per key, revocation reaches every ingest pod within `OPENLOG_AUTH_CACHE_TTL`, and it can read nothing. An
+application outside the list is refused with `403 app_not_allowed`, named separately from
+`origin_not_allowed` because the likely cause is an operator who shipped a new application without adding
+it, not an attack. A request that declares no application id never matches: a mobile key always names the
+applications it ships in, so claiming nothing is not traffic the key was issued for, and treating a blank
+field as "any" would make the unsafe setting the easy one.
+
+**What is deliberately not claimed.** Nothing here attests that the caller is really your app. Platform
+attestation (Play Integrity, App Attest) is the upgrade path, and pretending to it with a public key would
+be worse than saying plainly that this bounds damage rather than preventing forgery — the same position
+§3.5 takes for browsers.
+
 ## 4. Route normalization
 
 The cardinality of the rollups is the cardinality of the stored route, and its input is a URL chosen by a page

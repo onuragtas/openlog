@@ -75,7 +75,8 @@ func (s *Store) UpdateBrowserKey(_ context.Context, orgID, id string, in auth.Br
 		return auth.BrowserKey{}, auth.ErrNotFound
 	}
 	k.Name, k.ServiceName, k.Environment = in.Name, in.ServiceName, in.Environment
-	k.Origins, k.RateLimitPerMinute, k.SampleRate = in.Origins, in.RateLimitPerMinute, in.SampleRate
+	k.Kind, k.Origins, k.AppIDs = in.Kind, in.Origins, in.AppIDs
+	k.RateLimitPerMinute, k.SampleRate = in.RateLimitPerMinute, in.SampleRate
 	k.UpdatedAt = now(at)
 	_ = by
 	s.browserKeys[id] = k
@@ -116,7 +117,7 @@ func (s *Store) LookupBrowserKey(_ context.Context, hashes [][]byte) (rum.Key, e
 	k := s.browserKeys[best]
 	return rum.Key{
 		KeyID: k.ID, TenantID: s.orgs[k.OrgID].TenantID, ServiceName: k.ServiceName,
-		Environment: k.Environment, Origins: k.Origins,
+		Environment: k.Environment, Kind: k.Kind, Origins: k.Origins, AppIDs: k.AppIDs,
 		RateLimitPerMinute: k.RateLimitPerMinute, SampleRate: k.SampleRate,
 	}, nil
 }

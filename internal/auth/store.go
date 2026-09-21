@@ -154,9 +154,16 @@ type BrowserKey struct {
 	// optional deployment.environment.name. Both are forced server-side, never taken from the payload.
 	ServiceName string
 	Environment string
-	// Origins is the allowlist, already normalized by rum.ParseOrigins (exact origins and subdomain
-	// wildcards). Never empty: the API refuses to create a key without one.
+	// Kind is KeyKindBrowser or KeyKindMobile. It decides which allowlist below applies, and the two are
+	// mutually exclusive: a row carrying both would be a key whose scope depends on which check ran.
+	Kind string
+	// Origins is the allowlist of a browser key, already normalized by rum.ParseOrigins (exact origins and
+	// subdomain wildcards). Never empty for a browser key; always empty for a mobile one.
 	Origins []string
+	// AppIDs is the allowlist of a mobile key: Android package names and iOS bundle identifiers. It is
+	// **weaker than Origins and not interchangeable with it** — a browser cannot forge `Origin`, while an
+	// application declares its own identifier and curl declares whatever it likes (rum.md §3.6).
+	AppIDs []string
 	// RateLimitPerMinute bounds the RUM events this key may produce per ingest pod.
 	RateLimitPerMinute int
 	// SampleRate is the share of sessions the SDK keeps (0 < x <= 1); the stored sampling weight is
@@ -172,10 +179,14 @@ type BrowserKey struct {
 
 // BrowserKeyInput is the editable part of a browser key (create and update).
 type BrowserKeyInput struct {
-	Name               string
-	ServiceName        string
-	Environment        string
+	Name        string
+	ServiceName string
+	Environment string
+	// Kind is KeyKindBrowser (the default when empty) or KeyKindMobile; it selects which of the two
+	// allowlists below is required and which must be absent.
+	Kind               string
 	Origins            []string
+	AppIDs             []string
 	RateLimitPerMinute int
 	SampleRate         float64
 }

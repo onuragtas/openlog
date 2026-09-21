@@ -42,7 +42,9 @@ type browserKeyJSON struct {
 	Prefix             string   `json:"prefix"`
 	ServiceName        string   `json:"service_name"`
 	Environment        string   `json:"environment"`
+	Kind               string   `json:"kind"`
 	Origins            []string `json:"origins"`
+	AppIDs             []string `json:"app_ids"`
 	RateLimitPerMinute int      `json:"rate_limit_per_minute"`
 	SampleRate         float64  `json:"sample_rate"`
 	CreatedByEmail     string   `json:"created_by_email"`
@@ -53,13 +55,21 @@ type browserKeyJSON struct {
 }
 
 func browserKeyResponse(k auth.BrowserKey) browserKeyJSON {
-	origins := k.Origins
+	origins, appIDs := k.Origins, k.AppIDs
 	if origins == nil {
 		origins = []string{}
 	}
+	if appIDs == nil {
+		appIDs = []string{}
+	}
+	kind := k.Kind
+	if kind == "" {
+		kind = auth.KeyKindBrowser // rows written before 0098_mobile_keys
+	}
 	return browserKeyJSON{
 		ID: k.ID, Name: k.Name, Prefix: k.Prefix, ServiceName: k.ServiceName, Environment: k.Environment,
-		Origins: origins, RateLimitPerMinute: k.RateLimitPerMinute, SampleRate: k.SampleRate,
+		Kind: kind, Origins: origins, AppIDs: appIDs,
+		RateLimitPerMinute: k.RateLimitPerMinute, SampleRate: k.SampleRate,
 		CreatedByEmail: k.CreatedByEmail, CreatedAt: formatTime(k.CreatedAt), UpdatedAt: formatTime(k.UpdatedAt),
 		LastUsedAt: optTime(k.LastUsedAt), RevokedAt: optTime(k.RevokedAt),
 	}
@@ -83,7 +93,9 @@ type browserKeyInputJSON struct {
 	Name               string   `json:"name"`
 	ServiceName        string   `json:"service_name"`
 	Environment        string   `json:"environment"`
+	Kind               string   `json:"kind"`
 	Origins            []string `json:"origins"`
+	AppIDs             []string `json:"app_ids"`
 	RateLimitPerMinute int      `json:"rate_limit_per_minute"`
 	SampleRate         float64  `json:"sample_rate"`
 }
@@ -95,14 +107,30 @@ func decodeBrowserKeyInput(r *http.Request) (auth.BrowserKeyInput, error) {
 	if err := decodeJSON(r, &in); err != nil {
 		return auth.BrowserKeyInput{}, err
 	}
-	origins, err := rum.ParseOrigins(in.Origins)
-	if err != nil {
-		return auth.BrowserKeyInput{}, badRequest("origins: %v", err)
-	}
-	return auth.BrowserKeyInput{
-		Name: in.Name, ServiceName: in.ServiceName, Environment: in.Environment, Origins: origins,
+	// The allowlist that is parsed is the one the kind calls for, and only that one: parsing both would
+	// accept a key carrying two scopes, and internal/auth then has to decide which of them bounds it.
+	out := auth.BrowserKeyInput{
+		Name: in.Name, ServiceName: in.ServiceName, Environment: in.Environment, Kind: in.Kind,
 		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate,
-	}, nil
+	}
+	switch in.Kind {
+	case auth.KeyKindMobile:
+		appIDs, err := rum.ParseAppIDs(in.AppIDs)
+		if err != nil {
+			return auth.BrowserKeyInput{}, badRequest("app_ids: %v", err)
+		}
+		out.AppIDs = appIDs
+	case "", auth.KeyKindBrowser:
+		out.Kind = auth.KeyKindBrowser
+		origins, err := rum.ParseOrigins(in.Origins)
+		if err != nil {
+			return auth.BrowserKeyInput{}, badRequest("origins: %v", err)
+		}
+		out.Origins = origins
+	default:
+		return auth.BrowserKeyInput{}, badRequest("kind: must be %q or %q", auth.KeyKindBrowser, auth.KeyKindMobile)
+	}
+	return out, nil
 }
 
 func (s *Server) createBrowserKey(w http.ResponseWriter, r *http.Request, p *auth.Principal) error {

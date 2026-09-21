@@ -41,11 +41,17 @@ func newFakeRUMKeys() *fakeRUMKeys {
 	}
 }
 
-func (f *fakeRUMKeys) Resolve(_ context.Context, value, origin string) (rum.Key, error) {
+func (f *fakeRUMKeys) Resolve(_ context.Context, value string, sc rum.Scope) (rum.Key, error) {
 	if value != f.value {
 		return rum.Key{}, rum.ErrUnknownKey
 	}
-	if !rum.OriginAllowed(f.key.Origins, origin) {
+	if f.key.Kind == rum.KindMobile {
+		if !rum.AppIDAllowed(f.key.AppIDs, sc.AppID) {
+			return rum.Key{}, rum.ErrAppNotAllowed
+		}
+		return f.key, nil
+	}
+	if !rum.OriginAllowed(f.key.Origins, sc.Origin) {
 		return rum.Key{}, rum.ErrOriginNotAllowed
 	}
 	return f.key, nil

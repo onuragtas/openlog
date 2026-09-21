@@ -37,7 +37,7 @@ func isRUMPath(p string) bool { return p == rumPath || p == rumConfigPath }
 
 // RUMKeys resolves browser keys and enforces their rate limit (internal/rum.Keys).
 type RUMKeys interface {
-	Resolve(ctx context.Context, value, origin string) (rum.Key, error)
+	Resolve(ctx context.Context, value string, sc rum.Scope) (rum.Key, error)
 	Allow(key rum.Key, n int, now time.Time) (bool, time.Duration)
 	Rejected(reason string, n int)
 }
@@ -55,6 +55,11 @@ func (s *Service) SetRUM(k RUMKeys) {
 const (
 	rumKeyHeader = "openlog-browser-key"
 	rumKeyParam  = "k"
+	// rumAppIDHeader carries a mobile key's application identifier. A mobile application has no Origin —
+	// it is a binary on a device, not a page on a site — so it declares its own package name or bundle id.
+	// That declaration is **self-reported and unforgeable by nobody**: it narrows casual reuse of a key
+	// lifted from one app's build, and is not a defence against a program (rum.md §3.6).
+	rumAppIDHeader = "openlog-app-id"
 )
 
 // rumMaxBodyBytes bounds a RUM request independently of OPENLOG_INGEST_MAX_BODY_BYTES: the agent limit (10
@@ -87,7 +92,7 @@ func (s *Service) rumPreflight(w http.ResponseWriter, r *http.Request) {
 	if req := r.Header.Get("Access-Control-Request-Headers"); req != "" {
 		h.Set("Access-Control-Allow-Headers", req)
 	} else {
-		h.Set("Access-Control-Allow-Headers", "Content-Type, "+rumKeyHeader)
+		h.Set("Access-Control-Allow-Headers", "Content-Type, "+rumKeyHeader+", "+rumAppIDHeader)
 	}
 	h.Set("Access-Control-Max-Age", "7200")
 	w.WriteHeader(http.StatusNoContent)
@@ -127,7 +132,9 @@ func rumKeyFrom(r *http.Request) string {
 // whether the caller may continue.
 func (s *Service) rumResolve(w http.ResponseWriter, r *http.Request) (rum.Key, string, bool) {
 	origin := r.Header.Get("Origin")
-	key, err := s.rum.Resolve(r.Context(), rumKeyFrom(r), origin)
+	key, err := s.rum.Resolve(r.Context(), rumKeyFrom(r), rum.Scope{
+		Origin: origin, AppID: strings.TrimSpace(r.Header.Get(rumAppIDHeader)),
+	})
 	switch {
 	case err == nil:
 		return key, origin, true
@@ -136,6 +143,11 @@ func (s *Service) rumResolve(w http.ResponseWriter, r *http.Request) (rum.Key, s
 		// and a generic 401 would send them looking at the key instead of the allowlist.
 		s.rumError(w, origin, http.StatusForbidden, "origin_not_allowed",
 			"this browser key is not allowed for origin "+origin+"; add it to the key's origin list")
+	case errors.Is(err, rum.ErrAppNotAllowed):
+		// Distinct from the origin message for the same reason that one exists: the likely cause is an
+		// operator who shipped a new application without adding it to the key, not an attack.
+		s.rumError(w, origin, http.StatusForbidden, "app_not_allowed",
+			"this mobile key is not allowed for this application; add its id to the key's application list")
 	case errors.Is(err, rum.ErrUnavailable):
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter/time.Second)))
 		s.rumError(w, origin, http.StatusServiceUnavailable, "unavailable", "authentication temporarily unavailable, retry later")

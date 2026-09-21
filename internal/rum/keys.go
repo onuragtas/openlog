@@ -29,8 +29,10 @@ const PrefixBrowserKey = "olb_"
 var (
 	// ErrUnknownKey is an unknown or revoked browser key.
 	ErrUnknownKey = errors.New("unknown or missing browser key")
-	// ErrOriginNotAllowed is a known key used from an origin outside its allowlist.
+	// ErrOriginNotAllowed is a known browser key used from an origin outside its allowlist.
 	ErrOriginNotAllowed = errors.New("origin is not allowed for this browser key")
+	// ErrAppNotAllowed is a known mobile key used by an application outside its allowlist.
+	ErrAppNotAllowed = errors.New("application is not allowed for this mobile key")
 	// ErrUnavailable is returned when the key is not cached and the key store cannot be reached.
 	ErrUnavailable = errors.New("browser key store unavailable")
 )
@@ -43,12 +45,34 @@ type Key struct {
 	// telemetry under the name of a service a backend agent owns.
 	ServiceName string
 	Environment string
-	Origins     []string
+	// Kind is KindBrowser or KindMobile and selects which allowlist below bounds the key.
+	Kind string
+	// Origins bounds a browser key. A browser sets Origin itself and page JavaScript cannot forge it.
+	Origins []string
+	// AppIDs bounds a mobile key, and bounds it **more weakly**: an application declares its own package
+	// name, so this narrows casual reuse of a copied key rather than stopping a program (rum.md §3.6).
+	AppIDs []string
 	// RateLimitPerMinute bounds the RUM events this key may produce, per ingest pod (§3.4).
 	RateLimitPerMinute int
 	// SampleRate is the share of sessions the SDK is told to keep. The weight of every stored span is
 	// derived from it server-side, so a page cannot inflate its own traffic by claiming a sample rate.
 	SampleRate float64
+}
+
+// Key kinds, mirroring the `kind` column of browser_keys (0098_mobile_keys).
+const (
+	KindBrowser = "browser"
+	KindMobile  = "mobile"
+)
+
+// Scope is what the request declared about where it came from. Which field is consulted depends on the
+// resolved key's kind, never on which of them happens to be set: a browser key is not satisfied by an
+// application id, and a mobile key is not satisfied by an Origin.
+type Scope struct {
+	// Origin is the Origin header (browser keys).
+	Origin string
+	// AppID is the openlog-app-id header: an Android package name or iOS bundle identifier (mobile keys).
+	AppID string
 }
 
 // Store is the persistent browser key store (PostgreSQL).
@@ -132,7 +156,7 @@ func NewKeys(store Store, o CacheOptions) *Keys {
 		touched: map[string]struct{}{},
 		results: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "openlog_rum_key_resolutions_total",
-			Help: "Browser key resolutions by result: hit, miss, negative, stale, unavailable, origin_denied.",
+			Help: "Browser key resolutions by result: hit, miss, negative, stale, unavailable, origin_denied, app_denied.",
 		}, []string{"result"}),
 		rejected: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "openlog_rum_rejected_events_total",
@@ -152,10 +176,11 @@ func (k *Keys) Rejected(reason string, n int) {
 	}
 }
 
-// Resolve returns the key for value, checking that origin is on its allowlist. An empty origin is refused:
-// every browser sends one on a cross-origin POST, so a request without it is not the browser traffic this
-// endpoint exists for.
-func (k *Keys) Resolve(ctx context.Context, value, origin string) (Key, error) {
+// Resolve returns the key for value, checking that sc is on the allowlist belonging to the key's kind. An
+// empty declaration is refused either way: every browser sends an Origin on a cross-origin POST, and a
+// mobile key always names the applications it ships in, so a request that claims nothing is not traffic
+// either kind of key was issued for.
+func (k *Keys) Resolve(ctx context.Context, value string, sc Scope) (Key, error) {
 	if value == "" {
 		return Key{}, ErrUnknownKey
 	}
@@ -167,7 +192,7 @@ func (k *Keys) Resolve(ctx context.Context, value, origin string) (Key, error) {
 	k.mu.RUnlock()
 	if ok && k.o.Now().Before(e.refreshAt) {
 		k.results.WithLabelValues(hitLabel(e)).Inc()
-		return k.answer(e, origin)
+		return k.answer(e, sc)
 	}
 
 	v, err, _ := k.sf.Do(ck, func() (any, error) {
@@ -206,7 +231,7 @@ func (k *Keys) Resolve(ctx context.Context, value, origin string) (Key, error) {
 	if err != nil {
 		return Key{}, err
 	}
-	return k.answer(v.(entry), origin)
+	return k.answer(v.(entry), sc)
 }
 
 func hitLabel(e entry) string {
@@ -216,11 +241,18 @@ func hitLabel(e entry) string {
 	return "negative"
 }
 
-func (k *Keys) answer(e entry, origin string) (Key, error) {
+func (k *Keys) answer(e entry, sc Scope) (Key, error) {
 	if !e.found {
 		return Key{}, ErrUnknownKey
 	}
-	if !OriginAllowed(e.key.Origins, origin) {
+	// The kind decides which allowlist applies. A key stored before 0098_mobile_keys has an empty kind and
+	// is a browser key, which is also why the default arm is the origin check rather than an error.
+	if e.key.Kind == KindMobile {
+		if !AppIDAllowed(e.key.AppIDs, sc.AppID) {
+			k.results.WithLabelValues("app_denied").Inc()
+			return Key{}, ErrAppNotAllowed
+		}
+	} else if !OriginAllowed(e.key.Origins, sc.Origin) {
 		k.results.WithLabelValues("origin_denied").Inc()
 		return Key{}, ErrOriginNotAllowed
 	}

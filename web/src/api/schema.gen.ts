@@ -7441,8 +7441,11 @@ export interface components {
             /** @description The application every payload of this key is stored under */
             service_name: string;
             environment: string;
-            /** @description Exact origins and subdomain wildcards; never empty */
+            kind: components["schemas"]["BrowserKeyKind"];
+            /** @description Exact origins and subdomain wildcards. Non-empty for a browser key, empty for a mobile one. */
             origins: string[];
+            /** @description Android package names and iOS bundle identifiers. Non-empty for a mobile key, empty for a browser one. Self-declared by the application and therefore weaker than origins (rum.md §3.6). */
+            app_ids: string[];
             rate_limit_per_minute: number;
             sample_rate: number;
             created_by_email: string;
@@ -7451,11 +7454,22 @@ export interface components {
             last_used_at: components["schemas"]["Timestamp"];
             revoked_at: components["schemas"]["Timestamp"];
         };
+        /**
+         * @description Which allowlist bounds the key. A browser key is scoped by origins, which a browser sets and page JavaScript cannot forge; a mobile key is scoped by application ids, which the application declares about itself. The two are mutually exclusive and not equally strong (rum.md §3.6).
+         * @default browser
+         * @enum {string}
+         */
+        BrowserKeyKind: "browser" | "mobile";
+        /** @description Exactly one allowlist must be sent, the one belonging to `kind`: `origins` for a browser key, `app_ids` for a mobile one. Sending the other, or neither, is 400. */
         BrowserKeyInput: {
             name: string;
             service_name: string;
             environment?: string;
-            origins: string[];
+            kind?: components["schemas"]["BrowserKeyKind"];
+            /** @description Required when kind is browser; must be absent or empty when kind is mobile. */
+            origins?: string[];
+            /** @description Required when kind is mobile; must be absent or empty when kind is browser. */
+            app_ids?: string[];
             /** @default 6000 */
             rate_limit_per_minute: number;
             /** @default 1 */

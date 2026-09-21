@@ -225,3 +225,104 @@ func TestLookupCarriesWhatIngestEnforces(t *testing.T) {
 		t.Error("a revoked key still resolves on the ingest path")
 	}
 }
+
+// ---- mobile keys (rum.md §3.6, 0098_mobile_keys) ----
+
+func validMobileInput() auth.BrowserKeyInput {
+	return auth.BrowserKeyInput{
+		Name: "shop android", ServiceName: "shop-android", Environment: "prod",
+		Kind: auth.KeyKindMobile, AppIDs: []string{"com.example.shop"},
+		RateLimitPerMinute: 120, SampleRate: 0.5,
+	}
+}
+
+// TestMobileKeyCarriesItsOwnScope is the mobile half of the field-mapping canary. The kind is what decides
+// which allowlist bounds the key at ingest, so a kind that failed to survive the round trip would silently
+// turn a mobile key into a browser key with an empty origin list — refused for every request — or worse,
+// the reverse.
+func TestMobileKeyCarriesItsOwnScope(t *testing.T) {
+	e := newKeyEnv(t)
+	ctx := context.Background()
+	k, _, err := e.svc.CreateBrowserKey(ctx, e.admin, validMobileInput(), auth.ClientMeta{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Kind != auth.KeyKindMobile || len(k.AppIDs) != 1 || k.AppIDs[0] != "com.example.shop" {
+		t.Fatalf("created key does not carry its scope: kind=%q app_ids=%v", k.Kind, k.AppIDs)
+	}
+	if len(k.Origins) != 0 {
+		t.Errorf("a mobile key was stored with origins %v", k.Origins)
+	}
+
+	got, err := e.st.LookupBrowserKey(ctx, [][]byte{e.st.BrowserKeyHash(k.ID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != rum.KindMobile || len(got.AppIDs) != 1 || got.AppIDs[0] != "com.example.shop" {
+		t.Fatalf("lookup lost the mobile scope: %+v", got)
+	}
+	if !rum.AppIDAllowed(got.AppIDs, "com.example.shop") {
+		t.Error("the key's own application is not allowed by its allowlist")
+	}
+	if rum.AppIDAllowed(got.AppIDs, "com.example.other") {
+		t.Error("an application outside the allowlist was allowed")
+	}
+	// An empty declaration must never match: a request that claims nothing is not traffic this key was
+	// issued for, and defaulting it to "allowed" would make the blank field the permissive one.
+	if rum.AppIDAllowed(got.AppIDs, "") {
+		t.Error("a request declaring no application was allowed")
+	}
+	// The two scopes are not interchangeable: an Origin does not satisfy a mobile key.
+	if rum.OriginAllowed(got.Origins, "https://shop.example.com") {
+		t.Error("a mobile key was satisfied by an origin")
+	}
+}
+
+// TestKeyScopesAreMutuallyExclusive holds the invariant the CHECK constraint of 0098_mobile_keys also
+// holds in the database: a key carries exactly the allowlist of its kind. A row with both would be a key
+// whose scope depends on which check runs first.
+func TestKeyScopesAreMutuallyExclusive(t *testing.T) {
+	e := newKeyEnv(t)
+	ctx := context.Background()
+	for name, in := range map[string]auth.BrowserKeyInput{
+		"browser key with app ids": func() auth.BrowserKeyInput {
+			in := validInput()
+			in.AppIDs = []string{"com.example.shop"}
+			return in
+		}(),
+		"mobile key with origins": func() auth.BrowserKeyInput {
+			in := validMobileInput()
+			in.Origins = []string{"https://shop.example.com"}
+			return in
+		}(),
+		"mobile key without app ids": func() auth.BrowserKeyInput {
+			in := validMobileInput()
+			in.AppIDs = nil
+			return in
+		}(),
+		"unknown kind": func() auth.BrowserKeyInput {
+			in := validMobileInput()
+			in.Kind = "desktop"
+			return in
+		}(),
+	} {
+		if _, _, err := e.svc.CreateBrowserKey(ctx, e.admin, in, auth.ClientMeta{}); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+// TestKindDefaultsToBrowser keeps the rows written before 0098_mobile_keys meaning what they meant: an
+// empty kind is a browser key, not an unscoped one.
+func TestKindDefaultsToBrowser(t *testing.T) {
+	e := newKeyEnv(t)
+	in := validInput()
+	in.Kind = ""
+	k, _, err := e.svc.CreateBrowserKey(context.Background(), e.admin, in, auth.ClientMeta{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Kind != auth.KeyKindBrowser {
+		t.Errorf("kind defaulted to %q, want %q", k.Kind, auth.KeyKindBrowser)
+	}
+}

@@ -19,15 +19,17 @@ import (
 // reverse edge would close a cycle).
 var _ rum.Store = (*Store)(nil)
 
+// browserKeyCols and scanBrowserKey are positional: every column here has its destination at the same index
+// below, and a column inserted in one but not the other corrupts silently rather than failing.
 const browserKeyCols = `k.id::text, k.org_id::text, k.name, k.key_prefix, k.key_hash, k.service_name, k.environment,
-	k.origins, k.rate_limit_per_minute, k.sample_rate, coalesce(k.created_by::text, ''), k.created_at, k.updated_at,
-	k.last_used_at, k.revoked_at`
+	k.kind, k.origins, k.app_ids, k.rate_limit_per_minute, k.sample_rate, coalesce(k.created_by::text, ''),
+	k.created_at, k.updated_at, k.last_used_at, k.revoked_at`
 
 func scanBrowserKey(r pgx.Row, extra ...any) (auth.BrowserKey, error) {
 	var k auth.BrowserKey
 	dest := append([]any{&k.ID, &k.OrgID, &k.Name, &k.Prefix, &k.Hash, &k.ServiceName, &k.Environment,
-		&k.Origins, &k.RateLimitPerMinute, &k.SampleRate, &k.CreatedBy, &k.CreatedAt, &k.UpdatedAt,
-		&k.LastUsedAt, &k.RevokedAt}, extra...)
+		&k.Kind, &k.Origins, &k.AppIDs, &k.RateLimitPerMinute, &k.SampleRate, &k.CreatedBy,
+		&k.CreatedAt, &k.UpdatedAt, &k.LastUsedAt, &k.RevokedAt}, extra...)
 	return k, r.Scan(dest...)
 }
 
@@ -35,11 +37,11 @@ func (s *Store) CreateBrowserKey(ctx context.Context, k *auth.BrowserKey) error 
 	k.CreatedAt = ts(k.CreatedAt)
 	k.UpdatedAt = ts(k.UpdatedAt)
 	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO browser_keys
-		(org_id, name, key_prefix, key_hash, service_name, environment, origins, rate_limit_per_minute,
-		 sample_rate, created_by, created_at, updated_at, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11, $12, $10::uuid) RETURNING id::text`,
-		k.OrgID, k.Name, k.Prefix, k.Hash, k.ServiceName, k.Environment, k.Origins, k.RateLimitPerMinute,
-		k.SampleRate, nullID(k.CreatedBy), k.CreatedAt, k.UpdatedAt).Scan(&k.ID))
+		(org_id, name, key_prefix, key_hash, service_name, environment, kind, origins, app_ids,
+		 rate_limit_per_minute, sample_rate, created_by, created_at, updated_at, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::uuid, $13, $14, $12::uuid) RETURNING id::text`,
+		k.OrgID, k.Name, k.Prefix, k.Hash, k.ServiceName, k.Environment, k.Kind, k.Origins, k.AppIDs,
+		k.RateLimitPerMinute, k.SampleRate, nullID(k.CreatedBy), k.CreatedAt, k.UpdatedAt).Scan(&k.ID))
 }
 
 func (s *Store) ListBrowserKeys(ctx context.Context, orgID string) ([]auth.BrowserKey, error) {
@@ -80,12 +82,12 @@ func (s *Store) UpdateBrowserKey(ctx context.Context, orgID, id string, in auth.
 		return auth.BrowserKey{}, auth.ErrNotFound
 	}
 	k, err := scanBrowserKey(s.pool.QueryRow(ctx, `UPDATE browser_keys k
-		SET name = $3, service_name = $4, environment = $5, origins = $6, rate_limit_per_minute = $7,
-		    sample_rate = $8, updated_at = $9, updated_by = $10::uuid
+		SET name = $3, service_name = $4, environment = $5, kind = $6, origins = $7, app_ids = $8,
+		    rate_limit_per_minute = $9, sample_rate = $10, updated_at = $11, updated_by = $12::uuid
 		WHERE k.org_id = $1 AND k.id = $2 AND k.revoked_at IS NULL
 		RETURNING `+browserKeyCols,
-		orgID, id, in.Name, in.ServiceName, in.Environment, in.Origins, in.RateLimitPerMinute,
-		in.SampleRate, ts(at), nullID(by)))
+		orgID, id, in.Name, in.ServiceName, in.Environment, in.Kind, in.Origins, in.AppIDs,
+		in.RateLimitPerMinute, in.SampleRate, ts(at), nullID(by)))
 	return k, mapErr(err)
 }
 
@@ -111,12 +113,13 @@ func (s *Store) LookupBrowserKey(ctx context.Context, hashes [][]byte) (rum.Key,
 		return rum.Key{}, rum.ErrUnknownKey
 	}
 	var k rum.Key
-	err := s.pool.QueryRow(ctx, `SELECT k.id::text, o.tenant_id, k.service_name, k.environment, k.origins,
-			k.rate_limit_per_minute, k.sample_rate
+	err := s.pool.QueryRow(ctx, `SELECT k.id::text, o.tenant_id, k.service_name, k.environment, k.kind,
+			k.origins, k.app_ids, k.rate_limit_per_minute, k.sample_rate
 		FROM browser_keys k JOIN organizations o ON o.id = k.org_id
 		WHERE k.key_hash = ANY($1::bytea[]) AND k.revoked_at IS NULL AND o.deleted_at IS NULL
 		ORDER BY array_position($1::bytea[], k.key_hash) LIMIT 1`, hashes).
-		Scan(&k.KeyID, &k.TenantID, &k.ServiceName, &k.Environment, &k.Origins, &k.RateLimitPerMinute, &k.SampleRate)
+		Scan(&k.KeyID, &k.TenantID, &k.ServiceName, &k.Environment, &k.Kind, &k.Origins, &k.AppIDs,
+			&k.RateLimitPerMinute, &k.SampleRate)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return rum.Key{}, rum.ErrUnknownKey
