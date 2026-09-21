@@ -18,6 +18,7 @@ import (
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/synthetics"
 	"github.com/onuragtas/openlog/internal/tenant"
 )
 
@@ -95,6 +96,13 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 	// Job monitoring registers nothing without its store, so without this its routes are invisible to the
 	// coverage check below — the gap that lets a route reach production unexecuted.
 	s.SetJobs(fakeJobStore{}, nil, nil)
+	s.SetSLOs(fakeSLOStore{})
+	// Seeded rather than empty: the results endpoint looks the check up before it queries, so an empty
+	// store would 404 ahead of building any SQL — and the SQL is what this test exists to execute.
+	synth := newFakeSyntheticStore()
+	synth.checks["check-a"] = synthetics.Check{ID: "check-a", OrgID: "tenant-a"}
+	synth.order = []string{"check-a"}
+	s.SetSynthetics(synth)
 	h := s.Handler()
 	paths := []string{
 		"/api/v1/logs?attr.log.file.path=/var/log/nginx/access.log&attr.openlog.discovery.id=nginx",
@@ -148,6 +156,14 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/db/activity?instance=db1%3A5432",
 		"/api/v1/db/sessions?instance=db1%3A5432&at=1757757600000",
 		"/api/v1/db/lookup?db_system=postgresql&statement=SELECT%20%3F",
+		// Service level objectives (slos.go, slo.md)
+		"/api/v1/slos",
+		"/api/v1/slos/22222222-2222-2222-2222-222222222222",
+		"/api/v1/slos/22222222-2222-2222-2222-222222222222/results",
+		// Synthetic checks (synthetics.go, D-132)
+		"/api/v1/synthetics/checks",
+		"/api/v1/synthetics/checks/check-a",
+		"/api/v1/synthetics/checks/check-a/results",
 		// Job monitoring (jobs.go, schema 0099_job_runs, D-141)
 		"/api/v1/jobs/monitors",
 		"/api/v1/jobs/monitors/11111111-1111-1111-1111-111111111111",
@@ -255,12 +271,17 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 	// every request — a query that could not even be built — because its route was missing from this list:
 	// a route nobody calls here is a route whose SQL has never been constructed, let alone executed.
 	//
-	// What this does *not* cover, and the limit is worth stating rather than counting past: nineteen route
-	// groups register nothing unless their dependency is injected (alerts, dashboards, SLOs, synthetics,
-	// source maps, usage, fleet, SSO, jobs, …). A bare test server has none of them, so tenantScopedRoutes
-	// returns only the unconditional routes and this check cannot miss what was never registered. Job
-	// monitoring is wired in above precisely because it was in that blind spot — and both of its read
-	// endpoints answered 500 the moment they were walked. The rest of the nineteen are still unchecked.
+	// What this does *not* cover, stated as a count rather than a shrug: twenty route-registering functions
+	// return early unless their dependency is injected (accounts, alerts, SSO, operator, privacy, fleet,
+	// usage, dashboards, costs, status page, cloud, saved views, source maps, browser keys, integration
+	// settings, updates, vulnerability catalog, and the three wired above), and they hold 221 routes between
+	// them. A bare test server has none, so tenantScopedRoutes never returns those patterns and the check
+	// below cannot miss what was never registered.
+	//
+	// Jobs, SLOs and synthetics are wired in above because they were in that blind spot; job monitoring's
+	// two read endpoints answered 500 the moment they were first walked. The other seventeen are still dark
+	// here — but the fragment scan in internal/api/query covers the specific failure both known cases had
+	// (a query that cannot be built) across the whole repository, registered or not.
 	walkedPaths := make([]string, 0, len(paths)+len(posts))
 	for _, p := range paths {
 		walkedPaths = append(walkedPaths, "GET "+p)
