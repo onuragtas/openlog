@@ -154,6 +154,37 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/profiles/services",
 		"/api/v1/profiles/flame?service=orders&type=cpu&environment=prod",
 		"/api/v1/profiles/functions?service=orders&type=cpu&host=h1&sort=self",
+		// Explorer field keys and values (fields.go, D-118)
+		"/api/v1/fields/keys?signal=logs",
+		"/api/v1/fields/values?signal=logs&key=service.name",
+		// Metrics explorer (metrics.go, D-119)
+		"/api/v1/metrics",
+		// Language agent identity (apm_agents.go, D-124)
+		"/api/v1/apm/agents",
+		// OQL editor schema (oql.go)
+		"/api/v1/query/schema",
+		// Tail sampling policy (tailsampling.go, D-075)
+		"/api/v1/apm/sampling",
+		// Kubernetes (kubernetes.go, schema 0040–0042)
+		"/api/v1/kubernetes/clusters",
+		"/api/v1/kubernetes/clusters/c-1",
+		"/api/v1/kubernetes/nodes",
+		"/api/v1/kubernetes/workloads",
+		"/api/v1/kubernetes/workloads/c-1/default/Deployment/web",
+		"/api/v1/kubernetes/workloads/c-1/default/Deployment/web/timeseries",
+		"/api/v1/kubernetes/pods",
+		"/api/v1/kubernetes/pods/p-1",
+		"/api/v1/kubernetes/pods/p-1/timeseries",
+		"/api/v1/kubernetes/pods/p-1/events",
+		"/api/v1/kubernetes/events",
+		"/api/v1/apm/services/orders/kubernetes",
+		// Real user monitoring (rum.go, D-136)
+		"/api/v1/rum/apps",
+		"/api/v1/rum/overview?app=shop-web",
+		"/api/v1/rum/pages?app=shop-web",
+		"/api/v1/rum/vitals?app=shop-web",
+		"/api/v1/rum/sessions?app=shop-web",
+		"/api/v1/rum/sessions/9f2c41b7a80d4e6fb35c1d8e07a4b620?app=shop-web",
 	}
 	for _, p := range paths {
 		req := httptest.NewRequest(http.MethodGet, p, nil)
@@ -178,6 +209,68 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 			}
 		}
 	}
+
+	// Every tenant-scoped route must be walked above. GET /api/v1/vulnerabilities shipped returning 500 for
+	// every request — a query that could not even be built — because its route was missing from this list:
+	// a route nobody calls here is a route whose SQL has never been constructed, let alone executed.
+	var uncovered []string
+	for _, pattern := range s.tenantScopedRoutes() {
+		if !walked(pattern, paths) && !knownUncovered[pattern] {
+			uncovered = append(uncovered, pattern)
+		}
+	}
+	if len(uncovered) > 0 {
+		t.Errorf("tenant-scoped routes never walked by this test (add a path above, or knownUncovered):\n\t%s",
+			strings.Join(uncovered, "\n\t"))
+	}
+	for pattern := range knownUncovered {
+		if walked(pattern, paths) {
+			t.Errorf("%s is covered now: remove it from knownUncovered (the list may shrink, never grow)", pattern)
+		}
+	}
+}
+
+// knownUncovered are tenant-scoped routes this test does not walk yet. It is a ratchet: entries may be
+// removed as paths are added above, never added for a new route. Every line here is an endpoint whose query
+// has never been built by anything — the state GET /api/v1/vulnerabilities was in when it shipped broken.
+var knownUncovered = map[string]bool{
+	// The walk issues GET requests, so a POST route is unreachable by it — not an exemption on merit, a
+	// limit of this test. Their queries are still built by nothing, and a walk with bodies is the follow-up.
+	"POST /api/v1/logs/query":           true,
+	"POST /api/v1/logs/aggregate":       true,
+	"POST /api/v1/logs/patterns":        true,
+	"POST /api/v1/traces/query":         true,
+	"POST /api/v1/traces/aggregate":     true,
+	"POST /api/v1/metrics/query":        true,
+	"POST /api/v1/metrics/exemplars":    true,
+	"POST /api/v1/query":                true,
+	"POST /api/v1/query/validate":       true,
+	"POST /api/v1/apm/sampling/preview": true,
+}
+
+// walked reports whether any tested path matches the route pattern ("GET /api/v1/hosts/{host_id}").
+func walked(pattern string, paths []string) bool {
+	segs := strings.Split(strings.Trim(strings.TrimPrefix(pattern, "GET "), "/"), "/")
+	for _, p := range paths {
+		got := strings.Split(strings.Trim(strings.SplitN(p, "?", 2)[0], "/"), "/")
+		if len(got) != len(segs) {
+			continue
+		}
+		match := true
+		for i, seg := range segs {
+			if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") {
+				match = match && got[i] != ""
+				continue
+			}
+			if seg != got[i] {
+				match = false
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func TestAuthAndErrors(t *testing.T) {

@@ -49,6 +49,10 @@ type Server struct {
 	latency  *prometheus.HistogramVec
 	ui       http.Handler
 	srv      *http.Server
+	// wrapped are the route patterns registered through wrap, i.e. every tenant-scoped telemetry read.
+	// Recorded so a test can assert that each one is actually exercised: a route nothing calls is a route
+	// whose query has never been built, let alone run (api_test.go).
+	wrapped  []string
 	versions VersionSource   // nil: GET /api/v1/version reports the build only
 	updates  updatereq.Queue // nil: no update requests (updates.go; static auth mode)
 	checkNow func(ctx context.Context) error
@@ -147,6 +151,9 @@ type handlerFunc func(w http.ResponseWriter, r *http.Request, sc *query.Scope) e
 // Handler returns the routed handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	// Handler is called again when a dependency arrives (SetVulnerabilities), so the record starts empty
+	// rather than accumulating a second copy of every route.
+	s.wrapped = nil
 	route := func(pattern string, h handlerFunc) {
 		mux.Handle(pattern, s.wrap(pattern, h))
 	}
@@ -235,7 +242,11 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (*auth.Pri
 // wrap authenticates the request, creates the tenant scope and maps errors.
 // The tenant comes only from the authenticated principal: no header, query
 // parameter or path segment can select it.
+// tenantScopedRoutes returns the patterns registered through wrap, in registration order.
+func (s *Server) tenantScopedRoutes() []string { return s.wrapped }
+
 func (s *Server) wrap(pattern string, h handlerFunc) http.Handler {
+	s.wrapped = append(s.wrapped, pattern)
 	return s.instrument(pattern, func(rec *statusRecorder, r *http.Request) {
 		p, r := s.authenticate(rec, r)
 		if p == nil {
