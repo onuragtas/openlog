@@ -19,6 +19,9 @@ import { VERSION } from './version.js';
 export type { OpenLogBrowserOptions, TracePropagationTarget } from './config.js';
 export { VERSION };
 
+/** Matches rum.MaxUserIDBytes: generous for an opaque account key, far too short for a document. */
+const MAX_USER_ID_LENGTH = 128;
+
 export interface OpenLogBrowser {
   /** Sends everything buffered now. */
   flush(): void;
@@ -39,6 +42,17 @@ export interface OpenLogBrowser {
   recordEvent(name: string, params?: CustomParams): void;
   /** Records an application-defined timing in milliseconds, e.g. `recordTiming('cart_priced', 42)`. */
   recordTiming(name: string, milliseconds: number, params?: CustomParams): void;
+  /**
+   * Attaches the application's own identifier for the person using it to every later span of the session,
+   * so "which sessions did this account have" becomes a query. Pass `''` to clear it on sign-out.
+   *
+   * **Send an opaque, stable id — the key your backend already uses for the account — and not an e-mail
+   * address or a name.** openlog stores the value and never interprets it: it cannot tell the difference,
+   * so the discipline has to live here (rum.md §3.7). Held in memory only: a reload starts a page with no
+   * identity until the application calls this again, which is deliberate — the SDK does not keep an
+   * identity store of its own.
+   */
+  identify(userId: string): void;
 }
 
 const NOOP: OpenLogBrowser = {
@@ -48,6 +62,7 @@ const NOOP: OpenLogBrowser = {
   recordError() {},
   recordEvent() {},
   recordTiming() {},
+  identify() {},
 };
 
 let active: OpenLogBrowser | null = null;
@@ -92,6 +107,12 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
     })
     .catch(() => undefined);
 
+  /**
+   * The identity the application declared, or '' for none. Memory only: persisting it would make the SDK
+   * an identity store, and the page that knows who someone is can say so again after a reload.
+   */
+  let userId = '';
+
   /** Common attributes of every span of the current page view. */
   const common = (): AnyAttr => {
     const { full, host } = cleanURL(location.href);
@@ -102,6 +123,10 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
       'url.full': full,
       'url.domain': host,
       'device.type': deviceType(),
+      // Omitted when unset, but not by a check here: buildSpan drops empty attributes already, and two
+      // mechanisms for one rule are how they drift apart. An empty string never reaches the wire, so
+      // "signed out" and "identified as nothing" stay indistinguishable — which is the point.
+      'user.id': userId,
     };
   };
 
@@ -223,6 +248,11 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
       active = null;
     },
     sessionId: () => (session.sampled ? session.id : ''),
+    identify: (id: string) => {
+      // Bounded here as well as on the server: the server truncates, and a page should not be able to
+      // discover that by having its spans silently change shape.
+      userId = String(id ?? '').trim().slice(0, MAX_USER_ID_LENGTH);
+    },
     recordError: (error: unknown) => {
       const e = error instanceof Error ? error : new Error(String(error));
       emit('error', `error ${e.name}`, {
