@@ -31,6 +31,14 @@ export const HOST_IDS = {
   worker: "c0ffee00c0ffee00c0ffee00c0ffee00",
 } as const;
 
+/** The usage summary of the hosts list: one busy host, one nearly full disk, one that stopped reporting. */
+const HOST_USAGE: Record<string, Host["usage"]> = {
+  [HOST_IDS.db]: { cpu: 0.34, memory: 0.71, disk: 0.88, load1: 2.4, load_per_cpu: 0.6 },
+  [HOST_IDS.web]: { cpu: 0.92, memory: 0.44, disk: 0.31, load1: 7.8, load_per_cpu: 1.95 },
+  // worker-1 last reported two hours ago, so it has no usage at all — the case a zero would misrepresent.
+  [HOST_IDS.worker]: { cpu: null, memory: null, disk: null, load1: null, load_per_cpu: null },
+};
+
 export function hosts(now: number): Host[] {
   const mk = (
     id: string,
@@ -48,6 +56,7 @@ export function hosts(now: number): Host[] {
     agent_version: agent,
     last_seen: formatTs(now - lastSeenAgo),
     resource_attributes: { ...HOST_BASE_ATTRS(name, id, os, arch, agent), ...extra },
+    usage: HOST_USAGE[id],
   });
   return [
     mk(HOST_IDS.db, "db-1", { id: "debian", version: "12", pretty: "Debian GNU/Linux 12 (bookworm)" }, "arm64", "0.1.0", 12_000, { env: "prod", team: "data" }),

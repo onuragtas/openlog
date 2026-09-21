@@ -5413,6 +5413,20 @@ export interface components {
             agent_version: string;
             last_seen: components["schemas"]["Timestamp"];
             resource_attributes: components["schemas"]["StringMap"];
+            usage?: components["schemas"]["HostUsage"];
+        };
+        /** @description How busy the host is over the last 5 minutes, from the same metrics its own charts draw. Every field is null when the host sent no such metric in the window — an agent that stopped reporting must not read as 0 %. */
+        HostUsage: {
+            /** @description Busy share 0–1 (1 − idle) */
+            cpu: number | null;
+            /** @description Used share 0–1 of total memory */
+            memory: number | null;
+            /** @description Used share 0–1 of the *fullest* filesystem, not the average one */
+            disk: number | null;
+            /** @description 1-minute load average */
+            load1: number | null;
+            /** @description The load average divided by the logical CPU count */
+            load_per_cpu: number | null;
         };
         /** @description Provenance of every cost number; rendered next to the figures so an estimate is never mistaken for a bill. */
         CostPricing: {

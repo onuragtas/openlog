@@ -3,6 +3,7 @@ import type { components } from "./schema.gen";
 type S = components["schemas"];
 
 export type Host = S["Host"];
+export type HostUsage = S["HostUsage"];
 export type MetricMeta = S["MetricMeta"];
 export type MetricSeries = S["MetricSeries"];
 export type MetricSeriesResponse = S["MetricSeriesResponse"];

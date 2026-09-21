@@ -8445,6 +8445,21 @@ components:
         agent_version: { type: string }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
         resource_attributes: { $ref: "#/components/schemas/StringMap" }
+        usage: { $ref: "#/components/schemas/HostUsage" }
+
+    HostUsage:
+      type: object
+      description: >-
+        How busy the host is over the last 5 minutes, from the same metrics its own charts draw. Every field
+        is null when the host sent no such metric in the window — an agent that stopped reporting must not
+        read as 0 %.
+      required: [cpu, memory, disk, load1, load_per_cpu]
+      properties:
+        cpu: { type: number, nullable: true, description: "Busy share 0–1 (1 − idle)" }
+        memory: { type: number, nullable: true, description: "Used share 0–1 of total memory" }
+        disk: { type: number, nullable: true, description: "Used share 0–1 of the *fullest* filesystem, not the average one" }
+        load1: { type: number, nullable: true, description: 1-minute load average }
+        load_per_cpu: { type: number, nullable: true, description: The load average divided by the logical CPU count }
 
     CostPricing:
       type: object

@@ -20,6 +20,9 @@ type hostJSON struct {
 	AgentVersion       string            `json:"agent_version"`
 	LastSeen           string            `json:"last_seen"`
 	ResourceAttributes map[string]string `json:"resource_attributes"`
+	// Usage is how busy the host is right now (host_usage.go); nil when it reported no metric in the
+	// window, or when the caller asked for the list without it (usage=false).
+	Usage *hostUsageJSON `json:"usage,omitempty"`
 }
 
 func hostsQuery(sc *query.Scope) *query.Select {
@@ -66,7 +69,7 @@ func (s *Server) listHosts(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": s.withHostUsage(r, sc, hosts)})
 	return nil
 }
 
@@ -83,7 +86,7 @@ func (s *Server) getHost(w http.ResponseWriter, r *http.Request, sc *query.Scope
 	if len(hosts) == 0 {
 		return notFound("host not found")
 	}
-	writeJSON(w, http.StatusOK, hosts[0])
+	writeJSON(w, http.StatusOK, s.withHostUsage(r, sc, hosts)[0])
 	return nil
 }
 

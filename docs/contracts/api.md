@@ -615,12 +615,21 @@ are only returned once by `POST /api/v1/license-keys`, and a key the user pastes
 
 ## Hosts
 
-### `GET /api/v1/hosts?limit=`
-Hosts seen in the last 24h, ordered by `host_name`.
+### `GET /api/v1/hosts?limit=&usage=`
+Hosts seen in the last 24h, ordered by `host_name`, each with how busy it is right now.
 ```json
 {"hosts": [{"host_id": "…", "host_name": "web-1", "os_description": "Ubuntu 24.04 LTS", "arch": "amd64",
-            "agent_version": "0.1.0", "last_seen": "2026-09-13T10:00:00Z", "resource_attributes": {"env": "prod"}}]}
+            "agent_version": "0.1.0", "last_seen": "2026-09-13T10:00:00Z", "resource_attributes": {"env": "prod"},
+            "usage": {"cpu": 0.34, "memory": 0.71, "disk": 0.88, "load1": 2.4, "load_per_cpu": 0.6}}]}
 ```
+
+`usage` is the mean of the last 5 minutes of the same metrics the host's own charts draw
+(`system.cpu.utilization` without its idle share, `system.memory.utilization` in the `used` state,
+`system.filesystem.utilization`, `system.cpu.load_average.1m`), computed for the whole page in **one**
+query. Two choices in it are deliberate: `disk` is the **fullest** filesystem rather than the mean over
+mountpoints, because the mean hides the one partition that is about to fill up; and every field is `null`
+rather than `0` when the host sent no such metric in the window, because an agent that stopped reporting
+must not read as an idle machine. `usage=false` leaves the summary out.
 
 ### `GET /api/v1/hosts/{host_id}`
 Single host object (same shape) or `404`.

@@ -11,6 +11,7 @@ import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatLoad, UsageBar } from "@/components/hosts/UsageBar";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { parseTimeParam } from "@/lib/time";
@@ -79,10 +80,13 @@ export function HostsPage() {
               <TableRow>
                 <TableHead>{t("hosts.columns.name")}</TableHead>
                 <TableHead>{t("hosts.columns.os")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("hosts.columns.arch")}</TableHead>
+                <TableHead className="w-28">{t("hosts.columns.cpu")}</TableHead>
+                <TableHead className="w-28">{t("hosts.columns.memory")}</TableHead>
+                <TableHead className="w-28">{t("hosts.columns.disk")}</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">{t("hosts.columns.load")}</TableHead>
                 <TableHead className="hidden md:table-cell">{t("hosts.columns.agent")}</TableHead>
                 <TableHead>{t("hosts.columns.lastSeen")}</TableHead>
-                <TableHead>{t("hosts.columns.attributes")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("hosts.columns.attributes")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -108,9 +112,24 @@ export function HostsPage() {
                         {h.host_name || h.host_id}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{h.os_description}</TableCell>
-                    <TableCell label={t("hosts.columns.arch")} className="hidden font-mono text-xs md:table-cell">
-                      {h.arch}
+                    <TableCell className="text-muted-foreground">
+                      {h.os_description}
+                      <div className="font-mono text-xs opacity-70">{h.arch}</div>
+                    </TableCell>
+                    <TableCell label={t("hosts.columns.cpu")}>
+                      <UsageBar label={t("hosts.columns.cpu")} share={h.usage?.cpu} />
+                    </TableCell>
+                    <TableCell label={t("hosts.columns.memory")}>
+                      <UsageBar label={t("hosts.columns.memory")} share={h.usage?.memory} />
+                    </TableCell>
+                    <TableCell label={t("hosts.columns.disk")}>
+                      <UsageBar label={t("hosts.columns.disk")} share={h.usage?.disk} />
+                    </TableCell>
+                    <TableCell label={t("hosts.columns.load")} className="hidden lg:table-cell text-right font-mono text-xs tabular-nums">
+                      {/* The load per CPU is what makes the number readable without knowing the machine. */}
+                      <span title={h.usage?.load_per_cpu != null ? t("hosts.usage.loadPerCpu", { value: formatLoad(h.usage.load_per_cpu, locale) }) : undefined}>
+                        {formatLoad(h.usage?.load1, locale)}
+                      </span>
                     </TableCell>
                     <TableCell label={t("hosts.columns.agent")} className="hidden font-mono text-xs md:table-cell">
                       {h.agent_version}
@@ -120,7 +139,7 @@ export function HostsPage() {
                         {formatRelative(seen, now, locale)}
                       </time>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <AttributeChips attributes={h.resource_attributes} />
                     </TableCell>
                   </TableRow>
