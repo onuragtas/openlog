@@ -73,7 +73,8 @@ func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 		"any(severity) AS sev",
 		"toFloat64(max(score)) AS sc",
 		"any(summary) AS sum",
-		"uniqExact(host_id) AS hosts",
+		// Not `AS hosts`: the query layer refuses any fragment containing a table name, and `hosts` is one.
+		"uniqExact(host_id) AS host_count",
 		"arraySlice(arraySort(groupUniqArray(package)), 1, 20) AS pkgs",
 		"toInt64(toUnixTimestamp64Milli(min(first_seen))) AS first_ms",
 		"toInt64(toUnixTimestamp64Milli(max(last_seen))) AS last_ms",
@@ -88,7 +89,7 @@ func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 		q.Where("host_id = {host_id:String}").Param("host_id", hostID)
 	}
 	// Critical first, then the advisory that affects the most hosts: the order a person works down.
-	q.OrderBy("multiIf(sev = 'critical', 0, sev = 'high', 1, sev = 'medium', 2, sev = 'low', 3, 4)", "hosts DESC", "id")
+	q.OrderBy("multiIf(sev = 'critical', 0, sev = 'high', 1, sev = 'medium', 2, sev = 'low', 3, 4)", "host_count DESC", "id")
 
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {

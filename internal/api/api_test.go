@@ -145,6 +145,11 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/db/activity?instance=db1%3A5432",
 		"/api/v1/db/sessions?instance=db1%3A5432&at=1757757600000",
 		"/api/v1/db/lookup?db_system=postgresql&statement=SELECT%20%3F",
+		// Vulnerabilities (vulnerabilities.go, schema 0100_host_vulns, D-142)
+		"/api/v1/vulnerabilities",
+		"/api/v1/vulnerabilities?severity=critical",
+		"/api/v1/vulnerabilities/CVE-2026-0001",
+		"/api/v1/hosts/h1/vulnerabilities",
 		// Continuous profiling (profiles.go, schema 0095_profiles)
 		"/api/v1/profiles/services",
 		"/api/v1/profiles/flame?service=orders&type=cpu&environment=prod",
