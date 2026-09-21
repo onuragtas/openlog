@@ -1,0 +1,22 @@
+name: openlog
+description: >-
+  openlog mobile SDK: screens, errors, custom events and identity from a Dart or Flutter application,
+  over OTLP/JSON. Implements docs/contracts/mobile-agent.md.
+version: 0.1.0
+repository: https://github.com/onuragtas/openlog
+issue_tracker: https://github.com/onuragtas/openlog/issues
+documentation: https://github.com/onuragtas/openlog/tree/master/agents/dart#readme
+topics: [observability, monitoring, rum, opentelemetry]
+
+# Pure Dart on purpose: the SDK needs HTTP, timers and JSON, all of which are in the SDK itself. A Flutter
+# dependency would keep it out of Dart servers and CLIs for no gain, and would put Flutter in CI to test
+# code that does not use it. The three lines that bind it to a Flutter app's lifecycle are in the README.
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+# No runtime dependencies, deliberately: a telemetry SDK that pulls packages in can break the host
+# application's own resolution, and it is the one dependency an application cannot choose to drop.
+dependencies:
+
+dev_dependencies:
+  test: ^1.24.0

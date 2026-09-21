@@ -356,6 +356,47 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  browser-agent:
+    name: browser-agent (openlog-browser)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agents/browser
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agents/browser/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      # The bundle ships in a page: a size regression is a product regression, and the budget is what makes
+      # that visible before it is published rather than after.
+      - run: npm run size
+
+  dart-agent:
+    name: dart-agent (package:openlog)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The official image rather than a setup action: it needs no new third-party action to pin, and it is
+    # the same toolchain agents/dart/Makefile runs locally.
+    container: dart:stable
+    defaults:
+      run:
+        working-directory: agents/dart
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: dart pub get
+      # `dart analyze` is this package's typecheck and lint at once; --fatal-infos so a hint fails the build
+      # rather than accumulating.
+      - run: dart analyze --fatal-infos
+      - run: dart test
+
   node-agent:
     name: node-agent (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
