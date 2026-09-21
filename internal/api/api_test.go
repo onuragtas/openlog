@@ -92,6 +92,9 @@ var tableRef = regexp.MustCompile("`openlog`\\.(\\w+)( FINAL)?")
 func TestEveryEndpointIsTenantScoped(t *testing.T) {
 	s, conn := newTestServer(t)
 	conn.hostKnown = true // host endpoints run their data queries after the existence check
+	// Job monitoring registers nothing without its store, so without this its routes are invisible to the
+	// coverage check below — the gap that lets a route reach production unexecuted.
+	s.SetJobs(fakeJobStore{}, nil, nil)
 	h := s.Handler()
 	paths := []string{
 		"/api/v1/logs?attr.log.file.path=/var/log/nginx/access.log&attr.openlog.discovery.id=nginx",
@@ -145,6 +148,10 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/db/activity?instance=db1%3A5432",
 		"/api/v1/db/sessions?instance=db1%3A5432&at=1757757600000",
 		"/api/v1/db/lookup?db_system=postgresql&statement=SELECT%20%3F",
+		// Job monitoring (jobs.go, schema 0099_job_runs, D-141)
+		"/api/v1/jobs/monitors",
+		"/api/v1/jobs/monitors/11111111-1111-1111-1111-111111111111",
+		"/api/v1/jobs/monitors/11111111-1111-1111-1111-111111111111/runs",
 		// Vulnerabilities (vulnerabilities.go, schema 0100_host_vulns, D-142)
 		"/api/v1/vulnerabilities",
 		"/api/v1/vulnerabilities?severity=critical",
@@ -247,6 +254,13 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 	// Every tenant-scoped route must be walked above. GET /api/v1/vulnerabilities shipped returning 500 for
 	// every request — a query that could not even be built — because its route was missing from this list:
 	// a route nobody calls here is a route whose SQL has never been constructed, let alone executed.
+	//
+	// What this does *not* cover, and the limit is worth stating rather than counting past: nineteen route
+	// groups register nothing unless their dependency is injected (alerts, dashboards, SLOs, synthetics,
+	// source maps, usage, fleet, SSO, jobs, …). A bare test server has none of them, so tenantScopedRoutes
+	// returns only the unconditional routes and this check cannot miss what was never registered. Job
+	// monitoring is wired in above precisely because it was in that blind spot — and both of its read
+	// endpoints answered 500 the moment they were walked. The rest of the nineteen are still unchecked.
 	walkedPaths := make([]string, 0, len(paths)+len(posts))
 	for _, p := range paths {
 		walkedPaths = append(walkedPaths, "GET "+p)

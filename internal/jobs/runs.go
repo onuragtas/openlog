@@ -170,10 +170,13 @@ func History(ctx context.Context, sc *query.Scope, monitorID string, from, to ti
 		"toFloat64(late_seconds) AS late",
 		"message AS msg",
 		"source AS src",
+	// t_from / t_to, not from / to: the query layer refuses any fragment containing a SQL keyword, and a
+	// parameter placeholder is part of the fragment — so a parameter named `from` makes the whole query
+	// unbuildable. Every other read in the codebase already uses this spelling.
 	).Where("monitor_id = {monitor_id:String}").
-		Where("timestamp >= {from:DateTime64(3)}").
-		Where("timestamp < {to:DateTime64(3)}").
-		Param("monitor_id", monitorID).Param("from", from.UTC()).Param("to", to.UTC()).
+		Where("timestamp >= {t_from:DateTime64(3)}").
+		Where("timestamp < {t_to:DateTime64(3)}").
+		Param("monitor_id", monitorID).Param("t_from", from.UTC()).Param("t_to", to.UTC()).
 		OrderBy("timestamp DESC").Limit(limit)
 	rows, err := sc.Query(ctx, q)
 	if err != nil {
@@ -222,9 +225,9 @@ func Summaries(ctx context.Context, sc *query.Scope, monitorID string, from, to 
 		"avgIf(toFloat64(duration_ms), duration_ms > 0) AS avg_ms",
 		"maxIf(toFloat64(duration_ms), duration_ms > 0) AS max_ms",
 		"toInt64(toUnixTimestamp64Milli(max(timestamp))) AS last_ms",
-	).Where("timestamp >= {from:DateTime64(3)}").
-		Where("timestamp < {to:DateTime64(3)}").
-		Param("from", from.UTC()).Param("to", to.UTC()).
+	).Where("timestamp >= {t_from:DateTime64(3)}").
+		Where("timestamp < {t_to:DateTime64(3)}").
+		Param("t_from", from.UTC()).Param("t_to", to.UTC()).
 		GroupBy("monitor_id").Limit(maxRunsPerMonitor)
 	if monitorID != "" {
 		q = q.Where("monitor_id = {monitor_id:String}").Param("monitor_id", monitorID)
