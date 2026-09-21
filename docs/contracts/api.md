@@ -6,7 +6,7 @@ Machine-readable spec: [openapi.yaml](openapi.yaml). Data model: [postgres.md](p
 Errors: HTTP status + `{"error": {"code": "invalid_argument", "message": "…"}}`. Codes: `invalid_argument` (400),
 `unauthenticated` (401), `permission_denied` (403), `not_found` (404), `already_exists` (409),
 `failed_precondition` (409), `resource_exhausted` (429, with `Retry-After`), `internal` (500),
-`unavailable` (503, with `Retry-After`), `storage_unavailable` (503, with `Retry-After` and `"retryable": true`: a
+`unavailable` (503, with `Retry-After`; when its message says the database schema is behind the build, a migration was skipped or failed rather than a backend being down — run `openlog-migrate` and retry, see [releases-updates.md](releases-updates.md) §6), `storage_unavailable` (503, with `Retry-After` and `"retryable": true`: a
 telemetry query could not read data from storage, typically parts on S3 after tiered storage; retry later or query a
 more recent range, [config.md](config.md) "ClickHouse read-only user and per-tenant query limits"), `timeout` (504).
 

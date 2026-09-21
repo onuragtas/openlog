@@ -44,6 +44,11 @@ func mapErr(err error) error {
 			return auth.ErrAlreadyExists
 		case "23503", "22P02": // foreign_key_violation, invalid_text_representation (bad uuid)
 			return auth.ErrNotFound
+		case "42703", "42P01": // undefined_column, undefined_table
+			// Not an outage: the binary is asking for something the schema does not have yet, which only
+			// happens when a migration was skipped or failed. Reported as itself so the answer is "run the
+			// migration" rather than a generic "authentication backend unavailable" and a hunt in the log.
+			return auth.ErrSchemaBehind
 		}
 	}
 	return err
