@@ -15,6 +15,7 @@ import { createExporters } from './exporters';
 import { createInstrumentations } from './instrumentations';
 import { DbStatementProcessor, RouteProcessor } from './processors';
 import { buildResource } from './resource';
+import { startProfiler, type Profiler } from './profiles/profiler';
 import { startRuntimeMetrics, type RuntimeMetrics } from './runtime-metrics';
 import { createSampler, RandomFlagTracerProvider } from './sampler';
 import { VERSION } from './version';
@@ -161,6 +162,23 @@ export function start(options: OpenlogOptions = {}, internals: StartInternals = 
 
   let runtime: RuntimeMetrics | undefined;
   if (cfg.runtimeMetrics) runtime = startRuntimeMetrics(meterProvider);
+  let profiler: Profiler | undefined;
+  if (cfg.profiling) {
+    profiler = startProfiler(
+      {
+        endpoint: cfg.endpoint,
+        headers: cfg.headers,
+        compression: cfg.compression,
+        exportTimeoutMs: cfg.exportTimeoutMs,
+        profileIntervalMs: cfg.profileIntervalMs,
+        version: VERSION,
+      },
+      Object.entries(resource.attributes).flatMap(([key, value]) =>
+        value === undefined || value === null ? [] : [{ key, value: { stringValue: String(value) } }],
+      ),
+      log,
+    );
+  }
   let consoleBridge: ConsoleBridge | undefined;
   if (cfg.logsConsole) consoleBridge = bridgeConsole(loggerProvider);
 
@@ -189,6 +207,7 @@ export function start(options: OpenlogOptions = {}, internals: StartInternals = 
         shutdownPromise = (async () => {
           consoleBridge?.restore();
           runtime?.stop();
+          profiler?.stop();
           const results = await Promise.allSettled([
             withTimeout(tracerProvider.shutdown(), cfg.shutdownTimeoutMs, 'trace shutdown'),
             withTimeout(meterProvider.shutdown(), cfg.shutdownTimeoutMs, 'metric shutdown'),

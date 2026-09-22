@@ -35,9 +35,11 @@ what the bytes mean.
 A payload carrying no profile at all is accepted and produces nothing — an agent whose process was idle has
 nothing to report, and an error would make it retry forever.
 
-**Producers.** The Go agent (`agents/go`) is the first: it takes a CPU profile of the process over
-`OPENLOG_PROFILE_INTERVAL` and posts it here, **on by default** — a service nobody profiled is a service
-whose slow span has no answer, and the sampling cost is a few percent of one core.
+**Producers.** Two agents produce profiles, and their defaults differ for a reason worth writing down.
+
+The **Go agent** (`agents/go`) takes a CPU profile of the process over `OPENLOG_PROFILE_INTERVAL` and posts
+it here, **on by default** — a service nobody profiled is a service whose slow span has no answer, and the
+sampling cost is a few percent of one core.
 
 `OPENLOG_PROFILING=false` turns it off, and that switch is not decoration: Go allows one CPU profile per
 process, so while this runs, `net/http/pprof`'s own `/debug/pprof/profile` answers "cpu profiling already in
@@ -49,6 +51,13 @@ service stubs, so there is no generated profiles client to dial. The conversion 
 the agent (`agents/go/internal/otlpprofiles`): pprof declares two sample types over the same samples
 (`samples/count` and `cpu/nanoseconds`) while an OTLP profile declares one, so each becomes a profile of its
 own and "one profile, one unit" stays true.
+
+The **Node.js agent** (`agents/node`) does the same through V8's sampling profiler over the inspector
+protocol, converting in `agents/node/src/profiles/`, and is **off by default**: `OPENLOG_PROFILING=true` turns
+it on. Node has no one-profile-per-process lock, so the Go agent's reason for needing a switch does not apply
+here — but the reason for the default does, inverted. This shipped into an agent that already had
+installations, and an upgrade must not silently multiply what an operator stores and is billed for. A signal
+that costs money starts when somebody asks for it.
 
 ## 2. Storage
 

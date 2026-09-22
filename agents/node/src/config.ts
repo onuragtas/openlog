@@ -44,6 +44,15 @@ export interface OpenlogOptions {
   hostId?: string;
   /** OPENLOG_RUNTIME_METRICS: Node.js runtime metrics (default true). */
   runtimeMetrics?: boolean;
+  /**
+   * OPENLOG_PROFILING: continuous CPU profiling (default **false**).
+   *
+   * Off unlike the Go agent, and for a reason that is about upgrades rather than cost: turning it on for
+   * every existing installation would multiply what they store and are billed for without anyone asking.
+   */
+  profiling?: boolean;
+  /** OPENLOG_PROFILE_INTERVAL: how long each CPU profile covers (Go duration, default 60s). */
+  profileIntervalMs?: number;
   /** OPENLOG_METRIC_EXPORT_INTERVAL (Go duration, e.g. 60s; OTEL_METRIC_EXPORT_INTERVAL in ms). */
   metricIntervalMs?: number;
   /** OPENLOG_SHUTDOWN_TIMEOUT: bound of the final flush (default 5s). */
@@ -94,6 +103,8 @@ export interface Config {
   resourceAttributes: Record<string, string>;
   hostId: string;
   runtimeMetrics: boolean;
+  profiling: boolean;
+  profileIntervalMs: number;
   metricIntervalMs: number;
   shutdownTimeoutMs: number;
   exportTimeoutMs: number;
@@ -217,6 +228,8 @@ export function loadConfig(env: Env = process.env, opts: OpenlogOptions = {}): {
     resourceAttributes: {},
     hostId: '',
     runtimeMetrics: true,
+    profiling: false,
+    profileIntervalMs: 60_000,
     metricIntervalMs: 60_000,
     shutdownTimeoutMs: 5_000,
     exportTimeoutMs: 10_000,
@@ -302,6 +315,8 @@ export function loadConfig(env: Env = process.env, opts: OpenlogOptions = {}): {
   if ((g = get('OPENLOG_RESOURCE_ATTRIBUTES'))) Object.assign(c.resourceAttributes, parseKV(g[0]));
   if ((g = get('OPENLOG_HOST_ID'))) c.hostId = g[0];
   boolVar((b) => (c.runtimeMetrics = b), 'OPENLOG_RUNTIME_METRICS');
+  boolVar((b) => (c.profiling = b), 'OPENLOG_PROFILING');
+  durVar((ms) => (c.profileIntervalMs = ms), 'OPENLOG_PROFILE_INTERVAL');
   durVar((ms) => (c.metricIntervalMs = ms), 'OPENLOG_METRIC_EXPORT_INTERVAL');
   durVar((ms) => (c.shutdownTimeoutMs = ms), 'OPENLOG_SHUTDOWN_TIMEOUT');
   if ((g = get('OPENLOG_HOST_ROOT'))) c.hostRoot = g[0];
@@ -338,6 +353,8 @@ export function loadConfig(env: Env = process.env, opts: OpenlogOptions = {}): {
   if (o.resourceAttributes) Object.assign(c.resourceAttributes, o.resourceAttributes);
   if (o.hostId !== undefined) c.hostId = o.hostId;
   if (o.runtimeMetrics !== undefined) c.runtimeMetrics = o.runtimeMetrics;
+  if (o.profiling !== undefined) c.profiling = o.profiling;
+  if (o.profileIntervalMs !== undefined) c.profileIntervalMs = o.profileIntervalMs;
   if (o.metricIntervalMs !== undefined) c.metricIntervalMs = o.metricIntervalMs;
   if (o.shutdownTimeoutMs !== undefined) c.shutdownTimeoutMs = o.shutdownTimeoutMs;
   if (o.exportTimeoutMs !== undefined) c.exportTimeoutMs = o.exportTimeoutMs;

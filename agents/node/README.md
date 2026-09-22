@@ -80,6 +80,8 @@ Precedence: **options > `OPENLOG_*` > `OTEL_*` > defaults**. The names are the G
 | `OPENLOG_INFRA_STATE_DIR` | `infraStateDir` | `/var/lib/openlog-infra-agent` | Where the infra agent persists a generated host id |
 | `OPENLOG_STATE_DIR` | `stateDir` | user cache dir `/openlog` | Where this agent persists a generated host id (last resort) |
 | `OPENLOG_RUNTIME_METRICS` | `runtimeMetrics` | `true` | Node.js runtime metrics |
+| `OPENLOG_PROFILING` | `profiling` | `false` | Continuous CPU profiling, see [Profiling](#profiling) |
+| `OPENLOG_PROFILE_INTERVAL` (Go duration) | `profileIntervalMs` | `60s` | How long each CPU profile covers |
 | `OPENLOG_METRIC_EXPORT_INTERVAL` (Go duration; `OTEL_METRIC_EXPORT_INTERVAL` in ms) | `metricIntervalMs` | `60s` | Metric export interval |
 | `OPENLOG_SHUTDOWN_TIMEOUT` (Go duration) | `shutdownTimeoutMs` | `5s` | Bound of the final flush |
 | `OPENLOG_LOG_LEVEL` (`OTEL_LOG_LEVEL`) | `logLevel` | `warn` | Agent diagnostics on stderr: `debug`, `info`, `warn`, `error`, `off` |
@@ -223,6 +225,27 @@ observer. Names follow the OpenTelemetry semantic conventions (the Go agent's po
 | `process.memory.usage` | Sum, non-monotonic | `By` | — (RSS) |
 
 The HTTP instrumentation also records `http.server.request.duration` and `http.client.request.duration`.
+
+## Profiling
+
+Every `OPENLOG_PROFILE_INTERVAL` the agent takes a V8 CPU profile covering that interval and posts it as
+OTLP/JSON to `<endpoint>/v1/profiles`, where it becomes the flame graph behind a slow span. The contract is
+[profiles.md](../../docs/contracts/profiles.md).
+
+**Off by default**, unlike the Go agent, and the difference is about upgrades rather than cost. Go defaults to
+on and needs its switch because it allows only one CPU profile per process. Node has no such lock — but it
+does have existing installations, and turning a new signal on for everyone who upgrades would multiply what
+they store and are billed for without anyone asking:
+
+```sh
+OPENLOG_PROFILING=true
+```
+
+An idle process sends nothing: a profile with no samples is never posted, so a service that handled no
+requests costs nothing here.
+
+Only the CPU is sampled — heap, allocation and lock profiles are not collected yet. The sampler's cost is not
+included in the [Overhead](#overhead) numbers below, which were measured with profiling off.
 
 ## Overhead
 
