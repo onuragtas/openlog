@@ -41,6 +41,15 @@ AGENT_LDFLAGS := -s -w \
 	-X $(AGENT_MODULE)/internal/version.Date=$(DATE) \
 	-X $(AGENT_MODULE)/internal/release.trustedKeys=$(OPENLOG_RELEASE_PUBLIC_KEYS)
 
+# The eBPF profiler: internal/version of its own module. Deliberately not AGENT_LDFLAGS — that also sets
+# internal/release.trustedKeys, which this module does not have, and -X on a missing symbol is ignored
+# silently rather than refused.
+EBPF_MODULE := $(GO_MODULE)/agents/ebpf
+EBPF_LDFLAGS := -s -w \
+	-X $(EBPF_MODULE)/internal/version.Version=$(VERSION) \
+	-X $(EBPF_MODULE)/internal/version.Commit=$(COMMIT) \
+	-X $(EBPF_MODULE)/internal/version.Date=$(DATE)
+
 GOFMT_DIRS := cmd internal schema migrations libs test web/embed.go agents/infra/cmd agents/infra/internal agents/infra/rules
 
 .PHONY: all build test lint vet fmt fmt-check docker compose-up compose-down compose-logs loadgen clean
@@ -193,7 +202,7 @@ RELEASE_MANIFEST_ARGS = --version $(VERSION) --released-at $(DATE) \
 	$(if $(RELEASE_IMAGE),--image openlog=$(RELEASE_IMAGE)) \
 	--migrations postgres=migrations/postgres --migrations clickhouse=schema/clickhouse
 
-.PHONY: release-local release-tool release-testkeys release-check release-agent release-packages \
+.PHONY: release-local release-tool release-testkeys release-check release-agent release-packages release-ebpf-profiler release-ebpf-packages \
 	release-backend release-helm release-compose release-manifest release-index release-serve release-clean
 
 # Go agent modules (docs/operations/releasing.md "Go agent modules"). Before tagging vX.Y.Z:
@@ -210,7 +219,7 @@ go-agent-release-check:
 go-agent-verify:
 	scripts/go-agent-release.sh verify
 
-release-local: release-check release-agent release-packages release-backend release-helm release-compose release-manifest release-index
+release-local: release-check release-agent release-packages release-ebpf-packages release-backend release-helm release-compose release-manifest release-index
 	@rm -rf $(RELEASE_STAGE)
 	@echo "release $(VERSION) ready in $(RELEASE_DIR)"; ls -l $(RELEASE_DIR)
 
@@ -299,6 +308,39 @@ release-packages: release-agent
 			-e "s|\$${STAGE}|$(RELEASE_STAGE)/$$name|g" -e "s|\$${SCRIPTS}|$$scripts|g" \
 			-e "s|\$${MANIFEST_DIR}|$$emb|g" \
 			packaging/nfpm/infra-agent.yaml > "$$config"; \
+		for fmt in deb rpm; do \
+			echo "packaging $$name.$$fmt"; \
+			$(NFPM) package --config "$$config" --packager $$fmt --target "$(RELEASE_DIR)/$$name.$$fmt"; \
+		done; \
+	done
+
+# The eBPF profiler: linux only, because that is the only place it can run. Staged like the agent so the
+# tarball is also a hand-install path while there is no chart for it.
+release-ebpf-profiler: release-tool
+	@set -euo pipefail; mkdir -p $(RELEASE_DIR); for arch in $(RELEASE_ARCHES); do \
+		name=openlog-ebpf-profiler_$(VERSION)_linux_$$arch; stage="$(RELEASE_STAGE)/$$name"; \
+		rm -rf "$$stage"; mkdir -p "$$stage"; \
+		echo "building $$name"; \
+		( cd agents/ebpf && CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath \
+			-ldflags "$(EBPF_LDFLAGS)" -o "$(CURDIR)/$$stage/openlog-ebpf-profiler" ./cmd/openlog-ebpf-profiler ); \
+		cp agents/ebpf/LICENSE agents/ebpf/README.md "$$stage/"; \
+		cp -R agents/ebpf/packaging "$$stage/packaging"; \
+		$(RELEASE_TOOL) archive --out "$(RELEASE_DIR)/$$name.tar.gz" --prefix "$$name" "$$stage"; \
+	done
+
+# .deb/.rpm of the profiler. No embedded manifest and no signing key: this component does not update
+# itself, so it needs neither. Its artifacts still reach the signed release manifest, because
+# release-manifest lists whatever is in $(RELEASE_DIR) — which is why this must run before it.
+release-ebpf-packages: release-ebpf-profiler
+	@set -euo pipefail; scripts="$(RELEASE_STAGE)/ebpf-scripts"; rm -rf "$$scripts"; mkdir -p "$$scripts"; \
+	for s in agents/ebpf/packaging/scripts/*.sh; do \
+		sed 's/@VERSION@/$(VERSION)/g' "$$s" > "$$scripts/ebpf-$${s##*/}"; chmod 0755 "$$scripts/ebpf-$${s##*/}"; \
+	done; \
+	for arch in $(RELEASE_ARCHES); do \
+		name=openlog-ebpf-profiler_$(VERSION)_linux_$$arch; config="$(RELEASE_STAGE)/nfpm-ebpf-$$arch.yaml"; \
+		sed -e 's|$${VERSION}|$(VERSION)|g' -e "s|\$${ARCH}|$$arch|g" \
+			-e "s|\$${STAGE}|$(RELEASE_STAGE)/$$name|g" -e "s|\$${SCRIPTS}|$$scripts|g" \
+			packaging/nfpm/ebpf-profiler.yaml > "$$config"; \
 		for fmt in deb rpm; do \
 			echo "packaging $$name.$$fmt"; \
 			$(NFPM) package --config "$$config" --packager $$fmt --target "$(RELEASE_DIR)/$$name.$$fmt"; \
