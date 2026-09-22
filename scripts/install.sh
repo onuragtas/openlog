@@ -623,8 +623,18 @@ install_ebpf_profiler() {
 		rm -f "$tmpdir/ebpf.env"
 		log "openlog-ebpf-profiler configured from the same license key and endpoint as the agent"
 		if [ "$start" = 1 ] && command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-			systemctl start openlog-ebpf-profiler ||
-				log "openlog-ebpf-profiler did not start; run: openlog-ebpf-profiler -self-test"
+			systemctl start openlog-ebpf-profiler >/dev/null 2>&1 || true
+			# A Type=simple unit reports success the moment it forks, so "started" is not "running". The
+			# profiler exits when the kernel refuses to be sampled (capabilities, perf_event_paranoid,
+			# a guest without perf), and that has to be said here rather than left for an operator who
+			# believed the installer to find days later.
+			sleep 1
+			if systemctl is-active --quiet openlog-ebpf-profiler; then
+				log "openlog-ebpf-profiler started"
+			else
+				log "openlog-ebpf-profiler did not stay running; diagnose with: openlog-ebpf-profiler -self-test"
+				systemctl status openlog-ebpf-profiler --no-pager -n 5 2>/dev/null | sed 's/^/    /' >&2 || true
+			fi
 		fi
 	else
 		log "set OPENLOG_LICENSE_KEY in $ebpf_env, then: systemctl start openlog-ebpf-profiler"
