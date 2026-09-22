@@ -33,12 +33,22 @@ Not yet runnable. What exists and is tested:
 - `internal/version` and the command itself — `-version`, `-self-test` to say whether this machine can be
   sampled, and `-once` to print what would be stored before pointing it at an ingest.
 
-The binary builds for linux/amd64, linux/arm64, darwin and windows. `internal/sampler` refuses on every
-platform today, with two different errors because they are two different situations: on Linux the sampler
-has not landed yet, anywhere else the kernel interfaces do not exist. Neither returns a sampler that
-produces nothing.
+- `internal/sampler` (the program, not the plumbing) — the BPF program is assembled by hand with
+  `cilium/ebpf/asm` and its maps are declared beside it. None of that needs a kernel to construct, so it
+  lives in an untagged file and the tests assert its shape here: both stacks interned, only known maps
+  referenced, the key encoding matching the map spec byte for byte.
 
-Still to come: the perf-event sampler and its BPF program, and symbolication.
+The binary builds for linux/amd64, linux/arm64, darwin and windows. `sampler.New` still refuses on every
+platform, with two different errors because they are two different situations: on Linux the plumbing has
+not landed yet, anywhere else the kernel interfaces do not exist. Neither returns a sampler that produces
+nothing.
+
+**The program has never been through a verifier.** It compiles and its shape is tested; whether the kernel
+accepts it is unknown until it runs on Linux with the right privileges, and nothing here pretends
+otherwise.
+
+Still to come: the Linux plumbing — `perf_event_open` per CPU, attaching the program, draining the maps —
+and symbolication.
 
 **The sampler cannot be verified on a development Mac**, and this repository has no privileged Linux CI job.
 So everything that does not touch the kernel is built behind an interface and tested where tests can run,
