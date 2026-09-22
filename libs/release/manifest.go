@@ -35,6 +35,10 @@ const (
 	// ComponentCompose is the Docker Compose bundle openlog-compose-<v>.tar.gz (deploy/compose of the release: one top
 	// directory openlog-compose-<v>/ with docker-compose.yml, .env.example and clickhouse/). os/arch PlatformAny,
 	// format tar.gz. install-server.sh installs it and openlog-updater keeps such installations in sync (D-111).
+	// ComponentEBPFProfiler is the whole-host CPU profiler (agents/ebpf). Linux only: it needs perf
+	// events and eBPF, so it publishes no darwin or windows artifact.
+	ComponentEBPFProfiler = "ebpf-profiler"
+
 	ComponentCompose = "compose"
 
 	FormatTarGz = "tar.gz"

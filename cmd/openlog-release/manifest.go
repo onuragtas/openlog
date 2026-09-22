@@ -24,6 +24,7 @@ import (
 //	openlog-infra-agent_<v>_windows_<arch>.zip|.msi            component infra-agent (windows)
 //	openlog-infra-agent_<v>_darwin_<arch>.pkg                  component infra-agent (macOS installer, optional)
 //	openlog-php-agent_<v>_<os>_<arch>.tar.gz|.deb|.rpm|.apk   component php-agent (agents/php/packaging/build-artifacts.sh)
+//	openlog-ebpf-profiler_<v>_linux_<arch>.tar.gz|.deb|.rpm   component ebpf-profiler (Linux only, agents/ebpf)
 //	openlog_<v>_<os>_<arch>.tar.gz                            component backend (all backend binaries)
 //	openlog-<v>.tgz                                           Helm chart (manifest.helm_chart and helm_charts.openlog)
 //	openlog-agent-<v>.tgz                                     Helm chart (manifest.helm_charts.openlog-agent)
@@ -36,9 +37,10 @@ import (
 // The Python sdist (openlog_agent-<pep440 v>.tar.gz) and the .sha256 files are published with the GitHub release but
 // are not manifest artifacts.
 var componentPrefixes = map[string]string{
-	"openlog-infra-agent": lib.ComponentInfraAgent,
-	"openlog-php-agent":   lib.ComponentPHPAgent,
-	"openlog":             "backend",
+	"openlog-infra-agent":   lib.ComponentInfraAgent,
+	"openlog-php-agent":     lib.ComponentPHPAgent,
+	"openlog-ebpf-profiler": lib.ComponentEBPFProfiler,
+	"openlog":               "backend",
 }
 
 var artifactFormats = []string{lib.FormatTarGz, lib.FormatDeb, lib.FormatRPM, lib.FormatAPK, lib.FormatZip, lib.FormatMSI, lib.FormatPkg}
