@@ -65,14 +65,35 @@ So samples are **attributed per process** rather than sent as one undifferentiat
 
 | The process is | `service.name` becomes |
 |---|---|
-| a service the infra agent discovered (`openlog.discovery.id`) | that service's name — the same name its metrics and logs already use |
-| anything else | `process.executable.name`, the binary's own name (`postgres`, `sshd`, `containerd`) |
+| a service the infra agent discovered | its **discovery rule id** — `redis`, `postgresql`, `nginx` — the same value its process metrics carry as `openlog.discovery.id` |
+| anything else | the binary's own name (`sshd`, `containerd`), as `process.executable.name` does |
 | a kernel thread | `kernel`, once, rather than one pseudo-service per thread |
 
+**How the discovered names get here.** The mapping lives in the infra agent's memory and is rebuilt every
+round, so it cannot simply be read. The infra agent therefore publishes it to its runtime directory, the way
+it already publishes `host-id` there for the language agents (semantic-conventions §1): an optional file
+written atomically, absent when the agent is not running, and never required.
+
+```
+/run/openlog-infra-agent/services
+exe<TAB>/usr/bin/redis-server<TAB>redis
+container<TAB>3f2a1b9c…<TAB>redis
+```
+
+Keyed by **executable path and container id, never by pid**. Pids churn between publishes, so a pid-keyed
+file would be wrong within seconds of being written; an executable path and a container id are stable for as
+long as the thing they name exists. The profiler resolves a sample's pid to those through `/proc` itself.
+
+A line whose kind it does not recognise is skipped rather than refused, so an infra agent that learns to
+publish something new does not break a profiler that has not learned to read it yet.
+
+When the file is absent — the infra agent is not installed, or is older — every process falls to its binary
+name. That degrades the names on one screen; it does not degrade the profiling.
+
 One OTLP profile is produced per resulting name, each carrying `host.id` and the process attributes of
-§semantic-conventions §2. Sending a single profile with no `service.name` was rejected: the Kafka partition
-key is `<tenant_id>/<service.name>`, so every host in the fleet would land on one partition, and the flame
-graph screen would have nothing to select.
+[semantic-conventions.md](semantic-conventions.md) §2. Sending a single profile with no `service.name` was
+rejected: the Kafka partition key is `<tenant_id>/<service.name>`, so every host in the fleet would land on
+one partition, and the flame graph screen would have nothing to select.
 
 The consequence worth stating plainly: on this screen "service" means *a service or a binary*. That is a
 widening of what the word meant when only instrumented processes could profile themselves.

@@ -348,6 +348,11 @@ func (a *Agent) CollectInventory(now time.Time) (*logspb.LogsData, []discovery.S
 		a.stats.SetCollectorDuration("discovery", time.Since(start))
 		items = append(items, discovery.Items(services)...)
 		a.metrics.SetServiceLookup(discovery.NewServiceIndex(services).Lookup)
+		// Published for components that are not this agent (the eBPF profiler names CPU samples with it).
+		// A no-op when the runtime directory does not exist, and never fatal: nothing depends on it.
+		if err := resource.PublishServices(resource.RuntimeDir, publishedServices(services)); err != nil {
+			a.log.Debug("discovered services not published", "error", err)
+		}
 		if a.logs != nil {
 			a.logs.SetDiscovered(DiscoveredLogs(services))
 		}

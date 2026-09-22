@@ -18,9 +18,12 @@ will never run makes the whole repository harder to work in.
 Not yet runnable. What exists and is tested:
 
 - `internal/otlpprofiles` — aggregated stacks to an OTLP profiles payload, with the shared dictionary.
+- `internal/attribute` — which service a sample is stored under: the infra agent's published discovery map
+  where there is one, the binary's name where there is not, `kernel` for kernel threads.
+- `internal/export` — posting to `/v1/profiles` with the license key, gzip, and retries bounded so a dead
+  ingest delays the next profile instead of replacing it.
 
-Still to come: the perf-event sampler and its BPF program, per-process attribution, symbolication, the
-exporter, and the command itself.
+Still to come: the perf-event sampler and its BPF program, symbolication, and the command itself.
 
 **The sampler cannot be verified on a development Mac**, and this repository has no privileged Linux CI job.
 So everything that does not touch the kernel is built behind an interface and tested where tests can run,

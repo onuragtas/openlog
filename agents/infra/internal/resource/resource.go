@@ -92,6 +92,66 @@ func PublishHostID(dir, id string) error {
 	return nil
 }
 
+// ServicesFile is the file name of the published service map in the runtime dir.
+const ServicesFile = "services"
+
+// ServiceEntry is one published mapping: a kind ("exe" or "container"), the key, and the discovery rule id.
+//
+// This package deliberately does not import discovery: the map is published for other components to read,
+// and making the publisher depend on the discovery types would tie a file format to an internal one.
+type ServiceEntry struct{ Kind, Key, ID string }
+
+// PublishServices writes the discovered service map to <dir>/services (0644, atomic), so a component that
+// is not the infra agent can name a process it did not discover itself — the eBPF profiler does this to
+// decide which service a CPU sample belongs to (docs/contracts/ebpf-profiler.md §4).
+//
+// Keyed by executable path and container id, never by pid: pids churn between rounds, and a file that is
+// wrong seconds after it is written is worse than no file. Like PublishHostID, a missing directory is not
+// created and is not an error — nothing depends on this existing.
+func PublishServices(dir string, entries []ServiceEntry) error {
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return nil
+	}
+	// Sorted and de-duplicated so the same discovery produces the same bytes: without that, map iteration
+	// order would rewrite the file every round and the unchanged check below would never hold.
+	seen := make(map[ServiceEntry]struct{}, len(entries))
+	lines := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Kind == "" || e.Key == "" || e.ID == "" {
+			continue
+		}
+		if strings.ContainsAny(e.Kind+e.Key+e.ID, "\t\n") {
+			continue // a tab or newline in a field would silently reshape the file
+		}
+		if _, dup := seen[e]; dup {
+			continue
+		}
+		seen[e] = struct{}{}
+		lines = append(lines, e.Kind+"\t"+e.Key+"\t"+e.ID)
+	}
+	sort.Strings(lines)
+	body := "# openlog discovered services, published by " + AgentName + "\n"
+	if len(lines) > 0 {
+		body += strings.Join(lines, "\n") + "\n"
+	}
+
+	file := filepath.Join(dir, ServicesFile)
+	if b, err := os.ReadFile(file); err == nil && string(b) == body {
+		return nil
+	}
+	tmp := file + ".tmp"
+	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
+		return fmt.Errorf("resource: publish services: %w", err)
+	}
+	if err := os.Chmod(tmp, 0o644); err != nil { // umask
+		return fmt.Errorf("resource: publish services: %w", err)
+	}
+	if err := os.Rename(tmp, file); err != nil {
+		return fmt.Errorf("resource: publish services: %w", err)
+	}
+	return nil
+}
+
 // Info holds the resolved resource attributes.
 type Info struct {
 	HostID        string
