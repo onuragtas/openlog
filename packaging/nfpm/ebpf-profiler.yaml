@@ -1,0 +1,65 @@
+# nfpm configuration of the openlog-ebpf-profiler .deb and .rpm (docs/contracts/ebpf-profiler.md).
+# Rendered by `make release-packages` (sed replaces these placeholders; paths relative to the repo):
+#   VERSION  SemVer product version (no leading v)   ARCH   amd64 | arm64
+#   STAGE    staged directory (binary, LICENSE, README.md, packaging/)
+#   SCRIPTS  directory of the rendered maintainer scripts. This component's scripts live with the
+#            component (agents/ebpf/packaging/scripts) and are rendered into that directory with an
+#            "ebpf-" prefix, so they cannot collide with the infra agent's four scripts of the same
+#            names. `make release-packages` is what has to honour that prefix.
+#
+# Layout is deliberately flatter than the infra agent's: one binary in /opt/openlog/ebpf-profiler, no
+# versions/ directory and no `current` symlink, because this component does not update itself.
+name: openlog-ebpf-profiler
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: "1"
+section: admin
+priority: optional
+maintainer: openlog maintainers <https://github.com/onuragtas/openlog>
+vendor: openlog
+homepage: https://github.com/onuragtas/openlog
+license: Apache-2.0
+description: |-
+  openlog whole-host CPU profiler (eBPF).
+  Samples every process on the machine, instrumented or not, and sends OTLP profiles to openlog.
+  Runs with CAP_BPF and CAP_PERFMON, which the infra agent deliberately does not have.
+
+contents:
+  - dst: /opt/openlog
+    type: dir
+    file_info: {mode: 0755}
+  - dst: /opt/openlog/ebpf-profiler
+    type: dir
+    file_info: {mode: 0755, owner: root, group: root}
+  - src: ${STAGE}/openlog-ebpf-profiler
+    dst: /opt/openlog/ebpf-profiler/openlog-ebpf-profiler
+    file_info: {mode: 0755, owner: root, group: root}
+  - src: ${STAGE}/LICENSE
+    dst: /opt/openlog/ebpf-profiler/LICENSE
+    file_info: {mode: 0644, owner: root, group: root}
+  - src: ${STAGE}/README.md
+    dst: /opt/openlog/ebpf-profiler/README.md
+    file_info: {mode: 0644, owner: root, group: root}
+  - src: /opt/openlog/ebpf-profiler/openlog-ebpf-profiler
+    dst: /usr/bin/openlog-ebpf-profiler
+    type: symlink
+  # The unit is owned by the component (agents/ebpf/packaging/systemd).
+  - src: ${STAGE}/packaging/systemd/openlog-ebpf-profiler.service
+    dst: /usr/lib/systemd/system/openlog-ebpf-profiler.service
+    file_info: {mode: 0644}
+  - dst: /etc/openlog-ebpf-profiler
+    type: dir
+    file_info: {mode: 0755}
+  # Contains the license key: readable by the profiler's group only, and never overwritten on upgrade.
+  - src: ${STAGE}/packaging/openlog-ebpf-profiler.env.example
+    dst: /etc/openlog-ebpf-profiler/openlog-ebpf-profiler.env
+    type: config|noreplace
+    file_info: {mode: 0640, owner: root, group: openlog-ebpf}
+
+scripts:
+  preinstall: ${SCRIPTS}/ebpf-preinstall.sh
+  postinstall: ${SCRIPTS}/ebpf-postinstall.sh
+  preremove: ${SCRIPTS}/ebpf-preremove.sh
+  postremove: ${SCRIPTS}/ebpf-postremove.sh
