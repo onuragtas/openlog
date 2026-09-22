@@ -1,6 +1,6 @@
 # Contract: Whole-host CPU profiling (eBPF, v1)
 
-Decisions: D-148. Component: `agents/ebpf`. Related: [profiles.md](profiles.md) (the profiles signal this
+Decisions: D-148 (superseded by D-149), D-149. Component: `agents/ebpf`. Related: [profiles.md](profiles.md) (the profiles signal this
 produces), [semantic-conventions.md](semantic-conventions.md) §2 (process attributes).
 
 **This is a separate component, not a mode of the infra agent.** It is installed on purpose, it runs with
@@ -145,7 +145,56 @@ Interpreted runtimes (Python, PHP, Ruby, the JVM) show their **interpreter's** f
 That is a real limitation and not a bug to be filed: it needs per-runtime unwinding, which is its own
 contract. A language agent's own profiler is the better answer where one exists.
 
-## 8. Errors
+## 8. Keeping it current
+
+`install.sh` installs the package; from then on the **infra agent** keeps the component at the agent's own
+version (D-149), using the same component manager as the PHP and Java agent installations. It does **not**
+use `-reconcile`: that step is deliberately offline — no HTTP, no trust keys, no signed manifest — so it
+cannot fetch and verify a release.
+
+`config.yaml`:
+
+```yaml
+ebpf_profiler:
+  mode: auto                     # auto = install/upgrade; manual = report only; off = remove what the agent installed
+  version: agent                 # agent = the agent's own version, or e.g. 0.9.1
+  remote_config: true            # the Fleet page's mode/version replace these
+  health_check_after: 2m         # after a switch: check the service runs, roll back when it does not
+  install_root: /opt/openlog/ebpf-profiler
+```
+
+**An installation the agent did not make is never touched.** The agent's own install root carries a marker
+file; a root without it belongs to `dpkg`/`rpm` or to a person, is reported as `unmanaged` and left to the
+package manager. For the same reason a packaged unit in `/usr/lib/systemd/system` stops the installation
+instead of being overwritten: the agent's own unit goes to `/etc/systemd/system`, where tarball
+installations keep theirs.
+
+The handshake is split across the privilege boundary, because the agent runs unprivileged:
+
+| Step | Who | What |
+|---|---|---|
+| decide, download, verify, stage | the agent | signature, version, platform artifact and rollback floor, into `<state_dir>/ebpf-profiler/staged/<v>/` |
+| request | the agent | `request.json`, then it exits so the service manager restarts it |
+| install | the privileged pre-start step (`-apply`) | verifies **everything again**, extracts root-owned into `install_root/versions/<v>/`, switches `current`, installs and enables the unit |
+| result | the privileged step | `ebpf-profiler-status.json` in the agent's install root, read back at the next start |
+
+Everything below `state_dir` is written by the agent user and is therefore untrusted for the privileged
+step: it re-verifies the signature, copies the archive into a root-owned file whose size and sha256 it
+checks itself, and accepts the extracted tree only if it is root-owned.
+
+`health_check_after` a switch the agent confirms that `current` points at the version, its binary and
+manifest are there, and the service is running; otherwise it asks for a rollback to the previous version,
+which is why that version is kept on disk. A rolled back version is never retried automatically, a failed
+one not within the hour. The signed sha256 is **not** re-checked at this point: it covers the tarball, not
+the extracted binary, and the privileged step verified it before extracting.
+
+Sync carries an `ebpf_profiler` section both ways: the host reports mode, source, who owns the install
+root, the current and target version, whether the service is running and the last operation; the backend
+may reply with the fleet's `mode`, `target_version` and a signed manifest. When the component cannot be
+installed at all — not Linux, a container or dev build, no trusted keys, or a start without the privileged
+pre-start step — the host reports `capable: false` with the reason instead of failing quietly.
+
+## 9. Errors
 
 `401` unknown or missing license key · `413` body too large · `429` rate limited, with `Retry-After` ·
 `503` retry later. Bodies are `{"error": {"code", "message"}}`.

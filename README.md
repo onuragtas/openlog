@@ -140,7 +140,7 @@ This also installs the **whole-host CPU profiler**: it samples every process on 
 PHP-FPM pool, a cron job, a kernel thread — not only the ones running an APM agent, and gives each one a flame
 graph. It is a separate package and a separate service because it runs with `CAP_BPF` and `CAP_PERFMON`, which
 the infra agent deliberately does not have; the installer says so on the way out. Add `--no-ebpf-profiler` to
-leave it out. Linux and deb/rpm only — elsewhere it is skipped and the agent installs as usual:
+leave it out. Once installed, the infra agent keeps it at its own version; an installation you made yourself, or one your package manager owns, is left alone. Linux and deb/rpm only — elsewhere it is skipped and the agent installs as usual:
 [agents/ebpf](agents/ebpf), [contract](docs/contracts/ebpf-profiler.md).
 
 **From source** (until the first release; build on any machine with Go 1.26):
