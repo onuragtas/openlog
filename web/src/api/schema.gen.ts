@@ -1724,6 +1724,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rum/funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Of the sessions that did the first step, how many reached each of the next ones **in order** (rum.md §2.8). Counting each step independently would report a session that reached checkout before it saw the cart as having completed the funnel, so the order is enforced by the query rather than assumed. Bounded by the 7-day trace retention, like every read over the raw spans. */
+        get: operations["getRumFunnel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/db/instances": {
         parameters: {
             query?: never;
@@ -7469,6 +7486,14 @@ export interface components {
             user_id: string;
             /** @description ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page. Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved one — openlog stores no visitor address and derives nothing itself. */
             country: string;
+        };
+        RumFunnelStep: {
+            /** @description The custom event name this step matches */
+            step: string;
+            /** @description Sessions that reached this step **and every step before it**, in order and within the window — not sessions that performed this step at some point. */
+            sessions: number;
+            /** @description Share of the first step's sessions that got this far; 1 for the first step */
+            rate: number;
         };
         /** @description One version of the application over the requested range. Counted from the spans, so bounded by the trace retention rather than by the 30 days the release list reaches. */
         RumRelease: {
@@ -14176,6 +14201,41 @@ export interface operations {
                     "application/json": {
                         releases: components["schemas"]["RumRelease"][];
                         deployments: components["schemas"]["ApmDeployment"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getRumFunnel: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                /** @description A custom event name. Between 2 and 6, in the order the funnel expects them. */
+                step: string[];
+                /** @description How long a session has to get from the first step to the last. */
+                window?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The steps, in order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        steps: components["schemas"]["RumFunnelStep"][];
+                        window_seconds: number;
                     };
                 };
             };

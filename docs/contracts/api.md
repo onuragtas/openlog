@@ -1831,6 +1831,15 @@ bounded by the **trace** retention: an older session still has its summary and `
 version older than a week appears with no sessions against it. `crash_free_rate` is `1` for a version with
 no sessions: null would have to mean both "nothing broke" and "nothing is known".
 
+### `GET /api/v1/rum/funnel?app=&environment=&step=&step=&window=&from=&to=`
+`{"steps": [{"step", "sessions", "rate"}], "window_seconds"}` ([rum.md](rum.md) §2.8). Between 2 and 6
+`step` parameters, each a custom event name; `window` (default `30m`) is how long a session has to get from
+the first step to the last.
+
+**The steps are ordered.** `sessions` is the number that reached this step *and every step before it*, in
+order and within the window — not the number that did this step at some point. `rate` is relative to the
+first step. Bounded by the 7-day trace retention, like every read over the raw spans.
+
 `session.user_id` and `session.country` are filled **here only** ([rum.md](rum.md) §3.7). Both live on the
 spans rather than on the session rollup, so the list above — which reads the rollup — returns them empty
 rather than running a second query per row. `user_id` is the last identity the session declared, because a

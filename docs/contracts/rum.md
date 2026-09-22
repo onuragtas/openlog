@@ -196,6 +196,32 @@ decision about storage volume and should be made on purpose rather than arrived 
 A version with no sessions reports a crash-free rate of `1` rather than an absent field: null would have to
 mean both "nothing broke" and "nothing is known", and a chart cannot draw the difference.
 
+### 2.8 Funnels
+
+`GET /api/v1/rum/funnel?app=&environment=&step=&step=&window=&from=&to=` — of the sessions that did the
+first step, how many reached each of the next ones, **in order**.
+
+The steps are custom event names, the ones an application already sends through `recordEvent`. A funnel
+therefore needs no new instrumentation: it is a question asked of events that exist, which is also why the
+steps are a query parameter rather than a stored definition.
+
+**Order is the whole point, and it is why this is not one count per step.** Counting each step
+independently would report a session that reached checkout before it ever saw the cart as having completed
+the funnel. ClickHouse's `windowFunnel` answers, per session, the furthest step reached in order and within
+a window; the outer query counts sessions by that level, and the API adds each level back into the ones
+before it, because a session that finished is counted once at the last level.
+
+`window` (default 30 minutes) is how long a session has to get from the first step to the last — a funnel
+with no window is not a funnel, it is a lifetime.
+
+Two limits are stated rather than discovered. Between 2 and 6 steps: one step is a count, and beyond six
+the answer is a report. And, like everything that reads the spans rather than a rollup, it reaches back only
+as far as the **7-day trace retention** (§3.7).
+
+**Retention (cohorts) is deliberately not here yet.** It needs identity across sessions, which exists only
+for applications that call `identify()` (§3.7), and it would be bounded by the same seven days — which is
+too short for the question retention actually asks. Shipping half of it would be worse than saying so.
+
 ## 3. The browser key
 
 **A browser key is public by construction.** It ships inside a web page; everyone who can open the page has

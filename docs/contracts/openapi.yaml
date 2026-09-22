@@ -2943,6 +2943,46 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/rum/funnel:
+    get:
+      tags: [rum]
+      operationId: getRumFunnel
+      description: >-
+        Of the sessions that did the first step, how many reached each of the next ones **in order**
+        (rum.md §2.8). Counting each step independently would report a session that reached checkout before
+        it saw the cart as having completed the funnel, so the order is enforced by the query rather than
+        assumed. Bounded by the 7-day trace retention, like every read over the raw spans.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - name: step
+          in: query
+          required: true
+          description: A custom event name. Between 2 and 6, in the order the funnel expects them.
+          schema: { type: array, minItems: 2, maxItems: 6, items: { type: string } }
+        - name: window
+          in: query
+          description: How long a session has to get from the first step to the last.
+          schema: { type: string, default: 30m }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The steps, in order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [steps, window_seconds]
+                properties:
+                  steps:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumFunnelStep" }
+                  window_seconds: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   # -------------------------------------------------------------- database monitoring (D-138)
   /api/v1/db/instances:
     get:
@@ -10857,6 +10897,17 @@ components:
             ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page.
             Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved
             one — openlog stores no visitor address and derives nothing itself.
+    RumFunnelStep:
+      type: object
+      required: [step, sessions, rate]
+      properties:
+        step: { type: string, description: The custom event name this step matches }
+        sessions:
+          type: integer
+          description: >-
+            Sessions that reached this step **and every step before it**, in order and within the window —
+            not sessions that performed this step at some point.
+        rate: { type: number, description: Share of the first step's sessions that got this far; 1 for the first step }
     RumRelease:
       type: object
       description: >-
