@@ -478,6 +478,9 @@ func InstalledVersion(root string) string {
 }
 
 // ManagedBy tells who owns the install root: this agent (marker file), something else, or nobody.
+//
+// sys may be nil for the unprivileged side, which cannot verify ownership: the marker's existence is then the
+// honest answer, and the privileged step checks that it is really root-owned before it changes anything.
 func ManagedBy(sys *update.Sys, root string) string {
 	fi, err := os.Lstat(root)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -486,7 +489,14 @@ func ManagedBy(sys *update.Sys, root string) string {
 	if err != nil || !fi.IsDir() {
 		return ManagedManual
 	}
-	if sys != nil && sys.TrustedFile(filepath.Join(root, MarkerFile)) == nil {
+	marker := filepath.Join(root, MarkerFile)
+	if sys == nil {
+		if fi, err := os.Lstat(marker); err == nil && fi.Mode().IsRegular() {
+			return ManagedFleet
+		}
+		return ManagedPackage
+	}
+	if sys.TrustedFile(marker) == nil {
 		return ManagedFleet
 	}
 	return ManagedPackage

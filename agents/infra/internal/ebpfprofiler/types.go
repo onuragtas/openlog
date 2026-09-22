@@ -98,6 +98,60 @@ const (
 	SourceRemote = "remote"
 )
 
+// Report.Status values.
+const (
+	StatusInstalled = "installed"
+	StatusStaged    = "staged"
+	StatusError     = "error"
+	StatusNotFound  = "not_found"
+	// StatusUnmanaged: an install root this agent did not create (install.sh installs the .deb or .rpm by default).
+	StatusUnmanaged = "unmanaged"
+	// StatusInactive: the profiler is installed, but its service is not running.
+	StatusInactive = "inactive"
+)
+
+// Remote is the ebpf_profiler section of a sync response: the fleet's settings for this host.
+type Remote struct {
+	Mode    string `json:"mode"`
+	Version string `json:"version"`
+	// TargetVersion is the version the host should run ("" = keep what is installed).
+	TargetVersion string `json:"target_version"`
+	Manifest      string `json:"manifest,omitempty"`
+	Signature     string `json:"signature,omitempty"`
+	DownloadURL   string `json:"download_url,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+// Report is the ebpf_profiler section of a sync request.
+type Report struct {
+	Mode   string `json:"mode"`
+	Source string `json:"source"`
+	// Capable is false when this start cannot run the privileged step, or the platform has no profiler at all.
+	Capable bool   `json:"capable"`
+	Reason  string `json:"reason,omitempty"`
+	// Managed says who owns the install root (ManagedBy): none, fleet, package or manual. Unlike the Java agent
+	// this is not a yes/no, because install.sh installs the package by default and that root is left alone.
+	Managed        string `json:"managed"`
+	CurrentVersion string `json:"current_version"`
+	TargetVersion  string `json:"target_version"`
+	Status         string `json:"status"`
+	// Detail explains Status (the error, or why an installation is left alone).
+	Detail string `json:"detail,omitempty"`
+	Unit   string `json:"unit,omitempty"`
+	// Active: the profiler service is running.
+	Active bool          `json:"active"`
+	Update *UpdateReport `json:"update,omitempty"`
+}
+
+// UpdateReport is the last installation, upgrade, rollback or removal.
+type UpdateReport struct {
+	Operation string `json:"operation"`
+	Version   string `json:"version"`
+	State     string `json:"state"`
+	Error     string `json:"error"`
+	ChangedAt string `json:"changed_at"`
+}
+
 // Request is what the agent leaves for the privileged step.
 type Request struct {
 	ID      string    `json:"id"`

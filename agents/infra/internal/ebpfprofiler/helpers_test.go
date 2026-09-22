@@ -120,6 +120,12 @@ func testArchive(t *testing.T, version, osName, arch string, opt archiveOpts) []
 // testArchiveManifest returns a manifest whose profiler artifact matches archive.
 func testArchiveManifest(t *testing.T, version, osName, arch, floor string, archive []byte) []byte {
 	t.Helper()
+	return testArchiveManifestAt(t, version, osName, arch, floor, archive, "https://example.invalid")
+}
+
+// testArchiveManifestAt points the artifact at baseURL, so a manager test can actually download it.
+func testArchiveManifestAt(t *testing.T, version, osName, arch, floor string, archive []byte, baseURL string) []byte {
+	t.Helper()
 	sum := sha256.Sum256(archive)
 	name := TopDir(version, osName, arch) + ".tar.gz"
 	m := lib.Manifest{
@@ -127,7 +133,7 @@ func testArchiveManifest(t *testing.T, version, osName, arch, floor string, arch
 		Compatibility: lib.Compatibility{RollbackFloor: floor},
 		Artifacts: []lib.Artifact{{
 			Component: lib.ComponentEBPFProfiler, OS: osName, Arch: arch, Format: lib.FormatTarGz,
-			Name: name, URL: "https://example.invalid/" + name,
+			Name: name, URL: baseURL + "/" + name,
 			SHA256: hex.EncodeToString(sum[:]), Size: int64(len(archive)),
 		}},
 	}
@@ -156,6 +162,9 @@ type env struct {
 	// uidShift moves Sys.RootUID away from the test user, so the ownership checks of extracted files fail the
 	// way they would when the agent user wrote them.
 	uidShift int
+	// unitActive is what the injected UnitActive reports; restarts counts hand-overs to the privileged step.
+	unitActive bool
+	restarts   int
 }
 
 func newEnv(t *testing.T) *env {
@@ -256,4 +265,76 @@ func (e *env) currentTarget() string {
 		return ""
 	}
 	return t
+}
+
+// manager builds a Manager for this host. osName decides which platform's release it looks for.
+func (e *env) manager(osName string, mod func(*Options)) *Manager {
+	e.t.Helper()
+	o := Options{Config: e.cfg, StateDir: e.state, StatusDir: e.infra, AgentVersion: "1.0.0", OS: osName,
+		Trusted: []ed25519.PublicKey{e.key.pub}, Capable: true,
+		Now:        func() time.Time { return e.now },
+		UnitActive: func(context.Context) bool { return e.unitActive },
+		Restart:    func() { e.restarts++ },
+		Tick:       time.Hour}
+	if mod != nil {
+		mod(&o)
+	}
+	return NewManager(o)
+}
+
+// fakeInstall puts an installation of version in place the way the privileged step would have left it.
+func (e *env) fakeInstall(version, osName string, marker bool) {
+	e.t.Helper()
+	dir := filepath.Join(e.root, "versions", version)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		e.t.Fatal(err)
+	}
+	ar := testArchive(e.t, version, osName, e.goarch, archiveOpts{})
+	files := map[string][]byte{
+		BinaryRel:    []byte("profiler binary " + version),
+		ManifestFile: testArchiveManifest(e.t, version, osName, e.goarch, "", ar),
+	}
+	for name, data := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o755); err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	if marker {
+		if err := os.WriteFile(filepath.Join(e.root, MarkerFile), []byte("managed\n"), 0o644); err != nil {
+			e.t.Fatal(err)
+		}
+	}
+	cur := filepath.Join(e.root, "current")
+	os.Remove(cur)
+	if err := os.Symlink(filepath.Join("versions", version), cur); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+// readState is <state_dir>/ebpf-profiler/state.json.
+func (e *env) readState() State {
+	e.t.Helper()
+	var st State
+	b, err := os.ReadFile(filepath.Join(e.state, StateSubdir, StateFile))
+	if err != nil {
+		return st
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		e.t.Fatal(err)
+	}
+	return st
+}
+
+// readRequest is the request left for the privileged step (ok=false when there is none).
+func (e *env) readRequest() (Request, bool) {
+	e.t.Helper()
+	var req Request
+	b, err := os.ReadFile(filepath.Join(e.state, StateSubdir, RequestFile))
+	if err != nil {
+		return req, false
+	}
+	if err := json.Unmarshal(b, &req); err != nil {
+		e.t.Fatal(err)
+	}
+	return req, true
 }
