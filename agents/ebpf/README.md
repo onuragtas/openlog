@@ -38,22 +38,25 @@ Not yet runnable. What exists and is tested:
   lives in an untagged file and the tests assert its shape here: both stacks interned, only known maps
   referenced, the key encoding matching the map spec byte for byte.
 
-The binary builds for linux/amd64, linux/arm64, darwin and windows. `sampler.New` still refuses on every
-platform, with two different errors because they are two different situations: on Linux the plumbing has
-not landed yet, anywhere else the kernel interfaces do not exist. Neither returns a sampler that produces
-nothing.
+- `internal/sampler` (the Linux plumbing) — one perf event per CPU at the configured frequency, the
+  program attached with `PERF_EVENT_IOC_SET_BPF`, and the maps drained and cleared each interval. The
+  arithmetic over what the kernel wrote is untagged and tested here: summing a per-CPU counter across
+  CPUs, and trimming the zero padding a fixed-width stack array leaves after the last frame.
 
-**The program has never been through a verifier.** It compiles and its shape is tested; whether the kernel
-accepts it is unknown until it runs on Linux with the right privileges, and nothing here pretends
-otherwise.
+The binary builds for linux/amd64, linux/arm64, darwin and windows. Off Linux, `sampler.New` refuses
+rather than returning a sampler that produces nothing.
 
-Still to come: the Linux plumbing — `perf_event_open` per CPU, attaching the program, draining the maps —
-and symbolication.
+**None of the kernel-facing code has ever run.** It compiles for both Linux architectures and its pure
+parts are tested, but the program has not been through a verifier and the perf attach has not been
+attempted, because this repository has no privileged Linux CI job and a development Mac cannot load BPF.
+The first run on a real host is where `New` either works or says exactly which capability or
+`perf_event_paranoid` setting is in the way.
 
-**The sampler cannot be verified on a development Mac**, and this repository has no privileged Linux CI job.
-So everything that does not touch the kernel is built behind an interface and tested where tests can run,
-and the kernel-facing part is kept small enough to read. Where a claim here has not been executed, it says
-so rather than implying a green test.
+That shapes how the whole component is written: everything that does not touch the kernel sits behind an
+interface and is tested where tests can run, and the kernel-facing part is kept small enough to read.
+Where a claim here has not been executed, it says so rather than implying a green test.
+
+Still to come: symbolication — today every frame is reported as its address.
 
 ## No clang, no cgo
 
