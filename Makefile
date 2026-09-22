@@ -293,11 +293,16 @@ release-agent: release-tool
 # rollback_floor). It cannot be the final manifest.json, which contains the packages' own sha256, so
 # it lists the agent tarballs only; everything else (version, compatibility, images, released_at) is
 # identical.
-release-packages: release-agent
+# The embedded manifest also carries the profiler tarballs, so an agent can resolve
+# ComponentEBPFProfiler from the signed manifest beside its own binary; without them the artifact
+# exists in the release and is invisible where the updater looks. That is why this target now
+# depends on release-ebpf-profiler: the tarballs must exist before the manifest is built.
+release-packages: release-agent release-ebpf-profiler
 	@set -euo pipefail; scripts="$(RELEASE_STAGE)/pkg-scripts"; rm -rf "$$scripts"; mkdir -p "$$scripts"; \
 	for s in packaging/scripts/*.sh; do sed 's/@VERSION@/$(VERSION)/g' "$$s" > "$$scripts/$${s##*/}"; chmod 0755 "$$scripts/$${s##*/}"; done; \
 	emb="$(RELEASE_STAGE)/embedded-manifest"; rm -rf "$$emb"; mkdir -p "$$emb"; \
 	for arch in $(RELEASE_ARCHES); do cp "$(RELEASE_DIR)/openlog-infra-agent_$(VERSION)_linux_$$arch.tar.gz" "$$emb/"; done; \
+	for arch in $(RELEASE_ARCHES); do cp "$(RELEASE_DIR)/openlog-ebpf-profiler_$(VERSION)_linux_$$arch.tar.gz" "$$emb/"; done; \
 	$(RELEASE_TOOL) build-manifest $(RELEASE_MANIFEST_ARGS) --dist "$$emb"; \
 	$(RELEASE_TOOL) sign --key-env OPENLOG_RELEASE_SIGNING_KEY "$$emb/manifest.json"; \
 	if [ -n "$${OPENLOG_RELEASE_SIGNING_KEY_2:-}" ]; then $(RELEASE_TOOL) sign --key-env OPENLOG_RELEASE_SIGNING_KEY_2 "$$emb/manifest.json"; fi; \
