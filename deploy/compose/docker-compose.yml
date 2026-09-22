@@ -8,7 +8,7 @@ name: openlog
 
 # Release these files belong to (`make release-prepare` stamps it). openlog-updater compares it with the running
 # version and reports older compose files (settings and volumes added later do not reach the containers).
-x-openlog-compose-version: "0.1.84"
+x-openlog-compose-version: "0.1.85"
 
 # Every other setting of docs/contracts/config.md, passed through from .env (empty = the documented default), merged
 # into `openlog` and `openlog-alert`. internal/config/envcoverage_test.go fails when a variable read by the backend is
