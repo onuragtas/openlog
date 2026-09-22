@@ -194,6 +194,15 @@ func TestShardedClickHouse(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Minute)
 	distTenant, directTenant := "dist-"+run, "direct-"+run
 	distRows, directRows := testRows(distTenant, 40, now), testRows(directTenant, 40, now)
+	// A table that joins Tables without joining testRows is a mistake this test has now made twice: first
+	// metric_exemplars (fixed 2026-09-17), then profiles and the three db_monitoring tables. The placement
+	// subtest reports it as "rows not spread over both shards: map[]", which names the table but not the
+	// cause, and only the nightly run sees it. Fail here instead, saying what to do.
+	for _, tbl := range Tables {
+		if len(distRows[tbl]) == 0 || len(directRows[tbl]) == 0 {
+			t.Fatalf("testRows produces no rows for %s: add them there when a table joins Tables", tbl)
+		}
+	}
 	dist := ClickHouseWriter{Conn: boot, Database: "openlog"}
 	direct := DirectWriter{W: sw}
 	for _, tbl := range Tables {
