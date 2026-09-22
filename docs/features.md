@@ -59,6 +59,15 @@ profiled is a service whose slow span has no explanation. The **Node.js** agent 
 default (`OPENLOG_PROFILING=true`), because switching a new signal on for everyone who upgrades would
 multiply what they store without anyone asking.
 
+Everything that is *not* instrumented — a database, a PHP-FPM pool, a cron job, a kernel thread — can be
+profiled too, by a separate **eBPF whole-host profiler** (`install.sh --with-ebpf-profiler`). It samples
+every process on the machine and names the frames from each binary's symbols. It is its own package
+because it runs with `CAP_BPF` and `CAP_PERFMON`, which the infra agent deliberately does not have; an
+operator who never installs it keeps that posture exactly.
+
+That is profiling, not auto-instrumentation: it produces flame graphs, not spans, and the entry below
+about eBPF auto-instrumentation is still accurate.
+
 ---
 
 ## An error inbox, not an error list
