@@ -159,10 +159,18 @@ type Containers struct {
 
 // LogsConfig configures log collection from files and journald.
 type LogsConfig struct {
-	Enabled           bool            `yaml:"enabled"`
-	AutoFromDiscovery bool            `yaml:"auto_from_discovery"`
-	MaskSecrets       bool            `yaml:"mask_secrets"`
-	ParseSeverity     bool            `yaml:"parse_severity"`
+	Enabled           bool `yaml:"enabled"`
+	AutoFromDiscovery bool `yaml:"auto_from_discovery"`
+	MaskSecrets       bool `yaml:"mask_secrets"`
+	ParseSeverity     bool `yaml:"parse_severity"`
+	// JoinContinuations groups a stack trace into one record when no multiline_start applies: an
+	// indented or "at …" line continues the record before it (semantic-conventions §4.1).
+	//
+	// Off by default, and deliberately: holding a record until the next line costs up to a second of
+	// delivery latency, and a container's stdout and stderr records can change order relative to each
+	// other. A configured multiline_start pays the same price knowingly; every other installation should
+	// not pay it without asking.
+	JoinContinuations bool            `yaml:"join_continuations"`
 	PollInterval      Duration        `yaml:"poll_interval"`
 	StartAt           string          `yaml:"start_at"`
 	MaxLineBytes      int             `yaml:"max_line_bytes"`

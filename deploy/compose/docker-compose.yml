@@ -195,6 +195,10 @@ x-openlog-settings: &openlog-settings
 
 services:
   postgres:
+    labels:
+      # Group multi-line records into one log (semantic-conventions §4.1). Without this every
+      # line of a stack trace becomes its own record. Sample: 2026-09-22 14:24:12.069 UTC [26] LOG: ...
+      openlog.logs.multiline: '^\d{4}-\d{2}-\d{2} \d{2}:'
     image: postgres:16-alpine
     hostname: postgres
     environment:
@@ -237,6 +241,10 @@ services:
     restart: "no"
 
   kafka:
+    labels:
+      # Group multi-line records into one log (semantic-conventions §4.1). Without this every
+      # line of a stack trace becomes its own record. Sample: [2026-09-22 14:19:47,964] WARN ...
+      openlog.logs.multiline: '^\[\d{4}-\d{2}-\d{2}'
     image: apache/kafka:4.1.0
     hostname: kafka
     # Kafka resolves its own hostname at startup (InetAddress.getLocalHost()). Docker Engine 29+ no longer writes the

@@ -15,6 +15,17 @@ const LabelMultiline = "openlog.logs.multiline"
 // maxCachedPatterns bounds the compiled multiline patterns kept by a manager.
 const maxCachedPatterns = 256
 
+// defaultContinuation matches a line that continues the previous record when no multiline_start is
+// configured. Every runtime indents the frames of a stack trace (Java "\tat ", Node "    at ", Python
+// "  File ", Go "\t"), and the two unindented forms below are Java's. Conservative on purpose: a line
+// that is not clearly a continuation starts its own record, as it always did.
+var defaultContinuation = regexp.MustCompile(`^(?:[ \t]|at [\w$./<]|Caused by:|\.\.\. \d+ (?:more|common frames omitted))`)
+
+// defaultFlush is the idle window of continuation mode. A configured pattern waits multilineFlush for the
+// next start line; without one, a record ends as soon as a line that is not a continuation arrives, so
+// only the last record of a quiet stream waits — and it should not wait as long.
+const defaultFlush = time.Second
+
 // containerMultiline returns the multiline start regex of a container: the openlog.logs.multiline label,
 // else the multiline_start of the first matching include item; nil groups nothing. Run goroutine only.
 func (m *Manager) containerMultiline(c *containers.Container) *regexp.Regexp {
@@ -58,9 +69,23 @@ type groupEmitFunc func(stream int, body []byte, ts, last time.Time, truncated b
 type multilineGrouper struct {
 	re       *regexp.Regexp
 	maxBytes int
-	parts    [3]pendingLine
-	lastAt   [3]time.Time
+	// join groups stack traces when re is nil: an indented line continues the record before it. This is
+	// what makes a Java or Node stack trace one log instead of forty (logs.join_continuations).
+	join   bool
+	parts  [3]pendingLine
+	lastAt [3]time.Time
 }
+
+// idle is how long a stream may be silent before its pending record is emitted.
+func (g *multilineGrouper) idle() time.Duration {
+	if g.re == nil {
+		return defaultFlush
+	}
+	return multilineFlush
+}
+
+// holds reports whether the grouper can be holding a record, so a flusher is needed.
+func (g *multilineGrouper) holds() bool { return g.re != nil || g.join }
 
 func (g *multilineGrouper) pending() bool {
 	for i := range g.parts {
@@ -86,6 +111,32 @@ func (g *multilineGrouper) push(stream int, line []byte, ts time.Time, start int
 		stream = 0
 	}
 	p := &g.parts[stream]
+	if g.re == nil && g.join {
+		// Continuation mode: an indented or "at …" line belongs to the record before it; anything else
+		// ends that record and starts a new one.
+		if p.started && defaultContinuation.Match(line) {
+			p.add([]byte{'\n'}, g.maxBytes)
+			p.add(line, g.maxBytes)
+			p.truncated = p.truncated || truncated
+			if !ts.IsZero() {
+				p.last = ts
+			}
+			g.lastAt[stream] = now
+			return true
+		}
+		var old pendingLine
+		if p.started {
+			old = g.take(stream)
+		}
+		p.start, p.ts, p.last = start, ts, ts
+		p.add(line, g.maxBytes)
+		p.truncated = truncated
+		g.lastAt[stream] = now
+		if old.started {
+			return emit(stream, old.buf, old.ts, old.last, old.truncated)
+		}
+		return true
+	}
 	if g.re == nil || g.re.Match(line) {
 		var old pendingLine
 		if p.started {

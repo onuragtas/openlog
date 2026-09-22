@@ -208,3 +208,68 @@ func TestContainerMultilineAPIStream(t *testing.T) {
 		t.Errorf("stream position = %v", st.last)
 	}
 }
+
+// A stack trace is one event, and every runtime indents its frames. With logs.join_continuations on, an
+// indented or "at …" line joins the record before it even though no multiline_start applies; a line that
+// is not a continuation ends that record and starts the next. Taken from a real Rocket.Chat crash, which
+// arrived as one log line per frame.
+func TestGrouperJoinsContinuationsWhenAsked(t *testing.T) {
+	lines := []string{
+		"errorClass [Error]: [An error occurred when creating an index]",
+		"    at Collection.createIndexAsync (packages/mongo/collection/methods_index.js:64:15)",
+		"    at module.wrapAsync.self (packages/accounts-password/password_server.js:1097:1) {",
+		"  isClientSafe: true,",
+		"Node.js v22.13.1",
+	}
+	collect := func(join bool) []string {
+		var got []string
+		emit := func(_ int, body []byte, _, _ time.Time, _ bool) bool {
+			got = append(got, string(body))
+			return true
+		}
+		g := &multilineGrouper{maxBytes: 1 << 20, join: join}
+		now := time.Unix(0, 0)
+		for _, l := range lines {
+			g.push(0, []byte(l), time.Time{}, 0, false, now, emit)
+		}
+		g.flushAll(emit)
+		return got
+	}
+
+	want := []string{
+		"errorClass [Error]: [An error occurred when creating an index]\n" +
+			"    at Collection.createIndexAsync (packages/mongo/collection/methods_index.js:64:15)\n" +
+			"    at module.wrapAsync.self (packages/accounts-password/password_server.js:1097:1) {\n" +
+			"  isClientSafe: true,",
+		"Node.js v22.13.1",
+	}
+	if got := collect(true); !reflect.DeepEqual(got, want) {
+		t.Errorf("joined = %q, want %q", got, want)
+	}
+	// Off (the default): every line is its own record, exactly as before. This pins the default so it
+	// cannot be flipped without a test saying so.
+	if got := collect(false); !reflect.DeepEqual(got, lines) {
+		t.Errorf("not joined = %q, want one record per line", got)
+	}
+}
+
+// Java's unindented continuations are recognised too, and a Java-style trace ends at the next real line.
+func TestGrouperJoinsJavaContinuations(t *testing.T) {
+	var got []string
+	emit := func(_ int, body []byte, _, _ time.Time, _ bool) bool { got = append(got, string(body)); return true }
+	g := &multilineGrouper{maxBytes: 1 << 20, join: true}
+	now := time.Unix(0, 0)
+	for _, l := range []string{
+		"Exception in thread \"main\" java.lang.IllegalStateException: boom",
+		"\tat com.example.App.main(App.java:12)",
+		"Caused by: java.io.IOException: disk",
+		"\t... 12 more",
+		"INFO  ready",
+	} {
+		g.push(0, []byte(l), time.Time{}, 0, false, now, emit)
+	}
+	g.flushAll(emit)
+	if len(got) != 2 || !strings.Contains(got[0], "Caused by:") || got[1] != "INFO  ready" {
+		t.Fatalf("records = %q", got)
+	}
+}

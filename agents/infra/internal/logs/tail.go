@@ -200,7 +200,7 @@ func (m *Manager) pollFile(t *tailer, now time.Time) {
 		t.pend = nil
 		m.emitFileRecord(t, p.body, p.truncated)
 	}
-	if t.src.ctr != nil && idle >= multilineFlush && m.canEmit(t) {
+	if t.src.ctr != nil && idle >= t.mgroup.idle() && m.canEmit(t) {
 		m.flushContainerParts(t)
 	} else if t.src.ctr != nil && t.mgroup.pending() && m.canEmit(t) {
 		// A stream idle while the other one keeps writing.

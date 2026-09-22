@@ -352,6 +352,8 @@ finds them). See `semantic-conventions.md` §4.1.
 - Drivers that cannot be read (`none`, remote drivers without dual logging) are retried with backoff and logged once.
 - containerd/CRI-O containers: the CRI log file (`/var/log/pods/…/<n>.log`, CRI format, `P` partial lines joined) is tailed like a json-file
   log; there is no API stream for them.
+- Stack traces without a pattern: `logs.join_continuations: true` joins indented / `at …` / `Caused by:` / `... N more` lines to the record
+  before them. Off by default — it delays each record until the next line (up to ~1 s) and can reorder stdout against stderr.
 - Multiline: label a container `openlog.logs.multiline='^\d{4}-\d{2}-\d{2}'` or set `multiline_start` on an `include` item (the label wins;
   add `- name: "*"` so the include list still selects every container). Lines are grouped per stream (stdout/stderr) like `logs.files`:
   flushed on the next start line or after 2 s idle, cut at `max_line_bytes`.

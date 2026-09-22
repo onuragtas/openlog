@@ -55,6 +55,9 @@ logs:
   auto_from_discovery: false     # tail the log_paths of discovered services (e.g. /var/log/nginx/*.log)
   mask_secrets: false            # log bodies are user data: masking (password=***, url userinfo, …) is opt-in
   parse_severity: true           # guess severity from level words ([error], level=warn, "level":"info", …)
+  join_continuations: false      # group stack traces with no multiline_start: an indented or "at …" line
+                                 # joins the record before it. Off by default: holding a record until the
+                                 # next line adds up to ~1s latency and can reorder stdout against stderr.
   start_at: end                  # files present at startup without a saved offset: end | beginning
   max_line_bytes: 65536          # longer lines/records are truncated
   rate_limit_lines: 2000         # per file per second; 0 = unlimited; excess stays in the file (no drops)

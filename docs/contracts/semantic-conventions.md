@@ -441,6 +441,11 @@ same stream up to the `F` line, the time is that of the first part. There is no 
 lines that are not in the format are sent as they are without `log.iostream`. A rotation while the agent was down is not followed
 (kubelet's `<n>.log.<timestamp>` files are not read).
 
+Multiline grouping: without a start pattern, `logs.join_continuations` (default `false`) groups a stack trace by its shape — a line
+beginning with whitespace, `at …`, `Caused by:` or `... N more` continues the record before it, and any other line ends it. It is off by
+default because holding a record until the next line adds up to a second of delivery latency and can reorder a container's stdout
+against its stderr; a configured pattern pays the same price knowingly.
+
 Multiline grouping: a container's lines are grouped into multiline records when a start pattern is set — the container label
 `openlog.logs.multiline=<regex>` (wins), else `multiline_start` of the first matching `include` item. As for files, a line matching the
 pattern starts a record and following non-matching lines are appended with `\n` (lines before the first start line are sent alone).

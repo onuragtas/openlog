@@ -527,7 +527,7 @@ func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty b
 		}
 	}
 	var mu sync.Mutex // guards g and send (the flusher goroutine emits too)
-	g := &multilineGrouper{re: multiline, maxBytes: m.cfg.MaxLineBytes}
+	g := &multilineGrouper{re: multiline, maxBytes: m.cfg.MaxLineBytes, join: m.cfg.JoinContinuations}
 	lineEmit := func(stream int, line []byte, ts time.Time, truncated bool) bool {
 		if !since.IsZero() && !ts.IsZero() && ts.Before(since) {
 			return true // engines round since down to seconds
@@ -536,13 +536,15 @@ func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty b
 		defer mu.Unlock()
 		return g.push(stream, line, ts, 0, truncated, time.Now(), send)
 	}
-	if multiline != nil {
+	// A grouper that can hold a record needs a flusher, otherwise a quiet stream keeps its last record
+	// forever: continuation mode holds one without any configured pattern.
+	if g.holds() {
 		stop := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tick := time.NewTicker(multilineFlush / 2)
+			tick := time.NewTicker(g.idle() / 2)
 			defer tick.Stop()
 			for {
 				select {
@@ -552,7 +554,7 @@ func (m *Manager) runStream(ctx context.Context, st *apiStream, id string, tty b
 					return
 				case now := <-tick.C:
 					mu.Lock()
-					g.flushIdle(now, multilineFlush, send)
+					g.flushIdle(now, g.idle(), send)
 					mu.Unlock()
 				}
 			}
@@ -671,7 +673,7 @@ func (m *Manager) completeContainerPart(t *tailer, idx int) {
 
 // containerLine passes a complete line (owned by the callee) through multiline grouping.
 func (m *Manager) containerLine(t *tailer, idx int, body []byte, ts time.Time, start int64, truncated bool) {
-	t.mgroup.re, t.mgroup.maxBytes = t.src.multiline, m.cfg.MaxLineBytes
+	t.mgroup.re, t.mgroup.maxBytes, t.mgroup.join = t.src.multiline, m.cfg.MaxLineBytes, m.cfg.JoinContinuations
 	t.mgroup.push(idx, body, ts, start, truncated, m.now(), m.fileGroupEmit(t))
 }
 
@@ -694,7 +696,7 @@ func (m *Manager) flushContainerParts(t *tailer) {
 
 // flushContainerGroups emits multiline records of streams idle for multilineFlush.
 func (m *Manager) flushContainerGroups(t *tailer, now time.Time) {
-	t.mgroup.flushIdle(now, multilineFlush, m.fileGroupEmit(t))
+	t.mgroup.flushIdle(now, t.mgroup.idle(), m.fileGroupEmit(t))
 }
 
 func (m *Manager) emitContainerFileRecord(t *tailer, body []byte, stream string, ts, last time.Time, truncated bool) {
