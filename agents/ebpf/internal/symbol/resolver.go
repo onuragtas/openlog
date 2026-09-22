@@ -13,6 +13,13 @@ import (
 	"github.com/onuragtas/openlog/agents/ebpf/internal/otlpprofiles"
 )
 
+// MaxSymbolBytes is what all cached symbol tables together may cost. The cache used to be unbounded, and
+// on a host running many distinct binaries — every container image brings its own — it grew past the
+// unit's MemoryMax within one interval and the profiler was killed by the OOM killer while it was
+// working correctly. Past the budget, files are named "<binary>+0x<offset>" instead (contract §7):
+// fewer names, and a profiler that stays alive to produce them.
+var MaxSymbolBytes = 64 << 20
+
 // Resolver names addresses, caching what it learns. A profiler asks it tens of thousands of times per
 // interval, so re-reading /proc/<pid>/maps or re-parsing a binary for every sample is not an option.
 type Resolver struct {
@@ -21,7 +28,13 @@ type Resolver struct {
 
 	maps   map[int][]Mapping
 	tables map[string]*Table
+	// used is what the cached tables cost so far. Counting up rather than down keeps the zero value
+	// usable: a Resolver built as a struct literal gets the whole budget, not none of it.
+	used int
 }
+
+// Used is what the cached symbol tables cost, for tests and diagnostics.
+func (r *Resolver) Used() int { return r.used }
 
 // NewResolver reads the real /proc and the real files, under hostRoot when the profiler runs in a
 // container with the host mounted.
@@ -66,6 +79,12 @@ func (r *Resolver) Resolve(pid int, addr uint64) otlpprofiles.Frame {
 		if tab == nil {
 			tab = &Table{} // a file that could not be read is remembered as having no symbols
 		}
+		if r.used+tab.Bytes() > MaxSymbolBytes {
+			// Out of budget: remember the file as having no symbols rather than holding the table. It is
+			// remembered so the next sample in the same file does not parse it again.
+			tab = &Table{}
+		}
+		r.used += tab.Bytes()
 		r.tables[m.Path] = tab
 	}
 	if !tab.Empty() {

@@ -12,6 +12,11 @@ import (
 	"sort"
 )
 
+// MaxTableBytes bounds one file's symbols. A single binary must not be able to spend the whole
+// symbolication budget: past this it is treated as stripped, which costs names in that one file and
+// keeps the profiler inside its memory limit.
+var MaxTableBytes = 8 << 20
+
 // Table is one file's symbols, sorted by address so a lookup is a binary search.
 type Table struct {
 	addrs []uint64
@@ -19,7 +24,12 @@ type Table struct {
 	names []string
 	// loads are the PT_LOAD segments, kept to convert a file offset into a virtual address.
 	loads []load
+	// bytes is roughly what this table costs in memory, for the resolver's budget.
+	bytes int
 }
+
+// Bytes is roughly what the table costs in memory.
+func (t *Table) Bytes() int { return t.bytes }
 
 type load struct{ off, vaddr, filesz uint64 }
 
@@ -71,12 +81,28 @@ func NewTable(f *elf.File) (*Table, error) {
 		// Not an error: a stripped binary is normal, and the caller falls back to the address.
 		return t, nil
 	}
+	// Measure before building. A Go binary or a JVM can carry hundreds of thousands of symbols, and three
+	// parallel slices of them is the allocation that killed this process under MemoryMax.
+	size := 0
+	for _, e := range all {
+		size += 8 + 8 + 16 + len(e.name) // addr, size, string header, bytes
+	}
+	if size > MaxTableBytes {
+		// Deliberately not an error: the caller names frames "<binary>+0x<offset>", which still says which
+		// binary burned the CPU (contract §7).
+		return t, nil
+	}
 	sort.Slice(all, func(i, j int) bool { return all[i].addr < all[j].addr })
+	// Exact capacities: growing three slices to their final length doubles the peak.
+	t.addrs = make([]uint64, 0, len(all))
+	t.sizes = make([]uint64, 0, len(all))
+	t.names = make([]string, 0, len(all))
 	for _, e := range all {
 		t.addrs = append(t.addrs, e.addr)
 		t.sizes = append(t.sizes, e.size)
 		t.names = append(t.names, e.name)
 	}
+	t.bytes = size
 	return t, nil
 }
 

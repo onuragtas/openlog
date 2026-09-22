@@ -72,6 +72,10 @@ SystemCallErrorNumber=EPERM
 # Bounded like the infra agent, with room for the stack map and the symbol tables it parses. Profiling
 # must never be the reason a host runs out of either.
 MemoryMax=250M
+# Tell the Go runtime the same limit, a little below it. Without this the heap grows until the cgroup
+# kills the process (observed: OOM at restart counter 739 while the profiler was working correctly);
+# with it the collector works harder instead. Symbolication has its own budget (internal/symbol).
+Environment=GOMEMLIMIT=180MiB
 CPUQuota=15%
 Nice=10
 

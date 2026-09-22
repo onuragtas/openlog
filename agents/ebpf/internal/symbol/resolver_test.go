@@ -3,6 +3,7 @@ package symbol
 import (
 	"debug/elf"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -102,5 +103,41 @@ func TestAddressIsAlwaysCarried(t *testing.T) {
 		if got := r.Resolve(7, addr); got.Address != addr {
 			t.Errorf("frame for %#x carries address %#x", addr, got.Address)
 		}
+	}
+}
+
+// Once the symbolication budget is spent, further binaries are named "<binary>+0x<offset>" instead of
+// being parsed and held. The cache used to be unbounded: on a host where every container image brings its
+// own binaries it grew past the unit's MemoryMax within one interval and the profiler was OOM-killed
+// while it was working correctly.
+func TestResolverStopsCachingOnceTheBudgetIsSpent(t *testing.T) {
+	defer func(v int) { MaxSymbolBytes = v }(MaxSymbolBytes)
+
+	table := func(name string) *Table {
+		return &Table{addrs: []uint64{0x1000}, sizes: []uint64{0x100}, names: []string{name},
+			loads: []load{{off: 0, vaddr: 0, filesz: 0x2000}}, bytes: 100}
+	}
+	r := &Resolver{
+		readMaps: func(pid int) ([]Mapping, error) {
+			return []Mapping{{Start: 0x400000, End: 0x410000, Offset: 0, Path: "/bin/p" + strconv.Itoa(pid)}}, nil
+		},
+		loadTable: func(path string) (*Table, error) { return table("sym_of" + path), nil },
+		maps:      map[int][]Mapping{},
+		tables:    map[string]*Table{},
+	}
+	MaxSymbolBytes = 250 // room for two tables of 100 bytes, not three
+
+	var named []string
+	for pid := 1; pid <= 3; pid++ {
+		named = append(named, r.Resolve(pid, 0x401000).Function)
+	}
+	if named[0] != "sym_of/bin/p1" || named[1] != "sym_of/bin/p2" {
+		t.Fatalf("the first two binaries should have been symbolized: %v", named)
+	}
+	if named[2] != "p3+0x1000" {
+		t.Fatalf("past the budget the frame must fall back to <binary>+0x<offset>, got %q", named[2])
+	}
+	if r.Used() > MaxSymbolBytes {
+		t.Fatalf("used %d bytes, budget %d", r.Used(), MaxSymbolBytes)
 	}
 }

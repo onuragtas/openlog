@@ -220,3 +220,42 @@ func TestDataSymbolsAreNotUsedForNames(t *testing.T) {
 		t.Errorf("Lookup(0x401200) = %q,%v, want main.main", got, ok)
 	}
 }
+
+// A file whose symbols would cost more than MaxTableBytes is treated as stripped. The caller then names
+// frames "<binary>+0x<offset>", which still says which binary burned the CPU (contract §7). Without this
+// bound the cache grew until the cgroup's OOM killer stopped the profiler mid-interval.
+func TestTableDropsASymbolTableOverTheLimit(t *testing.T) {
+	defer func(v int) { MaxTableBytes = v }(MaxTableBytes)
+	MaxTableBytes = 64 // smaller than any real table, so two symbols already exceed it
+
+	f := buildELF(t, []testSym{
+		{Name: "main.work", Value: 0x401000, Size: 16, Type: elf.STT_FUNC},
+		{Name: "main.idle", Value: 0x401010, Size: 16, Type: elf.STT_FUNC},
+	}, 0x1000, 0x401000, 0x1000)
+	tab, err := NewTable(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tab.Empty() {
+		t.Fatal("a table over the limit was kept")
+	}
+	if tab.Bytes() != 0 {
+		t.Fatalf("a dropped table still reports %d bytes", tab.Bytes())
+	}
+	if _, ok := tab.VaddrFor(0x1000); !ok {
+		t.Fatal("PT_LOAD segments must survive: the fallback name needs the file offset")
+	}
+}
+
+// A table that fits is kept and reports what it costs, so the resolver can budget.
+func TestTableReportsWhatItCosts(t *testing.T) {
+	f := buildELF(t, []testSym{{Name: "main.work", Value: 0x401000, Size: 16, Type: elf.STT_FUNC}},
+		0x1000, 0x401000, 0x1000)
+	tab, err := NewTable(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tab.Empty() || tab.Bytes() < len("main.work") {
+		t.Fatalf("small table: empty=%t bytes=%d", tab.Empty(), tab.Bytes())
+	}
+}
