@@ -22,6 +22,9 @@ Not yet runnable. What exists and is tested:
   where there is one, the binary's name where there is not, `kernel` for kernel threads.
 - `internal/export` — posting to `/v1/profiles` with the license key, gzip, and retries bounded so a dead
   ingest delays the next profile instead of replacing it.
+- `internal/aggregate` — one interval's raw samples grouped per service, with every limit the contract
+  sets: 127 frames (the cut is marked), 20 000 stacks and 256 services, dropping the quietest rather than
+  the busiest.
 
 Still to come: the perf-event sampler and its BPF program, symbolication, and the command itself.
 
