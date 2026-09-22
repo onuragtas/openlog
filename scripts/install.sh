@@ -579,7 +579,32 @@ if [ "$ebpf_profiler" = 1 ]; then
 	# Said plainly, the way the docker group's root-equivalence is: an operator is entitled to know what
 	# this just granted without reading a contract.
 	log "openlog-ebpf-profiler installed; it runs with CAP_BPF and CAP_PERFMON and samples every process on this host"
-	log "set OPENLOG_LICENSE_KEY in /etc/openlog-ebpf-profiler/openlog-ebpf-profiler.env, then: systemctl start openlog-ebpf-profiler"
+
+	# The installer already knows the key and the endpoint, and the profiler needs the same ones the agent
+	# uses. Making someone type them again into a second file is friction with nothing bought for it, and
+	# it is why the service would otherwise sit enabled but stopped: its package ships a placeholder key,
+	# and it refuses to start on one rather than restart-looping.
+	ebpf_env=/etc/openlog-ebpf-profiler/openlog-ebpf-profiler.env
+	ebpf_key=$license_key
+	ebpf_endpoint=$endpoint
+	# Not given on this run: take what the agent is already configured with.
+	[ -n "$ebpf_key" ] || ebpf_key=$(sed -n 's/^license_key:[[:space:]]*"\{0,1\}\([^"[:space:]#]*\).*/\1/p' "$CONFIG" 2>/dev/null | head -n 1)
+	[ -n "$ebpf_endpoint" ] || ebpf_endpoint=$(sed -n 's/^endpoint:[[:space:]]*"\{0,1\}\([^"[:space:]#]*\).*/\1/p' "$CONFIG" 2>/dev/null | head -n 1)
+	if [ -f "$ebpf_env" ] && [ -n "$ebpf_key" ]; then
+		set -- -e "s|^OPENLOG_LICENSE_KEY=.*|OPENLOG_LICENSE_KEY=$ebpf_key|"
+		[ -z "$ebpf_endpoint" ] || set -- "$@" -e "s|^OPENLOG_ENDPOINT=.*|OPENLOG_ENDPOINT=$ebpf_endpoint|"
+		sed "$@" "$ebpf_env" >"$tmpdir/ebpf.env"
+		# Written back through the existing file so its mode and owner (0640 root:openlog-ebpf) survive.
+		cat "$tmpdir/ebpf.env" >"$ebpf_env"
+		rm -f "$tmpdir/ebpf.env"
+		log "openlog-ebpf-profiler configured from the same license key and endpoint as the agent"
+		if [ "$start" = 1 ] && command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+			systemctl start openlog-ebpf-profiler ||
+				log "openlog-ebpf-profiler did not start; run: openlog-ebpf-profiler -self-test"
+		fi
+	else
+		log "set OPENLOG_LICENSE_KEY in $ebpf_env, then: systemctl start openlog-ebpf-profiler"
+	fi
 fi
 
 bin=$ROOT/current/openlog-infra-agent
