@@ -116,6 +116,30 @@ func testRows(tenant string, n int, now time.Time) map[string][][]any {
 		// signal): one distinct signal value per row keeps the rows apart and spreads them over both shards.
 		u := UsageIngestRow{TenantID: tenant, Hour: now.Truncate(time.Hour), Signal: "signal-" + strconv.Itoa(i), Requests: 1, Bytes: uint64(100 + i)}
 		rows[TableUsageIngest] = append(rows[TableUsageIngest], u.Values())
+		// profiles is sharded by cityHash64(tenant_id, service_name) (0095_profiles): a flame graph is one
+		// service over one window, so the service name varies per row to spread a tenant over both shards.
+		svc := "svc-" + strconv.Itoa(i)
+		pr := ProfileRow{TenantID: tenant, Timestamp: ts, ServiceName: svc, ServiceNamespace: "ns", Environment: "prod",
+			HostID: host, ProfileType: "cpu", Unit: "nanoseconds", Stack: []string{"main", "work"}, Leaf: "work",
+			Value: int64(i + 1), DurationNs: uint64(time.Second), ResourceAttributes: map[string]string{}, Attributes: map[string]string{}}
+		rows[TableProfiles] = append(rows[TableProfiles], pr.Values())
+		// The three db_monitoring tables are sharded by cityHash64(tenant_id, instance) (0096_db_monitoring,
+		// D-138), so the instance varies for the same reason.
+		inst, qid := "db-"+strconv.Itoa(i), "q"+strconv.Itoa(i)
+		qs := DBQueryStatRow{TenantID: tenant, Timestamp: ts, IntervalSeconds: 60, HostID: host, HostName: host,
+			DBSystem: "postgresql", Instance: inst, ServerAddress: "127.0.0.1", ServerPort: 5432, DBName: "app", DBUser: "app",
+			QueryID: qid, QueryText: "SELECT 1", Fingerprint: uint64(i + 1), Calls: 1, TotalTimeMs: float64(i),
+			Rows: 1, RowsExamined: 1}
+		rows[TableDBQueryStats] = append(rows[TableDBQueryStats], qs.Values())
+		ss := DBSessionSampleRow{TenantID: tenant, Timestamp: ts, HostID: host, HostName: host, DBSystem: "postgresql",
+			Instance: inst, DBName: "app", DBUser: "app", SessionID: "s" + strconv.Itoa(i), State: "active",
+			WaitEventType: "CPU", WaitEvent: "cpu", QueryID: qid, QueryText: "SELECT 1", Fingerprint: uint64(i + 1),
+			DurationMs: float64(i), BlockingSessionIDs: []string{}, Application: "app", ClientAddress: "127.0.0.1"}
+		rows[TableDBSessionSamples] = append(rows[TableDBSessionSamples], ss.Values())
+		pl := DBQueryPlanRow{TenantID: tenant, CapturedAt: ts, Instance: inst, Fingerprint: uint64(i + 1),
+			PlanHash: "h" + strconv.Itoa(i), DBSystem: "postgresql", HostID: host, DBName: "app", QueryText: "SELECT 1",
+			PlanFormat: "json", Plan: "{}", TotalCost: float64(i)}
+		rows[TableDBQueryPlans] = append(rows[TableDBQueryPlans], pl.Values())
 	}
 	return rows
 }
