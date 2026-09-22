@@ -42,10 +42,16 @@ type Options struct {
 	Sampler    Sampler
 	Exporter   Exporter
 	Symbolizer aggregate.Symbolizer
-	Namer      aggregate.Namer
-	HostID     string
-	Version    string
-	Log        *slog.Logger
+	// NewSymbolizer builds a fresh symbolizer for each window, and takes precedence over Symbolizer.
+	//
+	// Symbol caches are keyed by pid, and pids are reused. A cache that outlived its window would name a
+	// new program's addresses after the symbols of the one that used to hold that pid — wrong in a way
+	// that looks entirely plausible. Rebuilding per window bounds that to the window.
+	NewSymbolizer func() aggregate.Symbolizer
+	Namer         aggregate.Namer
+	HostID        string
+	Version       string
+	Log           *slog.Logger
 	// Now is time.Now; tests replace it so a profile's window is predictable.
 	Now func() time.Time
 }
@@ -83,7 +89,11 @@ func Run(ctx context.Context, o Options) error {
 }
 
 func (o Options) exportWindow(ctx context.Context, raw []aggregate.RawSample, start time.Time) {
-	byService := aggregate.Run(raw, o.Symbolizer, o.Namer, o.Config.PeriodNanos())
+	sym := o.Symbolizer
+	if o.NewSymbolizer != nil {
+		sym = o.NewSymbolizer()
+	}
+	byService := aggregate.Run(raw, sym, o.Namer, o.Config.PeriodNanos())
 	if len(byService) == 0 {
 		// An interval in which nothing ran produces no request at all: an empty profile costs both sides a
 		// round trip and draws an empty flame graph.

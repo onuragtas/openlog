@@ -186,3 +186,32 @@ func TestResourceCarriesHostAndScope(t *testing.T) {
 		}
 	}
 }
+
+// Symbol caches are keyed by pid and pids are reused, so a symbolizer must not outlive its window: one
+// that did would name a new program's addresses after the symbols of whatever used to hold that pid.
+func TestASymbolizerIsBuiltForEachWindow(t *testing.T) {
+	built := 0
+	s := &scriptedSampler{batches: [][]aggregate.RawSample{
+		{{PID: 1, Addrs: []uint64{1}, Count: 1}},
+		{{PID: 1, Addrs: []uint64{1}, Count: 1}},
+		{{PID: 1, Addrs: []uint64{1}, Count: 1}},
+	}}
+	e := &recorder{}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	cfg, err := config.Load(config.Env(map[string]string{"OPENLOG_LICENSE_KEY": "olk_test"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Run(ctx, Options{
+		Config: cfg, Sampler: s, Exporter: e, Namer: namer{1: "redis"},
+		NewSymbolizer: func() aggregate.Symbolizer { built++; return fakeSym{} },
+		Version:       "1.2.3", Log: quiet(),
+		Now: func() time.Time { return time.Unix(1700000000, 0) },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if built != 3 {
+		t.Errorf("built %d symbolizers for 3 windows, want 3", built)
+	}
+}

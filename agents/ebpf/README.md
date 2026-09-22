@@ -56,7 +56,15 @@ That shapes how the whole component is written: everything that does not touch t
 interface and is tested where tests can run, and the kernel-facing part is kept small enough to read.
 Where a claim here has not been executed, it says so rather than implying a green test.
 
-Still to come: symbolication — today every frame is reported as its address.
+- `internal/symbol` — naming an address: which file `/proc/<pid>/maps` has at that address, where in the
+  file it lands (via the PT_LOAD headers, since symbols carry virtual addresses and maps give offsets),
+  and what the symbol table calls it. A stripped binary answers `app+0x1010`, a vanished process answers
+  the bare address; nothing is invented. Tested against an ELF built byte by byte in the test, because
+  this repository carries no binary fixtures.
+
+A fresh symbolizer is built for every window. Its caches are keyed by pid, and pids are reused — a cache
+that outlived its window would name a new program's addresses after the symbols of whatever used to hold
+that pid, which is wrong in a way that looks entirely plausible.
 
 ## No clang, no cgo
 

@@ -17,9 +17,9 @@ import (
 	"github.com/onuragtas/openlog/agents/ebpf/internal/attribute"
 	"github.com/onuragtas/openlog/agents/ebpf/internal/config"
 	"github.com/onuragtas/openlog/agents/ebpf/internal/export"
-	"github.com/onuragtas/openlog/agents/ebpf/internal/otlpprofiles"
 	"github.com/onuragtas/openlog/agents/ebpf/internal/profiler"
 	"github.com/onuragtas/openlog/agents/ebpf/internal/sampler"
+	"github.com/onuragtas/openlog/agents/ebpf/internal/symbol"
 	"github.com/onuragtas/openlog/agents/ebpf/internal/version"
 )
 
@@ -90,8 +90,9 @@ func run() int {
 
 	if err := profiler.Run(ctx, profiler.Options{
 		Config: cfg, Sampler: s, Exporter: exp,
-		Symbolizer: symbolizer{}, Namer: namer,
-		HostID: hostID, Version: version.Current(), Log: log,
+		NewSymbolizer: func() aggregate.Symbolizer { return symbol.NewResolver(cfg.HostRoot) },
+		Namer:         namer,
+		HostID:        hostID, Version: version.Current(), Log: log,
 	}); err != nil {
 		log.Error("profiling stopped", "error", err)
 		return 1
@@ -109,7 +110,7 @@ func runOnce(s sampler.Sampler, cfg config.Config, namer aggregate.Namer) int {
 		fmt.Fprintf(os.Stderr, "sampling: %v\n", err)
 		return 1
 	}
-	byService := aggregate.Run(raw, symbolizer{}, namer, cfg.PeriodNanos())
+	byService := aggregate.Run(raw, symbol.NewResolver(cfg.HostRoot), namer, cfg.PeriodNanos())
 	if len(byService) == 0 {
 		fmt.Println("no samples: nothing ran on a CPU during the interval")
 		return 0
@@ -127,14 +128,6 @@ func runOnce(s sampler.Sampler, cfg config.Config, namer aggregate.Namer) int {
 		fmt.Printf("%-32s %6d stacks  %10.3f CPU seconds\n", n, len(byService[n]), float64(total)/1e9)
 	}
 	return 0
-}
-
-// symbolizer is a placeholder until symbolication lands: an address with no name is still an answer about
-// which binary burned the CPU, and saying so is better than inventing a name.
-type symbolizer struct{}
-
-func (symbolizer) Resolve(_ int, addr uint64) otlpprofiles.Frame {
-	return otlpprofiles.Frame{Function: fmt.Sprintf("0x%x", addr), Address: addr}
 }
 
 func orUnknown(s string) string {
