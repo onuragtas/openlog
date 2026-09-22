@@ -81,7 +81,8 @@ func New(cfg config.Config) (Sampler, error) {
 		fd, err := openPerfEvent(cpu, cfg.Frequency)
 		if err != nil {
 			s.Close()
-			return nil, fmt.Errorf("sampler: perf event on cpu %d (check perf_event_paranoid): %w", cpu, err)
+			paranoid, readErr := readParanoid(cfg.HostRoot)
+			return nil, fmt.Errorf("sampler: perf event on cpu %d: %w%s", cpu, err, PerfHint(err, paranoid, readErr))
 		}
 		if err := unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_SET_BPF, prog.FD()); err != nil {
 			unix.Close(fd)
