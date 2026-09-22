@@ -1,0 +1,70 @@
+[Unit]
+Description=openlog whole-host CPU profiler (eBPF)
+Documentation=https://github.com/onuragtas/openlog/agents/ebpf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openlog-ebpf
+Group=openlog-ebpf
+ExecStart=/opt/openlog/ebpf-profiler/openlog-ebpf-profiler
+EnvironmentFile=/etc/openlog-ebpf-profiler/openlog-ebpf-profiler.env
+Restart=always
+RestartSec=10
+
+# This unit exists because the infra agent's does not permit this work, and must not be changed to
+# (docs/contracts/ebpf-profiler.md §2). Everything below is the *opposite* trade from that unit: the
+# capabilities it refuses, and the syscalls it filters.
+#
+# CAP_BPF + CAP_PERFMON load the program and open perf events (kernels >= 5.8). CAP_DAC_READ_SEARCH and
+# CAP_SYS_PTRACE read other users' /proc/<pid>/{maps,exe}, which is how a sampled address becomes a
+# function name. Not root: ambient capabilities give exactly these four and nothing else.
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+NoNewPrivileges=yes
+
+ConfigurationDirectory=openlog-ebpf-profiler
+
+# Hardening kept from the infra agent's unit, minus the parts that would forbid the job.
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+
+# The deliberate divergence. The infra agent filters ~@privileged and ~@debug, and bpf(2) and
+# perf_event_open(2) are in those sets — copying that line would ship a profiler that starts and can
+# never sample. They are allowed here explicitly, and the narrower deny list keeps the rest.
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @reboot @swap @cpu-emulation @obsolete @raw-io
+SystemCallFilter=bpf perf_event_open
+# A filtered syscall must fail with EPERM rather than killing the process with SIGSYS, so the profiler
+# can report what it is missing instead of disappearing.
+SystemCallErrorNumber=EPERM
+
+# ProcSubset/ProtectProc are intentionally not set: symbolication needs all of /proc.
+# PrivateDevices is intentionally not set: it implies restrictions that interfere with perf events.
+#
+# MemoryDenyWriteExecute is NOT set. BPF programs are loaded through bpf(2) rather than mapped W+X, so
+# it should be compatible — but that has not been verified on a real host, and shipping a flag that
+# might silently prevent loading is worse than leaving it off and saying why.
+
+# Bounded like the infra agent, with room for the stack map and the symbol tables it parses. Profiling
+# must never be the reason a host runs out of either.
+MemoryMax=250M
+CPUQuota=15%
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

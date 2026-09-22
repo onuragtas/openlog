@@ -66,6 +66,22 @@ A fresh symbolizer is built for every window. Its caches are keyed by pid, and p
 that outlived its window would name a new program's addresses after the symbols of whatever used to hold
 that pid, which is wrong in a way that looks entirely plausible.
 
+## Installing it
+
+`packaging/systemd/openlog-ebpf-profiler.service` is the unit, and it is the whole reason this is a
+separate component. It asks for `CAP_BPF`, `CAP_PERFMON`, `CAP_DAC_READ_SEARCH` and `CAP_SYS_PTRACE` —
+not root — and it allows `bpf(2)` and `perf_event_open(2)` where the infra agent's unit filters them.
+Copying that filter across would have shipped a profiler that starts and can never sample, which is the
+failure this component is written to rule out.
+
+`packaging/openlog-ebpf-profiler.env.example` is the configuration; it is environment only.
+
+**There is no package or installer yet.** The unit expects a binary at
+`/opt/openlog/ebpf-profiler/openlog-ebpf-profiler` and an environment file under `/etc`, and nothing
+puts them there: no .deb, no .rpm, no install.sh flag, no Helm chart. Until that exists this is
+installed by hand, and the unit itself has never been loaded by systemd — it is written against the
+infra agent's unit and the contract, not against a running host.
+
 ## No clang, no cgo
 
 The BPF program is assembled with `cilium/ebpf/asm` rather than generated from C by `bpf2go`. This
