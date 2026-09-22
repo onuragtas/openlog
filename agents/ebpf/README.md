@@ -76,11 +76,20 @@ failure this component is written to rule out.
 
 `packaging/openlog-ebpf-profiler.env.example` is the configuration; it is environment only.
 
-**There is no package or installer yet.** The unit expects a binary at
-`/opt/openlog/ebpf-profiler/openlog-ebpf-profiler` and an environment file under `/etc`, and nothing
-puts them there: no .deb, no .rpm, no install.sh flag, no Helm chart. Until that exists this is
-installed by hand, and the unit itself has never been loaded by systemd — it is written against the
-infra agent's unit and the contract, not against a running host.
+The release builds a .deb and an .rpm for linux/amd64 and linux/arm64, and the installer takes a flag:
+
+```sh
+curl -fsSL .../install.sh | sudo sh -s -- --license-key KEY --endpoint URL --with-ebpf-profiler
+```
+
+It is a separate package and an explicit flag because it holds capabilities the infra agent does not.
+The installer verifies it against the same signed release manifest as the agent — size and SHA-256 —
+and says on the way out what the component was just granted.
+
+**No Helm chart, and none of this has been run.** There is no DaemonSet for Kubernetes yet. The unit has
+never been loaded by systemd, nfpm has never built the package here, and the BPF program has never been
+through a verifier: all of it is written against the infra agent's equivalents and the contract, not
+against a running host. The first install on a real machine is where that stops being true.
 
 ## No clang, no cgo
 

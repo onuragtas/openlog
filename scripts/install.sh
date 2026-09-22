@@ -18,6 +18,8 @@
 #                         (creates /etc/openlog-infra-agent/no-docker-access) [OPENLOG_AGENT_DOCKER_ACCESS=0]
 #   --no-php-access       do not add PHP-FPM pool users to the openlog-php socket group, now or later
 #                         (creates /etc/openlog-infra-agent/no-php-access) [OPENLOG_AGENT_PHP_ACCESS=0]
+#   --with-ebpf-profiler  also install openlog-ebpf-profiler: whole-host CPU profiling of every process,
+#                         Linux and deb/rpm only. It runs with CAP_BPF and CAP_PERFMON [OPENLOG_EBPF_PROFILER=1]
 #
 # macOS (darwin amd64/arm64): the agent runs as root under launchd (label org.openlog.infra-agent,
 # /Library/LaunchDaemons/org.openlog.infra-agent.plist), CLI /usr/local/bin/openlog-infra-agent, config root:wheel 0600,
@@ -71,6 +73,7 @@ docker_added=0
 DOCKER_OPT_OUT=$CONFIG_DIR/no-docker-access
 php_access=${OPENLOG_AGENT_PHP_ACCESS:-1}
 PHP_OPT_OUT=$CONFIG_DIR/no-php-access
+ebpf_profiler=${OPENLOG_EBPF_PROFILER:-0}
 tmpdir=
 
 log() { printf 'openlog-install: %s\n' "$*" >&2; }
@@ -78,7 +81,7 @@ die() {
 	log "error: $*"
 	exit 1
 }
-usage() { sed -n '2,36s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
+usage() { sed -n '2,38s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "see https://github.com/onuragtas/openlog/blob/master/docs/operations/releasing.md"; }
 
 cleanup() { [ -z "$tmpdir" ] || rm -rf "$tmpdir"; }
 trap cleanup EXIT INT TERM
@@ -101,6 +104,11 @@ while [ $# -gt 0 ]; do
 		;;
 	--no-php-access)
 		php_access=0
+		shift
+		continue
+		;;
+	--with-ebpf-profiler)
+		ebpf_profiler=1
 		shift
 		continue
 		;;
@@ -530,6 +538,48 @@ if [ "$install" = 1 ]; then
 	if [ "$explicit_version" = 1 ] && [ "$(running_version)" != "$version" ]; then
 		switch_current "$version"
 	fi
+fi
+
+# --- optional: the eBPF whole-host profiler -------------------------------------------------------
+# A separate package on purpose (docs/contracts/ebpf-profiler.md §2): it runs with capabilities the
+# infra agent deliberately does not have, so it is installed only when asked for. Verified against the
+# same signed manifest as the agent — its artifacts are in there because the release builds them before
+# the manifest is written.
+if [ "$ebpf_profiler" = 1 ]; then
+	[ "$goos" = linux ] || die "--with-ebpf-profiler is Linux only (this host is $goos)"
+	case $method in
+	deb | rpm) ;;
+	*) die "--with-ebpf-profiler needs --method deb or rpm (got $method)" ;;
+	esac
+	# The agent may already have been up to date, in which case the manifest was never fetched.
+	[ -f "$tmpdir/manifest.json" ] || fetch "$manifest_url" "$tmpdir/manifest.json"
+	ebpf_manifest=$(json_flat "$tmpdir/manifest.json")
+	ebpf_name=openlog-ebpf-profiler_${version}_linux_${arch}.$method
+	# shellcheck disable=SC2020 # split the flat JSON into one line per object
+	ebpf_artifact=$(printf '%s' "$ebpf_manifest" | tr '{}' '\n\n' | grep -F "\"name\":\"$ebpf_name\"" | head -n 1 || true)
+	[ -n "$ebpf_artifact" ] || die "release $version has no artifact $ebpf_name"
+	ebpf_want_sha=$(json_str "$ebpf_artifact" sha256)
+	ebpf_want_size=$(json_num "$ebpf_artifact" size)
+	ebpf_url=$(json_str "$ebpf_artifact" url)
+	[ -z "$base_url" ] || ebpf_url=$base_url/v$version/$ebpf_name
+	printf '%s' "$ebpf_want_sha" | grep -Eq '^[0-9a-f]{64}$' || die "manifest has no valid sha256 for $ebpf_name"
+
+	log "downloading $ebpf_url"
+	fetch "$ebpf_url" "$tmpdir/$ebpf_name"
+	ebpf_got_size=$(wc -c <"$tmpdir/$ebpf_name" | tr -d ' ')
+	ebpf_got_sha=$(sha256_of "$tmpdir/$ebpf_name")
+	[ "$ebpf_got_size" = "$ebpf_want_size" ] || die "$ebpf_name: size $ebpf_got_size does not match the manifest ($ebpf_want_size)"
+	[ "$ebpf_got_sha" = "$ebpf_want_sha" ] || die "$ebpf_name: sha256 $ebpf_got_sha does not match the manifest ($ebpf_want_sha)"
+	log "sha256 verified: $ebpf_got_sha"
+
+	case $method in
+	deb) DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold -i "$tmpdir/$ebpf_name" >&2 ;;
+	rpm) rpm -U --replacepkgs --oldpackage "$tmpdir/$ebpf_name" >&2 ;;
+	esac
+	# Said plainly, the way the docker group's root-equivalence is: an operator is entitled to know what
+	# this just granted without reading a contract.
+	log "openlog-ebpf-profiler installed; it runs with CAP_BPF and CAP_PERFMON and samples every process on this host"
+	log "set OPENLOG_LICENSE_KEY in /etc/openlog-ebpf-profiler/openlog-ebpf-profiler.env, then: systemctl start openlog-ebpf-profiler"
 fi
 
 bin=$ROOT/current/openlog-infra-agent
