@@ -28,9 +28,9 @@ Bu liste ilk kapsam kararıydı; sonradan yapılanlar aşağıda işaretli. Gün
 [06-roadmap.md](06-roadmap.md).
 
 - ~~Windows ve macOS infra agent~~ — yapıldı (D-104).
-- ~~Real User Monitoring (tarayıcı)~~ — yapıldı (D-136). **Mobil hâlâ kapsam dışı**: sunucu tarafı mobil
-  uygulama kimliğine bağlı bir anahtar türü ve kendi olay tipleri gerektiriyor (tarayıcı anahtarı origin'e
-  bağlı, mobilde origin yok).
+- ~~Real User Monitoring (tarayıcı)~~ — yapıldı (D-136). ~~Mobil~~ — yapıldı (D-147): origin yerine uygulama
+  izin listesiyle kapsanan `mobile` anahtar türü ve iOS (Swift), Android (Kotlin/JVM) ve Flutter (Dart)
+  SDK'ları, tek bir sözleşmeye (`docs/contracts/mobile-agent.md`) karşı.
 - ~~Synthetic monitoring~~ — yapıldı (D-132).
 - Kendi wire protokolümüz (OTLP kullanılır) — hâlâ geçerli, bilinçli karar.
 

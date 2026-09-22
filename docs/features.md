@@ -48,6 +48,19 @@ environment and namespace, with the hosts and containers behind each node.
 
 ---
 
+## Continuous profiling
+
+CPU profiles from your own services, as a flame graph and as self time per function, so a slow transaction
+has an answer behind it instead of a shrug. Profiles arrive as OTLP like everything else and are queryable
+in OQL as `Profile`.
+
+The **Go** agent profiles on by default — the cost is a few percent of one core, and a service nobody
+profiled is a service whose slow span has no explanation. The **Node.js** agent samples V8 and is off by
+default (`OPENLOG_PROFILING=true`), because switching a new signal on for everyone who upgrades would
+multiply what they store without anyone asking.
+
+---
+
 ## An error inbox, not an error list
 
 ![Error inbox](images/error-inbox.png)
@@ -78,6 +91,9 @@ to the database.
   which is what makes it collectable without a consent banner.
 - **Source maps** un-minify browser stacks, so a frame reads `at greet (src/app.ts:5:3)` instead of
   `at n (main.3f2a1b9c.js:1:842)`.
+- **Mobile SDKs** for iOS (Swift), Android (Kotlin/JVM) and Flutter (Dart) report screens, errors, custom
+  events and identity through the same pipeline. A mobile key is scoped by an application allowlist rather
+  than an origin, since a mobile app has none.
 
 ![Session timeline](images/rum-session.png)
 
@@ -169,13 +185,15 @@ certificate at the end.
 
 Named on purpose, so you can plan:
 
-- **Continuous profiling** and **eBPF auto-instrumentation** — not built.
-- **Mobile monitoring** — no iOS or Android SDK.
+- **eBPF auto-instrumentation** — not built. Instrumenting a process without touching its code is a later
+  milestone.
 - **Session replay** — out of scope.
 - **Cloud billing** — the cost screens estimate from your own telemetry; openlog never reads a provider's
   bill, and only compute is priced.
-- **Synthetic checks run from one location** (the openlog server itself), HTTP only.
-- **RUM values are not yet in OQL** and there is no `rum` alert rule type.
+- **Synthetic checks run from one location** — the openlog server itself. The check types are HTTP, TCP, DNS
+  and TLS certificate expiry.
+- **No `rum` alert rule type**, and that is deliberate: the `oql` rule type runs any OQL query, and RUM page
+  views, vitals and sessions are OQL event types, so alerting on them needs no rule type of its own.
 
 More detail on any of these: the [contracts](contracts/) describe every signal, endpoint and guarantee, and
 [the roadmap](plan/06-roadmap.md) lists what is validated and what is still open.

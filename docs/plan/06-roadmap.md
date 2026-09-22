@@ -116,8 +116,9 @@ doğrulamalar (proje sahibi çalıştırır) ve hesap/altyapı gerektiren operas
 - Synthetic monitoring (D-132): zamanlanmış dışarıdan kontroller ve sonuçları.
 - Veritabanı sorgu performansı (D-138): PostgreSQL, MySQL ve SQL Server için ifade istatistikleri, oturum örnekleri
   ve yürütme planları.
-- Sürekli profilleme (`docs/contracts/profiles.md`): OTLP profiles alımı, pprof→OTLP çeviren Go agent üreticisi,
-  alev grafiği ekranı ve fonksiyon başına self süre.
+- Sürekli profilleme (`docs/contracts/profiles.md`): OTLP profiles alımı, pprof→OTLP çeviren Go agent üreticisi
+  (varsayılan açık) ve V8 örnekleyicisini çeviren Node.js agent üreticisi (varsayılan kapalı), alev grafiği
+  ekranı ve fonksiyon başına self süre.
 - Yeni sinyallerin sorgu ve alarm entegrasyonu: `Profile`, `RumPageView`, `RumVital`, `RumSession` ve `DbQuery`
   OQL olay tipleri. `oql` alarm kural tipi herhangi bir OQL sorgusunu koştuğu için bu tipler aynı anda alarma da
   bağlanabilir; sinyal başına ayrı kural tipi yazılmadı.
