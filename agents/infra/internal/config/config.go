@@ -63,9 +63,10 @@ type Config struct {
 	Update            UpdateConfig       `yaml:"update"`
 	Release           ReleaseConfig      `yaml:"release"`
 	PHPForwarder      PHPForwarder       `yaml:"php_forwarder"`
-	PHPAgent          PHPAgentConfig     `yaml:"php_agent"`  // php_agent.go
-	JavaAgent         JavaAgentConfig    `yaml:"java_agent"` // java_agent.go
-	Kubernetes        KubernetesConfig   `yaml:"kubernetes"` // kubernetes.go
+	PHPAgent          PHPAgentConfig     `yaml:"php_agent"`     // php_agent.go
+	JavaAgent         JavaAgentConfig    `yaml:"java_agent"`    // java_agent.go
+	EBPFProfiler      EBPFProfilerConfig `yaml:"ebpf_profiler"` // ebpf_profiler.go
+	Kubernetes        KubernetesConfig   `yaml:"kubernetes"`    // kubernetes.go
 }
 
 // PHPForwarder configures the php_forwarder module (docs/contracts/php-agent.md §6).
@@ -319,9 +320,10 @@ func DefaultFor(goos string) *Config {
 			Socket: DefaultPHPSocket, SocketGroup: "auto", SocketMode: "0660",
 			MaxPendingTraces: 10000, ReassemblyTimeout: Duration(5 * time.Second),
 		},
-		PHPAgent:   defaultPHPAgent(),
-		JavaAgent:  defaultJavaAgent(),
-		Kubernetes: defaultKubernetes(),
+		PHPAgent:     defaultPHPAgent(),
+		JavaAgent:    defaultJavaAgent(),
+		EBPFProfiler: defaultEBPFProfiler(),
+		Kubernetes:   defaultKubernetes(),
 	}
 	applyPlatformDefaults(c, goos)
 	return c
@@ -443,6 +445,7 @@ func (c *Config) Validate(requireExport bool) error {
 	errs = append(errs, c.PHPForwarder.validate()...)
 	errs = append(errs, c.PHPAgent.validate()...)
 	errs = append(errs, c.JavaAgent.validate()...)
+	errs = append(errs, c.EBPFProfiler.validate()...)
 	errs = append(errs, c.Kubernetes.validate(os.Getenv)...)
 	for k := range c.Host.ExtraAttributes {
 		if k == "" {

@@ -244,6 +244,13 @@ java_agent:                      # keeps openlog-javaagent.jar current (docs/con
   install_root: /opt/openlog/java-agent  # versions/<v>/openlog-javaagent.jar + current
   link_path: /opt/openlog/openlog-javaagent.jar  # use -javaagent:<link_path>; a file you put there yourself is never changed
 
+ebpf_profiler:                   # keeps the whole-host CPU profiler current (docs/contracts/ebpf-profiler.md, D-149)
+  mode: auto                     # auto = install/upgrade where no package owns it; manual = report only; off = remove the managed install
+  version: agent                 # agent = this agent's version, or e.g. 0.9.1
+  remote_config: true            # the Fleet page's mode/version replace these
+  health_check_after: 2m         # after a switch: check the service is running, roll back when it is not
+  install_root: /opt/openlog/ebpf-profiler  # versions/<v>/ + current; the .deb/.rpm use the same path
+
 update:
   enabled: true                 # apply signed updates ordered by the backend (sync/version reporting runs regardless)
   install_root: /opt/openlog/infra-agent   # versions/<v>/ + current symlink; must be writable by the agent user
