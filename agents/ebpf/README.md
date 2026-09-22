@@ -25,6 +25,11 @@ Not yet runnable. What exists and is tested:
 - `internal/aggregate` — one interval's raw samples grouped per service, with every limit the contract
   sets: 127 frames (the cut is marked), 20 000 stacks and 256 services, dropping the quietest rather than
   the busiest.
+- `internal/config` — settings from the environment, refusing what it cannot honour rather than guessing:
+  no license key, a sampling frequency outside 1..1000, an interval under a second.
+- `internal/profiler` — the interval loop that ties those together: sample, group, convert, send. Every
+  kernel-facing call is behind the `Sampler` interface, which is what keeps the loop testable on a machine
+  that cannot run eBPF at all.
 
 Still to come: the perf-event sampler and its BPF program, symbolication, and the command itself.
 
