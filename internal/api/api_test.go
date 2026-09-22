@@ -209,6 +209,7 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/rum/vitals?app=shop-web",
 		"/api/v1/rum/sessions?app=shop-web",
 		"/api/v1/rum/sessions/9f2c41b7a80d4e6fb35c1d8e07a4b620?app=shop-web",
+		"/api/v1/rum/releases?app=shop-web",
 	}
 	for _, p := range paths {
 		req := httptest.NewRequest(http.MethodGet, p, nil)

@@ -1707,6 +1707,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rum/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description How each version of the application behaved, and when its releases happened (rum.md §2.7). `deployments` is the same detection APM uses, because a RUM span feeds the same version rollup. **The two halves see different distances**: deployments reach back 30 days (the version rollup), while sessions are counted from the spans and so reach only the 7-day trace retention — a version older than a week appears with no sessions against it. */
+        get: operations["listRumReleases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/db/instances": {
         parameters: {
             query?: never;
@@ -7452,6 +7469,19 @@ export interface components {
             user_id: string;
             /** @description ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page. Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved one — openlog stores no visitor address and derives nothing itself. */
             country: string;
+        };
+        /** @description One version of the application over the requested range. Counted from the spans, so bounded by the trace retention rather than by the 30 days the release list reaches. */
+        RumRelease: {
+            /** @description The resource `service.version` the SDK sent; empty when it sent none */
+            version: string;
+            /** @description Distinct sessions seen for this version */
+            sessions: number;
+            /** @description Those of them that produced at least one error span. A session with twelve errors counts once. */
+            error_sessions: number;
+            /** @description (sessions − error_sessions) / sessions, and **1 for a version with no sessions**: null would have to mean both "nothing broke" and "nothing is known", which a chart cannot draw. */
+            crash_free_rate: number;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
         };
         RumEvent: {
             timestamp: components["schemas"]["Timestamp"];
@@ -14118,6 +14148,39 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listRumReleases: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                from?: string;
+                to?: string;
+                /** @description How long a version must have been absent for its return to count as a new release. */
+                gap?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Versions and the releases that introduced them */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        releases: components["schemas"]["RumRelease"][];
+                        deployments: components["schemas"]["ApmDeployment"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             504: components["responses"]["Timeout"];
         };
     };

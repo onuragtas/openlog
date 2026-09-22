@@ -30,6 +30,7 @@ func (s *Server) rumRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/rum/vitals", s.rumVitals)
 	route("GET /api/v1/rum/sessions", s.rumSessions)
 	route("GET /api/v1/rum/sessions/{session_id}", s.rumSessionDetail)
+	route("GET /api/v1/rum/releases", s.rumReleases)
 }
 
 // ---- filters ----

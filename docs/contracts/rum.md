@@ -173,6 +173,29 @@ never crossed the network.
 Assets are flushed when the page view ends — a route change, or the page being hidden — so a single-page
 application does not attribute the whole session's loading to its first screen.
 
+### 2.7 Release health
+
+How a version behaved, and when it shipped: `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=`.
+
+**Both halves reuse what already existed.** Releases come from `apm_service_versions_1m`, whose
+materialized view counts every span with a service name by its resource `service.version` — and a RUM span
+has both, the name forced from the key and the version sent by the SDK. So a mobile release is detected by
+exactly the code that detects a backend deployment ([apm.md](apm.md) §12), including its rollback and
+first-version cases. Nothing new had to learn what a release is.
+
+The crash-free rate could not come from the same place. `rum_sessions` has no version column and is written
+by a materialized view, which cannot be altered (§3.7) — so sessions are counted from the spans:
+`uniqExact` of session ids per version, and `uniqExactIf` of those that produced at least one `error` span.
+A session with twelve errors is one unhappy session, not twelve.
+
+**The two halves therefore see different distances, and the response does not hide it:** releases reach back
+30 days (the version rollup), sessions only 7 (trace retention). A version older than a week appears in the
+list with no sessions against it. Carrying session counts for thirty days needs its own table, which is a
+decision about storage volume and should be made on purpose rather than arrived at through a migration.
+
+A version with no sessions reports a crash-free rate of `1` rather than an absent field: null would have to
+mean both "nothing broke" and "nothing is known", and a chart cannot draw the difference.
+
 ## 3. The browser key
 
 **A browser key is public by construction.** It ships inside a web page; everyone who can open the page has

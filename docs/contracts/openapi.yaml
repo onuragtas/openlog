@@ -2905,6 +2905,44 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/rum/releases:
+    get:
+      tags: [rum]
+      operationId: listRumReleases
+      description: >-
+        How each version of the application behaved, and when its releases happened (rum.md §2.7).
+        `deployments` is the same detection APM uses, because a RUM span feeds the same version rollup.
+        **The two halves see different distances**: deployments reach back 30 days (the version rollup),
+        while sessions are counted from the spans and so reach only the 7-day trace retention — a version
+        older than a week appears with no sessions against it.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - name: gap
+          in: query
+          description: How long a version must have been absent for its return to count as a new release.
+          schema: { type: string, default: 30m }
+      responses:
+        "200":
+          description: Versions and the releases that introduced them
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [releases, deployments]
+                properties:
+                  releases:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumRelease" }
+                  deployments:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmDeployment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   # -------------------------------------------------------------- database monitoring (D-138)
   /api/v1/db/instances:
     get:
@@ -10819,6 +10857,25 @@ components:
             ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page.
             Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved
             one — openlog stores no visitor address and derives nothing itself.
+    RumRelease:
+      type: object
+      description: >-
+        One version of the application over the requested range. Counted from the spans, so bounded by the
+        trace retention rather than by the 30 days the release list reaches.
+      required: [version, sessions, error_sessions, crash_free_rate, first_seen, last_seen]
+      properties:
+        version: { type: string, description: The resource `service.version` the SDK sent; empty when it sent none }
+        sessions: { type: integer, description: Distinct sessions seen for this version }
+        error_sessions:
+          type: integer
+          description: Those of them that produced at least one error span. A session with twelve errors counts once.
+        crash_free_rate:
+          type: number
+          description: >-
+            (sessions − error_sessions) / sessions, and **1 for a version with no sessions**: null would
+            have to mean both "nothing broke" and "nothing is known", which a chart cannot draw.
+        first_seen: { $ref: "#/components/schemas/Timestamp" }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
     RumEvent:
       type: object
       required: [timestamp, event, name, route, duration_ms, trace_id, span_id, error_group_id, status_code]

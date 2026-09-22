@@ -1821,6 +1821,16 @@ string and fragment never reach storage.
 bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
 `404` when the session is unknown.
 
+### `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=`
+`{"releases": [{"version", "sessions", "error_sessions", "crash_free_rate", "first_seen", "last_seen"}],
+"deployments": [{…}]}` ([rum.md](rum.md) §2.7). `deployments` is the same detection APM uses
+(`GET /apm/services/{s}/deployments`), because a RUM span feeds the same version rollup.
+
+**The two halves see different distances.** `deployments` reaches back 30 days (the version rollup);
+`sessions` and `error_sessions` are counted from the spans and so reach only the 7-day trace retention. A
+version older than a week appears with no sessions against it. `crash_free_rate` is `1` for a version with
+no sessions: null would have to mean both "nothing broke" and "nothing is known".
+
 `session.user_id` and `session.country` are filled **here only** ([rum.md](rum.md) §3.7). Both live on the
 spans rather than on the session rollup, so the list above — which reads the rollup — returns them empty
 rather than running a second query per row. `user_id` is the last identity the session declared, because a
