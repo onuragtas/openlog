@@ -60,7 +60,8 @@ default (`OPENLOG_PROFILING=true`), because switching a new signal on for everyo
 multiply what they store without anyone asking.
 
 Everything that is *not* instrumented — a database, a PHP-FPM pool, a cron job, a kernel thread — can be
-profiled too, by a separate **eBPF whole-host profiler** (`install.sh --with-ebpf-profiler`). It samples
+profiled too, by a separate **eBPF whole-host profiler**, which `install.sh` installs alongside the agent
+(`--no-ebpf-profiler` leaves it out). It samples
 every process on the machine and names the frames from each binary's symbols. It is its own package
 because it runs with `CAP_BPF` and `CAP_PERFMON`, which the infra agent deliberately does not have; an
 operator who never installs it keeps that posture exactly.
