@@ -22,6 +22,23 @@ const KernelName = "kernel"
 // ServicesFile is published by the infra agent in its runtime directory, beside host-id.
 const ServicesFile = "services"
 
+// HostIDFile is published by the infra agent beside the service map; the language agents read the same
+// file, so a profile lands on the host whose metrics are already there.
+const HostIDFile = "host-id"
+
+// ReadHostID returns the host id the infra agent published, or "" when it is not there. A missing id is
+// not an error: the profile is still correct, it simply is not linked to a host.
+func ReadHostID(fs FS, runtimeDir string) string {
+	if runtimeDir == "" {
+		return ""
+	}
+	b, err := fs.ReadFile(path.Join(runtimeDir, HostIDFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
 // FS is the process-information the resolver reads. Injected so tests never need a real /proc.
 type FS interface {
 	// ReadFile reads a regular file, e.g. /proc/<pid>/comm.

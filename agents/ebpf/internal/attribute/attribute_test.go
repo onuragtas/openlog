@@ -117,3 +117,17 @@ func TestUnknownKindsAndJunkAreSkipped(t *testing.T) {
 		t.Errorf("parsed %d exe entries, want 1", len(r.byExe))
 	}
 }
+
+func TestReadHostID(t *testing.T) {
+	fs := fakeFS{files: map[string]string{"/run/openlog-infra-agent/host-id": "abc-123\n"}}
+	if got := ReadHostID(fs, "/run/openlog-infra-agent"); got != "abc-123" {
+		t.Errorf("host id = %q, want abc-123", got)
+	}
+	// Not an error: the profile is still correct, it is simply not linked to a host.
+	if got := ReadHostID(fakeFS{}, "/run/openlog-infra-agent"); got != "" {
+		t.Errorf("missing file returned %q", got)
+	}
+	if got := ReadHostID(fakeFS{}, ""); got != "" {
+		t.Errorf("empty dir returned %q", got)
+	}
+}
