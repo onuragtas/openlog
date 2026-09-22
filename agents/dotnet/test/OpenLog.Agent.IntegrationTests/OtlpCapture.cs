@@ -521,7 +521,16 @@ public sealed class OtlpCaptureServer : IAsyncDisposable
             if (v != null) return v;
             if (DateTime.UtcNow > deadline)
             {
-                throw new TimeoutException($"timed out waiting for {what}; metrics: {string.Join(", ", Metrics.Select(m => m.Name).Distinct().OrderBy(n => n))}; spans: {string.Join(" | ", Spans.Select(s => s.ToString()))}");
+                // Names alone hid the reason: a run timed out with process.cpu.time present but no host.id on
+                // its resource, and the message could not tell that from the metric never arriving. Say what
+                // each distinct metric's resource actually carried.
+                var detail = string.Join("; ", Metrics.GroupBy(m => m.Name).OrderBy(g => g.Key).Select(g =>
+                {
+                    var withHost = g.Count(m => m.Resource.ContainsKey("host.id"));
+                    var keys = string.Join(",", g.Last().Resource.Keys.OrderBy(k => k));
+                    return $"{g.Key} x{g.Count()} host.id={withHost}/{g.Count()} scope={g.Last().Scope.Name} resource=[{keys}]";
+                }));
+                throw new TimeoutException($"timed out waiting for {what}; metrics: {detail}; spans: {string.Join(" | ", Spans.Select(s => s.ToString()))}");
             }
             await Task.Delay(100);
         }

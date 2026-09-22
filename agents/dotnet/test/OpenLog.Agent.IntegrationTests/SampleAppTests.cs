@@ -68,6 +68,10 @@ public sealed class AppFixture : IAsyncLifetime
             o.Environment = "test";
             o.InfraRuntimeDir = runtimeDir;
             o.MetricExportInterval = TimeSpan.FromSeconds(1);
+            // The agent's own diagnostics on stderr, so a failing run says where host.id came from
+            // ("resource host.id.source=infra-agent" or "…=generated"). A run timed out with
+            // process.cpu.time present but no host.id on its resource and nothing in the log explained it.
+            o.LogLevel = "debug";
             o.ResourceAttributes = new Dictionary<string, string> { ["team"] = "payments" };
             // the capture server runs in the same process: its requests must not become spans
             o.HttpIgnorePaths = new List<string> { "/v1/traces", "/v1/metrics", "/v1/logs" };
