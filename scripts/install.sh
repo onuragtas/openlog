@@ -18,8 +18,8 @@
 #                         (creates /etc/openlog-infra-agent/no-docker-access) [OPENLOG_AGENT_DOCKER_ACCESS=0]
 #   --no-php-access       do not add PHP-FPM pool users to the openlog-php socket group, now or later
 #                         (creates /etc/openlog-infra-agent/no-php-access) [OPENLOG_AGENT_PHP_ACCESS=0]
-#   --with-ebpf-profiler  also install openlog-ebpf-profiler: whole-host CPU profiling of every process,
-#                         Linux and deb/rpm only. It runs with CAP_BPF and CAP_PERFMON [OPENLOG_EBPF_PROFILER=1]
+#   --no-ebpf-profiler    do not install openlog-ebpf-profiler (whole-host CPU profiling, installed by
+#                         default on Linux deb/rpm; runs with CAP_BPF and CAP_PERFMON) [OPENLOG_EBPF_PROFILER=0]
 #
 # macOS (darwin amd64/arm64): the agent runs as root under launchd (label org.openlog.infra-agent,
 # /Library/LaunchDaemons/org.openlog.infra-agent.plist), CLI /usr/local/bin/openlog-infra-agent, config root:wheel 0600,
@@ -73,7 +73,9 @@ docker_added=0
 DOCKER_OPT_OUT=$CONFIG_DIR/no-docker-access
 php_access=${OPENLOG_AGENT_PHP_ACCESS:-1}
 PHP_OPT_OUT=$CONFIG_DIR/no-php-access
-ebpf_profiler=${OPENLOG_EBPF_PROFILER:-0}
+ebpf_profiler=${OPENLOG_EBPF_PROFILER:-1}
+# Asked for by name: then a host that cannot run it is an error rather than something to skip quietly.
+ebpf_explicit=0
 tmpdir=
 
 log() { printf 'openlog-install: %s\n' "$*" >&2; }
@@ -109,6 +111,12 @@ while [ $# -gt 0 ]; do
 		;;
 	--with-ebpf-profiler)
 		ebpf_profiler=1
+		ebpf_explicit=1
+		shift
+		continue
+		;;
+	--no-ebpf-profiler)
+		ebpf_profiler=0
 		shift
 		continue
 		;;
@@ -545,11 +553,22 @@ fi
 # infra agent deliberately does not have, so it is installed only when asked for. Verified against the
 # same signed manifest as the agent — its artifacts are in there because the release builds them before
 # the manifest is written.
-if [ "$ebpf_profiler" = 1 ]; then
-	[ "$goos" = linux ] || die "--with-ebpf-profiler is Linux only (this host is $goos)"
+# Installed by default, so a host that cannot take it must not fail the agent's installation: skipped with
+# a reason. Asked for by name (--with-ebpf-profiler), the same conditions are errors — someone who typed
+# the flag is owed a failure rather than a silent no-op.
+ebpf_unavailable() {
+	if [ "$ebpf_explicit" = 1 ]; then
+		die "$1"
+	fi
+	log "openlog-ebpf-profiler skipped: $1"
+	return 1
+}
+
+install_ebpf_profiler() {
+	[ "$goos" = linux ] || ebpf_unavailable "whole-host profiling is Linux only (this host is $goos)" || return 0
 	case $method in
 	deb | rpm) ;;
-	*) die "--with-ebpf-profiler needs --method deb or rpm (got $method)" ;;
+	*) ebpf_unavailable "whole-host profiling needs the deb or rpm method (this run uses $method)" || return 0 ;;
 	esac
 	# The agent may already have been up to date, in which case the manifest was never fetched.
 	[ -f "$tmpdir/manifest.json" ] || fetch "$manifest_url" "$tmpdir/manifest.json"
@@ -557,12 +576,12 @@ if [ "$ebpf_profiler" = 1 ]; then
 	ebpf_name=openlog-ebpf-profiler_${version}_linux_${arch}.$method
 	# shellcheck disable=SC2020 # split the flat JSON into one line per object
 	ebpf_artifact=$(printf '%s' "$ebpf_manifest" | tr '{}' '\n\n' | grep -F "\"name\":\"$ebpf_name\"" | head -n 1 || true)
-	[ -n "$ebpf_artifact" ] || die "release $version has no artifact $ebpf_name"
+	[ -n "$ebpf_artifact" ] || { ebpf_unavailable "release $version has no artifact $ebpf_name"; return 0; }
 	ebpf_want_sha=$(json_str "$ebpf_artifact" sha256)
 	ebpf_want_size=$(json_num "$ebpf_artifact" size)
 	ebpf_url=$(json_str "$ebpf_artifact" url)
 	[ -z "$base_url" ] || ebpf_url=$base_url/v$version/$ebpf_name
-	printf '%s' "$ebpf_want_sha" | grep -Eq '^[0-9a-f]{64}$' || die "manifest has no valid sha256 for $ebpf_name"
+	printf '%s' "$ebpf_want_sha" | grep -Eq '^[0-9a-f]{64}$' || { ebpf_unavailable "manifest has no valid sha256 for $ebpf_name"; return 0; }
 
 	log "downloading $ebpf_url"
 	fetch "$ebpf_url" "$tmpdir/$ebpf_name"
@@ -605,6 +624,10 @@ if [ "$ebpf_profiler" = 1 ]; then
 	else
 		log "set OPENLOG_LICENSE_KEY in $ebpf_env, then: systemctl start openlog-ebpf-profiler"
 	fi
+}
+
+if [ "$ebpf_profiler" = 1 ]; then
+	install_ebpf_profiler
 fi
 
 bin=$ROOT/current/openlog-infra-agent

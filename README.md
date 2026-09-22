@@ -136,6 +136,13 @@ curl -fsSL https://github.com/onuragtas/openlog/releases/latest/download/install
   sudo sh -s -- --license-key <OPENLOG_BOOTSTRAP_LICENSE_KEY> --endpoint http://<server>:4318
 ```
 
+This also installs the **whole-host CPU profiler**: it samples every process on the machine — a database, a
+PHP-FPM pool, a cron job, a kernel thread — not only the ones running an APM agent, and gives each one a flame
+graph. It is a separate package and a separate service because it runs with `CAP_BPF` and `CAP_PERFMON`, which
+the infra agent deliberately does not have; the installer says so on the way out. Add `--no-ebpf-profiler` to
+leave it out. Linux and deb/rpm only — elsewhere it is skipped and the agent installs as usual:
+[agents/ebpf](agents/ebpf), [contract](docs/contracts/ebpf-profiler.md).
+
 **From source** (until the first release; build on any machine with Go 1.26):
 
 ```sh
@@ -232,6 +239,7 @@ More options: [deploy/compose/README.md](deploy/compose/README.md).
 | [`agents/dotnet`](agents/dotnet) | .NET APM agent, NuGet `OpenLog.Agent` (OpenTelemetry .NET distribution, Apache-2.0) |
 | [`agents/python`](agents/python) | Python APM agent, PyPI `openlog-agent` (OpenTelemetry Python distribution, Apache-2.0) |
 | [`agents/php`](agents/php) | PHP APM agent (C extension, in development, Apache-2.0) |
+| [`agents/ebpf`](agents/ebpf) | Whole-host CPU profiler (eBPF, Linux only; installed by default, `--no-ebpf-profiler` opts out, Apache-2.0) |
 | `libs/release` | Release manifests and signatures shared by agents and backend (Apache-2.0) |
 
 ## Releases

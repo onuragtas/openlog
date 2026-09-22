@@ -76,15 +76,21 @@ failure this component is written to rule out.
 
 `packaging/openlog-ebpf-profiler.env.example` is the configuration; it is environment only.
 
-The release builds a .deb and an .rpm for linux/amd64 and linux/arm64, and the installer takes a flag:
+The release builds a .deb and an .rpm for linux/amd64 and linux/arm64, and `install.sh` installs it
+alongside the agent by default:
 
 ```sh
-curl -fsSL .../install.sh | sudo sh -s -- --license-key KEY --endpoint URL --with-ebpf-profiler
+curl -fsSL .../install.sh | sudo sh -s -- --license-key KEY --endpoint URL
+curl -fsSL .../install.sh | sudo sh -s -- --license-key KEY --endpoint URL --no-ebpf-profiler   # without
 ```
 
-It is a separate package and an explicit flag because it holds capabilities the infra agent does not.
-The installer verifies it against the same signed release manifest as the agent — size and SHA-256 —
-and says on the way out what the component was just granted.
+It stays a separate package and a separate service because it holds capabilities the infra agent does
+not, and the installer says on the way out what was granted. It is verified against the same signed
+release manifest as the agent — size and SHA-256.
+
+Where it cannot run — not Linux, or the tarball install method — it is skipped with a reason and the
+agent installs as usual. Naming it explicitly with `--with-ebpf-profiler` turns those same conditions
+into errors instead: someone who asked for it by name is owed a failure, not a silent no-op.
 
 **No Helm chart, and none of this has been run.** There is no DaemonSet for Kubernetes yet. The unit has
 never been loaded by systemd, nfpm has never built the package here, and the BPF program has never been

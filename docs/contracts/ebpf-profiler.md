@@ -33,7 +33,13 @@ The infra agent's Linux sandbox forbids this work, and the sandbox is a promise 
   with `RuntimeDefault` seccomp — which blocks `bpf(2)` — and every capability dropped but two.
 
 Relaxing either would weaken the posture of every installation, including the ones that never wanted
-profiling. So the privileges live in a component an operator adds, and the infra agent is untouched.
+profiling. So the privileges live in a component of its own, and the infra agent is untouched.
+
+**Installed by default** (D-149), which is a change from how this started: the component is standard
+equipment rather than something to ask for, on the grounds that a host nobody profiled is a host whose
+slow process has no explanation. What does not change is that it is separate: its own package, its own
+account and its own unit, so `--no-ebpf-profiler` leaves a machine exactly as it was, and the capabilities
+are named out loud at install time rather than inherited quietly by the agent.
 
 ## 3. Privileges and kernel requirements
 
