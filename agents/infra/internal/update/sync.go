@@ -69,6 +69,9 @@ type Syncer struct {
 	// JavaAgent receives the java_agent section of a successful sync when the backend sent one (optional; must not
 	// block for long).
 	JavaAgent func(json.RawMessage)
+	// EBPFProfiler receives the ebpf_profiler section of a successful sync when the backend sent one (optional;
+	// must not block).
+	EBPFProfiler func(json.RawMessage)
 	// Kick triggers an immediate sync (state changes).
 	Kick <-chan struct{}
 	// InitialDelay before the first sync; negative means a random delay up to MaxInitialDelay.
@@ -171,6 +174,9 @@ func (s *Syncer) Run(ctx context.Context) {
 			}
 			if s.JavaAgent != nil && len(resp.JavaAgent) > 0 && string(resp.JavaAgent) != "null" {
 				s.JavaAgent(resp.JavaAgent)
+			}
+			if s.EBPFProfiler != nil && len(resp.EBPFProfiler) > 0 && string(resp.EBPFProfiler) != "null" {
+				s.EBPFProfiler(resp.EBPFProfiler)
 			}
 		}
 		wait = Jitter(interval, rnd())

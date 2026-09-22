@@ -115,8 +115,9 @@ func runApply(configPath string, explicit bool, ver string) (code int) {
 			return cmd.Run()
 		},
 	})
-	runPHPAgentApply(sys, cfg, install, keys, log)  // phpagent.go
-	runJavaAgentApply(sys, cfg, install, keys, log) // javaagent.go
+	runPHPAgentApply(sys, cfg, install, keys, log)     // phpagent.go
+	runJavaAgentApply(sys, cfg, install, keys, log)    // javaagent.go
+	runEBPFProfilerApply(sys, cfg, install, keys, log) // ebpfprofiler.go
 	return 0
 }
 

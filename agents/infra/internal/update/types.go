@@ -108,6 +108,8 @@ type SyncRequest struct {
 	PHPAgent any `json:"php_agent,omitempty"`
 	// JavaAgent is the JVM inventory and Java agent installation state (javaagent.Report, java-agent.md §2).
 	JavaAgent any `json:"java_agent,omitempty"`
+	// EBPFProfiler is the whole-host CPU profiler's installation state (ebpfprofiler.Report, ebpf-profiler.md).
+	EBPFProfiler any `json:"ebpf_profiler,omitempty"`
 	// PHPAccess is which PHP-FPM pools may send to php.sock (absent without PHP-FPM pools, php-agent.md §1).
 	PHPAccess *phpaccess.Report `json:"php_access,omitempty"`
 }
@@ -159,6 +161,8 @@ type SyncResponse struct {
 	PHPAgent json.RawMessage `json:"php_agent,omitempty"`
 	// JavaAgent is the fleet's Java agent settings for this host (javaagent.Remote; null/absent: keep the last ones).
 	JavaAgent json.RawMessage `json:"java_agent,omitempty"`
+	// EBPFProfiler is the fleet's profiler settings for this host (ebpfprofiler.Remote; null/absent: keep the last ones).
+	EBPFProfiler json.RawMessage `json:"ebpf_profiler,omitempty"`
 }
 
 // Instruction is an update ordered by the backend. The backend is untrusted: everything that
