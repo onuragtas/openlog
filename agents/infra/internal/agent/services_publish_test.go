@@ -32,3 +32,38 @@ func TestPublishedServicesMirrorsTheIndexRules(t *testing.T) {
 		}
 	}
 }
+
+// The fingerprint is what keeps file I/O off the collection round when nothing changed, so it has to
+// notice every field — a key that moved to another service is exactly the change worth republishing for.
+func TestServicesFingerprintNoticesEveryField(t *testing.T) {
+	base := []resource.ServiceEntry{
+		{Kind: "exe", Key: "/usr/bin/redis-server", ID: "redis"},
+		{Kind: "container", Key: "c1", ID: "redis"},
+	}
+	fp := servicesFingerprint(base)
+	if fp != servicesFingerprint([]resource.ServiceEntry{
+		{Kind: "exe", Key: "/usr/bin/redis-server", ID: "redis"},
+		{Kind: "container", Key: "c1", ID: "redis"},
+	}) {
+		t.Error("an unchanged set changed its fingerprint")
+	}
+	for name, changed := range map[string][]resource.ServiceEntry{
+		"kind":    {{Kind: "container", Key: "/usr/bin/redis-server", ID: "redis"}, base[1]},
+		"key":     {{Kind: "exe", Key: "/usr/bin/redis-cli", ID: "redis"}, base[1]},
+		"id":      {{Kind: "exe", Key: "/usr/bin/redis-server", ID: "valkey"}, base[1]},
+		"removed": {base[0]},
+		"added":   append(append([]resource.ServiceEntry{}, base...), resource.ServiceEntry{Kind: "exe", Key: "/x", ID: "y"}),
+	} {
+		if servicesFingerprint(changed) == fp {
+			t.Errorf("changing the %s did not change the fingerprint", name)
+		}
+	}
+}
+
+// Zero means "never published", so an empty set must not hash to zero: a machine that discovered nothing
+// would otherwise never publish, and never correct itself when something appeared.
+func TestEmptySetIsNotTheZeroFingerprint(t *testing.T) {
+	if servicesFingerprint(nil) == 0 {
+		t.Error("an empty set hashes to zero, which is the never-published sentinel")
+	}
+}

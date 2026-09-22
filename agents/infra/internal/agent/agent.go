@@ -97,6 +97,8 @@ type Agent struct {
 	// Integration status fingerprint of the last inventory snapshot.
 	statusFP      uint64
 	statusPending bool
+	// servicesFP is the last published service map; zero means nothing has been published yet.
+	servicesFP uint64
 	// remoteApplied is set by agent sync when a remote integration config was
 	// applied: the next settled status change is sent without statusSnapshotGap.
 	remoteApplied atomic.Bool
@@ -348,10 +350,18 @@ func (a *Agent) CollectInventory(now time.Time) (*logspb.LogsData, []discovery.S
 		a.stats.SetCollectorDuration("discovery", time.Since(start))
 		items = append(items, discovery.Items(services)...)
 		a.metrics.SetServiceLookup(discovery.NewServiceIndex(services).Lookup)
-		// Published for components that are not this agent (the eBPF profiler names CPU samples with it).
-		// A no-op when the runtime directory does not exist, and never fatal: nothing depends on it.
-		if err := resource.PublishServices(resource.RuntimeDir, publishedServices(services)); err != nil {
-			a.log.Debug("discovered services not published", "error", err)
+		// Published for components that are not this agent (the eBPF profiler names CPU samples with it),
+		// and only when the set actually changed. This runs inside the collection round, and the round is
+		// held to a schedule, so stat-ing and reading a file every time for something that changes rarely
+		// is work in the wrong place. A no-op when the runtime directory does not exist, and never fatal.
+		entries := publishedServices(services)
+		if fp := servicesFingerprint(entries); fp != a.servicesFP {
+			if err := resource.PublishServices(resource.RuntimeDir, entries); err != nil {
+				// Not recorded, so the next round tries again rather than assuming it landed.
+				a.log.Debug("discovered services not published", "error", err)
+			} else {
+				a.servicesFP = fp
+			}
 		}
 		if a.logs != nil {
 			a.logs.SetDiscovered(DiscoveredLogs(services))

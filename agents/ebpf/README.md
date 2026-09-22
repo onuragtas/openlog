@@ -30,8 +30,15 @@ Not yet runnable. What exists and is tested:
 - `internal/profiler` — the interval loop that ties those together: sample, group, convert, send. Every
   kernel-facing call is behind the `Sampler` interface, which is what keeps the loop testable on a machine
   that cannot run eBPF at all.
+- `internal/version` and the command itself — `-version`, `-self-test` to say whether this machine can be
+  sampled, and `-once` to print what would be stored before pointing it at an ingest.
 
-Still to come: the perf-event sampler and its BPF program, symbolication, and the command itself.
+The binary builds for linux/amd64, linux/arm64, darwin and windows. `internal/sampler` refuses on every
+platform today, with two different errors because they are two different situations: on Linux the sampler
+has not landed yet, anywhere else the kernel interfaces do not exist. Neither returns a sampler that
+produces nothing.
+
+Still to come: the perf-event sampler and its BPF program, and symbolication.
 
 **The sampler cannot be verified on a development Mac**, and this repository has no privileged Linux CI job.
 So everything that does not touch the kernel is built behind an interface and tested where tests can run,
