@@ -50,7 +50,7 @@ jobs:
 
 
   go:
-    name: go (root, libs/release, agents/infra, terraform)
+    name: go (root, libs/release, agents/infra, agents/ebpf, terraform)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -61,6 +61,7 @@ jobs:
           cache-dependency-path: |
             go.sum
             agents/infra/go.sum
+            agents/ebpf/go.sum
             terraform/go.sum
       - name: gofmt
         run: make fmt-check
@@ -81,6 +82,20 @@ jobs:
           GOOS=darwin go vet ./...
           GOOS=windows go vet ./...
           go test ./...
+      # The eBPF profiler is its own module (D-148) and Linux-only in function, so it is not covered by the
+      # root gofmt/vet/test above. It must still vet clean on darwin and windows: the sampler is behind a
+      # build tag and every other package has to keep compiling where it will never run.
+      - name: agents/ebpf
+        working-directory: agents/ebpf
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
+          go vet ./...
+          GOOS=linux GOARCH=arm64 go vet ./...
+          GOOS=darwin go vet ./...
+          GOOS=windows go vet ./...
+          go test ./...
+
       # The Terraform provider is its own module (D-131), so it is not covered by the root gofmt/vet/test above.
       - name: terraform provider
         working-directory: terraform
