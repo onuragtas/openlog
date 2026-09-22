@@ -18,8 +18,8 @@
 #                         (creates /etc/openlog-infra-agent/no-docker-access) [OPENLOG_AGENT_DOCKER_ACCESS=0]
 #   --no-php-access       do not add PHP-FPM pool users to the openlog-php socket group, now or later
 #                         (creates /etc/openlog-infra-agent/no-php-access) [OPENLOG_AGENT_PHP_ACCESS=0]
-#   --no-ebpf-profiler    do not install openlog-ebpf-profiler (whole-host CPU profiling, installed by
-#                         default on Linux deb/rpm; runs with CAP_BPF and CAP_PERFMON) [OPENLOG_EBPF_PROFILER=0]
+#   --no-ebpf-profiler    do not install openlog-ebpf-profiler (whole-host CPU profiling, on by default on
+#                         Linux deb/rpm; CAP_BPF+CAP_PERFMON). Remembered, like --no-docker-access
 #
 # macOS (darwin amd64/arm64): the agent runs as root under launchd (label org.openlog.infra-agent,
 # /Library/LaunchDaemons/org.openlog.infra-agent.plist), CLI /usr/local/bin/openlog-infra-agent, config root:wheel 0600,
@@ -74,8 +74,11 @@ DOCKER_OPT_OUT=$CONFIG_DIR/no-docker-access
 php_access=${OPENLOG_AGENT_PHP_ACCESS:-1}
 PHP_OPT_OUT=$CONFIG_DIR/no-php-access
 ebpf_profiler=${OPENLOG_EBPF_PROFILER:-1}
+EBPF_OPT_OUT=$CONFIG_DIR/no-ebpf-profiler
 # Asked for by name: then a host that cannot run it is an error rather than something to skip quietly.
 ebpf_explicit=0
+# Empty: neither flag was given, so an earlier opt-out stands.
+ebpf_opt_out=
 tmpdir=
 
 log() { printf 'openlog-install: %s\n' "$*" >&2; }
@@ -112,11 +115,13 @@ while [ $# -gt 0 ]; do
 	--with-ebpf-profiler)
 		ebpf_profiler=1
 		ebpf_explicit=1
+		ebpf_opt_out=0
 		shift
 		continue
 		;;
 	--no-ebpf-profiler)
 		ebpf_profiler=0
+		ebpf_opt_out=1
 		shift
 		continue
 		;;
@@ -626,6 +631,17 @@ install_ebpf_profiler() {
 	fi
 }
 
+# The choice has to outlive this run: an operator who said no must not have it reinstalled by the next
+# upgrade or by the agent's own updater. Recorded as a file the way --no-docker-access and
+# --no-php-access are; neither flag given leaves an earlier decision alone.
+case $ebpf_opt_out in
+1)
+	mkdir -p "$CONFIG_DIR" 2>/dev/null || true
+	: >"$EBPF_OPT_OUT" 2>/dev/null || log "could not record the opt-out in $EBPF_OPT_OUT"
+	;;
+0) rm -f "$EBPF_OPT_OUT" 2>/dev/null || true ;;
+*) [ ! -f "$EBPF_OPT_OUT" ] || ebpf_profiler=0 ;;
+esac
 if [ "$ebpf_profiler" = 1 ]; then
 	install_ebpf_profiler
 fi
