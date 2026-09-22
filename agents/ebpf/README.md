@@ -92,10 +92,20 @@ Where it cannot run — not Linux, or the tarball install method — it is skipp
 agent installs as usual. Naming it explicitly with `--with-ebpf-profiler` turns those same conditions
 into errors instead: someone who asked for it by name is owed a failure, not a silent no-op.
 
-**No Helm chart, and none of this has been run.** There is no DaemonSet for Kubernetes yet. The unit has
-never been loaded by systemd, nfpm has never built the package here, and the BPF program has never been
-through a verifier: all of it is written against the infra agent's equivalents and the contract, not
-against a running host. The first install on a real machine is where that stops being true.
+**No Helm chart.** There is no DaemonSet for Kubernetes yet.
+
+The rest of this section used to say none of it had ever run. That stopped being true on 2026-09-22, on a
+Debian host: nfpm builds the packages in every release, the unit was loaded by systemd, and the BPF
+program passed the kernel verifier. The evidence for the last one is where the failure landed — New()
+creates the maps, binds them and calls ebpf.NewProgram *before* opening perf events, and the host failed
+at `perf event on cpu 0 … permission denied`, which is the step after the program loaded. That host's
+`kernel.perf_event_paranoid` was 4 (a Debian/Ubuntu level above the mainline maximum of 2); with it
+lowered the profiler sampled and its profiles reached the profiling screen.
+
+What that first host also found, and what is fixed since: the symbol cache was unbounded and the process
+was OOM-killed under the unit's MemoryMax (internal/symbol now has a per-file and a total budget), and a
+failure an operator has to fix was retried every ten seconds forever (exit 78 and
+RestartPreventExitStatus).
 
 ## No clang, no cgo
 
