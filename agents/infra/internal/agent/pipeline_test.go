@@ -152,7 +152,10 @@ func TestCollectionStaysOnScheduleWhileExportStalls(t *testing.T) {
 		// the collection loop's independence from a stalled exporter is asserted on Linux.
 		t.Skip("schedule precision is asserted on Linux only")
 	}
-	const interval = 200 * time.Millisecond
+	// 400ms rather than 200ms: a shared runner's timer jitter (~25ms) is a fixed cost, so a longer
+	// interval shrinks it as a fraction of the tolerance without weakening what is asserted — a loop
+	// blocked by the exporter is still off by a whole interval, far outside it.
+	const interval = 400 * time.Millisecond
 	const outage = 8 // intervals
 
 	for _, mode := range []string{"503-retry-after", "hanging-ingest"} {
@@ -311,8 +314,13 @@ func TestShutdownPersistsPendingPayloads(t *testing.T) {
 	a := newPipelineAgent(t, 100*time.Millisecond, f)
 	a.pipe.maxItems = 100
 	a.shutdownTimeout = 300 * time.Millisecond
-	var payloads atomic.Int32
-	a.onEnqueue = func(exporter.Signal, int) { payloads.Add(1) }
+	var payloads, metricPayloads atomic.Int32
+	a.onEnqueue = func(sig exporter.Signal, _ int) {
+		payloads.Add(1)
+		if sig == exporter.SignalMetrics {
+			metricPayloads.Add(1)
+		}
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -320,7 +328,14 @@ func TestShutdownPersistsPendingPayloads(t *testing.T) {
 		defer close(done)
 		_ = a.Run(ctx)
 	}()
-	time.Sleep(550 * time.Millisecond)
+	// Wait for the metric collections themselves rather than for a duration: 550ms at a 100ms interval
+	// assumes a runner that never stalls, and a stalled one produced four and failed the "at least 5"
+	// check below. Metrics only: the assertion counts persisted metric samples, and logs enqueue payloads
+	// too, so waiting on the total reached the count with two metric batches.
+	deadline := time.Now().Add(10 * time.Second)
+	for metricPayloads.Load() < 6 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
 	stopAt := time.Now()
 	cancel()
 	<-done

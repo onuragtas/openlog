@@ -130,7 +130,7 @@ public sealed class SampleAppTests
         var tid = NewTraceId();
         var res = await Get("/users/7", tid);
         res.EnsureSuccessStatusCode();
-        var span = await WaitSpan(tid, s => s.Kind == Server, "server span of /users/7");
+        var span = await WaitSpan(tid, s => s.Kind == Server && s.Resource.ContainsKey("host.id"), "server span of /users/7");
         Assert.Equal("/users/{id:int}", span.Attr("http.route"));
         Assert.Equal("GET /users/{id:int}", span.Name);
         Assert.Equal("200", span.Attr("http.response.status_code"));
@@ -140,7 +140,8 @@ public sealed class SampleAppTests
         Assert.Equal("1.2.3", r["service.version"]);
         Assert.Equal("test", r["deployment.environment.name"]);
         Assert.Equal("payments", r["team"]);
-        Assert.Equal(AppFixture.InfraHostId, r["host.id"]);
+        Assert.True(r.TryGetValue("host.id", out var hostId), "the span resource carries no host.id: " + string.Join(", ", r.Keys));
+        Assert.Equal(AppFixture.InfraHostId, hostId);
         Assert.Equal("openlog", r["telemetry.distro.name"]);
         Assert.Equal(AgentVersion.Version, r["telemetry.distro.version"]);
         Assert.Equal("dotnet", r["telemetry.sdk.language"]);
@@ -264,16 +265,22 @@ public sealed class SampleAppTests
         var names = await f.Capture.WaitFor(c =>
         {
             var set = c.Metrics.Select(m => m.Name).ToHashSet();
-            return set.Contains("http.server.request.duration") && set.Contains("process.cpu.time") && set.Contains("process.memory.usage")
+            // The resource is enriched from the infra agent's host-id file, which the first exported batch can
+            // predate. Waiting only for the names let the assertions below read such a batch and throw
+            // KeyNotFoundException on host.id; wait for the metric the assertions actually use.
+            var cpuReady = c.Metrics.Any(m => m.Name == "process.cpu.time" && m.Resource.ContainsKey("host.id"));
+            return cpuReady
+                && set.Contains("http.server.request.duration") && set.Contains("process.cpu.time") && set.Contains("process.memory.usage")
                 && set.Any(n => n.StartsWith("dotnet.", StringComparison.Ordinal) || n.StartsWith("process.runtime.dotnet.", StringComparison.Ordinal))
                 ? set
                 : null;
         }, "runtime/process/http metrics");
         Assert.True(names.Contains("dotnet.gc.collections") || names.Contains("process.runtime.dotnet.gc.collections.count"), string.Join(", ", names.OrderBy(n => n)));
-        var cpu = f.Capture.Metrics.Last(m => m.Name == "process.cpu.time");
+        var cpu = f.Capture.Metrics.Last(m => m.Name == "process.cpu.time" && m.Resource.ContainsKey("host.id"));
         Assert.Equal("s", cpu.Unit);
         Assert.Contains(cpu.Points, p => p.Attributes.TryGetValue("cpu.mode", out var mode) && (string?)mode == "user");
-        Assert.Equal(AppFixture.InfraHostId, cpu.Resource["host.id"]);
+        Assert.True(cpu.Resource.TryGetValue("host.id", out var hostId), "process.cpu.time carries no host.id: " + string.Join(", ", cpu.Resource.Keys));
+        Assert.Equal(AppFixture.InfraHostId, hostId);
         var http = f.Capture.Metrics.Last(m => m.Name == "http.server.request.duration");
         Assert.Equal("histogram", http.Type);
         Assert.Contains(http.Points, p => (string?)p.Attributes.GetValueOrDefault("http.route") == "/users/{id:int}");

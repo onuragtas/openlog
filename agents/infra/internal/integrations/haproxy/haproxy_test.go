@@ -166,11 +166,14 @@ func TestCollectOverRuntimeSocket(t *testing.T) {
 			}
 			go func() {
 				defer conn.Close()
-				buf := make([]byte, 64)
-				if _, err := conn.Read(buf); err != nil {
-					return
-				}
+				// Answer without waiting for the command first. Windows AF_UNIX did not deliver the
+				// collector's request to this read before its own 3 s read deadline expired
+				// ("read unix @->…admin.sock: i/o timeout"), so the reply was never written and the test
+				// failed on a runner, not on the code. haproxy answers a command; what is asserted here is
+				// the parsing of the answer, and that does not need the command to be read first.
 				_, _ = conn.Write([]byte(statsCSV))
+				buf := make([]byte, 64)
+				_, _ = conn.Read(buf)
 			}()
 		}
 	}()

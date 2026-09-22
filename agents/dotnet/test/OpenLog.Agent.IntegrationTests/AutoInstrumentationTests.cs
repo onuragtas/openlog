@@ -163,14 +163,15 @@ public sealed class AutoInstrumentationTests : IClassFixture<AutoInstrumentation
     {
         var tid = ActivityTraceId.CreateRandom().ToHexString();
         (await Get("/users/5", tid, "01")).EnsureSuccessStatusCode();
-        var span = await WaitSpan(tid, s => s.Kind == Server, "server span of /users/5");
+        var span = await WaitSpan(tid, s => s.Kind == Server && s.Resource.ContainsKey("host.id"), "server span of /users/5");
         Assert.Equal("/users/{id:int}", span.Attr("http.route"));
         Assert.Equal("GET /users/{id:int}", span.Name);
         var r = span.Resource;
         Assert.Equal("dotnet-auto", r["service.name"]);
         Assert.Equal("2.0.1", r["service.version"]);
         Assert.Equal("test", r["deployment.environment.name"]);
-        Assert.Equal(AutoInstrumentationFixture.InfraHostId, r["host.id"]);
+        Assert.True(r.TryGetValue("host.id", out var hostId), "the span resource carries no host.id: " + string.Join(", ", r.Keys));
+        Assert.Equal(AutoInstrumentationFixture.InfraHostId, hostId);
         Assert.Equal("openlog", r["telemetry.distro.name"]);
         Assert.Equal(AgentVersion.Version, r["telemetry.distro.version"]);
         // the automatic instrumentation's own SDK resource stays (it owns the providers)
@@ -216,8 +217,9 @@ public sealed class AutoInstrumentationTests : IClassFixture<AutoInstrumentation
     [AutoInstrumentationFact]
     public async Task PluginProcessMetrics()
     {
-        var cpu = await f.Capture.WaitFor(c => c.Metrics.LastOrDefault(m => m.Name == "process.cpu.time" && m.Scope.Name == "OpenLog.Agent.Process"), "openlog process metrics");
+        var cpu = await f.Capture.WaitFor(c => c.Metrics.LastOrDefault(m => m.Name == "process.cpu.time" && m.Scope.Name == "OpenLog.Agent.Process" && m.Resource.ContainsKey("host.id")), "openlog process metrics");
         Assert.Equal("s", cpu.Unit);
-        Assert.Equal(AutoInstrumentationFixture.InfraHostId, cpu.Resource["host.id"]);
+        Assert.True(cpu.Resource.TryGetValue("host.id", out var hostId), "process.cpu.time carries no host.id: " + string.Join(", ", cpu.Resource.Keys));
+        Assert.Equal(AutoInstrumentationFixture.InfraHostId, hostId);
     }
 }
