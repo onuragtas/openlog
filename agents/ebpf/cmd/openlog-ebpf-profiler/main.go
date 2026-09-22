@@ -23,6 +23,12 @@ import (
 	"github.com/onuragtas/openlog/agents/ebpf/internal/version"
 )
 
+// exitConfig is returned for a failure that will not fix itself: the configuration is wrong, or this
+// kernel refuses to be sampled (capabilities, perf_event_paranoid, a guest without perf events). The unit
+// stops restarting on it (RestartPreventExitStatus), because retrying every ten seconds forever only
+// costs the host: an operator has to act first.
+const exitConfig = 78 // EX_CONFIG
+
 func main() { os.Exit(run()) }
 
 func run() int {
@@ -41,7 +47,7 @@ func run() int {
 		// Refused rather than started: a profiler that samples a whole machine and throws every profile
 		// away costs the host and delivers nothing.
 		fmt.Fprintf(os.Stderr, "configuration: %v\n", err)
-		return 1
+		return exitConfig
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level(cfg.LogLevel)}))
 
@@ -50,7 +56,7 @@ func run() int {
 		// Says what is missing and exits non-zero rather than degrading into sampling nothing while
 		// looking healthy (contract §3).
 		fmt.Fprintf(os.Stderr, "cannot sample this machine: %v\n", err)
-		return 1
+		return exitConfig
 	}
 
 	fs := attribute.OS{Root: cfg.HostRoot}

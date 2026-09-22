@@ -56,8 +56,17 @@ repository that ships six os/arch targets with `CGO_ENABLED=0`, to generate a pr
 instructions. The instructions are written out instead, and the cost of that choice is that the program must
 stay small — which is also the reason it is honest to keep it small.
 
-When a requirement is missing the component logs what is missing and exits non-zero at start-up. It never
-degrades into sampling nothing while looking healthy.
+When a requirement is missing the component logs what is missing and exits at start-up. It never degrades
+into sampling nothing while looking healthy.
+
+**Exit 78 (`EX_CONFIG`) means an operator has to act** — a wrong configuration, or a kernel that refuses to
+be sampled. The failure names the blocking setting rather than the sysctl alone: it reads
+`/proc/sys/kernel/perf_event_paranoid` and says whether that value is the reason, and where else to look
+when it is not (the unit's capabilities, or a guest where perf events are unavailable whatever the
+capabilities say). The unit sets `RestartPreventExitStatus=78`, so systemd stops instead of restarting
+every ten seconds: retrying cannot change a kernel policy, and a host was observed at restart counter 704
+against `perf_event_paranoid=4`. A start limit (5 starts in 5 minutes) is the backstop for failures that
+do not report 78. After changing the setting, start the service again.
 
 ## 4. How a sample becomes a service
 

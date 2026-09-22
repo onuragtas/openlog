@@ -3,6 +3,10 @@ Description=openlog whole-host CPU profiler (eBPF)
 Documentation=https://github.com/onuragtas/openlog/agents/ebpf
 After=network-online.target
 Wants=network-online.target
+# Backstop for failures that do not report exit 78: give up after five starts in five minutes rather
+# than restarting for hours.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -12,6 +16,11 @@ ExecStart=/opt/openlog/ebpf-profiler/openlog-ebpf-profiler
 EnvironmentFile=/etc/openlog-ebpf-profiler/openlog-ebpf-profiler.env
 Restart=always
 RestartSec=10
+# A kernel that refuses to be sampled will refuse again in ten seconds. Exit 78 (EX_CONFIG) means an
+# operator has to act first — capabilities, perf_event_paranoid, a guest without perf events — so systemd
+# stops instead of restarting forever. Observed on a real host: restart counter 704 against
+# perf_event_paranoid=4, which no number of restarts could have changed.
+RestartPreventExitStatus=78
 
 # This unit exists because the infra agent's does not permit this work, and must not be changed to
 # (docs/contracts/ebpf-profiler.md §2). Everything below is the *opposite* trade from that unit: the
