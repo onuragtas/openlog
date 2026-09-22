@@ -423,7 +423,20 @@ func (m *Manager) Handle(ctx context.Context, ins *Instruction) {
 	m.log.Info("update instruction received", "action", ins.Action, "from", m.o.Version, "target", ins.TargetVersion, "rollout", ins.RolloutID)
 
 	if err := m.stage(ctx, ins, deadline); err != nil {
-		if ctx.Err() != nil && m.restarting.Load() {
+		if ctx.Err() != nil {
+			// Cancelled, not refused: the agent is stopping, or whatever owns this context went away. That
+			// says nothing about the candidate, and reporting it as failed made one host halt a whole
+			// rollout ("self-test of …/extract/openlog-infra-agent failed: context canceled"), because the
+			// halt threshold counts failures. Go back to idle and let the next sync offer it again.
+			//
+			// A self-test that really times out is not this case: runSelfTest gives it its own child
+			// context, so the deadline fires there and this ctx.Err() stays nil.
+			if !m.restarting.Load() {
+				m.mu.Lock()
+				m.setLocked(StateIdle, "")
+				m.mu.Unlock()
+				m.log.Info("update attempt cancelled; will retry", "action", ins.Action, "target", ins.TargetVersion, "error", err)
+			}
 			return
 		}
 		m.mu.Lock()

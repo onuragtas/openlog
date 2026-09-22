@@ -409,6 +409,22 @@ func TestHandleRejections(t *testing.T) {
 		m.Handle(ctx, f.release(ActionUpgrade, "1.0.3", "echo cannot parse config >&2; exit 2", nil))
 		check(t, m, r, "cannot parse config")
 	})
+	t.Run("cancelled attempt is not a failure", func(t *testing.T) {
+		// A cancelled context says the agent is stopping, not that the candidate is broken. Reporting it as
+		// failed made one host halt a whole rollout: the fleet counts failures against halt_failure_rate,
+		// and "self-test of …/extract/openlog-infra-agent failed: context canceled" was enough at 1 of 3.
+		m, r := f.manager("0.9.1", true)
+		cctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		m.Handle(cctx, f.release(ActionUpgrade, "1.0.9", "exit 0", nil))
+		if st := m.State(); st.Status == StateFailed {
+			t.Fatalf("a cancelled attempt was reported as failed: %+v", st)
+		}
+		if r.Load() != 0 || f.current() != "0.9.1" {
+			t.Fatalf("switched on a cancelled attempt: restarts %d current %s", r.Load(), f.current())
+		}
+	})
+
 	t.Run("failed instruction not retried within delay", func(t *testing.T) {
 		m, r := f.manager("0.9.1", true)
 		ins := f.release(ActionUpgrade, "1.0.4", "exit 5", nil)
