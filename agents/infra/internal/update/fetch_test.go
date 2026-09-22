@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -240,5 +241,39 @@ func TestRunSelfTest(t *testing.T) {
 	}
 	if time.Since(start) > 5*time.Second {
 		t.Error("timeout not enforced")
+	}
+}
+
+// A failed download must say why it failed. Go's *url.Error carries the address it ended on, and after a
+// redirect that is the storage provider's presigned URL (GitHub's release assets: signature + JWT, well
+// over a kilobyte). A host reported exactly that and the reason was nowhere in the message.
+func TestDownloadErrorKeepsTheReasonNotThePresignedURL(t *testing.T) {
+	long := "/asset?" + strings.Repeat("sig=abcdefghijklmnopqrstuvwxyz&", 60) + "jwt=" + strings.Repeat("x", 400)
+	var dead string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, dead+long, http.StatusFound)
+	}))
+	defer srv.Close()
+	// A listener that is closed immediately: the redirect target refuses the connection.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead = "http://" + ln.Addr().String()
+	ln.Close()
+
+	err = Download(t.Context(), srv.Client(), srv.URL+"/start", nil, filepath.Join(t.TempDir(), "f"), 10, "")
+	if err == nil {
+		t.Fatal("download of a refused redirect target succeeded")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "jwt=") || strings.Contains(msg, "sig=abcdef") {
+		t.Errorf("the presigned URL is in the message (%d bytes): %s", len(msg), msg)
+	}
+	if !strings.Contains(msg, "connect") && !strings.Contains(msg, "refused") {
+		t.Errorf("the reason is missing: %s", msg)
+	}
+	if !strings.Contains(msg, srv.URL) {
+		t.Errorf("the requested URL should still be named: %s", msg)
 	}
 }

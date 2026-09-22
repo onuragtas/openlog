@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -18,6 +19,19 @@ import (
 	"strings"
 	"time"
 )
+
+// downloadErr keeps the reason instead of the address. A *url.Error renders as `Get "<final URL>": reason`,
+// and after a redirect that URL is the storage provider's presigned one — GitHub's release assets carry a
+// signature and a JWT and run well over a kilobyte. Reported verbatim it pushed the reason past every
+// truncation boundary: a host showed `download …: Get "https://release-assets…&sig=…&jwt=…"` and nobody
+// could tell a timeout from a refused connection.
+func downloadErr(url string, err error) error {
+	var ue *neturl.Error
+	if errors.As(err, &ue) && ue.Err != nil {
+		err = ue.Err
+	}
+	return fmt.Errorf("download %s: %w", url, err)
+}
 
 // Download fetches url into dest and checks size and sha256 against the signed manifest
 // (rule 6). At most size+1 bytes are read. dest is removed on failure.
@@ -36,7 +50,7 @@ func Download(ctx context.Context, client *http.Client, url string, header http.
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("download %s: %w", url, err)
+		return downloadErr(url, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -60,7 +74,7 @@ func Download(ctx context.Context, client *http.Client, url string, header http.
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(resp.Body, size+1))
 	if err != nil {
-		return fmt.Errorf("download %s: %w", url, err)
+		return downloadErr(url, err)
 	}
 	if n != size {
 		return ruleErr(6, "archive size mismatch: got %d bytes, manifest says %d", n, size)
