@@ -24,6 +24,8 @@ import { syntheticHandlers } from "./synthetics";
 import { usageHandlers } from "./usage";
 import { operatorHandlers } from "./operator";
 import { ssoHandlers } from "./sso";
+import { tailSamplingHandlers } from "./tailSampling";
+import { sourceMapHandlers } from "./sourceMaps";
 import { onboardingHandlers, onboardingHosts } from "./onboarding";
 import { privacyHandlers } from "./privacy";
 import { explorerHandlers } from "./explorer";
@@ -348,6 +350,8 @@ export const handlers = [
   ...onboardingHandlers,
   ...privacyHandlers, // mocks/privacy.ts: data exports, deletion, status page (D-107, D-108)
   ...explorerHandlers, // mocks/explorer.ts: field keys/values, logs and metrics explorer, saved views (D-118, D-119)
+  ...tailSamplingHandlers, // mocks/tailSampling.ts: the tail sampling policy and its preview (apm.md §4.2)
+  ...sourceMapHandlers, // mocks/sourceMaps.ts: the stored source maps of browser applications (rum.md §8)
 
   http.all(`${API}/*`, () => apiError("not_found", "no such endpoint")),
 ];
