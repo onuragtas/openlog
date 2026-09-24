@@ -530,7 +530,14 @@ public sealed class OtlpCaptureServer : IAsyncDisposable
                     var keys = string.Join(",", g.Last().Resource.Keys.OrderBy(k => k));
                     return $"{g.Key} x{g.Count()} host.id={withHost}/{g.Count()} scope={g.Last().Scope.Name} resource=[{keys}]";
                 }));
-                throw new TimeoutException($"timed out waiting for {what}; metrics: {detail}; spans: {string.Join(" | ", Spans.Select(s => s.ToString()))}");
+                // Which requests arrived at all. A metric with an empty resource can mean our exporter sent
+                // one that way, or that these points never came from our exporter: the user agent settles
+                // it, and the encoding rules out a body this server decoded without decompressing.
+                var metricRequests = Requests.Count(r => r.Path.EndsWith("/metrics", StringComparison.Ordinal));
+                var reqs = string.Join(", ", Requests
+                    .Select(r => $"{r.Path} encoding=\"{r.Encoding}\" ua=\"{r.UserAgent}\"")
+                    .Distinct());
+                throw new TimeoutException($"timed out waiting for {what}; metrics: {detail}; metric requests: {metricRequests}; requests: {reqs}; spans: {string.Join(" | ", Spans.Select(s => s.ToString()))}");
             }
             await Task.Delay(100);
         }

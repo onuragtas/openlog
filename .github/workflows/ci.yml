@@ -623,7 +623,12 @@ jobs:
       - name: integration tests (ASP.NET Core minimal API/MVC, HttpClient, gRPC, ILogger, metrics, PostgreSQL/EF Core, MySQL, Redis, SQL Server, MassTransit/RabbitMQ, Kafka)
         run: |
           $COMPOSE --profile sqlserver up -d --wait postgres mysql redis rabbitmq kafka sqlserver
-          dotnet test test/OpenLog.Agent.IntegrationTests/OpenLog.Agent.IntegrationTests.csproj -c Release -f "net${{ matrix.dotnet }}"
+          # detailed verbosity forwards what the sample app and the agent write to the test host's console.
+          # Roughly half the runs fail with every metric carrying an empty resource while spans in the same
+          # run carry full ones, and the agent's own diagnostics (component=openlog-dotnet-agent, including
+          # host.id.source) never reached the log to say why.
+          dotnet test test/OpenLog.Agent.IntegrationTests/OpenLog.Agent.IntegrationTests.csproj -c Release -f "net${{ matrix.dotnet }}" \
+            --logger "console;verbosity=detailed"
       - name: stop databases and brokers
         if: always()
         run: $COMPOSE --profile sqlserver down -v
