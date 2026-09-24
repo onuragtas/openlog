@@ -251,6 +251,13 @@ jobs:
         working-directory: .
         shell: bash
         env:
+          # Git Bash rewrites values that look like absolute POSIX paths into Windows paths, arguments and
+          # environment alike. The keys are random base64, so about one in 64 starts with "/" and reached
+          # openlog-release as "C:/Program Files/Git/…": "illegal base64 data at input byte 1", on that run
+          # only. Excluding both conversions here covers the whole class; setting them inside the script
+          # would be too late, because the environment is converted as bash starts.
+          MSYS2_ENV_CONV_EXCL: "*"
+          MSYS2_ARG_CONV_EXCL: "*"
           OPENLOG_RELEASE_SIGNING_KEY: ${{ env.TEST_SIGNING_KEY }}
           OPENLOG_RELEASE_PUBLIC_KEYS: ${{ env.TEST_PUBLIC_KEYS }}
           RELEASE_BASE_URL: https://example.invalid/releases
