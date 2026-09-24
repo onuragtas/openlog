@@ -1159,9 +1159,12 @@ discovery found (default 9000) — not over HTTP. PHP-FPM speaks FastCGI, so rea
 web server in front of it to proxy that path; the pool's own socket needs only `pm.status_path`, which is PHP-FPM's own
 setting. `auto_enable: true` with `requires: []`: the status page needs no credentials. The paths `/status`, `/fpm-status`,
 `/php-fpm-status`, `/php_status`, `/fpm_status` are tried as `SCRIPT_NAME` with `QUERY_STRING=json`, and the one that
-answered is remembered. A pool with no `pm.status_path` answers 404 or writes to stderr on every path and is reported
-`needs_configuration` — a configuration answer, not an unreachable endpoint. A configured `endpoint` is `unix:/path` or
-`host:port`.
+answered is remembered. Two results are configuration answers rather than unreachable endpoints, and both are reported
+`needs_configuration` with a hint naming the setting to add: a pool with no `pm.status_path` answers 404 or writes to
+stderr on every path; and a pool socket the agent may not connect to answers `permission denied` on connect, because
+pool sockets are `0660` owned by the web server's user while the agent runs as `openlog-agent` (`listen.acl_users =
+openlog-agent` in the pool file grants it without widening anything else). Neither means the pool is down. A configured
+`endpoint` is `unix:/path` or `host:port`.
 
 Counters are cumulative from the pool's start (`start time` gives the start time). Resource attributes:
 `phpfpm.pool.name` (`pool`) and `phpfpm.process_manager` (`process manager`: `static`, `dynamic`, `ondemand`).

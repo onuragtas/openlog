@@ -14,8 +14,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/config"
@@ -69,9 +71,18 @@ func (Integration) Hint(inst *integrations.Instance) string {
 		}
 		break
 	}
-	return fmt.Sprintf(`# This PHP-FPM pool serves no status page: pm.status_path is not set, so the pool has
-# nothing to answer with (tried %s on %s). The agent never changes the PHP-FPM configuration.
-# Add the setting to the pool (/etc/php/<version>/fpm/pool.d/www.conf, /etc/php-fpm.d/www.conf on RHEL):
+	return fmt.Sprintf(`# The pool's status page could not be read (tried %s on %s). The agent never changes the
+# PHP-FPM configuration; both causes are fixed in the pool file
+# (/etc/php/<version>/fpm/pool.d/www.conf, /etc/php-fpm.d/www.conf on RHEL).
+#
+# "permission denied" on the socket: the pool socket is 0660 owned by the web server's user, and the
+# agent runs as openlog-agent. Let it connect, without widening anything else:
+#
+#   listen.acl_users = openlog-agent
+#
+# (a group also works: usermod -aG www-data openlog-agent, then restart openlog-infra-agent.)
+#
+# No status page at all: pm.status_path is unset, so the pool has nothing to answer with. Add:
 #
 #   pm.status_path = /status
 #
@@ -171,6 +182,13 @@ func errorIsNotStatus(err error) bool {
 func (c *collector) read(ctx context.Context, path string) (Status, error) {
 	conn, err := (&net.Dialer{}).DialContext(ctx, c.ep.Network, c.ep.Address)
 	if err != nil {
+		// A pool socket the agent may not connect to is a configuration answer, not an unreachable
+		// endpoint: the socket is there and PHP-FPM is listening on it. Pool sockets are 0660 owned by
+		// the web server's user, and the agent runs as openlog-agent (docker does the same, D-031).
+		if errors.Is(err, fs.ErrPermission) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+			return Status{}, integrations.NeedsConfiguration(
+				"the agent may not connect to "+c.ep.Display+" (permission denied); grant openlog-agent access to the pool socket", false)
+		}
 		return Status{}, fmt.Errorf("%w: %v", integrations.ErrUnreachable, err)
 	}
 	defer conn.Close()

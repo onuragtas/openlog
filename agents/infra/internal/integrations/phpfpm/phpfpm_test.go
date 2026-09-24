@@ -6,7 +6,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/fcgi"
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,7 +94,16 @@ func TestRecordOmitsQueueLimitWhenZero(t *testing.T) {
 // protocol this package's client speaks), so the wire format is exercised rather than assumed.
 func fakePool(t *testing.T, statusPath, body string) (sock string, asked func() []string) {
 	t.Helper()
-	sock = filepath.Join(t.TempDir(), "fpm.sock")
+	// Not t.TempDir(): it puts the test name in the path, and a unix socket path is capped at about 104
+	// bytes (sun_path). The names here pushed the macOS temp path past that, so every socket test skipped
+	// itself with "bind: invalid argument" — green, and testing nothing.
+	dir, err := os.MkdirTemp("/tmp", "olfpm")
+	if err != nil {
+		dir = t.TempDir()
+	} else {
+		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	}
+	sock = filepath.Join(dir, "s")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Skipf("unix sockets unavailable: %v", err)
@@ -185,6 +197,43 @@ func TestMissingSocketIsUnreachable(t *testing.T) {
 	err := c.Collect(context.Background(), integrations.NewBatch(time.Now(), 0))
 	if !integrations.IsUnreachable(err) {
 		t.Fatalf("err = %v, want unreachable", err)
+	}
+}
+
+// A pool socket the agent may not connect to is the common first result on a real host: pool sockets are
+// 0660 owned by the web server's user. That is a configuration answer — the socket is there and PHP-FPM is
+// listening on it — so it must not be reported as an unreachable endpoint, which reads as "the pool is down".
+func TestSocketWithoutPermissionNeedsConfiguration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix socket permissions are not enforced the same way on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses socket permissions")
+	}
+	sock, _ := fakePool(t, "/status", statusJSON)
+	if err := os.Chmod(sock, 0o000); err != nil {
+		t.Skipf("cannot take permissions away from the socket: %v", err)
+	}
+	// Some platforms do not check permissions on connect; assert only where the premise holds.
+	if conn, err := net.Dial("unix", sock); err == nil {
+		_ = conn.Close()
+		t.Skip("this platform does not enforce connect permissions on unix sockets")
+	}
+
+	c := collectorFor(t, sock)
+	err := c.Collect(context.Background(), integrations.NewBatch(time.Now(), 0))
+	var se *integrations.StatusError
+	if !errors.As(err, &se) {
+		t.Fatalf("err = %v (%T), want a status error", err, err)
+	}
+	if se.Status != discovery.StatusNeedsConfiguration {
+		t.Errorf("status = %q, want %q", se.Status, discovery.StatusNeedsConfiguration)
+	}
+	if integrations.IsUnreachable(err) {
+		t.Error("a socket that exists and is listening must not be reported unreachable")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("the reason must say what is wrong: %v", err)
 	}
 }
 
