@@ -1154,20 +1154,32 @@ idle share, because "how busy is it" is the question an operator asks.
 
 ### 6.18 PHP-FPM (`php-fpm`, D-147)
 
-Source: the pool status page, read over **FastCGI** on the pool's own listening socket — a unix socket or the TCP port
-discovery found (default 9000) — not over HTTP. PHP-FPM speaks FastCGI, so reaching `/status` over HTTP would require the
-web server in front of it to proxy that path; the pool's own socket needs only `pm.status_path`, which is PHP-FPM's own
-setting. `auto_enable: true` with `requires: []`: the status page needs no credentials. The paths `/status`, `/fpm-status`,
-`/php-fpm-status`, `/php_status`, `/fpm_status` are tried as `SCRIPT_NAME` with `QUERY_STRING=json`, and the one that
-answered is remembered. Two results are configuration answers rather than unreachable endpoints, and both are reported
-`needs_configuration` with a hint naming the setting to add: a pool with no `pm.status_path` answers 404 or writes to
-stderr on every path; and a pool socket the agent may not connect to answers `permission denied` on connect, because
-pool sockets are `0660` owned by the web server's user while the agent runs as `openlog-agent` (`listen.acl_users =
-openlog-agent` in the pool file grants it without widening anything else). Neither means the pool is down. A configured
-`endpoint` is `unix:/path` or `host:port`.
+Source: **every pool** of the PHP-FPM configuration, each read over **FastCGI** on its own listening socket, not over
+HTTP. The pools come from the pool files (`/etc/php/*/fpm/pool.d/*.conf`, `/etc/php-fpm.d/*.conf`, and the Remi, cPanel
+and Plesk layouts — the same reader the PHP agent's access check uses) rather than from a list of well-known socket
+paths: a host that runs one pool per site (HestiaCP, cPanel, Plesk) has dozens of sockets named after the sites, which no
+fixed list can enumerate, and each pool is a resource of its own, because one pool's queue says nothing about another's.
+`listen` gives the address (a socket path, `host:port`, or a bare port on loopback) and `pm.status_path` the page; a pool
+that names no status path is probed for `/status`, `/fpm-status`, `/php-fpm-status`, `/php_status`, `/fpm_status` as
+`SCRIPT_NAME` with `QUERY_STRING=json`, and the one that answered is remembered. A host whose pool files cannot be read —
+a container that mounts only the socket — falls back to the single endpoint discovery derived, with the well-known socket
+paths as candidates; a configured `endpoint` (`unix:/path` or `host:port`) selects that fallback. PHP-FPM speaks FastCGI,
+so reaching `/status` over HTTP would require the web server in front of it to proxy that path; the pool's own socket
+needs only `pm.status_path`, which is PHP-FPM's own setting. `auto_enable: true` with `requires: []`: the status page
+needs no credentials.
 
-Counters are cumulative from the pool's start (`start time` gives the start time). Resource attributes:
-`phpfpm.pool.name` (`pool`) and `phpfpm.process_manager` (`process manager`: `static`, `dynamic`, `ondemand`).
+Pools that answer are recorded even when others do not, so one pool that is down or unconfigured does not cost the rest;
+the collection is then `partial` and names what failed. When **no** pool answers, two results are configuration answers
+rather than unreachable endpoints and are reported `needs_configuration` with the fix: a socket the agent may not connect
+to (pool sockets are `0660` owned by the web server's user while the agent runs as `openlog-agent`, so
+`usermod -aG www-data openlog-agent` covers every pool at once, or `listen.acl_users = openlog-agent` one pool at a
+time), and a pool with no `pm.status_path`, which answers 404 or writes to stderr on every path. Neither means the pool
+is down.
+
+One resource per pool, with `phpfpm.pool.name` (`pool`, as the status page reports it) and `phpfpm.process_manager`
+(`process manager`: `static`, `dynamic`, `ondemand`). The cumulative sums carry **no** start time: one batch holds
+several pools, each started when its master forked it, so a batch-wide start would label most of them with another
+pool's (nginx and PostgreSQL sums carry none either, §6.1).
 
 | Metric | Type | Unit | Attributes | status field |
 |---|---|---|---|---|

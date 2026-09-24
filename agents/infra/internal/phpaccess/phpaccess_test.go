@@ -50,8 +50,8 @@ user = -rf
 user = root
 `
 	got := ParsePoolFile([]byte(src))
-	want := []Pool{{Name: "example.com", User: "admin"}, {Name: "second", User: "Projects"},
-		{Name: "$pool-var", User: ""}, {Name: "root-pool", User: "root"}}
+	want := []Pool{{Name: "example.com", User: "admin", Listen: "/run/php/php8.2-fpm-example.com.sock"},
+		{Name: "second", User: "Projects"}, {Name: "$pool-var", User: ""}, {Name: "root-pool", User: "root"}}
 	// "$pool-var" expands to a name with "$": rejected, so it is not listed at all.
 	want = []Pool{want[0], want[1], want[3]}
 	if !reflect.DeepEqual(got, want) {
@@ -60,6 +60,26 @@ user = root
 
 	if got := ParsePoolFile([]byte("[www]\nuser = $pool\n")); len(got) != 1 || got[0].User != "www" {
 		t.Errorf("$pool expansion: %+v", got)
+	}
+
+	// listen and pm.status_path: the integration dials the one and asks for the other, and $pool expands in
+	// both. Neither is a name, so neither may go through the user-name check — that check rejects every
+	// path, which would leave the integration with nothing to dial and no sign of why.
+	got = ParsePoolFile([]byte("[shop]\nuser = admin\nlisten = /run/php/php8.3-fpm-$pool.sock\npm.status_path = /status\n"))
+	if len(got) != 1 || got[0].Listen != "/run/php/php8.3-fpm-shop.sock" || got[0].StatusPath != "/status" {
+		t.Errorf("listen/status parsing: %+v", got)
+	}
+
+	// A value this parser cannot resolve must not become an address to dial.
+	got = ParsePoolFile([]byte("[x]\nuser = admin\nlisten = ${SOCKET}\n"))
+	if len(got) != 1 || got[0].Listen != "" {
+		t.Errorf("unresolved variable must not become a listen address: %+v", got)
+	}
+
+	// A TCP pool and a bare port are both listen forms the integration has to understand.
+	got = ParsePoolFile([]byte("[a]\nuser = admin\nlisten = 127.0.0.1:9001\n\n[b]\nuser = admin\nlisten = 9002\n"))
+	if len(got) != 2 || got[0].Listen != "127.0.0.1:9001" || got[1].Listen != "9002" {
+		t.Errorf("tcp listen forms: %+v", got)
 	}
 }
 

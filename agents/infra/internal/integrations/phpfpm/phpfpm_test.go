@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/onuragtas/openlog/agents/infra/internal/discovery"
+	"github.com/onuragtas/openlog/agents/infra/internal/hostfs"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/internal/testutil"
 )
@@ -92,18 +93,25 @@ func TestRecordOmitsQueueLimitWhenZero(t *testing.T) {
 
 // fakePool serves a PHP-FPM-like status page over real FastCGI (net/http/fcgi is the server half of the
 // protocol this package's client speaks), so the wire format is exercised rather than assumed.
-func fakePool(t *testing.T, statusPath, body string) (sock string, asked func() []string) {
+// shortDir is a temp directory with a short path. Not t.TempDir(): it puts the test name in the path, and a
+// unix socket path is capped at about 104 bytes (sun_path). The names here pushed the macOS temp path past
+// that, so every socket test skipped itself with "bind: invalid argument" — green, and testing nothing.
+func shortDir(t *testing.T) string {
 	t.Helper()
-	// Not t.TempDir(): it puts the test name in the path, and a unix socket path is capped at about 104
-	// bytes (sun_path). The names here pushed the macOS temp path past that, so every socket test skipped
-	// itself with "bind: invalid argument" — green, and testing nothing.
 	dir, err := os.MkdirTemp("/tmp", "olfpm")
 	if err != nil {
-		dir = t.TempDir()
-	} else {
-		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+		return t.TempDir()
 	}
-	sock = filepath.Join(dir, "s")
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
+// servePool answers FastCGI on sock like a pool whose pm.status_path is statusPath ("": it serves none).
+func servePool(t *testing.T, sock, statusPath, body string) (asked func() []string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(sock), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Skipf("unix sockets unavailable: %v", err)
@@ -125,11 +133,70 @@ func fakePool(t *testing.T, statusPath, body string) (sock string, asked func() 
 			_, _ = w.Write([]byte(body))
 		}))
 	}()
-	return sock, func() []string {
+	return func() []string {
 		mu.Lock()
 		defer mu.Unlock()
 		return append([]string(nil), paths...)
 	}
+}
+
+// fakePool serves a PHP-FPM-like status page over real FastCGI (net/http/fcgi is the server half of the
+// protocol this package's client speaks), so the wire format is exercised rather than assumed.
+func fakePool(t *testing.T, statusPath, body string) (sock string, asked func() []string) {
+	t.Helper()
+	sock = filepath.Join(shortDir(t), "s")
+	return sock, servePool(t, sock, statusPath, body)
+}
+
+// statusFor is the recorded page with another pool name. The resource name comes from the page, not from
+// the pool file: the page reports what PHP-FPM itself calls the pool.
+func statusFor(name string) string {
+	return strings.Replace(statusJSON, `"pool":"www"`, `"pool":"`+name+`"`, 1)
+}
+
+// poolHost builds a host root holding one pool file that declares every named pool, with a fake pool
+// listening on each pool's listen path. Pools outside `answering` serve no status page at all.
+func poolHost(t *testing.T, names []string, statusPath string, answering map[string]bool) *integrations.Instance {
+	t.Helper()
+	root := shortDir(t)
+	var conf strings.Builder
+	for _, n := range names {
+		listen := "/run/php/" + n + ".sock"
+		conf.WriteString("[" + n + "]\nuser = admin\nlisten = " + listen + "\n")
+		if statusPath != "" {
+			conf.WriteString("pm.status_path = " + statusPath + "\n")
+		}
+		conf.WriteString("\n")
+		serves := statusPath
+		if !answering[n] {
+			serves = ""
+		}
+		servePool(t, filepath.Join(root, listen), serves, statusFor(n))
+	}
+	file := filepath.Join(root, "etc/php/8.3/fpm/pool.d/pools.conf")
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(conf.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inst := testutil.Instance()
+	inst.FS = hostfs.New(root)
+	return inst
+}
+
+// collectAll runs one collection with an endpoint that does not exist, so only pool discovery can produce
+// anything: a test that passed because the fallback answered would prove nothing about the pools.
+func collectAll(t *testing.T, inst *integrations.Instance) (*integrations.Batch, error) {
+	t.Helper()
+	absent := filepath.Join(shortDir(t), "absent.sock")
+	col, err := Integration{}.New(inst, integrations.Endpoint{Network: "unix", Address: absent, Display: "unix:" + absent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(col.Close)
+	b := integrations.NewBatch(time.Now(), 0)
+	return b, col.Collect(context.Background(), b)
 }
 
 func collectorFor(t *testing.T, sock string) *collector {
@@ -201,9 +268,11 @@ func TestMissingSocketIsUnreachable(t *testing.T) {
 }
 
 // A pool socket the agent may not connect to is the common first result on a real host: pool sockets are
-// 0660 owned by the web server's user. That is a configuration answer — the socket is there and PHP-FPM is
-// listening on it — so it must not be reported as an unreachable endpoint, which reads as "the pool is down".
-func TestSocketWithoutPermissionNeedsConfiguration(t *testing.T) {
+// 0660 owned by the web server's user. In fallback mode — one derived endpoint, no pool file — another
+// candidate may still be readable, so the collector asks for the next one and the manager turns "every
+// candidate refused" into needs_configuration itself. What must survive to that point is the reason, and it
+// must not be reported as unreachable, which reads as "the pool is down".
+func TestSocketWithoutPermissionAsksForTheNextEndpoint(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix socket permissions are not enforced the same way on Windows")
 	}
@@ -222,6 +291,55 @@ func TestSocketWithoutPermissionNeedsConfiguration(t *testing.T) {
 
 	c := collectorFor(t, sock)
 	err := c.Collect(context.Background(), integrations.NewBatch(time.Now(), 0))
+	if !errors.Is(err, integrations.ErrTryNext) {
+		t.Fatalf("err = %v (%T), want try-next so the remaining candidates are tried", err, err)
+	}
+	if integrations.IsUnreachable(err) {
+		t.Error("a socket that exists and is listening must not be reported unreachable")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("the reason must survive to the manager, which turns it into needs_configuration: %v", err)
+	}
+}
+
+// A host that runs one pool per site keeps them apart: every pool is read and recorded on its own resource,
+// which is the whole point of reading the pool files instead of one well-known socket.
+func TestCollectsEveryPoolSeparately(t *testing.T) {
+	names := []string{"alpha", "beta", "gamma"}
+	inst := poolHost(t, names, "/status", map[string]bool{"alpha": true, "beta": true, "gamma": true})
+	b, err := collectAll(t, inst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := testutil.Points(b)
+	for _, n := range names {
+		testutil.Expect(t, ps, "phpfpm.connections.accepted", "{connections}", true, true, 48211,
+			map[string]string{"phpfpm.pool.name": n})
+	}
+	// Without a resource each, every pool's points would land on one series and the pools would be
+	// indistinguishable — the failure this integration exists to avoid.
+	if got := testutil.Find(ps, "phpfpm.listen_queue.current", nil); len(got) != len(names) {
+		t.Errorf("listen queue points = %d, want one per pool (%d)", len(got), len(names))
+	}
+}
+
+// A pool that is down or unconfigured must not cost the others their metrics: on a host with a pool per
+// site there is always one, and losing everything to it would make the integration useless there.
+func TestPoolsThatAnswerSurviveOnesThatDoNot(t *testing.T) {
+	inst := poolHost(t, []string{"alpha", "beta"}, "/status", map[string]bool{"alpha": true})
+	b, err := collectAll(t, inst)
+	var pe *integrations.PartialError
+	if !errors.As(err, &pe) {
+		t.Fatalf("err = %v (%T), want a partial collection", err, err)
+	}
+	testutil.Expect(t, testutil.Points(b), "phpfpm.connections.accepted", "{connections}", true, true, 48211,
+		map[string]string{"phpfpm.pool.name": "alpha"})
+}
+
+// When no pool answers at all, that is a configuration answer naming the setting, not a red error.
+func TestNoPoolAnswersNeedsConfiguration(t *testing.T) {
+	inst := poolHost(t, []string{"alpha", "beta"}, "/status", nil)
+	_, err := collectAll(t, inst)
 	var se *integrations.StatusError
 	if !errors.As(err, &se) {
 		t.Fatalf("err = %v (%T), want a status error", err, err)
@@ -229,11 +347,8 @@ func TestSocketWithoutPermissionNeedsConfiguration(t *testing.T) {
 	if se.Status != discovery.StatusNeedsConfiguration {
 		t.Errorf("status = %q, want %q", se.Status, discovery.StatusNeedsConfiguration)
 	}
-	if integrations.IsUnreachable(err) {
-		t.Error("a socket that exists and is listening must not be reported unreachable")
-	}
-	if !strings.Contains(err.Error(), "permission denied") {
-		t.Errorf("the reason must say what is wrong: %v", err)
+	if !strings.Contains(err.Error(), "pm.status_path") {
+		t.Errorf("the reason must name the setting to add: %v", err)
 	}
 }
 

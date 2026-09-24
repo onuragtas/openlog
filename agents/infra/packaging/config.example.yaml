@@ -121,8 +121,13 @@ integrations:                    # metric integrations bound to discovered servi
     #   - match: { port: 8080 }
     #     endpoint: http://127.0.0.1:8080/nginx_status
   php-fpm:
-    enabled: true                # the pool status page is read over FastCGI on the pool's own socket or port
-                                 # (pm.status_path; /status, /fpm-status, … are tried). Not set → needs_configuration.
+    enabled: true                # every pool of the PHP-FPM configuration is read over FastCGI on its own socket,
+                                 # one resource per pool: listen and pm.status_path of /etc/php/*/fpm/pool.d/*.conf,
+                                 # /etc/php-fpm.d/*.conf and the Remi/cPanel/Plesk layouts. Pools that answer are kept
+                                 # when others fail; when none answers the reason (no pm.status_path, or a 0660 socket
+                                 # the agent may not connect to) is reported as needs_configuration with the fix.
+    # endpoint is only the fallback for a host whose pool files cannot be read, e.g. a container that mounts
+    # a single socket:
     # instances:
     #   - match: { unit: php8.3-fpm.service }
     #     endpoint: unix:/run/php/php8.3-fpm.sock    # or 127.0.0.1:9000

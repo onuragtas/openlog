@@ -60,6 +60,13 @@ type Pool struct {
 	Unit string `json:"unit"`
 	// File is the pool file (host path).
 	File string `json:"file"`
+	// Listen is the pool's listen address — a unix socket path, "host:port" or a bare port — as written in
+	// the pool file ("" when unset, where the pool inherits the master's). The php-fpm integration reads
+	// each pool's status page over it, which is the only way to tell one pool's metrics from another's on a
+	// host that runs one pool per site (HestiaCP, cPanel, Plesk).
+	Listen string `json:"listen"`
+	// StatusPath is pm.status_path ("" when the pool serves no status page at all).
+	StatusPath string `json:"status_path"`
 }
 
 // poolDir is a pool directory layout and how its FPM service is named.
@@ -179,12 +186,15 @@ func readRegular(p string) ([]byte, error) {
 // run as the master's user) and values with other variables (${ENV}) are skipped.
 func ParsePoolFile(b []byte) []Pool {
 	var out []Pool
-	section, user := "", ""
+	section, user, listen, statusPath := "", "", "", ""
 	flush := func() {
+		// A pool without "user" stays unlisted: these pools also feed the access report (reconcile_php),
+		// whose consumers key on the user. The php-fpm integration loses only the rare pool that inherits
+		// its user from the master.
 		if section != "" && !strings.EqualFold(section, "global") && user != "" {
-			out = append(out, Pool{Name: section, User: user})
+			out = append(out, Pool{Name: section, User: user, Listen: listen, StatusPath: statusPath})
 		}
-		user = ""
+		user, listen, statusPath = "", "", ""
 	}
 	sc := bufio.NewScanner(bytes.NewReader(b))
 	sc.Buffer(make([]byte, 0, 64*1024), maxPoolFileBytes)
@@ -203,16 +213,26 @@ func ParsePoolFile(b []byte) []Pool {
 			continue
 		}
 		k, v, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(k) != "user" {
+		if !ok {
 			continue
 		}
-		user = poolValue(v, section)
+		switch strings.TrimSpace(k) {
+		case "user":
+			user = poolValue(v, section)
+		case "listen":
+			listen = poolRaw(v, section)
+		case "pm.status_path":
+			statusPath = poolRaw(v, section)
+		}
 	}
 	flush()
 	return out
 }
 
-func poolValue(v, section string) string {
+// poolRaw is a pool file value with its quotes or trailing comment removed and $pool substituted. A value
+// that still holds a variable afterwards ("${FPM_USER}", "$HOSTNAME") is dropped: this parser cannot resolve
+// it, and a half-resolved path is worse than no path.
+func poolRaw(v, section string) string {
 	v = strings.TrimSpace(v)
 	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') {
 		if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
@@ -222,7 +242,16 @@ func poolValue(v, section string) string {
 		v = strings.TrimSpace(v[:i])
 	}
 	v = strings.ReplaceAll(v, "$pool", section)
-	if strings.Contains(v, "$") || !validName(v) {
+	if strings.Contains(v, "$") {
+		return ""
+	}
+	return v
+}
+
+// poolValue is poolRaw for a value that must be a user or group name. Paths must not go through it: a
+// listen socket or a status path fails the name check and would silently come back empty.
+func poolValue(v, section string) string {
+	if v = poolRaw(v, section); !validName(v) {
 		return ""
 	}
 	return v
