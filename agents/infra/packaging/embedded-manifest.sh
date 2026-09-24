@@ -45,6 +45,10 @@ go build -o "$tool" ./cmd/openlog-release
 if [ -n "${OPENLOG_RELEASE_SIGNING_KEY_2:-}" ]; then
 	"$tool" sign --key-env OPENLOG_RELEASE_SIGNING_KEY_2 "$out/manifest.json"
 fi
-"$tool" verify --keys "$OPENLOG_RELEASE_PUBLIC_KEYS" --check-artifacts "$out/manifest.json"
+# --keys is deliberately not passed: verify already defaults it to $OPENLOG_RELEASE_PUBLIC_KEYS. Passing the
+# value as an argument breaks on Windows, where Git Bash rewrites an argument that looks like an absolute
+# POSIX path — a base64 key starting with "/" (about one in 64) became "C:/Program Files/Git/…" and verify
+# answered "public key: illegal base64 data at input byte 1". Reading it from the environment does not.
+"$tool" verify --check-artifacts "$out/manifest.json"
 find "$out" -mindepth 1 ! -name manifest.json ! -name manifest.json.sig -exec rm -f {} +
 echo "embedded manifest of $version in $out ($# archives)"
