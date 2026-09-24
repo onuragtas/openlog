@@ -158,6 +158,12 @@ func statusFor(name string) string {
 // listening on each pool's listen path. Pools outside `answering` serve no status page at all.
 func poolHost(t *testing.T, names []string, statusPath string, answering map[string]bool) *integrations.Instance {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// Pool discovery is a Unix layout: pool files under /etc/php/*/fpm/pool.d and one unix socket per
+		// pool. On Windows the collector finds no pool file and falls back to the derived endpoint, which
+		// the fallback tests above cover; phpaccess skips its own pool fixture there for the same reason.
+		t.Skip("PHP-FPM pool files and per-pool unix sockets are a Unix layout")
+	}
 	root := shortDir(t)
 	var conf strings.Builder
 	for _, n := range names {
