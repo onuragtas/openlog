@@ -210,7 +210,15 @@ internal static class OpenLogSetup
         if (addExporter)
         {
             var interval = (int)Math.Max(1, Math.Min(int.MaxValue, cfg.MetricExportInterval.TotalMilliseconds));
-            b.AddReader(new PeriodicExportingMetricReader(
+            // Build the reader when the provider is built, not while it is being configured.
+            // PeriodicExportingMetricReader starts its worker in its constructor, and the exporter resolves its
+            // resource once and caches it (field ??= ParentProvider.GetResource()). Constructing it here let the
+            // first tick fire before MeterProviderSdk called SetParentProvider on it: GetResource(null) returns
+            // Resource.Empty, which the exporter then kept for the life of the process, so every metric batch
+            // went out with no resource at all while spans in the same process carried theirs. Whether the tick
+            // won that race depended on how long building the provider took (a slow CI runner lost it about half
+            // the time). The factory overload runs at build time, after this.Resource is assigned.
+            b.AddReader(_ => new PeriodicExportingMetricReader(
                 new OtlpMetricExporter(ExporterOptions(cfg, "metrics")),
                 exportIntervalMilliseconds: interval,
                 exportTimeoutMilliseconds: Math.Min(Math.Max((int)cfg.ExportTimeout.TotalMilliseconds, 1), interval)));
