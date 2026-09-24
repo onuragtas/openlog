@@ -7,4 +7,10 @@ match:
 version:
   - cmdline_regex: "php-fpm: master process \\((\\S+)\\)"
   - package_regex: "^php[0-9.]*-fpm$"
+endpoints:
+  - from: listening_port
+integration:
+  id: php-fpm
+  auto_enable: true         # read the status page over FastCGI; no pm.status_path → needs_configuration
+  requires: []              # the pool's own socket needs no credentials
 apm_hint: { language: php, agent: openlog-agent-php }

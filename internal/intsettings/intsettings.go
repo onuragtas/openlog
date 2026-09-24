@@ -40,6 +40,7 @@ const (
 	MongoDB       = "mongodb"
 	JVM           = "jvm"
 	Kafka         = "kafka"
+	PHPFPM        = "php-fpm"
 )
 
 // RevisionDisabled is reported by agents configured with integrations.remote_config: false.
@@ -100,6 +101,8 @@ var allowedFields = map[string]field{
 	// The JVM and Kafka are read over Jolokia: an http(s) endpoint, and credentials when the bridge asks.
 	JVM:   fEndpoint | fUsername | fPassword,
 	Kafka: fEndpoint | fUsername | fPassword,
+	// php-fpm: the endpoint is the pool's own socket (unix:/path) or host:port; the status page needs no credentials.
+	PHPFPM: fEndpoint,
 }
 
 // urlEndpoints are the integrations whose endpoint is an http(s) URL — a status page or a management API —

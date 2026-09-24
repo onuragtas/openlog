@@ -18,6 +18,7 @@ import (
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mssql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/mysql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/nginx"
+	"github.com/onuragtas/openlog/agents/infra/internal/integrations/phpfpm"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/postgresql"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/rabbitmq"
 	"github.com/onuragtas/openlog/agents/infra/internal/integrations/redis"
@@ -45,5 +46,6 @@ func Registry(cfg *config.Config, ctr *containers.Source) []integrations.Integra
 		mongodb.Integration{},
 		jvm.Integration{},
 		kafka.Integration{},
+		phpfpm.Integration{},
 	}
 }

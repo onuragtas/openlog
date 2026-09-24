@@ -120,6 +120,12 @@ integrations:                    # metric integrations bound to discovered servi
     # instances:
     #   - match: { port: 8080 }
     #     endpoint: http://127.0.0.1:8080/nginx_status
+  php-fpm:
+    enabled: true                # the pool status page is read over FastCGI on the pool's own socket or port
+                                 # (pm.status_path; /status, /fpm-status, … are tried). Not set → needs_configuration.
+    # instances:
+    #   - match: { unit: php8.3-fpm.service }
+    #     endpoint: unix:/run/php/php8.3-fpm.sock    # or 127.0.0.1:9000
   redis:
     enabled: true                # INFO without AUTH unless a password is set
     # username: openlog          # ACL user (Redis 6+)

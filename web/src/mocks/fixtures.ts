@@ -185,7 +185,10 @@ function services(host: string): InventoryItem[] {
       svc({
         rule_id: "php-fpm", name: "PHP-FPM", category: "runtime", instance: "/usr/sbin/php-fpm8.3", version: "8.3.6",
         matched_by: ["process", "systemd_unit"], pids: [1201, 1202], systemd_units: ["php8.3-fpm.service"], packages: ["dpkg:php8.3-fpm"],
-        integration: { status: "not_available" }, apm_hint: { language: "php", agent: "openlog-agent-php", status: "not_installed" },
+        // PHP-FPM has both: the pool status page is a metrics integration, and the pool still runs PHP code
+        // the APM agent would trace.
+        integration: { id: "php-fpm", status: "enabled", endpoint: "unix:/run/php/php8.3-fpm.sock" },
+        apm_hint: { language: "php", agent: "openlog-agent-php", status: "not_installed" },
       }),
     );
   }
@@ -474,13 +477,15 @@ function integrationResources() {
   mssql: { "openlog.discovery.id": "mssql", "openlog.discovery.instance": "MSSQLSERVER", "openlog.integration.id": "mssql", "service.instance.id": "win-iis-1:1433", "server.address": "127.0.0.1", "server.port": "1433", "sqlserver.version": "16.0.4135.4", "sqlserver.instance.name": "MSSQLSERVER" },
   // IIS has no endpoint; one resource per site.
   iis: { "openlog.discovery.id": "iis", "openlog.discovery.instance": "W3SVC", "openlog.integration.id": "iis" },
+  // A pool listening on a unix socket has no address or port; its instance id is host:socket path.
+  phpfpm: { "openlog.discovery.id": "php-fpm", "openlog.discovery.instance": "/usr/sbin/php-fpm8.3", "openlog.integration.id": "php-fpm", "service.instance.id": "web-1:/run/php/php8.3-fpm.sock" },
   };
 }
 
 type MockSeries = MetricDef["series"][number];
 
 function integrationMetrics(): Record<string, MetricDef> {
-  const { nginx: N, redis: R, postgresql: P, mariadb: M, mssql: S, iis: I } = integrationResources();
+  const { nginx: N, redis: R, postgresql: P, mariadb: M, mssql: S, iis: I, phpfpm: F } = integrationResources();
   const site = (name: string) => ({ ...I, "iis.site": name });
   const sites: [string, number][] = [["Default Web Site", 1], ["api", 0.45]];
   const epoch = 1_757_000_000;
@@ -507,6 +512,21 @@ function integrationMetrics(): Record<string, MetricDef> {
       type: "sum", unit: "{connections}",
       series: ([["active", 1], ["reading", 0.03], ["writing", 0.11], ["waiting", 0.86]] as const).map(([state, share]) => gauge(N, { state }, (t) => Math.round(150 * load(t, 13) * share))),
     },
+    // PHP-FPM (§6.18): a pool that is mostly fine and occasionally queues, which is what sizing decisions
+    // are actually made from.
+    "phpfpm.processes.current": {
+      type: "sum", unit: "{processes}",
+      series: ([["active", 0.55], ["idle", 0.45]] as const).map(([state, share]) => gauge(F, { state }, (t) => Math.max(0, Math.round(12 * load(t, 41) * share)))),
+    },
+    "phpfpm.processes.max_active": { type: "gauge", unit: "{processes}", series: [gauge(F, {}, () => 14)] },
+    // Mostly zero, with spikes when the workers are all busy: the queue is the symptom, max_children the cause.
+    "phpfpm.listen_queue.current": { type: "gauge", unit: "{requests}", series: [gauge(F, {}, (t) => Math.max(0, Math.round(9 * (load(t, 42) - 1.05))))] },
+    "phpfpm.listen_queue.max": { type: "gauge", unit: "{requests}", series: [gauge(F, {}, () => 17)] },
+    "phpfpm.listen_queue.limit": { type: "gauge", unit: "{requests}", series: [gauge(F, {}, () => 511)] },
+    "phpfpm.connections.accepted": mono("{connections}", [counter(F, {}, (t) => 26 * load(t, 43))]),
+    "phpfpm.requests.slow": mono("{requests}", [counter(F, {}, (t) => 0.02 * load(t, 44))]),
+    "phpfpm.max_children_reached": mono("{events}", [counter(F, {}, (t) => 0.02 * load(t, 45))]),
+    "phpfpm.uptime": mono("s", [counter(F, {}, () => 1)]),
     // Redis
     "redis.commands": { type: "gauge", unit: "{ops}/s", series: [gauge(R, {}, (t) => Math.round(900 * load(t, 21)))] },
     "redis.memory.used": { type: "gauge", unit: "By", series: [gauge(R, {}, (t) => Math.round(1024 * MiB * (0.6 + 0.22 * wave(t, 5400))))] },

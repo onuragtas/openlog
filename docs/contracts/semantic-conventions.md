@@ -1152,6 +1152,36 @@ The `Count` attribute is read rather than the `*Rate` ones: a rate the broker co
 cannot be re-aggregated, while a monotonic total can. `kafka.request.handler.busy` inverts the broker's own
 idle share, because "how busy is it" is the question an operator asks.
 
+### 6.18 PHP-FPM (`php-fpm`, D-147)
+
+Source: the pool status page, read over **FastCGI** on the pool's own listening socket — a unix socket or the TCP port
+discovery found (default 9000) — not over HTTP. PHP-FPM speaks FastCGI, so reaching `/status` over HTTP would require the
+web server in front of it to proxy that path; the pool's own socket needs only `pm.status_path`, which is PHP-FPM's own
+setting. `auto_enable: true` with `requires: []`: the status page needs no credentials. The paths `/status`, `/fpm-status`,
+`/php-fpm-status`, `/php_status`, `/fpm_status` are tried as `SCRIPT_NAME` with `QUERY_STRING=json`, and the one that
+answered is remembered. A pool with no `pm.status_path` answers 404 or writes to stderr on every path and is reported
+`needs_configuration` — a configuration answer, not an unreachable endpoint. A configured `endpoint` is `unix:/path` or
+`host:port`.
+
+Counters are cumulative from the pool's start (`start time` gives the start time). Resource attributes:
+`phpfpm.pool.name` (`pool`) and `phpfpm.process_manager` (`process manager`: `static`, `dynamic`, `ondemand`).
+
+| Metric | Type | Unit | Attributes | status field |
+|---|---|---|---|---|
+| `phpfpm.uptime` | Sum, monotonic, int | `s` | — | `start since` |
+| `phpfpm.connections.accepted` | Sum, monotonic, int | `{connections}` | — | `accepted conn` |
+| `phpfpm.requests.slow` | Sum, monotonic, int | `{requests}` | — | `slow requests` (needs `request_slowlog_timeout`) |
+| `phpfpm.max_children_reached` | Sum, monotonic, int | `{events}` | — | `max children reached` |
+| `phpfpm.listen_queue.current` | Gauge, int | `{requests}` | — | `listen queue` |
+| `phpfpm.listen_queue.max` | Gauge, int | `{requests}` | — | `max listen queue` (high water mark since start) |
+| `phpfpm.listen_queue.limit` | Gauge, int | `{requests}` | — | `listen queue len`; omitted when 0, so a socket without a backlog setting does not read as a limit of zero |
+| `phpfpm.processes.current` | Sum, non-monotonic, int | `{processes}` | `state` = `idle`, `active` | `idle processes`, `active processes` |
+| `phpfpm.processes.max_active` | Gauge, int | `{processes}` | — | `max active processes` |
+
+`total processes` emits nothing: it is `idle + active`, and a value the backend can add is not a series worth storing.
+The per-process detail of `?full` is not collected — one series per worker, recycled by `pm.max_requests`, is churn
+rather than information.
+
 ## 7. Kubernetes (infra agent, M4, D-070, D-071)
 
 The infra agent runs in Kubernetes from the `deploy/helm/openlog-agent` chart in two modes ([operations/kubernetes.md](../operations/kubernetes.md)):

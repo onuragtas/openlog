@@ -8723,7 +8723,7 @@ export interface components {
             created_at: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        IntegrationName: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mongodb" | "docker" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch" | "jvm" | "kafka";
+        IntegrationName: "nginx" | "apache" | "redis" | "memcached" | "mysql" | "postgresql" | "mongodb" | "docker" | "mssql" | "iis" | "haproxy" | "rabbitmq" | "elasticsearch" | "jvm" | "kafka" | "php-fpm";
         IntegrationMatch: {
             port: number | null;
             container: string;

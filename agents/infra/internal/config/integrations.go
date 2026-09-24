@@ -38,12 +38,14 @@ const (
 	IntegrationJVM = "jvm"
 	// IntegrationKafka is Apache Kafka's broker MBeans, read over Jolokia.
 	IntegrationKafka = "kafka"
+	// IntegrationPHPFPM is PHP-FPM (the pool status page, read over FastCGI).
+	IntegrationPHPFPM = "php-fpm"
 )
 
 // IntegrationIDs lists the implemented integrations in a stable order.
 var IntegrationIDs = []string{IntegrationApache, IntegrationDocker, IntegrationElasticsearch, IntegrationHAProxy, IntegrationIIS,
 	IntegrationJVM, IntegrationKafka, IntegrationMemcached, IntegrationMongoDB, IntegrationMSSQL, IntegrationMySQL, IntegrationNginx,
-	IntegrationPostgreSQL, IntegrationRabbitMQ, IntegrationRedis}
+	IntegrationPHPFPM, IntegrationPostgreSQL, IntegrationRabbitMQ, IntegrationRedis}
 
 // IntegrationsConfig configures the metric integrations bound to discovered services.
 type IntegrationsConfig struct {
@@ -70,6 +72,7 @@ type IntegrationsConfig struct {
 	JVM           IntegrationConfig `yaml:"jvm"`
 	Kafka         IntegrationConfig `yaml:"kafka"`
 	Nginx         IntegrationConfig `yaml:"nginx"`
+	PHPFPM        IntegrationConfig `yaml:"php-fpm"`
 	Redis         IntegrationConfig `yaml:"redis"`
 	MySQL         IntegrationConfig `yaml:"mysql"`
 	PostgreSQL    IntegrationConfig `yaml:"postgresql"`
@@ -205,6 +208,8 @@ func (c *IntegrationsConfig) Integration(id string) *IntegrationConfig {
 		return &c.Memcached
 	case IntegrationNginx:
 		return &c.Nginx
+	case IntegrationPHPFPM:
+		return &c.PHPFPM
 	case IntegrationRedis:
 		return &c.Redis
 	case IntegrationMySQL:
@@ -266,7 +271,7 @@ func defaultIntegrations() IntegrationsConfig {
 	return IntegrationsConfig{
 		Enabled: true, Interval: Duration(30 * time.Second), Timeout: Duration(10 * time.Second),
 		MaxConcurrent: 4, MaxInstances: 32, RemoteConfig: true,
-		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on, MongoDB: on, JVM: on, Kafka: on,
+		Nginx: on, Redis: on, MySQL: on, PostgreSQL: on, Docker: on, MSSQL: on, IIS: on, Apache: on, Memcached: on, HAProxy: on, RabbitMQ: on, Elasticsearch: on, MongoDB: on, JVM: on, Kafka: on, PHPFPM: on,
 	}
 }
 
@@ -276,6 +281,8 @@ var integrationKeys = map[string]map[string]bool{
 	// apache: the endpoint is the mod_status URL, like nginx's stub_status; memcached needs nothing.
 	IntegrationApache:    {"endpoint": true, "tls": true},
 	IntegrationMemcached: {"endpoint": true},
+	// php-fpm: the endpoint is the pool's own socket (unix:/path) or host:port; the status page needs no credentials.
+	IntegrationPHPFPM: {"endpoint": true},
 	// The management APIs: an endpoint (host:port or a full URL) and, except HAProxy's open stats page,
 	// credentials.
 	IntegrationHAProxy:       {"endpoint": true, "username": true, "password": true, "tls": true},

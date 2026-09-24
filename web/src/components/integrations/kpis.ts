@@ -45,7 +45,8 @@ export type KpiId =
   | "gcTime"
   | "threads"
   | "underReplicated"
-  | "messagesIn";
+  | "messagesIn"
+  | "listenQueue";
 
 export interface KpiSpec {
   id: KpiId;
@@ -58,6 +59,17 @@ const get = (d: PanelData, k: string) => d[k] ?? [];
 const last = (d: PanelData, k: string) => lastValue(sumSeries(get(d, k)));
 
 export const KPIS: Record<IntegrationId, KpiSpec[]> = {
+  "php-fpm": [
+    {
+      id: "busyWorkers",
+      queries: { p: { name: "phpfpm.processes.current", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      compute: (d) => lastValue(sumSeries(pickSeries(get(d, "p"), "state", ["active"]))),
+    },
+    { id: "listenQueue", queries: { q: { name: "phpfpm.listen_queue.current", agg: "last" } }, unit: "number", compute: (d) => last(d, "q") },
+    { id: "connections", queries: { c: { name: "phpfpm.connections.accepted", agg: "rate" } }, unit: "number", compute: (d) => last(d, "c") },
+    { id: "slow", queries: { s: { name: "phpfpm.requests.slow", agg: "rate" } }, unit: "number", compute: (d) => last(d, "s") },
+  ],
   nginx: [
     { id: "requests", queries: { r: { name: "nginx.requests", agg: "rate" } }, unit: "number", compute: (d) => last(d, "r") },
     {

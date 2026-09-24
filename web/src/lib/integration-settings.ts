@@ -22,6 +22,7 @@ export const CONFIG_FIELDS: Record<IntegrationName, readonly ConfigField[]> = {
   elasticsearch: ["endpoint", "username", "password"],
   jvm: ["endpoint", "username", "password"],
   kafka: ["endpoint", "username", "password"],
+  "php-fpm": ["endpoint"],
 };
 
 /** Integrations whose endpoint is an http(s) URL (a status page or a management API) rather than host:port. */
@@ -50,6 +51,8 @@ export const ENDPOINT_PLACEHOLDER: Record<IntegrationName, string> = {
   elasticsearch: "http://127.0.0.1:9200",
   jvm: "http://127.0.0.1:8778/jolokia",
   kafka: "http://127.0.0.1:8778/jolokia",
+  // The pool's own socket, which is where PHP-FPM serves its status page; 127.0.0.1:9000 for a TCP pool.
+  "php-fpm": "unix:/run/php/php8.3-fpm.sock",
 };
 
 export type EndpointError = "url" | "hostPort";

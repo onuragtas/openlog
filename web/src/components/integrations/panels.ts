@@ -123,7 +123,9 @@ export type SeriesLabelKey =
   | "partitions"
   | "leaders"
   | "handler"
-  | "processor";
+  | "processor"
+  | "peak"
+  | "reached";
 
 export type PanelChartId =
   | "nginxRequests"
@@ -215,7 +217,12 @@ export type PanelChartId =
   | "kafkaPartitions"
   | "kafkaController"
   | "kafkaLatency"
-  | "kafkaBusy";
+  | "kafkaBusy"
+  | "phpfpmWorkers"
+  | "phpfpmQueue"
+  | "phpfpmMaxChildren"
+  | "phpfpmConnections"
+  | "phpfpmSlow";
 
 export interface PanelQuery {
   name: string;
@@ -286,6 +293,52 @@ const by = (series: MetricSeries[], keys: string[], fallback: string): ChartSeri
   series.filter((s) => s.points.length > 0).map((s) => ({ label: seriesLabel(s.attributes, keys) || fallback, points: s.points }));
 
 export const PANELS: Record<IntegrationId, PanelChart[]> = {
+  // PHP-FPM (§6.18): the numbers a pool is sized with. Workers and queue answer "is the pool big enough",
+  // max_children reached answers it a second time, in the pool's own words.
+  "php-fpm": [
+    {
+      id: "phpfpmWorkers",
+      queries: { p: { name: "phpfpm.processes.current", agg: "last", groupBy: ["state"] } },
+      unit: "number",
+      stacked: true,
+      order: ["active", "idle"],
+      alert: "p",
+      build: (d, L) => by(get(d, "p"), ["state"], L("active")),
+    },
+    {
+      id: "phpfpmQueue",
+      queries: {
+        q: { name: "phpfpm.listen_queue.current", agg: "last" },
+        m: { name: "phpfpm.listen_queue.max", agg: "last" },
+      },
+      unit: "number",
+      alert: "q",
+      // phpfpm.listen_queue.limit (typically 511) is deliberately not drawn here: a flat line two orders of
+      // magnitude above the queue flattens the two series that matter onto the axis.
+      build: (d, L) => [...one(L("queued"), sumSeries(get(d, "q"))), ...one(L("peak"), sumSeries(get(d, "m")))],
+    },
+    {
+      id: "phpfpmMaxChildren",
+      queries: { m: { name: "phpfpm.max_children_reached", agg: "rate" } },
+      unit: "number",
+      alert: "m",
+      build: (d, L) => one(L("reached"), sumSeries(get(d, "m"))),
+    },
+    {
+      id: "phpfpmConnections",
+      queries: { c: { name: "phpfpm.connections.accepted", agg: "rate" } },
+      unit: "number",
+      alert: "c",
+      build: (d, L) => one(L("accepted"), sumSeries(get(d, "c"))),
+    },
+    {
+      id: "phpfpmSlow",
+      queries: { s: { name: "phpfpm.requests.slow", agg: "rate" } },
+      unit: "number",
+      alert: "s",
+      build: (d, L) => one(L("slow"), sumSeries(get(d, "s"))),
+    },
+  ],
   nginx: [
     {
       id: "nginxRequests",
