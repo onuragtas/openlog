@@ -68,10 +68,6 @@ func (d Disk) Key() string { return d.Host + "/" + d.Name }
 // UsedPercent is UsedRatio as a percentage.
 func (d Disk) UsedPercent() float64 { return 100 * d.UsedRatio() }
 
-// DefaultThresholds are the levels a disk is reported at. 80 is early enough that shortening retention still
-// works; 90 is where a merge can fail for lack of scratch space, which stops ingest rather than slowing it.
-var DefaultThresholds = []int{80, 90}
-
 // DefaultHysteresis is how many points a disk has to fall below the level it was reported at before that level
 // can be reported again. Without it a disk sitting exactly on a threshold reports on every single check.
 const DefaultHysteresis = 5
@@ -91,6 +87,9 @@ func Level(usedPercent float64, thresholds []int) int {
 type Snapshot struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Disks     []Disk    `json:"disks"`
+	// Levels are the thresholds this round ran with, so a reader of the stored snapshot does not have to guess
+	// which settings produced Reported.
+	Levels Effective `json:"levels"`
 	// Reported is the level each disk was last reported at, by Disk.Key. It is carried in the stored snapshot so
 	// a restart does not re-report a disk that has not moved, and so the UI can show which disks are over a
 	// threshold without recomputing the rule.
@@ -115,9 +114,9 @@ type Checker struct {
 	CH       clickhouse.Conn
 	Cluster  string
 	Interval time.Duration
-	// Thresholds and Hysteresis decide when a disk is reported; zero values use the defaults.
-	Thresholds []int
-	Hysteresis int
+	// Settings is read at the top of every round, so a change made in the UI applies without a restart. nil, or
+	// an error, uses the built-in defaults.
+	Settings func(context.Context) (Effective, error)
 	// Save persists a snapshot; nil keeps it in memory only.
 	Save func(context.Context, Snapshot) error
 	// Load reads the stored snapshot once, so the levels already reported survive a restart; nil starts clean.
@@ -195,19 +194,8 @@ func (c *Checker) restore(ctx context.Context) {
 }
 
 // levels decides what level every disk is at, against the levels of the previous round, and reports the changes.
-func (c *Checker) levels(disks []Disk) map[string]int {
-	thresholds := c.Thresholds
-	if len(thresholds) == 0 {
-		thresholds = DefaultThresholds
-	}
-	hysteresis := c.Hysteresis
-	if hysteresis <= 0 {
-		hysteresis = DefaultHysteresis
-	}
-	top := 0
-	for _, t := range thresholds {
-		top = max(top, t)
-	}
+func (c *Checker) levels(disks []Disk, eff Effective) map[string]int {
+	thresholds := eff.Thresholds()
 	prev := c.Last().Reported
 	out := make(map[string]int, len(disks))
 	for _, d := range disks {
@@ -215,8 +203,8 @@ func (c *Checker) levels(disks []Disk) map[string]int {
 		was, now := prev[d.Key()], Level(pct, thresholds)
 		switch {
 		case now > was:
-			c.reportRise(d, pct, now, top)
-		case was > 0 && pct < float64(was-hysteresis):
+			c.reportRise(d, pct, now, eff.High)
+		case was > 0 && pct < float64(was-eff.Hysteresis):
 			if c.Log != nil {
 				c.Log.Info("ClickHouse disk is back under the level it was reported at", "host", d.Host,
 					"disk", d.Name, "used_percent", math.Round(pct), "reported_at", was, "now", now)
@@ -286,7 +274,21 @@ func (c *Checker) RunOnce(ctx context.Context) (Snapshot, error) {
 		c.metrics.runs.WithLabelValues("error").Inc()
 		return snap, err
 	}
-	snap.Reported = c.levels(snap.Disks)
+	// Read at the top of the round rather than held in a field: a change made in the UI then applies on the next
+	// check, with no restart and no cache to invalidate.
+	eff := Defaults()
+	if c.Settings != nil {
+		s, serr := c.Settings(ctx)
+		if serr != nil {
+			if c.Log != nil {
+				c.Log.Warn("cannot read the disk space settings; using the built-in levels for this round", "err", serr)
+			}
+		} else {
+			eff = s
+		}
+	}
+	snap.Levels = eff
+	snap.Reported = c.levels(snap.Disks, eff)
 	// Reset first: a disk that disappeared (a replica removed, a warm volume unmounted) must not leave its last
 	// value behind as a series that looks current.
 	c.metrics.used.Reset()

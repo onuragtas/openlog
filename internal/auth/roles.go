@@ -98,6 +98,11 @@ const (
 
 	// ActManageQueryLimits is the organization's own query limits (usage.go, D-080).
 	ActManageQueryLimits Action = "query_limits.manage"
+	// ActReadDiskSpace and ActManageDiskSpace cover how full the ClickHouse disks are and the levels they are
+	// reported at (diskspace.go). These are the operator's disks rather than a tenant's data, so reading them
+	// takes an admin and changing them an owner.
+	ActReadDiskSpace   Action = "disk_space.read"
+	ActManageDiskSpace Action = "disk_space.manage"
 	// ActExportUsage is the usage report export (usage.go, D-079).
 	ActExportUsage Action = "usage.export"
 	// ActManageSupportAccess grants or revokes openlog operators' support access (operator.go, D-106).
@@ -168,6 +173,8 @@ var matrix = map[Action]Permission{
 	ActManageFleet:         {Min: RoleAdmin, UserOnly: true},
 	ActRequestUpdate:       {Min: RoleAdmin, UserOnly: true},
 	ActManageQueryLimits:   {Min: RoleOwner, UserOnly: true},
+	ActReadDiskSpace:       {Min: RoleAdmin},
+	ActManageDiskSpace:     {Min: RoleOwner, UserOnly: true},
 	ActManageSupportAccess: {Min: RoleOwner, UserOnly: true},
 	ActDeleteOrganization:  {Min: RoleOwner, UserOnly: true},
 	ActReadOrgExports:      {Min: RoleOwner, UserOnly: true},

@@ -82,6 +82,8 @@ type Server struct {
 	sourceMaps *sourcemaps.Service
 	// public status page and its incidents (statuspage.go, D-108); nil: none
 	statusPage *StatusPageDeps
+	// how full the ClickHouse disks are and the levels they are reported at (diskspace.go); nil: none
+	diskSpace *DiskSpaceDeps
 	// saved explorer views (savedviews.go, D-118); nil: none
 	savedViews *savedview.Manager
 	// service level objectives and their error budgets (slos.go, slo.md); nil: none (static auth mode)
@@ -181,6 +183,7 @@ func (s *Server) Handler() http.Handler {
 	s.dashboardRoutes(mux)    // dashboards.go
 	s.tailSamplingRoutes(mux) // tailsampling.go (D-075)
 	s.usageRoutes(mux)        // usage.go (D-079..D-081)
+	s.diskSpaceRoutes(mux)    // diskspace.go: ClickHouse disk usage and the levels it is reported at
 	s.ssoRoutes(mux)          // sso.go: single sign-on, domains, SCIM (D-077, D-078)
 	s.onboardingRoutes(mux)   // onboarding.go: "Add data" install command inputs
 	s.operatorRoutes(mux)     // operator.go: SaaS operator console, lifecycle, support access (D-105, D-106)

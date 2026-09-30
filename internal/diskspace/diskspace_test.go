@@ -98,7 +98,7 @@ func TestADiskIsReportedOnceNotOnEveryCheck(t *testing.T) {
 	h := &capture{}
 	c := &Checker{Log: slog.New(h)}
 	for range 5 {
-		c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)})}
+		c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)}, Defaults())}
 	}
 	if got := c.last.Reported["ch-1/default"]; got != 80 {
 		t.Fatalf("level = %d, want 80", got)
@@ -113,12 +113,12 @@ func TestDriftingJustBelowAThresholdDoesNotReArmIt(t *testing.T) {
 	// report again on the next point of drift upwards.
 	h := &capture{}
 	c := &Checker{Log: slog.New(h)}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)})}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(78)})}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)}, Defaults())}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(78)}, Defaults())}
 	if got := c.last.Reported["ch-1/default"]; got != 80 {
 		t.Fatalf("level = %d, want it still latched at 80", got)
 	}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)})}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)}, Defaults())}
 	if n := h.atLeast(slog.LevelWarn); n != 1 {
 		t.Fatalf("reported %d times, want 1: the drift re-armed the threshold", n)
 	}
@@ -127,12 +127,12 @@ func TestDriftingJustBelowAThresholdDoesNotReArmIt(t *testing.T) {
 func TestFallingClearOfTheBandArmsTheThresholdAgain(t *testing.T) {
 	h := &capture{}
 	c := &Checker{Log: slog.New(h)}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)})}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(70)})}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)}, Defaults())}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(70)}, Defaults())}
 	if got := c.last.Reported["ch-1/default"]; got != 0 {
 		t.Fatalf("level = %d, want 0 after falling clear", got)
 	}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)})}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(88)}, Defaults())}
 	if n := h.atLeast(slog.LevelWarn); n != 2 {
 		t.Fatalf("reported %d times, want 2: rise, recovery, rise again", n)
 	}
@@ -141,7 +141,7 @@ func TestFallingClearOfTheBandArmsTheThresholdAgain(t *testing.T) {
 func TestTheTopLevelIsReportedAsAnError(t *testing.T) {
 	h := &capture{}
 	c := &Checker{Log: slog.New(h)}
-	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(95)})}
+	c.last = Snapshot{Reported: c.levels([]Disk{diskAt(95)}, Defaults())}
 	if n := h.atLeast(slog.LevelError); n != 1 {
 		t.Fatalf("errors = %d, want 1", n)
 	}
@@ -152,7 +152,7 @@ func TestARestartDoesNotReportALevelAlreadyReported(t *testing.T) {
 	h := &capture{}
 	c := &Checker{Log: slog.New(h), Load: func(context.Context) (Snapshot, bool, error) { return stored, true, nil }}
 	c.restore(context.Background())
-	c.last.Reported = c.levels([]Disk{diskAt(91)})
+	c.last.Reported = c.levels([]Disk{diskAt(91)}, Defaults())
 	if got := c.last.Reported["ch-1/default"]; got != 90 {
 		t.Fatalf("level = %d, want 90 carried over", got)
 	}
