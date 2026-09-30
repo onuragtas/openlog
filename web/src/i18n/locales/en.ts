@@ -4884,6 +4884,39 @@ export const en = {
       invalid: "Enter whole numbers.",
       order: "The warning level has to stay below the critical level.",
       readOnly: "Only organization owners can change these levels.",
+      alerts: {
+        title: "Reporting levels",
+        description: "When a disk is called filling or critical. These delete nothing.",
+      },
+      shed: {
+        title: "Automatic deletion",
+        description: "What openlog gives up when a disk fills anyway.",
+        warning:
+          "This deletes telemetry permanently and cannot be undone. Retention keeps data for a fixed number of days, which cannot keep a disk from filling when traffic grows; with this on, openlog gives up the oldest day instead of running out of space.",
+        enable: "Delete the oldest day when a disk passes the level below",
+        currentlyOff: "currently off",
+        settings: {
+          shed_start_percent: "Start deleting at",
+          shed_stop_percent: "Stop deleting at",
+          shed_min_partitions: "Days always kept, per table",
+          shed_max_drops_per_run: "Days deleted per check, at most",
+        },
+        stopOrder: "The level deletion stops at has to be below the level it starts at.",
+        belowHigh:
+          "Deletion cannot start below the critical level ({{high}}%): data must not disappear while the disk is still reported as healthy.",
+        orderTitle: "What is given up, in order:",
+        order: {
+          profiles: "Profiles",
+          exemplars: "Metric exemplars",
+          traces: "Traces — spans and the trace index together",
+          sessionSamples: "Database session samples",
+          logs: "Logs",
+          queryStats: "Database query statistics and plans",
+          rawMetrics: "Raw metrics",
+        },
+        never:
+          "Never deleted: the minute-resolution metric rollup, usage and billing, the APM rollups, and every inventory, alert and vulnerability table.",
+      },
       hint: "A disk is reported once when it reaches a level, and not again until it has fallen the recovery margin below it. Retention is set per signal and bounds how old the data gets, not how much of it there is.",
     },
     banner: {

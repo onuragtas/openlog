@@ -4885,6 +4885,39 @@ export const tr: Messages = {
       invalid: "Tam sayı girin.",
       order: "Uyarı seviyesi kritik seviyenin altında kalmalı.",
       readOnly: "Bu seviyeleri yalnızca kuruluş sahipleri değiştirebilir.",
+      alerts: {
+        title: "Bildirim seviyeleri",
+        description: "Bir diskin ne zaman dolmakta ya da kritik sayılacağı. Bunlar hiçbir şey silmez.",
+      },
+      shed: {
+        title: "Otomatik silme",
+        description: "Disk buna rağmen dolarsa openlog'un neyden vazgeçeceği.",
+        warning:
+          "Bu, telemetriyi kalıcı olarak siler ve geri alınamaz. Saklama süresi veriyi sabit bir gün sayısı kadar tutar; trafik büyüdüğünde diskin dolmasını engelleyemez. Bu açıkken openlog, yerin tükenmesi yerine en eski günden vazgeçer.",
+        enable: "Disk aşağıdaki seviyeyi geçtiğinde en eski günü sil",
+        currentlyOff: "şu an kapalı",
+        settings: {
+          shed_start_percent: "Silmeye başlama",
+          shed_stop_percent: "Silmeyi bırakma",
+          shed_min_partitions: "Tablo başına her zaman korunan gün",
+          shed_max_drops_per_run: "Kontrol başına en çok silinen gün",
+        },
+        stopOrder: "Silmenin bırakıldığı seviye, başladığı seviyenin altında olmalı.",
+        belowHigh:
+          "Silme, kritik seviyenin (%{{high}}) altında başlayamaz: disk hâlâ sağlıklı olarak bildirilirken veri kaybolmamalı.",
+        orderTitle: "Sırayla nelerden vazgeçilir:",
+        order: {
+          profiles: "Profiller",
+          exemplars: "Metrik exemplar'ları",
+          traces: "Trace'ler — span'ler ve trace indeksi birlikte",
+          sessionSamples: "Veritabanı oturum örnekleri",
+          logs: "Loglar",
+          queryStats: "Veritabanı sorgu istatistikleri ve planları",
+          rawMetrics: "Ham metrikler",
+        },
+        never:
+          "Asla silinmeyenler: dakikalık metrik özeti, kullanım ve faturalama, APM özetleri, ve tüm envanter, uyarı ve güvenlik tabloları.",
+      },
       hint: "Bir disk seviyeye ulaştığında bir kez bildirilir; geri dönüş payı kadar altına düşmeden tekrar bildirilmez. Saklama süresi sinyal bazında ayarlanır ve verinin ne kadar eskiyeceğini sınırlar, ne kadar yer kaplayacağını değil.",
     },
     banner: {

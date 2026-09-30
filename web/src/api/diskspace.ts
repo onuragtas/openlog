@@ -7,10 +7,28 @@ type S = components["schemas"];
 export type DiskSpace = S["DiskSpace"];
 export type DiskStatus = S["DiskStatus"];
 export type DiskSpaceSettingsInput = S["DiskSpaceSettingsInput"];
-export type DiskSpaceLevel = keyof S["DiskSpaceSettingsInput"];
 
-/** The order the levels are shown in, which is also the order they take effect in. */
-export const DISK_SPACE_LEVELS: readonly DiskSpaceLevel[] = ["warn_percent", "high_percent", "hysteresis"];
+/** The reporting levels. These delete nothing: they only decide when a disk is called filling or critical. */
+export const DISK_ALERT_LEVELS = ["warn_percent", "high_percent", "hysteresis"] as const;
+export type DiskAlertLevel = (typeof DISK_ALERT_LEVELS)[number];
+
+/**
+ * The deletion levels, deliberately a separate list from the reporting ones so no screen can present them as the
+ * same kind of setting. shed_enabled is not here because it is a switch, not a number.
+ */
+export const DISK_SHED_LEVELS = ["shed_start_percent", "shed_stop_percent", "shed_min_partitions", "shed_max_drops_per_run"] as const;
+export type DiskShedLevel = (typeof DISK_SHED_LEVELS)[number];
+
+/** The order data is given up in when a disk fills; mirrors diskspace.ShedOrder. */
+export const DISK_SHED_ORDER = [
+  "profiles",
+  "exemplars",
+  "traces",
+  "sessionSamples",
+  "logs",
+  "queryStats",
+  "rawMetrics",
+] as const;
 
 /** The last measurement and the levels in force. Admins and owners only; the server refuses anyone else. */
 export const diskSpaceQuery = () =>

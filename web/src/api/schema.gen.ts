@@ -5070,18 +5070,34 @@ export interface components {
             /** @description Other api/alert pods apply a change within this many seconds */
             refresh_seconds: number;
         };
-        /** @description The levels in force, after the built-in ones have filled in whatever the operator has not set */
+        /** @description The levels in force, after the built-in ones have filled in whatever the operator has not set. warn/high only decide when a disk is reported; the shed_* values decide when data is deleted. */
         DiskSpaceLevels: {
             warn_percent: number;
             high_percent: number;
             /** @description Points a disk must fall below a level before it is reported again */
             hysteresis: number;
+            /** @description false: no disk pressure ever deletes anything */
+            shed_enabled: boolean;
+            /** @description Dropping the oldest day begins at or above this; never below high_percent */
+            shed_start_percent: number;
+            /** @description Dropping stops once the disk is back under this */
+            shed_stop_percent: number;
+            /** @description Days every table keeps however full the disk is */
+            shed_min_partitions: number;
+            /** @description Days a single round may drop at most */
+            shed_max_drops_per_run: number;
         };
-        /** @description null or absent = use the built-in level. warn_percent must stay below high_percent */
+        /** @description null or absent = use the built-in value. warn_percent must stay below high_percent, shed_stop_percent below shed_start_percent, and shed_start_percent may not be below high_percent: data must not be deleted at a level still reported as healthy. */
         DiskSpaceSettingsInput: {
             warn_percent?: number | null;
             high_percent?: number | null;
             hysteresis?: number | null;
+            /** @description Turning this on lets openlog delete telemetry; it cannot be undone */
+            shed_enabled?: boolean | null;
+            shed_start_percent?: number | null;
+            shed_stop_percent?: number | null;
+            shed_min_partitions?: number | null;
+            shed_max_drops_per_run?: number | null;
         };
         /** @description One local ClickHouse disk of one replica. Object storage disks are not measured */
         DiskStatus: {
@@ -5108,6 +5124,11 @@ export interface components {
                 warn_percent: number | null;
                 high_percent: number | null;
                 hysteresis: number | null;
+                shed_enabled: boolean | null;
+                shed_start_percent: number | null;
+                shed_stop_percent: number | null;
+                shed_min_partitions: number | null;
+                shed_max_drops_per_run: number | null;
                 updated_at: components["schemas"]["Timestamp"];
                 /** @description E-mail of the last editor (empty when the user was deleted) */
                 updated_by: string;

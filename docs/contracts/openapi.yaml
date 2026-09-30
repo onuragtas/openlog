@@ -8103,20 +8103,36 @@ components:
 
     DiskSpaceLevels:
       type: object
-      description: The levels in force, after the built-in ones have filled in whatever the operator has not set
-      required: [warn_percent, high_percent, hysteresis]
+      description: >-
+        The levels in force, after the built-in ones have filled in whatever the operator has not set. warn/high
+        only decide when a disk is reported; the shed_* values decide when data is deleted.
+      required: [warn_percent, high_percent, hysteresis, shed_enabled, shed_start_percent, shed_stop_percent,
+                 shed_min_partitions, shed_max_drops_per_run]
       properties:
         warn_percent: { type: integer }
         high_percent: { type: integer }
         hysteresis: { type: integer, description: Points a disk must fall below a level before it is reported again }
+        shed_enabled: { type: boolean, description: "false: no disk pressure ever deletes anything" }
+        shed_start_percent: { type: integer, description: Dropping the oldest day begins at or above this; never below high_percent }
+        shed_stop_percent: { type: integer, description: Dropping stops once the disk is back under this }
+        shed_min_partitions: { type: integer, description: Days every table keeps however full the disk is }
+        shed_max_drops_per_run: { type: integer, description: Days a single round may drop at most }
 
     DiskSpaceSettingsInput:
       type: object
-      description: null or absent = use the built-in level. warn_percent must stay below high_percent
+      description: >-
+        null or absent = use the built-in value. warn_percent must stay below high_percent, shed_stop_percent
+        below shed_start_percent, and shed_start_percent may not be below high_percent: data must not be deleted
+        at a level still reported as healthy.
       properties:
         warn_percent: { type: [integer, "null"], minimum: 1, maximum: 99 }
         high_percent: { type: [integer, "null"], minimum: 1, maximum: 99 }
         hysteresis: { type: [integer, "null"], minimum: 0, maximum: 50 }
+        shed_enabled: { type: [boolean, "null"], description: Turning this on lets openlog delete telemetry; it cannot be undone }
+        shed_start_percent: { type: [integer, "null"], minimum: 1, maximum: 99 }
+        shed_stop_percent: { type: [integer, "null"], minimum: 1, maximum: 99 }
+        shed_min_partitions: { type: [integer, "null"], minimum: 1 }
+        shed_max_drops_per_run: { type: [integer, "null"], minimum: 1, maximum: 1000 }
 
     DiskStatus:
       type: object
@@ -8148,11 +8164,17 @@ components:
           oneOf:
             - type: "null"
             - type: object
-              required: [warn_percent, high_percent, hysteresis, updated_at, updated_by]
+              required: [warn_percent, high_percent, hysteresis, shed_enabled, shed_start_percent,
+                         shed_stop_percent, shed_min_partitions, shed_max_drops_per_run, updated_at, updated_by]
               properties:
                 warn_percent: { type: [integer, "null"] }
                 high_percent: { type: [integer, "null"] }
                 hysteresis: { type: [integer, "null"] }
+                shed_enabled: { type: [boolean, "null"] }
+                shed_start_percent: { type: [integer, "null"] }
+                shed_stop_percent: { type: [integer, "null"] }
+                shed_min_partitions: { type: [integer, "null"] }
+                shed_max_drops_per_run: { type: [integer, "null"] }
                 updated_at: { $ref: "#/components/schemas/Timestamp" }
                 updated_by: { type: string, description: E-mail of the last editor (empty when the user was deleted) }
         effective: { $ref: "#/components/schemas/DiskSpaceLevels" }
