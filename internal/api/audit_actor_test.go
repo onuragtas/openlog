@@ -19,6 +19,11 @@ func TestAuditActorsCarryTheAPIKey(t *testing.T) {
 	// Actor types whose writes are never made by an API key, with the reason.
 	exempt := map[string]string{
 		"quota.Actor": "usage and quota changes come from billing webhooks and operators, not from keys",
+		// auth.ActManageDiskSpace is {Min: RoleOwner, UserOnly: true} and the superadmin path needs a session
+		// too, so Allow refuses every API key before a diskspace.Actor is ever built. Carrying the fields would
+		// mean carrying two that can only ever be empty. If that permission stops being UserOnly, delete this
+		// line rather than the assertion.
+		"diskspace.Actor": "the storage levels are UserOnly (auth.ActManageDiskSpace), so no key can make the change",
 	}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
