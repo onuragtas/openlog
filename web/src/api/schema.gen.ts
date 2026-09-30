@@ -4324,6 +4324,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/storage/disk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How full the ClickHouse disks are, and the levels they are reported at (operations/disk-space.md; admin) */
+        get: operations["getDiskSpace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage/disk/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the levels (owner without SaaS mode, superadmin; audit disk_space_settings.update) */
+        put: operations["putDiskSpaceSettings"];
+        post?: never;
+        /** Go back to the built-in levels (same permission as PUT; audit disk_space_settings.delete) */
+        delete: operations["deleteDiskSpaceSettings"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/orgs/{org}/plan": {
         parameters: {
             query?: never;
@@ -5034,6 +5069,53 @@ export interface components {
             can_manage: boolean;
             /** @description Other api/alert pods apply a change within this many seconds */
             refresh_seconds: number;
+        };
+        /** @description The levels in force, after the built-in ones have filled in whatever the operator has not set */
+        DiskSpaceLevels: {
+            warn_percent: number;
+            high_percent: number;
+            /** @description Points a disk must fall below a level before it is reported again */
+            hysteresis: number;
+        };
+        /** @description null or absent = use the built-in level. warn_percent must stay below high_percent */
+        DiskSpaceSettingsInput: {
+            warn_percent?: number | null;
+            high_percent?: number | null;
+            hysteresis?: number | null;
+        };
+        /** @description One local ClickHouse disk of one replica. Object storage disks are not measured */
+        DiskStatus: {
+            host: string;
+            disk: string;
+            /** Format: int64 */
+            free_bytes: number;
+            /** Format: int64 */
+            total_bytes: number;
+            used_percent: number;
+            broken: boolean;
+            /** @description The level this disk was reported at */
+            level: number;
+        };
+        DiskSpace: {
+            /** @description Empty until the leader has measured once */
+            checked_at: string;
+            disks: components["schemas"]["DiskStatus"][];
+            /** @description The disk under the most pressure, which is what the banner shows; null before the first measurement */
+            worst: null | components["schemas"]["DiskStatus"];
+            defaults: components["schemas"]["DiskSpaceLevels"];
+            /** @description What the operator set; null when the built-in levels apply */
+            configured: null | {
+                warn_percent: number | null;
+                high_percent: number | null;
+                hysteresis: number | null;
+                updated_at: components["schemas"]["Timestamp"];
+                /** @description E-mail of the last editor (empty when the user was deleted) */
+                updated_by: string;
+            };
+            effective: components["schemas"]["DiskSpaceLevels"];
+            can_manage: boolean;
+            /** @description How often the disks are measured */
+            interval_seconds: number;
         };
         /** @description 0 or absent = unlimited (retention_days absent = table default) */
         PlanLimits: {
@@ -19735,6 +19817,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgQueryLimits"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getDiskSpace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last measurement and the levels in force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskSpace"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putDiskSpaceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiskSpaceSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description New state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskSpace"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteDiskSpaceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description New state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiskSpace"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

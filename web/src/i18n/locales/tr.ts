@@ -693,6 +693,7 @@ export const tr: Messages = {
       auditLog: "Denetim kaydı",
       tailSampling: "APM örnekleme",
       usage: "Kullanım ve plan",
+      storage: "Depolama",
     },
     sourceMaps: {
       title: "Source map'ler",
@@ -4863,6 +4864,34 @@ export const tr: Messages = {
       "Hesabınız, oturumlarınız ve API anahtarlarınız kalıcı olarak silinir ve tüm organizasyonlardan ayrılırsınız. Sizinle ilgili denetim kayıtlarında adınız ve e-posta adresiniz yerine bir takma ad kalır. Bu işlem geri alınamaz.",
     confirmEmail: "Onaylamak için e-posta adresinizi ({{email}}) yazın",
     deleteAccount: "Hesabımı sil",
+  },
+  storage: {
+    disk: {
+      title: "ClickHouse diskleri",
+      description: "Telemetrinizi tutan disklerin doluluğu ve hangi seviyelerde bildirileceği.",
+      notMeasuredYet: "Diskler henüz ölçülmedi. İlk kontrol, başlatmadan birkaç dakika sonra çalışır.",
+      remoteNote:
+        "Yalnızca yerel diskler ölçülür. Nesne depolama ve önündeki önbellek yer tutucu bir boyut bildirir; oradaki yüzde hiçbir şey ifade etmez.",
+      columns: { host: "Sunucu", disk: "Disk", used: "Dolu", free: "Boş", total: "Boyut", level: "Durum" },
+      levels: { ok: "Normal", warning: "%{{level}} üzeri", critical: "%{{level}} üzeri" },
+      broken: "Bozuk",
+      settings: { warn_percent: "Uyarı seviyesi", high_percent: "Kritik seviye", hysteresis: "Geri dönüş payı" },
+      sources: { default: "Yerleşik", configured: "Burada ayarlandı" },
+      builtIn: "Yerleşik: {{value}}",
+      useDefault: "Yerleşik",
+      save: "Kaydet",
+      reset: "Yerleşik seviyelere dön",
+      saved: "Kaydedildi. {{seconds}} sn içinde, bir sonraki kontrolde uygulanır.",
+      invalid: "Tam sayı girin.",
+      order: "Uyarı seviyesi kritik seviyenin altında kalmalı.",
+      readOnly: "Bu seviyeleri yalnızca kuruluş sahipleri değiştirebilir.",
+      hint: "Bir disk seviyeye ulaştığında bir kez bildirilir; geri dönüş payı kadar altına düşmeden tekrar bildirilmez. Saklama süresi sinyal bazında ayarlanır ve verinin ne kadar eskiyeceğini sınırlar, ne kadar yer kaplayacağını değil.",
+    },
+    banner: {
+      warning: "{{host}} sunucusundaki {{disk}} diski %{{percent}} dolu.",
+      critical: "{{host}} sunucusundaki {{disk}} diski %{{percent}} dolu. Dolarsa veri alımı durur.",
+      details: "Depolama ayarları",
+    },
   },
   statusPage: {
     title: "Sistem durumu",

@@ -87,6 +87,7 @@ const SecuritySettingsPage = lazyRouteComponent(() => import("@/routes/settings"
 const AuditLogSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "AuditLogSettingsPage");
 const TailSamplingSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "TailSamplingSettingsPage");
 const UsageSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "UsageSettingsPage");
+const StorageSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "StorageSettingsPage");
 const QueryPage = lazyRouteComponent(() => import("@/routes/query"), "QueryPage");
 const DashboardsPage = lazyRouteComponent(() => import("@/routes/dashboards"), "DashboardsPage");
 const DashboardPage = lazyRouteComponent(() => import("@/routes/dashboards"), "DashboardPage");
@@ -1084,6 +1085,7 @@ const settingsSecurityRoute = createRoute({ getParentRoute: () => settingsRoute,
 const settingsAuditLogRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/audit-log", component: AuditLogSettingsPage });
 const settingsTailSamplingRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/apm-sampling", component: TailSamplingSettingsPage });
 const settingsUsageRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/usage", component: UsageSettingsPage });
+const settingsStorageRoute = createRoute({ getParentRoute: () => settingsRoute, path: "/storage", component: StorageSettingsPage });
 // Single sign-on settings and the public domain verification link (components/settings/Sso*.tsx, D-077).
 const SsoSettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SsoSettingsPage");
 const settingsSsoRoute = createRoute({
@@ -1207,6 +1209,7 @@ export const routeTree = rootRoute.addChildren([
       settingsAuditLogRoute,
       settingsTailSamplingRoute,
       settingsUsageRoute,
+      settingsStorageRoute,
       settingsSsoRoute,
       settingsStatusPageRoute,
     ]),

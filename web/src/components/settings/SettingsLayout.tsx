@@ -20,6 +20,7 @@ const TABS = [
   { to: "/settings/audit-log", label: "settings.tabs.auditLog", permission: "audit.read" },
   { to: "/settings/apm-sampling", label: "settings.tabs.tailSampling", permission: null },
   { to: "/settings/usage", label: "settings.tabs.usage", permission: null },
+  { to: "/settings/storage", label: "settings.tabs.storage", permission: "disk_space.read" },
 ] as const satisfies readonly { to: string; label: string; permission: Permission | null }[];
 
 const TAB_CLASS =

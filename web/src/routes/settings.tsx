@@ -2,6 +2,7 @@
 export { ApiKeysSettings as ApiKeysSettingsPage } from "@/components/settings/ApiKeysSettings";
 export { AuditLogSettings as AuditLogSettingsPage } from "@/components/settings/AuditLogSettings";
 export { BrowserKeysSettings as BrowserKeysSettingsPage } from "@/components/settings/BrowserKeysSettings";
+export { DiskSpaceSettings as StorageSettingsPage } from "@/components/settings/DiskSpaceSettings";
 export { LicenseKeysSettings as LicenseKeysSettingsPage } from "@/components/settings/LicenseKeysSettings";
 export { MembersSettings as MembersSettingsPage } from "@/components/settings/MembersSettings";
 export { OrganizationSettings as OrganizationSettingsPage } from "@/components/settings/OrganizationSettings";

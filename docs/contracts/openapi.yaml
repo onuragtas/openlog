@@ -75,6 +75,8 @@ tags:
     description: Data exports, account and organization deletion (api.md "Data export and deletion", D-107)
   - name: status
     description: Public status page and its incidents (api.md "Status page", D-108)
+  - name: storage
+    description: How full the ClickHouse disks are and the levels they are reported at (operations/disk-space.md)
 
 paths:
   /api/v1/hosts:
@@ -6985,6 +6987,52 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /api/v1/storage/disk:
+    get:
+      tags: [storage]
+      operationId: getDiskSpace
+      summary: How full the ClickHouse disks are, and the levels they are reported at (operations/disk-space.md; admin)
+      responses:
+        "200":
+          description: The last measurement and the levels in force
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskSpace" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/storage/disk/settings:
+    put:
+      tags: [storage]
+      operationId: putDiskSpaceSettings
+      summary: Set the levels (owner without SaaS mode, superadmin; audit disk_space_settings.update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiskSpaceSettingsInput" }
+      responses:
+        "200":
+          description: New state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskSpace" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [storage]
+      operationId: deleteDiskSpaceSettings
+      summary: Go back to the built-in levels (same permission as PUT; audit disk_space_settings.delete)
+      responses:
+        "200":
+          description: New state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskSpace" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /api/v1/admin/orgs/{org}/plan:
     parameters:
       - { name: org, in: path, required: true, description: Organization id or tenant id, schema: { type: string } }
@@ -8052,6 +8100,64 @@ components:
             max_bytes_to_read: { $ref: "#/components/schemas/QueryLimitSource" }
         can_manage: { type: boolean }
         refresh_seconds: { type: integer, description: Other api/alert pods apply a change within this many seconds }
+
+    DiskSpaceLevels:
+      type: object
+      description: The levels in force, after the built-in ones have filled in whatever the operator has not set
+      required: [warn_percent, high_percent, hysteresis]
+      properties:
+        warn_percent: { type: integer }
+        high_percent: { type: integer }
+        hysteresis: { type: integer, description: Points a disk must fall below a level before it is reported again }
+
+    DiskSpaceSettingsInput:
+      type: object
+      description: null or absent = use the built-in level. warn_percent must stay below high_percent
+      properties:
+        warn_percent: { type: [integer, "null"], minimum: 1, maximum: 99 }
+        high_percent: { type: [integer, "null"], minimum: 1, maximum: 99 }
+        hysteresis: { type: [integer, "null"], minimum: 0, maximum: 50 }
+
+    DiskStatus:
+      type: object
+      description: One local ClickHouse disk of one replica. Object storage disks are not measured
+      required: [host, disk, free_bytes, total_bytes, used_percent, broken, level]
+      properties:
+        host: { type: string }
+        disk: { type: string }
+        free_bytes: { type: integer, format: int64 }
+        total_bytes: { type: integer, format: int64 }
+        used_percent: { type: number }
+        broken: { type: boolean }
+        level: { type: integer, description: The level this disk was reported at, 0 when it is under all of them }
+
+    DiskSpace:
+      type: object
+      required: [checked_at, disks, worst, defaults, configured, effective, can_manage, interval_seconds]
+      properties:
+        checked_at: { type: string, description: Empty until the leader has measured once }
+        disks: { type: array, items: { $ref: "#/components/schemas/DiskStatus" } }
+        worst:
+          description: The disk under the most pressure, which is what the banner shows; null before the first measurement
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/DiskStatus"
+        defaults: { $ref: "#/components/schemas/DiskSpaceLevels" }
+        configured:
+          description: What the operator set; null when the built-in levels apply
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [warn_percent, high_percent, hysteresis, updated_at, updated_by]
+              properties:
+                warn_percent: { type: [integer, "null"] }
+                high_percent: { type: [integer, "null"] }
+                hysteresis: { type: [integer, "null"] }
+                updated_at: { $ref: "#/components/schemas/Timestamp" }
+                updated_by: { type: string, description: E-mail of the last editor (empty when the user was deleted) }
+        effective: { $ref: "#/components/schemas/DiskSpaceLevels" }
+        can_manage: { type: boolean }
+        interval_seconds: { type: integer, description: How often the disks are measured, so a change applies within this many seconds }
 
     PlanLimits:
       type: object

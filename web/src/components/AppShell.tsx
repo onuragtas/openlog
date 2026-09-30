@@ -9,6 +9,7 @@ import { EmailVerificationBanner } from "@/components/EmailVerificationBanner";
 import { AccountLanguageSwitch } from "@/components/LanguageSwitch";
 import { UserLanguageSync } from "@/components/UserLanguageSync";
 import { OrgSwitcher } from "@/components/settings/OrgSwitcher";
+import { StorageBanner } from "@/components/settings/StorageBanner";
 import { UsageBanner } from "@/components/settings/UsageBanner";
 import { OperatorNavLink } from "@/components/operator/OperatorNavLink";
 import { SaaSBanner } from "@/components/operator/SaaSBanner";
@@ -242,6 +243,7 @@ export function AppShell() {
         <UpdateBanner />
         <EmailVerificationBanner />
         <UsageBanner />
+        <StorageBanner />
         <SaaSBanner />
         <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-auto p-4 md:p-6">
           <Outlet />

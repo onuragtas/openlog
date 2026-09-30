@@ -25,7 +25,8 @@ export type Permission =
   | "updates.request"
   | "alerts.write"
   | "alerts.manage"
-  | "cloud_connections.manage";
+  | "cloud_connections.manage"
+  | "disk_space.read";
 
 /** Mirrors internal/auth/roles.go. The server enforces permissions; the UI only hides actions. */
 const MIN_ROLE: Record<Permission, Role> = {
@@ -55,6 +56,9 @@ const MIN_ROLE: Record<Permission, Role> = {
   // A cloud connection stores provider credentials and spends money at the provider, so only admins and
   // owners may change one; every role may read them (D-135).
   "cloud_connections.manage": "admin",
+  // The ClickHouse disks belong to the operator, not to a tenant: in a multi-tenant install their free space is
+  // nobody else's business, so reading takes an admin and changing the levels an owner (server-side).
+  "disk_space.read": "admin",
 };
 
 export function atLeast(role: Role | null | undefined, min: Role): boolean {

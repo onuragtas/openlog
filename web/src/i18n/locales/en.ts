@@ -692,6 +692,7 @@ export const en = {
       auditLog: "Audit log",
       tailSampling: "APM sampling",
       usage: "Usage & plan",
+      storage: "Storage",
     },
     sourceMaps: {
       title: "Source maps",
@@ -4862,6 +4863,34 @@ export const en = {
       "Your account, sessions and API keys are deleted permanently and you leave every organization. Audit entries about you keep a pseudonym instead of your name and e-mail address. This cannot be undone.",
     confirmEmail: "Type your e-mail address ({{email}}) to confirm",
     deleteAccount: "Delete my account",
+  },
+  storage: {
+    disk: {
+      title: "ClickHouse disks",
+      description: "How full the disks holding your telemetry are, and the levels they are reported at.",
+      notMeasuredYet: "The disks have not been measured yet. The first check runs within a few minutes of startup.",
+      remoteNote:
+        "Only local disks are measured. Object storage and the cache in front of it report a placeholder size, so a percentage there would mean nothing.",
+      columns: { host: "Host", disk: "Disk", used: "Used", free: "Free", total: "Size", level: "Status" },
+      levels: { ok: "OK", warning: "Over {{level}}%", critical: "Over {{level}}%" },
+      broken: "Broken",
+      settings: { warn_percent: "Warning level", high_percent: "Critical level", hysteresis: "Recovery margin" },
+      sources: { default: "Built-in", configured: "Set here" },
+      builtIn: "Built-in: {{value}}",
+      useDefault: "Built-in",
+      save: "Save",
+      reset: "Use the built-in levels",
+      saved: "Saved. It applies within {{seconds}} s, at the next check.",
+      invalid: "Enter whole numbers.",
+      order: "The warning level has to stay below the critical level.",
+      readOnly: "Only organization owners can change these levels.",
+      hint: "A disk is reported once when it reaches a level, and not again until it has fallen the recovery margin below it. Retention is set per signal and bounds how old the data gets, not how much of it there is.",
+    },
+    banner: {
+      warning: "ClickHouse disk {{disk}} on {{host}} is {{percent}}% full.",
+      critical: "ClickHouse disk {{disk}} on {{host}} is {{percent}}% full. Ingest stops if it fills.",
+      details: "Storage settings",
+    },
   },
   statusPage: {
     title: "System status",
