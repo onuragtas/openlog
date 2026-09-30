@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"regexp"
 	"sync"
 	"time"
@@ -61,10 +62,39 @@ func UsedRatio(free, total uint64) float64 {
 // UsedRatio is what fraction of this disk is not available, 0..1.
 func (d Disk) UsedRatio() float64 { return UsedRatio(d.Free, d.Total) }
 
+// Key identifies a disk across checks and across restarts.
+func (d Disk) Key() string { return d.Host + "/" + d.Name }
+
+// UsedPercent is UsedRatio as a percentage.
+func (d Disk) UsedPercent() float64 { return 100 * d.UsedRatio() }
+
+// DefaultThresholds are the levels a disk is reported at. 80 is early enough that shortening retention still
+// works; 90 is where a merge can fail for lack of scratch space, which stops ingest rather than slowing it.
+var DefaultThresholds = []int{80, 90}
+
+// DefaultHysteresis is how many points a disk has to fall below the level it was reported at before that level
+// can be reported again. Without it a disk sitting exactly on a threshold reports on every single check.
+const DefaultHysteresis = 5
+
+// Level is the highest threshold a disk at usedPercent has reached, or 0 for none.
+func Level(usedPercent float64, thresholds []int) int {
+	lvl := 0
+	for _, t := range thresholds {
+		if usedPercent >= float64(t) && t > lvl {
+			lvl = t
+		}
+	}
+	return lvl
+}
+
 // Snapshot is one round of measurement.
 type Snapshot struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Disks     []Disk    `json:"disks"`
+	// Reported is the level each disk was last reported at, by Disk.Key. It is carried in the stored snapshot so
+	// a restart does not re-report a disk that has not moved, and so the UI can show which disks are over a
+	// threshold without recomputing the rule.
+	Reported map[string]int `json:"reported,omitempty"`
 }
 
 // Fullest returns the disk under the most pressure. A cluster is as full as its fullest replica: an average
@@ -85,13 +115,19 @@ type Checker struct {
 	CH       clickhouse.Conn
 	Cluster  string
 	Interval time.Duration
+	// Thresholds and Hysteresis decide when a disk is reported; zero values use the defaults.
+	Thresholds []int
+	Hysteresis int
 	// Save persists a snapshot; nil keeps it in memory only.
 	Save func(context.Context, Snapshot) error
+	// Load reads the stored snapshot once, so the levels already reported survive a restart; nil starts clean.
+	Load func(context.Context) (Snapshot, bool, error)
 	Log  *slog.Logger
 
 	Registerer prometheus.Registerer
 	metrics    *metrics
 	once       sync.Once
+	loadOnce   sync.Once
 
 	mu   sync.RWMutex
 	last Snapshot
@@ -101,6 +137,7 @@ type metrics struct {
 	used  *prometheus.GaugeVec
 	free  *prometheus.GaugeVec
 	total *prometheus.GaugeVec
+	level *prometheus.GaugeVec
 	runs  *prometheus.CounterVec
 }
 
@@ -113,13 +150,16 @@ func (c *Checker) init() {
 				Help: "Free bytes of a local ClickHouse disk, by replica."}, []string{"host", "disk"}),
 			total: prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "openlog_clickhouse_disk_total_bytes",
 				Help: "Size in bytes of a local ClickHouse disk, by replica."}, []string{"host", "disk"}),
+			level: prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "openlog_clickhouse_disk_reported_level",
+				Help: "Threshold a local ClickHouse disk is currently reported at (0 = below all of them)."},
+				[]string{"host", "disk"}),
 			runs: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openlog_clickhouse_disk_checks_total",
 				Help: "Disk usage checks by outcome."}, []string{"result"}),
 		}
 		m.runs.WithLabelValues("ok")
 		m.runs.WithLabelValues("error")
 		if c.Registerer != nil {
-			c.Registerer.MustRegister(m.used, m.free, m.total, m.runs)
+			c.Registerer.MustRegister(m.used, m.free, m.total, m.level, m.runs)
 		}
 		c.metrics = m
 	})
@@ -130,6 +170,81 @@ func (c *Checker) Last() Snapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.last
+}
+
+// restore reads the stored snapshot once, so a restart does not report a level that was already reported.
+func (c *Checker) restore(ctx context.Context) {
+	c.loadOnce.Do(func() {
+		if c.Load == nil {
+			return
+		}
+		prev, ok, err := c.Load(ctx)
+		if err != nil {
+			if c.Log != nil {
+				c.Log.Warn("cannot read the stored disk usage snapshot; a level already reported may be reported once more", "err", err)
+			}
+			return
+		}
+		if !ok {
+			return
+		}
+		c.mu.Lock()
+		c.last = prev
+		c.mu.Unlock()
+	})
+}
+
+// levels decides what level every disk is at, against the levels of the previous round, and reports the changes.
+func (c *Checker) levels(disks []Disk) map[string]int {
+	thresholds := c.Thresholds
+	if len(thresholds) == 0 {
+		thresholds = DefaultThresholds
+	}
+	hysteresis := c.Hysteresis
+	if hysteresis <= 0 {
+		hysteresis = DefaultHysteresis
+	}
+	top := 0
+	for _, t := range thresholds {
+		top = max(top, t)
+	}
+	prev := c.Last().Reported
+	out := make(map[string]int, len(disks))
+	for _, d := range disks {
+		pct := d.UsedPercent()
+		was, now := prev[d.Key()], Level(pct, thresholds)
+		switch {
+		case now > was:
+			c.reportRise(d, pct, now, top)
+		case was > 0 && pct < float64(was-hysteresis):
+			if c.Log != nil {
+				c.Log.Info("ClickHouse disk is back under the level it was reported at", "host", d.Host,
+					"disk", d.Name, "used_percent", math.Round(pct), "reported_at", was, "now", now)
+			}
+		default:
+			// Latched. A disk drifting either side of a threshold must not report on every check, and a disk
+			// that only dipped a point below it has not recovered.
+			now = was
+		}
+		out[d.Key()] = now
+	}
+	return out
+}
+
+// reportRise logs a disk that has reached a level it was not at before.
+func (c *Checker) reportRise(d Disk, pct float64, level, top int) {
+	if c.Log == nil {
+		return
+	}
+	args := []any{"host", d.Host, "disk", d.Name, "used_percent", math.Round(pct), "level", level,
+		"free_bytes", d.Free, "total_bytes", d.Total}
+	if level >= top {
+		// At the top level a merge can fail for want of scratch space, and a failed merge stops ingest rather
+		// than slowing it down.
+		c.Log.Error("ClickHouse disk is nearly full", args...)
+		return
+	}
+	c.Log.Warn("ClickHouse disk is filling up", args...)
 }
 
 // Read queries the disks of every replica.
@@ -165,20 +280,24 @@ func (c *Checker) Read(ctx context.Context) (Snapshot, error) {
 // RunOnce measures, publishes and stores one snapshot.
 func (c *Checker) RunOnce(ctx context.Context) (Snapshot, error) {
 	c.init()
+	c.restore(ctx)
 	snap, err := c.Read(ctx)
 	if err != nil {
 		c.metrics.runs.WithLabelValues("error").Inc()
 		return snap, err
 	}
+	snap.Reported = c.levels(snap.Disks)
 	// Reset first: a disk that disappeared (a replica removed, a warm volume unmounted) must not leave its last
 	// value behind as a series that looks current.
 	c.metrics.used.Reset()
 	c.metrics.free.Reset()
 	c.metrics.total.Reset()
+	c.metrics.level.Reset()
 	for _, d := range snap.Disks {
 		c.metrics.used.WithLabelValues(d.Host, d.Name).Set(d.UsedRatio())
 		c.metrics.free.WithLabelValues(d.Host, d.Name).Set(float64(d.Free))
 		c.metrics.total.WithLabelValues(d.Host, d.Name).Set(float64(d.Total))
+		c.metrics.level.WithLabelValues(d.Host, d.Name).Set(float64(snap.Reported[d.Key()]))
 	}
 	c.mu.Lock()
 	c.last = snap

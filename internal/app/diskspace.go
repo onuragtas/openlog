@@ -37,6 +37,13 @@ func startDiskSpace(cfg config.Config, pool *pgxpool.Pool, conn clickhouse.Conn,
 		c.Save = func(ctx context.Context, s diskspace.Snapshot) error {
 			return postgres.PutSystemState(ctx, pool, diskspace.SystemStateKey, s)
 		}
+		// Carries the levels already reported across a restart and across a change of leader, so a disk sitting
+		// at 91 % is not reported again every time an api pod comes up.
+		c.Load = func(ctx context.Context) (diskspace.Snapshot, bool, error) {
+			var s diskspace.Snapshot
+			_, found, err := postgres.GetSystemState(ctx, pool, diskspace.SystemStateKey, &s)
+			return s, found, err
+		}
 	}
 	return []leaderTask{{"clickhouse-disk-usage", c.Run}}
 }

@@ -92,6 +92,20 @@ percent below the pressure the server actually feels.
 A cluster is as full as its fullest replica, never the average: an average hides the one node that is about to
 stop accepting parts.
 
+### Thresholds
+
+A disk that reaches **80 %** is logged as a warning and one that reaches **90 %** as an error, with the host, the
+disk, the percentage and the free and total bytes. 80 is early enough that shortening retention still works; at
+90 a merge can fail for want of scratch space, and a failed merge stops ingest rather than slowing it down.
+
+`openlog_clickhouse_disk_reported_level{host,disk}` carries the level a disk is currently reported at, `0` when
+it is under all of them.
+
+Each level is reported **once**, not on every check. A disk has to fall **5 points** below the level it was
+reported at before that level is armed again, so a disk drifting either side of 80 % does not report every five
+minutes, and a disk that only dipped a point has not recovered. The levels are stored with the snapshot, so a
+restart or a change of leader does not report a disk that has not moved.
+
 ## What is using the disk
 
 `openlog-admin storage status` prints free and total space per disk per replica, and bytes per table per volume
