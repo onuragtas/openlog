@@ -121,6 +121,9 @@ type Checker struct {
 	Save func(context.Context, Snapshot) error
 	// Load reads the stored snapshot once, so the levels already reported survive a restart; nil starts clean.
 	Load func(context.Context) (Snapshot, bool, error)
+	// Shed drops the oldest day when a disk is past the shedding level. nil means no disk pressure will ever
+	// delete anything, whatever the settings say.
+	Shed *Shedder
 	Log  *slog.Logger
 
 	Registerer prometheus.Registerer
@@ -138,6 +141,10 @@ type metrics struct {
 	total *prometheus.GaugeVec
 	level *prometheus.GaugeVec
 	runs  *prometheus.CounterVec
+	// Dropping telemetry is worth its own counters: they are the only lasting record that a byte of a customer's
+	// data was given up to keep the disk writable.
+	dropped      *prometheus.CounterVec
+	droppedBytes prometheus.Counter
 }
 
 func (c *Checker) init() {
@@ -154,11 +161,18 @@ func (c *Checker) init() {
 				[]string{"host", "disk"}),
 			runs: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openlog_clickhouse_disk_checks_total",
 				Help: "Disk usage checks by outcome."}, []string{"result"}),
+			dropped: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "openlog_clickhouse_disk_days_dropped_total",
+				Help: "Day-partitions dropped to free disk space, by what was given up."}, []string{"unit"}),
+			droppedBytes: prometheus.NewCounter(prometheus.CounterOpts{Name: "openlog_clickhouse_disk_dropped_bytes_total",
+				Help: "Bytes of telemetry dropped to free disk space."}),
 		}
 		m.runs.WithLabelValues("ok")
 		m.runs.WithLabelValues("error")
+		for _, u := range ShedOrder {
+			m.dropped.WithLabelValues(u.Name)
+		}
 		if c.Registerer != nil {
-			c.Registerer.MustRegister(m.used, m.free, m.total, m.level, m.runs)
+			c.Registerer.MustRegister(m.used, m.free, m.total, m.level, m.runs, m.dropped, m.droppedBytes)
 		}
 		c.metrics = m
 	})
@@ -235,6 +249,43 @@ func (c *Checker) reportRise(d Disk, pct float64, level, top int) {
 	c.Log.Warn("ClickHouse disk is filling up", args...)
 }
 
+// shed gives up the oldest days of the least valuable data until the disk is back under the stop level.
+func (c *Checker) shed(ctx context.Context, disk Disk, eff Effective) {
+	parts, err := c.Shed.Partitions(ctx, disk)
+	if err != nil {
+		if c.Log != nil {
+			c.Log.Warn("cannot read the partitions to drop; nothing was deleted", "host", disk.Host,
+				"disk", disk.Name, "err", err)
+		}
+		return
+	}
+	plan := Plan(disk, parts, eff)
+	if len(plan) == 0 {
+		// Past the level but nothing may be given up: every table is at its floor, or what is left is protected.
+		// Saying so is the point — the disk will keep filling and only the operator can act.
+		if c.Log != nil {
+			c.Log.Error("disk is past the shedding level but nothing can be dropped", "host", disk.Host,
+				"disk", disk.Name, "used_percent", math.Round(disk.UsedPercent()))
+		}
+		return
+	}
+	if c.Log != nil {
+		c.Log.Warn("disk is past the shedding level; giving up the oldest days", "host", disk.Host,
+			"disk", disk.Name, "used_percent", math.Round(disk.UsedPercent()), "stop_percent", eff.ShedStop,
+			"days", len(plan), "bytes", PlanBytes(plan), "dry_run", c.Shed.DryRun)
+	}
+	done, err := c.Shed.Apply(ctx, plan)
+	if !c.Shed.DryRun {
+		for _, d := range done {
+			c.metrics.dropped.WithLabelValues(d.Unit).Inc()
+			c.metrics.droppedBytes.Add(float64(d.Bytes))
+		}
+	}
+	if err != nil && c.Log != nil {
+		c.Log.Error("dropping stopped partway", "dropped_days", len(done), "freed_bytes", PlanBytes(done), "err", err)
+	}
+}
+
 // Read queries the disks of every replica.
 func (c *Checker) Read(ctx context.Context) (Snapshot, error) {
 	snap := Snapshot{CheckedAt: time.Now().UTC()}
@@ -305,6 +356,13 @@ func (c *Checker) RunOnce(ctx context.Context) (Snapshot, error) {
 	c.last = snap
 	c.mu.Unlock()
 	c.metrics.runs.WithLabelValues("ok").Inc()
+	// After the snapshot is published, so the levels and the gauges describe the disk as it was measured, and a
+	// failure to shed cannot lose the measurement.
+	if eff.ShedEnabled && c.Shed != nil {
+		if worst, found := snap.Fullest(); found {
+			c.shed(ctx, worst, eff)
+		}
+	}
 	if c.Save != nil {
 		if err := c.Save(ctx, snap); err != nil {
 			return snap, fmt.Errorf("store snapshot: %w", err)

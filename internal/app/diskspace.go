@@ -56,6 +56,15 @@ func startDiskSpace(cfg config.Config, pool *pgxpool.Pool, conn clickhouse.Conn,
 			_, found, err := postgres.GetSystemState(ctx, pool, diskspace.SystemStateKey, &s)
 			return s, found, err
 		}
+		// Dropping the oldest day when the disk fills. Attached unconditionally, but it deletes nothing until an
+		// operator turns shed_enabled on: the Checker asks the settings first, and the built-in value is off.
+		c.Shed = &diskspace.Shedder{
+			CH:       conn,
+			Cluster:  cfg.ClickHouseCluster,
+			Database: cfg.ClickHouseDatabase,
+			Record:   store.RecordDrop,
+			Log:      log.With("job", "clickhouse-disk-shed"),
+		}
 		// Every api pod serves the page from the stored snapshot, not by querying ClickHouse itself: only the
 		// leader measures, and a page load must not become a second source of the same query.
 		srv.SetDiskSpace(api.DiskSpaceDeps{

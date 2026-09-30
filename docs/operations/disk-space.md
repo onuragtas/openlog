@@ -106,6 +106,59 @@ reported at before that level is armed again, so a disk drifting either side of 
 minutes, and a disk that only dipped a point has not recovered. The levels are stored with the snapshot, so a
 restart or a change of leader does not report a disk that has not moved.
 
+## Dropping the oldest day when the disk fills
+
+Table TTLs bound how *old* the data gets. They cannot bound how *much* of it there is: double the ingest and the
+same retention fills the disk with data that is still inside its TTL, and nothing in ClickHouse will give it up.
+
+Shedding is the answer to that, and it is **off until you turn it on**. It deletes telemetry and cannot be undone.
+
+| Setting | Built-in | What it does |
+|---|---|---|
+| `shed_enabled` | **off** | Nothing is ever dropped while this is off |
+| `shed_start_percent` | 90 | Dropping begins at or above this |
+| `shed_stop_percent` | 85 | Dropping stops once the disk is back under this |
+| `shed_min_partitions` | 3 | Every table keeps at least this many days, however full the disk is |
+| `shed_max_drops_per_run` | 20 | A single round drops no more days than this |
+
+`shed_start_percent` may not be set below the critical reporting level: data must not disappear at a percentage
+the same page still calls healthy. The API and the database both refuse it.
+
+### What is given up, in order
+
+Least valuable per byte first, so a disk under pressure loses debugging detail before it loses the record of what
+happened:
+
+1. profiles
+2. metric exemplars
+3. traces — `spans` and `trace_index` **together**, since an index into rows that are gone is worse than no index
+4. database session samples
+5. logs
+6. database query statistics and plans
+7. raw metrics
+
+**Never dropped, at any pressure:** `metrics_1m` (the long-term memory, and partitioned by month, so one drop
+would take a whole month of it), `usage_*` (billing), the `apm_*` rollups (what survives when the spans they came
+from expire), and every inventory, alert, RUM and vulnerability table.
+
+### How it drops
+
+`ALTER TABLE … ON CLUSTER … DROP PARTITION ID '<YYYYMMDD>'`, oldest day first, one day at a time until the
+estimate reaches the stop level.
+
+A whole partition rather than rows on purpose. `ALTER … DELETE` is a mutation: it rewrites parts, which needs free
+space to write the new ones, so it is at its most expensive exactly when the disk is at its fullest. Dropping a
+partition frees the space at once, and every sheddable table is partitioned by day.
+
+### What it leaves behind
+
+Every dropped day is logged as a warning naming the day, the tables and the bytes, counted in
+`openlog_clickhouse_disk_days_dropped_total{unit}` and `openlog_clickhouse_disk_dropped_bytes_total`, and written
+to `audit_log` as `disk_space.partition_dropped` with the actor `system:disk-space`.
+
+If the disk is past the level and nothing may be given up — every table at its floor, or only protected tables
+left — that is logged as an error rather than passed over in silence. At that point only you can act.
+
 ## What is using the disk
 
 `openlog-admin storage status` prints free and total space per disk per replica, and bytes per table per volume

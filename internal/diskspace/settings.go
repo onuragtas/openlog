@@ -16,19 +16,40 @@ import (
 const (
 	DefaultWarnPercent = 80
 	DefaultHighPercent = 90
+	// Shedding starts at the critical level and stops below it, so a disk that has been dropped from does not
+	// immediately qualify again.
+	DefaultShedStartPercent = 90
+	DefaultShedStopPercent  = 85
+	// A table always keeps this many day-partitions, however full the disk is. Expressed in partitions rather
+	// than days because a quiet day has no partition at all, and counting days would then delete more than asked.
+	DefaultShedMinPartitions = 3
+	// A bound on how much one round can delete, so a wrong setting or a mismeasured disk cannot empty the
+	// installation in a single pass.
+	DefaultShedMaxDropsPerRun = 20
 )
 
 // Settings is what an operator may change. A nil field means "use the built-in default": the same convention as
 // org_query_limits, and it keeps "left alone" distinguishable from "deliberately set to the default".
 type Settings struct {
+	// The levels a disk is *reported* at. These delete nothing.
 	WarnPercent *int `json:"warn_percent"`
 	HighPercent *int `json:"high_percent"`
 	Hysteresis  *int `json:"hysteresis"`
+
+	// The levels data is *deleted* at, kept separate from the ones above so that setting a reporting level can
+	// never delete anything. nil ShedEnabled means off.
+	ShedEnabled        *bool `json:"shed_enabled"`
+	ShedStartPercent   *int  `json:"shed_start_percent"`
+	ShedStopPercent    *int  `json:"shed_stop_percent"`
+	ShedMinPartitions  *int  `json:"shed_min_partitions"`
+	ShedMaxDropsPerRun *int  `json:"shed_max_drops_per_run"`
 }
 
 // Empty reports whether nothing is set, which is how a stored row is told from no row at all.
 func (s Settings) Empty() bool {
-	return s.WarnPercent == nil && s.HighPercent == nil && s.Hysteresis == nil
+	return s.WarnPercent == nil && s.HighPercent == nil && s.Hysteresis == nil &&
+		s.ShedEnabled == nil && s.ShedStartPercent == nil && s.ShedStopPercent == nil &&
+		s.ShedMinPartitions == nil && s.ShedMaxDropsPerRun == nil
 }
 
 // Validate checks a settings change before it is stored. The database has the same constraints; this is what
@@ -40,18 +61,35 @@ func (s Settings) Validate() error {
 		}
 		return nil
 	}
-	if err := pct("warn_percent", s.WarnPercent); err != nil {
-		return err
-	}
-	if err := pct("high_percent", s.HighPercent); err != nil {
-		return err
+	for name, v := range map[string]*int{
+		"warn_percent": s.WarnPercent, "high_percent": s.HighPercent,
+		"shed_start_percent": s.ShedStartPercent, "shed_stop_percent": s.ShedStopPercent,
+	} {
+		if err := pct(name, v); err != nil {
+			return err
+		}
 	}
 	if s.Hysteresis != nil && (*s.Hysteresis < 0 || *s.Hysteresis > 50) {
 		return fmt.Errorf("hysteresis = %d: must be between 0 and 50", *s.Hysteresis)
 	}
+	if s.ShedMinPartitions != nil && *s.ShedMinPartitions < 1 {
+		return fmt.Errorf("shed_min_partitions = %d: must be at least 1", *s.ShedMinPartitions)
+	}
+	if s.ShedMaxDropsPerRun != nil && (*s.ShedMaxDropsPerRun < 1 || *s.ShedMaxDropsPerRun > 1000) {
+		return fmt.Errorf("shed_max_drops_per_run = %d: must be between 1 and 1000", *s.ShedMaxDropsPerRun)
+	}
 	e := s.Resolve()
 	if e.Warn >= e.High {
 		return fmt.Errorf("warn_percent = %d must be below high_percent = %d", e.Warn, e.High)
+	}
+	if e.ShedStop >= e.ShedStart {
+		return fmt.Errorf("shed_stop_percent = %d must be below shed_start_percent = %d", e.ShedStop, e.ShedStart)
+	}
+	// Deletion must never begin before the operator has been told the disk is critical. Otherwise data can go
+	// away at a level that the same page calls healthy.
+	if e.ShedStart < e.High {
+		return fmt.Errorf("shed_start_percent = %d must not be below high_percent = %d: data must not be deleted at a level that is still reported as healthy",
+			e.ShedStart, e.High)
 	}
 	return nil
 }
@@ -61,14 +99,24 @@ type Effective struct {
 	Warn       int `json:"warn_percent"`
 	High       int `json:"high_percent"`
 	Hysteresis int `json:"hysteresis"`
+
+	ShedEnabled        bool `json:"shed_enabled"`
+	ShedStart          int  `json:"shed_start_percent"`
+	ShedStop           int  `json:"shed_stop_percent"`
+	ShedMinPartitions  int  `json:"shed_min_partitions"`
+	ShedMaxDropsPerRun int  `json:"shed_max_drops_per_run"`
 }
 
-// Thresholds are the levels of Effective, lowest first.
+// Thresholds are the reporting levels of Effective, lowest first.
 func (e Effective) Thresholds() []int { return []int{e.Warn, e.High} }
 
 // Resolve fills the unset fields with the built-in defaults.
 func (s Settings) Resolve() Effective {
-	e := Effective{Warn: DefaultWarnPercent, High: DefaultHighPercent, Hysteresis: DefaultHysteresis}
+	e := Effective{
+		Warn: DefaultWarnPercent, High: DefaultHighPercent, Hysteresis: DefaultHysteresis,
+		ShedStart: DefaultShedStartPercent, ShedStop: DefaultShedStopPercent,
+		ShedMinPartitions: DefaultShedMinPartitions, ShedMaxDropsPerRun: DefaultShedMaxDropsPerRun,
+	}
 	if s.WarnPercent != nil {
 		e.Warn = *s.WarnPercent
 	}
@@ -77,6 +125,21 @@ func (s Settings) Resolve() Effective {
 	}
 	if s.Hysteresis != nil {
 		e.Hysteresis = *s.Hysteresis
+	}
+	if s.ShedEnabled != nil {
+		e.ShedEnabled = *s.ShedEnabled
+	}
+	if s.ShedStartPercent != nil {
+		e.ShedStart = *s.ShedStartPercent
+	}
+	if s.ShedStopPercent != nil {
+		e.ShedStop = *s.ShedStopPercent
+	}
+	if s.ShedMinPartitions != nil {
+		e.ShedMinPartitions = *s.ShedMinPartitions
+	}
+	if s.ShedMaxDropsPerRun != nil {
+		e.ShedMaxDropsPerRun = *s.ShedMaxDropsPerRun
 	}
 	return e
 }
@@ -106,10 +169,13 @@ type PGStore struct{ Pool *pgxpool.Pool }
 // Get returns the stored settings, if an operator has ever set any.
 func (st PGStore) Get(ctx context.Context) (Stored, bool, error) {
 	var s Stored
-	err := st.Pool.QueryRow(ctx, `SELECT d.warn_percent, d.high_percent, d.hysteresis, d.updated_at,
-	        coalesce(u.email, '')
+	err := st.Pool.QueryRow(ctx, `SELECT d.warn_percent, d.high_percent, d.hysteresis,
+	        d.shed_enabled, d.shed_start_percent, d.shed_stop_percent, d.shed_min_partitions,
+	        d.shed_max_drops_per_run, d.updated_at, coalesce(u.email, '')
 	    FROM disk_space_settings d LEFT JOIN users u ON u.id = d.updated_by`).
-		Scan(&s.WarnPercent, &s.HighPercent, &s.Hysteresis, &s.UpdatedAt, &s.UpdatedByEmail)
+		Scan(&s.WarnPercent, &s.HighPercent, &s.Hysteresis,
+			&s.ShedEnabled, &s.ShedStartPercent, &s.ShedStopPercent, &s.ShedMinPartitions,
+			&s.ShedMaxDropsPerRun, &s.UpdatedAt, &s.UpdatedByEmail)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Stored{}, false, nil
 	}
@@ -136,11 +202,18 @@ func (st PGStore) Put(ctx context.Context, s Settings, actor Actor) error {
 		if _, err := tx.Exec(ctx, "DELETE FROM disk_space_settings"); err != nil {
 			return err
 		}
-	} else if _, err := tx.Exec(ctx, `INSERT INTO disk_space_settings (id, warn_percent, high_percent, hysteresis, updated_by, updated_at)
-	        VALUES (true, $1, $2, $3, $4::uuid, now())
+	} else if _, err := tx.Exec(ctx, `INSERT INTO disk_space_settings (id, warn_percent, high_percent, hysteresis,
+	            shed_enabled, shed_start_percent, shed_stop_percent, shed_min_partitions, shed_max_drops_per_run,
+	            updated_by, updated_at)
+	        VALUES (true, $1, $2, $3, $4, $5, $6, $7, $8, $9::uuid, now())
 	        ON CONFLICT (id) DO UPDATE SET warn_percent = excluded.warn_percent, high_percent = excluded.high_percent,
-	            hysteresis = excluded.hysteresis, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-		s.WarnPercent, s.HighPercent, s.Hysteresis, actorID(actor.UserID)); err != nil {
+	            hysteresis = excluded.hysteresis, shed_enabled = excluded.shed_enabled,
+	            shed_start_percent = excluded.shed_start_percent, shed_stop_percent = excluded.shed_stop_percent,
+	            shed_min_partitions = excluded.shed_min_partitions,
+	            shed_max_drops_per_run = excluded.shed_max_drops_per_run,
+	            updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+		s.WarnPercent, s.HighPercent, s.Hysteresis, s.ShedEnabled, s.ShedStartPercent, s.ShedStopPercent,
+		s.ShedMinPartitions, s.ShedMaxDropsPerRun, actorID(actor.UserID)); err != nil {
 		return err
 	}
 	details, _ := json.Marshal(s)
