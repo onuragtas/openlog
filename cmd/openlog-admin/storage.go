@@ -12,6 +12,7 @@ import (
 
 	"github.com/onuragtas/openlog/internal/app"
 	"github.com/onuragtas/openlog/internal/config"
+	"github.com/onuragtas/openlog/internal/diskspace"
 	"github.com/onuragtas/openlog/internal/migrate"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
 )
@@ -78,13 +79,16 @@ func printStorageStatus(w io.Writer, st migrate.StorageStatus, cfg config.Config
 	fmt.Fprintf(w, "cluster %s, tiering %s, storage policy %s: %s\n\n", st.Cluster, tiering, st.Policy, strings.Join(vols, " -> "))
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "HOST\tDISK\tTYPE\tREMOTE\tBROKEN\tFREE\tTOTAL\tCACHE")
+	fmt.Fprintln(tw, "HOST\tDISK\tTYPE\tREMOTE\tBROKEN\tUSED\tFREE\tTOTAL\tCACHE")
 	for _, d := range st.Disks {
 		free, total := humanBytes(d.FreeBytes), humanBytes(d.TotalBytes)
+		// Same helper as the disk-usage job, so this table and openlog_clickhouse_disk_used_ratio cannot disagree.
+		used := fmt.Sprintf("%.0f%%", 100*diskspace.UsedRatio(d.FreeBytes, d.TotalBytes))
 		if d.Remote {
-			free, total = "-", "-"
+			// free_space/total_space of an object storage disk is a placeholder, so a percentage would be a lie.
+			free, total, used = "-", "-", "-"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%t\t%t\t%s\t%s\t%s\n", d.Host, d.Name, d.Type, d.Remote, d.Broken, free, total, d.CachePath)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%t\t%t\t%s\t%s\t%s\t%s\n", d.Host, d.Name, d.Type, d.Remote, d.Broken, used, free, total, d.CachePath)
 	}
 	_ = tw.Flush()
 	fmt.Fprintln(w)

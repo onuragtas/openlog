@@ -71,6 +71,27 @@ DROP TABLE system.query_log_0;
 Tables with a numeric suffix are always leftovers — of this change or of an earlier ClickHouse upgrade that
 changed a system table's columns. Nothing reads them.
 
+## How full the disks are
+
+The api leader asks ClickHouse every 5 minutes how full its local disks are (`system.disks`, one row per replica)
+and publishes the result three ways:
+
+| Where | What |
+|---|---|
+| `openlog_clickhouse_disk_used_ratio{host,disk}` on `/metrics` | used fraction, 0..1 — the series to alert on |
+| `openlog_clickhouse_disk_free_bytes`, `openlog_clickhouse_disk_total_bytes` | the raw numbers behind it |
+| `openlog-admin storage status` | a `USED` column per disk |
+
+Only local disks are measured. For an object-storage disk and the cache in front of it ClickHouse reports
+`free_space`/`total_space` as a placeholder, so a percentage there would be a lie; those rows print `-`.
+
+The percentage is derived from ClickHouse's `free_space`, which on ext4 excludes the blocks reserved for root.
+Those blocks are not available to ClickHouse, so they count as used — otherwise the number would sit a few
+percent below the pressure the server actually feels.
+
+A cluster is as full as its fullest replica, never the average: an average hides the one node that is about to
+stop accepting parts.
+
 ## What is using the disk
 
 `openlog-admin storage status` prints free and total space per disk per replica, and bytes per table per volume

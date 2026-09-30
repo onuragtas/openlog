@@ -155,11 +155,11 @@ changes) reads all replicas:
 ```
 cluster openlog, tiering enabled, storage policy openlog_tiered: default[default] -> warm[openlog_warm] -> cold[openlog_s3]
 
-HOST        DISK              TYPE           REMOTE  BROKEN  FREE      TOTAL     CACHE
-clickhouse  default           Local          false   false   37.4 GiB  87.1 GiB
-clickhouse  openlog_s3        ObjectStorage  true    false   -         -
-clickhouse  openlog_s3_cache  ObjectStorage  true    false   -         -         /var/lib/clickhouse/openlog_s3_cache/
-clickhouse  openlog_warm      Local          false   false   37.4 GiB  87.1 GiB
+HOST        DISK              TYPE           REMOTE  BROKEN  USED  FREE      TOTAL     CACHE
+clickhouse  default           Local          false   false   57%   37.4 GiB  87.1 GiB
+clickhouse  openlog_s3        ObjectStorage  true    false   -     -         -
+clickhouse  openlog_s3_cache  ObjectStorage  true    false   -     -         -         /var/lib/clickhouse/openlog_s3_cache/
+clickhouse  openlog_warm      Local          false   false   57%   37.4 GiB  87.1 GiB
 
 TABLE       CLASS  VOLUME   DISK          REPLICAS  PARTS  ROWS  SIZE      PARTITIONS              OVERDUE MOVES  POLICY
 logs_local  logs   default  default       1         2      525   4.7 KiB   2026-09-13..2026-09-14  -              openlog_tiered
