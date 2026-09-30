@@ -173,8 +173,51 @@ spec:
       {{- toYaml . | nindent 6 }}
       {{- end }}
     {{- end }}
-    {{- if or $serverTLS $tiered }}
     files:
+      # ClickHouse's own system log tables and server log files are unbounded by default and share the data
+      # volume; the same content as deploy/compose/clickhouse/openlog-system-logs.xml, which carries the long
+      # explanation. partition_by is set together with ttl on purpose: with the default monthly partitioning a
+      # shorter TTL degrades into a row-level rewrite of the whole month that never finishes on metric_log
+      # (~1000 columns). On a server that already runs, ClickHouse renames the tables whose partitioning changes
+      # to system.*_log_0 and those keep their rows with no TTL: drop them once.
+      config.d/openlog-system-logs.xml: |
+        <clickhouse>
+          <logger>
+            <size>100M</size>
+            <count>3</count>
+          </logger>
+          <!-- Read by the usage collector (usage_queries_1h). -->
+          <query_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+          </query_log>
+          <!-- Read by `openlog-admin storage status` (failed moves of the last 24 h). -->
+          <part_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+          </part_log>
+          <!-- Debugging aids only: nothing in openlog reads them. -->
+          <trace_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </trace_log>
+          <metric_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </metric_log>
+          <asynchronous_metric_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </asynchronous_metric_log>
+          <text_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </text_log>
+          <query_thread_log>
+            <partition_by>event_date</partition_by>
+            <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+          </query_thread_log>
+        </clickhouse>
       {{- if $tiered }}
       # Tiered storage (D-066): the same policy as deploy/compose/clickhouse/storage-tiered.xml; values come from the
       # container environment below (credentials from clickhouse.tieredStorage.s3.credentialsSecret).
@@ -272,7 +315,6 @@ spec:
           {{- end }}
         </clickhouse>
       {{- end }}
-    {{- end }}
     clusters:
       - name: {{ .Values.clickhouse.cluster }}
         {{- if $serverTLS }}

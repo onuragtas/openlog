@@ -303,6 +303,10 @@ services:
       OPENLOG_WARM_PATH: /var/lib/clickhouse-warm/
     volumes:
       - ./clickhouse/openlog-cluster.xml:/etc/clickhouse-server/config.d/openlog-cluster.xml:ro
+      # Daily partitions + TTL on ClickHouse's own system log tables, and a bound on the server log files;
+      # both are unbounded by default and sit on the data disk. See the file's header for the one-time
+      # cleanup of the renamed system.*_log_0 tables on an existing server.
+      - ./clickhouse/openlog-system-logs.xml:/etc/clickhouse-server/config.d/openlog-system-logs.xml:ro
       - ./clickhouse/openlog-reader.xml:/etc/clickhouse-server/users.d/openlog-reader.xml:ro
       - clickhouse-data:/var/lib/clickhouse
       # Storage policy `openlog_tiered` (./clickhouse/storage-tiered.xml), optional warm volume

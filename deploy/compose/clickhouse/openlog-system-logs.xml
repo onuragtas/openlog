@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+<!--
+  Bounds ClickHouse's own system log tables and server log files. They are unbounded by default: metric_log and
+  asynchronous_metric_log are written every second, trace_log and text_log follow the server's activity, and on a
+  quiet installation they outgrow the telemetry itself (the ClickHouse operator measured 3.7 GB of system.text_log
+  against 70 MB of user data before adding the same defaults).
+
+  Two of them are read by openlog, so everything here bounds rather than disables:
+    query_log  the usage collector copies tenant query compute into usage_queries_1h (internal/usage/collector.go)
+    part_log   `openlog-admin storage status` counts failed part moves of the last 24 h (internal/migrate/storage_status.go)
+
+  partition_by is set together with ttl, and that pairing is the point. TTL alone is not enough: the default
+  partitioning is monthly and ClickHouse expires whole parts, so a TTL shorter than the partition span degrades into
+  a row-level rewrite of the entire month. metric_log has ~1000 columns, that merge runs out of memory, and it then
+  retries forever with a core pegged. With daily partitions every expiry is a partition drop instead.
+
+  engine is deliberately not set here: it is an alternative to partition_by/ttl, not a companion, and spelling out
+  ORDER BY per table would pin structure that ClickHouse owns.
+
+  First deployment on an existing server: changing partition_by of a table that already exists makes ClickHouse log
+  "Existing table system.query_log for system log has obsolete or different structure", rename it to
+  system.query_log_0 and create a new one. The renamed tables keep their rows and no TTL applies to them, so drop
+  them once:
+      SELECT name FROM system.tables WHERE database = 'system' AND match(name, '_log_[0-9]+$');
+      DROP TABLE system.query_log_0;   (for each name the SELECT lists)
+-->
+<clickhouse>
+    <!-- Server log files. level/console come from openlog-cluster.xml; the official image otherwise keeps up to
+         10 x 1000M per log kind on the same disk as the data. -->
+    <logger>
+        <size>100M</size>
+        <count>3</count>
+    </logger>
+
+    <!-- Read by the usage collector: keep well past the hourly collection window so a stopped collector can
+         still catch up. -->
+    <query_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+    </query_log>
+
+    <!-- Read by `openlog-admin storage status` (failed moves of the last 24 h). -->
+    <part_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+    </part_log>
+
+    <!-- Debugging aids only: nothing in openlog reads them. -->
+    <trace_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </trace_log>
+    <metric_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </metric_log>
+    <asynchronous_metric_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+    <text_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </text_log>
+    <query_thread_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </query_thread_log>
+</clickhouse>
