@@ -39,6 +39,7 @@ const usage = `usage:
   openlog-admin create-owner --email EMAIL --org NAME [--tenant-id ID] [--name NAME] [--password-stdin] [--no-license-key]
   openlog-admin reset-password --email EMAIL [--password-stdin]
   openlog-admin storage status [--json]
+openlog-admin storage clean [--apply] [--json]
 `
 
 func main() {
@@ -71,7 +72,7 @@ func main() {
 func run(ctx context.Context, cfg config.Config, log *slog.Logger, cmd string, args []string, stdin io.Reader, stdout io.Writer) error {
 	switch cmd {
 	case "storage":
-		// ClickHouse only (storage.go); no PostgreSQL migrations.
+		// storage.go: ClickHouse, and for `clean` the settings row and the audit log; no PostgreSQL migrations.
 		return storageCommand(ctx, cfg, args, stdout)
 	case "migrate", "bootstrap", "create-owner", "reset-password":
 	case "-h", "--help", "help":

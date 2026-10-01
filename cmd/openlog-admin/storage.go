@@ -21,8 +21,17 @@ import (
 // bytes per table per volume summed over the replicas, pending and running moves, and the TTL changes openlog-migrate
 // would still apply. It uses the OPENLOG_CLICKHOUSE_* (writer) and OPENLOG_STORAGE_* variables.
 func storageCommand(ctx context.Context, cfg config.Config, args []string, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "status" {
-		return errors.New("usage: openlog-admin storage status [--json]")
+	const usage = "usage: openlog-admin storage status [--json] | openlog-admin storage clean [--apply] [--json]"
+	if len(args) == 0 {
+		return errors.New(usage)
+	}
+	switch args[0] {
+	case "status":
+	case "clean":
+		// storage_clean.go: what shedding would give up, and with --apply giving it up now.
+		return cleanCommand(ctx, cfg, args[1:], stdout)
+	default:
+		return errors.New(usage)
 	}
 	fs := flag.NewFlagSet("storage status", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "print JSON")

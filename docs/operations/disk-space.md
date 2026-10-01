@@ -159,6 +159,35 @@ A whole partition rather than rows on purpose. `ALTER … DELETE` is a mutation:
 space to write the new ones, so it is at its most expensive exactly when the disk is at its fullest. Dropping a
 partition frees the space at once, and every sheddable table is partitioned by day.
 
+### Seeing what it would take, before turning it on
+
+```
+openlog-admin storage clean            # preview: deletes nothing
+openlog-admin storage clean --apply    # delete the days listed
+```
+
+The preview plans as though shedding were on even when it is off, because that is the question being asked while
+it is still off. It prints the fullest disk, the levels it used and where they came from, and a row per day it
+would give up:
+
+```
+disk clickhouse/default: 93% used, 20.4 GiB free of 291.7 GiB
+levels (stored settings): shedding off, start 90%, stop 85%, keep 3 days per table, at most 20 days per run
+
+UNIT      DAY       TABLES                         SIZE
+profiles  20260901  profiles_local                 2.1 GiB
+traces    20260901  spans_local,trace_index_local  9.4 GiB
+
+2 days, 11.5 GiB: nothing was deleted. Pass --apply to delete them.
+automatic shedding is off: this is what it would give up if you turned it on.
+```
+
+`--apply` runs even when automatic shedding is off: it is an explicit instruction from a person at a terminal,
+not the scheduled job. It writes the same audit rows and respects the same floors and caps.
+
+When the levels cannot be read from PostgreSQL the command says so and falls back to the built-in ones, because a
+preview against the wrong levels is worse than no preview.
+
 ### What it leaves behind
 
 Every dropped day is logged as a warning naming the day, the tables and the bytes, counted in
