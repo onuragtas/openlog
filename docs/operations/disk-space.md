@@ -9,10 +9,11 @@ is *not* telemetry.
 
 ## ClickHouse's own system log tables
 
-ClickHouse writes `system.query_log`, `system.part_log`, `system.trace_log`, `system.metric_log`,
-`system.asynchronous_metric_log`, `system.text_log` and `system.query_thread_log` to the same disk as the data,
-and by default none of them ever expires. `metric_log` and `asynchronous_metric_log` get a row every second, so
-on a quiet installation they outgrow the telemetry they are supposed to help debug.
+ClickHouse writes a dozen log tables of its own to the same disk as the data, and by default none of them ever
+expires. `metric_log` and `asynchronous_metric_log` get a row every second; `processors_profile_log` gets one per
+query *operator*. On a quiet installation they outgrow the telemetry they are supposed to help debug: one measured
+server had 4.2 GiB of `processors_profile_log` and 1.9 GiB of `query_views_log` against 36 KiB of logs and 26 KiB
+of spans.
 
 openlog ships bounds for them:
 
@@ -22,10 +23,18 @@ openlog ships bounds for them:
   ClickHouseInstallation.
 - Helm `external` mode: nothing is applied — put the same file on your own servers.
 
-`query_log` and `part_log` keep 14 days, the rest 3 days. The first two are longer on purpose: the usage collector
-reads tenant query compute out of `system.query_log` into `usage_queries_1h`, and `openlog-admin storage status`
-reads failed part moves of the last 24 h out of `system.part_log`. Shortening them below the collection window
-loses usage data silently.
+Twelve tables are bounded: `query_log`, `part_log` and `error_log` keep 14 days, `crash_log` 90, and the volume
+ones — `trace_log`, `metric_log`, `asynchronous_metric_log`, `text_log`, `query_thread_log`,
+`processors_profile_log`, `query_views_log`, `query_metric_log` — keep 3.
+
+`query_log` and `part_log` are longer on purpose: the usage collector reads tenant query compute out of
+`system.query_log` into `usage_queries_1h`, and `openlog-admin storage status` reads failed part moves of the last
+24 h out of `system.part_log`. Shortening them below the collection window loses usage data silently. `crash_log`
+is tiny and the one table you want history for.
+
+Only tables that ClickHouse enables by default are listed. For some log tables the presence of a config section is
+what *enables* them (`text_log` is the known case), so naming one that is off would create volume rather than
+bound it.
 
 Server log *files* are bounded in the same file (`100M` × 3). The official image otherwise keeps up to 10 × 1000M
 per log kind, on the data disk.

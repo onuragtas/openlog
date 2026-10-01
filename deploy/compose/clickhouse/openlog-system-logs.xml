@@ -66,4 +66,29 @@
         <partition_by>event_date</partition_by>
         <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
     </query_thread_log>
+    <!-- Per-query processor timings: the biggest of them all on a busy server (4 GiB in a day was measured). -->
+    <processors_profile_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </processors_profile_log>
+    <!-- One row per view a query triggered. -->
+    <query_views_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </query_views_log>
+    <!-- Per-query metric snapshots. -->
+    <query_metric_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </query_metric_log>
+    <!-- Error counts; small, and worth keeping longer than the volume logs. -->
+    <error_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 14 DAY DELETE</ttl>
+    </error_log>
+    <!-- Crashes are rare and precious: bounded, but generously. -->
+    <crash_log>
+        <partition_by>event_date</partition_by>
+        <ttl>event_date + INTERVAL 90 DAY DELETE</ttl>
+    </crash_log>
 </clickhouse>
