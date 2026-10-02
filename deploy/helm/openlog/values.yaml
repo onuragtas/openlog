@@ -78,9 +78,11 @@ config:
   # ingest and api, so it lives here rather than in one component's config.
   OPENLOG_RUM_ENABLED: "true"
   OPENLOG_RUM_GEO_HEADER: ""
-  # Source maps that un-minify browser stacks (rum.md §8). The default local path is a container directory:
-  # point these at the same object storage the data export uses when more than one API replica runs, or an
-  # upload lands on one pod and the symbolication on another finds nothing.
+  # Source maps that un-minify browser stacks (rum.md §8). The default local path is the api pod's /tmp
+  # emptyDir: the maps do not survive a pod restart and are not shared between replicas, so an upload lands
+  # on one pod and the symbolication on another finds nothing. Unlike a data export a lost map cannot be
+  # regenerated -- browser stacks stay minified until someone uploads it again. Use the same object storage
+  # the data export uses.
   OPENLOG_SOURCE_MAPS_ENABLED: ""
   OPENLOG_SOURCE_MAPS_STORAGE: "auto"
   OPENLOG_SOURCE_MAPS_LOCAL_PATH: "/tmp/openlog-sourcemaps"

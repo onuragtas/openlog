@@ -197,6 +197,24 @@ to `audit_log` as `disk_space.partition_dropped` with the actor `system:disk-spa
 If the disk is past the level and nothing may be given up — every table at its floor, or only protected tables
 left — that is logged as an error rather than passed over in silence. At that point only you can act.
 
+## Uploaded source maps
+
+A RUM source map is uploaded once and read whenever a browser stack needs un-minifying, so it has to outlive the
+deploy it belongs to.
+
+Compose keeps them in the `source-maps` volume, mounted at `/var/lib/openlog/sourcemaps`. They used to default to
+the container's `/tmp`, where every recreation lost them — and unlike a data export, a lost map cannot be
+regenerated: stacks stay minified until someone uploads it again.
+
+Helm leaves the path on the api pod's `/tmp` emptyDir on purpose, the same way data exports do: a ReadWriteOnce
+PVC could not be shared between replicas either, and an upload that lands on one pod would be invisible to the
+symbolication on another. Point `OPENLOG_SOURCE_MAPS_S3_URL` at object storage instead — with tiered storage
+enabled it is derived from `OPENLOG_S3_ENDPOINT` automatically.
+
+How much space they take is bounded per `(organization, application, script)`: a re-upload replaces both the row
+and the object. It is *not* bounded over time when the bundler hashes file names (`app.a1b2c3.js`), because every
+build is then a new script and nothing removes the maps of builds nobody runs any more.
+
 ## What is using the disk
 
 `openlog-admin storage status` prints free and total space per disk per replica, and bytes per table per volume
