@@ -3,8 +3,10 @@ package sourcemaps
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/onuragtas/openlog/internal/objstore"
 )
@@ -57,6 +59,20 @@ func (f *fakeMeta) DeleteSourceMap(_ context.Context, org, id string) (Record, e
 		}
 	}
 	return Record{}, ErrNotFound
+}
+
+func (f *fakeMeta) StaleSourceMaps(_ context.Context, before time.Time, limit int) ([]Record, error) {
+	out := []Record{}
+	for _, r := range f.rows {
+		if r.UpdatedAt.Before(before) {
+			out = append(out, r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.Before(out[j].UpdatedAt) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 func newService(t *testing.T) (*Service, *fakeMeta) {
@@ -166,5 +182,87 @@ func TestUploadRollsBackWhenStorageFails(t *testing.T) {
 	}
 	if len(meta.rows) != 0 {
 		t.Error("the row survived a failed upload, promising a document that is not there")
+	}
+}
+
+// put stores one map with an explicit last-upload time.
+func put(t *testing.T, s *Service, meta *fakeMeta, app, script string, updated time.Time) Record {
+	t.Helper()
+	r := &Record{OrgID: "11111111-1111-4111-8111-111111111111", App: app, Script: script,
+		CreatedAt: updated, UpdatedAt: updated}
+	if err := s.Upload(context.Background(), r, fixture(t)); err != nil {
+		t.Fatalf("upload %s: %v", script, err)
+	}
+	// Upload does not carry the timestamps through the fake, so set them as the database would.
+	k := metaKey(r.OrgID, app, script)
+	rec := meta.rows[k]
+	rec.CreatedAt, rec.UpdatedAt = updated, updated
+	meta.rows[k] = rec
+	return rec
+}
+
+func TestPruneRemovesStaleMapsAndTheirDocuments(t *testing.T) {
+	s, meta := newService(t)
+	old := put(t, s, meta, "web", "main.old.js", time.Now().Add(-200*24*time.Hour))
+	n, err := s.Prune(context.Background(), time.Now().Add(-90*24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("pruned %d, want 1", n)
+	}
+	if len(meta.rows) != 0 {
+		t.Fatalf("row survived: %+v", meta.rows)
+	}
+	if rc, _, err := s.Objects.Open(context.Background(), old.ObjectKey()); err == nil {
+		rc.Close()
+		t.Fatal("the document is still in storage")
+	} else if !errors.Is(err, objstore.ErrNotFound) {
+		t.Fatalf("unexpected error reading the deleted document: %v", err)
+	}
+}
+
+func TestPruneLeavesMapsStillBeingDeployed(t *testing.T) {
+	s, meta := newService(t)
+	put(t, s, meta, "web", "main.fresh.js", time.Now().Add(-3*24*time.Hour))
+	n, err := s.Prune(context.Background(), time.Now().Add(-90*24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != 0 || len(meta.rows) != 1 {
+		t.Fatalf("pruned %d and left %d rows; a recent map must survive", n, len(meta.rows))
+	}
+}
+
+func TestPruneReadsTheLastUploadNotTheFirst(t *testing.T) {
+	// A bundler that does not hash names re-uploads "main.js" every deploy: the row is old, the upload is not,
+	// and deleting it would un-minify nothing while the build is still live.
+	s, meta := newService(t)
+	r := put(t, s, meta, "web", "main.js", time.Now().Add(-400*24*time.Hour))
+	k := metaKey(r.OrgID, "web", "main.js")
+	rec := meta.rows[k]
+	rec.UpdatedAt = time.Now().Add(-2 * 24 * time.Hour)
+	meta.rows[k] = rec
+
+	n, err := s.Prune(context.Background(), time.Now().Add(-90*24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("pruned a map that was re-uploaded two days ago")
+	}
+}
+
+func TestPruneStopsAtItsLimit(t *testing.T) {
+	s, meta := newService(t)
+	for i := range 5 {
+		put(t, s, meta, "web", "main."+string(rune('a'+i))+".js", time.Now().Add(-time.Duration(200+i)*24*time.Hour))
+	}
+	n, err := s.Prune(context.Background(), time.Now().Add(-90*24*time.Hour), 2)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != 2 || len(meta.rows) != 3 {
+		t.Fatalf("pruned %d and left %d rows, want 2 and 3", n, len(meta.rows))
 	}
 }

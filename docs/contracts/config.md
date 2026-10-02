@@ -137,12 +137,13 @@ GRANT ON CLUSTER openlog SELECT ON openlog.* TO openlog_reader;
 | `OPENLOG_STORAGE_WARM_AFTER_DAYS_PROFILES` | – | Days before profiling samples move to the warm volume (unset = no warm step) |
 | `OPENLOG_SOURCE_MAPS_ENABLED` | `OPENLOG_RUM_ENABLED` | Serve `/api/v1/source-maps` and un-minify browser stacks with the uploaded maps ([rum.md](rum.md) §8). Off: stacks stay minified, nothing else changes |
 | `OPENLOG_SOURCE_MAPS_STORAGE` | `auto` | Where maps are kept: `auto` (s3 when an S3 URL is known, else local), `local` or `s3` |
-| `OPENLOG_SOURCE_MAPS_LOCAL_PATH` | `/tmp/openlog-sourcemaps` | Directory of locally stored maps. Put it on a volume that survives a restart, or the maps go with it |
+| `OPENLOG_SOURCE_MAPS_LOCAL_PATH` | `/tmp/openlog-sourcemaps` | Directory of locally stored maps. Compose overrides it to `/var/lib/openlog/sourcemaps` on the `source-maps` volume; anywhere else, put it on storage that survives a restart or the maps go with it |
 | `OPENLOG_SOURCE_MAPS_S3_URL` | – | Object base URL, bucket and prefix included. Empty with tiered storage enabled: derived from `OPENLOG_S3_ENDPOINT` (same bucket, prefix `openlog-sourcemaps/`) |
 | `OPENLOG_SOURCE_MAPS_S3_REGION` | `OPENLOG_S3_REGION`, else `us-east-1` | Region of that bucket |
 | `OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID` | `OPENLOG_S3_ACCESS_KEY_ID` | Static key id; unset with `_S3_CREDENTIALS=auto` |
 | `OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY` | `OPENLOG_S3_SECRET_ACCESS_KEY` | Static secret; unset with `_S3_CREDENTIALS=auto` |
 | `OPENLOG_SOURCE_MAPS_S3_CREDENTIALS` | `static` with keys, else `auto` | `static` (the keys above) or `auto` (AWS credential chain: env, web identity, ECS, IMDSv2; D-116) |
+| `OPENLOG_SOURCE_MAPS_RETENTION_DAYS` | `90` | Delete maps nobody has uploaded for this long, document and index row (`0` keeps them forever). A bundler that hashes file names makes every deploy a new script, so without this the bucket grows for the life of the installation. A map re-uploaded under the same name is never stale |
 | `OPENLOG_AUTH_CACHE_TTL` | `60s` | `postgres` mode: a resolved license key is re-checked against PostgreSQL after this long. **A revoked key keeps being accepted by an ingest pod for up to this long** (browser keys too, [rum.md](rum.md) §3.5) |
 | `OPENLOG_AUTH_NEGATIVE_CACHE_TTL` | `10s` | Unknown keys are re-checked after this long (a newly created key works within this delay on pods that rejected it before) |
 | `OPENLOG_AUTH_CACHE_MAX_STALE` | `15m` | While PostgreSQL is unreachable, keys resolved successfully within this window keep being accepted (`0` = never serve stale entries) |

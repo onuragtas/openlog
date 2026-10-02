@@ -48,6 +48,9 @@ type MetaStore interface {
 	FindSourceMap(ctx context.Context, orgID, app, script string) (Record, error)
 	// DeleteSourceMap removes the row and returns it, so the caller can delete the object too.
 	DeleteSourceMap(ctx context.Context, orgID, id string) (Record, error)
+	// StaleSourceMaps returns up to limit maps not touched since before, across every organization: the prune
+	// runs once on the leader, not per tenant. It orders oldest first so repeated calls make progress.
+	StaleSourceMaps(ctx context.Context, before time.Time, limit int) ([]Record, error)
 }
 
 // Service stores and resolves maps. It is the only thing that knows both halves — the index in PostgreSQL
@@ -106,6 +109,35 @@ func (s *Service) Delete(ctx context.Context, orgID, id string) error {
 		return err
 	}
 	return nil
+}
+
+// Prune deletes the maps nobody has uploaded since before, document and row, and returns how many went.
+//
+// Age is a proxy, and worth stating as one: what makes a map useless is that no browser runs the build it
+// belongs to any more, and nothing here can know that. A bundler that hashes file names ("main.3f2a1b9c.js")
+// makes every deploy a new script, so the rows of old builds accumulate forever; one that does not hash them
+// re-uploads the same script, which keeps the id and bumps UpdatedAt, so an actively deployed map never looks
+// stale. That is why this reads UpdatedAt and not CreatedAt.
+//
+// A missing document is not an error, for the same reason it is not in Delete: the row is the record of truth.
+func (s *Service) Prune(ctx context.Context, before time.Time, limit int) (int, error) {
+	recs, err := s.Meta.StaleSourceMaps(ctx, before, limit)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, rec := range recs {
+		if err := s.Objects.Delete(ctx, rec.ObjectKey()); err != nil && !errors.Is(err, objstore.ErrNotFound) {
+			return n, err
+		}
+		if _, err := s.Meta.DeleteSourceMap(ctx, rec.OrgID, rec.ID); err != nil {
+			// The document is gone and the row is not: the next pass sees it again and the object delete is a
+			// no-op, so stopping here loses nothing and reporting the error beats hiding it.
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // Load reads and parses one map.

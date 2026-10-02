@@ -212,8 +212,16 @@ symbolication on another. Point `OPENLOG_SOURCE_MAPS_S3_URL` at object storage i
 enabled it is derived from `OPENLOG_S3_ENDPOINT` automatically.
 
 How much space they take is bounded per `(organization, application, script)`: a re-upload replaces both the row
-and the object. It is *not* bounded over time when the bundler hashes file names (`app.a1b2c3.js`), because every
-build is then a new script and nothing removes the maps of builds nobody runs any more.
+and the object. It is not bounded over time when the bundler hashes file names (`app.a1b2c3.js`), because every
+build is then a new script.
+
+So the api leader deletes the maps nobody has uploaded for `OPENLOG_SOURCE_MAPS_RETENTION_DAYS` (default **90**,
+`0` keeps them forever), document and index row, at most 500 per hourly pass.
+
+Age is a proxy and worth naming as one: what makes a map useless is that no browser runs the build it belongs to
+any more, and nothing here can know that. What the rule does get right is the other case — a bundler that does
+*not* hash names re-uploads the same script every deploy, which keeps the row and bumps its timestamp, so a map
+still being shipped never looks stale. That is why the prune reads the last upload and not the first.
 
 ## What is using the disk
 

@@ -49,6 +49,10 @@ type SourceMaps struct {
 	S3AccessKeyID     string // OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID, else OPENLOG_S3_ACCESS_KEY_ID
 	S3SecretAccessKey string // OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY, else OPENLOG_S3_SECRET_ACCESS_KEY
 	// S3Credentials is static (the keys above) or auto (AWS credential chain; D-116)
+	// RetentionDays deletes maps nobody has uploaded for that long (OPENLOG_SOURCE_MAPS_RETENTION_DAYS;
+	// 0 keeps them forever). A bundler that hashes file names makes every deploy a new script, so without this
+	// the index and the bucket grow for the life of the installation.
+	RetentionDays int
 	// (OPENLOG_SOURCE_MAPS_S3_CREDENTIALS; default static when keys are set, else auto).
 	S3Credentials string
 }
@@ -75,6 +79,7 @@ func loadRUM(p *parser) RUM {
 		S3Region:          p.str("OPENLOG_SOURCE_MAPS_S3_REGION", ""),
 		S3AccessKeyID:     p.str("OPENLOG_SOURCE_MAPS_S3_ACCESS_KEY_ID", ""),
 		S3SecretAccessKey: p.str("OPENLOG_SOURCE_MAPS_S3_SECRET_ACCESS_KEY", ""),
+		RetentionDays:     int(p.int64("OPENLOG_SOURCE_MAPS_RETENTION_DAYS", 90)),
 	}
 	// Tiered storage settings (the ClickHouse S3 disk) are reused when maps have none of their own, exactly
 	// as the data export does — same bucket, its own prefix beside the disk prefixes.

@@ -28,6 +28,7 @@ import (
 	"github.com/onuragtas/openlog/internal/processor"
 	"github.com/onuragtas/openlog/internal/queue"
 	"github.com/onuragtas/openlog/internal/slo"
+	"github.com/onuragtas/openlog/internal/sourcemaps"
 	"github.com/onuragtas/openlog/internal/store/clickhouse"
 	"github.com/onuragtas/openlog/internal/store/postgres"
 	"github.com/onuragtas/openlog/internal/tailsampling"
@@ -297,10 +298,12 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		}
 		srv.SetCostPrices(prices)
 	}
+	var sourceMapService *sourcemaps.Service
 	if pgPool != nil {
 		srv.SetAPMErrorStates(apm.PGErrorStates{Pool: pgPool}) // error inbox workflow (apm.md §3.4)
 		srv.SetSLOs(slo.NewPGStore(pgPool))                    // service level objectives (slo.md)
-		srv.SetSourceMaps(newSourceMaps(cfg, pgPool, log))     // browser stack symbolication (rum.md §8)
+		sourceMapService = newSourceMaps(cfg, pgPool, log)
+		srv.SetSourceMaps(sourceMapService) // browser stack symbolication (rum.md §8)
 	}
 	if err := startAlertAPI(cfg, pgPool, srv, apmSettings, log); err != nil { // alert.go
 		return err
@@ -344,6 +347,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	usageTasks = append(usageTasks, startStatusPage(cfg, pgPool, conn, srv, log)...) // privacy.go: public status page (D-108)
 	// diskspace.go: how full the ClickHouse disks are. Table TTLs bound the age of the data, never its size.
 	usageTasks = append(usageTasks, startDiskSpace(cfg, pgPool, conn, srv, adm.Registry(), log)...)
+	// sourcemaps.go: delete the maps of builds nobody deploys any more (OPENLOG_SOURCE_MAPS_RETENTION_DAYS).
+	usageTasks = append(usageTasks, startSourceMapPrune(cfg, sourceMapService, log)...)
 	// synthetics.go: scheduled outside-in checks; the scheduler and the result writer run on the leader (D-132)
 	usageTasks = append(usageTasks, startSynthetics(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)...)
 	// jobs.go: cron and heartbeat monitoring; pings are served by every pod, the sweeper runs on the leader (D-141)

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -78,4 +79,24 @@ func (s *Store) DeleteSourceMap(ctx context.Context, orgID, id string) (sourcema
 		return sourcemaps.Record{}, sourcemaps.ErrNotFound
 	}
 	return m, mapErr(err)
+}
+
+// StaleSourceMaps returns the maps nobody has uploaded since before, oldest first, across every organization:
+// the prune is one leader task, not one per tenant.
+//
+// updated_at and not created_at. A bundler that hashes file names makes every deploy a new script, so those rows
+// age and should go; one that does not hash them re-uploads the same script, which keeps the row and bumps
+// updated_at. Reading created_at would delete the map of a build still being shipped.
+func (s *Store) StaleSourceMaps(ctx context.Context, before time.Time, limit int) ([]sourcemaps.Record, error) {
+	if limit <= 0 {
+		return []sourcemaps.Record{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT `+sourceMapCols+`
+		FROM source_maps m WHERE m.updated_at < $1 ORDER BY m.updated_at LIMIT $2`, ts(before), limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (sourcemaps.Record, error) {
+		return scanSourceMap(r)
+	})
 }
