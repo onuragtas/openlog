@@ -696,7 +696,9 @@ export interface paths {
         /**
          * @description Every metric name with data points in the range, from any resource (Metrics Explorer). Ranges up to 6h read
          *     raw data points; longer ranges read the 1-minute rollup for gauges and sums (no description/temporality) plus
-         *     the raw points of the last 6h for other types. `q`: case-insensitive substring of the name.
+         *     the raw points of the last 6h for other types. `q`: case-insensitive substring of the metric name or
+         *     of any service that sent it, so searching a service name lists its metrics. Matched the same way on
+         *     the raw table and on the rollup; `description` and `unit` are deliberately not searched.
          */
         get: operations["listMetrics"];
         put?: never;

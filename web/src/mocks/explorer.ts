@@ -961,9 +961,13 @@ export const explorerHandlers = [
     const limit = Math.min(5000, Math.max(1, Number(p.get("limit") ?? 1000) || 1000));
     const now = Date.now();
     const all = explorerMetrics()
-      .filter((m) => !q || m.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((m) => info(m, now));
+      .map((m) => info(m, now))
+      // internal/api/metricsexplorer.go matches the metric name OR any service that sent it, so a service name
+      // typed into the one search box lists its metrics. Mapping before filtering is what puts those services in
+      // reach -- an XMetric has none, info() derives them from the series resources. info() caps them at 5 like the
+      // response field does, while the server searches every service_name row; no seed here has more than two.
+      .filter((m) => !q || m.name.toLowerCase().includes(q) || m.services.some((s) => s.toLowerCase().includes(q)))
+      .sort((a, b) => a.name.localeCompare(b.name));
     return HttpResponse.json({ metrics: all.slice(0, limit), truncated: all.length > limit });
   })),
 

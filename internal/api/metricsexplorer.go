@@ -95,7 +95,21 @@ func metricInfos(r *http.Request, sc *query.Scope, name, search string, from, to
 			q.Where("metric_name = {name:String}").Param("name", name)
 		}
 		if search != "" {
-			q.Where("positionCaseInsensitiveUTF8(metric_name, {q:String}) > 0").Param("q", search)
+			// One box, two fields. metric_name is the group key so it reads directly; service_name is per data
+			// point, which is what HAVING is for -- a WHERE cannot see it once the rows are grouped by name.
+			//
+			// Both metrics and metrics_1m carry service_name, so the same search answers the same way whichever
+			// table the range reads. description is deliberately not matched for exactly that reason: the rollup
+			// stores '' for it, so searching it would return different metrics for a 2-hour range than for a
+			// 2-day one. unit is left out too -- a term like "s" would match almost everything.
+			//
+			// A WHERE could see service_name too, and would prune before grouping, but then topKIf(5)(service_name),
+			// series and last_seen would all be computed over the matching rows only -- a row claiming the metric has
+			// one service and 3 series when it has six and 300. HAVING keeps the metadata about the metric true. It
+			// costs a full read of the range, which is what listing with an empty search box already costs, so the
+			// search is no longer cheaper than opening the page rather than newly expensive.
+			q.Having("positionCaseInsensitiveUTF8(metric_name, {q:String}) > 0"+
+				" OR countIf(positionCaseInsensitiveUTF8(service_name, {q:String}) > 0) > 0").Param("q", search)
 		}
 		return q.GroupBy("metric_name").OrderBy("metric_name").Limit(limit + 1)
 	}

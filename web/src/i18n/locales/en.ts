@@ -2468,7 +2468,7 @@ export const en = {
     list: {
       title: "Metrics",
       target: "Selecting for query {{id}}",
-      search: "Search metric names…",
+      search: "Search metric or service names…",
       noMatch: "No metric matches this search.",
       empty: "No metrics in the selected range.",
       refine: "Only the first metrics are listed; refine the search to see more.",

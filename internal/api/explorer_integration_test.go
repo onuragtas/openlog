@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -512,6 +513,27 @@ func TestExplorerMetricsIntegration(t *testing.T) {
 			t.Errorf("%s: type %q, want %q (%v)", n, types[n], typ, types)
 		}
 	}
+	// The one search box matches the service name as well as the metric name, so typing a service lists what it
+	// sent. Both tenants send from service "checkout" and no metric name contains it, which makes this two proofs
+	// in one: the service half of the predicate matches, and the tenant filter still holds over it -- tenant A
+	// must see exactly its own metrics, the same set the name search returned, and none of tenant B's.
+	e.get(t, "key-a", "/api/v1/metrics?q=checkout", &list)
+	byService := map[string]string{}
+	for _, m := range list.Metrics {
+		byService[m.Name] = m.Type
+		if strings.HasPrefix(m.Name, "tenantb.") {
+			t.Errorf("tenant B metric listed for a service search: %s", m.Name)
+		}
+		if m.Name == "explorer.cpu" && (m.Series != 2 || len(m.Services) != 1 || m.Services[0] != "checkout") {
+			// HAVING, not WHERE: the metadata is aggregated over every row of the metric, so matching on the
+			// service must not shrink the service list or the series count the way a prefilter would.
+			t.Errorf("cpu via service search %+v", m)
+		}
+	}
+	if !maps.Equal(byService, types) {
+		t.Errorf("service search: %v, want the same metrics as the name search: %v", byService, types)
+	}
+
 	e.get(t, "key-a", "/api/v1/metrics?q=explorer.&from="+strconv.FormatInt(e.now.Add(-48*time.Hour).UnixMilli(), 10), &list)
 	if len(list.Metrics) != 6 {
 		t.Errorf("long range list: %+v", list.Metrics)

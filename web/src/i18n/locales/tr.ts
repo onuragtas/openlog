@@ -2469,7 +2469,7 @@ export const tr: Messages = {
     list: {
       title: "Metrikler",
       target: "{{id}} sorgusu için seçiliyor",
-      search: "Metrik adı ara…",
+      search: "Metrik veya servis adı ara…",
       noMatch: "Bu aramaya uyan metrik yok.",
       empty: "Seçili aralıkta metrik yok.",
       refine: "Yalnızca ilk metrikler listeleniyor; daha fazlasını görmek için aramayı daraltın.",

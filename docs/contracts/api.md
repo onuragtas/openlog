@@ -947,7 +947,8 @@ bound query parameters. Integration panels select one instance with
 ### `GET /api/v1/metrics?from=&to=&q=&limit=` (Metrics Explorer, D-119)
 Every metric with data points in the range, from any resource (not only infra agent hosts). Ranges up to 6h read raw data
 points; longer ranges add the 1-minute rollup (gauges and sums; no description or temporality) to the raw points of the
-last 6h. `q`: case-insensitive substring of the name; `limit` default 1000, max 5000 (`truncated`).
+last 6h. `q`: case-insensitive substring of the metric name **or** of any service that sent it; `limit` default 1000, max
+5000 (`truncated`).
 ```json
 {"metrics": [{"name": "http.server.request.duration", "type": "histogram", "unit": "s", "description": "…",
               "temporality": "cumulative", "monotonic": false, "last_seen": "…", "series": 42, "services": ["checkout"]}],

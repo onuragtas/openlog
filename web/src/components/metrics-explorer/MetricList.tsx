@@ -23,7 +23,14 @@ export function MetricList({ range, selected, target, onSelect, className }: { r
   const list = useQuery(metricsListQuery({ range, q }));
   const now = useNow();
   const lower = text.trim().toLowerCase();
-  const metrics = (list.data?.metrics ?? []).filter((m) => m.name.toLowerCase().includes(lower));
+  // This filter exists only to narrow the *stale* response while the 250 ms debounce settles, so it is off once
+  // the response belongs to what is in the box: the server matches the service name as well as the metric name,
+  // and `services` is only the top 5 of them, so re-filtering a settled response would drop a row that matched
+  // on a sixth service. While typing it matches the same two fields the server does.
+  const typing = lower !== q.toLowerCase();
+  const metrics = (list.data?.metrics ?? []).filter(
+    (m) => !typing || m.name.toLowerCase().includes(lower) || m.services.some((s) => s.toLowerCase().includes(lower)),
+  );
 
   return (
     <section aria-labelledby={`${id}-title`} className={cn("flex min-h-0 flex-col gap-2 rounded-xl border bg-card p-3", className)}>
