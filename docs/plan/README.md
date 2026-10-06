@@ -15,6 +15,7 @@ Aynı kod tabanı hem SaaS olarak hem de müşterinin kendi altyapısında (self
 | [08-risks.md](08-risks.md) | Riskler ve önlemler |
 | [10-m2.md](10-m2.md) | M2: alarm, entegrasyonlar, APM, Go agent, PHP agent tasarımı |
 | [09-releases-updates.md](09-releases-updates.md) | Tek ürün sürümü, imzalı release'ler, agent ve backend otomatik güncelleme |
+| [11-mobile-console.md](11-mobile-console.md) | Mobil konsol: sunucu adresi, kayıt/giriş, cihaz oturumu, ekranlar, push |
 
 Ekiplerin birbirinden bağımsız çalışabilmesi için bağlayıcı sözleşmeler ayrı tutulur:
 
