@@ -118,16 +118,22 @@ Kayıt uygulamanın içinde olur, `POST /api/v1/auth/signup`. Akışın şekli `
    `POST /api/v1/auth/verify-email/resend` ile yeniden gönderim. `email_enabled: false` olan bir sunucuda
    doğrulama e-postası hiç gitmeyeceği için bu ekran gösterilmez.
 
-### 3.4 Captcha — mobilde bir WebView gerektirir
+### 3.4 Captcha — yazılmıyor, karşılanıyor
 
-`AuthConfig.captcha` doluysa kayıt isteği `captcha_token` ister. Sağlayıcılar `turnstile` ve `hcaptcha`;
-ikisi de web widget'ı. Turnstile'ın native mobil desteği yok, dolayısıyla tek dürüst yol widget'ı küçük bir
-WebView'de açıp token'ı geri almaktır.
+Captcha varsayılan olarak kapalıdır: `OPENLOG_SIGNUP_CAPTCHA_PROVIDER` boş bırakıldığında hiç devreye
+girmez ([../contracts/config.md](../contracts/config.md)). `apm.resoft.org`'da da ayarlı değil, dolayısıyla
+uygulamanın en çok kullanılacak yolunda captcha yok ve **Faz 1'e captcha işi girmiyor.**
 
-Bu, bir WebView bağımlılığını yalnızca **captcha yapılandırılmış sunucularda ve yalnızca kayıt akışında**
-devreye sokar. Girişte captcha yok; kendi sunucusunu çalıştıran çoğu kurulumda captcha hiç yapılandırılmamış
-olacağı için bu kod yolu hiç çalışmaz. Yine de yazılması gerekir: barındırılan kurulum varsayılan adres
-olduğu için en çok kullanılacak yol tam olarak o.
+Yine de `AuthConfig.captcha` dolu gelebilir — kendi sunucusunu çalıştıran biri açabilir, ya da ileride
+`apm.resoft.org`'da açılabilir. O durumda uygulama **kayıt widget'ını kendi içinde göstermez**: uygulama
+içi kayıt kapanır ve kullanıcı o sunucunun web kayıt sayfasına yönlendirilir, sonra telefondan giriş yapar.
+
+Alternatifi widget'ı bir WebView'de açmaktı. Sağlayıcıların ikisi de (`turnstile`, `hcaptcha`) web
+bileşeni ve Turnstile'ın native mobil desteği yok, yani WebView tek yoldu. Bugün kimsenin kullanmadığı bir
+yol için uygulamaya WebView bağımlılığı eklemek, taşınacak ama çalışmayacak kod demek. Gerçekten ihtiyaç
+duyan bir kurulum çıkarsa o zaman yazılır.
+
+Girişte captcha hiç yok: `captcha_token` yalnızca `SignupRequest`'te var, `LoginRequest`'te yok.
 
 ### 3.5 SSO — Faz 1'de değil
 
@@ -239,4 +245,6 @@ birkaç kez sürüm kesebilir, mağaza kesemez.
   bağlanır, veri projeye akmaz — bunu beyanda doğru anlatmak gerekir. Push rölesi (§6) bu tabloyu
   değiştirir ve beyanın güncellenmesini gerektirir.
 - **SSO zorunlu kurulumlar ilk sürümde dışarıda** (§3.5).
-- **Captcha WebView'i** (§3.4) barındırılan kurulumda ana giriş yolu olacak; erken test edilmeli.
+- **`apm.resoft.org`'da captcha açılırsa uygulama içi kayıt kapanır** (§3.4). Bugün kapalı olduğu için
+  Faz 1'de captcha işi yok; açılması bir hata üretmez ama kayıt akışı sessizce web'e taşınır. Spam
+  nedeniyle açmak gerekirse bunun mobil kayıt oranına etkisi önceden bilinmeli.
