@@ -28,9 +28,14 @@ Kapsam dışı, bilerek:
 Mağazadan inen tek bir derleme, herkesin kendi sunucusuna bağlanır. Bu, ürünün en belirleyici mobil
 farkıdır ve ilk ekranı o belirler.
 
-- **Adres alanı, varsayılanı dolu.** Açılışta adres alanında barındırılan openlog adresi yazar; kendi
-  sunucusunda çalıştıran onu siler ve kendisininkini yazar. Varsayılan bir derleme sabitidir, gizli bir
-  zorunluluk değil — her kurulum eşit şekilde desteklenir.
+- **Adres alanı, varsayılanı dolu: `https://apm.resoft.org`.** Barındırılan kurulumun adresi budur ve
+  açılışta alanda yazıyor olur; kendi sunucusunda çalıştıran onu siler ve kendisininkini yazar. Varsayılan
+  bir kolaylıktır, gizli bir zorunluluk değil — her kurulum eşit şekilde desteklenir.
+- **Varsayılan bir derleme sabitidir, yani değiştirmek mağaza sürümü ister.** Adres uygulamanın içine
+  gömülür; `apm.resoft.org` bir gün taşınırsa eski derlemeler onu bulamaz. Bunun bedelini ödememek için
+  adres alanı her zaman düzenlenebilir kalır ve uygulama varsayılana dair başka hiçbir şey varsaymaz —
+  sertifika sabitleme (certificate pinning) yok, bu adrese özel kod yolu yok. Barındırılan kurulum,
+  uygulamanın gözünde yalnızca alanı önceden doldurulmuş bir self-hosted kurulumdur.
 - **Adresin doğrulanması `GET /api/v1/auth/config` ile olur.** Bu uç nokta kimlik doğrulaması istemez
   (`security: []`) ve iki işi birden yapar: adresin gerçekten bir openlog sunucusu olduğunu kanıtlar ve
   giriş ekranının şeklini söyler.
@@ -220,9 +225,13 @@ birkaç kez sürüm kesebilir, mağaza kesemez.
 
 ## 8. Riskler ve açık kararlar
 
-- **Barındırılan adres belirli değil.** §2 varsayılan bir adrese dayanıyor ama depoda kanonik bir adres
-  yok — belgelerde yalnızca `openlog.example.com` yer tutucusu geçiyor. Adres bir derleme sabiti olarak
-  verilmeli; verilmezse ilk ekran "adresini yaz" ile başlar ve barındırılan kurulumun kolaylığı kaybolur.
+- **Derin bağlantılar `apm.resoft.org`'dan sunulmak zorunda.** §3.3 (davet kabulü) ve §3.5 (SSO geri
+  çağrısı) ilk sürümde yok, ama yapıldıklarında universal link / app link kurulumu gerekir: Apple için
+  `/.well-known/apple-app-site-association`, Android için `/.well-known/assetlinks.json`, ikisi de o
+  alan adından. Bunlar yalnızca barındırılan kurulumda çalışır — kendi sunucusunu çalıştıran bir kullanıcı
+  için davet bağlantısı uygulamayı açmaz. O yüzden ikisinin de tasarımı, derin bağlantı *olmadan* çalışan
+  bir yedek yola sahip olmalı (kodu elle yapıştırmak gibi); aksi halde self-hosted kurulumlar sessizce
+  ikinci sınıf olur.
 - **Cihaz oturumu sunucu işi.** Faz 1'in en büyük parçası mobil kodda değil, Go tarafındadır: yeni
   kimlik türü, iptal ekranı, audit, yetki matrisine yeni satır. Mobil ekranlar bundan sonra hızlı gelir.
 - **Mağaza yayını.** App Store ve Play, uygulama kimliği, imzalama sertifikaları ve gizlilik beyanı demek.
