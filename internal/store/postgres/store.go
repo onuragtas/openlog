@@ -397,22 +397,32 @@ func (s *Store) CreateSession(ctx context.Context, sess *auth.Session) error {
 		method = auth.MethodPassword
 	}
 	// auth_method, org_id and sso_connection_id: 0030_sso (SSO-bound sessions, D-077).
+	kind := sess.Kind
+	if kind == "" {
+		kind = auth.SessionBrowser
+	}
+	// auth_method, org_id and sso_connection_id: 0030_sso. kind and device_name: 0102_device_sessions.
 	err := s.pool.QueryRow(ctx, `INSERT INTO sessions (user_id, token_hash, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent,
-			auth_method, org_id, sso_connection_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11::uuid) RETURNING id::text`,
+			auth_method, org_id, sso_connection_id, kind, device_name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11::uuid, $12, $13) RETURNING id::text`,
 		sess.UserID, sess.TokenHash, sess.CSRFToken, sess.CreatedAt, ts(sess.LastSeenAt), sess.ExpiresAt, sess.IP, sess.UserAgent,
-		method, nullID(sess.OrgID), nullID(sess.ConnectionID)).Scan(&sess.ID)
+		method, nullID(sess.OrgID), nullID(sess.ConnectionID), string(kind), sess.DeviceName).Scan(&sess.ID)
 	return mapErr(err)
 }
 
 const sessionCols = `s.id::text, s.user_id::text, s.token_hash, s.csrf_token, s.created_at, s.last_seen_at, s.expires_at, s.revoked_at, s.ip, s.user_agent,
-	s.auth_method, coalesce(s.org_id::text, ''), coalesce(s.sso_connection_id::text, '')`
+	s.auth_method, coalesce(s.org_id::text, ''), coalesce(s.sso_connection_id::text, ''), s.kind, s.device_name`
 
 func scanSession(r pgx.Row, extra ...any) (auth.Session, error) {
 	var x auth.Session
+	// kind through a plain string: the column is text and auth.SessionKind is a named string type, which is
+	// not worth asking the driver to infer.
+	var kind string
 	dest := append([]any{&x.ID, &x.UserID, &x.TokenHash, &x.CSRFToken, &x.CreatedAt, &x.LastSeenAt, &x.ExpiresAt, &x.RevokedAt, &x.IP, &x.UserAgent,
-		&x.AuthMethod, &x.OrgID, &x.ConnectionID}, extra...)
-	return x, r.Scan(dest...)
+		&x.AuthMethod, &x.OrgID, &x.ConnectionID, &kind, &x.DeviceName}, extra...)
+	err := r.Scan(dest...)
+	x.Kind = auth.SessionKind(kind)
+	return x, err
 }
 
 func (s *Store) GetSessionByTokenHash(ctx context.Context, hash []byte) (auth.Session, auth.User, error) {

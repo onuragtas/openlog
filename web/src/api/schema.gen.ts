@@ -2192,6 +2192,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Signs in and returns the session as a bearer token instead of a cookie, for the mobile console
+         *     (docs/plan/11-mobile-console.md §3.2). The token is returned here and nowhere else.
+         *
+         *     It authenticates as `Authorization: Bearer olm_...` and acts as the signed-in person with their
+         *     membership role, **except** that every operation marked user-only is refused whatever that role is:
+         *     members, invitations, license/API/browser keys, source maps, the fleet, backend updates and
+         *     own-account management. Signing out (`POST /api/v1/auth/logout`) is allowed, because it only removes
+         *     access. It needs no `X-CSRF-Token`.
+         *
+         *     Its lifetime is `OPENLOG_DEVICE_SESSION_TTL` with `OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT`, both longer
+         *     than the browser session's. The session appears in `GET /api/v1/sessions` with `kind: device` and is
+         *     revoked there like any other.
+         */
+        post: operations["loginDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/signup": {
         parameters: {
             query?: never;
@@ -8707,7 +8737,7 @@ export interface components {
         };
         Me: {
             /** @enum {string} */
-            auth: "session" | "api_key" | "license_key";
+            auth: "session" | "api_key" | "license_key" | "device";
             user: components["schemas"]["User"] | null;
             /** @description The API key that authenticated this request and the role it acts with; null unless auth is api_key (D-133). */
             api_key: {
@@ -8720,7 +8750,7 @@ export interface components {
             organization: components["schemas"]["OrgRef"] | null;
             role: components["schemas"]["Role"] | null;
             organizations: components["schemas"]["OrgRef"][];
-            /** @description Send as X-CSRF-Token on mutating cookie-authenticated requests. Null for API keys. */
+            /** @description Send as X-CSRF-Token on mutating cookie-authenticated requests. Null for API keys and for device sessions, which authenticate with a bearer token and need none. */
             csrf_token: string | null;
         };
         Organization: {
@@ -8808,6 +8838,13 @@ export interface components {
             ip: string;
             user_agent: string;
             current: boolean;
+            /**
+             * @description `browser` is a cookie session; `device` is one held as a bearer token (the mobile console).
+             * @enum {string}
+             */
+            kind: "browser" | "device";
+            /** @description The label a device chose for itself; empty for a browser session. */
+            device_name: string;
         };
         AuditEvent: {
             id: number;
@@ -15182,6 +15219,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    loginDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                    password: string;
+                    /** @description What the person sees in their session list, for example "Onur's iPhone". Required. */
+                    device_name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Signed in */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description `olm_...`, shown only here */
+                        token: string;
+                        session_id: string;
+                        expires_at: components["schemas"]["Timestamp"];
+                        me: components["schemas"]["Me"];
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];

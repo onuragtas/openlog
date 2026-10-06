@@ -28,14 +28,21 @@ const touchEvery = time.Minute
 type Config struct {
 	SessionTTL         time.Duration // absolute session lifetime
 	SessionIdleTimeout time.Duration // 0 disables the idle timeout
-	CookieName         string
-	CookieSecure       bool
-	CookieDomain       string
-	SignupEnabled      bool
-	LoginMaxFailures   int           // failed attempts per (email, IP) within LoginWindow
-	LoginWindow        time.Duration //
-	InvitationTTL      time.Duration
-	TrustedProxies     []netip.Prefix
+	// DeviceSessionTTL and DeviceSessionIdleTimeout bound a session held by a device (Kind SessionDevice).
+	// They are separate from the browser ones because the two answer different questions: a browser session is
+	// short so that an unattended desk is not an open console, while a phone is in its owner's pocket behind a
+	// lock screen and is opened exactly when an alert arrives -- after a long quiet stretch. Stretching the
+	// browser timeout to suit phones would weaken every desk to serve them.
+	DeviceSessionTTL         time.Duration
+	DeviceSessionIdleTimeout time.Duration
+	CookieName               string
+	CookieSecure             bool
+	CookieDomain             string
+	SignupEnabled            bool
+	LoginMaxFailures         int           // failed attempts per (email, IP) within LoginWindow
+	LoginWindow              time.Duration //
+	InvitationTTL            time.Duration
+	TrustedProxies           []netip.Prefix
 
 	// KeyHasher hashes license and API keys (OPENLOG_KEY_HASH_SECRET, D-044); nil = plain SHA-256.
 	KeyHasher *tenant.KeyHasher
@@ -58,6 +65,12 @@ type Config struct {
 func (c *Config) defaults() {
 	if c.SessionTTL <= 0 {
 		c.SessionTTL = 7 * 24 * time.Hour
+	}
+	if c.DeviceSessionTTL <= 0 {
+		c.DeviceSessionTTL = 90 * 24 * time.Hour
+	}
+	if c.DeviceSessionIdleTimeout <= 0 {
+		c.DeviceSessionIdleTimeout = 30 * 24 * time.Hour
 	}
 	if c.CookieName == "" {
 		c.CookieName = DefaultCookieName
@@ -166,6 +179,9 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 	ctx := r.Context()
 	now := s.now()
 	if key, ok := bearerToken(r); ok {
+		if strings.HasPrefix(key, PrefixDeviceSession) {
+			return s.authenticateDeviceSession(ctx, r, key, now)
+		}
 		return s.authenticateAPIKey(ctx, r, key, now)
 	}
 	c, err := r.Cookie(s.cfg.CookieName)
@@ -182,6 +198,12 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 	if !sess.Active(now, s.cfg.SessionIdleTimeout) || user.DisabledAt != nil {
 		return nil, unauthenticated("session expired or revoked")
 	}
+	if sess.Kind == SessionDevice {
+		// A device token presented as a cookie would otherwise authenticate as KindSession and walk straight
+		// past the restriction that is the whole point of a device session. The prefix makes this hard to
+		// reach by accident; the check makes it impossible on purpose.
+		return nil, unauthenticated("session expired or revoked")
+	}
 	if unsafeMethod(r.Method) && subtle.ConstantTimeCompare([]byte(r.Header.Get(HeaderCSRF)), []byte(sess.CSRFToken)) != 1 {
 		return nil, denied("missing or invalid CSRF token")
 	}
@@ -195,6 +217,38 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 	p := &Principal{Kind: KindSession, UserID: user.ID, Email: user.Email, Name: user.Name, SessionID: sess.ID, CSRFToken: sess.CSRFToken,
 		EmailVerified: user.EmailVerifiedAt != nil, Language: user.Preference()}
 	// With a SessionPolicy (single sign-on) the organization must also be allowed for this session (external.go).
+	if err := s.selectSessionOrg(ctx, p, sess, user, strings.TrimSpace(r.Header.Get(HeaderOrg)), now); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// authenticateDeviceSession resolves a session a device holds as a bearer token. It is the cookie path
+// without the cookie: no CSRF (nothing can make a foreign site attach an Authorization header), its own idle
+// window, and a principal of KindDevice so Allow refuses every UserOnly action.
+func (s *Service) authenticateDeviceSession(ctx context.Context, r *http.Request, token string, now time.Time) (*Principal, error) {
+	sess, user, err := s.store.GetSessionByTokenHash(ctx, HashSecret(token))
+	if errors.Is(err, ErrNotFound) {
+		return nil, unauthenticated("session expired or revoked")
+	}
+	if err != nil {
+		return nil, s.fail(err)
+	}
+	// A browser session can never carry this prefix, so reaching here with one would mean the token was
+	// minted elsewhere; refuse rather than silently grant the wider browser rights.
+	if sess.Kind != SessionDevice {
+		return nil, unauthenticated("session expired or revoked")
+	}
+	if !sess.Active(now, s.cfg.DeviceSessionIdleTimeout) || user.DisabledAt != nil {
+		return nil, unauthenticated("session expired or revoked")
+	}
+	if now.Sub(sess.LastSeenAt) >= touchEvery {
+		if err := s.store.TouchSession(ctx, sess.ID, now); err != nil {
+			s.log.Warn("cannot update session last_seen_at", "err", err)
+		}
+	}
+	p := &Principal{Kind: KindDevice, UserID: user.ID, Email: user.Email, Name: user.Name, SessionID: sess.ID,
+		EmailVerified: user.EmailVerifiedAt != nil, Language: user.Preference()}
 	if err := s.selectSessionOrg(ctx, p, sess, user, strings.TrimSpace(r.Header.Get(HeaderOrg)), now); err != nil {
 		return nil, err
 	}
@@ -323,6 +377,31 @@ var errBadCredentials = &Error{Code: CodeUnauthenticated, Message: "invalid emai
 // Login verifies email and password and creates a session. Failed attempts
 // are limited per (email, client IP) across all API replicas.
 func (s *Service) Login(ctx context.Context, email, password string, meta ClientMeta) (LoginResult, error) {
+	return s.login(ctx, email, password, meta, SessionBrowser, "")
+}
+
+// MaxDeviceNameLen bounds the label a device chooses for itself (migration 0102).
+const MaxDeviceNameLen = 100
+
+// LoginDevice signs in and returns a session the caller holds as a bearer token instead of a cookie: the
+// mobile console (docs/plan/11-mobile-console.md §3.2). Everything a password sign-in checks is checked here
+// too -- the rate limit, the disabled user, single sign-on enforcement -- because this is the same sign-in
+// with a different envelope, not a second way in.
+//
+// deviceName is required: it is the only thing that tells one row of the person's session list from another,
+// and "sign this one out" is useless when every row reads the same.
+func (s *Service) LoginDevice(ctx context.Context, email, password, deviceName string, meta ClientMeta) (LoginResult, error) {
+	deviceName = strings.TrimSpace(deviceName)
+	if deviceName == "" {
+		return LoginResult{}, invalid("device_name is required")
+	}
+	if len(deviceName) > MaxDeviceNameLen {
+		return LoginResult{}, invalid("device_name must be at most %d characters", MaxDeviceNameLen)
+	}
+	return s.login(ctx, email, password, meta, SessionDevice, deviceName)
+}
+
+func (s *Service) login(ctx context.Context, email, password string, meta ClientMeta, kind SessionKind, deviceName string) (LoginResult, error) {
 	email = NormalizeEmail(email)
 	if email == "" || password == "" {
 		return LoginResult{}, invalid("email and password are required")
@@ -357,30 +436,56 @@ func (s *Service) Login(ctx context.Context, email, password string, meta Client
 		s.audit(ctx, "", u.ID, u.Email, meta, "user.login_refused", "user", u.ID, map[string]any{"reason": "sso_required"})
 		return LoginResult{}, err
 	}
-	res, err := s.startSession(ctx, u, meta, now)
+	res, err := s.startSessionOfKind(ctx, u, meta, now, kind, deviceName)
 	if err != nil {
 		return LoginResult{}, err
 	}
 	if err := s.store.SetUserLastLogin(ctx, u.ID, now); err != nil {
 		s.log.Warn("cannot update last_login_at", "err", err)
 	}
-	s.audit(ctx, "", u.ID, u.Email, meta, "user.login", "session", res.Session.ID, nil)
+	var details map[string]any
+	if kind == SessionDevice {
+		// The audit row says which phone, because revoking the right session later depends on telling them apart.
+		details = map[string]any{"kind": string(kind), "device_name": deviceName}
+	}
+	s.audit(ctx, "", u.ID, u.Email, meta, "user.login", "session", res.Session.ID, details)
 	return res, nil
 }
 
 func (s *Service) startSession(ctx context.Context, u User, meta ClientMeta, now time.Time) (LoginResult, error) {
-	token, err := newOpaqueToken()
+	return s.startSessionOfKind(ctx, u, meta, now, SessionBrowser, "")
+}
+
+func (s *Service) startSessionOfKind(ctx context.Context, u User, meta ClientMeta, now time.Time, kind SessionKind, deviceName string) (LoginResult, error) {
+	var token string
+	var err error
+	if kind == SessionDevice {
+		// A device sends this in Authorization, so it carries a visible prefix like every other bearer
+		// credential: a leaked one is recognizable to a secret scanner and tells itself apart from an API key.
+		// A cookie is never pasted anywhere, which is why the browser one stays a bare opaque token.
+		token, err = NewSecret(PrefixDeviceSession)
+	} else {
+		token, err = newOpaqueToken()
+	}
 	if err != nil {
 		return LoginResult{}, err
 	}
+	// A device session has nothing for a CSRF token to protect and never sends one, but it still gets one:
+	// an empty stored value would make an empty X-CSRF-Token header compare equal if any path ever reached
+	// that check with a device principal.
 	csrf, err := newOpaqueToken()
 	if err != nil {
 		return LoginResult{}, err
 	}
+	ttl := s.cfg.SessionTTL
+	if kind == SessionDevice {
+		ttl = s.cfg.DeviceSessionTTL
+	}
 	sess := Session{
 		UserID: u.ID, TokenHash: HashSecret(token), CSRFToken: csrf,
-		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(s.cfg.SessionTTL),
+		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(ttl),
 		IP: meta.IP, UserAgent: truncate(meta.UserAgent, 256),
+		Kind: kind, DeviceName: deviceName,
 	}
 	if err := s.store.CreateSession(ctx, &sess); err != nil {
 		return LoginResult{}, s.fail(err)
@@ -390,9 +495,15 @@ func (s *Service) startSession(ctx context.Context, u User, meta ClientMeta, now
 }
 
 // Logout revokes the caller's session.
+//
+// Deliberately not requireSession: a device session must be able to end itself. ActManageOwnAccount is
+// UserOnly because changing a password or listing sessions from a phone is account management, but signing
+// out only ever removes access -- refusing it would leave the one thing a worried person reaches for out of
+// reach, and leave the session alive. The matrix cannot express "a principal that holds a session", since an
+// API key passes every check here and then has no SessionID to revoke, so this one is checked in place.
 func (s *Service) Logout(ctx context.Context, p *Principal, meta ClientMeta) error {
-	if err := requireSession(p); err != nil {
-		return err
+	if !p.IsUser() || p.SessionID == "" {
+		return denied("this operation requires a signed-in user; API keys cannot perform it")
 	}
 	if err := s.store.RevokeSession(ctx, p.UserID, p.SessionID, s.now()); err != nil && !errors.Is(err, ErrNotFound) {
 		return s.fail(err)
@@ -549,7 +660,7 @@ type MeResult struct {
 // Me returns the caller and their organizations.
 func (s *Service) Me(ctx context.Context, p *Principal) (MeResult, error) {
 	res := MeResult{Principal: p}
-	if p.Kind == KindSession {
+	if p.IsUser() {
 		ms, err := s.store.ListMemberships(ctx, p.UserID)
 		if err != nil {
 			return res, s.fail(err)

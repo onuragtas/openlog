@@ -160,7 +160,7 @@ var errNotVerified = &Error{Code: CodePermissionDenied, Message: "confirm your e
 
 // requireVerified blocks unverified sign-ups from creating credentials and sending invitations.
 func (s *Service) requireVerified(p *Principal) error {
-	if s.cfg.RequireEmailVerification && p != nil && p.Kind == KindSession && !p.EmailVerified {
+	if s.cfg.RequireEmailVerification && p.IsUser() && !p.EmailVerified {
 		return errNotVerified
 	}
 	return nil

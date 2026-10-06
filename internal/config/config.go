@@ -61,13 +61,18 @@ type AuthCache struct {
 type Auth struct {
 	SessionTTL         time.Duration
 	SessionIdleTimeout time.Duration
-	CookieSecure       bool
-	CookieDomain       string
-	SignupEnabled      bool
-	LoginMaxFailures   int
-	LoginWindow        time.Duration
-	InvitationTTL      time.Duration
-	TrustedProxies     []string
+	// DeviceSessionTTL and DeviceSessionIdleTimeout bound a session held by a device as a bearer token
+	// (the mobile console). Separate from the browser ones: a phone is opened when an alert arrives, which is
+	// after a long quiet stretch, so the browser's idle timeout would sign it out exactly when it is needed.
+	DeviceSessionTTL         time.Duration
+	DeviceSessionIdleTimeout time.Duration
+	CookieSecure             bool
+	CookieDomain             string
+	SignupEnabled            bool
+	LoginMaxFailures         int
+	LoginWindow              time.Duration
+	InvitationTTL            time.Duration
+	TrustedProxies           []string
 	// Signup configures sign-up abuse protection and e-mail verification (signup.go).
 	Signup Signup
 	// SSO configures single sign-on and SCIM provisioning (sso.go).
@@ -293,17 +298,19 @@ func Load(getenv func(string) string) (Config, error) {
 			MaxRows:      int(p.int64("OPENLOG_API_MAX_ROWS", 10000)),
 			UIEnabled:    p.bool("OPENLOG_API_UI_ENABLED", true),
 			Auth: Auth{
-				SessionTTL:         p.duration("OPENLOG_SESSION_TTL", 7*24*time.Hour),
-				SessionIdleTimeout: p.duration("OPENLOG_SESSION_IDLE_TIMEOUT", 24*time.Hour),
-				CookieSecure:       p.bool("OPENLOG_COOKIE_SECURE", true),
-				CookieDomain:       p.str("OPENLOG_COOKIE_DOMAIN", ""),
-				SignupEnabled:      p.bool("OPENLOG_SIGNUP_ENABLED", false),
-				LoginMaxFailures:   int(p.int64("OPENLOG_LOGIN_MAX_FAILURES", 10)),
-				LoginWindow:        p.duration("OPENLOG_LOGIN_WINDOW", 15*time.Minute),
-				InvitationTTL:      p.duration("OPENLOG_INVITATION_TTL", 7*24*time.Hour),
-				TrustedProxies:     p.list("OPENLOG_API_TRUSTED_PROXIES", ""),
-				Signup:             loadSignup(&p),
-				SSO:                loadSSO(&p),
+				SessionTTL:               p.duration("OPENLOG_SESSION_TTL", 7*24*time.Hour),
+				SessionIdleTimeout:       p.duration("OPENLOG_SESSION_IDLE_TIMEOUT", 24*time.Hour),
+				DeviceSessionTTL:         p.duration("OPENLOG_DEVICE_SESSION_TTL", 90*24*time.Hour),
+				DeviceSessionIdleTimeout: p.duration("OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT", 30*24*time.Hour),
+				CookieSecure:             p.bool("OPENLOG_COOKIE_SECURE", true),
+				CookieDomain:             p.str("OPENLOG_COOKIE_DOMAIN", ""),
+				SignupEnabled:            p.bool("OPENLOG_SIGNUP_ENABLED", false),
+				LoginMaxFailures:         int(p.int64("OPENLOG_LOGIN_MAX_FAILURES", 10)),
+				LoginWindow:              p.duration("OPENLOG_LOGIN_WINDOW", 15*time.Minute),
+				InvitationTTL:            p.duration("OPENLOG_INVITATION_TTL", 7*24*time.Hour),
+				TrustedProxies:           p.list("OPENLOG_API_TRUSTED_PROXIES", ""),
+				Signup:                   loadSignup(&p),
+				SSO:                      loadSSO(&p),
 			},
 		},
 		Migrate: Migrate{
@@ -502,6 +509,14 @@ func (c Config) validate(getenv func(string) string) error {
 	a := c.API.Auth
 	if a.SessionTTL <= 0 || a.SessionIdleTimeout < 0 || a.LoginWindow <= 0 || a.InvitationTTL <= 0 {
 		errs = append(errs, errors.New("OPENLOG_SESSION_TTL, OPENLOG_LOGIN_WINDOW and OPENLOG_INVITATION_TTL must be > 0, OPENLOG_SESSION_IDLE_TIMEOUT >= 0"))
+	}
+	if a.DeviceSessionTTL <= 0 || a.DeviceSessionIdleTimeout < 0 {
+		errs = append(errs, errors.New("OPENLOG_DEVICE_SESSION_TTL must be > 0 and OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT >= 0"))
+	}
+	if a.DeviceSessionIdleTimeout > a.DeviceSessionTTL {
+		// An idle window wider than the absolute lifetime can never close: the session expires first, and the
+		// setting silently does nothing. Refuse it rather than let an operator believe it took effect.
+		errs = append(errs, errors.New("OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT must not exceed OPENLOG_DEVICE_SESSION_TTL"))
 	}
 	if a.LoginMaxFailures <= 0 {
 		errs = append(errs, errors.New("OPENLOG_LOGIN_MAX_FAILURES must be > 0"))

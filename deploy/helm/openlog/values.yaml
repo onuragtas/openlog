@@ -147,6 +147,11 @@ auth:
     # Keep true behind TLS. false only for plain-HTTP development clusters.
     cookieSecure: true
     cookieDomain: ""
+  # A session the mobile console holds as a bearer token. Longer than the browser one on purpose: a phone is
+  # opened when an alert arrives, which is after a long quiet stretch. idleTimeout may not exceed ttl.
+  deviceSession:
+    ttl: 2160h
+    idleTimeout: 720h
   # Self-service sign-up (POST /api/v1/auth/signup), for SaaS.
   signupEnabled: false
   # Failed password checks per (email, client IP) within the window before 429.

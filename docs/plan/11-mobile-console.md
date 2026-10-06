@@ -77,24 +77,41 @@ API anahtarları (`ola_…`) bu boşluğu dolduramaz: organizasyon düzeyinde pa
 rolle gelir ve kullanıcının kimliğini taşımaz. Bir kullanıcının telefonuna organizasyon anahtarı koymak,
 telefon kaybolduğunda iptal edilecek şeyin yanlış şey olması demektir.
 
-### 3.2 Cihaz oturumu (öneri)
+### 3.2 Cihaz oturumu — **yazıldı**
 
-Kullanıcıya ve **cihaza** bağlı, uzun ömürlü, tek tek iptal edilebilir bir bearer token.
+`POST /api/v1/auth/device`, e-posta ve parolayı `olm_…` bearer token'ına çeviriyor. Mobil kod yazılmadan
+önce bitti, çünkü her ekran buna dayanıyor.
 
-- **Bearer, çerez değil.** CSRF bir çerez problemidir; `Authorization` başlığıyla gelen bir istemcide CSRF
-  token'ı taşımanın hiçbir güvenlik kazancı yok. Çerezi bırakmak, aynı zamanda token'ı döndürmeyi (rotation)
-  mümkün kılar.
-- **Kendi ömrü.** Boşta kalma süresi tarayıcı oturumundan bağımsız ve uzun; her kullanımda kayan pencere.
-  Tarayıcının 24 saatini mobil için uzatmak, tarayıcıyı da zayıflatacağı için yanlış yol.
-- **İptal edilebilir ve görünür.** Ayarlar'da "Cihazlarım": cihaz adı, son görülme, çıkış düğmesi. Her
-  oluşturma ve iptal audit kaydı yazar.
-- **Kapsamı bilerek dar.** Cihaz token'ı telemetriyi okur ve alarmı susturur; **kimlik ve kimlik bilgisi
-  işlemleri yapamaz** (üye ve davet yönetimi, lisans/API anahtarları, fleet, backend güncellemesi). D-133'ün
-  API anahtarlarına koyduğu sınırın aynısı, aynı gerekçeyle: çalınan bir telefon kurulumu ele geçirmesin.
-
-**Faz 1 için ucuz alternatif** — mevcut çerezi Dart tarafında bir cookie jar'da tutmak ve `Me`'den gelen
-`csrf_token`'ı saklamak. Çalışır ve hızlıdır, ama cihaz iptali ve token döndürme olmaz, 24 saat sorunu
-yerinde kalır. Geçici köprü olarak kabul edilebilir, varış noktası değil.
+- **Bearer, çerez değil.** CSRF bir çerez problemidir, `Authorization` başlığında gelen bir istekte
+  koruyacağı bir şey yok; o yüzden `/auth/me` cihaz oturumunda `csrf_token` döndürmüyor. Buna rağmen satırda
+  bir CSRF token'ı **saklanıyor**: boş bir değer, herhangi bir yol oraya cihaz principal'ıyla ulaşırsa boş bir
+  `X-CSRF-Token` başlığıyla eşit karşılaştırılırdı.
+- **Kendi ömrü.** `OPENLOG_DEVICE_SESSION_TTL` (90 gün) ve `OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT` (30 gün),
+  tarayıcının 7 gün / 24 saatinden ayrı. Boşta kalma süresi TTL'i aşarsa yapılandırma reddediliyor — asla
+  kapanamayacak bir pencere, sessizce hiçbir şey yapmayan bir ayardır.
+- **Ayrı tablo değil, `sessions` üzerinde bir `kind` kolonu** (`0102_device_sessions`). Cihaz oturumu *bir*
+  kullanıcı oturumudur: aynı kullanıcı, aynı rol, aynı iptal. Ayırmak ikinci bir arama yolu, ikinci bir iptal
+  yolu ve yarısını unutan bir "her yerden çıkış" demekti. Bu sayede `GET /api/v1/sessions` telefonu
+  tarayıcının yanında listeliyor ve `DELETE /api/v1/sessions/{id}` onu çıkış yaptırıyor — ikisi de
+  değişmeden. Ayarlar → Güvenlik'te telefon kendi adıyla ve "Mobil uygulama" etiketiyle görünüyor.
+- **Kısıtlama matristen geliyor, elle yazılmış bir listeden değil.** `auth.Allow`, `UserOnly` işaretli her
+  eylemi oturum olmayan principal'lara reddediyordu; cihaz da oturum olmadığı için matrise tek satır
+  dokunmadan üyeler, davetler, lisans/API/tarayıcı anahtarları, source map'ler, fleet, backend güncellemesi,
+  sorgu limitleri, disk alanı ve hesap yönetiminin tamamı kapandı. Test bunu uç nokta listesiyle değil
+  **matrisin tamamı üzerinden** doğruluyor, böylece sonradan eklenen bir `UserOnly` eylem eklendiği gün
+  kapsama giriyor.
+- **Okumak ayrı bir soru.** Üye listesini ya da anahtarların adlarını ve öneklerini okumak role bağlı, o
+  yüzden telefon da okuyabiliyor — aynı rolde bir API anahtarı da okuyabildiği için telefon bununla fazladan
+  yetki kazanmıyor. Yasak olan, o listelerdeki şeyleri **üretmek ya da iptal etmek**.
+- **Çıkış yapmak serbest.** `POST /auth/logout` cihaza açık, çünkü çıkış yalnızca erişimi azaltır: reddetmek,
+  endişelenen birinin ilk uzandığı düğmeyi erişilemez kılar ve oturumu açık bırakır. Bu tek kural matrisle
+  ifade edilemiyordu (bir API anahtarı her kontrolü geçer ve sonra iptal edecek oturumu yoktur), o yüzden
+  yerinde kontrol ediliyor.
+- **Token çerez olarak kabul edilmiyor.** Cihaz token'ı `openlog_session` çerezinde gönderilse çerez yolu onu
+  tarayıcı oturumu sanıp bütün bu kısıtlamanın etrafından dolaşırdı. Önek bunu kazara ulaşılmaz kılıyor,
+  kontrol ise bilerek imkânsız.
+- **Önek `olm_`, `old_` değil.** Akla gelen harf `d`'ydi ama `old_`, hem `olds_` (dashboard paylaşımı) hem
+  `oldv_` (domain doğrulama) öneklerinin başlangıcı; bearer token'ı önekle yönlendirmek onları da yakalardı.
 
 ### 3.3 Kayıt
 
@@ -238,8 +255,10 @@ birkaç kez sürüm kesebilir, mağaza kesemez.
   için davet bağlantısı uygulamayı açmaz. O yüzden ikisinin de tasarımı, derin bağlantı *olmadan* çalışan
   bir yedek yola sahip olmalı (kodu elle yapıştırmak gibi); aksi halde self-hosted kurulumlar sessizce
   ikinci sınıf olur.
-- **Cihaz oturumu sunucu işi.** Faz 1'in en büyük parçası mobil kodda değil, Go tarafındadır: yeni
-  kimlik türü, iptal ekranı, audit, yetki matrisine yeni satır. Mobil ekranlar bundan sonra hızlı gelir.
+- ~~**Cihaz oturumu sunucu işi.**~~ Yapıldı (§3.2): `olm_` bearer token'ı, `sessions.kind`, 90/30 gün,
+  matris üzerinden kısıtlama, Ayarlar → Güvenlik'te "Mobil uygulama" etiketi. Mobil ekranlar bundan sonra
+  gelebilir. Not: yetki matrisine **hiç** satır eklenmedi, ki beklediğimden iyisi — `UserOnly` zaten
+  "kimlik, kimlik bilgileri, kurulum makineleri" kümesini tam olarak ifade ediyordu.
 - **Mağaza yayını.** App Store ve Play, uygulama kimliği, imzalama sertifikaları ve gizlilik beyanı demek.
   Self-hosted bir ürün için gizlilik beyanı özellikle dikkat ister: uygulama *kullanıcının* sunucusuna
   bağlanır, veri projeye akmaz — bunu beyanda doğru anlatmak gerekir. Push rölesi (§6) bu tabloyu

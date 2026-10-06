@@ -169,8 +169,10 @@ function seed() {
       },
     ] as ApiKey[],
     sessions: [
-      { id: "s-current", created_at: ago(2 * 3_600_000), last_seen_at: ago(10_000), expires_at: formatTs(now + 7 * day), ip: "127.0.0.1", user_agent: "Mozilla/5.0 (this browser)", current: true },
-      { id: "s-2", created_at: ago(3 * day), last_seen_at: ago(5 * 3_600_000), expires_at: formatTs(now + 4 * day), ip: "203.0.113.20", user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) Gecko/20100101 Firefox/130.0", current: false },
+      { id: "s-current", created_at: ago(2 * 3_600_000), last_seen_at: ago(10_000), expires_at: formatTs(now + 7 * day), ip: "127.0.0.1", user_agent: "Mozilla/5.0 (this browser)", current: true, kind: "browser", device_name: "" },
+      { id: "s-2", created_at: ago(3 * day), last_seen_at: ago(5 * 3_600_000), expires_at: formatTs(now + 4 * day), ip: "203.0.113.20", user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) Gecko/20100101 Firefox/130.0", current: false, kind: "browser", device_name: "" },
+      // A phone, so the row the mobile console produces is visible in mock mode and not only in production.
+      { id: "s-3", created_at: ago(9 * day), last_seen_at: ago(20 * 60_000), expires_at: formatTs(now + 81 * day), ip: "203.0.113.44", user_agent: "openlog-mobile/1.0 (iOS 18.2)", current: false, kind: "device", device_name: "Onur's iPhone" },
     ] as Session[],
     seq: 100,
   };

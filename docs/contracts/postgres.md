@@ -36,6 +36,7 @@ Nothing that grants access is stored in plaintext:
 | Invitation token | `oli_` + 48 hex chars | `invitations.token_hash = sha256(token)` |
 | E-mail verification token | `olv_` + 48 hex chars | `email_verifications.token_hash = sha256(token)` |
 | Session token (cookie) | 32 random bytes, base64url | `sessions.token_hash = sha256(token)` |
+| Device session token (bearer) | `olm_` + 48 hex chars | `sessions.token_hash = sha256(token)`, same column; `kind = 'device'` (`0102_device_sessions`). Prefixed because it is sent in `Authorization` and a leaked one should be recognizable; the cookie one is not, because it is never pasted anywhere |
 | SCIM token | `ols_` + 48 hex chars | `scim_tokens.key_hash`, hashed like API keys (D-044); `key_prefix` = first 12 chars |
 | SSO sign-in state / binding cookie | 32 random bytes each, base64url | `sso_login_states.state_hash` / `binding_hash = sha256(…)`; the PKCE verifier and nonce are stored for 10 minutes |
 | Domain verification e-mail token | `oldv_` + 48 hex chars | `sso_domains.email_token_hash = sha256(token)` |
@@ -119,10 +120,18 @@ license keys never authenticate the API.
 
 ### `sessions`
 `id`, `user_id`, `token_hash` (UNIQUE), `csrf_token`, `created_at`, `last_seen_at`, `expires_at`,
-`revoked_at`, `ip`, `user_agent`. A session is valid while not revoked, `now < expires_at`
-(`OPENLOG_SESSION_TTL`) and `now - last_seen_at < OPENLOG_SESSION_IDLE_TIMEOUT`. `last_seen_at` is
+`revoked_at`, `ip`, `user_agent`, and from `0102_device_sessions` `kind` (`browser` | `device`, default
+`browser`) and `device_name` (at most 100 chars, empty unless `kind = 'device'`). A session is valid while
+not revoked, `now < expires_at` and `now - last_seen_at < ` the idle timeout; the two bounds come from
+`OPENLOG_SESSION_TTL`/`OPENLOG_SESSION_IDLE_TIMEOUT` for a browser session and from
+`OPENLOG_DEVICE_SESSION_TTL`/`OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT` for a device one. `last_seen_at` is
 updated at most once per minute. The API deletes sessions that expired or were revoked more than a day
 ago (hourly, from every API pod; idempotent).
+
+A device session is one table row away from a browser session on purpose: the same user, the same
+membership role, the same revocation, so `GET /api/v1/sessions` lists a phone beside a browser and
+`DELETE /api/v1/sessions/{id}` signs it out. `kind` is what `auth.Allow` reads to refuse a device every
+user-only operation ([api.md](api.md), [11-mobile-console.md](../plan/11-mobile-console.md) §3.2).
 
 ### `invitations`
 `id`, `org_id`, `email`, `role`, `token_hash` (UNIQUE), `invited_by`, `created_at`, `expires_at`

@@ -49,6 +49,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 		return
 	}
 	public("POST /api/v1/auth/login", s.login)
+	public("POST /api/v1/auth/device", s.loginDevice)
 	public("POST /api/v1/auth/signup", s.signup)
 	public("POST /api/v1/invitations/lookup", s.lookupInvitation)
 	public("POST /api/v1/invitations/accept", s.acceptInvitation)
@@ -160,11 +161,15 @@ func meResponse(p *auth.Principal, ms []auth.Membership) meJSON {
 	if p.Kind == auth.KindAPIKey {
 		out.APIKey = &apiKeyRefJSON{ID: p.APIKeyID, Name: p.APIKeyName, Role: string(p.Role)}
 	}
-	if p.Kind == auth.KindSession {
+	if p.IsUser() {
 		out.User = &userJSON{ID: p.UserID, Email: p.Email, Name: p.Name, EmailVerified: p.EmailVerified, Language: auth.LanguageAuto}
 		if p.Language != "" {
 			out.User.Language = p.Language
 		}
+	}
+	if p.Kind == auth.KindSession {
+		// Only a cookie needs one. A device sends the session as a bearer token, which no other site can make
+		// a browser attach, so there is nothing for a CSRF token to protect there.
 		tok := p.CSRFToken
 		out.CSRFToken = &tok
 	}
@@ -260,6 +265,42 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return s.startSession(w, r, res, http.StatusOK)
+}
+
+// loginDevice signs in and answers with a bearer token instead of a cookie, for the mobile console
+// (docs/plan/11-mobile-console.md §3.2). The token is returned here and nowhere else.
+func (s *Server) loginDevice(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Email      string `json:"email"`
+		Password   string `json:"password"`
+		DeviceName string `json:"device_name"`
+	}
+	if err := decodeJSON(r, &in); err != nil {
+		return err
+	}
+	res, err := s.accounts.LoginDevice(r.Context(), in.Email, in.Password, in.DeviceName, s.accounts.Meta(r))
+	if err != nil {
+		return err
+	}
+	p := &auth.Principal{Kind: auth.KindDevice, UserID: res.User.ID, Email: res.User.Email, Name: res.User.Name,
+		SessionID: res.Session.ID, EmailVerified: res.User.EmailVerifiedAt != nil, Language: res.User.Preference()}
+	me, err := s.accounts.Me(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	if len(me.Memberships) > 0 {
+		m := me.Memberships[0]
+		p.OrgID, p.OrgName, p.TenantID, p.Role = m.Org.ID, m.Org.Name, m.Org.TenantID, m.Role
+	}
+	// The same /auth/me body the app will read on every later start, so it needs no second request now and no
+	// second shape to parse.
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"token":      res.Token,
+		"session_id": res.Session.ID,
+		"expires_at": formatTime(res.Session.ExpiresAt),
+		"me":         meResponse(p, me.Memberships),
+	})
+	return nil
 }
 
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) error {
@@ -657,11 +698,21 @@ func (s *Server) listSessions(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		IP         string `json:"ip"`
 		UserAgent  string `json:"user_agent"`
 		Current    bool   `json:"current"`
+		// Kind is "browser" or "device"; DeviceName is the label a device chose for itself and is empty for a
+		// browser. Without them this list shows a phone as another user agent string, and "sign this one out"
+		// becomes guesswork.
+		Kind       string `json:"kind"`
+		DeviceName string `json:"device_name"`
 	}
 	out := make([]sessionJSON, 0, len(ss))
 	for _, x := range ss {
+		kind := string(x.Kind)
+		if kind == "" {
+			kind = string(auth.SessionBrowser)
+		}
 		out = append(out, sessionJSON{ID: x.ID, CreatedAt: formatTime(x.CreatedAt), LastSeenAt: formatTime(x.LastSeenAt),
-			ExpiresAt: formatTime(x.ExpiresAt), IP: x.IP, UserAgent: x.UserAgent, Current: x.ID == p.SessionID})
+			ExpiresAt: formatTime(x.ExpiresAt), IP: x.IP, UserAgent: x.UserAgent, Current: x.ID == p.SessionID,
+			Kind: kind, DeviceName: x.DeviceName})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": out})
 	return nil

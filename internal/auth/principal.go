@@ -13,6 +13,11 @@ const (
 	KindSession    Kind = "session"
 	KindAPIKey     Kind = "api_key"
 	KindLicenseKey Kind = "license_key" // OPENLOG_AUTH_MODE=static only
+	// KindDevice is a signed-in person holding the session as a bearer token instead of a cookie: the mobile
+	// console (docs/plan/11-mobile-console.md §3.2). It carries a real user and their membership role, so it
+	// reads what that person may read -- but Allow refuses it every UserOnly action, which is what keeps a
+	// stolen phone from managing members, keys, the fleet or backend updates.
+	KindDevice Kind = "device"
 )
 
 // HTTP headers used by the API.
@@ -47,6 +52,14 @@ type Principal struct {
 	OrgName  string
 	TenantID string
 	Role     Role
+}
+
+// IsUser reports whether a real person is behind the request, whether they hold the session in a cookie or,
+// from a device, as a bearer token. Code that asks "is there a user here" (memberships, the user block of
+// /auth/me, the unverified-sign-up gate) asks this. Code that enforces the device restriction compares
+// Kind against KindSession directly, and only Allow does that.
+func (p *Principal) IsUser() bool {
+	return p != nil && (p.Kind == KindSession || p.Kind == KindDevice)
 }
 
 // HasOrg reports whether the principal acts inside an organization.

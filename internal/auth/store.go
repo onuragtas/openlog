@@ -88,7 +88,17 @@ type Member struct {
 	JoinedAt time.Time
 }
 
-// Session is a browser session. TokenHash = sha256(cookie value).
+// SessionKind separates a browser session from one a device holds as a bearer token.
+type SessionKind string
+
+// Session kinds (migration 0102). The zero value is not valid; CreateSession defaults it to SessionBrowser.
+const (
+	SessionBrowser SessionKind = "browser"
+	SessionDevice  SessionKind = "device"
+)
+
+// Session is a signed-in session. TokenHash = sha256(cookie value) for a browser session and
+// sha256(bearer token) for a device one.
 type Session struct {
 	ID         string
 	UserID     string
@@ -107,6 +117,11 @@ type Session struct {
 	// password sessions.
 	OrgID        string
 	ConnectionID string
+	// Kind is SessionBrowser (a cookie) or SessionDevice (a bearer token held by a device).
+	Kind SessionKind
+	// DeviceName is the label the person sees in their session list ("Onur's iPhone"). Chosen by the client,
+	// never interpreted, empty for a browser session.
+	DeviceName string
 }
 
 // Active reports whether the session is usable at now: not revoked, not past

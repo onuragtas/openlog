@@ -254,6 +254,7 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		store := postgres.NewStore(pool)
 		acfg := auth.Config{
 			SessionTTL: a.SessionTTL, SessionIdleTimeout: a.SessionIdleTimeout,
+			DeviceSessionTTL: a.DeviceSessionTTL, DeviceSessionIdleTimeout: a.DeviceSessionIdleTimeout,
 			CookieSecure: a.CookieSecure, CookieDomain: a.CookieDomain, SignupEnabled: a.SignupEnabled,
 			LoginMaxFailures: a.LoginMaxFailures, LoginWindow: a.LoginWindow, InvitationTTL: a.InvitationTTL,
 			TrustedProxies: proxies,

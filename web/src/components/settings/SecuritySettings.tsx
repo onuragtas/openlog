@@ -139,9 +139,16 @@ export function SecuritySettings() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <MonitorSmartphone className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      <span className="break-all text-xs" title={s.user_agent}>
-                        {s.user_agent ? shortAgent(s.user_agent) : t("settings.security.unknownDevice")}
+                      {/* A device chose its own name, so show that rather than the user agent it happens to
+                          send: "Onur's iPhone" is what the person recognises when deciding what to sign out. */}
+                      <span className="break-all text-xs" title={s.kind === "device" ? s.device_name : s.user_agent}>
+                        {s.kind === "device"
+                          ? s.device_name || t("settings.security.unknownDevice")
+                          : s.user_agent
+                            ? shortAgent(s.user_agent)
+                            : t("settings.security.unknownDevice")}
                       </span>
+                      {s.kind === "device" && <Badge variant="secondary">{t("settings.security.mobileDevice")}</Badge>}
                       {s.current && <Badge variant="success">{t("settings.security.current")}</Badge>}
                     </div>
                   </TableCell>

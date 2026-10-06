@@ -194,6 +194,8 @@ per pod. Metric: `openlog_license_key_resolutions_total{result="hit|miss|negativ
 | `OPENLOG_INGEST_PUBLIC_GRPC_URL` | `` | Public OTLP/gRPC endpoint for the same commands, e.g. `https://ingest.openlog.example.com:4317`. Empty = the host of `OPENLOG_INGEST_PUBLIC_URL` (or of its fallback) with port `4317` |
 | `OPENLOG_SESSION_TTL` | `168h` | Absolute session lifetime (`postgres` mode) |
 | `OPENLOG_SESSION_IDLE_TIMEOUT` | `24h` | A session unused for this long ends (`0` disables); activity is recorded at most once a minute |
+| `OPENLOG_DEVICE_SESSION_TTL` | `2160h` | Absolute lifetime of a session held by a device as a bearer token (the mobile console); 90 days |
+| `OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT` | `720h` | A device session unused for this long ends (`0` disables); must not exceed `OPENLOG_DEVICE_SESSION_TTL`. Longer than the browser timeout on purpose: a phone is opened when an alert arrives, which is after a long quiet stretch |
 | `OPENLOG_COOKIE_SECURE` | `true` | `Secure` attribute of the session cookie. Set `false` only for plain-HTTP development (the API logs a warning) |
 | `OPENLOG_COOKIE_DOMAIN` | `` | Cookie `Domain`; empty = host-only cookie (recommended) |
 | `OPENLOG_SIGNUP_ENABLED` | `false` | Enables `POST /api/v1/auth/signup` (self-service organization creation, SaaS) |

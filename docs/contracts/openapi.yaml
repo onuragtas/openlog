@@ -3680,6 +3680,56 @@ paths:
         "429": { $ref: "#/components/responses/TooManyRequests" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/auth/device:
+    post:
+      tags: [auth]
+      operationId: loginDevice
+      security: []
+      description: |
+        Signs in and returns the session as a bearer token instead of a cookie, for the mobile console
+        (docs/plan/11-mobile-console.md §3.2). The token is returned here and nowhere else.
+
+        It authenticates as `Authorization: Bearer olm_...` and acts as the signed-in person with their
+        membership role, **except** that every operation marked user-only is refused whatever that role is:
+        members, invitations, license/API/browser keys, source maps, the fleet, backend updates and
+        own-account management. Signing out (`POST /api/v1/auth/logout`) is allowed, because it only removes
+        access. It needs no `X-CSRF-Token`.
+
+        Its lifetime is `OPENLOG_DEVICE_SESSION_TTL` with `OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT`, both longer
+        than the browser session's. The session appears in `GET /api/v1/sessions` with `kind: device` and is
+        revoked there like any other.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, device_name]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                device_name:
+                  type: string
+                  maxLength: 100
+                  description: What the person sees in their session list, for example "Onur's iPhone". Required.
+      responses:
+        "201":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, session_id, expires_at, me]
+                properties:
+                  token: { type: string, description: "`olm_...`, shown only here" }
+                  session_id: { type: string }
+                  expires_at: { $ref: "#/components/schemas/Timestamp" }
+                  me: { $ref: "#/components/schemas/Me" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/auth/signup:
     post:
       tags: [auth]
@@ -12360,7 +12410,7 @@ components:
       type: object
       required: [auth, user, api_key, organization, role, organizations, csrf_token]
       properties:
-        auth: { type: string, enum: [session, api_key, license_key] }
+        auth: { type: string, enum: [session, api_key, license_key, device] }
         user:
           oneOf:
             - { $ref: "#/components/schemas/User" }
@@ -12389,7 +12439,7 @@ components:
           items: { $ref: "#/components/schemas/OrgRef" }
         csrf_token:
           type: [string, "null"]
-          description: Send as X-CSRF-Token on mutating cookie-authenticated requests. Null for API keys.
+          description: Send as X-CSRF-Token on mutating cookie-authenticated requests. Null for API keys and for device sessions, which authenticate with a bearer token and need none.
 
     Organization:
       type: object
@@ -12482,7 +12532,7 @@ components:
 
     Session:
       type: object
-      required: [id, created_at, last_seen_at, expires_at, ip, user_agent, current]
+      required: [id, created_at, last_seen_at, expires_at, ip, user_agent, current, kind, device_name]
       properties:
         id: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
@@ -12491,6 +12541,13 @@ components:
         ip: { type: string }
         user_agent: { type: string }
         current: { type: boolean }
+        kind:
+          type: string
+          enum: [browser, device]
+          description: "`browser` is a cookie session; `device` is one held as a bearer token (the mobile console)."
+        device_name:
+          type: string
+          description: The label a device chose for itself; empty for a browser session.
 
     AuditEvent:
       type: object

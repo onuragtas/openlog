@@ -394,6 +394,10 @@ func (s *Store) CreateSession(_ context.Context, sess *auth.Session) error {
 	}
 	sess.ID = uuid.NewString()
 	sess.CreatedAt = now(sess.CreatedAt)
+	if sess.Kind == "" {
+		// The same default the column has (0102), so a test against this store sees what PostgreSQL would store.
+		sess.Kind = auth.SessionBrowser
+	}
 	s.sessions[sess.ID] = *sess
 	return nil
 }

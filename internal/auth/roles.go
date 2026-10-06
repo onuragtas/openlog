@@ -200,6 +200,9 @@ func Allow(p *Principal, perm Permission) error {
 		return unauthenticated("missing credentials")
 	}
 	if perm.UserOnly && p.Kind != KindSession {
+		if p.Kind == KindDevice {
+			return denied("this operation requires a signed-in browser session; a device session cannot perform it")
+		}
 		return denied("this operation requires a signed-in user; API keys cannot perform it")
 	}
 	if perm.Min == "" {

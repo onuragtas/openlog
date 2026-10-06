@@ -547,6 +547,10 @@ ctx: dict "root" $ "component" "<name>" "values" <component values>
   value: {{ $a.session.ttl | quote }}
 - name: OPENLOG_SESSION_IDLE_TIMEOUT
   value: {{ $a.session.idleTimeout | quote }}
+- name: OPENLOG_DEVICE_SESSION_TTL
+  value: {{ $a.deviceSession.ttl | quote }}
+- name: OPENLOG_DEVICE_SESSION_IDLE_TIMEOUT
+  value: {{ $a.deviceSession.idleTimeout | quote }}
 - name: OPENLOG_COOKIE_SECURE
   value: {{ $a.session.cookieSecure | toString | quote }}
 - name: OPENLOG_COOKIE_DOMAIN

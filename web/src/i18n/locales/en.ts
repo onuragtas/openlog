@@ -983,6 +983,7 @@ export const en = {
       sessionsDescription: "Browsers signed in to your account.",
       current: "This session",
       unknownDevice: "Unknown device",
+      mobileDevice: "Mobile app",
       sessionsEmpty: "No active sessions.",
     },
   },

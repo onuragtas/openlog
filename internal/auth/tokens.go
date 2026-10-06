@@ -13,6 +13,11 @@ const (
 	PrefixLicenseKey = "olk_"
 	PrefixAPIKey     = "ola_"
 	PrefixInvitation = "oli_"
+	// PrefixDeviceSession marks a session a device holds as a bearer token (Session.Kind = SessionDevice).
+	// "m" for mobile, its first client: "old_" would have been the obvious letter but it is a prefix of both
+	// "olds_" (dashboard share) and "oldv_" (domain verification), so routing a bearer token by it would have
+	// caught those too.
+	PrefixDeviceSession = "olm_"
 )
 
 // secretBytes is the entropy of generated keys and tokens (192 bits).
@@ -37,7 +42,7 @@ func HashSecret(secret string) []byte {
 // DisplayPrefix is the non-secret part of a key shown in listings: the type
 // prefix plus the first 8 characters (e.g. "olk_1a2b3c4d").
 func DisplayPrefix(secret string) string {
-	for _, p := range []string{PrefixLicenseKey, PrefixAPIKey, PrefixInvitation} {
+	for _, p := range []string{PrefixLicenseKey, PrefixAPIKey, PrefixInvitation, PrefixDeviceSession} {
 		// Generated keys have 48 characters after the prefix; shorter operator-chosen
 		// values that merely start with a type prefix fall through to the half rule.
 		if len(secret) >= len(p)+24 && secret[:len(p)] == p {

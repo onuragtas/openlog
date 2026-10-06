@@ -984,6 +984,7 @@ export const tr: Messages = {
       sessionsDescription: "Hesabınıza giriş yapmış tarayıcılar.",
       current: "Bu oturum",
       unknownDevice: "Bilinmeyen cihaz",
+      mobileDevice: "Mobil uygulama",
       sessionsEmpty: "Etkin oturum yok.",
     },
   },
