@@ -378,6 +378,37 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  mobile:
+    name: mobile (Flutter, openlog console)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The SDK is cloned at a pinned tag rather than installed by a community action: every action in this
+      # workflow comes from actions/, docker/, azure/ or pypa/, and Flutter publishes neither an official
+      # image (the way Dart does, see dart-agent) nor an action of its own.
+      - name: install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+        env:
+          FLUTTER_VERSION: 3.41.8
+      - run: flutter --version
+      - run: flutter pub get
+      # The contract guard. lib/src/api/schema.g.dart is generated from docs/contracts/openapi.yaml, so a
+      # change to the contract that the app has not been regenerated against fails here instead of becoming
+      # a cast error on someone's phone -- the app is a store build and cannot be fixed in step with a deploy.
+      - run: dart run tool/gen_api.dart --check
+      - run: dart analyze --fatal-infos
+      # The generated file is excluded: the generator reproduces it byte for byte (that is what --check above
+      # compares), so running the formatter over it would make the two disagree.
+      - name: dart format
+        run: dart format --output=none --set-exit-if-changed $(find lib test tool -name '*.dart' ! -name '*.g.dart')
+      - run: flutter test
+
   browser-agent:
     name: browser-agent (openlog-browser)
     runs-on: ubuntu-24.04

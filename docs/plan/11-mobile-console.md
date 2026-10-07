@@ -177,18 +177,46 @@ aynı organizasyona bakar.
 Web, OpenAPI'den `web/src/api/schema.gen.ts` üretiyor ve sözleşme değişince `tsc` kırılıyor. Flutter'da bu
 güvenlik ağı doğrudan kurulamaz, yerine konması gerekir:
 
-- OpenAPI'den Dart modelleri üretilir (`openapi-generator` dart-dio ya da `swagger_parser`).
-- **CI bekçisi:** üretimi yeniden koş, işlenmiş dosyalarla karşılaştır, fark varsa düş. `web`'de
-  `npm run gen:api`'nin yaptığı işin aynısı.
+**Yazıldı.** `mobile/tool/gen_api.dart`, `docs/contracts/openapi.yaml`'dan `lib/src/api/schema.g.dart`
+üretiyor; `--check` kipi CI'da sözleşmeyle dosya ayrışmışsa düşüyor (`web`'de `npm run gen:api`'nin yaptığı
+işin aynısı).
 
-Bu bekçi olmazsa bir sözleşme değişikliği mobilde sessizce kırılır ve bunu ilk fark eden kullanıcı olur.
-Flutter seçiminin asıl bedeli bu ek mekanizmadır ve ödenebilir bir bedeldir — ama ödenmesi şarttır.
+Hazır üreticileri önce denedim, ikisi de olmadı:
+
+- **swagger_parser 1.45.0** bu spec'te çöküyor: `type 'List<Object?>' is not a subtype of type
+  'Map<String, dynamic>' in type cast`, 0 dosya. Sebep spec'in OpenAPI **3.1** olması — `type: [string,
+  "null"]` 108 yerde geçiyor, parser ise `type`'ı string sanıyor.
+- **openapi-generator**'ın Dart hedefleri bu işe JVM istiyor ve 3.1'i deneysel sayıyor.
+
+İkisi de ayrıca uygulamanın ~10 uç nokta ayrıştırdığı yerde 278'inin tamamını üretirdi. Ve bu spec'in dolu
+olduğu yapılarda sessizce `dynamic`'e düşen bir üretici, bekçinin **sağlamadığı** bir güvenliği sağlıyormuş
+gibi gösterir — ki bu, bekçinin hiç olmamasından kötüdür.
+
+Bu yüzden üretici bize ait: spec'in kullandığı yapıları (`$ref`, null dallı `oneOf`, `type: [x, "null"]`,
+gömülü nesneler, enum, dizi, map, `Timestamp`) biliyor ve tanımadığı bir şeyde **yüksek sesle duruyor**.
+Nitekim ilk koşuda `Role`'de durdu; doğrusu bir dalı `dynamic`'e açmak değil, üreticiye o yapıyı öğretmekti.
+
+İçindeki iki karar:
+
+- **Bilinmeyen enum değeri `unknown` oluyor, istisna atmıyor.** Mağazadaki uygulama sunucuyla aynı anda
+  güncellenmediği için, sunucuya eklenen bir rol eski telefonlarda çalışan bir ekranı düşürmemeli.
+- **Eksik ya da yanlış tipte zorunlu alan, yolunu söyleyerek hata veriyor**
+  (`DeviceSession.me.organizations[0].name`). Üç ekran sonraki "unexpected null", bir sözleşme kırığının
+  alakasız bir hata raporuna dönüşme biçimidir.
+
+Hata gövdeleri bilinçli olarak **üretilmiyor**: 502'yi bir proxy HTML olarak döndürebilir, captive portal
+her şeyi yanıtlayabilir. Sözleşmenin söz veremediği tek şekil orası, o yüzden `client.dart` onu toleranslı
+ayrıştırıyor ve "ulaşılamıyor" ile "sunucu reddetti"yi ayrı tutuyor — kişiye söylenecek şey farklı.
 
 ### 4.2 i18n
 
 Web'de `en.ts` tip kaynağı, `tr.ts` ise `Messages` olarak tipli; eksik anahtar `tsc`'yi kırıyor. Mobilde
 sözlükleri çatallamamak için bu dosyaları ARB'ye çeviren bir betik yazılır. Çeviriyi iki yerde ayrı
 sürdürmek, ikisinin de eksik kalmasıyla sonuçlanır.
+
+Bu köprü Faz 0'da değil **Faz 1'de**, ilk ekranlarla birlikte yazılıyor. Çevrilecek tek bir metin yokken
+kurulan bir çeviri altyapısı, ilk gerçek ekran geldiğinde elden geçirilir; o yüzden Faz 0'ın yer tutucu
+ekranında bilerek neredeyse hiç kullanıcıya görünen metin yok.
 
 ### 4.3 Grafikler
 
@@ -202,7 +230,7 @@ bağlı. Mobil için kullanmak, raporlara bağlı bir mekanizmayı amacının d�
 
 | Faz | İçerik | Çıktı |
 |---|---|---|
-| **0** | Depo iskeleti, Dart tip üretimi + CI bekçisi, i18n köprüsü | Boş ama sözleşmeye bağlı uygulama |
+| **0** ✅ | `mobile/` iskeleti, Dart tip üretimi + CI bekçisi, API istemcisi, 22 test | Sözleşmeye bağlı temel |
 | **1** | Sunucu adresi (§2), kayıt ve giriş (§3.3), **cihaz oturumu (§3.2)**, organizasyon seçimi | Uygulama bağlanıyor, kalıcı oturum açıyor |
 | **2** | **Alarmlar:** açık alarm listesi, detay, tetikleme grafiği, susturma/onaylama | Uygulamanın var olma sebebi |
 | **3** | **Servis sağlığı:** APM servis listesi (RED), servis detayı, hatalar | Alarmdan sonra bakılan ilk yer |
