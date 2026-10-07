@@ -15,15 +15,24 @@ openlog installation; it touches none of them.
 | `lib/src/api/schema.g.dart` | **Generated.** Data classes from `docs/contracts/openapi.yaml` |
 | `tool/gen_api.dart` | The generator, and `--check` for CI |
 | `lib/src/api/client.dart` | One installation over HTTP: address handling, bearer token, org header, errors |
-| `lib/main.dart` | Placeholder screen. The sign-in flow is the next phase |
+| `lib/src/session.dart` | Which installation, which person, which organization — the only mutable state above the widgets |
+| `lib/src/storage/token_store.dart` | The device token in Keychain / EncryptedSharedPreferences |
+| `lib/src/ui/` | Server address, sign in and sign up, signed in |
+| `lib/l10n/` | `app_en.arb`, `app_tr.arb`, and what gen-l10n makes of them |
+| `tool/check_l10n.dart` | Fails when the two dictionaries disagree |
 
 ```
 flutter pub get
 dart run tool/gen_api.dart        # regenerate after a contract change
 dart run tool/gen_api.dart --check
+dart run tool/check_l10n.dart
 dart analyze --fatal-infos
+dart format --output=none --set-exit-if-changed lib test tool
 flutter test
 ```
+
+`dart analyze`, not `flutter analyze`: the latter crashes on some setups with
+`analysis server exited with code 64`. CI runs `dart analyze`.
 
 ## The generated schema, and why the generator is ours
 
@@ -66,6 +75,28 @@ Add a type by putting it in `schemaTargets` (named schemas) or `responseTargets`
 (bodies declared inline on a path), then regenerating. Only what the app parses
 is generated, so the file stays the size of the app's needs.
 
+## Turkish and English, without a bridge from the web
+
+The plan ([11-mobile-console.md](../docs/plan/11-mobile-console.md) §4.2) called
+for generating these dictionaries from the web app's `en.ts`/`tr.ts` so the two
+could not drift. That is not what is here, and the reason is a measurement: the
+web dictionaries are **4985 lines**, and this app shows about 56 strings.
+Generating from them would carry thousands of keys no screen reads, to protect
+against drift in a handful.
+
+So the ARB files are the app's own, and where a string exists on both sides the
+web's wording is used verbatim — "openlog'a giriş yap", "E-posta veya parola
+hatalı." — so the two products speak the same Turkish. The risk that is real,
+a key translated in one language and not the other, is caught directly:
+`tool/check_l10n.dart` fails when the key sets differ, and when the same key
+uses different placeholders in the two files (`{min}` against `{sayi}` throws
+on the one screen that formats it). gen-l10n only warns and falls back to
+English, which is a Turkish screen with English words on it that a user finds
+before CI does.
+
+Revisit this when the app grows into screens the web already has — alerts,
+services, logs. The overlap will be larger there than it is for a sign-in form.
+
 ## Errors are the one shape the contract cannot promise
 
 `client.dart` parses error bodies tolerantly, on purpose. A 502 can come from a
@@ -83,6 +114,20 @@ domain would strand installed copies; the app therefore assumes nothing else
 about it — no certificate pinning, no code path of its own — and the field stays
 editable. To the app, the hosted installation is a self-hosted one with the box
 already filled in.
+
+## What is not verified here
+
+CI runs the tests on Linux. It does **not** build for iOS or Android, so the
+native side of `flutter_secure_storage` — Keychain entitlements, the Android
+`minSdk`, the CocoaPods deployment target — is not exercised there.
+`flutter build apk --debug` was run once by hand and passed; iOS has not been
+built at all.
+
+If a build fails with `Invalid resource directory name` on something like
+`mipmap-hdpi 2`, that is not this project: the repository lives in iCloud Drive,
+which makes `<name> 2` copies of files and directories. They are not tracked by
+git, so CI stays green while the local build breaks. Delete them and build
+again.
 
 ## Releases
 

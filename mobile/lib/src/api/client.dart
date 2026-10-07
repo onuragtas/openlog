@@ -164,6 +164,35 @@ class OpenlogClient {
     return session;
   }
 
+  /// Creates an account and the organization it owns, then signs this device in.
+  ///
+  /// Two calls, because POST /api/v1/auth/signup answers the way the web needs
+  /// it to -- a session cookie -- and a phone needs a bearer token. Signing in
+  /// straight afterwards with the same credentials is the whole difference.
+  ///
+  /// `organization_name` is required by the contract, so this button creates an
+  /// installation owner rather than a user: someone invited to an existing
+  /// organization accepts that invitation on the web and then signs in here.
+  Future<DeviceSession> signUp({
+    required String email,
+    required String password,
+    required String name,
+    required String organizationName,
+    required String deviceName,
+  }) async {
+    await _send(
+      'POST',
+      '/api/v1/auth/signup',
+      body: {
+        'email': email,
+        'password': password,
+        'name': name,
+        'organization_name': organizationName,
+      },
+    );
+    return signIn(email: email, password: password, deviceName: deviceName);
+  }
+
   /// Who the token belongs to, which organizations they are in and their role
   /// in the selected one. Read on every start, because a role change or a
   /// removed membership applies to the next request.

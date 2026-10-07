@@ -44,7 +44,7 @@ void main(List<String> args) {
     exit(2);
   }
   final spec = loadYaml(specFile.readAsStringSync()) as YamlMap;
-  final out = Generator(spec).run();
+  final out = _formatted(Generator(spec).run());
 
   final target = File('lib/src/api/schema.g.dart');
   if (check) {
@@ -61,6 +61,27 @@ void main(List<String> args) {
   }
   target.writeAsStringSync(out);
   stdout.writeln('wrote ${target.path}');
+}
+
+/// Runs the output through `dart format`, so the committed file is formatted
+/// like every other file and `dart format --set-exit-if-changed` in CI needs no
+/// exception for it -- an exception that had to be written as a `find` in the
+/// workflow, which is its own small problem. Emitting formatted code by hand
+/// would mean guessing at the formatter's line breaking; shelling out to the
+/// SDK's own formatter means the two cannot disagree about a version either.
+String _formatted(String source) {
+  final tmp = Directory.systemTemp.createTempSync('openlog_gen_api');
+  try {
+    final file = File('${tmp.path}/schema.g.dart')..writeAsStringSync(source);
+    final r = Process.runSync('dart', ['format', file.path]);
+    if (r.exitCode != 0) {
+      stderr.writeln('gen_api: dart format failed: ${r.stderr}');
+      exit(2);
+    }
+    return file.readAsStringSync();
+  } finally {
+    tmp.deleteSync(recursive: true);
+  }
 }
 
 /// A Dart type and whether the field holding it may be null.

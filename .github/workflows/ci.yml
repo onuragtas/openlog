@@ -402,11 +402,14 @@ jobs:
       # change to the contract that the app has not been regenerated against fails here instead of becoming
       # a cast error on someone's phone -- the app is a store build and cannot be fixed in step with a deploy.
       - run: dart run tool/gen_api.dart --check
+      # The other guard: gen-l10n only warns about a missing translation and then
+      # falls back to English, which is a Turkish screen with English words on it,
+      # found by a user rather than here.
+      - run: dart run tool/check_l10n.dart
       - run: dart analyze --fatal-infos
-      # The generated file is excluded: the generator reproduces it byte for byte (that is what --check above
-      # compares), so running the formatter over it would make the two disagree.
-      - name: dart format
-        run: dart format --output=none --set-exit-if-changed $(find lib test tool -name '*.dart' ! -name '*.g.dart')
+      # No exception for the generated file: gen_api.dart runs its own output through `dart format`, so the
+      # committed file is formatted like every other one and --check above still reproduces it exactly.
+      - run: dart format --output=none --set-exit-if-changed lib test tool
       - run: flutter test
 
   browser-agent:

@@ -1,0 +1,8 @@
+# Flutter's gen-l10n. The English file is the source: a key that exists there and
+# not in app_tr.arb is a string that would reach a Turkish screen in English, so
+# tool/check_l10n.dart fails on it rather than letting it ship.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: L
+nullable-getter: false

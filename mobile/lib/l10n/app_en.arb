@@ -1,0 +1,81 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "openlog",
+
+  "serverTitle": "Connect to openlog",
+  "serverDescription": "openlog runs on your own server. The address below is the hosted one — replace it with yours if you run your own.",
+  "serverAddressLabel": "Server address",
+  "serverContinue": "Continue",
+  "serverChecking": "Checking…",
+  "serverInvalidAddress": "That does not look like an address.",
+  "serverUnreachable": "Cannot reach {address}. Check the address and your connection.",
+  "@serverUnreachable": {
+    "placeholders": { "address": { "type": "String" } }
+  },
+  "serverNotOpenlog": "That address answered, but not like an openlog server.",
+  "serverChange": "Change server",
+
+  "signInTitle": "Sign in to openlog",
+  "signInDescription": "Use the e-mail address and password of your openlog account.",
+  "emailLabel": "E-mail",
+  "emailHint": "you@example.com",
+  "passwordLabel": "Password",
+  "signInSubmit": "Sign in",
+  "signInChecking": "Signing in…",
+  "signInInvalid": "Wrong e-mail address or password.",
+  "signInRateLimited": "Too many failed attempts. Wait a few minutes and try again.",
+  "signInRequired": "E-mail address and password are required.",
+  "signInStaticMode": "This server runs with OPENLOG_AUTH_MODE=static and has no user accounts.",
+  "deviceNameLabel": "Device name",
+  "deviceNameHelp": "Shown in your session list, so you can tell this device from your others and sign it out.",
+  "deviceNameRequired": "A device name is required.",
+
+  "signUpPrompt": "No account?",
+  "signUpLink": "Create an account",
+  "signUpTitle": "Create your openlog account",
+  "signUpDescription": "Start a new organization. You become its owner and can invite your team.",
+  "nameLabel": "Your name",
+  "orgLabel": "Organization name",
+  "orgHint": "e.g. Acme Inc.",
+  "passwordHintMin": "At least {min} characters, and not your e-mail address.",
+  "@passwordHintMin": {
+    "placeholders": { "min": { "type": "int" } }
+  },
+  "signUpSubmit": "Create account",
+  "signUpSubmitting": "Creating the account…",
+  "signUpRequired": "Organization name, e-mail address and password are required.",
+  "signUpDisabled": "Sign-up is closed on this server. Ask an administrator of your organization for an invitation.",
+  "signUpEmailTaken": "An account with this e-mail address already exists. Sign in instead.",
+  "signUpRateLimited": "Too many sign-up attempts. Try again later.",
+  "signUpOnWeb": "This server asks for a CAPTCHA when signing up, which this app cannot show. Create the account at {address} in a browser, then sign in here.",
+  "@signUpOnWeb": {
+    "placeholders": { "address": { "type": "String" } }
+  },
+  "signUpVerificationNote": "We will e-mail you a link to confirm your address.",
+  "haveAccount": "Already have an account?",
+  "toSignIn": "Sign in",
+
+  "homeSignedInAs": "Signed in as {email}",
+  "@homeSignedInAs": {
+    "placeholders": { "email": { "type": "String" } }
+  },
+  "homeOrganization": "Organization",
+  "homeRole": "Role",
+  "homeSignOut": "Sign out",
+  "homeNextPhase": "Alerts, services and logs arrive in the next phase.",
+  "homeSwitchOrganization": "Switch organization",
+
+  "roleOwner": "Owner",
+  "roleAdmin": "Admin",
+  "roleMember": "Member",
+  "roleViewer": "Viewer",
+  "roleUnknown": "Unknown role",
+
+  "retry": "Try again",
+  "cancel": "Cancel",
+  "errorUnexpected": "Something went wrong: {detail}",
+  "@errorUnexpected": {
+    "placeholders": { "detail": { "type": "String" } }
+  }
+}

@@ -16,7 +16,8 @@ class ApiShapeError implements Exception {
   final String detail;
 
   @override
-  String toString() => 'the server sent something this app cannot read at "$path": $detail';
+  String toString() =>
+      'the server sent something this app cannot read at "$path": $detail';
 }
 
 Map<String, Object?> _obj(Object? v, String path) {
@@ -24,14 +25,24 @@ Map<String, Object?> _obj(Object? v, String path) {
   throw ApiShapeError(path, 'expected an object, got ${v.runtimeType}');
 }
 
-T _req<T>(Map<String, Object?> m, String key, String path, T Function(Object?, String) read) {
+T _req<T>(
+  Map<String, Object?> m,
+  String key,
+  String path,
+  T Function(Object?, String) read,
+) {
   if (!m.containsKey(key) || m[key] == null) {
     throw ApiShapeError('$path.$key', 'required field is missing');
   }
   return read(m[key], '$path.$key');
 }
 
-T? _opt<T>(Map<String, Object?> m, String key, String path, T Function(Object?, String) read) {
+T? _opt<T>(
+  Map<String, Object?> m,
+  String key,
+  String path,
+  T Function(Object?, String) read,
+) {
   final v = m[key];
   return v == null ? null : read(v, '$path.$key');
 }
@@ -79,7 +90,11 @@ List<T> _list<T>(Object? v, String path, T Function(Object?, String) read) {
   );
 }
 
-Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read) {
+Map<String, T> _map<T>(
+  Object? v,
+  String path,
+  T Function(Object?, String) read,
+) {
   final m = _obj(v, path);
   return {for (final e in m.entries) e.key: read(e.value, '$path.${e.key}')};
 }
@@ -109,7 +124,6 @@ enum AuthConfigMode {
   }
 }
 
-
 /// AuthConfigCaptchaProvider of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -134,7 +148,6 @@ enum AuthConfigCaptchaProvider {
     return unknown;
   }
 }
-
 
 /// MeAuth of the contract.
 ///
@@ -163,7 +176,6 @@ enum MeAuth {
   }
 }
 
-
 /// MeApiKeyRole of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -189,7 +201,6 @@ enum MeApiKeyRole {
     return unknown;
   }
 }
-
 
 /// Role of the contract.
 ///
@@ -218,7 +229,6 @@ enum Role {
   }
 }
 
-
 /// SessionKind of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -243,7 +253,6 @@ enum SessionKind {
     return unknown;
   }
 }
-
 
 /// UserLanguage of the contract.
 ///
@@ -271,7 +280,6 @@ enum UserLanguage {
   }
 }
 
-
 /// `AuthConfig` of the openlog API contract.
 class AuthConfig {
   const AuthConfig({
@@ -291,8 +299,18 @@ class AuthConfig {
       signupEnabled: _req(m, 'signup_enabled', path, _bool),
       passwordMinLength: _req(m, 'password_min_length', path, _int),
       emailEnabled: _req(m, 'email_enabled', path, _bool),
-      emailVerificationRequired: _req(m, 'email_verification_required', path, _bool),
-      captcha: _opt(m, 'captcha', path, (v, p) => AuthConfigCaptcha.fromJson(v, p)),
+      emailVerificationRequired: _req(
+        m,
+        'email_verification_required',
+        path,
+        _bool,
+      ),
+      captcha: _opt(
+        m,
+        'captcha',
+        path,
+        (v, p) => AuthConfigCaptcha.fromJson(v, p),
+      ),
       ssoEnabled: _opt(m, 'sso_enabled', path, _bool),
     );
   }
@@ -306,15 +324,14 @@ class AuthConfig {
   final bool? ssoEnabled;
 }
 
-
 /// `AuthConfigCaptcha` of the openlog API contract.
 class AuthConfigCaptcha {
-  const AuthConfigCaptcha({
-    required this.provider,
-    required this.siteKey,
-  });
+  const AuthConfigCaptcha({required this.provider, required this.siteKey});
 
-  factory AuthConfigCaptcha.fromJson(Object? json, [String path = 'AuthConfigCaptcha']) {
+  factory AuthConfigCaptcha.fromJson(
+    Object? json, [
+    String path = 'AuthConfigCaptcha',
+  ]) {
     final m = _obj(json, path);
     return AuthConfigCaptcha(
       provider: _req(m, 'provider', path, AuthConfigCaptchaProvider.fromJson),
@@ -325,7 +342,6 @@ class AuthConfigCaptcha {
   final AuthConfigCaptchaProvider provider;
   final String siteKey;
 }
-
 
 /// `Me` of the openlog API contract.
 class Me {
@@ -345,9 +361,19 @@ class Me {
       auth: _req(m, 'auth', path, MeAuth.fromJson),
       user: _opt(m, 'user', path, (v, p) => User.fromJson(v, p)),
       apiKey: _opt(m, 'api_key', path, (v, p) => MeApiKey.fromJson(v, p)),
-      organization: _opt(m, 'organization', path, (v, p) => OrgRef.fromJson(v, p)),
+      organization: _opt(
+        m,
+        'organization',
+        path,
+        (v, p) => OrgRef.fromJson(v, p),
+      ),
       role: _opt(m, 'role', path, Role.fromJson),
-      organizations: _req(m, 'organizations', path, (v, p) => _list<OrgRef>(v, p, (v, p) => OrgRef.fromJson(v, p))),
+      organizations: _req(
+        m,
+        'organizations',
+        path,
+        (v, p) => _list<OrgRef>(v, p, (v, p) => OrgRef.fromJson(v, p)),
+      ),
       csrfToken: _opt(m, 'csrf_token', path, _str),
     );
   }
@@ -361,14 +387,9 @@ class Me {
   final String? csrfToken;
 }
 
-
 /// `MeApiKey` of the openlog API contract.
 class MeApiKey {
-  const MeApiKey({
-    required this.id,
-    required this.name,
-    required this.role,
-  });
+  const MeApiKey({required this.id, required this.name, required this.role});
 
   factory MeApiKey.fromJson(Object? json, [String path = 'MeApiKey']) {
     final m = _obj(json, path);
@@ -383,7 +404,6 @@ class MeApiKey {
   final String name;
   final MeApiKeyRole role;
 }
-
 
 /// `Session` of the openlog API contract.
 class Session {
@@ -425,7 +445,6 @@ class Session {
   final String deviceName;
 }
 
-
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -454,7 +473,6 @@ class User {
   final UserLanguage language;
 }
 
-
 /// `OrgRef` of the openlog API contract.
 class OrgRef {
   const OrgRef({
@@ -480,7 +498,6 @@ class OrgRef {
   final Role? role;
 }
 
-
 /// `DeviceSession` of the openlog API contract.
 class DeviceSession {
   const DeviceSession({
@@ -490,7 +507,10 @@ class DeviceSession {
     required this.me,
   });
 
-  factory DeviceSession.fromJson(Object? json, [String path = 'DeviceSession']) {
+  factory DeviceSession.fromJson(
+    Object? json, [
+    String path = 'DeviceSession',
+  ]) {
     final m = _obj(json, path);
     return DeviceSession(
       token: _req(m, 'token', path, _str),
@@ -505,4 +525,3 @@ class DeviceSession {
   final DateTime expiresAt;
   final Me me;
 }
-

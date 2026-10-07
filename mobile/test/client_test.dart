@@ -7,42 +7,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 
-/// One request as the server saw it.
-class Seen {
-  Seen(this.method, this.path, this.headers, this.body);
-  final String method;
-  final String path;
-  final Map<String, String> headers;
-  final String body;
-}
-
-/// A server that answers from [handler] and records what it was sent.
-class FakeServer {
-  FakeServer(this._server);
-
-  static Future<FakeServer> start(
-    void Function(HttpRequest req, Seen seen) handler,
-  ) async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = FakeServer(server);
-    server.listen((req) async {
-      final body = await utf8.decoder.bind(req).join();
-      final headers = <String, String>{};
-      req.headers.forEach((k, v) => headers[k.toLowerCase()] = v.join(','));
-      final seen = Seen(req.method, req.uri.path, headers, body);
-      fake.requests.add(seen);
-      handler(req, seen);
-      await req.response.close();
-    });
-    return fake;
-  }
-
-  final HttpServer _server;
-  final requests = <Seen>[];
-
-  String get baseUrl => 'http://127.0.0.1:${_server.port}';
-  Future<void> stop() => _server.close(force: true);
-}
+import 'fake_server.dart';
 
 const _authConfig = {
   'mode': 'postgres',
@@ -81,13 +46,6 @@ Map<String, Object?> _deviceSession(String token) => {
     'csrf_token': null,
   },
 };
-
-void writeJson(HttpRequest req, int status, Object? body) {
-  req.response
-    ..statusCode = status
-    ..headers.contentType = ContentType.json
-    ..write(jsonEncode(body));
-}
 
 void main() {
   group('normalizeBaseUrl', () {

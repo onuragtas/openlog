@@ -214,9 +214,19 @@ Web'de `en.ts` tip kaynağı, `tr.ts` ise `Messages` olarak tipli; eksik anahtar
 sözlükleri çatallamamak için bu dosyaları ARB'ye çeviren bir betik yazılır. Çeviriyi iki yerde ayrı
 sürdürmek, ikisinin de eksik kalmasıyla sonuçlanır.
 
-Bu köprü Faz 0'da değil **Faz 1'de**, ilk ekranlarla birlikte yazılıyor. Çevrilecek tek bir metin yokken
-kurulan bir çeviri altyapısı, ilk gerçek ekran geldiğinde elden geçirilir; o yüzden Faz 0'ın yer tutucu
-ekranında bilerek neredeyse hiç kullanıcıya görünen metin yok.
+**Köprü yazılmadı, ve gerekçesi bir ölçüm.** Web sözlükleri **4985 satır**; uygulama Faz 1'de **56** metin
+gösteriyor. Onlardan üretmek, bir avuç anahtardaki çatallanmayı önlemek için hiçbir ekranın okumadığı binlerce
+anahtarı taşımak olurdu.
+
+Bunun yerine ARB dosyaları uygulamanın kendisinin, ama **örtüşen her metinde web'in Türkçesi birebir
+kullanılıyor** ("openlog'a giriş yap", "E-posta veya parola hatalı.") — iki ürün aynı Türkçeyi konuşsun diye.
+Gerçek risk olan "bir dilde çevrilmiş, diğerinde unutulmuş anahtar" ise doğrudan yakalanıyor:
+`tool/check_l10n.dart`, anahtar kümeleri ayrıştığında **ve** aynı anahtar iki dosyada farklı yer tutucu
+kullandığında (`{min}`'e karşı `{sayi}`) düşüyor. gen-l10n bunu yalnızca uyarıp İngilizceye düşüyor, ki o da
+kullanıcının CI'dan önce gördüğü "Türkçe ekranda İngilizce kelime" demek.
+
+Uygulama web'de zaten var olan ekranlara (alarmlar, servisler, loglar) büyüdüğünde yeniden değerlendirilmeli:
+örtüşme orada bir giriş formundakinden çok daha büyük olacak.
 
 ### 4.3 Grafikler
 
@@ -231,7 +241,7 @@ bağlı. Mobil için kullanmak, raporlara bağlı bir mekanizmayı amacının d�
 | Faz | İçerik | Çıktı |
 |---|---|---|
 | **0** ✅ | `mobile/` iskeleti, Dart tip üretimi + CI bekçisi, API istemcisi, 22 test | Sözleşmeye bağlı temel |
-| **1** | Sunucu adresi (§2), kayıt ve giriş (§3.3), **cihaz oturumu (§3.2)**, organizasyon seçimi | Uygulama bağlanıyor, kalıcı oturum açıyor |
+| **1** ✅ | Sunucu adresi (§2), kayıt ve giriş (§3.3), **cihaz oturumu (§3.2)**, organizasyon seçimi | Uygulama bağlanıyor, kalıcı oturum açıyor |
 | **2** | **Alarmlar:** açık alarm listesi, detay, tetikleme grafiği, susturma/onaylama | Uygulamanın var olma sebebi |
 | **3** | **Servis sağlığı:** APM servis listesi (RED), servis detayı, hatalar | Alarmdan sonra bakılan ilk yer |
 | **4** | Loglar ve izler: arama, son hatalar, trace detayı | Teşhis |
