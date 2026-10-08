@@ -31,6 +31,9 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# Also as a plain entry: keeping the build output out of iCloud means making
+# `build` a symlink, and `/build/` matches only a directory (see README).
+/build
 /coverage/
 
 # Symbolication related
