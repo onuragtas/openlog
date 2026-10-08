@@ -375,4 +375,110 @@ class LEn extends L {
 
   @override
   String get closeMenu => 'Close menu';
+
+  @override
+  String get navHosts => 'Hosts';
+
+  @override
+  String get navContainers => 'Containers';
+
+  @override
+  String get navKubernetes => 'Kubernetes';
+
+  @override
+  String get navDatabases => 'Databases';
+
+  @override
+  String get navSlos => 'SLOs';
+
+  @override
+  String get navSynthetics => 'Synthetics';
+
+  @override
+  String get navJobs => 'Job monitoring';
+
+  @override
+  String get navVulnerabilities => 'Vulnerabilities';
+
+  @override
+  String get sectionForbidden =>
+      'Your role does not allow reading this section.';
+
+  @override
+  String get sectionSearch => 'Search';
+
+  @override
+  String get hostsEmpty => 'No host is reporting.';
+
+  @override
+  String get containersEmpty => 'No container is reporting.';
+
+  @override
+  String get podsEmpty => 'No pod found.';
+
+  @override
+  String get databasesEmpty => 'No database instance is reporting.';
+
+  @override
+  String get slosEmpty => 'No SLO defined.';
+
+  @override
+  String get syntheticsEmpty => 'No synthetic check defined.';
+
+  @override
+  String get jobsEmpty => 'No job monitor defined.';
+
+  @override
+  String get vulnerabilitiesEmpty => 'No vulnerability found.';
+
+  @override
+  String get statCpu => 'CPU';
+
+  @override
+  String get statMemory => 'Memory';
+
+  @override
+  String get statDisk => 'Disk';
+
+  @override
+  String get statRestarts => 'restarts';
+
+  @override
+  String get statUptime => 'uptime';
+
+  @override
+  String get statRuns => 'runs';
+
+  @override
+  String get statFailures => 'failures';
+
+  @override
+  String get statBudget => 'budget left';
+
+  @override
+  String get statObjective => 'objective';
+
+  @override
+  String get statScore => 'score';
+
+  @override
+  String get statHosts => 'hosts';
+
+  @override
+  String get statCalls => 'calls';
+
+  @override
+  String get stateDisabled => 'Disabled';
+
+  @override
+  String get stateNotReporting => 'Not reporting';
+
+  @override
+  String get stateReady => 'Ready';
+
+  @override
+  String get sloMet => 'Met';
+
+  @override
+  String get sloBreached => 'Breached';
 }

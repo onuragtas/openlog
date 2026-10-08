@@ -273,6 +273,62 @@ class OpenlogClient {
     await _send('POST', '/api/v1/query', body: {'query': query}),
   );
 
+  // ---- the sections that are a list and nothing more ----
+  //
+  // Each is one GET with an optional search. They are grouped here rather than
+  // spread out because that is all they are; anything that needs more than a
+  // page and a query gets its own method above.
+
+  Future<HostPage> hosts({String q = ''}) async =>
+      HostPage.fromJson(await _send('GET', _listPath('/api/v1/hosts', q)));
+
+  Future<ContainerPage> containers({String q = ''}) async =>
+      ContainerPage.fromJson(
+        await _send('GET', _listPath('/api/v1/containers', q)),
+      );
+
+  Future<PodPage> pods({String q = ''}) async => PodPage.fromJson(
+    await _send('GET', _listPath('/api/v1/kubernetes/pods', q)),
+  );
+
+  /// `status=true` asks the server to compute each SLO's budget, which is the
+  /// only reason to look at this list on a phone.
+  Future<SloPage> slos({String q = ''}) async => SloPage.fromJson(
+    await _send('GET', _listPath('/api/v1/slos', q, extra: {'status': 'true'})),
+  );
+
+  Future<SyntheticPage> synthetics({String q = ''}) async =>
+      SyntheticPage.fromJson(
+        await _send('GET', _listPath('/api/v1/synthetics/checks', q)),
+      );
+
+  Future<JobMonitorPage> jobMonitors({String q = ''}) async =>
+      JobMonitorPage.fromJson(
+        await _send('GET', _listPath('/api/v1/jobs/monitors', q)),
+      );
+
+  Future<VulnPage> vulnerabilities({String q = ''}) async => VulnPage.fromJson(
+    await _send('GET', _listPath('/api/v1/vulnerabilities', q)),
+  );
+
+  Future<DbInstancePage> dbInstances({String q = ''}) async =>
+      DbInstancePage.fromJson(
+        await _send('GET', _listPath('/api/v1/db/instances', q)),
+      );
+
+  /// A path with `q` only when there is one: an empty `q=` is a filter that
+  /// matches the empty string on some endpoints and everything on others, and
+  /// neither is what an empty search box means.
+  String _listPath(
+    String path,
+    String q, {
+    Map<String, String> extra = const {},
+  }) {
+    final query = <String, String>{...extra};
+    if (q.trim().isNotEmpty) query['q'] = q.trim();
+    return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
+  }
+
   /// Ends this device's session on the server and forgets the token here.
   ///
   /// The token is dropped even when the request fails: the person asked to be

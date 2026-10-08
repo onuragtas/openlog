@@ -309,6 +309,29 @@ uygulamaya push göndermesi mümkün değildir — kendi derlemesini yayınlamas
 Push'un sona bırakılması bilinçli: önce uygulamanın gösterecek bir şeyi olması gerekir. Faz 2–5 bittiğinde
 kullanıcı alarmı Slack'ten duyup uygulamayı açar, ki bu zaten bugünkü akıştır.
 
+## 6b. Web ile aynı deneyim
+
+Faz 0–5 çalışan bir uygulama verdi ama *openlog gibi* görünmüyordu. Bu bölüm onu kapatıyor.
+
+**Renkler ölçülerek alındı, benzetilerek değil.** `web/src/index.css`'teki OKLCH belirteçleri standart OKLab
+matrisleriyle sRGB'ye çevrilip `mobile/lib/src/ui/theme.dart`'a birebir taşındı. İlk ortaya çıkan şey
+uygulamanın baştan beri **yanlış renkte** olduğuydu: openlog teal (`#00736A`), tohumlanmış bir
+`ColorScheme` ise mavi üretiyordu. Artık tohum yok.
+
+**Bileşenler web'in biçiminde:** kart `rounded-xl border bg-card shadow-xs` (12 piksel, kenarlıklı,
+gölgesiz — Material'ın varsayılanının tersi), rozet ise anlamsal rengin %15–20 tonu artı ayrı bir metin
+belirteci, ki index.css bunları WCAG AA için zaten ayrı tutuyor.
+
+**Gezinme de web'in:** web kenar çubuğunu `lg` altında soldan açılan bir Sheet'e indiriyor, yani çekmece
+mobil icadı değil. Aynı düz liste, aynı sıra, aynı etiketler. Uygulamanın sahip olduğu on üç bölüm web'in
+yerlerinde duruyor; sahip olmadıkları listelenmiyor — hiçbir yere gitmeyen on satır da web'in deneyimi
+değil.
+
+İki yerde bilerek ayrıldık: uygulamanın **nerede açıldığı** (liste sırası web'in, ama nöbet uygulaması yanan
+şeyle açılır) ve **bölümlerin ne zaman yüklendiği** (web her sayfayı gezinince yükler; burada `IndexedStack`
+hepsini kuruyor ama her bölüm ilk bakıldığında yükleniyor — on üç ekran kurmak ucuz, henüz kimsenin sormadığı
+on üç soruyu sunucuya sormak değil).
+
 ## 7. Depo yerleşimi ve sürüm hattı
 
 Monorepo'da `mobile/` dizini, `web/` ve `agents/` ile tutarlıdır ve tip üretimi bekçisini (§4.1) mümkün

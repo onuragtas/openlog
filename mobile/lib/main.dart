@@ -6,13 +6,10 @@
 import 'package:flutter/material.dart';
 
 import 'l10n/app_localizations.dart';
-import 'src/alerts.dart';
 import 'src/api/client.dart';
+import 'src/sections.dart';
 import 'src/session.dart';
 import 'src/storage/token_store.dart';
-import 'src/dashboards.dart';
-import 'src/logs.dart';
-import 'src/services.dart';
 import 'src/ui/app_shell.dart';
 import 'src/ui/server_screen.dart';
 import 'src/ui/theme.dart';
@@ -25,10 +22,7 @@ class OpenlogApp extends StatefulWidget {
     super.key,
     required this.store,
     this.session,
-    this.alerts,
-    this.services,
-    this.logs,
-    this.dashboards,
+    this.sections,
   });
 
   /// Where the device token is kept between launches.
@@ -36,12 +30,7 @@ class OpenlogApp extends StatefulWidget {
 
   /// Injected by tests, which cannot reach Keychain or a real server.
   final SessionController? session;
-
-  /// Injected by tests so the lists can be driven without a server.
-  final AlertsController? alerts;
-  final ServicesController? services;
-  final LogsController? logs;
-  final DashboardsController? dashboards;
+  final Sections? sections;
 
   @override
   State<OpenlogApp> createState() => _OpenlogAppState();
@@ -51,58 +40,37 @@ class _OpenlogAppState extends State<OpenlogApp> {
   late final SessionController _session;
   late final bool _ownsSession;
 
+  Sections? _sections;
+  OpenlogClient? _sectionsClient;
+
   @override
   void initState() {
     super.initState();
     _ownsSession = widget.session == null;
     _session = widget.session ?? SessionController(store: widget.store);
-    // Before the first frame decides anything: a stored token has to be checked
-    // against the server, because it can have been revoked from the web.
+    // Before the first frame decides anything: a stored token has to be
+    // checked against the server, because it can have been revoked from the
+    // web.
     _session.restore();
   }
 
-  AlertsController? _alerts;
-  ServicesController? _services;
-  LogsController? _logs;
-  DashboardsController? _dashboards;
-  OpenlogClient? _listsClient;
-
-  /// One set of list controllers per signed-in client. Keyed on the client
+  /// One set of section controllers per signed-in client. Keyed on the client
   /// rather than kept for the app's life: signing out and back in, or changing
   /// server, must not leave the previous installation's rows on screen.
-  bool _listsFor(OpenlogClient? client) {
-    if (widget.alerts != null) {
-      _alerts = widget.alerts;
-      _services = widget.services ?? _services;
-      _logs = widget.logs ?? _logs;
-      _dashboards = widget.dashboards ?? _dashboards;
+  Sections? _sectionsFor(OpenlogClient? client) {
+    if (widget.sections != null) return widget.sections;
+    if (client == null) return null;
+    if (!identical(_sectionsClient, client)) {
+      _sections?.dispose();
+      _sections = Sections(client: client);
+      _sectionsClient = client;
     }
-    if (client == null) {
-      return _alerts != null &&
-          _services != null &&
-          _logs != null &&
-          _dashboards != null;
-    }
-    if (!identical(_listsClient, client)) {
-      _alerts?.dispose();
-      _services?.dispose();
-      _logs?.dispose();
-      _dashboards?.dispose();
-      _alerts = widget.alerts ?? AlertsController(client);
-      _services = widget.services ?? ServicesController(client);
-      _logs = widget.logs ?? LogsController(client);
-      _dashboards = widget.dashboards ?? DashboardsController(client);
-      _listsClient = client;
-    }
-    return true;
+    return _sections;
   }
 
   @override
   void dispose() {
-    _alerts?.dispose();
-    _services?.dispose();
-    _logs?.dispose();
-    _dashboards?.dispose();
+    _sections?.dispose();
     if (_ownsSession) _session.dispose();
     super.dispose();
   }
@@ -129,20 +97,15 @@ class _OpenlogAppState extends State<OpenlogApp> {
             case SessionStage.needsSignIn:
               return SignInScreen(session: _session);
             case SessionStage.signedIn:
-              if (!_listsFor(_session.client)) {
+              final sections = _sectionsFor(_session.client);
+              if (sections == null) {
                 // Signed in with no client is not a state the controller
                 // produces; a spinner beats crashing if it ever becomes one.
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
-              return AppShell(
-                session: _session,
-                alerts: _alerts!,
-                services: _services!,
-                logs: _logs!,
-                dashboards: _dashboards!,
-              );
+              return AppShell(session: _session, sections: sections);
           }
         },
       ),

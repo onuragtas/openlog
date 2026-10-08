@@ -595,6 +595,86 @@ enum DashboardThresholdSeverity {
   }
 }
 
+/// SloSliType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SloSliType {
+  availability('availability'),
+  latency('latency'),
+  unknown('');
+
+  const SloSliType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SloSliType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SyntheticAssertionType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SyntheticAssertionType {
+  none('none'),
+  contains('contains'),
+  notContains('not_contains'),
+  jsonPath('json_path'),
+  unknown('');
+
+  const SyntheticAssertionType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SyntheticAssertionType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// VulnSeverity of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum VulnSeverity {
+  critical('critical'),
+  high('high'),
+  medium('medium'),
+  low('low'),
+  none('none'),
+  unknown('');
+
+  const VulnSeverity(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static VulnSeverity fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// `AuthConfig` of the openlog API contract.
 class AuthConfig {
   const AuthConfig({
@@ -1704,6 +1784,203 @@ class DashboardPageList {
   final List<DashboardSummary> dashboards;
 }
 
+/// `HostPage` of the openlog API contract.
+class HostPage {
+  const HostPage({required this.hosts});
+
+  factory HostPage.fromJson(Object? json, [String path = 'HostPage']) {
+    final m = _obj(json, path);
+    return HostPage(
+      hosts: _req(
+        m,
+        'hosts',
+        path,
+        (v, p) => _list<Host>(v, p, (v, p) => Host.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<Host> hosts;
+}
+
+/// `ContainerPage` of the openlog API contract.
+class ContainerPage {
+  const ContainerPage({
+    required this.containers,
+    required this.total,
+    required this.step,
+  });
+
+  factory ContainerPage.fromJson(
+    Object? json, [
+    String path = 'ContainerPage',
+  ]) {
+    final m = _obj(json, path);
+    return ContainerPage(
+      containers: _req(
+        m,
+        'containers',
+        path,
+        (v, p) =>
+            _list<ApiContainer>(v, p, (v, p) => ApiContainer.fromJson(v, p)),
+      ),
+      total: _req(m, 'total', path, _int),
+      step: _req(m, 'step', path, _str),
+    );
+  }
+
+  final List<ApiContainer> containers;
+  final int total;
+  final String step;
+}
+
+/// `PodPage` of the openlog API contract.
+class PodPage {
+  const PodPage({required this.pods, required this.total});
+
+  factory PodPage.fromJson(Object? json, [String path = 'PodPage']) {
+    final m = _obj(json, path);
+    return PodPage(
+      pods: _req(
+        m,
+        'pods',
+        path,
+        (v, p) =>
+            _list<KubernetesPod>(v, p, (v, p) => KubernetesPod.fromJson(v, p)),
+      ),
+      total: _req(m, 'total', path, _int),
+    );
+  }
+
+  final List<KubernetesPod> pods;
+  final int total;
+}
+
+/// `SloPage` of the openlog API contract.
+class SloPage {
+  const SloPage({required this.slos, required this.statusTruncated});
+
+  factory SloPage.fromJson(Object? json, [String path = 'SloPage']) {
+    final m = _obj(json, path);
+    return SloPage(
+      slos: _req(
+        m,
+        'slos',
+        path,
+        (v, p) =>
+            _list<SloListItem>(v, p, (v, p) => SloListItem.fromJson(v, p)),
+      ),
+      statusTruncated: _req(m, 'status_truncated', path, _bool),
+    );
+  }
+
+  final List<SloListItem> slos;
+  final bool statusTruncated;
+}
+
+/// `SyntheticPage` of the openlog API contract.
+class SyntheticPage {
+  const SyntheticPage({required this.checks, required this.locations});
+
+  factory SyntheticPage.fromJson(
+    Object? json, [
+    String path = 'SyntheticPage',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticPage(
+      checks: _req(
+        m,
+        'checks',
+        path,
+        (v, p) => _list<SyntheticCheckListItem>(
+          v,
+          p,
+          (v, p) => SyntheticCheckListItem.fromJson(v, p),
+        ),
+      ),
+      locations: _req(
+        m,
+        'locations',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final List<SyntheticCheckListItem> checks;
+  final List<String> locations;
+}
+
+/// `JobMonitorPage` of the openlog API contract.
+class JobMonitorPage {
+  const JobMonitorPage({required this.monitors});
+
+  factory JobMonitorPage.fromJson(
+    Object? json, [
+    String path = 'JobMonitorPage',
+  ]) {
+    final m = _obj(json, path);
+    return JobMonitorPage(
+      monitors: _req(
+        m,
+        'monitors',
+        path,
+        (v, p) => _list<JobMonitor>(v, p, (v, p) => JobMonitor.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<JobMonitor> monitors;
+}
+
+/// `VulnPage` of the openlog API contract.
+class VulnPage {
+  const VulnPage({required this.vulnerabilities, required this.severityCounts});
+
+  factory VulnPage.fromJson(Object? json, [String path = 'VulnPage']) {
+    final m = _obj(json, path);
+    return VulnPage(
+      vulnerabilities: _req(
+        m,
+        'vulnerabilities',
+        path,
+        (v, p) => _list<VulnGroup>(v, p, (v, p) => VulnGroup.fromJson(v, p)),
+      ),
+      severityCounts: _req(
+        m,
+        'severity_counts',
+        path,
+        (v, p) => _map<int>(v, p, _int),
+      ),
+    );
+  }
+
+  final List<VulnGroup> vulnerabilities;
+  final Map<String, int> severityCounts;
+}
+
+/// `DbInstancePage` of the openlog API contract.
+class DbInstancePage {
+  const DbInstancePage({required this.instances});
+
+  factory DbInstancePage.fromJson(
+    Object? json, [
+    String path = 'DbInstancePage',
+  ]) {
+    final m = _obj(json, path);
+    return DbInstancePage(
+      instances: _req(
+        m,
+        'instances',
+        path,
+        (v, p) => _list<DbInstance>(v, p, (v, p) => DbInstance.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<DbInstance> instances;
+}
+
 /// `LogRecord` of the openlog API contract.
 class LogRecord {
   const LogRecord({
@@ -1755,4 +2032,877 @@ class LogRecord {
   final String spanId;
   final Map<String, String> attributes;
   final Map<String, String> resourceAttributes;
+}
+
+/// `Host` of the openlog API contract.
+class Host {
+  const Host({
+    required this.hostId,
+    required this.hostName,
+    required this.osDescription,
+    required this.arch,
+    required this.agentVersion,
+    required this.lastSeen,
+    required this.resourceAttributes,
+    this.usage,
+  });
+
+  factory Host.fromJson(Object? json, [String path = 'Host']) {
+    final m = _obj(json, path);
+    return Host(
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      osDescription: _req(m, 'os_description', path, _str),
+      arch: _req(m, 'arch', path, _str),
+      agentVersion: _req(m, 'agent_version', path, _str),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      resourceAttributes: _req(
+        m,
+        'resource_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      usage: _opt(m, 'usage', path, (v, p) => HostUsage.fromJson(v, p)),
+    );
+  }
+
+  final String hostId;
+  final String hostName;
+  final String osDescription;
+  final String arch;
+  final String agentVersion;
+  final DateTime lastSeen;
+  final Map<String, String> resourceAttributes;
+  final HostUsage? usage;
+}
+
+/// `ApiContainer` of the openlog API contract.
+class ApiContainer {
+  const ApiContainer({
+    required this.containerId,
+    required this.name,
+    required this.imageName,
+    required this.imageTags,
+    required this.runtime,
+    required this.hostId,
+    required this.hostName,
+    required this.composeProject,
+    required this.composeService,
+    required this.k8sPodName,
+    required this.k8sNamespaceName,
+    required this.k8sContainerName,
+    required this.state,
+    required this.health,
+    this.startedAt,
+    required this.restartCount,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    this.cpuUtilization,
+    this.memoryUsage,
+    this.memoryLimit,
+    required this.cpuSparkline,
+    required this.memorySparkline,
+  });
+
+  factory ApiContainer.fromJson(Object? json, [String path = 'ApiContainer']) {
+    final m = _obj(json, path);
+    return ApiContainer(
+      containerId: _req(m, 'container_id', path, _str),
+      name: _req(m, 'name', path, _str),
+      imageName: _req(m, 'image_name', path, _str),
+      imageTags: _req(
+        m,
+        'image_tags',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      runtime: _req(m, 'runtime', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      composeProject: _req(m, 'compose_project', path, _str),
+      composeService: _req(m, 'compose_service', path, _str),
+      k8sPodName: _req(m, 'k8s_pod_name', path, _str),
+      k8sNamespaceName: _req(m, 'k8s_namespace_name', path, _str),
+      k8sContainerName: _req(m, 'k8s_container_name', path, _str),
+      state: _req(m, 'state', path, _str),
+      health: _req(m, 'health', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      restartCount: _req(m, 'restart_count', path, _int),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      cpuUtilization: _opt(m, 'cpu_utilization', path, _num),
+      memoryUsage: _opt(m, 'memory_usage', path, _num),
+      memoryLimit: _opt(m, 'memory_limit', path, _num),
+      cpuSparkline: _req(
+        m,
+        'cpu_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memorySparkline: _req(
+        m,
+        'memory_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  final String containerId;
+  final String name;
+  final String imageName;
+  final List<String> imageTags;
+  final String runtime;
+  final String hostId;
+  final String hostName;
+  final String composeProject;
+  final String composeService;
+  final String k8sPodName;
+  final String k8sNamespaceName;
+  final String k8sContainerName;
+  final String state;
+  final String health;
+  final String? startedAt;
+  final int restartCount;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final double? cpuUtilization;
+  final double? memoryUsage;
+  final double? memoryLimit;
+  final List<List<double>> cpuSparkline;
+  final List<List<double>> memorySparkline;
+}
+
+/// `KubernetesPod` of the openlog API contract.
+class KubernetesPod {
+  const KubernetesPod({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.namespace,
+    required this.podName,
+    required this.podUid,
+    required this.nodeName,
+    required this.workloadKind,
+    required this.workloadName,
+    required this.phase,
+    required this.ready,
+    required this.reason,
+    required this.status,
+    required this.restarts,
+    required this.podIp,
+    required this.qosClass,
+    this.createdAt,
+    this.startedAt,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+  });
+
+  factory KubernetesPod.fromJson(
+    Object? json, [
+    String path = 'KubernetesPod',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPod(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      namespace: _req(m, 'namespace', path, _str),
+      podName: _req(m, 'pod_name', path, _str),
+      podUid: _req(m, 'pod_uid', path, _str),
+      nodeName: _req(m, 'node_name', path, _str),
+      workloadKind: _req(m, 'workload_kind', path, _str),
+      workloadName: _req(m, 'workload_name', path, _str),
+      phase: _req(m, 'phase', path, _str),
+      ready: _req(m, 'ready', path, _bool),
+      reason: _req(m, 'reason', path, _str),
+      status: _req(m, 'status', path, _str),
+      restarts: _req(m, 'restarts', path, _int),
+      podIp: _req(m, 'pod_ip', path, _str),
+      qosClass: _req(m, 'qos_class', path, _str),
+      createdAt: _opt(m, 'created_at', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+    );
+  }
+
+  final String clusterUid;
+  final String clusterName;
+  final String namespace;
+  final String podName;
+  final String podUid;
+  final String nodeName;
+  final String workloadKind;
+  final String workloadName;
+  final String phase;
+  final bool ready;
+  final String reason;
+  final String status;
+  final int restarts;
+  final String podIp;
+  final String qosClass;
+  final String? createdAt;
+  final String? startedAt;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+}
+
+/// `SloListItem` of the openlog API contract.
+class SloListItem {
+  const SloListItem({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.serviceName,
+    this.serviceNamespace,
+    this.environment,
+    required this.sliType,
+    this.latencyThresholdMs,
+    required this.objective,
+    required this.windowDays,
+    required this.createdByEmail,
+    required this.updatedByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    this.status,
+  });
+
+  factory SloListItem.fromJson(Object? json, [String path = 'SloListItem']) {
+    final m = _obj(json, path);
+    return SloListItem(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _opt(m, 'service_namespace', path, _str),
+      environment: _opt(m, 'environment', path, _str),
+      sliType: _req(m, 'sli_type', path, SloSliType.fromJson),
+      latencyThresholdMs: _opt(m, 'latency_threshold_ms', path, _num),
+      objective: _req(m, 'objective', path, _num),
+      windowDays: _req(m, 'window_days', path, _int),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      status: _opt(m, 'status', path, (v, p) => SloStatus.fromJson(v, p)),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String description;
+  final String serviceName;
+  final String? serviceNamespace;
+  final String? environment;
+  final SloSliType sliType;
+  final double? latencyThresholdMs;
+  final double objective;
+  final int windowDays;
+  final String createdByEmail;
+  final String updatedByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final SloStatus? status;
+}
+
+/// `SyntheticCheckListItem` of the openlog API contract.
+class SyntheticCheckListItem {
+  const SyntheticCheckListItem({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.enabled,
+    required this.url,
+    required this.method,
+    required this.headers,
+    required this.body,
+    required this.expectedStatus,
+    required this.assertionType,
+    required this.assertionPath,
+    required this.assertionValue,
+    required this.timeoutMs,
+    required this.intervalSeconds,
+    required this.locations,
+    required this.target,
+    required this.dnsRecordType,
+    required this.dnsExpected,
+    required this.tlsWarningDays,
+    required this.createdByEmail,
+    required this.updatedByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.status,
+    this.summary,
+  });
+
+  factory SyntheticCheckListItem.fromJson(
+    Object? json, [
+    String path = 'SyntheticCheckListItem',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticCheckListItem(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, _str),
+      enabled: _req(m, 'enabled', path, _bool),
+      url: _req(m, 'url', path, _str),
+      method: _req(m, 'method', path, _str),
+      headers: _req(m, 'headers', path, (v, p) => _map<String>(v, p, _str)),
+      body: _req(m, 'body', path, _str),
+      expectedStatus: _req(
+        m,
+        'expected_status',
+        path,
+        (v, p) => _list<int>(v, p, _int),
+      ),
+      assertionType: _req(
+        m,
+        'assertion_type',
+        path,
+        SyntheticAssertionType.fromJson,
+      ),
+      assertionPath: _req(m, 'assertion_path', path, _str),
+      assertionValue: _req(m, 'assertion_value', path, _str),
+      timeoutMs: _req(m, 'timeout_ms', path, _int),
+      intervalSeconds: _req(m, 'interval_seconds', path, _int),
+      locations: _req(
+        m,
+        'locations',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      target: _req(m, 'target', path, _str),
+      dnsRecordType: _req(m, 'dns_record_type', path, _str),
+      dnsExpected: _req(
+        m,
+        'dns_expected',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      tlsWarningDays: _req(m, 'tls_warning_days', path, _int),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      status: _req(
+        m,
+        'status',
+        path,
+        (v, p) => _list<SyntheticLocationStatus>(
+          v,
+          p,
+          (v, p) => SyntheticLocationStatus.fromJson(v, p),
+        ),
+      ),
+      summary: _opt(
+        m,
+        'summary',
+        path,
+        (v, p) => SyntheticSummary.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String type;
+  final bool enabled;
+  final String url;
+  final String method;
+  final Map<String, String> headers;
+  final String body;
+  final List<int> expectedStatus;
+  final SyntheticAssertionType assertionType;
+  final String assertionPath;
+  final String assertionValue;
+  final int timeoutMs;
+  final int intervalSeconds;
+  final List<String> locations;
+  final String target;
+  final String dnsRecordType;
+  final List<String> dnsExpected;
+  final int tlsWarningDays;
+  final String createdByEmail;
+  final String updatedByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<SyntheticLocationStatus> status;
+  final SyntheticSummary? summary;
+}
+
+/// `JobMonitor` of the openlog API contract.
+class JobMonitor {
+  const JobMonitor({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.kind,
+    required this.cron,
+    required this.timeZone,
+    required this.intervalSeconds,
+    required this.graceSeconds,
+    required this.enabled,
+    required this.tags,
+    required this.pingUrl,
+    required this.createdByEmail,
+    required this.updatedByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.state,
+    this.summary,
+  });
+
+  factory JobMonitor.fromJson(Object? json, [String path = 'JobMonitor']) {
+    final m = _obj(json, path);
+    return JobMonitor(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      kind: _req(m, 'kind', path, _str),
+      cron: _req(m, 'cron', path, _str),
+      timeZone: _req(m, 'time_zone', path, _str),
+      intervalSeconds: _req(m, 'interval_seconds', path, _int),
+      graceSeconds: _req(m, 'grace_seconds', path, _int),
+      enabled: _req(m, 'enabled', path, _bool),
+      tags: _req(m, 'tags', path, (v, p) => _list<String>(v, p, _str)),
+      pingUrl: _req(m, 'ping_url', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      state: _req(m, 'state', path, (v, p) => JobMonitorState.fromJson(v, p)),
+      summary: _opt(m, 'summary', path, (v, p) => JobSummary.fromJson(v, p)),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String description;
+  final String kind;
+  final String cron;
+  final String timeZone;
+  final int intervalSeconds;
+  final int graceSeconds;
+  final bool enabled;
+  final List<String> tags;
+  final String pingUrl;
+  final String createdByEmail;
+  final String updatedByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final JobMonitorState state;
+  final JobSummary? summary;
+}
+
+/// `VulnGroup` of the openlog API contract.
+class VulnGroup {
+  const VulnGroup({
+    required this.vulnId,
+    required this.cve,
+    required this.severity,
+    required this.score,
+    required this.summary,
+    required this.hosts,
+    required this.packages,
+    required this.firstSeen,
+    required this.lastSeen,
+  });
+
+  factory VulnGroup.fromJson(Object? json, [String path = 'VulnGroup']) {
+    final m = _obj(json, path);
+    return VulnGroup(
+      vulnId: _req(m, 'vuln_id', path, _str),
+      cve: _req(m, 'cve', path, _str),
+      severity: _req(m, 'severity', path, VulnSeverity.fromJson),
+      score: _req(m, 'score', path, _num),
+      summary: _req(m, 'summary', path, _str),
+      hosts: _req(m, 'hosts', path, _int),
+      packages: _req(m, 'packages', path, (v, p) => _list<String>(v, p, _str)),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  final String vulnId;
+  final String cve;
+  final VulnSeverity severity;
+  final double score;
+  final String summary;
+  final int hosts;
+  final List<String> packages;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+}
+
+/// `DbInstance` of the openlog API contract.
+class DbInstance {
+  const DbInstance({
+    required this.instance,
+    required this.dbSystem,
+    required this.hostId,
+    required this.hostName,
+    required this.serverAddress,
+    required this.serverPort,
+    required this.calls,
+    required this.throughput,
+    required this.totalTimeMs,
+    this.avgMs,
+    required this.statements,
+    required this.errors,
+    this.avgActiveSessions,
+    required this.topWait,
+    required this.lastSeen,
+  });
+
+  factory DbInstance.fromJson(Object? json, [String path = 'DbInstance']) {
+    final m = _obj(json, path);
+    return DbInstance(
+      instance: _req(m, 'instance', path, _str),
+      dbSystem: _req(m, 'db_system', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      serverAddress: _req(m, 'server_address', path, _str),
+      serverPort: _req(m, 'server_port', path, _int),
+      calls: _req(m, 'calls', path, _int),
+      throughput: _req(m, 'throughput', path, _num),
+      totalTimeMs: _req(m, 'total_time_ms', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      statements: _req(m, 'statements', path, _int),
+      errors: _req(m, 'errors', path, _int),
+      avgActiveSessions: _opt(m, 'avg_active_sessions', path, _num),
+      topWait: _req(m, 'top_wait', path, _str),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  final String instance;
+  final String dbSystem;
+  final String hostId;
+  final String hostName;
+  final String serverAddress;
+  final int serverPort;
+  final int calls;
+  final double throughput;
+  final double totalTimeMs;
+  final double? avgMs;
+  final int statements;
+  final int errors;
+  final double? avgActiveSessions;
+  final String topWait;
+  final DateTime lastSeen;
+}
+
+/// How busy the host is over the last 5 minutes, from the same metrics its own charts draw. Every field is null when the host sent no such metric in the window — an agent that stopped reporting must not read as 0 %.
+class HostUsage {
+  const HostUsage({
+    this.cpu,
+    this.memory,
+    this.disk,
+    this.load1,
+    this.loadPerCpu,
+  });
+
+  factory HostUsage.fromJson(Object? json, [String path = 'HostUsage']) {
+    final m = _obj(json, path);
+    return HostUsage(
+      cpu: _opt(m, 'cpu', path, _num),
+      memory: _opt(m, 'memory', path, _num),
+      disk: _opt(m, 'disk', path, _num),
+      load1: _opt(m, 'load1', path, _num),
+      loadPerCpu: _opt(m, 'load_per_cpu', path, _num),
+    );
+  }
+
+  final double? cpu;
+  final double? memory;
+  final double? disk;
+  final double? load1;
+  final double? loadPerCpu;
+}
+
+/// `SloStatus` of the openlog API contract.
+class SloStatus {
+  const SloStatus({
+    required this.from,
+    required this.to,
+    required this.windowDays,
+    required this.budget,
+  });
+
+  factory SloStatus.fromJson(Object? json, [String path = 'SloStatus']) {
+    final m = _obj(json, path);
+    return SloStatus(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      windowDays: _req(m, 'window_days', path, _int),
+      budget: _req(m, 'budget', path, (v, p) => SloBudget.fromJson(v, p)),
+    );
+  }
+
+  final DateTime from;
+  final DateTime to;
+  final int windowDays;
+  final SloBudget budget;
+}
+
+/// The schedule row of one location - the last outcome and when the next run is due.
+class SyntheticLocationStatus {
+  const SyntheticLocationStatus({
+    required this.location,
+    required this.nextRunAt,
+    this.lastRunAt,
+    this.lastSuccess,
+    required this.lastStatusCode,
+    required this.lastDurationMs,
+    required this.lastErrorKind,
+    required this.lastError,
+  });
+
+  factory SyntheticLocationStatus.fromJson(
+    Object? json, [
+    String path = 'SyntheticLocationStatus',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticLocationStatus(
+      location: _req(m, 'location', path, _str),
+      nextRunAt: _req(m, 'next_run_at', path, _time),
+      lastRunAt: _opt(m, 'last_run_at', path, _time),
+      lastSuccess: _opt(m, 'last_success', path, _bool),
+      lastStatusCode: _req(m, 'last_status_code', path, _int),
+      lastDurationMs: _req(m, 'last_duration_ms', path, _num),
+      lastErrorKind: _req(m, 'last_error_kind', path, _str),
+      lastError: _req(m, 'last_error', path, _str),
+    );
+  }
+
+  final String location;
+  final DateTime nextRunAt;
+  final DateTime? lastRunAt;
+  final bool? lastSuccess;
+  final int lastStatusCode;
+  final double lastDurationMs;
+  final String lastErrorKind;
+  final String lastError;
+}
+
+/// Uptime and latency over one range; ratios and percentiles are null without runs.
+class SyntheticSummary {
+  const SyntheticSummary({
+    required this.from,
+    required this.to,
+    required this.step,
+    required this.runs,
+    required this.failures,
+    this.uptime,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    required this.points,
+  });
+
+  factory SyntheticSummary.fromJson(
+    Object? json, [
+    String path = 'SyntheticSummary',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticSummary(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      step: _req(m, 'step', path, _str),
+      runs: _req(m, 'runs', path, _int),
+      failures: _req(m, 'failures', path, _int),
+      uptime: _opt(m, 'uptime', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<SyntheticPoint>(
+          v,
+          p,
+          (v, p) => SyntheticPoint.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final DateTime from;
+  final DateTime to;
+  final String step;
+  final int runs;
+  final int failures;
+  final double? uptime;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final List<SyntheticPoint> points;
+}
+
+/// `JobMonitorState` of the openlog API contract.
+class JobMonitorState {
+  const JobMonitorState({
+    required this.status,
+    this.lastPingAt,
+    this.lastStartedAt,
+    this.lastFinishedAt,
+    required this.lastDurationMs,
+    required this.lastExitCode,
+    required this.lastMessage,
+    required this.expectedAt,
+    required this.consecutiveFailures,
+    required this.late,
+  });
+
+  factory JobMonitorState.fromJson(
+    Object? json, [
+    String path = 'JobMonitorState',
+  ]) {
+    final m = _obj(json, path);
+    return JobMonitorState(
+      status: _req(m, 'status', path, _str),
+      lastPingAt: _opt(m, 'last_ping_at', path, _time),
+      lastStartedAt: _opt(m, 'last_started_at', path, _time),
+      lastFinishedAt: _opt(m, 'last_finished_at', path, _time),
+      lastDurationMs: _req(m, 'last_duration_ms', path, _num),
+      lastExitCode: _req(m, 'last_exit_code', path, _int),
+      lastMessage: _req(m, 'last_message', path, _str),
+      expectedAt: _req(m, 'expected_at', path, _time),
+      consecutiveFailures: _req(m, 'consecutive_failures', path, _int),
+      late: _req(m, 'late', path, _bool),
+    );
+  }
+
+  final String status;
+  final DateTime? lastPingAt;
+  final DateTime? lastStartedAt;
+  final DateTime? lastFinishedAt;
+  final double lastDurationMs;
+  final int lastExitCode;
+  final String lastMessage;
+  final DateTime expectedAt;
+  final int consecutiveFailures;
+  final bool late;
+}
+
+/// `JobSummary` of the openlog API contract.
+class JobSummary {
+  const JobSummary({
+    required this.runs,
+    required this.failures,
+    required this.missed,
+    this.avgMs,
+    this.maxMs,
+    this.lastAt,
+  });
+
+  factory JobSummary.fromJson(Object? json, [String path = 'JobSummary']) {
+    final m = _obj(json, path);
+    return JobSummary(
+      runs: _req(m, 'runs', path, _int),
+      failures: _req(m, 'failures', path, _int),
+      missed: _req(m, 'missed', path, _int),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      maxMs: _opt(m, 'max_ms', path, _num),
+      lastAt: _opt(m, 'last_at', path, _time),
+    );
+  }
+
+  final int runs;
+  final int failures;
+  final int missed;
+  final double? avgMs;
+  final double? maxMs;
+  final DateTime? lastAt;
+}
+
+/// Error budget over one range; ratios are null without requests (slo.md §2).
+class SloBudget {
+  const SloBudget({
+    required this.requests,
+    required this.good,
+    required this.bad,
+    this.sli,
+    required this.budgetRequests,
+    required this.budgetConsumed,
+    required this.budgetRemaining,
+    this.remainingRatio,
+    this.burnRate,
+    required this.met,
+  });
+
+  factory SloBudget.fromJson(Object? json, [String path = 'SloBudget']) {
+    final m = _obj(json, path);
+    return SloBudget(
+      requests: _req(m, 'requests', path, _num),
+      good: _req(m, 'good', path, _num),
+      bad: _req(m, 'bad', path, _num),
+      sli: _opt(m, 'sli', path, _num),
+      budgetRequests: _req(m, 'budget_requests', path, _num),
+      budgetConsumed: _req(m, 'budget_consumed', path, _num),
+      budgetRemaining: _req(m, 'budget_remaining', path, _num),
+      remainingRatio: _opt(m, 'remaining_ratio', path, _num),
+      burnRate: _opt(m, 'burn_rate', path, _num),
+      met: _req(m, 'met', path, _bool),
+    );
+  }
+
+  final double requests;
+  final double good;
+  final double bad;
+  final double? sli;
+  final double budgetRequests;
+  final double budgetConsumed;
+  final double budgetRemaining;
+  final double? remainingRatio;
+  final double? burnRate;
+  final bool met;
+}
+
+/// `SyntheticPoint` of the openlog API contract.
+class SyntheticPoint {
+  const SyntheticPoint({
+    required this.t,
+    required this.runs,
+    required this.failures,
+    this.uptime,
+    this.p95Ms,
+  });
+
+  factory SyntheticPoint.fromJson(
+    Object? json, [
+    String path = 'SyntheticPoint',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticPoint(
+      t: _req(m, 't', path, _int),
+      runs: _req(m, 'runs', path, _int),
+      failures: _req(m, 'failures', path, _int),
+      uptime: _opt(m, 'uptime', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+    );
+  }
+
+  final int t;
+  final int runs;
+  final int failures;
+  final double? uptime;
+  final double? p95Ms;
 }

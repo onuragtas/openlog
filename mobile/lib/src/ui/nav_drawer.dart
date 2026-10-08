@@ -18,10 +18,18 @@ class NavItem {
   final String Function(L) label;
 }
 
-/// Order taken from web/src/components/AppShell.tsx: apm, logs, dashboards,
-/// alerts, settings.
+/// Order taken from web/src/components/AppShell.tsx. The web lists
+/// twenty-three; these are the ones this app has, in the same places.
 final navItems = <NavItem>[
+  NavItem(Icons.dns_outlined, (l) => l.navHosts),
+  NavItem(Icons.inventory_2_outlined, (l) => l.navContainers),
+  NavItem(Icons.hub_outlined, (l) => l.navKubernetes),
   NavItem(Icons.monitor_heart_outlined, (l) => l.navApm),
+  NavItem(Icons.storage_outlined, (l) => l.navDatabases),
+  NavItem(Icons.track_changes_outlined, (l) => l.navSlos),
+  NavItem(Icons.radar_outlined, (l) => l.navSynthetics),
+  NavItem(Icons.event_repeat_outlined, (l) => l.navJobs),
+  NavItem(Icons.gpp_maybe_outlined, (l) => l.navVulnerabilities),
   NavItem(Icons.article_outlined, (l) => l.navLogs),
   NavItem(Icons.dashboard_outlined, (l) => l.navDashboards),
   NavItem(Icons.notifications_outlined, (l) => l.navAlerts),
@@ -49,7 +57,7 @@ class NavDrawer extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     return Drawer(
-      width: 272,
+      width: 288,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,11 +146,19 @@ class _Item extends StatelessWidget {
                   color: active ? c.accentForeground : c.mutedForeground,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  item.label(l),
-                  style: TextStyle(
-                    color: active ? c.accentForeground : c.foreground,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                // Expanded, because the label is translated: "Güvenlik
+                // açıkları" and "Sentetik izleme" overflow a fixed row where
+                // "Vulnerabilities" and "Synthetics" fit, and an overflow
+                // stripe is a bug nobody sees until the app is in Turkish.
+                Expanded(
+                  child: Text(
+                    item.label(l),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: active ? c.accentForeground : c.foreground,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
                 ),
               ],

@@ -10,6 +10,7 @@ import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/alerts.dart';
 import 'package:openlog_mobile/src/dashboards.dart';
+import 'package:openlog_mobile/src/sections.dart';
 import 'package:openlog_mobile/src/logs.dart';
 import 'package:openlog_mobile/src/services.dart';
 import 'package:openlog_mobile/src/session.dart';
@@ -188,21 +189,40 @@ DashboardSummary board(
   canEdit: false,
 );
 
-/// The signed-in app with all four lists scripted, which is what the shell
-/// needs: it builds every tab at once so moving between them keeps their state.
+class ScriptedHosts extends HostsController {
+  ScriptedHosts() : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'));
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async {
+    calls.add('refresh');
+    loaded = true;
+  }
+}
+
+/// The signed-in app with every section scripted, which is what the shell
+/// needs: it builds all of them at once so moving between them keeps state.
 Widget signedInApp(
   SessionController session, {
   AlertsController? alerts,
   ServicesController? services,
   LogsController? logs,
   DashboardsController? dashboards,
+  HostsController? hosts,
 }) => OpenlogApp(
   store: MemoryTokenStore(),
   session: session,
-  alerts: alerts ?? ScriptedAlerts(),
-  services: services ?? ScriptedServices(),
-  logs: logs ?? ScriptedLogs(),
-  dashboards: dashboards ?? ScriptedDashboards(),
+  sections: Sections(
+    // Never reached: every controller below is either scripted or one of the
+    // plain ones, which this test never refreshes.
+    client: OpenlogClient(baseUrl: 'http://127.0.0.1:1'),
+    alerts: alerts ?? ScriptedAlerts(),
+    services: services ?? ScriptedServices(),
+    logs: logs ?? ScriptedLogs(),
+    dashboards: dashboards ?? ScriptedDashboards(),
+    hosts: hosts,
+  ),
 );
 
 /// Opens the navigation drawer, which is how the web moves between sections
@@ -720,5 +740,58 @@ void main() {
     expect(find.text('Checkout health'), findsOneWidget);
     expect(find.text('4 widgets on 1 pages'), findsOneWidget);
     expect(boards.calls, contains('refresh:'));
+  });
+
+  testWidgets('a section is not asked about until it is looked at', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final hosts = ScriptedHosts();
+    await tester.pumpWidget(signedInApp(session, hosts: hosts));
+    await tester.pumpAndSettle();
+
+    // Thirteen sections are built by the IndexedStack; asking the server
+    // thirteen questions for screens nobody has opened is the part that costs.
+    expect(hosts.calls, isEmpty);
+
+    await goTo(tester, 'Hosts');
+    expect(hosts.calls, ['refresh']);
+
+    // And not again on the way back.
+    await goTo(tester, 'Alerts');
+    await goTo(tester, 'Hosts');
+    expect(hosts.calls, ['refresh']);
+  });
+
+  testWidgets('the drawer lists every section the app has, in the web order', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    await tester.pumpWidget(signedInApp(session));
+    await tester.pumpAndSettle();
+    await openDrawer(tester);
+
+    // Same labels and same order as web/src/components/AppShell.tsx.
+    for (final label in const [
+      'Hosts',
+      'Containers',
+      'Kubernetes',
+      'APM',
+      'Databases',
+      'SLOs',
+      'Synthetics',
+      'Job monitoring',
+      'Vulnerabilities',
+      'Logs',
+      'Dashboards',
+      'Alerts',
+      'Settings',
+    ]) {
+      expect(
+        find.byKey(Key('nav-$label')),
+        findsOneWidget,
+        reason: '$label is missing',
+      );
+    }
   });
 }

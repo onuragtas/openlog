@@ -372,4 +372,109 @@ class LTr extends L {
 
   @override
   String get closeMenu => 'Menüyü kapat';
+
+  @override
+  String get navHosts => 'Sunucular';
+
+  @override
+  String get navContainers => 'Konteynerler';
+
+  @override
+  String get navKubernetes => 'Kubernetes';
+
+  @override
+  String get navDatabases => 'Veritabanları';
+
+  @override
+  String get navSlos => 'SLO\'lar';
+
+  @override
+  String get navSynthetics => 'Sentetik izleme';
+
+  @override
+  String get navJobs => 'İş izleme';
+
+  @override
+  String get navVulnerabilities => 'Güvenlik açıkları';
+
+  @override
+  String get sectionForbidden => 'Rolünüz bu bölümü görmeye izin vermiyor.';
+
+  @override
+  String get sectionSearch => 'Ara';
+
+  @override
+  String get hostsEmpty => 'Bildirim yapan sunucu yok.';
+
+  @override
+  String get containersEmpty => 'Bildirim yapan konteyner yok.';
+
+  @override
+  String get podsEmpty => 'Pod bulunamadı.';
+
+  @override
+  String get databasesEmpty => 'Bildirim yapan veritabanı örneği yok.';
+
+  @override
+  String get slosEmpty => 'Tanımlı SLO yok.';
+
+  @override
+  String get syntheticsEmpty => 'Tanımlı sentetik kontrol yok.';
+
+  @override
+  String get jobsEmpty => 'Tanımlı iş izleyici yok.';
+
+  @override
+  String get vulnerabilitiesEmpty => 'Güvenlik açığı bulunamadı.';
+
+  @override
+  String get statCpu => 'CPU';
+
+  @override
+  String get statMemory => 'Bellek';
+
+  @override
+  String get statDisk => 'Disk';
+
+  @override
+  String get statRestarts => 'yeniden başlatma';
+
+  @override
+  String get statUptime => 'çalışma';
+
+  @override
+  String get statRuns => 'koşu';
+
+  @override
+  String get statFailures => 'hata';
+
+  @override
+  String get statBudget => 'kalan bütçe';
+
+  @override
+  String get statObjective => 'hedef';
+
+  @override
+  String get statScore => 'skor';
+
+  @override
+  String get statHosts => 'sunucu';
+
+  @override
+  String get statCalls => 'çağrı';
+
+  @override
+  String get stateDisabled => 'Kapalı';
+
+  @override
+  String get stateNotReporting => 'Bildirim yok';
+
+  @override
+  String get stateReady => 'Hazır';
+
+  @override
+  String get sloMet => 'Karşılandı';
+
+  @override
+  String get sloBreached => 'Aşıldı';
 }

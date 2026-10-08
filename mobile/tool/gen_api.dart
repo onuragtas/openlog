@@ -35,6 +35,16 @@ const schemaTargets = <String>[
   'OqlResult', // what a widget's query answers
 ];
 
+/// Schema names that would collide with something Flutter already owns.
+///
+/// The contract is free to call a thing `Container`; a Dart file that imports
+/// material.dart is not. Renaming here rather than prefixing the import keeps
+/// every call site reading as itself.
+const renames = <String, String>{'Container': 'ApiContainer'};
+
+/// The Dart name for a schema.
+String dartName(String schema) => renames[schema] ?? schema;
+
 /// Responses that are declared inline on a path rather than as a named schema.
 /// 'METHOD path status ClassName'.
 const responseTargets = <String>[
@@ -43,6 +53,14 @@ const responseTargets = <String>[
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/dashboards 200 DashboardPageList',
+  'get /api/v1/hosts 200 HostPage',
+  'get /api/v1/containers 200 ContainerPage',
+  'get /api/v1/kubernetes/pods 200 PodPage',
+  'get /api/v1/slos 200 SloPage',
+  'get /api/v1/synthetics/checks 200 SyntheticPage',
+  'get /api/v1/jobs/monitors 200 JobMonitorPage',
+  'get /api/v1/vulnerabilities 200 VulnPage',
+  'get /api/v1/db/instances 200 DbInstancePage',
 ];
 
 void main(List<String> args) {
@@ -133,7 +151,7 @@ class Generator {
         if (!_done.add(name)) continue;
         final node = _schemas[name];
         if (node == null) _fail('schema $name is not in components.schemas');
-        _emit(name, node as YamlMap);
+        _emit(dartName(name), node as YamlMap);
       }
     }
 
@@ -308,38 +326,74 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
   /// stops, because a union this cannot name is a field it would have to widen
   /// to `dynamic`.
   (YamlMap node, bool nullable) _unwrapNullable(YamlMap node) {
-    for (final key in const ['oneOf', 'anyOf']) {
-      final union = node[key];
-      if (union is! YamlList) continue;
-      final branches = union.cast<YamlMap>().toList();
-      final nulls = branches.where((b) => b['type'] == 'null').toList();
-      final rest = branches.where((b) => b['type'] != 'null').toList();
-      if (nulls.length == 1 && rest.length == 1) return (rest.single, true);
-      _fail('$key with ${branches.length} branches is not supported: $node');
-    }
-    final type = node['type'];
-    if (type is YamlList) {
-      final types = type.cast<String>().toList();
-      final rest = types.where((t) => t != 'null').toList();
-      if (types.contains('null') && rest.length == 1) {
-        final copy = Map<String, Object?>.of(node.cast<String, Object?>())
-          ..['type'] = rest.single;
-        return (YamlMap.wrap(copy), true);
+    var current = node;
+    var nullable = false;
+
+    // A loop, because these wrappers nest: SloListItem.status is an `allOf`
+    // of one $ref carrying `nullable: true`, which is how OpenAPI 3.0 makes a
+    // reference nullable (a $ref could not have siblings there) and which this
+    // 3.1 spec still uses in places.
+    while (true) {
+      if (current['nullable'] == true) {
+        nullable = true;
+        final copy = Map<String, Object?>.of(current.cast<String, Object?>())
+          ..remove('nullable');
+        current = YamlMap.wrap(copy);
+        continue;
       }
-      // A union of scalars is the one place a value really is dynamic, and
-      // the contract says so rather than this generator guessing: OqlValue is
-      // `[number, string, "null"]` because a query column holds either. It
-      // reads as Object?, and the app turns it back into something typed where
-      // it is used. Anything wider still stops.
-      const scalars = {'number', 'integer', 'string', 'boolean'};
-      if (rest.every(scalars.contains)) {
-        final copy = Map<String, Object?>.of(node.cast<String, Object?>())
-          ..['type'] = '__any';
-        return (YamlMap.wrap(copy), types.contains('null'));
+
+      // `allOf` of a single branch is a wrapper, not a composition; a real
+      // composition has more than one and is flattened by _absorb instead.
+      final all = current['allOf'];
+      if (all is YamlList && all.length == 1) {
+        current = all.first as YamlMap;
+        continue;
       }
-      _fail('type union $types is not supported');
+
+      var unwrapped = false;
+      for (final key in const ['oneOf', 'anyOf']) {
+        final union = current[key];
+        if (union is! YamlList) continue;
+        final branches = union.cast<YamlMap>().toList();
+        final nulls = branches.where((b) => b['type'] == 'null').toList();
+        final rest = branches.where((b) => b['type'] != 'null').toList();
+        if (nulls.length == 1 && rest.length == 1) {
+          current = rest.single;
+          nullable = true;
+          unwrapped = true;
+          break;
+        }
+        _fail(
+          '$key with ${branches.length} branches is not supported: $current',
+        );
+      }
+      if (unwrapped) continue;
+
+      final type = current['type'];
+      if (type is YamlList) {
+        final types = type.cast<String>().toList();
+        final rest = types.where((t) => t != 'null').toList();
+        if (types.contains('null') && rest.length == 1) {
+          final copy = Map<String, Object?>.of(current.cast<String, Object?>())
+            ..['type'] = rest.single;
+          return (YamlMap.wrap(copy), true);
+        }
+        // A union of scalars is the one place a value really is dynamic, and
+        // the contract says so rather than this generator guessing: OqlValue
+        // is `[number, string, "null"]` because a query column holds either.
+        // It reads as Object?, and the app turns it back into something typed
+        // where it is used. Anything wider still stops.
+        const scalars = {'number', 'integer', 'string', 'boolean'};
+        if (rest.every(scalars.contains)) {
+          final copy = Map<String, Object?>.of(current.cast<String, Object?>())
+            ..['type'] = '__any';
+          return (YamlMap.wrap(copy), nullable || types.contains('null'));
+        }
+        _fail('type union $types is not supported');
+      }
+
+      return (current, nullable);
     }
-    return (node, false);
   }
 
   DartType _type(YamlMap raw, String context) {
@@ -357,7 +411,7 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       // Aliases carry no identity of their own: a Timestamp is a DateTime, and
       // a NullableTimestamp is a nullable one. Generating a class for them
       // would make every call site unwrap a one-field box.
-      final aliased = _aliasOf(name, target as YamlMap);
+      final aliased = _aliasOf(dartName(name), target as YamlMap);
       if (aliased != null) {
         return DartType(aliased.name, nullable: nullable || aliased.nullable);
       }
@@ -365,11 +419,14 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       // everywhere rather than OrgRefRole in one place and MeRole in another.
       final (inner, innerNullable) = _unwrapNullable(target);
       if (inner['type'] == 'string' && inner['enum'] != null) {
-        _emitEnum(name, (inner['enum'] as YamlList).cast<String>().toList());
-        return DartType(name, nullable: nullable || innerNullable);
+        _emitEnum(
+          dartName(name),
+          (inner['enum'] as YamlList).cast<String>().toList(),
+        );
+        return DartType(dartName(name), nullable: nullable || innerNullable);
       }
       _queue(name);
-      return DartType(name, nullable: nullable);
+      return DartType(dartName(name), nullable: nullable);
     }
 
     final type = node['type'];

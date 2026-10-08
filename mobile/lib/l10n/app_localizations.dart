@@ -750,6 +750,216 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Close menu'**
   String get closeMenu;
+
+  /// No description provided for @navHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get navHosts;
+
+  /// No description provided for @navContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get navContainers;
+
+  /// No description provided for @navKubernetes.
+  ///
+  /// In en, this message translates to:
+  /// **'Kubernetes'**
+  String get navKubernetes;
+
+  /// No description provided for @navDatabases.
+  ///
+  /// In en, this message translates to:
+  /// **'Databases'**
+  String get navDatabases;
+
+  /// No description provided for @navSlos.
+  ///
+  /// In en, this message translates to:
+  /// **'SLOs'**
+  String get navSlos;
+
+  /// No description provided for @navSynthetics.
+  ///
+  /// In en, this message translates to:
+  /// **'Synthetics'**
+  String get navSynthetics;
+
+  /// No description provided for @navJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'Job monitoring'**
+  String get navJobs;
+
+  /// No description provided for @navVulnerabilities.
+  ///
+  /// In en, this message translates to:
+  /// **'Vulnerabilities'**
+  String get navVulnerabilities;
+
+  /// No description provided for @sectionForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading this section.'**
+  String get sectionForbidden;
+
+  /// No description provided for @sectionSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get sectionSearch;
+
+  /// No description provided for @hostsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No host is reporting.'**
+  String get hostsEmpty;
+
+  /// No description provided for @containersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No container is reporting.'**
+  String get containersEmpty;
+
+  /// No description provided for @podsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pod found.'**
+  String get podsEmpty;
+
+  /// No description provided for @databasesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No database instance is reporting.'**
+  String get databasesEmpty;
+
+  /// No description provided for @slosEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No SLO defined.'**
+  String get slosEmpty;
+
+  /// No description provided for @syntheticsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No synthetic check defined.'**
+  String get syntheticsEmpty;
+
+  /// No description provided for @jobsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No job monitor defined.'**
+  String get jobsEmpty;
+
+  /// No description provided for @vulnerabilitiesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No vulnerability found.'**
+  String get vulnerabilitiesEmpty;
+
+  /// No description provided for @statCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get statCpu;
+
+  /// No description provided for @statMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get statMemory;
+
+  /// No description provided for @statDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk'**
+  String get statDisk;
+
+  /// No description provided for @statRestarts.
+  ///
+  /// In en, this message translates to:
+  /// **'restarts'**
+  String get statRestarts;
+
+  /// No description provided for @statUptime.
+  ///
+  /// In en, this message translates to:
+  /// **'uptime'**
+  String get statUptime;
+
+  /// No description provided for @statRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'runs'**
+  String get statRuns;
+
+  /// No description provided for @statFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'failures'**
+  String get statFailures;
+
+  /// No description provided for @statBudget.
+  ///
+  /// In en, this message translates to:
+  /// **'budget left'**
+  String get statBudget;
+
+  /// No description provided for @statObjective.
+  ///
+  /// In en, this message translates to:
+  /// **'objective'**
+  String get statObjective;
+
+  /// No description provided for @statScore.
+  ///
+  /// In en, this message translates to:
+  /// **'score'**
+  String get statScore;
+
+  /// No description provided for @statHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'hosts'**
+  String get statHosts;
+
+  /// No description provided for @statCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'calls'**
+  String get statCalls;
+
+  /// No description provided for @stateDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get stateDisabled;
+
+  /// No description provided for @stateNotReporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Not reporting'**
+  String get stateNotReporting;
+
+  /// No description provided for @stateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get stateReady;
+
+  /// No description provided for @sloMet.
+  ///
+  /// In en, this message translates to:
+  /// **'Met'**
+  String get sloMet;
+
+  /// No description provided for @sloBreached.
+  ///
+  /// In en, this message translates to:
+  /// **'Breached'**
+  String get sloBreached;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
