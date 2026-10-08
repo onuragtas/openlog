@@ -107,5 +107,22 @@
   "hoursAgo": "{count}h ago",
   "@hoursAgo": {"placeholders": {"count": {"type": "int"}}},
   "daysAgo": "{count}d ago",
-  "@daysAgo": {"placeholders": {"count": {"type": "int"}}}
+  "@daysAgo": {"placeholders": {"count": {"type": "int"}}},
+  "navAlerts": "Alerts",
+  "navServices": "Services",
+  "navLogs": "Logs",
+  "servicesEmpty": "No service has reported in the last hour.",
+  "servicesSearch": "Search services",
+  "servicesForbidden": "Your role does not allow reading services.",
+  "svcThroughput": "rpm",
+  "svcErrorRate": "errors",
+  "svcP95": "p95",
+  "svcApdex": "Apdex",
+  "svcNoData": "—",
+  "logsEmpty": "No log records match.",
+  "logsSearch": "Search in the message",
+  "logsForbidden": "Your role does not allow reading logs.",
+  "logsSeverity": "Severity",
+  "logsSeverityAll": "All",
+  "logsNoService": "no service"
 }

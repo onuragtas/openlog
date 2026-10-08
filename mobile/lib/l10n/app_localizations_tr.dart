@@ -280,4 +280,55 @@ class LTr extends L {
   String daysAgo(int count) {
     return '$count gün önce';
   }
+
+  @override
+  String get navAlerts => 'Alarmlar';
+
+  @override
+  String get navServices => 'Servisler';
+
+  @override
+  String get navLogs => 'Loglar';
+
+  @override
+  String get servicesEmpty => 'Son bir saatte hiçbir servis bildirim yapmadı.';
+
+  @override
+  String get servicesSearch => 'Servis ara';
+
+  @override
+  String get servicesForbidden => 'Rolünüz servisleri görmeye izin vermiyor.';
+
+  @override
+  String get svcThroughput => 'ist/dk';
+
+  @override
+  String get svcErrorRate => 'hata';
+
+  @override
+  String get svcP95 => 'p95';
+
+  @override
+  String get svcApdex => 'Apdex';
+
+  @override
+  String get svcNoData => '—';
+
+  @override
+  String get logsEmpty => 'Eşleşen log kaydı yok.';
+
+  @override
+  String get logsSearch => 'Mesaj içinde ara';
+
+  @override
+  String get logsForbidden => 'Rolünüz logları görmeye izin vermiyor.';
+
+  @override
+  String get logsSeverity => 'Önem';
+
+  @override
+  String get logsSeverityAll => 'Hepsi';
+
+  @override
+  String get logsNoService => 'servis yok';
 }

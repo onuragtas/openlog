@@ -225,6 +225,33 @@ class OpenlogClient {
     '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/acknowledge',
   );
 
+  /// Services with spans in the last hour, with their RED metrics.
+  ///
+  /// The range is left to the server's default (now - 1h), which is the window
+  /// an on-call screen wants: what is happening, not what happened.
+  Future<ServicePage> services({String q = ''}) async {
+    final query = <String, String>{};
+    if (q.isNotEmpty) query['q'] = q;
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    return ServicePage.fromJson(
+      await _send('GET', '/api/v1/apm/services$suffix'),
+    );
+  }
+
+  /// Recent log records, newest first.
+  Future<LogPage> logs({
+    String q = '',
+    String severityMin = '',
+    int limit = 50,
+  }) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (q.isNotEmpty) query['q'] = q;
+    if (severityMin.isNotEmpty) query['severity_min'] = severityMin;
+    return LogPage.fromJson(
+      await _send('GET', '/api/v1/logs?${Uri(queryParameters: query).query}'),
+    );
+  }
+
   /// Ends this device's session on the server and forgets the token here.
   ///
   /// The token is dropped even when the request fails: the person asked to be

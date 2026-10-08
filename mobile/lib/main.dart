@@ -10,14 +10,23 @@ import 'src/alerts.dart';
 import 'src/api/client.dart';
 import 'src/session.dart';
 import 'src/storage/token_store.dart';
-import 'src/ui/alerts_screen.dart';
+import 'src/logs.dart';
+import 'src/services.dart';
+import 'src/ui/app_shell.dart';
 import 'src/ui/server_screen.dart';
 import 'src/ui/sign_in_screen.dart';
 
 void main() => runApp(OpenlogApp(store: SecureTokenStore()));
 
 class OpenlogApp extends StatefulWidget {
-  const OpenlogApp({super.key, required this.store, this.session, this.alerts});
+  const OpenlogApp({
+    super.key,
+    required this.store,
+    this.session,
+    this.alerts,
+    this.services,
+    this.logs,
+  });
 
   /// Where the device token is kept between launches.
   final TokenStore store;
@@ -25,8 +34,10 @@ class OpenlogApp extends StatefulWidget {
   /// Injected by tests, which cannot reach Keychain or a real server.
   final SessionController? session;
 
-  /// Injected by tests so the alerts screen can be driven without a server.
+  /// Injected by tests so the lists can be driven without a server.
   final AlertsController? alerts;
+  final ServicesController? services;
+  final LogsController? logs;
 
   @override
   State<OpenlogApp> createState() => _OpenlogAppState();
@@ -47,25 +58,39 @@ class _OpenlogAppState extends State<OpenlogApp> {
   }
 
   AlertsController? _alerts;
-  OpenlogClient? _alertsClient;
+  ServicesController? _services;
+  LogsController? _logs;
+  OpenlogClient? _listsClient;
 
-  /// One alerts controller per signed-in client. Keyed on the client rather
-  /// than kept for the app's life: signing out and back in, or changing server,
-  /// must not leave the previous installation's incidents on screen.
-  AlertsController? _alertsFor(OpenlogClient? client) {
-    if (widget.alerts != null) return widget.alerts;
-    if (client == null) return null;
-    if (!identical(_alertsClient, client)) {
-      _alerts?.dispose();
-      _alerts = AlertsController(client);
-      _alertsClient = client;
+  /// One set of list controllers per signed-in client. Keyed on the client
+  /// rather than kept for the app's life: signing out and back in, or changing
+  /// server, must not leave the previous installation's rows on screen.
+  bool _listsFor(OpenlogClient? client) {
+    if (widget.alerts != null) {
+      _alerts = widget.alerts;
+      _services = widget.services ?? _services;
+      _logs = widget.logs ?? _logs;
     }
-    return _alerts;
+    if (client == null) {
+      return _alerts != null && _services != null && _logs != null;
+    }
+    if (!identical(_listsClient, client)) {
+      _alerts?.dispose();
+      _services?.dispose();
+      _logs?.dispose();
+      _alerts = widget.alerts ?? AlertsController(client);
+      _services = widget.services ?? ServicesController(client);
+      _logs = widget.logs ?? LogsController(client);
+      _listsClient = client;
+    }
+    return true;
   }
 
   @override
   void dispose() {
     _alerts?.dispose();
+    _services?.dispose();
+    _logs?.dispose();
     if (_ownsSession) _session.dispose();
     super.dispose();
   }
@@ -96,16 +121,19 @@ class _OpenlogAppState extends State<OpenlogApp> {
             case SessionStage.needsSignIn:
               return SignInScreen(session: _session);
             case SessionStage.signedIn:
-              final alerts = _alertsFor(_session.client);
-              if (alerts == null) {
+              if (!_listsFor(_session.client)) {
                 // Signed in with no client is not a state the controller
-                // produces; rendering a spinner is better than crashing if it
-                // ever becomes one.
+                // produces; a spinner beats crashing if it ever becomes one.
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
-              return AlertsScreen(session: _session, alerts: alerts);
+              return AppShell(
+                session: _session,
+                alerts: _alerts!,
+                services: _services!,
+                logs: _logs!,
+              );
           }
         },
       ),

@@ -1,8 +1,7 @@
 // What is firing, and taking one of them.
-import 'package:flutter/foundation.dart';
-
 import 'api/client.dart';
 import 'api/schema.g.dart';
+import 'list_controller.dart';
 import 'session.dart';
 
 /// The open-and-acknowledged list behind the alerts screen.
@@ -10,48 +9,29 @@ import 'session.dart';
 /// Separate from [SessionController] because its lifetime is the screen's, not
 /// the app's: signing out should drop this, and a reload should not touch who
 /// is signed in.
-class AlertsController extends ChangeNotifier {
+class AlertsController extends ListController<AlertIncident> {
   AlertsController(this._client);
 
   final OpenlogClient _client;
 
   /// Newest first, open and acknowledged only.
-  List<AlertIncident> incidents = const [];
+  List<AlertIncident> get incidents => items;
 
   /// Every state's count for the organization, including the resolved ones
   /// this list deliberately does not show.
   IncidentPageCounts? counts;
 
-  /// True only for the first load, so a pull-to-refresh does not blank the
-  /// list that is already on screen.
-  bool loadingFirst = false;
-  bool loaded = false;
-  SessionFailure? failure;
-
   /// The incident whose acknowledge button is busy, so only that row spins.
   String? acknowledging;
 
-  Future<void> refresh() async {
-    if (!loaded) {
-      loadingFirst = true;
-      notifyListeners();
-    }
-    try {
-      final page = await _client.incidents();
-      incidents = page.incidents;
-      counts = page.counts;
-      failure = null;
-      loaded = true;
-    } on ApiUnreachable {
-      failure = const SessionFailure('unreachable', '');
-    } on ApiException catch (e) {
-      failure = e.status == 403
-          ? const SessionFailure('alertsForbidden', '')
-          : SessionFailure('unexpected', e.message);
-    } finally {
-      loadingFirst = false;
-      notifyListeners();
-    }
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertIncident>> fetch() async {
+    final page = await _client.incidents();
+    counts = page.counts;
+    return page.incidents;
   }
 
   /// Takes [id], then reloads so the row shows who took it rather than this

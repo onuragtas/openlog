@@ -29,6 +29,7 @@ const schemaTargets = <String>[
   'Me', // who am I, which organizations, which role
   'Session', // the person's sessions, including other phones
   'AlertIncident', // what the app exists to show: what is firing right now
+  'ApmService', // where to look after an alert: which service, how healthy
 ];
 
 /// Responses that are declared inline on a path rather than as a named schema.
@@ -36,6 +37,8 @@ const schemaTargets = <String>[
 const responseTargets = <String>[
   'post /api/v1/auth/device 201 DeviceSession',
   'get /api/v1/alerts/incidents 200 IncidentPage',
+  'get /api/v1/apm/services 200 ServicePage',
+  'get /api/v1/logs 200 LogPage',
 ];
 
 void main(List<String> args) {
@@ -120,15 +123,25 @@ class Generator {
       }
       responses[parts[3]] = _responseSchema(parts[0], parts[1], parts[2]);
     }
-    while (_pending.isNotEmpty) {
-      final name = _pending.removeAt(0);
-      if (!_done.add(name)) continue;
-      final node = _schemas[name];
-      if (node == null) _fail('schema $name is not in components.schemas');
-      _emit(name, node as YamlMap);
+    void drain() {
+      while (_pending.isNotEmpty) {
+        final name = _pending.removeAt(0);
+        if (!_done.add(name)) continue;
+        final node = _schemas[name];
+        if (node == null) _fail('schema $name is not in components.schemas');
+        _emit(name, node as YamlMap);
+      }
     }
-    // Inline response bodies last: they reference the named schemas above.
+
+    drain();
+    // Inline response bodies after the named schemas they reference.
     responses.forEach(_emit);
+    // And again: a response body can be the only thing that reaches a schema.
+    // LogPage is the whole reason -- its `logs` array is the only reference to
+    // LogRecord anywhere in the targets, and emitting responses last left that
+    // reference queued and never drained, which the generated file reported as
+    // "LogRecord isn't a type" rather than as anything about the generator.
+    drain();
 
     final b = StringBuffer()
       ..writeln(
@@ -370,36 +383,55 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     }
   }
 
-  /// Named schemas that are a scalar with no identity worth a class.
+  /// Named schemas with no identity worth a class: a scalar, a list or a map.
+  ///
+  /// Timestamp is a DateTime, ApmNullableNumber is a `double?`, AlertLabels is
+  /// a `Map<String, String>` and MetricPoint is a `List<double>`. Wrapping any
+  /// of them in a class would make every call site unwrap a one-field box.
   DartType? _aliasOf(String name, YamlMap node) {
     final (inner, nullable) = _unwrapNullable(node);
+
     final ref = inner[r'$ref'];
     if (ref is String && nullable) {
       final t = _type(YamlMap.wrap({r'$ref': ref}), name);
       return DartType(t.name, nullable: true);
     }
-    if (inner['type'] == 'string' &&
-        inner['enum'] == null &&
-        inner['properties'] == null) {
-      if (inner['format'] == 'date-time') {
-        return DartType('DateTime', nullable: nullable);
-      }
-      return DartType('String', nullable: nullable);
+    if (inner['properties'] != null || inner['enum'] != null) return null;
+
+    switch (inner['type']) {
+      case 'string':
+        if (inner['format'] == 'date-time') {
+          return DartType('DateTime', nullable: nullable);
+        }
+        return DartType('String', nullable: nullable);
+      case 'integer':
+        return DartType('int', nullable: nullable);
+      case 'number':
+        return DartType('double', nullable: nullable);
+      case 'boolean':
+        return DartType('bool', nullable: nullable);
+      case 'array':
+        // MetricPoint is `[unix ms, value]`: a 2-tuple written with
+        // prefixItems, which Dart has no type for, so it reads as the
+        // List<double> both members fit -- a unix millisecond is well inside
+        // what a double represents exactly.
+        if (inner['items'] is YamlMap) {
+          final item = _type(inner['items'] as YamlMap, '${name}Item');
+          return DartType('List<${item.decl}>', nullable: nullable);
+        }
+        return null;
+      case 'object':
+        if (inner['additionalProperties'] is YamlMap) {
+          final value = _type(
+            inner['additionalProperties'] as YamlMap,
+            '${name}Value',
+          );
+          return DartType('Map<String, ${value.decl}>', nullable: nullable);
+        }
+        return null;
+      default:
+        return null;
     }
-    // A named schema with additionalProperties and no properties of its own is
-    // a map, not a class -- AlertLabels is `{string: string}`. Emitting a class
-    // for it produced `const AlertLabels({});`, which is not valid Dart, and
-    // would have made every call site unwrap a box around a Map anyway.
-    if (inner['type'] == 'object' &&
-        inner['properties'] == null &&
-        inner['additionalProperties'] is YamlMap) {
-      final value = _type(
-        inner['additionalProperties'] as YamlMap,
-        '${name}Value',
-      );
-      return DartType('Map<String, ${value.decl}>', nullable: nullable);
-    }
-    return null;
   }
 
   void _emitEnum(String name, List<String> values) {
@@ -445,18 +477,56 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     _enums[name] = b.toString();
   }
 
+  /// Flattens an `allOf` into one set of properties.
+  ///
+  /// Composition, not inheritance: ApmService is ApmRed plus its own fields,
+  /// and the app wants one class with all of them rather than a wrapper around
+  /// a base it would reach through on every screen. A branch that is a `$ref`
+  /// is absorbed the same way, which is why ApmRed never becomes a class.
+  void _absorb(YamlMap node, Map<String, Object?> props, Set<String> required) {
+    final (inner, _) = _unwrapNullable(node);
+    final ref = inner[r'$ref'];
+    if (ref is String) {
+      const prefix = '#/components/schemas/';
+      if (!ref.startsWith(prefix)) {
+        _fail('only component schema refs are supported, got $ref');
+      }
+      final target = _schemas[ref.substring(prefix.length)];
+      if (target == null) _fail('allOf branch refers to unknown schema $ref');
+      _absorb(target as YamlMap, props, required);
+      return;
+    }
+    final all = inner['allOf'];
+    if (all is YamlList) {
+      for (final branch in all.cast<YamlMap>()) {
+        _absorb(branch, props, required);
+      }
+    }
+    final p = inner['properties'];
+    if (p is YamlMap) {
+      for (final e in p.entries) {
+        props[e.key as String] = e.value;
+      }
+    }
+    final r = inner['required'];
+    if (r is YamlList) required.addAll(r.cast<String>());
+  }
+
   void _emit(String name, YamlMap node) {
     if (_classes.containsKey(name)) return;
-    _classes[name] =
-        ''; // reserve the slot: a self-referencing schema must not recurse forever
+    // reserve the slot: a self-referencing schema must not recurse forever
+    _classes[name] = '';
     final (unwrapped, _) = _unwrapNullable(node);
-    if (unwrapped['type'] != 'object' && unwrapped['properties'] == null) {
+    final composed = unwrapped['allOf'] is YamlList;
+    if (!composed &&
+        unwrapped['type'] != 'object' &&
+        unwrapped['properties'] == null) {
       _fail('$name is not an object; add it as an alias instead');
     }
-    final props = (unwrapped['properties'] as YamlMap?) ?? YamlMap();
-    final required = ((unwrapped['required'] as YamlList?) ?? YamlList())
-        .cast<String>()
-        .toSet();
+    final merged = <String, Object?>{};
+    final required = <String>{};
+    _absorb(unwrapped, merged, required);
+    final props = YamlMap.wrap(merged);
 
     final fields = <_Field>[];
     for (final entry in props.entries) {

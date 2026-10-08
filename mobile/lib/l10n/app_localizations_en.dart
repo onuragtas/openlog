@@ -282,4 +282,55 @@ class LEn extends L {
   String daysAgo(int count) {
     return '${count}d ago';
   }
+
+  @override
+  String get navAlerts => 'Alerts';
+
+  @override
+  String get navServices => 'Services';
+
+  @override
+  String get navLogs => 'Logs';
+
+  @override
+  String get servicesEmpty => 'No service has reported in the last hour.';
+
+  @override
+  String get servicesSearch => 'Search services';
+
+  @override
+  String get servicesForbidden => 'Your role does not allow reading services.';
+
+  @override
+  String get svcThroughput => 'rpm';
+
+  @override
+  String get svcErrorRate => 'errors';
+
+  @override
+  String get svcP95 => 'p95';
+
+  @override
+  String get svcApdex => 'Apdex';
+
+  @override
+  String get svcNoData => '—';
+
+  @override
+  String get logsEmpty => 'No log records match.';
+
+  @override
+  String get logsSearch => 'Search in the message';
+
+  @override
+  String get logsForbidden => 'Your role does not allow reading logs.';
+
+  @override
+  String get logsSeverity => 'Severity';
+
+  @override
+  String get logsSeverityAll => 'All';
+
+  @override
+  String get logsNoService => 'no service';
 }

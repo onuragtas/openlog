@@ -649,6 +649,76 @@ class AlertIncident {
   final List<String> channelIds;
 }
 
+/// `ApmService` of the openlog API contract.
+class ApmService {
+  const ApmService({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.language,
+    required this.version,
+    required this.lastSeen,
+    required this.apdexTMs,
+    required this.sparkline,
+  });
+
+  factory ApmService.fromJson(Object? json, [String path = 'ApmService']) {
+    final m = _obj(json, path);
+    return ApmService(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      language: _req(m, 'language', path, _str),
+      version: _req(m, 'version', path, _str),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      sparkline: _req(
+        m,
+        'sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final String language;
+  final String version;
+  final DateTime lastSeen;
+  final double apdexTMs;
+  final List<List<double>> sparkline;
+}
+
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -786,4 +856,99 @@ class IncidentPageCounts {
   final int open;
   final int acknowledged;
   final int resolved;
+}
+
+/// `ServicePage` of the openlog API contract.
+class ServicePage {
+  const ServicePage({required this.step, required this.services});
+
+  factory ServicePage.fromJson(Object? json, [String path = 'ServicePage']) {
+    final m = _obj(json, path);
+    return ServicePage(
+      step: _req(m, 'step', path, _str),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<ApmService>(v, p, (v, p) => ApmService.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final String step;
+  final List<ApmService> services;
+}
+
+/// `LogPage` of the openlog API contract.
+class LogPage {
+  const LogPage({required this.logs, this.nextCursor});
+
+  factory LogPage.fromJson(Object? json, [String path = 'LogPage']) {
+    final m = _obj(json, path);
+    return LogPage(
+      logs: _req(
+        m,
+        'logs',
+        path,
+        (v, p) => _list<LogRecord>(v, p, (v, p) => LogRecord.fromJson(v, p)),
+      ),
+      nextCursor: _opt(m, 'next_cursor', path, _str),
+    );
+  }
+
+  final List<LogRecord> logs;
+  final String? nextCursor;
+}
+
+/// `LogRecord` of the openlog API contract.
+class LogRecord {
+  const LogRecord({
+    required this.timestamp,
+    required this.severityText,
+    required this.severityNumber,
+    required this.body,
+    required this.hostId,
+    required this.serviceName,
+    required this.traceId,
+    required this.spanId,
+    required this.attributes,
+    required this.resourceAttributes,
+  });
+
+  factory LogRecord.fromJson(Object? json, [String path = 'LogRecord']) {
+    final m = _obj(json, path);
+    return LogRecord(
+      timestamp: _req(m, 'timestamp', path, _time),
+      severityText: _req(m, 'severity_text', path, _str),
+      severityNumber: _req(m, 'severity_number', path, _int),
+      body: _req(m, 'body', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      resourceAttributes: _req(
+        m,
+        'resource_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final DateTime timestamp;
+  final String severityText;
+  final int severityNumber;
+  final String body;
+  final String hostId;
+  final String serviceName;
+  final String traceId;
+  final String spanId;
+  final Map<String, String> attributes;
+  final Map<String, String> resourceAttributes;
 }

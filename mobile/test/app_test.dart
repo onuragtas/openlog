@@ -9,6 +9,8 @@ import 'package:openlog_mobile/main.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/alerts.dart';
+import 'package:openlog_mobile/src/logs.dart';
+import 'package:openlog_mobile/src/services.dart';
 import 'package:openlog_mobile/src/session.dart';
 import 'package:openlog_mobile/src/storage/token_store.dart';
 
@@ -50,7 +52,7 @@ class ScriptedAlerts extends AlertsController {
     List<AlertIncident> incidents = const [],
     IncidentPageCounts? counts,
   }) : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
-    this.incidents = incidents;
+    items = incidents;
     this.counts =
         counts ??
         const IncidentPageCounts(open: 0, acknowledged: 0, resolved: 0);
@@ -87,6 +89,87 @@ AlertIncident firing(
   openedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 7)),
   acknowledgedByEmail: ackBy,
   channelIds: const [],
+);
+
+/// Services and logs that make no requests, for the same reason as above.
+class ScriptedServices extends ServicesController {
+  ScriptedServices({List<ApmService> services = const []})
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    items = services;
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh:$query');
+}
+
+class ScriptedLogs extends LogsController {
+  ScriptedLogs({List<LogRecord> logs = const []})
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    items = logs;
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh:$query:$severityMin');
+}
+
+ApmService service(
+  String name, {
+  double errorRate = 0,
+  double throughput = 120,
+  double? p95 = 180,
+}) => ApmService(
+  requests: 1200,
+  throughput: throughput,
+  errors: 3,
+  errorRate: errorRate,
+  p95Ms: p95,
+  apdex: 0.97,
+  serviceName: name,
+  serviceNamespace: '',
+  environment: 'prod',
+  language: 'go',
+  version: '1.2.3',
+  lastSeen: DateTime.now().toUtc(),
+  apdexTMs: 500,
+  sparkline: const [],
+);
+
+LogRecord logLine(
+  String body, {
+  int severity = 17,
+  String service = 'checkout',
+}) => LogRecord(
+  timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+  severityText: severity >= 17 ? 'ERROR' : 'WARN',
+  severityNumber: severity,
+  body: body,
+  hostId: 'h1',
+  serviceName: service,
+  traceId: '',
+  spanId: '',
+  attributes: const {},
+  resourceAttributes: const {},
+);
+
+/// The signed-in app with all three lists scripted, which is what the shell
+/// needs: it builds every tab at once so moving between them keeps their state.
+Widget signedInApp(
+  SessionController session, {
+  AlertsController? alerts,
+  ServicesController? services,
+  LogsController? logs,
+}) => OpenlogApp(
+  store: MemoryTokenStore(),
+  session: session,
+  alerts: alerts ?? ScriptedAlerts(),
+  services: services ?? ScriptedServices(),
+  logs: logs ?? ScriptedLogs(),
 );
 
 /// Opens the account drawer, which is where the signed-in details moved when
@@ -333,13 +416,7 @@ void main() {
     'signed in, the screen names the person, the organization and the role',
     (tester) async {
       final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
-      await tester.pumpWidget(
-        OpenlogApp(
-          store: MemoryTokenStore(),
-          session: s,
-          alerts: ScriptedAlerts(),
-        ),
-      );
+      await tester.pumpWidget(signedInApp(s));
       await tester.pump();
       await openDrawer(tester);
 
@@ -356,13 +433,7 @@ void main() {
   ) async {
     final s = ScriptedSession(stage: SessionStage.signedIn)
       ..me = me(orgs: [org('o1', 'Org A'), org('o2', 'Org B')]);
-    await tester.pumpWidget(
-      OpenlogApp(
-        store: MemoryTokenStore(),
-        session: s,
-        alerts: ScriptedAlerts(),
-      ),
-    );
+    await tester.pumpWidget(signedInApp(s));
     await tester.pump();
     await openDrawer(tester);
 
@@ -378,13 +449,7 @@ void main() {
     tester,
   ) async {
     final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
-    await tester.pumpWidget(
-      OpenlogApp(
-        store: MemoryTokenStore(),
-        session: s,
-        alerts: ScriptedAlerts(),
-      ),
-    );
+    await tester.pumpWidget(signedInApp(s));
     await tester.pump();
     await openDrawer(tester);
 
@@ -449,9 +514,7 @@ void main() {
       ],
       counts: const IncidentPageCounts(open: 1, acknowledged: 1, resolved: 0),
     );
-    await tester.pumpWidget(
-      OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
-    );
+    await tester.pumpWidget(signedInApp(s, alerts: a));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('incident-i1')), findsOneWidget);
@@ -473,9 +536,7 @@ void main() {
     final a = ScriptedAlerts(
       counts: const IncidentPageCounts(open: 0, acknowledged: 0, resolved: 11),
     );
-    await tester.pumpWidget(
-      OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
-    );
+    await tester.pumpWidget(signedInApp(s, alerts: a));
     await tester.pumpAndSettle();
 
     expect(find.text('Nothing is firing.'), findsOneWidget);
@@ -489,9 +550,7 @@ void main() {
       final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
       final a = ScriptedAlerts()
         ..failure = const SessionFailure('alertsForbidden', '');
-      await tester.pumpWidget(
-        OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
-      );
+      await tester.pumpWidget(signedInApp(s, alerts: a));
       await tester.pumpAndSettle();
 
       expect(
@@ -506,11 +565,108 @@ void main() {
   ) async {
     final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
     final a = ScriptedAlerts();
-    await tester.pumpWidget(
-      OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
-    );
+    await tester.pumpWidget(signedInApp(s, alerts: a));
     await tester.pumpAndSettle();
 
     expect(a.calls, contains('refresh'));
+  });
+
+  testWidgets(
+    'the three lists are tabs, and moving between them keeps each one',
+    (tester) async {
+      final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+      final services = ScriptedServices(services: [service('checkout')]);
+      final logs = ScriptedLogs(logs: [logLine('connection refused')]);
+      await tester.pumpWidget(
+        signedInApp(
+          session,
+          alerts: ScriptedAlerts(incidents: [firing('i1')]),
+          services: services,
+          logs: logs,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('incident-i1')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('tab-services')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('service-checkout')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('tab-logs')));
+      await tester.pumpAndSettle();
+      expect(find.text('connection refused'), findsOneWidget);
+
+      // Back to the first tab: an IndexedStack keeps it built, so the list is
+      // still there and was not reloaded, which on an on-call screen is the
+      // difference between checking two things and losing one.
+      await tester.tap(find.byKey(const Key('tab-alerts')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('incident-i1')), findsOneWidget);
+      expect(services.calls.where((c) => c.startsWith('refresh')).length, 1);
+    },
+  );
+
+  testWidgets(
+    'a service search asks the server rather than filtering locally',
+    (tester) async {
+      final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+      final services = ScriptedServices(services: [service('checkout')]);
+      await tester.pumpWidget(signedInApp(session, services: services));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tab-services')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('services-search')), 'pay');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+
+      // Searching the rows already loaded would hide every service that did not
+      // fit in the first page.
+      expect(services.calls, contains('refresh:pay'));
+    },
+  );
+
+  testWidgets('the log severity filter is a query, not a client-side sieve', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final logs = ScriptedLogs(logs: [logLine('boom')]);
+    await tester.pumpWidget(signedInApp(session, logs: logs));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tab-logs')));
+    await tester.pumpAndSettle();
+
+    // Scoped to the filter: a log row shows its own severity as "ERROR" too,
+    // so a bare text finder taps the list instead of the button.
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('logs-severity')),
+        matching: find.text('ERROR'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(logs.calls, contains('refresh::ERROR'));
+  });
+
+  testWidgets('a service with no errors is not coloured as if it had some', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    await tester.pumpWidget(
+      signedInApp(
+        session,
+        services: ScriptedServices(
+          services: [service('quiet'), service('broken', errorRate: 0.12)],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tab-services')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0.0%'), findsOneWidget);
+    expect(find.text('12%'), findsOneWidget);
   });
 }

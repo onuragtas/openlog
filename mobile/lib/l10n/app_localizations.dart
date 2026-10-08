@@ -570,6 +570,108 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{count}d ago'**
   String daysAgo(int count);
+
+  /// No description provided for @navAlerts.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get navAlerts;
+
+  /// No description provided for @navServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get navServices;
+
+  /// No description provided for @navLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get navLogs;
+
+  /// No description provided for @servicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No service has reported in the last hour.'**
+  String get servicesEmpty;
+
+  /// No description provided for @servicesSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search services'**
+  String get servicesSearch;
+
+  /// No description provided for @servicesForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading services.'**
+  String get servicesForbidden;
+
+  /// No description provided for @svcThroughput.
+  ///
+  /// In en, this message translates to:
+  /// **'rpm'**
+  String get svcThroughput;
+
+  /// No description provided for @svcErrorRate.
+  ///
+  /// In en, this message translates to:
+  /// **'errors'**
+  String get svcErrorRate;
+
+  /// No description provided for @svcP95.
+  ///
+  /// In en, this message translates to:
+  /// **'p95'**
+  String get svcP95;
+
+  /// No description provided for @svcApdex.
+  ///
+  /// In en, this message translates to:
+  /// **'Apdex'**
+  String get svcApdex;
+
+  /// No description provided for @svcNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'—'**
+  String get svcNoData;
+
+  /// No description provided for @logsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No log records match.'**
+  String get logsEmpty;
+
+  /// No description provided for @logsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in the message'**
+  String get logsSearch;
+
+  /// No description provided for @logsForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading logs.'**
+  String get logsForbidden;
+
+  /// No description provided for @logsSeverity.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get logsSeverity;
+
+  /// No description provided for @logsSeverityAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get logsSeverityAll;
+
+  /// No description provided for @logsNoService.
+  ///
+  /// In en, this message translates to:
+  /// **'no service'**
+  String get logsNoService;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
