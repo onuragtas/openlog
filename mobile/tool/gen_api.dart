@@ -35,6 +35,9 @@ const schemaTargets = <String>[
   'ApmErrorInbox', // what is actually breaking in that service
   'Trace', // one request end to end: where the time and the error went
   'TracesQueryResponse', // the span search behind the traces section
+  'MetricListResponse', // the metrics explorer's list
+  'MetricDetail', // one metric: what it is and how it can be aggregated
+  'MetricQueryResponse', // and the series to draw
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers

@@ -706,4 +706,37 @@ class LTr extends L {
 
   @override
   String get tracesError => 'hata';
+
+  @override
+  String get navMetrics => 'Metrikler';
+
+  @override
+  String get metricsEmpty => 'Bu aralıkta rapor eden metrik yok.';
+
+  @override
+  String metricSeriesCount(int count) {
+    return '$count seri';
+  }
+
+  @override
+  String metricNoChart(String detail) {
+    return 'Seri çizilemedi: $detail';
+  }
+
+  @override
+  String get metricNoPoints => 'Bu metriğin bu aralıkta noktası yok.';
+
+  @override
+  String get metricAttributes => 'Öznitelikler';
+
+  @override
+  String get metricResourceKeys => 'Kaynak anahtarları';
+
+  @override
+  String get metricTruncated => 'Grafiğin gösterdiğinden fazla seri var.';
+
+  @override
+  String metricOneSeries(int count) {
+    return '$count serinin biri.';
+  }
 }

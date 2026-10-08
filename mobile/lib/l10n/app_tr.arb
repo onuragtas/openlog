@@ -279,5 +279,35 @@
   "tracesEmpty": "Bu aralıkta izlenmiş istek yok.",
   "tracesNewest": "En yeni",
   "tracesSlowest": "En yavaş",
-  "tracesError": "hata"
+  "tracesError": "hata",
+  "navMetrics": "Metrikler",
+  "metricsEmpty": "Bu aralıkta rapor eden metrik yok.",
+  "metricSeriesCount": "{count} seri",
+  "@metricSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "metricNoChart": "Seri çizilemedi: {detail}",
+  "@metricNoChart": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "metricNoPoints": "Bu metriğin bu aralıkta noktası yok.",
+  "metricAttributes": "Öznitelikler",
+  "metricResourceKeys": "Kaynak anahtarları",
+  "metricTruncated": "Grafiğin gösterdiğinden fazla seri var.",
+  "metricOneSeries": "{count} serinin biri.",
+  "@metricOneSeries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

@@ -376,5 +376,35 @@
   "tracesEmpty": "No request has been traced in the window.",
   "tracesNewest": "Newest",
   "tracesSlowest": "Slowest",
-  "tracesError": "error"
+  "tracesError": "error",
+  "navMetrics": "Metrics",
+  "metricsEmpty": "No metric has reported in the window.",
+  "metricSeriesCount": "{count} series",
+  "@metricSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "metricNoChart": "No series could be drawn: {detail}",
+  "@metricNoChart": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "metricNoPoints": "This metric has no points in the window.",
+  "metricAttributes": "Attributes",
+  "metricResourceKeys": "Resource keys",
+  "metricTruncated": "More series than the chart shows.",
+  "metricOneSeries": "One of {count} series.",
+  "@metricOneSeries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

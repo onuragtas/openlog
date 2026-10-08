@@ -1380,6 +1380,60 @@ abstract class L {
   /// In en, this message translates to:
   /// **'error'**
   String get tracesError;
+
+  /// No description provided for @navMetrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics'**
+  String get navMetrics;
+
+  /// No description provided for @metricsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No metric has reported in the window.'**
+  String get metricsEmpty;
+
+  /// No description provided for @metricSeriesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} series'**
+  String metricSeriesCount(int count);
+
+  /// No description provided for @metricNoChart.
+  ///
+  /// In en, this message translates to:
+  /// **'No series could be drawn: {detail}'**
+  String metricNoChart(String detail);
+
+  /// No description provided for @metricNoPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'This metric has no points in the window.'**
+  String get metricNoPoints;
+
+  /// No description provided for @metricAttributes.
+  ///
+  /// In en, this message translates to:
+  /// **'Attributes'**
+  String get metricAttributes;
+
+  /// No description provided for @metricResourceKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'Resource keys'**
+  String get metricResourceKeys;
+
+  /// No description provided for @metricTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'More series than the chart shows.'**
+  String get metricTruncated;
+
+  /// No description provided for @metricOneSeries.
+  ///
+  /// In en, this message translates to:
+  /// **'One of {count} series.'**
+  String metricOneSeries(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

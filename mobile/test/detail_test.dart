@@ -164,6 +164,54 @@ Map<String, Object?> span(
   'events': <Object>[],
 };
 
+Map<String, Object?> metricDetail({String agg = 'avg'}) => {
+  'name': 'http.server.duration',
+  'type': 'histogram',
+  'unit': 'ms',
+  'description': 'request duration',
+  'temporality': 'delta',
+  'monotonic': false,
+  'last_seen': '2026-10-08T09:00:00.000000000Z',
+  'series': 7,
+  'services': ['checkout'],
+  'attribute_keys': [
+    {
+      'key': 'http.route',
+      'name': 'http.route',
+      'source': 'attribute',
+      'type': 'string',
+      'count': 10,
+      'cardinality': 4,
+    },
+  ],
+  'resource_keys': <Object>[],
+  'aggregations': ['p50', 'p95', 'p99'],
+  'default_aggregation': agg,
+};
+
+Map<String, Object?> metricSeries() => {
+  'metric': {
+    'name': 'http.server.duration',
+    'type': 'histogram',
+    'unit': 'ms',
+    'temporality': 'delta',
+    'monotonic': false,
+  },
+  'aggregation': 'p95',
+  'step': '60s',
+  'series': [
+    {
+      'attributes': {'http.route': '/checkout'},
+      'points': [
+        [1760000000000, 12.5],
+        [1760000060000, 18.0],
+      ],
+    },
+    {'attributes': <String, String>{}, 'points': <Object>[]},
+  ],
+  'truncated': false,
+};
+
 void main() {
   test('the incident is asked for by id, and its open details survive', () async {
     final server = await FakeServer.start(
@@ -410,6 +458,72 @@ void main() {
       expect(c.rows.single.width.isNaN, isFalse);
     },
   );
+
+  test('a metric is read first, then drawn with its own aggregation', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'POST') {
+        writeJson(req, 200, metricSeries());
+      } else {
+        writeJson(req, 200, metricDetail(agg: 'p95'));
+      }
+    });
+    addTearDown(server.stop);
+    final c = MetricController(client(server.baseUrl), 'http.server.duration');
+
+    await c.refresh();
+
+    expect(server.requests.map((r) => '${r.method} ${r.path}'), [
+      'GET /api/v1/metrics/http.server.duration',
+      'POST /api/v1/metrics/query',
+    ]);
+    // Which aggregation is meaningful depends on the metric's type, so it
+    // comes from the metadata rather than from a guess in this app.
+    expect(jsonDecode(server.requests.last.body), {
+      'metric': 'http.server.duration',
+      'aggregation': 'p95',
+    });
+    expect(c.values, [12.5, 18.0]);
+    expect(c.seriesError, isNull);
+  });
+
+  test('a metric with no chart still shows what it is', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'POST') {
+        writeJson(req, 422, {
+          'error': {'message': 'too many series'},
+        });
+      } else {
+        writeJson(req, 200, metricDetail());
+      }
+    });
+    addTearDown(server.stop);
+    final c = MetricController(client(server.baseUrl), 'http.server.duration');
+
+    await c.refresh();
+
+    // The metadata arrived, so the screen is worth showing; only the chart is
+    // missing, and the reason is kept rather than the whole screen failing.
+    expect(c.failure, isNull);
+    expect(c.value!.attributeKeys.single.key, 'http.route');
+    expect(c.seriesError, contains('too many series'));
+    expect(c.values, isEmpty);
+  });
+
+  test('a metric name with a slash is encoded, not split', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'POST') {
+        writeJson(req, 200, metricSeries());
+      } else {
+        writeJson(req, 200, metricDetail());
+      }
+    });
+    addTearDown(server.stop);
+    final c = MetricController(client(server.baseUrl), 'queue/depth');
+
+    await c.refresh();
+
+    expect(server.requests.first.path, '/api/v1/metrics/queue%2Fdepth');
+  });
 
   test('a server that is not there reads as unreachable', () async {
     final c = ServiceOverviewController(

@@ -32,6 +32,7 @@ final navItems = <NavItem>[
   NavItem(Icons.gpp_maybe_outlined, (l) => l.navVulnerabilities),
   NavItem(Icons.article_outlined, (l) => l.navLogs),
   NavItem(Icons.account_tree_outlined, (l) => l.navTraces),
+  NavItem(Icons.show_chart_outlined, (l) => l.navMetrics),
   NavItem(Icons.manage_search_outlined, (l) => l.navQuery),
   NavItem(Icons.dashboard_outlined, (l) => l.navDashboards),
   NavItem(Icons.notifications_outlined, (l) => l.navAlerts),

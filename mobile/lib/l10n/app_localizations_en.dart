@@ -711,4 +711,37 @@ class LEn extends L {
 
   @override
   String get tracesError => 'error';
+
+  @override
+  String get navMetrics => 'Metrics';
+
+  @override
+  String get metricsEmpty => 'No metric has reported in the window.';
+
+  @override
+  String metricSeriesCount(int count) {
+    return '$count series';
+  }
+
+  @override
+  String metricNoChart(String detail) {
+    return 'No series could be drawn: $detail';
+  }
+
+  @override
+  String get metricNoPoints => 'This metric has no points in the window.';
+
+  @override
+  String get metricAttributes => 'Attributes';
+
+  @override
+  String get metricResourceKeys => 'Resource keys';
+
+  @override
+  String get metricTruncated => 'More series than the chart shows.';
+
+  @override
+  String metricOneSeries(int count) {
+    return 'One of $count series.';
+  }
 }

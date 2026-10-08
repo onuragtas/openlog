@@ -261,3 +261,55 @@ class TraceController extends DetailController<Trace> {
     return out;
   }
 }
+
+/// One metric: its metadata and a series drawn with the aggregation the
+/// server says is the right default for its type.
+///
+/// Two requests, in order, because the second depends on the first: which
+/// aggregations mean anything is a property of the metric, so asking for a
+/// series before reading the metadata would mean this app guessing.
+class MetricController extends DetailController<MetricDetail> {
+  MetricController(this._client, this.name);
+
+  final OpenlogClient _client;
+  final String name;
+
+  MetricQueryResponse? series;
+
+  /// Why the chart is missing while the metadata is on screen. A metric can
+  /// describe itself and still have nothing to draw, and an empty space where
+  /// a chart should be says nothing about which happened.
+  String? seriesError;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<MetricDetail> fetch() async {
+    final detail = await _client.metric(name);
+    seriesError = null;
+    series = null;
+    try {
+      series = await _client.metricSeries(
+        name,
+        aggregation: detail.defaultAggregation,
+      );
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      // The metadata came back, so the screen is worth showing; only the chart
+      // is missing, and saying why beats failing the whole screen.
+      seriesError = e.message;
+    }
+    return detail;
+  }
+
+  /// The first series' values, for the sparkline. One line: a metric can have
+  /// fifty series and a phone can show one of them honestly or fifty of them
+  /// as a smear.
+  List<double> get values => [
+    for (final p
+        in series?.series.firstOrNull?.points ?? const <List<double>>[])
+      if (p.length > 1) p[1],
+  ];
+}

@@ -303,6 +303,43 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// Metric names with data points in the range.
+  ///
+  /// `q` matches the name or any service that sent it, so typing a service
+  /// lists its metrics -- which is how a person who knows the service but not
+  /// the metric name finds anything here.
+  Future<MetricListResponse> metrics({String q = '', int limit = 200}) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (q.trim().isNotEmpty) query['q'] = q.trim();
+    return MetricListResponse.fromJson(
+      await _send(
+        'GET',
+        '/api/v1/metrics?${Uri(queryParameters: query).query}',
+      ),
+    );
+  }
+
+  /// One metric: what it is, and which aggregations it allows.
+  Future<MetricDetail> metric(String name) async => MetricDetail.fromJson(
+    await _send('GET', '/api/v1/metrics/${Uri.encodeComponent(name)}'),
+  );
+
+  /// Its series under [aggregation].
+  ///
+  /// The aggregation is not this app's choice: which ones are even meaningful
+  /// depends on the metric's type, so the detail is read first and its
+  /// `default_aggregation` is what gets asked for.
+  Future<MetricQueryResponse> metricSeries(
+    String name, {
+    required MetricAggregation aggregation,
+  }) async => MetricQueryResponse.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/metrics/query',
+      body: {'metric': name, 'aggregation': aggregation.wire},
+    ),
+  );
+
   Future<TracesQueryResponse> traces({
     String q = '',
     bool slowest = false,

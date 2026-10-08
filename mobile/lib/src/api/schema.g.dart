@@ -380,6 +380,97 @@ enum AlertResolveReason {
   }
 }
 
+/// MetricType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum MetricType {
+  gauge('gauge'),
+  sum('sum'),
+  histogram('histogram'),
+  exponentialHistogram('exponential_histogram'),
+  summary('summary'),
+  empty(''),
+  unknown('');
+
+  const MetricType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static MetricType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// MetricTemporality of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum MetricTemporality {
+  unspecified('unspecified'),
+  delta('delta'),
+  cumulative('cumulative'),
+  unknown('');
+
+  const MetricTemporality(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static MetricTemporality fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// MetricAggregation of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum MetricAggregation {
+  avg('avg'),
+  min('min'),
+  max('max'),
+  sum('sum'),
+  last('last'),
+  count('count'),
+  rate('rate'),
+  increase('increase'),
+  p50('p50'),
+  p75('p75'),
+  p90('p90'),
+  p95('p95'),
+  p99('p99'),
+  unknown('');
+
+  const MetricAggregation(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static MetricAggregation fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVisibility of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -649,6 +740,59 @@ enum SpanStatusCode {
   final String wire;
 
   static SpanStatusCode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FieldSource of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FieldSource {
+  field('field'),
+  attribute('attribute'),
+  resource('resource'),
+  body('body'),
+  unknown('');
+
+  const FieldSource(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FieldSource fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FieldType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FieldType {
+  string('string'),
+  number('number'),
+  bool('bool'),
+  unknown('');
+
+  const FieldType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FieldType fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1451,6 +1595,175 @@ class TracesQueryResponse {
   final String? nextCursor;
 }
 
+/// `MetricListResponse` of the openlog API contract.
+class MetricListResponse {
+  const MetricListResponse({required this.metrics, required this.truncated});
+
+  factory MetricListResponse.fromJson(
+    Object? json, [
+    String path = 'MetricListResponse',
+  ]) {
+    final m = _obj(json, path);
+    return MetricListResponse(
+      metrics: _req(
+        m,
+        'metrics',
+        path,
+        (v, p) => _list<MetricInfo>(v, p, (v, p) => MetricInfo.fromJson(v, p)),
+      ),
+      truncated: _req(m, 'truncated', path, _bool),
+    );
+  }
+
+  final List<MetricInfo> metrics;
+  final bool truncated;
+}
+
+/// `MetricDetail` of the openlog API contract.
+class MetricDetail {
+  const MetricDetail({
+    required this.name,
+    required this.type,
+    required this.unit,
+    required this.description,
+    required this.temporality,
+    required this.monotonic,
+    required this.lastSeen,
+    required this.series,
+    required this.services,
+    required this.attributeKeys,
+    required this.resourceKeys,
+    required this.aggregations,
+    required this.defaultAggregation,
+  });
+
+  factory MetricDetail.fromJson(Object? json, [String path = 'MetricDetail']) {
+    final m = _obj(json, path);
+    return MetricDetail(
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, MetricType.fromJson),
+      unit: _req(m, 'unit', path, _str),
+      description: _req(m, 'description', path, _str),
+      temporality: _req(m, 'temporality', path, MetricTemporality.fromJson),
+      monotonic: _req(m, 'monotonic', path, _bool),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      series: _req(m, 'series', path, _int),
+      services: _req(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+      attributeKeys: _req(
+        m,
+        'attribute_keys',
+        path,
+        (v, p) => _list<FieldKey>(v, p, (v, p) => FieldKey.fromJson(v, p)),
+      ),
+      resourceKeys: _req(
+        m,
+        'resource_keys',
+        path,
+        (v, p) => _list<FieldKey>(v, p, (v, p) => FieldKey.fromJson(v, p)),
+      ),
+      aggregations: _req(
+        m,
+        'aggregations',
+        path,
+        (v, p) => _list<MetricAggregation>(v, p, MetricAggregation.fromJson),
+      ),
+      defaultAggregation: _req(
+        m,
+        'default_aggregation',
+        path,
+        MetricAggregation.fromJson,
+      ),
+    );
+  }
+
+  final String name;
+  final MetricType type;
+  final String unit;
+  final String description;
+  final MetricTemporality temporality;
+  final bool monotonic;
+  final DateTime lastSeen;
+  final int series;
+  final List<String> services;
+  final List<FieldKey> attributeKeys;
+  final List<FieldKey> resourceKeys;
+  final List<MetricAggregation> aggregations;
+  final MetricAggregation defaultAggregation;
+}
+
+/// `MetricQueryResponse` of the openlog API contract.
+class MetricQueryResponse {
+  const MetricQueryResponse({
+    required this.metric,
+    required this.aggregation,
+    required this.step,
+    required this.series,
+    required this.truncated,
+  });
+
+  factory MetricQueryResponse.fromJson(
+    Object? json, [
+    String path = 'MetricQueryResponse',
+  ]) {
+    final m = _obj(json, path);
+    return MetricQueryResponse(
+      metric: _req(
+        m,
+        'metric',
+        path,
+        (v, p) => MetricQueryResponseMetric.fromJson(v, p),
+      ),
+      aggregation: _req(m, 'aggregation', path, MetricAggregation.fromJson),
+      step: _req(m, 'step', path, _str),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) =>
+            _list<MetricSeries>(v, p, (v, p) => MetricSeries.fromJson(v, p)),
+      ),
+      truncated: _req(m, 'truncated', path, _bool),
+    );
+  }
+
+  final MetricQueryResponseMetric metric;
+  final MetricAggregation aggregation;
+  final String step;
+  final List<MetricSeries> series;
+  final bool truncated;
+}
+
+/// `MetricQueryResponseMetric` of the openlog API contract.
+class MetricQueryResponseMetric {
+  const MetricQueryResponseMetric({
+    required this.name,
+    required this.type,
+    required this.unit,
+    required this.temporality,
+    required this.monotonic,
+  });
+
+  factory MetricQueryResponseMetric.fromJson(
+    Object? json, [
+    String path = 'MetricQueryResponseMetric',
+  ]) {
+    final m = _obj(json, path);
+    return MetricQueryResponseMetric(
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, MetricType.fromJson),
+      unit: _req(m, 'unit', path, _str),
+      temporality: _req(m, 'temporality', path, MetricTemporality.fromJson),
+      monotonic: _req(m, 'monotonic', path, _bool),
+    );
+  }
+
+  final String name;
+  final MetricType type;
+  final String unit;
+  final MetricTemporality temporality;
+  final bool monotonic;
+}
+
 /// `DashboardSummary` of the openlog API contract.
 class DashboardSummary {
   const DashboardSummary({
@@ -2106,6 +2419,104 @@ class SpanQueryRow {
   final Map<String, String> fields;
   final Map<String, String>? attributes;
   final Map<String, String>? resourceAttributes;
+}
+
+/// `MetricInfo` of the openlog API contract.
+class MetricInfo {
+  const MetricInfo({
+    required this.name,
+    required this.type,
+    required this.unit,
+    required this.description,
+    required this.temporality,
+    required this.monotonic,
+    required this.lastSeen,
+    required this.series,
+    required this.services,
+  });
+
+  factory MetricInfo.fromJson(Object? json, [String path = 'MetricInfo']) {
+    final m = _obj(json, path);
+    return MetricInfo(
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, MetricType.fromJson),
+      unit: _req(m, 'unit', path, _str),
+      description: _req(m, 'description', path, _str),
+      temporality: _req(m, 'temporality', path, MetricTemporality.fromJson),
+      monotonic: _req(m, 'monotonic', path, _bool),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      series: _req(m, 'series', path, _int),
+      services: _req(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+    );
+  }
+
+  final String name;
+  final MetricType type;
+  final String unit;
+  final String description;
+  final MetricTemporality temporality;
+  final bool monotonic;
+  final DateTime lastSeen;
+  final int series;
+  final List<String> services;
+}
+
+/// `FieldKey` of the openlog API contract.
+class FieldKey {
+  const FieldKey({
+    required this.key,
+    required this.name,
+    required this.source,
+    required this.type,
+    this.count,
+    this.cardinality,
+  });
+
+  factory FieldKey.fromJson(Object? json, [String path = 'FieldKey']) {
+    final m = _obj(json, path);
+    return FieldKey(
+      key: _req(m, 'key', path, _str),
+      name: _req(m, 'name', path, _str),
+      source: _req(m, 'source', path, FieldSource.fromJson),
+      type: _req(m, 'type', path, FieldType.fromJson),
+      count: _opt(m, 'count', path, _int),
+      cardinality: _opt(m, 'cardinality', path, _int),
+    );
+  }
+
+  final String key;
+  final String name;
+  final FieldSource source;
+  final FieldType type;
+  final int? count;
+  final int? cardinality;
+}
+
+/// `MetricSeries` of the openlog API contract.
+class MetricSeries {
+  const MetricSeries({required this.attributes, required this.points});
+
+  factory MetricSeries.fromJson(Object? json, [String path = 'MetricSeries']) {
+    final m = _obj(json, path);
+    return MetricSeries(
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  final Map<String, String> attributes;
+  final List<List<double>> points;
 }
 
 /// `DashboardVariable` of the openlog API contract.

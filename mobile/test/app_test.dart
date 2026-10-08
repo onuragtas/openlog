@@ -1489,6 +1489,7 @@ void main() {
       'Vulnerabilities',
       'Logs',
       'Traces',
+      'Metrics',
       'Query',
       'Dashboards',
       'Alerts',

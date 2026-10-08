@@ -35,6 +35,7 @@ class Sections {
     VulnerabilitiesController? vulnerabilities,
     LogsController? logs,
     TracesController? traces,
+    MetricsController? metrics,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -42,6 +43,7 @@ class Sections {
     ServiceOverviewController Function(String serviceName)? serviceOverview,
     ServiceErrorsController Function(String serviceName)? serviceErrors,
     TraceController Function(String traceId)? trace,
+    MetricController Function(String name)? metric,
   }) : incident = incident ?? ((id) => IncidentController(client, id)),
        serviceOverview =
            serviceOverview ??
@@ -49,6 +51,7 @@ class Sections {
        serviceErrors =
            serviceErrors ?? ((name) => ServiceErrorsController(client, name)),
        trace = trace ?? ((id) => TraceController(client, id)),
+       metric = metric ?? ((name) => MetricController(client, name)),
        hosts = hosts ?? HostsController(client),
        containers = containers ?? ContainersController(client),
        pods = pods ?? PodsController(client),
@@ -60,6 +63,7 @@ class Sections {
        vulnerabilities = vulnerabilities ?? VulnerabilitiesController(client),
        logs = logs ?? LogsController(client),
        traces = traces ?? TracesController(client),
+       metrics = metrics ?? MetricsController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -75,6 +79,7 @@ class Sections {
   final VulnerabilitiesController vulnerabilities;
   final LogsController logs;
   final TracesController traces;
+  final MetricsController metrics;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -87,6 +92,7 @@ class Sections {
   final ServiceOverviewController Function(String serviceName) serviceOverview;
   final ServiceErrorsController Function(String serviceName) serviceErrors;
   final TraceController Function(String traceId) trace;
+  final MetricController Function(String name) metric;
 
   /// In the order the drawer lists them, which is the web's order.
   List<ChangeNotifier> get all => [
@@ -101,6 +107,7 @@ class Sections {
     vulnerabilities,
     logs,
     traces,
+    metrics,
     query,
     dashboards,
     alerts,
@@ -210,4 +217,13 @@ class TracesController extends SectionController<SpanQueryRow> {
   @override
   Future<List<SpanQueryRow>> fetch() async =>
       (await client.traces(q: query.trim(), slowest: slowest)).rows;
+}
+
+/// Metric names, for the metrics explorer.
+class MetricsController extends SectionController<MetricInfo> {
+  MetricsController(super.client);
+
+  @override
+  Future<List<MetricInfo>> fetch() async =>
+      (await client.metrics(q: query.trim())).metrics;
 }
