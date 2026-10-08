@@ -240,5 +240,74 @@
   "stateNotReporting": "Not reporting",
   "stateReady": "Ready",
   "sloMet": "Met",
-  "sloBreached": "Breached"
+  "sloBreached": "Breached",
+  "detailGone": "That is no longer on the server.",
+  "incidentTimeline": "Timeline",
+  "incidentNoEvents": "Nothing has happened to this incident yet.",
+  "incidentDeliveries": "Notifications",
+  "incidentNoDeliveries": "Nothing was sent for this incident.",
+  "incidentLabels": "Labels",
+  "incidentValue": "Value",
+  "incidentThreshold": "Threshold",
+  "incidentOpenService": "Open {name}",
+  "@incidentOpenService": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "incidentResolve": "Resolve",
+  "incidentResolveHint": "A series that is still breaching opens a new incident, so this does not silence anything.",
+  "incidentResolvedBy": "Resolved by {email}",
+  "@incidentResolvedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "incidentResolved": "Resolved {when}",
+  "@incidentResolved": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "incidentNote": "Add a note",
+  "incidentNoteHint": "What you found",
+  "incidentNoteSend": "Send",
+  "incidentEventOpened": "Opened",
+  "incidentEventFlapping": "Flapping",
+  "incidentEventAcknowledged": "Acknowledged",
+  "incidentEventNote": "Note",
+  "incidentEventRenotified": "Re-notified",
+  "incidentEventResolved": "Resolved",
+  "incidentEventDelivered": "Notification delivered",
+  "incidentEventFailed": "Notification failed",
+  "incidentEventSuppressed": "Notification suppressed",
+  "incidentEventMuted": "Notification muted",
+  "incidentEventUnknown": "Event this app does not know",
+  "serviceSignals": "Golden signals",
+  "serviceRequests": "Requests",
+  "serviceErrors": "Errors",
+  "serviceLatency": "Latency",
+  "serviceNoData": "This service has not reported in the window.",
+  "serviceThroughputChart": "Requests per minute",
+  "serviceErrorRateChart": "Error rate",
+  "deliveryPending": "Pending",
+  "deliverySending": "Sending",
+  "deliveryDelivered": "Delivered",
+  "deliveryFailed": "Failed",
+  "deliverySuppressed": "Suppressed",
+  "deliveryUnknown": "Unknown state",
+  "deliveryAttempts": "{count} attempts",
+  "@deliveryAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

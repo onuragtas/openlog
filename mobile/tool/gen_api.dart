@@ -29,7 +29,9 @@ const schemaTargets = <String>[
   'Me', // who am I, which organizations, which role
   'Session', // the person's sessions, including other phones
   'AlertIncident', // what the app exists to show: what is firing right now
+  'AlertIncidentDetail', // one incident with its timeline and what was delivered
   'ApmService', // where to look after an alert: which service, how healthy
+  'ApmOverview', // that service's golden signals, so the alert gets a shape
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers
@@ -463,6 +465,13 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
           final inner = _type(extra, '${context}Value');
           return DartType('Map<String, ${inner.decl}>', nullable: nullable);
         }
+        // `additionalProperties: true` with no declared properties: an open bag
+        // whose values the contract deliberately does not constrain, like an
+        // incident event's `details`. A class would have no fields at all; the
+        // honest Dart type is the map it is.
+        if (node['properties'] == null && extra == true) {
+          return DartType('Map<String, Object?>', nullable: nullable);
+        }
         final name = _className(context);
         _emit(name, node);
         return DartType(name, nullable: nullable);
@@ -517,6 +526,13 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
             '${name}Value',
           );
           return DartType('Map<String, ${value.decl}>', nullable: nullable);
+        }
+        // `additionalProperties: true` with no declared properties: an open bag
+        // whose values the contract deliberately does not constrain, like an
+        // incident event's `details`. A class would have no fields; the honest
+        // Dart type is the map it is.
+        if (inner['additionalProperties'] == true) {
+          return DartType('Map<String, Object?>', nullable: nullable);
         }
         return null;
       default:

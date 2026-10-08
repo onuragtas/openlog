@@ -60,10 +60,10 @@
   "alertsEmpty": "Açık alarm yok.",
   "alertsEmptyHint": "Bir kural tetiklendiği anda burada görünür.",
   "alertsForbidden": "Rolünüz alarmları görmeye izin vermiyor.",
-  "alertsAlreadyResolved": "Bu alarm onaylanmadan önce çözüldü.",
-  "alertsAcknowledge": "Onayla",
-  "alertsAcknowledgedBy": "{email} onayladı",
-  "alertsAcknowledgedUnknown": "Onaylandı",
+  "alertsAlreadyResolved": "Bu alarm üstlenilmeden önce çözüldü.",
+  "alertsAcknowledge": "Üstlen",
+  "alertsAcknowledgedBy": "{email} üstlendi",
+  "alertsAcknowledgedUnknown": "Üstlenildi",
   "alertsCounts": "{open} açık, {acknowledged} onaylanmış",
   "alertsResolvedRecently": "Son 7 günde {count} çözüldü",
   "alertsMuted": "Susturulmuş",
@@ -143,5 +143,74 @@
   "stateNotReporting": "Bildirim yok",
   "stateReady": "Hazır",
   "sloMet": "Karşılandı",
-  "sloBreached": "Aşıldı"
+  "sloBreached": "Aşıldı",
+  "detailGone": "Bu kayıt artık sunucuda yok.",
+  "incidentTimeline": "Zaman çizelgesi",
+  "incidentNoEvents": "Bu olayla ilgili henüz bir şey olmadı.",
+  "incidentDeliveries": "Bildirimler",
+  "incidentNoDeliveries": "Bu olay için bir bildirim gönderilmedi.",
+  "incidentLabels": "Etiketler",
+  "incidentValue": "Değer",
+  "incidentThreshold": "Eşik",
+  "incidentOpenService": "{name} servisini aç",
+  "@incidentOpenService": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "incidentResolve": "Çöz",
+  "incidentResolveHint": "Eşiği aşmaya devam eden bir seri yeni bir olay açar; bu bir susturma değildir.",
+  "incidentResolvedBy": "{email} çözdü",
+  "@incidentResolvedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "incidentResolved": "{when} çözüldü",
+  "@incidentResolved": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "incidentNote": "Not ekle",
+  "incidentNoteHint": "Ne buldunuz",
+  "incidentNoteSend": "Gönder",
+  "incidentEventOpened": "Açıldı",
+  "incidentEventFlapping": "Kararsız",
+  "incidentEventAcknowledged": "Üstlenildi",
+  "incidentEventNote": "Not",
+  "incidentEventRenotified": "Yeniden bildirildi",
+  "incidentEventResolved": "Çözüldü",
+  "incidentEventDelivered": "Bildirim iletildi",
+  "incidentEventFailed": "Bildirim başarısız",
+  "incidentEventSuppressed": "Bildirim bastırıldı",
+  "incidentEventMuted": "Bildirim sessize alındı",
+  "incidentEventUnknown": "Uygulamanın tanımadığı olay",
+  "serviceSignals": "Altın sinyaller",
+  "serviceRequests": "İstekler",
+  "serviceErrors": "Hatalar",
+  "serviceLatency": "Gecikme",
+  "serviceNoData": "Bu servis bu aralıkta hiç rapor etmedi.",
+  "serviceThroughputChart": "Dakikadaki istek",
+  "serviceErrorRateChart": "Hata oranı",
+  "deliveryPending": "Beklemede",
+  "deliverySending": "Gönderiliyor",
+  "deliveryDelivered": "İletildi",
+  "deliveryFailed": "Başarısız",
+  "deliverySuppressed": "Bastırıldı",
+  "deliveryUnknown": "Bilinmeyen durum",
+  "deliveryAttempts": "{count} deneme",
+  "@deliveryAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

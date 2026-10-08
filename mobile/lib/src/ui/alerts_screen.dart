@@ -4,14 +4,26 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../alerts.dart';
 import '../api/schema.g.dart';
+import '../sections.dart';
 import '../session.dart';
+import 'incident_screen.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
+import 'theme.dart';
 
 class AlertsBody extends StatefulWidget {
-  const AlertsBody({super.key, required this.session, required this.alerts});
+  const AlertsBody({
+    super.key,
+    required this.session,
+    required this.sections,
+    required this.alerts,
+  });
 
   final SessionController session;
+
+  /// Needed to open an incident: the detail screen makes its own controller,
+  /// and a test hands this app a scripted one through the same door.
+  final Sections sections;
   final AlertsController alerts;
 
   @override
@@ -45,9 +57,27 @@ class _AlertsBodyState extends State<AlertsBody> {
           incident: c.items[i],
           busy: c.acknowledging == c.items[i].id,
           onAcknowledge: () => c.acknowledge(c.items[i].id),
+          onOpen: () => _open(context, c.items[i]),
         ),
       ),
     );
+  }
+
+  /// Opens the incident, then reloads the list on the way back: the person may
+  /// have acknowledged or resolved it on the detail screen, and a row that still
+  /// says "open" after they closed it is worse than a moment's spinner.
+  Future<void> _open(BuildContext context, AlertIncident incident) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => IncidentScreen(
+          session: widget.session,
+          sections: widget.sections,
+          incidentId: incident.id,
+          ruleName: incident.ruleName,
+        ),
+      ),
+    );
+    await widget.alerts.refresh();
   }
 
   Widget _header(BuildContext context, L l) {
@@ -92,11 +122,13 @@ class _IncidentCard extends StatelessWidget {
     required this.incident,
     required this.busy,
     required this.onAcknowledge,
+    required this.onOpen,
   });
 
   final AlertIncident incident;
   final bool busy;
   final VoidCallback onAcknowledge;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -108,119 +140,70 @@ class _IncidentCard extends StatelessWidget {
     return Card(
       key: Key('incident-${incident.id}'),
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _SeverityChip(severity: incident.severity),
-                if (incident.muted) _Tag(label: l.alertsMuted),
-                if (incident.flapping) _Tag(label: l.alertsFlapping),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SeverityChip(severity: incident.severity),
+                  if (incident.muted) OutlineTag(label: l.alertsMuted),
+                  if (incident.flapping) OutlineTag(label: l.alertsFlapping),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(incident.ruleName, style: text.titleMedium),
+              if (incident.summary.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(incident.summary, style: text.bodyMedium),
               ],
-            ),
-            const SizedBox(height: 8),
-            Text(incident.ruleName, style: text.titleMedium),
-            if (incident.summary.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(incident.summary, style: text.bodyMedium),
-            ],
-            if (incident.seriesKey.isNotEmpty) ...[
-              const SizedBox(height: 4),
+              if (incident.seriesKey.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  incident.seriesKey,
+                  style: text.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
               Text(
-                incident.seriesKey,
+                l.alertsOpened(relativeTimeOf(l, incident.openedAt)),
                 style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
-            ],
-            const SizedBox(height: 10),
-            Text(
-              l.alertsOpened(relativeTimeOf(l, incident.openedAt)),
-              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 6),
-            if (open)
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonal(
-                  key: Key('ack-${incident.id}'),
-                  onPressed: busy ? null : onAcknowledge,
-                  child: busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(l.alertsAcknowledge),
+              const SizedBox(height: 6),
+              if (open)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.tonal(
+                    key: Key('ack-${incident.id}'),
+                    onPressed: busy ? null : onAcknowledge,
+                    child: busy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(l.alertsAcknowledge),
+                  ),
+                )
+              else
+                Text(
+                  incident.acknowledgedByEmail == null
+                      ? l.alertsAcknowledgedUnknown
+                      : l.alertsAcknowledgedBy(incident.acknowledgedByEmail!),
+                  style: text.bodySmall?.copyWith(color: scheme.primary),
                 ),
-              )
-            else
-              Text(
-                incident.acknowledgedByEmail == null
-                    ? l.alertsAcknowledgedUnknown
-                    : l.alertsAcknowledgedBy(incident.acknowledgedByEmail!),
-                style: text.bodySmall?.copyWith(color: scheme.primary),
-              ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _SeverityChip extends StatelessWidget {
-  const _SeverityChip({required this.severity});
-
-  final AlertSeverity severity;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = L.of(context);
-    final (label, level) = switch (severity) {
-      AlertSeverity.critical => (l.severityCritical, SeverityLevel.critical),
-      AlertSeverity.warning => (l.severityWarning, SeverityLevel.warning),
-      AlertSeverity.info => (l.severityInfo, SeverityLevel.info),
-      // A severity this build has never heard of still has to render as
-      // something, since the server can be newer than the app.
-      AlertSeverity.unknown => (l.severityUnknown, SeverityLevel.unknown),
-    };
-    final colors = severityChipColors(context, level);
-    final bg = colors.background;
-    final fg = colors.foreground;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: 12),
-      ),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
       ),
     );
   }

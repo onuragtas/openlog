@@ -119,7 +119,7 @@ class _AppShellState extends State<AppShell> {
             emptyTitle: (l) => l.podsEmpty,
             card: podCard,
           ),
-          ServicesBody(session: session, services: s.services),
+          ServicesBody(session: session, sections: s, services: s.services),
           SectionBody(
             session: session,
             controller: s.databases,
@@ -162,7 +162,7 @@ class _AppShellState extends State<AppShell> {
           ),
           LogsBody(session: session, logs: s.logs),
           DashboardsBody(session: session, dashboards: s.dashboards),
-          AlertsBody(session: session, alerts: s.alerts),
+          AlertsBody(session: session, sections: s, alerts: s.alerts),
           SettingsBody(session: session),
         ],
       ),

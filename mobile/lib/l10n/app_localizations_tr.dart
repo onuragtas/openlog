@@ -211,18 +211,18 @@ class LTr extends L {
   String get alertsForbidden => 'Rolünüz alarmları görmeye izin vermiyor.';
 
   @override
-  String get alertsAlreadyResolved => 'Bu alarm onaylanmadan önce çözüldü.';
+  String get alertsAlreadyResolved => 'Bu alarm üstlenilmeden önce çözüldü.';
 
   @override
-  String get alertsAcknowledge => 'Onayla';
+  String get alertsAcknowledge => 'Üstlen';
 
   @override
   String alertsAcknowledgedBy(String email) {
-    return '$email onayladı';
+    return '$email üstlendi';
   }
 
   @override
-  String get alertsAcknowledgedUnknown => 'Onaylandı';
+  String get alertsAcknowledgedUnknown => 'Üstlenildi';
 
   @override
   String alertsCounts(int open, int acknowledged) {
@@ -477,4 +477,136 @@ class LTr extends L {
 
   @override
   String get sloBreached => 'Aşıldı';
+
+  @override
+  String get detailGone => 'Bu kayıt artık sunucuda yok.';
+
+  @override
+  String get incidentTimeline => 'Zaman çizelgesi';
+
+  @override
+  String get incidentNoEvents => 'Bu olayla ilgili henüz bir şey olmadı.';
+
+  @override
+  String get incidentDeliveries => 'Bildirimler';
+
+  @override
+  String get incidentNoDeliveries => 'Bu olay için bir bildirim gönderilmedi.';
+
+  @override
+  String get incidentLabels => 'Etiketler';
+
+  @override
+  String get incidentValue => 'Değer';
+
+  @override
+  String get incidentThreshold => 'Eşik';
+
+  @override
+  String incidentOpenService(String name) {
+    return '$name servisini aç';
+  }
+
+  @override
+  String get incidentResolve => 'Çöz';
+
+  @override
+  String get incidentResolveHint =>
+      'Eşiği aşmaya devam eden bir seri yeni bir olay açar; bu bir susturma değildir.';
+
+  @override
+  String incidentResolvedBy(String email) {
+    return '$email çözdü';
+  }
+
+  @override
+  String incidentResolved(String when) {
+    return '$when çözüldü';
+  }
+
+  @override
+  String get incidentNote => 'Not ekle';
+
+  @override
+  String get incidentNoteHint => 'Ne buldunuz';
+
+  @override
+  String get incidentNoteSend => 'Gönder';
+
+  @override
+  String get incidentEventOpened => 'Açıldı';
+
+  @override
+  String get incidentEventFlapping => 'Kararsız';
+
+  @override
+  String get incidentEventAcknowledged => 'Üstlenildi';
+
+  @override
+  String get incidentEventNote => 'Not';
+
+  @override
+  String get incidentEventRenotified => 'Yeniden bildirildi';
+
+  @override
+  String get incidentEventResolved => 'Çözüldü';
+
+  @override
+  String get incidentEventDelivered => 'Bildirim iletildi';
+
+  @override
+  String get incidentEventFailed => 'Bildirim başarısız';
+
+  @override
+  String get incidentEventSuppressed => 'Bildirim bastırıldı';
+
+  @override
+  String get incidentEventMuted => 'Bildirim sessize alındı';
+
+  @override
+  String get incidentEventUnknown => 'Uygulamanın tanımadığı olay';
+
+  @override
+  String get serviceSignals => 'Altın sinyaller';
+
+  @override
+  String get serviceRequests => 'İstekler';
+
+  @override
+  String get serviceErrors => 'Hatalar';
+
+  @override
+  String get serviceLatency => 'Gecikme';
+
+  @override
+  String get serviceNoData => 'Bu servis bu aralıkta hiç rapor etmedi.';
+
+  @override
+  String get serviceThroughputChart => 'Dakikadaki istek';
+
+  @override
+  String get serviceErrorRateChart => 'Hata oranı';
+
+  @override
+  String get deliveryPending => 'Beklemede';
+
+  @override
+  String get deliverySending => 'Gönderiliyor';
+
+  @override
+  String get deliveryDelivered => 'İletildi';
+
+  @override
+  String get deliveryFailed => 'Başarısız';
+
+  @override
+  String get deliverySuppressed => 'Bastırıldı';
+
+  @override
+  String get deliveryUnknown => 'Bilinmeyen durum';
+
+  @override
+  String deliveryAttempts(int count) {
+    return '$count deneme';
+  }
 }

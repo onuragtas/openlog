@@ -7,6 +7,8 @@
 // `warning` from the theme's tertiary slot produced magenta.
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../api/schema.g.dart';
 import 'theme.dart';
 
 enum SeverityLevel { critical, warning, info, unknown }
@@ -45,4 +47,66 @@ SeverityLevel severityOfNumber(int number) {
   if (number >= 13) return SeverityLevel.warning;
   if (number >= 1) return SeverityLevel.info;
   return SeverityLevel.unknown;
+}
+
+/// A severity as a filled chip. Shared because the alerts list and the incident
+/// screen must not disagree about what "critical" looks like, which is the same
+/// reason the colours above live here.
+class SeverityChip extends StatelessWidget {
+  const SeverityChip({super.key, required this.severity});
+
+  final AlertSeverity severity;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final (label, level) = switch (severity) {
+      AlertSeverity.critical => (l.severityCritical, SeverityLevel.critical),
+      AlertSeverity.warning => (l.severityWarning, SeverityLevel.warning),
+      AlertSeverity.info => (l.severityInfo, SeverityLevel.info),
+      // A severity this build has never heard of still has to render as
+      // something, since the server can be newer than the app.
+      AlertSeverity.unknown => (l.severityUnknown, SeverityLevel.unknown),
+    };
+    final colors = severityChipColors(context, level);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.foreground,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+/// An attribute of an incident -- muted, flapping -- drawn as an outline rather
+/// than a fill, so it cannot be mistaken for a severity.
+class OutlineTag extends StatelessWidget {
+  const OutlineTag({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
+      ),
+    );
+  }
 }

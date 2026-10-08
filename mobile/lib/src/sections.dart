@@ -10,6 +10,7 @@ import 'alerts.dart';
 import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
+import 'detail.dart';
 import 'list_controller.dart';
 import 'logs.dart';
 import 'services.dart';
@@ -34,7 +35,13 @@ class Sections {
     LogsController? logs,
     DashboardsController? dashboards,
     AlertsController? alerts,
-  }) : hosts = hosts ?? HostsController(client),
+    IncidentController Function(String id)? incident,
+    ServiceOverviewController Function(String serviceName)? serviceOverview,
+  }) : incident = incident ?? ((id) => IncidentController(client, id)),
+       serviceOverview =
+           serviceOverview ??
+           ((name) => ServiceOverviewController(client, name)),
+       hosts = hosts ?? HostsController(client),
        containers = containers ?? ContainersController(client),
        pods = pods ?? PodsController(client),
        services = services ?? ServicesController(client),
@@ -59,6 +66,13 @@ class Sections {
   final LogsController logs;
   final DashboardsController dashboards;
   final AlertsController alerts;
+
+  /// Detail screens get a controller each, made when the screen opens and
+  /// disposed with it -- unlike the sections, whose rows are worth keeping while
+  /// the person moves between tabs. Functions rather than instances so a test
+  /// can hand a screen a scripted one without a server.
+  final IncidentController Function(String id) incident;
+  final ServiceOverviewController Function(String serviceName) serviceOverview;
 
   /// In the order the drawer lists them, which is the web's order.
   List<ChangeNotifier> get all => [

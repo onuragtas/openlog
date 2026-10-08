@@ -10,6 +10,7 @@ import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/alerts.dart';
 import 'package:openlog_mobile/src/dashboards.dart';
+import 'package:openlog_mobile/src/detail.dart';
 import 'package:openlog_mobile/src/sections.dart';
 import 'package:openlog_mobile/src/logs.dart';
 import 'package:openlog_mobile/src/services.dart';
@@ -210,6 +211,8 @@ Widget signedInApp(
   LogsController? logs,
   DashboardsController? dashboards,
   HostsController? hosts,
+  IncidentController Function(String id)? incident,
+  ServiceOverviewController Function(String name)? serviceOverview,
 }) => OpenlogApp(
   store: MemoryTokenStore(),
   session: session,
@@ -222,8 +225,132 @@ Widget signedInApp(
     logs: logs ?? ScriptedLogs(),
     dashboards: dashboards ?? ScriptedDashboards(),
     hosts: hosts,
+    incident: incident,
+    serviceOverview: serviceOverview,
   ),
 );
+
+/// An incident detail that answers from memory, so a test can check the screen
+/// without a server and still see which actions the screen asked for.
+class ScriptedIncident extends IncidentController {
+  ScriptedIncident(this.detail, {this.failOnResolve = false})
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'), detail.id) {
+    value = detail;
+    loaded = true;
+  }
+
+  final AlertIncidentDetail detail;
+  final bool failOnResolve;
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh');
+
+  @override
+  Future<void> acknowledge() async => calls.add('acknowledge');
+
+  @override
+  Future<void> resolve({String note = ''}) async {
+    calls.add('resolve:$note');
+    if (failOnResolve) {
+      failure = const SessionFailure('alreadyResolved', '');
+      notifyListeners();
+    }
+  }
+
+  @override
+  Future<void> addNote(String text) async => calls.add('note:$text');
+}
+
+class ScriptedOverview extends ServiceOverviewController {
+  ScriptedOverview(String name, ApmOverview? overview)
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'), name) {
+    value = overview;
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh');
+}
+
+/// The incident the list row points at, with a timeline and one failed
+/// notification -- the two things the detail screen exists to show.
+AlertIncidentDetail detailOf(
+  String id, {
+  AlertIncidentState state = AlertIncidentState.open,
+  Map<String, String> labels = const {
+    'service.name': 'checkout',
+    'alert.rule': 'r1',
+  },
+}) => AlertIncidentDetail(
+  id: id,
+  ruleName: 'API error rate',
+  ruleType: AlertRuleType.unknown,
+  severity: AlertSeverity.critical,
+  state: state,
+  seriesKey: 'service.name=checkout',
+  labels: labels,
+  summary: 'error rate 12% over 5m',
+  value: 0.12,
+  lastValue: 0.14,
+  threshold: 0.05,
+  flapping: false,
+  muted: false,
+  openedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 7)),
+  channelIds: const [],
+  events: [
+    AlertIncidentEvent(
+      id: 1,
+      at: DateTime.now().toUtc().subtract(const Duration(minutes: 7)),
+      kind: AlertIncidentEventKind.opened,
+      message: 'error rate 12% over 5m',
+      details: const {},
+    ),
+  ],
+  deliveries: [
+    AlertDelivery(
+      id: 'd1',
+      ruleName: 'API error rate',
+      channelName: 'oncall-email',
+      channelType: AlertChannelType.email,
+      kind: AlertNotificationKind.unknown,
+      status: AlertNotificationStatus.failed,
+      attempts: 3,
+      idempotencyKey: 'k1',
+      createdAt: DateTime.now().toUtc(),
+      lastError: 'smtp: connection refused',
+      attemptLog: const [],
+    ),
+  ],
+);
+
+ApmOverview overviewOf({double requests = 1200, double errorRate = 0.12}) =>
+    ApmOverview(
+      step: '1m',
+      apdexTMs: 500,
+      totals: ApmRed(
+        requests: requests,
+        throughput: requests / 60,
+        errors: requests * errorRate,
+        errorRate: errorRate,
+        p50Ms: 42,
+        p95Ms: 310,
+        p99Ms: 980,
+        apdex: 0.91,
+      ),
+      series: [
+        for (var i = 0; i < 4; i++)
+          ApmPoint(
+            requests: requests / 4,
+            throughput: requests / 240,
+            errors: 1,
+            errorRate: errorRate,
+            t: i,
+          ),
+      ],
+    );
 
 /// Opens the navigation drawer, which is how the web moves between sections
 /// below `lg` and now how this app does too.
@@ -588,6 +715,184 @@ void main() {
     await tester.pump();
     expect(a.calls, contains('acknowledge:i1'));
   });
+
+  testWidgets('an incident row opens the incident, which asks the server', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      incidents: [firing('i1')],
+      counts: const IncidentPageCounts(open: 1, acknowledged: 0, resolved: 0),
+    );
+    late ScriptedIncident detail;
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        alerts: a,
+        incident: (id) => detail = ScriptedIncident(detailOf(id)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('incident-i1')));
+    await tester.pumpAndSettle();
+
+    // The screen asked for its own copy rather than drawing the row again: the
+    // timeline and the deliveries are only on the detail.
+    expect(detail.calls, contains('refresh'));
+    expect(detail.id, 'i1');
+    expect(find.byKey(const Key('event-1')), findsOneWidget);
+    expect(find.byKey(const Key('delivery-d1')), findsOneWidget);
+    // A notification that failed is the difference between "nobody was told"
+    // and "nobody looked", so the error has to be on screen.
+    expect(find.text('smtp: connection refused'), findsOneWidget);
+    expect(find.text('Failed'), findsOneWidget);
+  });
+
+  testWidgets('the incident leads to the service the rule was about', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      incidents: [firing('i1')],
+      counts: const IncidentPageCounts(open: 1, acknowledged: 0, resolved: 0),
+    );
+    final names = <String>[];
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        alerts: a,
+        incident: (id) => ScriptedIncident(detailOf(id)),
+        serviceOverview: (name) {
+          names.add(name);
+          return ScriptedOverview(name, overviewOf());
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incident-i1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('incident-open-service')));
+    await tester.pumpAndSettle();
+
+    // The whole point of the chain: the label on the incident chose the service.
+    expect(names, ['checkout']);
+    expect(find.text('Golden signals'), findsNothing); // no section heading
+    expect(find.text('42.0 ms'), findsOneWidget); // p50 from the overview
+    expect(find.text('12%'), findsOneWidget); // error rate, in red
+  });
+
+  testWidgets('an incident with no service label offers no way through', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      incidents: [firing('i1')],
+      counts: const IncidentPageCounts(open: 1, acknowledged: 0, resolved: 0),
+    );
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        alerts: a,
+        // A host or an OQL rule has no service.name, and a dead button that
+        // opens a screen about nothing would be worse than no button.
+        incident: (id) =>
+            ScriptedIncident(detailOf(id, labels: const {'host.id': 'h1'})),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incident-i1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('incident-open-service')), findsNothing);
+    // The labels are still shown, because they are what the person filtered on.
+    expect(find.text('host.id'), findsOneWidget);
+  });
+
+  testWidgets('resolving sends what was typed, and a 409 is said out loud', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      incidents: [firing('i1')],
+      counts: const IncidentPageCounts(open: 1, acknowledged: 0, resolved: 0),
+    );
+    late ScriptedIncident detail;
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        alerts: a,
+        incident: (id) =>
+            detail = ScriptedIncident(detailOf(id), failOnResolve: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incident-i1')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('incident-note')),
+      'restarted the pool',
+    );
+    await tester.tap(find.byKey(const Key('incident-resolve')));
+    await tester.pumpAndSettle();
+
+    expect(detail.calls, contains('resolve:restarted the pool'));
+    expect(
+      find.text('That alert resolved before it could be acknowledged.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a resolved incident is history, so it offers no buttons', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      incidents: [firing('i1')],
+      counts: const IncidentPageCounts(open: 1, acknowledged: 0, resolved: 0),
+    );
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        alerts: a,
+        incident: (id) =>
+            ScriptedIncident(detailOf(id, state: AlertIncidentState.resolved)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incident-i1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('incident-resolve')), findsNothing);
+    expect(find.byKey(const Key('incident-ack')), findsNothing);
+    expect(find.byKey(const Key('incident-note')), findsNothing);
+  });
+
+  testWidgets(
+    'a service that stopped serving says so rather than four zeroes',
+    (tester) async {
+      final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+      await tester.pumpWidget(
+        signedInApp(
+          s,
+          services: ScriptedServices(services: [service('checkout')]),
+          serviceOverview: (name) =>
+              ScriptedOverview(name, overviewOf(requests: 0)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await goTo(tester, 'APM');
+      await tester.tap(find.byKey(const Key('service-checkout')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('This service has not reported in the window.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('nothing firing reads as good news, not as an empty page', (
     tester,

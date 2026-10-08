@@ -458,6 +458,124 @@ enum UserLanguage {
   }
 }
 
+/// AlertIncidentEventKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertIncidentEventKind {
+  opened('opened'),
+  flapping('flapping'),
+  acknowledged('acknowledged'),
+  note('note'),
+  renotified('renotified'),
+  resolved('resolved'),
+  notificationDelivered('notification_delivered'),
+  notificationFailed('notification_failed'),
+  notificationSuppressed('notification_suppressed'),
+  notificationMuted('notification_muted'),
+  unknown('');
+
+  const AlertIncidentEventKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertIncidentEventKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertChannelType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertChannelType {
+  slack('slack'),
+  email('email'),
+  webhook('webhook'),
+  teams('teams'),
+  pagerduty('pagerduty'),
+  opsgenie('opsgenie'),
+  unknown('');
+
+  const AlertChannelType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertChannelType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertNotificationKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertNotificationKind {
+  opened('opened'),
+  acknowledged('acknowledged'),
+  resolved('resolved'),
+  renotify('renotify'),
+  test('test'),
+  unknown('');
+
+  const AlertNotificationKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertNotificationKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertNotificationStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertNotificationStatus {
+  pending('pending'),
+  sending('sending'),
+  delivered('delivered'),
+  failed('failed'),
+  suppressed('suppressed'),
+  unknown('');
+
+  const AlertNotificationStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertNotificationStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVariableType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -929,6 +1047,116 @@ class AlertIncident {
   final List<String> channelIds;
 }
 
+/// `AlertIncidentDetail` of the openlog API contract.
+class AlertIncidentDetail {
+  const AlertIncidentDetail({
+    required this.id,
+    this.ruleId,
+    required this.ruleName,
+    required this.ruleType,
+    required this.severity,
+    required this.state,
+    required this.seriesKey,
+    required this.labels,
+    required this.summary,
+    this.value,
+    this.lastValue,
+    this.threshold,
+    required this.flapping,
+    required this.muted,
+    required this.openedAt,
+    this.acknowledgedAt,
+    this.acknowledgedByEmail,
+    this.resolvedAt,
+    this.resolvedByEmail,
+    this.resolveReason,
+    required this.channelIds,
+    required this.events,
+    required this.deliveries,
+  });
+
+  factory AlertIncidentDetail.fromJson(
+    Object? json, [
+    String path = 'AlertIncidentDetail',
+  ]) {
+    final m = _obj(json, path);
+    return AlertIncidentDetail(
+      id: _req(m, 'id', path, _str),
+      ruleId: _opt(m, 'rule_id', path, _str),
+      ruleName: _req(m, 'rule_name', path, _str),
+      ruleType: _req(m, 'rule_type', path, AlertRuleType.fromJson),
+      severity: _req(m, 'severity', path, AlertSeverity.fromJson),
+      state: _req(m, 'state', path, AlertIncidentState.fromJson),
+      seriesKey: _req(m, 'series_key', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      summary: _req(m, 'summary', path, _str),
+      value: _opt(m, 'value', path, _num),
+      lastValue: _opt(m, 'last_value', path, _num),
+      threshold: _opt(m, 'threshold', path, _num),
+      flapping: _req(m, 'flapping', path, _bool),
+      muted: _req(m, 'muted', path, _bool),
+      openedAt: _req(m, 'opened_at', path, _time),
+      acknowledgedAt: _opt(m, 'acknowledged_at', path, _time),
+      acknowledgedByEmail: _opt(m, 'acknowledged_by_email', path, _str),
+      resolvedAt: _opt(m, 'resolved_at', path, _time),
+      resolvedByEmail: _opt(m, 'resolved_by_email', path, _str),
+      resolveReason: _opt(
+        m,
+        'resolve_reason',
+        path,
+        AlertResolveReason.fromJson,
+      ),
+      channelIds: _req(
+        m,
+        'channel_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      events: _req(
+        m,
+        'events',
+        path,
+        (v, p) => _list<AlertIncidentEvent>(
+          v,
+          p,
+          (v, p) => AlertIncidentEvent.fromJson(v, p),
+        ),
+      ),
+      deliveries: _req(
+        m,
+        'deliveries',
+        path,
+        (v, p) =>
+            _list<AlertDelivery>(v, p, (v, p) => AlertDelivery.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final String id;
+  final String? ruleId;
+  final String ruleName;
+  final AlertRuleType ruleType;
+  final AlertSeverity severity;
+  final AlertIncidentState state;
+  final String seriesKey;
+  final Map<String, String> labels;
+  final String summary;
+  final double? value;
+  final double? lastValue;
+  final double? threshold;
+  final bool flapping;
+  final bool muted;
+  final DateTime openedAt;
+  final DateTime? acknowledgedAt;
+  final String? acknowledgedByEmail;
+  final DateTime? resolvedAt;
+  final String? resolvedByEmail;
+  final AlertResolveReason? resolveReason;
+  final List<String> channelIds;
+  final List<AlertIncidentEvent> events;
+  final List<AlertDelivery> deliveries;
+}
+
 /// `ApmService` of the openlog API contract.
 class ApmService {
   const ApmService({
@@ -997,6 +1225,36 @@ class ApmService {
   final DateTime lastSeen;
   final double apdexTMs;
   final List<List<double>> sparkline;
+}
+
+/// `ApmOverview` of the openlog API contract.
+class ApmOverview {
+  const ApmOverview({
+    required this.step,
+    required this.apdexTMs,
+    required this.totals,
+    required this.series,
+  });
+
+  factory ApmOverview.fromJson(Object? json, [String path = 'ApmOverview']) {
+    final m = _obj(json, path);
+    return ApmOverview(
+      step: _req(m, 'step', path, _str),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      totals: _req(m, 'totals', path, (v, p) => ApmRed.fromJson(v, p)),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<ApmPoint>(v, p, (v, p) => ApmPoint.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final String step;
+  final double apdexTMs;
+  final ApmRed totals;
+  final List<ApmPoint> series;
 }
 
 /// `DashboardSummary` of the openlog API contract.
@@ -1221,6 +1479,196 @@ class OrgRef {
   final String tenantId;
   final String name;
   final Role? role;
+}
+
+/// `AlertIncidentEvent` of the openlog API contract.
+class AlertIncidentEvent {
+  const AlertIncidentEvent({
+    required this.id,
+    required this.at,
+    required this.kind,
+    this.actorEmail,
+    required this.message,
+    required this.details,
+  });
+
+  factory AlertIncidentEvent.fromJson(
+    Object? json, [
+    String path = 'AlertIncidentEvent',
+  ]) {
+    final m = _obj(json, path);
+    return AlertIncidentEvent(
+      id: _req(m, 'id', path, _int),
+      at: _req(m, 'at', path, _time),
+      kind: _req(m, 'kind', path, AlertIncidentEventKind.fromJson),
+      actorEmail: _opt(m, 'actor_email', path, _str),
+      message: _req(m, 'message', path, _str),
+      details: _req(m, 'details', path, (v, p) => _map<Object?>(v, p, _any)),
+    );
+  }
+
+  final int id;
+  final DateTime at;
+  final AlertIncidentEventKind kind;
+  final String? actorEmail;
+  final String message;
+  final Map<String, Object?> details;
+}
+
+/// `AlertDelivery` of the openlog API contract.
+class AlertDelivery {
+  const AlertDelivery({
+    required this.id,
+    this.incidentId,
+    this.ruleId,
+    required this.ruleName,
+    this.channelId,
+    required this.channelName,
+    required this.channelType,
+    required this.kind,
+    required this.status,
+    required this.attempts,
+    required this.idempotencyKey,
+    required this.createdAt,
+    this.finishedAt,
+    this.nextAttemptAt,
+    required this.lastError,
+    required this.attemptLog,
+  });
+
+  factory AlertDelivery.fromJson(
+    Object? json, [
+    String path = 'AlertDelivery',
+  ]) {
+    final m = _obj(json, path);
+    return AlertDelivery(
+      id: _req(m, 'id', path, _str),
+      incidentId: _opt(m, 'incident_id', path, _str),
+      ruleId: _opt(m, 'rule_id', path, _str),
+      ruleName: _req(m, 'rule_name', path, _str),
+      channelId: _opt(m, 'channel_id', path, _str),
+      channelName: _req(m, 'channel_name', path, _str),
+      channelType: _req(m, 'channel_type', path, AlertChannelType.fromJson),
+      kind: _req(m, 'kind', path, AlertNotificationKind.fromJson),
+      status: _req(m, 'status', path, AlertNotificationStatus.fromJson),
+      attempts: _req(m, 'attempts', path, _int),
+      idempotencyKey: _req(m, 'idempotency_key', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      finishedAt: _opt(m, 'finished_at', path, _time),
+      nextAttemptAt: _opt(m, 'next_attempt_at', path, _time),
+      lastError: _req(m, 'last_error', path, _str),
+      attemptLog: _req(
+        m,
+        'attempt_log',
+        path,
+        (v, p) => _list<AlertDeliveryAttempt>(
+          v,
+          p,
+          (v, p) => AlertDeliveryAttempt.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final String id;
+  final String? incidentId;
+  final String? ruleId;
+  final String ruleName;
+  final String? channelId;
+  final String channelName;
+  final AlertChannelType channelType;
+  final AlertNotificationKind kind;
+  final AlertNotificationStatus status;
+  final int attempts;
+  final String idempotencyKey;
+  final DateTime createdAt;
+  final DateTime? finishedAt;
+  final DateTime? nextAttemptAt;
+  final String lastError;
+  final List<AlertDeliveryAttempt> attemptLog;
+}
+
+/// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
+class ApmRed {
+  const ApmRed({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+  });
+
+  factory ApmRed.fromJson(Object? json, [String path = 'ApmRed']) {
+    final m = _obj(json, path);
+    return ApmRed(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+    );
+  }
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+}
+
+/// `ApmPoint` of the openlog API contract.
+class ApmPoint {
+  const ApmPoint({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+    required this.t,
+  });
+
+  factory ApmPoint.fromJson(Object? json, [String path = 'ApmPoint']) {
+    final m = _obj(json, path);
+    return ApmPoint(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+      t: _req(m, 't', path, _int),
+    );
+  }
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+  final int t;
 }
 
 /// `DashboardVariable` of the openlog API contract.
@@ -1495,6 +1943,40 @@ class OqlMetadata {
   final bool truncated;
   final List<String> warnings;
   final List<String>? ignoredFilters;
+}
+
+/// `AlertDeliveryAttempt` of the openlog API contract.
+class AlertDeliveryAttempt {
+  const AlertDeliveryAttempt({
+    required this.attempt,
+    required this.at,
+    required this.durationMs,
+    required this.success,
+    required this.statusCode,
+    required this.error,
+  });
+
+  factory AlertDeliveryAttempt.fromJson(
+    Object? json, [
+    String path = 'AlertDeliveryAttempt',
+  ]) {
+    final m = _obj(json, path);
+    return AlertDeliveryAttempt(
+      attempt: _req(m, 'attempt', path, _int),
+      at: _req(m, 'at', path, _time),
+      durationMs: _req(m, 'duration_ms', path, _int),
+      success: _req(m, 'success', path, _bool),
+      statusCode: _req(m, 'status_code', path, _int),
+      error: _req(m, 'error', path, _str),
+    );
+  }
+
+  final int attempt;
+  final DateTime at;
+  final int durationMs;
+  final bool success;
+  final int statusCode;
+  final String error;
 }
 
 /// `DashboardWidget` of the openlog API contract.

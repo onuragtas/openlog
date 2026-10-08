@@ -30,10 +30,24 @@ String? failureText(
       return l.signUpOnWeb(baseUrl);
     case 'emailTaken':
       return l.signUpEmailTaken;
+    // Every forbidden kind a controller can produce has to be named here. They
+    // were not, and a member without the APM permission was told "something
+    // went wrong:" with nothing after the colon, which reads like a bug in the
+    // app rather than a permission they do not have.
     case 'alertsForbidden':
       return l.alertsForbidden;
+    case 'servicesForbidden':
+      return l.servicesForbidden;
+    case 'logsForbidden':
+      return l.logsForbidden;
+    case 'dashboardsForbidden':
+      return l.dashboardsForbidden;
+    case 'sectionForbidden':
+      return l.sectionForbidden;
     case 'alreadyResolved':
       return l.alertsAlreadyResolved;
+    case 'detailGone':
+      return l.detailGone;
     default:
       // The server's own message, which is more useful than anything this app
       // could invent about a problem it does not recognise.

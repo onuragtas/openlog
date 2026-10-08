@@ -960,6 +960,252 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Breached'**
   String get sloBreached;
+
+  /// No description provided for @detailGone.
+  ///
+  /// In en, this message translates to:
+  /// **'That is no longer on the server.'**
+  String get detailGone;
+
+  /// No description provided for @incidentTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get incidentTimeline;
+
+  /// No description provided for @incidentNoEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has happened to this incident yet.'**
+  String get incidentNoEvents;
+
+  /// No description provided for @incidentDeliveries.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get incidentDeliveries;
+
+  /// No description provided for @incidentNoDeliveries.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was sent for this incident.'**
+  String get incidentNoDeliveries;
+
+  /// No description provided for @incidentLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels'**
+  String get incidentLabels;
+
+  /// No description provided for @incidentValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Value'**
+  String get incidentValue;
+
+  /// No description provided for @incidentThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Threshold'**
+  String get incidentThreshold;
+
+  /// No description provided for @incidentOpenService.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name}'**
+  String incidentOpenService(String name);
+
+  /// No description provided for @incidentResolve.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve'**
+  String get incidentResolve;
+
+  /// No description provided for @incidentResolveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A series that is still breaching opens a new incident, so this does not silence anything.'**
+  String get incidentResolveHint;
+
+  /// No description provided for @incidentResolvedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved by {email}'**
+  String incidentResolvedBy(String email);
+
+  /// No description provided for @incidentResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved {when}'**
+  String incidentResolved(String when);
+
+  /// No description provided for @incidentNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note'**
+  String get incidentNote;
+
+  /// No description provided for @incidentNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What you found'**
+  String get incidentNoteHint;
+
+  /// No description provided for @incidentNoteSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get incidentNoteSend;
+
+  /// No description provided for @incidentEventOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened'**
+  String get incidentEventOpened;
+
+  /// No description provided for @incidentEventFlapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Flapping'**
+  String get incidentEventFlapping;
+
+  /// No description provided for @incidentEventAcknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged'**
+  String get incidentEventAcknowledged;
+
+  /// No description provided for @incidentEventNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get incidentEventNote;
+
+  /// No description provided for @incidentEventRenotified.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-notified'**
+  String get incidentEventRenotified;
+
+  /// No description provided for @incidentEventResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get incidentEventResolved;
+
+  /// No description provided for @incidentEventDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification delivered'**
+  String get incidentEventDelivered;
+
+  /// No description provided for @incidentEventFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification failed'**
+  String get incidentEventFailed;
+
+  /// No description provided for @incidentEventSuppressed.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification suppressed'**
+  String get incidentEventSuppressed;
+
+  /// No description provided for @incidentEventMuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification muted'**
+  String get incidentEventMuted;
+
+  /// No description provided for @incidentEventUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Event this app does not know'**
+  String get incidentEventUnknown;
+
+  /// No description provided for @serviceSignals.
+  ///
+  /// In en, this message translates to:
+  /// **'Golden signals'**
+  String get serviceSignals;
+
+  /// No description provided for @serviceRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests'**
+  String get serviceRequests;
+
+  /// No description provided for @serviceErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get serviceErrors;
+
+  /// No description provided for @serviceLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency'**
+  String get serviceLatency;
+
+  /// No description provided for @serviceNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'This service has not reported in the window.'**
+  String get serviceNoData;
+
+  /// No description provided for @serviceThroughputChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests per minute'**
+  String get serviceThroughputChart;
+
+  /// No description provided for @serviceErrorRateChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Error rate'**
+  String get serviceErrorRateChart;
+
+  /// No description provided for @deliveryPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get deliveryPending;
+
+  /// No description provided for @deliverySending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending'**
+  String get deliverySending;
+
+  /// No description provided for @deliveryDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivered'**
+  String get deliveryDelivered;
+
+  /// No description provided for @deliveryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get deliveryFailed;
+
+  /// No description provided for @deliverySuppressed.
+  ///
+  /// In en, this message translates to:
+  /// **'Suppressed'**
+  String get deliverySuppressed;
+
+  /// No description provided for @deliveryUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown state'**
+  String get deliveryUnknown;
+
+  /// No description provided for @deliveryAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attempts'**
+  String deliveryAttempts(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

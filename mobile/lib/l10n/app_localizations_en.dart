@@ -481,4 +481,136 @@ class LEn extends L {
 
   @override
   String get sloBreached => 'Breached';
+
+  @override
+  String get detailGone => 'That is no longer on the server.';
+
+  @override
+  String get incidentTimeline => 'Timeline';
+
+  @override
+  String get incidentNoEvents => 'Nothing has happened to this incident yet.';
+
+  @override
+  String get incidentDeliveries => 'Notifications';
+
+  @override
+  String get incidentNoDeliveries => 'Nothing was sent for this incident.';
+
+  @override
+  String get incidentLabels => 'Labels';
+
+  @override
+  String get incidentValue => 'Value';
+
+  @override
+  String get incidentThreshold => 'Threshold';
+
+  @override
+  String incidentOpenService(String name) {
+    return 'Open $name';
+  }
+
+  @override
+  String get incidentResolve => 'Resolve';
+
+  @override
+  String get incidentResolveHint =>
+      'A series that is still breaching opens a new incident, so this does not silence anything.';
+
+  @override
+  String incidentResolvedBy(String email) {
+    return 'Resolved by $email';
+  }
+
+  @override
+  String incidentResolved(String when) {
+    return 'Resolved $when';
+  }
+
+  @override
+  String get incidentNote => 'Add a note';
+
+  @override
+  String get incidentNoteHint => 'What you found';
+
+  @override
+  String get incidentNoteSend => 'Send';
+
+  @override
+  String get incidentEventOpened => 'Opened';
+
+  @override
+  String get incidentEventFlapping => 'Flapping';
+
+  @override
+  String get incidentEventAcknowledged => 'Acknowledged';
+
+  @override
+  String get incidentEventNote => 'Note';
+
+  @override
+  String get incidentEventRenotified => 'Re-notified';
+
+  @override
+  String get incidentEventResolved => 'Resolved';
+
+  @override
+  String get incidentEventDelivered => 'Notification delivered';
+
+  @override
+  String get incidentEventFailed => 'Notification failed';
+
+  @override
+  String get incidentEventSuppressed => 'Notification suppressed';
+
+  @override
+  String get incidentEventMuted => 'Notification muted';
+
+  @override
+  String get incidentEventUnknown => 'Event this app does not know';
+
+  @override
+  String get serviceSignals => 'Golden signals';
+
+  @override
+  String get serviceRequests => 'Requests';
+
+  @override
+  String get serviceErrors => 'Errors';
+
+  @override
+  String get serviceLatency => 'Latency';
+
+  @override
+  String get serviceNoData => 'This service has not reported in the window.';
+
+  @override
+  String get serviceThroughputChart => 'Requests per minute';
+
+  @override
+  String get serviceErrorRateChart => 'Error rate';
+
+  @override
+  String get deliveryPending => 'Pending';
+
+  @override
+  String get deliverySending => 'Sending';
+
+  @override
+  String get deliveryDelivered => 'Delivered';
+
+  @override
+  String get deliveryFailed => 'Failed';
+
+  @override
+  String get deliverySuppressed => 'Suppressed';
+
+  @override
+  String get deliveryUnknown => 'Unknown state';
+
+  @override
+  String deliveryAttempts(int count) {
+    return '$count attempts';
+  }
 }

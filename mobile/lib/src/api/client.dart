@@ -225,6 +225,36 @@ class OpenlogClient {
     '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/acknowledge',
   );
 
+  /// One incident with its timeline and what the server tried to deliver.
+  ///
+  /// The list row already says what is firing; this is what turns the row into
+  /// a story -- when it opened, who took it, which channel failed and why.
+  Future<AlertIncidentDetail> incident(String id) async =>
+      AlertIncidentDetail.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}',
+        ),
+      );
+
+  /// Closes an incident, with an optional note on the timeline.
+  ///
+  /// 409 like [acknowledgeIncident]: someone else, or the server itself, got
+  /// there first. A still-breaching series opens a new incident, so this is
+  /// not a way to silence anything -- which is why the screen says so.
+  Future<void> resolveIncident(String id, {String note = ''}) => _send(
+    'POST',
+    '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/resolve',
+    body: note.isEmpty ? null : {'note': note},
+  );
+
+  /// Adds a note to the incident's timeline.
+  Future<void> addIncidentNote(String id, String text) => _send(
+    'POST',
+    '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/notes',
+    body: {'text': text},
+  );
+
   /// Services with spans in the last hour, with their RED metrics.
   ///
   /// The range is left to the server's default (now - 1h), which is the window
@@ -237,6 +267,18 @@ class OpenlogClient {
       await _send('GET', '/api/v1/apm/services$suffix'),
     );
   }
+
+  /// Golden signals of one service: totals plus the timeseries behind them.
+  ///
+  /// The window is the server's default, the same hour [services] uses, so a
+  /// number on the list and a number on the detail screen cannot disagree.
+  Future<ApmOverview> serviceOverview(String name) async =>
+      ApmOverview.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(name)}/overview',
+        ),
+      );
 
   /// Recent log records, newest first.
   Future<LogPage> logs({
