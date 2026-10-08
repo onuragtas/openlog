@@ -212,5 +212,41 @@
         "type": "int"
       }
     }
-  }
+  },
+  "serviceTabOverview": "Genel bakış",
+  "serviceTabErrors": "Hatalar",
+  "errorsEmpty": "Bu aralıkta hiçbir şey hata vermedi.",
+  "errorsOccurrences": "{count} kez",
+  "@errorsOccurrences": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsLastSeen": "son {when}",
+  "@errorsLastSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "errorStatusUnresolved": "Çözülmedi",
+  "errorStatusResolved": "Çözüldü",
+  "errorStatusIgnored": "Yoksayıldı",
+  "errorStatusUnknown": "Bilinmeyen durum",
+  "errorsNoTrace": "Bu hata için iz saklanmamış.",
+  "errorsTruncated": "Daha fazlası var; bu listenin başı.",
+  "traceTitle": "İz",
+  "traceSpans": "{count} span",
+  "@traceSpans": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "traceEmpty": "Bu izde span yok.",
+  "traceRoot": "kök"
 }

@@ -95,6 +95,75 @@ Map<String, Object?> overview() => {
   ],
 };
 
+Map<String, Object?> group(
+  String id, {
+  String status = 'unresolved',
+  double count = 10,
+  String traceId = 'abc',
+}) => {
+  'group_id': id,
+  'service_name': 'checkout',
+  'service_namespace': '',
+  'environment': 'production',
+  'error_type': 'TimeoutError',
+  'message': 'upstream timed out',
+  'count': count,
+  'total_count': count * 3,
+  'first_seen': '2026-10-07T19:00:00.000000000Z',
+  'last_seen': '2026-10-07T20:00:00.000000000Z',
+  'last_trace_id': traceId,
+  'last_span_name': 'POST /checkout',
+  'sparkline': <Object>[],
+  'status': status,
+  'assignee': null,
+  'resolved_at': null,
+  'resolved_in_version': '',
+  'resolved_by_email': '',
+  'regressed_at': null,
+  'regression_count': 0,
+  'comment_count': 0,
+  'updated_at': null,
+  'updated_by_email': '',
+};
+
+Map<String, Object?> inbox(List<Map<String, Object?>> groups) => {
+  'step': '1m',
+  'groups': groups,
+  'counts': {'unresolved': 1, 'resolved': 0, 'ignored': 0},
+  'truncated': false,
+  'workflow': true,
+};
+
+/// `start` is an offset in milliseconds from a fixed instant, so a test can say
+/// "this one began 20 ms in" without writing timestamps by hand.
+Map<String, Object?> span(
+  String id, {
+  String parent = '',
+  int start = 0,
+  int durationMs = 10,
+  String name = 'span',
+  String status = 'unset',
+  String service = 'checkout',
+}) => {
+  'span_id': id,
+  'parent_span_id': parent,
+  'name': name,
+  'kind': 'server',
+  'service_name': service,
+  'start': DateTime.utc(
+    2026,
+    10,
+    7,
+    20,
+  ).add(Duration(milliseconds: start)).toIso8601String(),
+  'duration_ns': durationMs * 1000000,
+  'status_code': status,
+  'status_message': '',
+  'attributes': <String, String>{},
+  'resource_attributes': <String, String>{},
+  'events': <Object>[],
+};
+
 void main() {
   test('the incident is asked for by id, and its open details survive', () async {
     final server = await FakeServer.start(
@@ -244,6 +313,103 @@ void main() {
     // draw a line at the bottom of the chart and read as "very fast".
     expect(c.value!.series.single.p95Ms, isNull);
   });
+
+  test('the error inbox puts what is still broken first', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        ...inbox([
+          group('g1', status: 'resolved', count: 900),
+          group('g2', count: 5),
+          group('g3', count: 50),
+        ]),
+      }),
+    );
+    addTearDown(server.stop);
+    final c = ServiceErrorsController(client(server.baseUrl), 'checkout');
+
+    await c.refresh();
+
+    expect(server.requests.single.path, '/api/v1/apm/services/checkout/errors');
+    // Unresolved before resolved however loud the resolved one was, then by
+    // how often: a phone list is read from the top.
+    expect(c.groups.map((g) => g.groupId), ['g3', 'g2', 'g1']);
+  });
+
+  test('a trace becomes a tree, deepest path and all', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'trace_id': 'abc',
+        'spans': [
+          // Deliberately out of order, and the child listed before its parent.
+          span('c2', parent: 'root', start: 60, durationMs: 30, name: 'db'),
+          span('root', start: 0, durationMs: 100, name: 'POST /checkout'),
+          span('c1', parent: 'root', start: 10, durationMs: 40, name: 'auth'),
+          span('g1', parent: 'c1', start: 20, durationMs: 10, name: 'redis'),
+        ],
+      }),
+    );
+    addTearDown(server.stop);
+    final c = TraceController(client(server.baseUrl), 'abc');
+
+    await c.refresh();
+
+    final rows = c.rows;
+    // Depth-first, children by start time: the order a person reads it in.
+    expect(rows.map((r) => r.span.name), [
+      'POST /checkout',
+      'auth',
+      'redis',
+      'db',
+    ]);
+    expect(rows.map((r) => r.depth), [0, 1, 2, 1]);
+    // The bars are shares of the whole request, not of the parent.
+    expect(rows[0].offset, 0);
+    expect(rows[0].width, 1);
+    expect(rows[1].offset, closeTo(0.1, 0.001));
+    expect(rows[1].width, closeTo(0.4, 0.001));
+    expect(rows[3].offset, closeTo(0.6, 0.001));
+  });
+
+  test('a trace missing its middle still shows every span', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'trace_id': 'abc',
+        'spans': [
+          span('root', start: 0, durationMs: 100),
+          // Its parent never arrived. Dropping it would be the worst way to
+          // show an incomplete trace, so it is treated as another root.
+          span('orphan', parent: 'gone', start: 20, durationMs: 10),
+        ],
+      }),
+    );
+    addTearDown(server.stop);
+    final c = TraceController(client(server.baseUrl), 'abc');
+
+    await c.refresh();
+
+    expect(c.rows.map((r) => r.span.spanId), ['root', 'orphan']);
+    expect(c.rows.map((r) => r.depth), [0, 0]);
+  });
+
+  test(
+    'a trace with no duration is a full bar, not a divide by zero',
+    () async {
+      final server = await FakeServer.start(
+        (req, _) => writeJson(req, 200, {
+          'trace_id': 'abc',
+          'spans': [span('root', durationMs: 0)],
+        }),
+      );
+      addTearDown(server.stop);
+      final c = TraceController(client(server.baseUrl), 'abc');
+
+      await c.refresh();
+
+      expect(c.rows.single.offset, 0);
+      expect(c.rows.single.width, 1);
+      expect(c.rows.single.width.isNaN, isFalse);
+    },
+  );
 
   test('a server that is not there reads as unreachable', () async {
     final c = ServiceOverviewController(

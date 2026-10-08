@@ -576,6 +576,87 @@ enum AlertNotificationStatus {
   }
 }
 
+/// ApmErrorStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmErrorStatus {
+  unresolved('unresolved'),
+  resolved('resolved'),
+  ignored('ignored'),
+  unknown('');
+
+  const ApmErrorStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmErrorStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SpanKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SpanKind {
+  unspecified('unspecified'),
+  internal('internal'),
+  server('server'),
+  client('client'),
+  producer('producer'),
+  consumer('consumer'),
+  unknown('');
+
+  const SpanKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SpanKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SpanStatusCode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SpanStatusCode {
+  unset('unset'),
+  ok('ok'),
+  error('error'),
+  unknown('');
+
+  const SpanStatusCode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SpanStatusCode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVariableType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1257,6 +1338,94 @@ class ApmOverview {
   final List<ApmPoint> series;
 }
 
+/// `ApmErrorInbox` of the openlog API contract.
+class ApmErrorInbox {
+  const ApmErrorInbox({
+    required this.step,
+    required this.groups,
+    required this.counts,
+    required this.truncated,
+    required this.workflow,
+  });
+
+  factory ApmErrorInbox.fromJson(
+    Object? json, [
+    String path = 'ApmErrorInbox',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorInbox(
+      step: _req(m, 'step', path, _str),
+      groups: _req(
+        m,
+        'groups',
+        path,
+        (v, p) =>
+            _list<ApmErrorGroup>(v, p, (v, p) => ApmErrorGroup.fromJson(v, p)),
+      ),
+      counts: _req(
+        m,
+        'counts',
+        path,
+        (v, p) => ApmErrorInboxCounts.fromJson(v, p),
+      ),
+      truncated: _req(m, 'truncated', path, _bool),
+      workflow: _req(m, 'workflow', path, _bool),
+    );
+  }
+
+  final String step;
+  final List<ApmErrorGroup> groups;
+  final ApmErrorInboxCounts counts;
+  final bool truncated;
+  final bool workflow;
+}
+
+/// Groups per status after the assignee and q filters (before the status filter)
+class ApmErrorInboxCounts {
+  const ApmErrorInboxCounts({
+    required this.unresolved,
+    required this.resolved,
+    required this.ignored,
+  });
+
+  factory ApmErrorInboxCounts.fromJson(
+    Object? json, [
+    String path = 'ApmErrorInboxCounts',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorInboxCounts(
+      unresolved: _req(m, 'unresolved', path, _int),
+      resolved: _req(m, 'resolved', path, _int),
+      ignored: _req(m, 'ignored', path, _int),
+    );
+  }
+
+  final int unresolved;
+  final int resolved;
+  final int ignored;
+}
+
+/// `Trace` of the openlog API contract.
+class Trace {
+  const Trace({required this.traceId, required this.spans});
+
+  factory Trace.fromJson(Object? json, [String path = 'Trace']) {
+    final m = _obj(json, path);
+    return Trace(
+      traceId: _req(m, 'trace_id', path, _str),
+      spans: _req(
+        m,
+        'spans',
+        path,
+        (v, p) => _list<Span>(v, p, (v, p) => Span.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final String traceId;
+  final List<Span> spans;
+}
+
 /// `DashboardSummary` of the openlog API contract.
 class DashboardSummary {
   const DashboardSummary({
@@ -1671,6 +1840,166 @@ class ApmPoint {
   final int t;
 }
 
+/// `ApmErrorGroup` of the openlog API contract.
+class ApmErrorGroup {
+  const ApmErrorGroup({
+    required this.status,
+    this.assignee,
+    this.resolvedAt,
+    required this.resolvedInVersion,
+    required this.resolvedByEmail,
+    this.regressedAt,
+    required this.regressionCount,
+    required this.commentCount,
+    this.updatedAt,
+    required this.updatedByEmail,
+    required this.groupId,
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.errorType,
+    required this.message,
+    required this.count,
+    required this.totalCount,
+    this.firstSeen,
+    this.lastSeen,
+    required this.lastTraceId,
+    required this.lastSpanName,
+    required this.sparkline,
+  });
+
+  factory ApmErrorGroup.fromJson(
+    Object? json, [
+    String path = 'ApmErrorGroup',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorGroup(
+      status: _req(m, 'status', path, ApmErrorStatus.fromJson),
+      assignee: _opt(
+        m,
+        'assignee',
+        path,
+        (v, p) => ApmErrorAssignee.fromJson(v, p),
+      ),
+      resolvedAt: _opt(m, 'resolved_at', path, _time),
+      resolvedInVersion: _req(m, 'resolved_in_version', path, _str),
+      resolvedByEmail: _req(m, 'resolved_by_email', path, _str),
+      regressedAt: _opt(m, 'regressed_at', path, _time),
+      regressionCount: _req(m, 'regression_count', path, _int),
+      commentCount: _req(m, 'comment_count', path, _int),
+      updatedAt: _opt(m, 'updated_at', path, _time),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      groupId: _req(m, 'group_id', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      errorType: _req(m, 'error_type', path, _str),
+      message: _req(m, 'message', path, _str),
+      count: _req(m, 'count', path, _num),
+      totalCount: _req(m, 'total_count', path, _num),
+      firstSeen: _opt(m, 'first_seen', path, _time),
+      lastSeen: _opt(m, 'last_seen', path, _time),
+      lastTraceId: _req(m, 'last_trace_id', path, _str),
+      lastSpanName: _req(m, 'last_span_name', path, _str),
+      sparkline: _req(
+        m,
+        'sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  final ApmErrorStatus status;
+  final ApmErrorAssignee? assignee;
+  final DateTime? resolvedAt;
+  final String resolvedInVersion;
+  final String resolvedByEmail;
+  final DateTime? regressedAt;
+  final int regressionCount;
+  final int commentCount;
+  final DateTime? updatedAt;
+  final String updatedByEmail;
+  final String groupId;
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final String errorType;
+  final String message;
+  final double count;
+  final double totalCount;
+  final DateTime? firstSeen;
+  final DateTime? lastSeen;
+  final String lastTraceId;
+  final String lastSpanName;
+  final List<List<double>> sparkline;
+}
+
+/// `Span` of the openlog API contract.
+class Span {
+  const Span({
+    required this.spanId,
+    required this.parentSpanId,
+    required this.name,
+    required this.kind,
+    required this.serviceName,
+    required this.start,
+    required this.durationNs,
+    required this.statusCode,
+    required this.statusMessage,
+    required this.attributes,
+    required this.resourceAttributes,
+    required this.events,
+  });
+
+  factory Span.fromJson(Object? json, [String path = 'Span']) {
+    final m = _obj(json, path);
+    return Span(
+      spanId: _req(m, 'span_id', path, _str),
+      parentSpanId: _req(m, 'parent_span_id', path, _str),
+      name: _req(m, 'name', path, _str),
+      kind: _req(m, 'kind', path, SpanKind.fromJson),
+      serviceName: _req(m, 'service_name', path, _str),
+      start: _req(m, 'start', path, _time),
+      durationNs: _req(m, 'duration_ns', path, _int),
+      statusCode: _req(m, 'status_code', path, SpanStatusCode.fromJson),
+      statusMessage: _req(m, 'status_message', path, _str),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      resourceAttributes: _req(
+        m,
+        'resource_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      events: _req(
+        m,
+        'events',
+        path,
+        (v, p) => _list<SpanEvent>(v, p, (v, p) => SpanEvent.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final String spanId;
+  final String parentSpanId;
+  final String name;
+  final SpanKind kind;
+  final String serviceName;
+  final DateTime start;
+  final int durationNs;
+  final SpanStatusCode statusCode;
+  final String statusMessage;
+  final Map<String, String> attributes;
+  final Map<String, String> resourceAttributes;
+  final List<SpanEvent> events;
+}
+
 /// `DashboardVariable` of the openlog API contract.
 class DashboardVariable {
   const DashboardVariable({
@@ -1977,6 +2306,58 @@ class AlertDeliveryAttempt {
   final bool success;
   final int statusCode;
   final String error;
+}
+
+/// `ApmErrorAssignee` of the openlog API contract.
+class ApmErrorAssignee {
+  const ApmErrorAssignee({
+    required this.userId,
+    required this.email,
+    required this.name,
+  });
+
+  factory ApmErrorAssignee.fromJson(
+    Object? json, [
+    String path = 'ApmErrorAssignee',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorAssignee(
+      userId: _req(m, 'user_id', path, _str),
+      email: _req(m, 'email', path, _str),
+      name: _req(m, 'name', path, _str),
+    );
+  }
+
+  final String userId;
+  final String email;
+  final String name;
+}
+
+/// `SpanEvent` of the openlog API contract.
+class SpanEvent {
+  const SpanEvent({
+    required this.timestamp,
+    required this.name,
+    required this.attributes,
+  });
+
+  factory SpanEvent.fromJson(Object? json, [String path = 'SpanEvent']) {
+    final m = _obj(json, path);
+    return SpanEvent(
+      timestamp: _req(m, 'timestamp', path, _str),
+      name: _req(m, 'name', path, _str),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final String timestamp;
+  final String name;
+  final Map<String, String> attributes;
 }
 
 /// `DashboardWidget` of the openlog API contract.

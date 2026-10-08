@@ -37,10 +37,15 @@ class Sections {
     AlertsController? alerts,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
+    ServiceErrorsController Function(String serviceName)? serviceErrors,
+    TraceController Function(String traceId)? trace,
   }) : incident = incident ?? ((id) => IncidentController(client, id)),
        serviceOverview =
            serviceOverview ??
            ((name) => ServiceOverviewController(client, name)),
+       serviceErrors =
+           serviceErrors ?? ((name) => ServiceErrorsController(client, name)),
+       trace = trace ?? ((id) => TraceController(client, id)),
        hosts = hosts ?? HostsController(client),
        containers = containers ?? ContainersController(client),
        pods = pods ?? PodsController(client),
@@ -73,6 +78,8 @@ class Sections {
   /// can hand a screen a scripted one without a server.
   final IncidentController Function(String id) incident;
   final ServiceOverviewController Function(String serviceName) serviceOverview;
+  final ServiceErrorsController Function(String serviceName) serviceErrors;
+  final TraceController Function(String traceId) trace;
 
   /// In the order the drawer lists them, which is the web's order.
   List<ChangeNotifier> get all => [

@@ -213,6 +213,8 @@ Widget signedInApp(
   HostsController? hosts,
   IncidentController Function(String id)? incident,
   ServiceOverviewController Function(String name)? serviceOverview,
+  ServiceErrorsController Function(String name)? serviceErrors,
+  TraceController Function(String traceId)? trace,
 }) => OpenlogApp(
   store: MemoryTokenStore(),
   session: session,
@@ -227,7 +229,92 @@ Widget signedInApp(
     hosts: hosts,
     incident: incident,
     serviceOverview: serviceOverview,
+    serviceErrors: serviceErrors,
+    trace: trace,
   ),
+);
+
+/// Unlike the other scripted controllers this one starts empty and fills on
+/// refresh, because what the errors tab is tested for is *when* it asks: a
+/// fake that pretends to be loaded already would make the question unaskable.
+class ScriptedErrors extends ServiceErrorsController {
+  ScriptedErrors(String name, this._inbox)
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'), name);
+
+  final ApmErrorInbox? _inbox;
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async {
+    calls.add('refresh');
+    value = _inbox;
+    loaded = true;
+    notifyListeners();
+  }
+}
+
+class ScriptedTrace extends TraceController {
+  ScriptedTrace(String id, Trace? t)
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'), id) {
+    value = t;
+    loaded = true;
+  }
+
+  @override
+  Future<void> refresh() async {}
+}
+
+ApmErrorGroup errorGroup(
+  String id, {
+  String traceId = 'abcdef',
+  ApmErrorStatus status = ApmErrorStatus.unresolved,
+}) => ApmErrorGroup(
+  groupId: id,
+  serviceName: 'checkout',
+  serviceNamespace: '',
+  environment: 'production',
+  errorType: 'TimeoutError',
+  message: 'upstream timed out',
+  count: 12,
+  totalCount: 40,
+  lastSeen: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
+  lastTraceId: traceId,
+  lastSpanName: 'POST /checkout',
+  sparkline: const [],
+  status: status,
+  resolvedInVersion: '',
+  resolvedByEmail: '',
+  regressionCount: 0,
+  commentCount: 0,
+  updatedByEmail: '',
+);
+
+ApmErrorInbox inboxOf(List<ApmErrorGroup> groups) => ApmErrorInbox(
+  step: '1m',
+  groups: groups,
+  counts: const ApmErrorInboxCounts(unresolved: 1, resolved: 0, ignored: 0),
+  truncated: false,
+  workflow: true,
+);
+
+Trace traceOf() => Trace(
+  traceId: 'abcdef',
+  spans: [
+    Span(
+      spanId: 'root',
+      parentSpanId: '',
+      name: 'POST /checkout',
+      kind: SpanKind.server,
+      serviceName: 'checkout',
+      start: DateTime.utc(2026, 10, 7, 20),
+      durationNs: 100000000,
+      statusCode: SpanStatusCode.error,
+      statusMessage: 'upstream timed out',
+      attributes: const {},
+      resourceAttributes: const {},
+      events: const [],
+    ),
+  ],
 );
 
 /// An incident detail that answers from memory, so a test can check the screen
@@ -891,6 +978,95 @@ void main() {
         find.text('This service has not reported in the window.'),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets('the error inbox is not asked for until the tab is opened', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    late ScriptedErrors errors;
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        services: ScriptedServices(services: [service('checkout')]),
+        serviceOverview: (name) => ScriptedOverview(name, overviewOf()),
+        serviceErrors: (name) =>
+            errors = ScriptedErrors(name, inboxOf([errorGroup('g1')])),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await goTo(tester, 'APM');
+    await tester.tap(find.byKey(const Key('service-checkout')));
+    await tester.pumpAndSettle();
+
+    // TabBarView builds both pages; building is not looking.
+    expect(errors.calls, isEmpty);
+
+    await tester.tap(find.byKey(const Key('tab-errors')));
+    await tester.pumpAndSettle();
+    expect(errors.calls, ['refresh']);
+    expect(find.byKey(const Key('error-g1')), findsOneWidget);
+  });
+
+  testWidgets('an error leads to the request it happened in', (tester) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final asked = <String>[];
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        services: ScriptedServices(services: [service('checkout')]),
+        serviceOverview: (name) => ScriptedOverview(name, overviewOf()),
+        serviceErrors: (name) =>
+            ScriptedErrors(name, inboxOf([errorGroup('g1')])),
+        trace: (id) {
+          asked.add(id);
+          return ScriptedTrace(id, traceOf());
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await goTo(tester, 'APM');
+    await tester.tap(find.byKey(const Key('service-checkout')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tab-errors')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('error-g1')));
+    await tester.pumpAndSettle();
+
+    // The last link: the group carried the trace id, so the chain that began
+    // with an alert ends at the request itself.
+    expect(asked, ['abcdef']);
+    expect(find.byKey(const Key('span-root')), findsOneWidget);
+    expect(find.text('upstream timed out'), findsWidgets);
+  });
+
+  testWidgets(
+    'an error whose sample aged out says so instead of going nowhere',
+    (tester) async {
+      final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+      await tester.pumpWidget(
+        signedInApp(
+          s,
+          services: ScriptedServices(services: [service('checkout')]),
+          serviceOverview: (name) => ScriptedOverview(name, overviewOf()),
+          serviceErrors: (name) =>
+              ScriptedErrors(name, inboxOf([errorGroup('g1', traceId: '')])),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await goTo(tester, 'APM');
+      await tester.tap(find.byKey(const Key('service-checkout')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tab-errors')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No trace was kept for this error.'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('error-g1')));
+      await tester.pumpAndSettle();
+      // Still on the service: a dead tap must not look like a failed navigation.
+      expect(find.byKey(const Key('tab-errors')), findsOneWidget);
     },
   );
 

@@ -309,5 +309,41 @@
         "type": "int"
       }
     }
-  }
+  },
+  "serviceTabOverview": "Overview",
+  "serviceTabErrors": "Errors",
+  "errorsEmpty": "Nothing has thrown in the window.",
+  "errorsOccurrences": "{count} times",
+  "@errorsOccurrences": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsLastSeen": "last {when}",
+  "@errorsLastSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "errorStatusUnresolved": "Unresolved",
+  "errorStatusResolved": "Resolved",
+  "errorStatusIgnored": "Ignored",
+  "errorStatusUnknown": "Unknown state",
+  "errorsNoTrace": "No trace was kept for this error.",
+  "errorsTruncated": "There are more; this is the top of the list.",
+  "traceTitle": "Trace",
+  "traceSpans": "{count} spans",
+  "@traceSpans": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "traceEmpty": "This trace has no spans.",
+  "traceRoot": "root"
 }

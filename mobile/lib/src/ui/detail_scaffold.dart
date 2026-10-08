@@ -24,42 +24,62 @@ class DetailScreen<T> extends StatelessWidget {
   final List<Widget> Function(BuildContext, T) builder;
 
   @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: subtitle == null
+          ? Text(title, overflow: TextOverflow.ellipsis)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title, overflow: TextOverflow.ellipsis),
+                Text(
+                  subtitle!,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+    ),
+    body: DetailBody<T>(
+      controller: controller,
+      baseUrl: baseUrl,
+      builder: builder,
+    ),
+  );
+}
+
+/// The body of a detail screen without its own Scaffold, for a screen that
+/// supplies one of its own -- a tabbed screen has one app bar and two bodies.
+class DetailBody<T> extends StatelessWidget {
+  const DetailBody({
+    super.key,
+    required this.controller,
+    required this.baseUrl,
+    required this.builder,
+  });
+
+  final DetailController<T> controller;
+  final String baseUrl;
+  final List<Widget> Function(BuildContext, T) builder;
+
+  @override
   Widget build(BuildContext context) {
     final value = controller.value;
-    final banner = FailureBanner(failure: controller.failure, baseUrl: baseUrl);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: subtitle == null
-            ? Text(title, overflow: TextOverflow.ellipsis)
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(title, overflow: TextOverflow.ellipsis),
-                  Text(
-                    subtitle!,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: controller.refresh,
-        child: controller.loadingFirst
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                children: [
-                  // The banner sits above the content, not below it: on a
-                  // detail screen the failure is usually about the whole screen
-                  // rather than about one row of it.
-                  banner,
-                  if (value != null) ...builder(context, value),
-                ],
-              ),
-      ),
+    return RefreshIndicator(
+      onRefresh: controller.refresh,
+      child: controller.loadingFirst
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+              children: [
+                // The banner sits above the content, not below it: on a detail
+                // screen the failure is usually about the whole screen rather
+                // than about one row of it.
+                FailureBanner(failure: controller.failure, baseUrl: baseUrl),
+                if (value != null) ...builder(context, value),
+              ],
+            ),
     );
   }
 }

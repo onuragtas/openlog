@@ -280,6 +280,24 @@ class OpenlogClient {
         ),
       );
 
+  /// What is actually breaking in that service: the error inbox, grouped.
+  ///
+  /// The window is the server's default again, and the workflow filters the
+  /// web offers are left out on purpose -- a phone reads the inbox, it does
+  /// not triage it.
+  Future<ApmErrorInbox> serviceErrors(String name) async =>
+      ApmErrorInbox.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(name)}/errors',
+        ),
+      );
+
+  /// One request end to end, every span of it, ordered by start time.
+  Future<Trace> trace(String traceId) async => Trace.fromJson(
+    await _send('GET', '/api/v1/traces/${Uri.encodeComponent(traceId)}'),
+  );
+
   /// Recent log records, newest first.
   Future<LogPage> logs({
     String q = '',

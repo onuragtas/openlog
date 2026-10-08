@@ -609,4 +609,55 @@ class LTr extends L {
   String deliveryAttempts(int count) {
     return '$count deneme';
   }
+
+  @override
+  String get serviceTabOverview => 'Genel bakış';
+
+  @override
+  String get serviceTabErrors => 'Hatalar';
+
+  @override
+  String get errorsEmpty => 'Bu aralıkta hiçbir şey hata vermedi.';
+
+  @override
+  String errorsOccurrences(int count) {
+    return '$count kez';
+  }
+
+  @override
+  String errorsLastSeen(String when) {
+    return 'son $when';
+  }
+
+  @override
+  String get errorStatusUnresolved => 'Çözülmedi';
+
+  @override
+  String get errorStatusResolved => 'Çözüldü';
+
+  @override
+  String get errorStatusIgnored => 'Yoksayıldı';
+
+  @override
+  String get errorStatusUnknown => 'Bilinmeyen durum';
+
+  @override
+  String get errorsNoTrace => 'Bu hata için iz saklanmamış.';
+
+  @override
+  String get errorsTruncated => 'Daha fazlası var; bu listenin başı.';
+
+  @override
+  String get traceTitle => 'İz';
+
+  @override
+  String traceSpans(int count) {
+    return '$count span';
+  }
+
+  @override
+  String get traceEmpty => 'Bu izde span yok.';
+
+  @override
+  String get traceRoot => 'kök';
 }

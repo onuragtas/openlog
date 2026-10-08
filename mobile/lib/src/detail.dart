@@ -137,3 +137,127 @@ class ServiceOverviewController extends DetailController<ApmOverview> {
   @override
   Future<ApmOverview> fetch() => _client.serviceOverview(serviceName);
 }
+
+/// One service's error inbox: what is breaking, worst first.
+class ServiceErrorsController extends DetailController<ApmErrorInbox> {
+  ServiceErrorsController(this._client, this.serviceName);
+
+  final OpenlogClient _client;
+  final String serviceName;
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  @override
+  Future<ApmErrorInbox> fetch() => _client.serviceErrors(serviceName);
+
+  /// Unresolved first, then by how often it happened in the window. The server
+  /// sorts by its own default; a phone screen is read from the top and rarely
+  /// scrolled, so what is still broken has to be there.
+  List<ApmErrorGroup> get groups {
+    final all = [...?value?.groups];
+    all.sort((a, b) {
+      final openA = a.status == ApmErrorStatus.unresolved ? 0 : 1;
+      final openB = b.status == ApmErrorStatus.unresolved ? 0 : 1;
+      if (openA != openB) return openA - openB;
+      return b.count.compareTo(a.count);
+    });
+    return all;
+  }
+}
+
+/// A span placed in the tree and on the timeline.
+class SpanRow {
+  const SpanRow({
+    required this.span,
+    required this.depth,
+    required this.offset,
+    required this.width,
+  });
+
+  final Span span;
+
+  /// How many ancestors it has, for the indent.
+  final int depth;
+
+  /// Where it starts and how much of the trace it covers, both 0..1, so the
+  /// bar can be drawn without the screen knowing anything about time.
+  final double offset;
+  final double width;
+}
+
+/// One trace, flattened into rows a list can draw.
+class TraceController extends DetailController<Trace> {
+  TraceController(this._client, this.traceId);
+
+  final OpenlogClient _client;
+  final String traceId;
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  @override
+  Future<Trace> fetch() => _client.trace(traceId);
+
+  /// Depth-first, children ordered by start: the order a person reads a trace.
+  ///
+  /// A root is a span whose parent is not in the answer, which covers both the
+  /// real root (empty parent_span_id) and a trace that arrived incomplete --
+  /// those spans would otherwise be dropped silently, which is the worst
+  /// possible way to show a trace that is missing its middle.
+  List<SpanRow> get rows {
+    final spans = value?.spans ?? const <Span>[];
+    if (spans.isEmpty) return const [];
+
+    final byId = {for (final s in spans) s.spanId: s};
+    final children = <String, List<Span>>{};
+    final roots = <Span>[];
+    for (final s in spans) {
+      if (s.parentSpanId.isEmpty || !byId.containsKey(s.parentSpanId)) {
+        roots.add(s);
+      } else {
+        (children[s.parentSpanId] ??= []).add(s);
+      }
+    }
+    int byStart(Span a, Span b) => a.start.compareTo(b.start);
+    roots.sort(byStart);
+    for (final list in children.values) {
+      list.sort(byStart);
+    }
+
+    // The trace's own window, from the earliest start to the latest end, so a
+    // bar's width means "this share of the request" rather than "this share of
+    // the root span", which is wrong whenever a child outlives its parent.
+    final startUs = spans
+        .map((s) => s.start.microsecondsSinceEpoch)
+        .reduce((a, b) => a < b ? a : b);
+    final endUs = spans
+        .map((s) => s.start.microsecondsSinceEpoch + s.durationNs ~/ 1000)
+        .reduce((a, b) => a > b ? a : b);
+    final total = (endUs - startUs).toDouble();
+
+    final out = <SpanRow>[];
+    void walk(Span s, int depth) {
+      final from = (s.start.microsecondsSinceEpoch - startUs).toDouble();
+      final width = (s.durationNs / 1000).toDouble();
+      out.add(
+        SpanRow(
+          span: s,
+          depth: depth,
+          // A trace whose spans all share one instant is not a division by
+          // zero; it is a full-width bar, which is what instant means here.
+          offset: total <= 0 ? 0 : from / total,
+          width: total <= 0 ? 1 : (width / total).clamp(0.0, 1.0),
+        ),
+      );
+      for (final c in children[s.spanId] ?? const <Span>[]) {
+        walk(c, depth + 1);
+      }
+    }
+
+    for (final r in roots) {
+      walk(r, 0);
+    }
+    return out;
+  }
+}

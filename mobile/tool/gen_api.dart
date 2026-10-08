@@ -32,6 +32,8 @@ const schemaTargets = <String>[
   'AlertIncidentDetail', // one incident with its timeline and what was delivered
   'ApmService', // where to look after an alert: which service, how healthy
   'ApmOverview', // that service's golden signals, so the alert gets a shape
+  'ApmErrorInbox', // what is actually breaking in that service
+  'Trace', // one request end to end: where the time and the error went
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers
@@ -346,8 +348,18 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
 
       // `allOf` of a single branch is a wrapper, not a composition; a real
       // composition has more than one and is flattened by _absorb instead.
+      //
+      // Unless it has siblings that carry schema of their own. ApmErrorGroup
+      // is `type: object` with a one-branch `allOf` next to its own
+      // `properties` and `required`, which is still a composition -- unwrapping
+      // to the branch threw its fifteen fields away and left a bare $ref that
+      // _emit then rejected as "not an object".
       final all = current['allOf'];
-      if (all is YamlList && all.length == 1) {
+      if (all is YamlList &&
+          all.length == 1 &&
+          current['properties'] == null &&
+          current['required'] == null &&
+          current['type'] == null) {
         current = all.first as YamlMap;
         continue;
       }

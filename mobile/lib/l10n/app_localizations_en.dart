@@ -613,4 +613,55 @@ class LEn extends L {
   String deliveryAttempts(int count) {
     return '$count attempts';
   }
+
+  @override
+  String get serviceTabOverview => 'Overview';
+
+  @override
+  String get serviceTabErrors => 'Errors';
+
+  @override
+  String get errorsEmpty => 'Nothing has thrown in the window.';
+
+  @override
+  String errorsOccurrences(int count) {
+    return '$count times';
+  }
+
+  @override
+  String errorsLastSeen(String when) {
+    return 'last $when';
+  }
+
+  @override
+  String get errorStatusUnresolved => 'Unresolved';
+
+  @override
+  String get errorStatusResolved => 'Resolved';
+
+  @override
+  String get errorStatusIgnored => 'Ignored';
+
+  @override
+  String get errorStatusUnknown => 'Unknown state';
+
+  @override
+  String get errorsNoTrace => 'No trace was kept for this error.';
+
+  @override
+  String get errorsTruncated => 'There are more; this is the top of the list.';
+
+  @override
+  String get traceTitle => 'Trace';
+
+  @override
+  String traceSpans(int count) {
+    return '$count spans';
+  }
+
+  @override
+  String get traceEmpty => 'This trace has no spans.';
+
+  @override
+  String get traceRoot => 'root';
 }

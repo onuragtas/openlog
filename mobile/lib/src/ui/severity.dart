@@ -110,3 +110,35 @@ class OutlineTag extends StatelessWidget {
     );
   }
 }
+
+/// A tinted pill, built the way the web builds a badge.
+class Tag extends StatelessWidget {
+  const Tag({
+    super.key,
+    required this.label,
+    this.level = SeverityLevel.unknown,
+  });
+
+  final String label;
+  final SeverityLevel level;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = severityChipColors(context, level);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(Radii.lg),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.foreground,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}

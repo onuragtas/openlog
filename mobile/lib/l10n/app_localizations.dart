@@ -1206,6 +1206,96 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{count} attempts'**
   String deliveryAttempts(int count);
+
+  /// No description provided for @serviceTabOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get serviceTabOverview;
+
+  /// No description provided for @serviceTabErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get serviceTabErrors;
+
+  /// No description provided for @errorsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has thrown in the window.'**
+  String get errorsEmpty;
+
+  /// No description provided for @errorsOccurrences.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} times'**
+  String errorsOccurrences(int count);
+
+  /// No description provided for @errorsLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'last {when}'**
+  String errorsLastSeen(String when);
+
+  /// No description provided for @errorStatusUnresolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Unresolved'**
+  String get errorStatusUnresolved;
+
+  /// No description provided for @errorStatusResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get errorStatusResolved;
+
+  /// No description provided for @errorStatusIgnored.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignored'**
+  String get errorStatusIgnored;
+
+  /// No description provided for @errorStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown state'**
+  String get errorStatusUnknown;
+
+  /// No description provided for @errorsNoTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'No trace was kept for this error.'**
+  String get errorsNoTrace;
+
+  /// No description provided for @errorsTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'There are more; this is the top of the list.'**
+  String get errorsTruncated;
+
+  /// No description provided for @traceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trace'**
+  String get traceTitle;
+
+  /// No description provided for @traceSpans.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} spans'**
+  String traceSpans(int count);
+
+  /// No description provided for @traceEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This trace has no spans.'**
+  String get traceEmpty;
+
+  /// No description provided for @traceRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'root'**
+  String get traceRoot;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
