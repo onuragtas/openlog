@@ -1503,6 +1503,7 @@ void main() {
       'Query': Key('query-text'),
       'Dashboards': Key('dashboards-search'),
       'Inventory search': Key('inventory-category'),
+      'Fleet': Key('fleet-search'),
       'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
@@ -1590,6 +1591,7 @@ void main() {
       'Query',
       'Dashboards',
       'Inventory search',
+      'Fleet',
       'Alerts',
       'Settings',
     ]);

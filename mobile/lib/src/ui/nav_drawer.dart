@@ -38,6 +38,7 @@ final navItems = <NavItem>[
   NavItem(Icons.manage_search_outlined, (l) => l.navQuery),
   NavItem(Icons.dashboard_outlined, (l) => l.navDashboards),
   NavItem(Icons.inventory_outlined, (l) => l.navInventory),
+  NavItem(Icons.rocket_launch_outlined, (l) => l.navFleet),
   NavItem(Icons.notifications_outlined, (l) => l.navAlerts),
   NavItem(Icons.settings_outlined, (l) => l.navSettings),
 ];

@@ -94,6 +94,139 @@ Map<String, Object?> spanRow(
 };
 
 void main() {
+  test('the fleet summary and the agents come from one fetch', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.path.endsWith('/summary')) {
+        writeJson(req, 200, {
+          'total_hosts': 12,
+          'active_hosts': 11,
+          'update_capable': 9,
+          'not_update_capable': [
+            {'reason': 'container', 'hosts': 2},
+          ],
+          'outdated': 3,
+          'unsupported': 1,
+          'in_progress': 1,
+          'failed': 1,
+          'held': 0,
+          'pinned': 0,
+          'versions': <Object>[],
+          'latest': {
+            'stable': {
+              'version': '0.1.113',
+              'channel': 'stable',
+              'released_at': '2026-10-08T09:00:00.000000000Z',
+              'notes_url': '',
+            },
+            'beta': null,
+          },
+          'target': null,
+          'oldest_supported_version': '0.1.100',
+          'policy_mode': 'notify',
+          'update_available': true,
+          'stale_after_seconds': 900,
+          'catalog': {
+            'status': 'ok',
+            'source': 'github',
+            'checked_at': '2026-10-08T09:00:00.000000000Z',
+            'last_success_at': '2026-10-08T09:00:00.000000000Z',
+            'error': '',
+            'releases': 40,
+            'warnings': <String>[],
+          },
+          'current_rollout': null,
+        });
+      } else {
+        writeJson(req, 200, {
+          'hosts': [
+            {
+              'host_id': 'h1',
+              'host_name': 'web-1',
+              'agent': {
+                'name': 'openlog-infra-agent',
+                'version': '0.1.110',
+                'commit': 'abc',
+                'os': 'linux',
+                'arch': 'arm64',
+                'install_method': 'deb',
+                'update_capable': true,
+              },
+              'update': {
+                'state': 'failed',
+                'from_version': '0.1.110',
+                'to_version': '0.1.113',
+                'error': 'checksum mismatch',
+                'changed_at': '2026-10-08T09:00:00.000000000Z',
+              },
+              'first_seen_at': '2026-09-08T09:00:00.000000000Z',
+              'last_sync_at': '2026-10-08T09:00:00.000000000Z',
+              'rollout_id': null,
+              'override': null,
+              'outdated': true,
+              'supported': true,
+              'status': 'offer',
+              'status_target': '0.1.113',
+              // Filled out in full on purpose: the parser is strict and
+              // tells you exactly which field is missing, which is the whole
+              // point of generating it from the contract.
+              'php_agent': {
+                'reported': false,
+                'mode': 'off',
+                'agent_mode': '',
+                'source': '',
+                'capable': false,
+                'reason': '',
+                'managed_by': 'none',
+                'version': null,
+                'runtimes': <Object>[],
+                'update': null,
+                'override': null,
+                'status': 'not_capable',
+                'status_target': null,
+              },
+              'php_access': null,
+              'java_agent': {
+                'reported': false,
+                'mode': 'off',
+                'agent_mode': '',
+                'source': '',
+                'capable': false,
+                'reason': '',
+                'managed': false,
+                'version': null,
+                'state': '',
+                'detail': '',
+                'link_path': '',
+                'link_state': '',
+                'jvms': <Object>[],
+                'update': null,
+                'override': null,
+                'status': 'not_capable',
+                'status_target': null,
+              },
+            },
+          ],
+          'next_cursor': null,
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = FleetController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+
+    // Both in one fetch, so the header and the list describe one moment.
+    expect(server.requests.map((r) => r.path), [
+      '/api/v1/fleet/summary',
+      '/api/v1/fleet/hosts',
+    ]);
+    expect(c.summary!.outdated, 3);
+    expect(c.items.single.agent.version, '0.1.110');
+    expect(c.items.single.update.error, 'checksum mismatch');
+  });
+
   test('inventory asks for one category and the typed key', () async {
     final server = await FakeServer.start(
       (req, _) => writeJson(req, 200, {

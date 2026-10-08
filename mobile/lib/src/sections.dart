@@ -39,6 +39,7 @@ class Sections {
     RumController? rum,
     CostsController? costs,
     InventoryController? inventory,
+    FleetController? fleet,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -73,6 +74,7 @@ class Sections {
        rum = rum ?? RumController(client),
        costs = costs ?? CostsController(client),
        inventory = inventory ?? InventoryController(client),
+       fleet = fleet ?? FleetController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -92,6 +94,7 @@ class Sections {
   final RumController rum;
   final CostsController costs;
   final InventoryController inventory;
+  final FleetController fleet;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -126,6 +129,7 @@ class Sections {
     query,
     dashboards,
     inventory,
+    fleet,
     alerts,
   ];
 
@@ -270,4 +274,25 @@ class InventoryController extends SectionController<InventorySearchItem> {
   @override
   Future<List<InventorySearchItem>> fetch() async =>
       (await client.inventory(category: category, q: query.trim())).items;
+}
+
+/// The agent fleet, read-only: how far behind it is and which host is where.
+///
+/// Two requests in one fetch, so the summary on top and the list under it
+/// always describe the same moment -- separate controllers would let the
+/// header say "3 outdated" over a list that has already moved on.
+///
+/// Read-only on purpose. Changing a rollout policy is a fleet-wide action
+/// with a blast radius, and a phone in a pocket is the wrong place for the
+/// button that starts one.
+class FleetController extends SectionController<FleetHost> {
+  FleetController(super.client);
+
+  FleetSummary? summary;
+
+  @override
+  Future<List<FleetHost>> fetch() async {
+    summary = await client.fleetSummary();
+    return (await client.fleetHosts(q: query.trim())).hosts;
+  }
 }

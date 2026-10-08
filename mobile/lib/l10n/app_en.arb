@@ -487,5 +487,39 @@
   "invUser": "Users",
   "invLaunchdService": "launchd services",
   "invWindowsService": "Windows services",
-  "invDiscoveredService": "Discovered services"
+  "invDiscoveredService": "Discovered services",
+  "navFleet": "Fleet",
+  "fleetEmpty": "No agent has reported.",
+  "fleetAgents": "Agents",
+  "fleetOutdated": "Outdated",
+  "fleetInProgress": "Updating",
+  "fleetFailed": "Failed",
+  "fleetLatest": "Latest {version}",
+  "@fleetLatest": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetNoCatalog": "No release catalogue; the server cannot tell what is latest.",
+  "fleetReadOnly": "Read-only here. Rollouts and policy are changed on the web.",
+  "fleetUnsupported": "unsupported",
+  "fleetStatePrefix": "update {state}",
+  "@fleetStatePrefix": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetStateIdle": "idle",
+  "fleetStateDownloading": "downloading",
+  "fleetStateVerifying": "verifying",
+  "fleetStateStaged": "staged",
+  "fleetStateRestarting": "restarting",
+  "fleetStateConfirming": "confirming",
+  "fleetStateSucceeded": "succeeded",
+  "fleetStateFailed": "failed",
+  "fleetStateRolledBack": "rolled back"
 }

@@ -879,4 +879,70 @@ class LTr extends L {
 
   @override
   String get invDiscoveredService => 'Keşfedilen servisler';
+
+  @override
+  String get navFleet => 'Filo';
+
+  @override
+  String get fleetEmpty => 'Rapor eden ajan yok.';
+
+  @override
+  String get fleetAgents => 'Ajan';
+
+  @override
+  String get fleetOutdated => 'Eski';
+
+  @override
+  String get fleetInProgress => 'Güncelleniyor';
+
+  @override
+  String get fleetFailed => 'Başarısız';
+
+  @override
+  String fleetLatest(String version) {
+    return 'En yeni $version';
+  }
+
+  @override
+  String get fleetNoCatalog =>
+      'Sürüm kataloğu yok; sunucu en yenisinin hangisi olduğunu bilemiyor.';
+
+  @override
+  String get fleetReadOnly =>
+      'Burada salt okunur. Dağıtım ve politika webden değiştirilir.';
+
+  @override
+  String get fleetUnsupported => 'desteklenmiyor';
+
+  @override
+  String fleetStatePrefix(String state) {
+    return 'güncelleme $state';
+  }
+
+  @override
+  String get fleetStateIdle => 'boşta';
+
+  @override
+  String get fleetStateDownloading => 'indiriliyor';
+
+  @override
+  String get fleetStateVerifying => 'doğrulanıyor';
+
+  @override
+  String get fleetStateStaged => 'hazır';
+
+  @override
+  String get fleetStateRestarting => 'yeniden başlıyor';
+
+  @override
+  String get fleetStateConfirming => 'onaylanıyor';
+
+  @override
+  String get fleetStateSucceeded => 'başarılı';
+
+  @override
+  String get fleetStateFailed => 'başarısız';
+
+  @override
+  String get fleetStateRolledBack => 'geri alındı';
 }

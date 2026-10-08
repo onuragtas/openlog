@@ -471,6 +471,32 @@ enum MetricAggregation {
   }
 }
 
+/// FleetMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetMode {
+  off('off'),
+  notify('notify'),
+  auto('auto'),
+  unknown('');
+
+  const FleetMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVisibility of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -829,6 +855,111 @@ enum RumVitalName {
   }
 }
 
+/// FleetChannel of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetChannel {
+  stable('stable'),
+  beta('beta'),
+  unknown('');
+
+  const FleetChannel(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetChannel fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetCatalogStatusStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetCatalogStatusStatus {
+  ok('ok'),
+  pending('pending'),
+  error('error'),
+  disabled('disabled'),
+  unknown('');
+
+  const FleetCatalogStatusStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetCatalogStatusStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetRolloutAction of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetRolloutAction {
+  upgrade('upgrade'),
+  rollback('rollback'),
+  unknown('');
+
+  const FleetRolloutAction(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetRolloutAction fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetRolloutState of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetRolloutState {
+  active('active'),
+  paused('paused'),
+  halted('halted'),
+  completed('completed'),
+  superseded('superseded'),
+  unknown('');
+
+  const FleetRolloutState(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetRolloutState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVariableType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -966,6 +1097,48 @@ enum DashboardThresholdSeverity {
   }
 }
 
+/// FleetHostStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetHostStatus {
+  offer('offer'),
+  noCatalog('no_catalog'),
+  modeOff('mode_off'),
+  notifyOnly('notify_only'),
+  invalidVersion('invalid_version'),
+  hold('hold'),
+  notCapable('not_capable'),
+  noRollout('no_rollout'),
+  rolloutPaused('rollout_paused'),
+  rolloutHalted('rollout_halted'),
+  rolloutOutdated('rollout_outdated'),
+  notInRollout('not_in_rollout'),
+  upToDate('up_to_date'),
+  notInWave('not_in_wave'),
+  targetUnavailable('target_unavailable'),
+  incompatible('incompatible'),
+  alreadyFailed('already_failed'),
+  noArtifact('no_artifact'),
+  outsideWindow('outside_window'),
+  unknown('');
+
+  const FleetHostStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetHostStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SloSliType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1065,6 +1238,184 @@ enum CostSource {
   final String wire;
 
   static CostSource fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetOverrideAction of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetOverrideAction {
+  hold('hold'),
+  pin('pin'),
+  unknown('');
+
+  const FleetOverrideAction(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetOverrideAction fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetPHPAgentMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetPHPAgentMode {
+  off('off'),
+  manual('manual'),
+  auto('auto'),
+  unknown('');
+
+  const FleetPHPAgentMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetPHPAgentMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetHostPHPAgentManagedBy of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetHostPHPAgentManagedBy {
+  fleet('fleet'),
+  package('package'),
+  manual('manual'),
+  none('none'),
+  unknown('');
+
+  const FleetHostPHPAgentManagedBy(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetHostPHPAgentManagedBy fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetHostPHPAgentStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetHostPHPAgentStatus {
+  offer('offer'),
+  upToDate('up_to_date'),
+  modeOff('mode_off'),
+  manual('manual'),
+  notReported('not_reported'),
+  notCapable('not_capable'),
+  managedElsewhere('managed_elsewhere'),
+  noPhp('no_php'),
+  invalidVersion('invalid_version'),
+  noCatalog('no_catalog'),
+  targetUnavailable('target_unavailable'),
+  noArtifact('no_artifact'),
+  alreadyFailed('already_failed'),
+  notInWave('not_in_wave'),
+  outsideWindow('outside_window'),
+  unknown('');
+
+  const FleetHostPHPAgentStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetHostPHPAgentStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetJavaAgentMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetJavaAgentMode {
+  off('off'),
+  manual('manual'),
+  auto('auto'),
+  unknown('');
+
+  const FleetJavaAgentMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetJavaAgentMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetHostJavaAgentStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetHostJavaAgentStatus {
+  offer('offer'),
+  upToDate('up_to_date'),
+  modeOff('mode_off'),
+  manual('manual'),
+  notReported('not_reported'),
+  notCapable('not_capable'),
+  invalidVersion('invalid_version'),
+  noCatalog('no_catalog'),
+  targetUnavailable('target_unavailable'),
+  noArtifact('no_artifact'),
+  alreadyFailed('already_failed'),
+  notInWave('not_in_wave'),
+  outsideWindow('outside_window'),
+  unknown('');
+
+  const FleetHostJavaAgentStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetHostJavaAgentStatus fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1922,6 +2273,191 @@ class RumOverviewTotals {
   final double? avgMs;
 }
 
+/// `FleetSummary` of the openlog API contract.
+class FleetSummary {
+  const FleetSummary({
+    required this.totalHosts,
+    required this.activeHosts,
+    required this.updateCapable,
+    required this.notUpdateCapable,
+    required this.outdated,
+    required this.unsupported,
+    required this.inProgress,
+    required this.failed,
+    required this.held,
+    required this.pinned,
+    required this.versions,
+    required this.latest,
+    this.target,
+    required this.oldestSupportedVersion,
+    required this.policyMode,
+    required this.updateAvailable,
+    required this.staleAfterSeconds,
+    required this.catalog,
+    this.currentRollout,
+  });
+
+  factory FleetSummary.fromJson(Object? json, [String path = 'FleetSummary']) {
+    final m = _obj(json, path);
+    return FleetSummary(
+      totalHosts: _req(m, 'total_hosts', path, _int),
+      activeHosts: _req(m, 'active_hosts', path, _int),
+      updateCapable: _req(m, 'update_capable', path, _int),
+      notUpdateCapable: _req(
+        m,
+        'not_update_capable',
+        path,
+        (v, p) => _list<FleetSummaryNotUpdateCapableItem>(
+          v,
+          p,
+          (v, p) => FleetSummaryNotUpdateCapableItem.fromJson(v, p),
+        ),
+      ),
+      outdated: _req(m, 'outdated', path, _int),
+      unsupported: _req(m, 'unsupported', path, _int),
+      inProgress: _req(m, 'in_progress', path, _int),
+      failed: _req(m, 'failed', path, _int),
+      held: _req(m, 'held', path, _int),
+      pinned: _req(m, 'pinned', path, _int),
+      versions: _req(
+        m,
+        'versions',
+        path,
+        (v, p) => _list<FleetSummaryVersionsItem>(
+          v,
+          p,
+          (v, p) => FleetSummaryVersionsItem.fromJson(v, p),
+        ),
+      ),
+      latest: _req(
+        m,
+        'latest',
+        path,
+        (v, p) => FleetSummaryLatest.fromJson(v, p),
+      ),
+      target: _opt(
+        m,
+        'target',
+        path,
+        (v, p) => FleetReleaseInfo.fromJson(v, p),
+      ),
+      oldestSupportedVersion: _req(m, 'oldest_supported_version', path, _str),
+      policyMode: _req(m, 'policy_mode', path, FleetMode.fromJson),
+      updateAvailable: _req(m, 'update_available', path, _bool),
+      staleAfterSeconds: _req(m, 'stale_after_seconds', path, _int),
+      catalog: _req(
+        m,
+        'catalog',
+        path,
+        (v, p) => FleetCatalogStatus.fromJson(v, p),
+      ),
+      currentRollout: _opt(
+        m,
+        'current_rollout',
+        path,
+        (v, p) => FleetRollout.fromJson(v, p),
+      ),
+    );
+  }
+
+  final int totalHosts;
+  final int activeHosts;
+  final int updateCapable;
+  final List<FleetSummaryNotUpdateCapableItem> notUpdateCapable;
+  final int outdated;
+  final int unsupported;
+  final int inProgress;
+  final int failed;
+  final int held;
+  final int pinned;
+  final List<FleetSummaryVersionsItem> versions;
+  final FleetSummaryLatest latest;
+  final FleetReleaseInfo? target;
+  final String oldestSupportedVersion;
+  final FleetMode policyMode;
+  final bool updateAvailable;
+  final int staleAfterSeconds;
+  final FleetCatalogStatus catalog;
+  final FleetRollout? currentRollout;
+}
+
+/// `FleetSummaryNotUpdateCapableItem` of the openlog API contract.
+class FleetSummaryNotUpdateCapableItem {
+  const FleetSummaryNotUpdateCapableItem({
+    required this.reason,
+    required this.hosts,
+  });
+
+  factory FleetSummaryNotUpdateCapableItem.fromJson(
+    Object? json, [
+    String path = 'FleetSummaryNotUpdateCapableItem',
+  ]) {
+    final m = _obj(json, path);
+    return FleetSummaryNotUpdateCapableItem(
+      reason: _req(m, 'reason', path, _str),
+      hosts: _req(m, 'hosts', path, _int),
+    );
+  }
+
+  final String reason;
+  final int hosts;
+}
+
+/// `FleetSummaryVersionsItem` of the openlog API contract.
+class FleetSummaryVersionsItem {
+  const FleetSummaryVersionsItem({
+    required this.version,
+    required this.hosts,
+    required this.latest,
+    required this.outdated,
+    required this.supported,
+  });
+
+  factory FleetSummaryVersionsItem.fromJson(
+    Object? json, [
+    String path = 'FleetSummaryVersionsItem',
+  ]) {
+    final m = _obj(json, path);
+    return FleetSummaryVersionsItem(
+      version: _req(m, 'version', path, _str),
+      hosts: _req(m, 'hosts', path, _int),
+      latest: _req(m, 'latest', path, _bool),
+      outdated: _req(m, 'outdated', path, _bool),
+      supported: _req(m, 'supported', path, _bool),
+    );
+  }
+
+  final String version;
+  final int hosts;
+  final bool latest;
+  final bool outdated;
+  final bool supported;
+}
+
+/// `FleetSummaryLatest` of the openlog API contract.
+class FleetSummaryLatest {
+  const FleetSummaryLatest({this.stable, this.beta});
+
+  factory FleetSummaryLatest.fromJson(
+    Object? json, [
+    String path = 'FleetSummaryLatest',
+  ]) {
+    final m = _obj(json, path);
+    return FleetSummaryLatest(
+      stable: _opt(
+        m,
+        'stable',
+        path,
+        (v, p) => FleetReleaseInfo.fromJson(v, p),
+      ),
+      beta: _opt(m, 'beta', path, (v, p) => FleetReleaseInfo.fromJson(v, p)),
+    );
+  }
+
+  final FleetReleaseInfo? stable;
+  final FleetReleaseInfo? beta;
+}
+
 /// `DashboardSummary` of the openlog API contract.
 class DashboardSummary {
   const DashboardSummary({
@@ -2729,6 +3265,146 @@ class RumVital {
   final double poorThreshold;
 }
 
+/// `FleetReleaseInfo` of the openlog API contract.
+class FleetReleaseInfo {
+  const FleetReleaseInfo({
+    required this.version,
+    required this.channel,
+    required this.releasedAt,
+    required this.notesUrl,
+  });
+
+  factory FleetReleaseInfo.fromJson(
+    Object? json, [
+    String path = 'FleetReleaseInfo',
+  ]) {
+    final m = _obj(json, path);
+    return FleetReleaseInfo(
+      version: _req(m, 'version', path, _str),
+      channel: _req(m, 'channel', path, FleetChannel.fromJson),
+      releasedAt: _req(m, 'released_at', path, _time),
+      notesUrl: _req(m, 'notes_url', path, _str),
+    );
+  }
+
+  final String version;
+  final FleetChannel channel;
+  final DateTime releasedAt;
+  final String notesUrl;
+}
+
+/// `FleetCatalogStatus` of the openlog API contract.
+class FleetCatalogStatus {
+  const FleetCatalogStatus({
+    required this.status,
+    required this.source,
+    this.checkedAt,
+    this.lastSuccessAt,
+    required this.error,
+    required this.releases,
+    required this.warnings,
+  });
+
+  factory FleetCatalogStatus.fromJson(
+    Object? json, [
+    String path = 'FleetCatalogStatus',
+  ]) {
+    final m = _obj(json, path);
+    return FleetCatalogStatus(
+      status: _req(m, 'status', path, FleetCatalogStatusStatus.fromJson),
+      source: _req(m, 'source', path, _str),
+      checkedAt: _opt(m, 'checked_at', path, _time),
+      lastSuccessAt: _opt(m, 'last_success_at', path, _time),
+      error: _req(m, 'error', path, _str),
+      releases: _req(m, 'releases', path, _int),
+      warnings: _req(m, 'warnings', path, (v, p) => _list<String>(v, p, _str)),
+    );
+  }
+
+  final FleetCatalogStatusStatus status;
+  final String source;
+  final DateTime? checkedAt;
+  final DateTime? lastSuccessAt;
+  final String error;
+  final int releases;
+  final List<String> warnings;
+}
+
+/// `FleetRollout` of the openlog API contract.
+class FleetRollout {
+  const FleetRollout({
+    required this.id,
+    required this.action,
+    this.fromVersion,
+    this.toVersion,
+    required this.targets,
+    required this.waves,
+    required this.currentWave,
+    required this.wavePercent,
+    required this.waveStartedAt,
+    this.nextWaveAt,
+    required this.waveSoakMinutes,
+    required this.haltFailureRate,
+    required this.state,
+    required this.stateReason,
+    required this.counters,
+    this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    this.endedAt,
+  });
+
+  factory FleetRollout.fromJson(Object? json, [String path = 'FleetRollout']) {
+    final m = _obj(json, path);
+    return FleetRollout(
+      id: _req(m, 'id', path, _str),
+      action: _req(m, 'action', path, FleetRolloutAction.fromJson),
+      fromVersion: _opt(m, 'from_version', path, _str),
+      toVersion: _opt(m, 'to_version', path, _str),
+      targets: _req(m, 'targets', path, (v, p) => _map<String>(v, p, _str)),
+      waves: _req(m, 'waves', path, (v, p) => _list<int>(v, p, _int)),
+      currentWave: _req(m, 'current_wave', path, _int),
+      wavePercent: _req(m, 'wave_percent', path, _int),
+      waveStartedAt: _req(m, 'wave_started_at', path, _time),
+      nextWaveAt: _opt(m, 'next_wave_at', path, _time),
+      waveSoakMinutes: _req(m, 'wave_soak_minutes', path, _int),
+      haltFailureRate: _req(m, 'halt_failure_rate', path, _num),
+      state: _req(m, 'state', path, FleetRolloutState.fromJson),
+      stateReason: _req(m, 'state_reason', path, _str),
+      counters: _req(
+        m,
+        'counters',
+        path,
+        (v, p) => FleetRolloutCounters.fromJson(v, p),
+      ),
+      createdByEmail: _opt(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      endedAt: _opt(m, 'ended_at', path, _time),
+    );
+  }
+
+  final String id;
+  final FleetRolloutAction action;
+  final String? fromVersion;
+  final String? toVersion;
+  final Map<String, String> targets;
+  final List<int> waves;
+  final int currentWave;
+  final int wavePercent;
+  final DateTime waveStartedAt;
+  final DateTime? nextWaveAt;
+  final int waveSoakMinutes;
+  final double haltFailureRate;
+  final FleetRolloutState state;
+  final String stateReason;
+  final FleetRolloutCounters counters;
+  final String? createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? endedAt;
+}
+
 /// `DashboardVariable` of the openlog API contract.
 class DashboardVariable {
   const DashboardVariable({
@@ -3089,6 +3765,37 @@ class SpanEvent {
   final Map<String, String> attributes;
 }
 
+/// `FleetRolloutCounters` of the openlog API contract.
+class FleetRolloutCounters {
+  const FleetRolloutCounters({
+    required this.pending,
+    required this.attempted,
+    required this.succeeded,
+    required this.failed,
+    required this.rolledBack,
+  });
+
+  factory FleetRolloutCounters.fromJson(
+    Object? json, [
+    String path = 'FleetRolloutCounters',
+  ]) {
+    final m = _obj(json, path);
+    return FleetRolloutCounters(
+      pending: _req(m, 'pending', path, _int),
+      attempted: _req(m, 'attempted', path, _int),
+      succeeded: _req(m, 'succeeded', path, _int),
+      failed: _req(m, 'failed', path, _int),
+      rolledBack: _req(m, 'rolled_back', path, _int),
+    );
+  }
+
+  final int pending;
+  final int attempted;
+  final int succeeded;
+  final int failed;
+  final int rolledBack;
+}
+
 /// `DashboardWidget` of the openlog API contract.
 class DashboardWidget {
   const DashboardWidget({
@@ -3423,6 +4130,30 @@ class InventoryPage {
   }
 
   final List<InventorySearchItem> items;
+}
+
+/// `FleetHostPage` of the openlog API contract.
+class FleetHostPage {
+  const FleetHostPage({required this.hosts, this.nextCursor});
+
+  factory FleetHostPage.fromJson(
+    Object? json, [
+    String path = 'FleetHostPage',
+  ]) {
+    final m = _obj(json, path);
+    return FleetHostPage(
+      hosts: _req(
+        m,
+        'hosts',
+        path,
+        (v, p) => _list<FleetHost>(v, p, (v, p) => FleetHost.fromJson(v, p)),
+      ),
+      nextCursor: _opt(m, 'next_cursor', path, _str),
+    );
+  }
+
+  final List<FleetHost> hosts;
+  final String? nextCursor;
 }
 
 /// `DashboardPageList` of the openlog API contract.
@@ -3914,6 +4645,152 @@ class InventorySearchItem {
   final Object? data;
   final String hostId;
   final String? hostName;
+}
+
+/// `FleetHost` of the openlog API contract.
+class FleetHost {
+  const FleetHost({
+    required this.hostId,
+    required this.hostName,
+    required this.agent,
+    required this.update,
+    required this.firstSeenAt,
+    required this.lastSyncAt,
+    this.rolloutId,
+    this.override,
+    required this.outdated,
+    required this.supported,
+    required this.status,
+    this.statusTarget,
+    required this.phpAgent,
+    this.phpAccess,
+    required this.javaAgent,
+  });
+
+  factory FleetHost.fromJson(Object? json, [String path = 'FleetHost']) {
+    final m = _obj(json, path);
+    return FleetHost(
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      agent: _req(m, 'agent', path, (v, p) => FleetHostAgent.fromJson(v, p)),
+      update: _req(m, 'update', path, (v, p) => FleetHostUpdate.fromJson(v, p)),
+      firstSeenAt: _req(m, 'first_seen_at', path, _time),
+      lastSyncAt: _req(m, 'last_sync_at', path, _time),
+      rolloutId: _opt(m, 'rollout_id', path, _str),
+      override: _opt(
+        m,
+        'override',
+        path,
+        (v, p) => FleetOverride.fromJson(v, p),
+      ),
+      outdated: _req(m, 'outdated', path, _bool),
+      supported: _req(m, 'supported', path, _bool),
+      status: _req(m, 'status', path, FleetHostStatus.fromJson),
+      statusTarget: _opt(m, 'status_target', path, _str),
+      phpAgent: _req(
+        m,
+        'php_agent',
+        path,
+        (v, p) => FleetHostPHPAgent.fromJson(v, p),
+      ),
+      phpAccess: _opt(
+        m,
+        'php_access',
+        path,
+        (v, p) => FleetPHPAccess.fromJson(v, p),
+      ),
+      javaAgent: _req(
+        m,
+        'java_agent',
+        path,
+        (v, p) => FleetHostJavaAgent.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String hostId;
+  final String hostName;
+  final FleetHostAgent agent;
+  final FleetHostUpdate update;
+  final DateTime firstSeenAt;
+  final DateTime lastSyncAt;
+  final String? rolloutId;
+  final FleetOverride? override;
+  final bool outdated;
+  final bool supported;
+  final FleetHostStatus status;
+  final String? statusTarget;
+  final FleetHostPHPAgent phpAgent;
+  final FleetPHPAccess? phpAccess;
+  final FleetHostJavaAgent javaAgent;
+}
+
+/// `FleetHostAgent` of the openlog API contract.
+class FleetHostAgent {
+  const FleetHostAgent({
+    required this.name,
+    required this.version,
+    required this.commit,
+    required this.os,
+    required this.arch,
+    required this.installMethod,
+    required this.updateCapable,
+  });
+
+  factory FleetHostAgent.fromJson(
+    Object? json, [
+    String path = 'FleetHostAgent',
+  ]) {
+    final m = _obj(json, path);
+    return FleetHostAgent(
+      name: _req(m, 'name', path, _str),
+      version: _req(m, 'version', path, _str),
+      commit: _req(m, 'commit', path, _str),
+      os: _req(m, 'os', path, _str),
+      arch: _req(m, 'arch', path, _str),
+      installMethod: _req(m, 'install_method', path, _str),
+      updateCapable: _req(m, 'update_capable', path, _bool),
+    );
+  }
+
+  final String name;
+  final String version;
+  final String commit;
+  final String os;
+  final String arch;
+  final String installMethod;
+  final bool updateCapable;
+}
+
+/// `FleetHostUpdate` of the openlog API contract.
+class FleetHostUpdate {
+  const FleetHostUpdate({
+    required this.state,
+    required this.fromVersion,
+    required this.toVersion,
+    required this.error,
+    this.changedAt,
+  });
+
+  factory FleetHostUpdate.fromJson(
+    Object? json, [
+    String path = 'FleetHostUpdate',
+  ]) {
+    final m = _obj(json, path);
+    return FleetHostUpdate(
+      state: _req(m, 'state', path, _str),
+      fromVersion: _req(m, 'from_version', path, _str),
+      toVersion: _req(m, 'to_version', path, _str),
+      error: _req(m, 'error', path, _str),
+      changedAt: _opt(m, 'changed_at', path, _time),
+    );
+  }
+
+  final String state;
+  final String fromVersion;
+  final String toVersion;
+  final String error;
+  final DateTime? changedAt;
 }
 
 /// `Host` of the openlog API contract.
@@ -4512,6 +5389,236 @@ class CostPrice {
   final double regionMultiplier;
 }
 
+/// `FleetOverride` of the openlog API contract.
+class FleetOverride {
+  const FleetOverride({
+    required this.action,
+    this.version,
+    required this.updatedAt,
+  });
+
+  factory FleetOverride.fromJson(
+    Object? json, [
+    String path = 'FleetOverride',
+  ]) {
+    final m = _obj(json, path);
+    return FleetOverride(
+      action: _req(m, 'action', path, FleetOverrideAction.fromJson),
+      version: _opt(m, 'version', path, _str),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  final FleetOverrideAction action;
+  final String? version;
+  final DateTime updatedAt;
+}
+
+/// `FleetHostPHPAgent` of the openlog API contract.
+class FleetHostPHPAgent {
+  const FleetHostPHPAgent({
+    required this.reported,
+    required this.mode,
+    required this.agentMode,
+    required this.source,
+    required this.capable,
+    required this.reason,
+    required this.managedBy,
+    this.version,
+    required this.runtimes,
+    this.update,
+    this.override,
+    required this.status,
+    this.statusTarget,
+  });
+
+  factory FleetHostPHPAgent.fromJson(
+    Object? json, [
+    String path = 'FleetHostPHPAgent',
+  ]) {
+    final m = _obj(json, path);
+    return FleetHostPHPAgent(
+      reported: _req(m, 'reported', path, _bool),
+      mode: _req(m, 'mode', path, FleetPHPAgentMode.fromJson),
+      agentMode: _req(m, 'agent_mode', path, _str),
+      source: _req(m, 'source', path, _str),
+      capable: _req(m, 'capable', path, _bool),
+      reason: _req(m, 'reason', path, _str),
+      managedBy: _req(
+        m,
+        'managed_by',
+        path,
+        FleetHostPHPAgentManagedBy.fromJson,
+      ),
+      version: _opt(m, 'version', path, _str),
+      runtimes: _req(
+        m,
+        'runtimes',
+        path,
+        (v, p) => _list<FleetPHPRuntime>(
+          v,
+          p,
+          (v, p) => FleetPHPRuntime.fromJson(v, p),
+        ),
+      ),
+      update: _opt(
+        m,
+        'update',
+        path,
+        (v, p) => FleetPHPAgentUpdate.fromJson(v, p),
+      ),
+      override: _opt(
+        m,
+        'override',
+        path,
+        (v, p) => FleetPHPOverride.fromJson(v, p),
+      ),
+      status: _req(m, 'status', path, FleetHostPHPAgentStatus.fromJson),
+      statusTarget: _opt(m, 'status_target', path, _str),
+    );
+  }
+
+  final bool reported;
+  final FleetPHPAgentMode mode;
+  final String agentMode;
+  final String source;
+  final bool capable;
+  final String reason;
+  final FleetHostPHPAgentManagedBy managedBy;
+  final String? version;
+  final List<FleetPHPRuntime> runtimes;
+  final FleetPHPAgentUpdate? update;
+  final FleetPHPOverride? override;
+  final FleetHostPHPAgentStatus status;
+  final String? statusTarget;
+}
+
+/// `FleetPHPAccess` of the openlog API contract.
+class FleetPHPAccess {
+  const FleetPHPAccess({
+    required this.socketGroup,
+    required this.group,
+    required this.groupExists,
+    required this.agentMember,
+    required this.grants,
+    required this.pools,
+  });
+
+  factory FleetPHPAccess.fromJson(
+    Object? json, [
+    String path = 'FleetPHPAccess',
+  ]) {
+    final m = _obj(json, path);
+    return FleetPHPAccess(
+      socketGroup: _req(m, 'socket_group', path, _str),
+      group: _req(m, 'group', path, _str),
+      groupExists: _req(m, 'group_exists', path, _bool),
+      agentMember: _req(m, 'agent_member', path, _bool),
+      grants: _req(m, 'grants', path, _str),
+      pools: _req(
+        m,
+        'pools',
+        path,
+        (v, p) => _list<FleetPHPPoolAccess>(
+          v,
+          p,
+          (v, p) => FleetPHPPoolAccess.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final String socketGroup;
+  final String group;
+  final bool groupExists;
+  final bool agentMember;
+  final String grants;
+  final List<FleetPHPPoolAccess> pools;
+}
+
+/// `FleetHostJavaAgent` of the openlog API contract.
+class FleetHostJavaAgent {
+  const FleetHostJavaAgent({
+    required this.reported,
+    required this.mode,
+    required this.agentMode,
+    required this.source,
+    required this.capable,
+    required this.reason,
+    required this.managed,
+    this.version,
+    required this.state,
+    required this.detail,
+    required this.linkPath,
+    required this.linkState,
+    required this.jvms,
+    this.update,
+    this.override,
+    required this.status,
+    this.statusTarget,
+  });
+
+  factory FleetHostJavaAgent.fromJson(
+    Object? json, [
+    String path = 'FleetHostJavaAgent',
+  ]) {
+    final m = _obj(json, path);
+    return FleetHostJavaAgent(
+      reported: _req(m, 'reported', path, _bool),
+      mode: _req(m, 'mode', path, FleetJavaAgentMode.fromJson),
+      agentMode: _req(m, 'agent_mode', path, _str),
+      source: _req(m, 'source', path, _str),
+      capable: _req(m, 'capable', path, _bool),
+      reason: _req(m, 'reason', path, _str),
+      managed: _req(m, 'managed', path, _bool),
+      version: _opt(m, 'version', path, _str),
+      state: _req(m, 'state', path, _str),
+      detail: _req(m, 'detail', path, _str),
+      linkPath: _req(m, 'link_path', path, _str),
+      linkState: _req(m, 'link_state', path, _str),
+      jvms: _req(
+        m,
+        'jvms',
+        path,
+        (v, p) =>
+            _list<FleetJavaJVM>(v, p, (v, p) => FleetJavaJVM.fromJson(v, p)),
+      ),
+      update: _opt(
+        m,
+        'update',
+        path,
+        (v, p) => FleetJavaAgentUpdate.fromJson(v, p),
+      ),
+      override: _opt(
+        m,
+        'override',
+        path,
+        (v, p) => FleetJavaOverride.fromJson(v, p),
+      ),
+      status: _req(m, 'status', path, FleetHostJavaAgentStatus.fromJson),
+      statusTarget: _opt(m, 'status_target', path, _str),
+    );
+  }
+
+  final bool reported;
+  final FleetJavaAgentMode mode;
+  final String agentMode;
+  final String source;
+  final bool capable;
+  final String reason;
+  final bool managed;
+  final String? version;
+  final String state;
+  final String detail;
+  final String linkPath;
+  final String linkState;
+  final List<FleetJavaJVM> jvms;
+  final FleetJavaAgentUpdate? update;
+  final FleetJavaOverride? override;
+  final FleetHostJavaAgentStatus status;
+  final String? statusTarget;
+}
+
 /// How busy the host is over the last 5 minutes, from the same metrics its own charts draw. Every field is null when the host sent no such metric in the window — an agent that stopped reporting must not read as 0 %.
 class HostUsage {
   const HostUsage({
@@ -4738,6 +5845,229 @@ class JobSummary {
   final double? avgMs;
   final double? maxMs;
   final DateTime? lastAt;
+}
+
+/// One PHP binary of the host (openlog-php-install status --json, php-agent.md §7.2)
+class FleetPHPRuntime {
+  const FleetPHPRuntime({
+    required this.bin,
+    required this.version,
+    required this.api,
+    required this.zts,
+    required this.debug,
+    required this.libc,
+    required this.scanDir,
+    required this.module,
+    required this.supported,
+    required this.enabled,
+    required this.loaded,
+    required this.excluded,
+  });
+
+  factory FleetPHPRuntime.fromJson(
+    Object? json, [
+    String path = 'FleetPHPRuntime',
+  ]) {
+    final m = _obj(json, path);
+    return FleetPHPRuntime(
+      bin: _req(m, 'bin', path, _str),
+      version: _req(m, 'version', path, _str),
+      api: _req(m, 'api', path, _str),
+      zts: _req(m, 'zts', path, _bool),
+      debug: _req(m, 'debug', path, _bool),
+      libc: _req(m, 'libc', path, _str),
+      scanDir: _req(m, 'scan_dir', path, _str),
+      module: _req(m, 'module', path, _str),
+      supported: _req(m, 'supported', path, _bool),
+      enabled: _req(m, 'enabled', path, _bool),
+      loaded: _req(m, 'loaded', path, _bool),
+      excluded: _req(m, 'excluded', path, _bool),
+    );
+  }
+
+  final String bin;
+  final String version;
+  final String api;
+  final bool zts;
+  final bool debug;
+  final String libc;
+  final String scanDir;
+  final String module;
+  final bool supported;
+  final bool enabled;
+  final bool loaded;
+  final bool excluded;
+}
+
+/// `FleetPHPAgentUpdate` of the openlog API contract.
+class FleetPHPAgentUpdate {
+  const FleetPHPAgentUpdate({
+    required this.operation,
+    required this.version,
+    required this.state,
+    required this.error,
+    required this.changedAt,
+  });
+
+  factory FleetPHPAgentUpdate.fromJson(
+    Object? json, [
+    String path = 'FleetPHPAgentUpdate',
+  ]) {
+    final m = _obj(json, path);
+    return FleetPHPAgentUpdate(
+      operation: _req(m, 'operation', path, _str),
+      version: _req(m, 'version', path, _str),
+      state: _req(m, 'state', path, _str),
+      error: _req(m, 'error', path, _str),
+      changedAt: _req(m, 'changed_at', path, _str),
+    );
+  }
+
+  final String operation;
+  final String version;
+  final String state;
+  final String error;
+  final String changedAt;
+}
+
+/// `FleetPHPOverride` of the openlog API contract.
+class FleetPHPOverride {
+  const FleetPHPOverride({required this.mode, required this.updatedAt});
+
+  factory FleetPHPOverride.fromJson(
+    Object? json, [
+    String path = 'FleetPHPOverride',
+  ]) {
+    final m = _obj(json, path);
+    return FleetPHPOverride(
+      mode: _req(m, 'mode', path, FleetPHPAgentMode.fromJson),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  final FleetPHPAgentMode mode;
+  final DateTime updatedAt;
+}
+
+/// `FleetPHPPoolAccess` of the openlog API contract.
+class FleetPHPPoolAccess {
+  const FleetPHPPoolAccess({
+    required this.pool,
+    required this.phpVersion,
+    required this.user,
+    required this.unit,
+    required this.access,
+  });
+
+  factory FleetPHPPoolAccess.fromJson(
+    Object? json, [
+    String path = 'FleetPHPPoolAccess',
+  ]) {
+    final m = _obj(json, path);
+    return FleetPHPPoolAccess(
+      pool: _req(m, 'pool', path, _str),
+      phpVersion: _req(m, 'php_version', path, _str),
+      user: _req(m, 'user', path, _str),
+      unit: _req(m, 'unit', path, _str),
+      access: _req(m, 'access', path, _str),
+    );
+  }
+
+  final String pool;
+  final String phpVersion;
+  final String user;
+  final String unit;
+  final String access;
+}
+
+/// A running JVM that loads an openlog Java agent (-javaagent on its command line or in JAVA_TOOL_OPTIONS)
+class FleetJavaJVM {
+  const FleetJavaJVM({
+    required this.pid,
+    required this.name,
+    required this.command,
+    required this.agentPath,
+    required this.loadedVersion,
+    required this.managed,
+    required this.restartPending,
+    required this.startedAt,
+    required this.container,
+  });
+
+  factory FleetJavaJVM.fromJson(Object? json, [String path = 'FleetJavaJVM']) {
+    final m = _obj(json, path);
+    return FleetJavaJVM(
+      pid: _req(m, 'pid', path, _int),
+      name: _req(m, 'name', path, _str),
+      command: _req(m, 'command', path, _str),
+      agentPath: _req(m, 'agent_path', path, _str),
+      loadedVersion: _req(m, 'loaded_version', path, _str),
+      managed: _req(m, 'managed', path, _bool),
+      restartPending: _req(m, 'restart_pending', path, _bool),
+      startedAt: _req(m, 'started_at', path, _str),
+      container: _req(m, 'container', path, _bool),
+    );
+  }
+
+  final int pid;
+  final String name;
+  final String command;
+  final String agentPath;
+  final String loadedVersion;
+  final bool managed;
+  final bool restartPending;
+  final String startedAt;
+  final bool container;
+}
+
+/// `FleetJavaAgentUpdate` of the openlog API contract.
+class FleetJavaAgentUpdate {
+  const FleetJavaAgentUpdate({
+    required this.operation,
+    required this.version,
+    required this.state,
+    required this.error,
+    required this.changedAt,
+  });
+
+  factory FleetJavaAgentUpdate.fromJson(
+    Object? json, [
+    String path = 'FleetJavaAgentUpdate',
+  ]) {
+    final m = _obj(json, path);
+    return FleetJavaAgentUpdate(
+      operation: _req(m, 'operation', path, _str),
+      version: _req(m, 'version', path, _str),
+      state: _req(m, 'state', path, _str),
+      error: _req(m, 'error', path, _str),
+      changedAt: _req(m, 'changed_at', path, _str),
+    );
+  }
+
+  final String operation;
+  final String version;
+  final String state;
+  final String error;
+  final String changedAt;
+}
+
+/// `FleetJavaOverride` of the openlog API contract.
+class FleetJavaOverride {
+  const FleetJavaOverride({required this.mode, required this.updatedAt});
+
+  factory FleetJavaOverride.fromJson(
+    Object? json, [
+    String path = 'FleetJavaOverride',
+  ]) {
+    final m = _obj(json, path);
+    return FleetJavaOverride(
+      mode: _req(m, 'mode', path, FleetJavaAgentMode.fromJson),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  final FleetJavaAgentMode mode;
+  final DateTime updatedAt;
 }
 
 /// Error budget over one range; ratios are null without requests (slo.md §2).

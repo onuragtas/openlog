@@ -39,6 +39,7 @@ const schemaTargets = <String>[
   'MetricDetail', // one metric: what it is and how it can be aggregated
   'MetricQueryResponse', // and the series to draw
   'RumOverview', // what the browser saw: Core Web Vitals and page views
+  'FleetSummary', // how far behind the agents are
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers
@@ -64,6 +65,7 @@ const responseTargets = <String>[
   'get /api/v1/rum/apps 200 RumAppPage',
   'get /api/v1/costs/hosts 200 CostHostPage',
   'get /api/v1/inventory/search 200 InventoryPage',
+  'get /api/v1/fleet/hosts 200 FleetHostPage',
   'get /api/v1/dashboards 200 DashboardPageList',
   'get /api/v1/hosts 200 HostPage',
   'get /api/v1/containers 200 ContainerPage',

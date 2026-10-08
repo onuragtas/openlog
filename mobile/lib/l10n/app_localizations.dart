@@ -1692,6 +1692,126 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Discovered services'**
   String get invDiscoveredService;
+
+  /// No description provided for @navFleet.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet'**
+  String get navFleet;
+
+  /// No description provided for @fleetEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No agent has reported.'**
+  String get fleetEmpty;
+
+  /// No description provided for @fleetAgents.
+  ///
+  /// In en, this message translates to:
+  /// **'Agents'**
+  String get fleetAgents;
+
+  /// No description provided for @fleetOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Outdated'**
+  String get fleetOutdated;
+
+  /// No description provided for @fleetInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating'**
+  String get fleetInProgress;
+
+  /// No description provided for @fleetFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get fleetFailed;
+
+  /// No description provided for @fleetLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest {version}'**
+  String fleetLatest(String version);
+
+  /// No description provided for @fleetNoCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'No release catalogue; the server cannot tell what is latest.'**
+  String get fleetNoCatalog;
+
+  /// No description provided for @fleetReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only here. Rollouts and policy are changed on the web.'**
+  String get fleetReadOnly;
+
+  /// No description provided for @fleetUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'unsupported'**
+  String get fleetUnsupported;
+
+  /// No description provided for @fleetStatePrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'update {state}'**
+  String fleetStatePrefix(String state);
+
+  /// No description provided for @fleetStateIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'idle'**
+  String get fleetStateIdle;
+
+  /// No description provided for @fleetStateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'downloading'**
+  String get fleetStateDownloading;
+
+  /// No description provided for @fleetStateVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'verifying'**
+  String get fleetStateVerifying;
+
+  /// No description provided for @fleetStateStaged.
+  ///
+  /// In en, this message translates to:
+  /// **'staged'**
+  String get fleetStateStaged;
+
+  /// No description provided for @fleetStateRestarting.
+  ///
+  /// In en, this message translates to:
+  /// **'restarting'**
+  String get fleetStateRestarting;
+
+  /// No description provided for @fleetStateConfirming.
+  ///
+  /// In en, this message translates to:
+  /// **'confirming'**
+  String get fleetStateConfirming;
+
+  /// No description provided for @fleetStateSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'succeeded'**
+  String get fleetStateSucceeded;
+
+  /// No description provided for @fleetStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get fleetStateFailed;
+
+  /// No description provided for @fleetStateRolledBack.
+  ///
+  /// In en, this message translates to:
+  /// **'rolled back'**
+  String get fleetStateRolledBack;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

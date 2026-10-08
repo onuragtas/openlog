@@ -390,5 +390,39 @@
   "invUser": "Kullanıcılar",
   "invLaunchdService": "launchd servisleri",
   "invWindowsService": "Windows servisleri",
-  "invDiscoveredService": "Keşfedilen servisler"
+  "invDiscoveredService": "Keşfedilen servisler",
+  "navFleet": "Filo",
+  "fleetEmpty": "Rapor eden ajan yok.",
+  "fleetAgents": "Ajan",
+  "fleetOutdated": "Eski",
+  "fleetInProgress": "Güncelleniyor",
+  "fleetFailed": "Başarısız",
+  "fleetLatest": "En yeni {version}",
+  "@fleetLatest": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetNoCatalog": "Sürüm kataloğu yok; sunucu en yenisinin hangisi olduğunu bilemiyor.",
+  "fleetReadOnly": "Burada salt okunur. Dağıtım ve politika webden değiştirilir.",
+  "fleetUnsupported": "desteklenmiyor",
+  "fleetStatePrefix": "güncelleme {state}",
+  "@fleetStatePrefix": {
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "fleetStateIdle": "boşta",
+  "fleetStateDownloading": "indiriliyor",
+  "fleetStateVerifying": "doğrulanıyor",
+  "fleetStateStaged": "hazır",
+  "fleetStateRestarting": "yeniden başlıyor",
+  "fleetStateConfirming": "onaylanıyor",
+  "fleetStateSucceeded": "başarılı",
+  "fleetStateFailed": "başarısız",
+  "fleetStateRolledBack": "geri alındı"
 }

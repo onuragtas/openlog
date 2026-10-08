@@ -303,6 +303,22 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// How far behind the agents are, fleet-wide.
+  Future<FleetSummary> fleetSummary() async =>
+      FleetSummary.fromJson(await _send('GET', '/api/v1/fleet/summary'));
+
+  /// The agents themselves, ordered by host name.
+  Future<FleetHostPage> fleetHosts({String q = '', int limit = 100}) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (q.trim().isNotEmpty) query['q'] = q.trim();
+    return FleetHostPage.fromJson(
+      await _send(
+        'GET',
+        '/api/v1/fleet/hosts?${Uri(queryParameters: query).query}',
+      ),
+    );
+  }
+
   /// Inventory items of one category whose key contains [q], across every
   /// host's latest snapshot.
   ///

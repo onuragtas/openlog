@@ -884,4 +884,70 @@ class LEn extends L {
 
   @override
   String get invDiscoveredService => 'Discovered services';
+
+  @override
+  String get navFleet => 'Fleet';
+
+  @override
+  String get fleetEmpty => 'No agent has reported.';
+
+  @override
+  String get fleetAgents => 'Agents';
+
+  @override
+  String get fleetOutdated => 'Outdated';
+
+  @override
+  String get fleetInProgress => 'Updating';
+
+  @override
+  String get fleetFailed => 'Failed';
+
+  @override
+  String fleetLatest(String version) {
+    return 'Latest $version';
+  }
+
+  @override
+  String get fleetNoCatalog =>
+      'No release catalogue; the server cannot tell what is latest.';
+
+  @override
+  String get fleetReadOnly =>
+      'Read-only here. Rollouts and policy are changed on the web.';
+
+  @override
+  String get fleetUnsupported => 'unsupported';
+
+  @override
+  String fleetStatePrefix(String state) {
+    return 'update $state';
+  }
+
+  @override
+  String get fleetStateIdle => 'idle';
+
+  @override
+  String get fleetStateDownloading => 'downloading';
+
+  @override
+  String get fleetStateVerifying => 'verifying';
+
+  @override
+  String get fleetStateStaged => 'staged';
+
+  @override
+  String get fleetStateRestarting => 'restarting';
+
+  @override
+  String get fleetStateConfirming => 'confirming';
+
+  @override
+  String get fleetStateSucceeded => 'succeeded';
+
+  @override
+  String get fleetStateFailed => 'failed';
+
+  @override
+  String get fleetStateRolledBack => 'rolled back';
 }
