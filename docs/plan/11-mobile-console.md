@@ -246,7 +246,7 @@ bağlı. Mobil için kullanmak, raporlara bağlı bir mekanizmayı amacının d�
 | **3** ✅ | **Servis sağlığı:** APM servis listesi (RED), en kötü üstte, sunucu tarafı arama | Alarmdan sonra bakılan ilk yer |
 | **4** ✅ | Loglar: gövde araması, önem filtresi (varsayılan WARN), son kayıtlar | Teşhis |
 | **5** ✅ | Pano listesi ve görüntüleme (salt-okuma), **sonuç türüne göre** render | Tamamlayıcı |
-| **6** | **Push bildirim (§6)** | En son |
+| **6** ⛔ | **Push bildirim (§6)** | Kod değil, karar ve kimlik bilgisi bekliyor |
 
 Faz 2 erken ve tam yapıldı: uygulamanın var olma sebebi o.
 
@@ -261,7 +261,32 @@ okunur" diyor — boş görünen bir kart, bozuk görünen bir karttır.
 Sparkline elle çiziliyor (`CustomPainter`): eksen, gösterge, ipucu ve etkileşim içermeyen tek bir çoklu çizgi
 için bir grafik kütüphanesi bağımlılık, lisans ve sürüm yükü demekti.
 
-## 6. Push bildirim — en son faz
+## 6. Push bildirim — kod eksik değil, karar eksik
+
+**Durum: başlanmadı, ve başlanamaz.** Faz 0–5 yazıldı; bu fazı bloke eden şey yazılacak kod değil, aşağıdaki
+üç şeyin sahibinin vermesi gereken kararlar ve kimlik bilgileri. Bunlar gelmeden yazılacak her şey, var
+olmayan bir protokole karşı spekülatif kod olurdu.
+
+**Gereken, sırayla:**
+
+1. **Bir karar: röle mi, yoksa push yok mu?** Aşağıdaki üç yoldan hangisi. Röle seçilirse proje bir sunucu
+   işletmeyi üstlenmiş olur.
+2. **Apple Developer hesabı ve bir APNs anahtarı**, uygulama kimliğine bağlı. Mağaza derlemesi projenin
+   kimliğiyle imzalandığı için bu anahtar da projenindir — bir operatör kendi Firebase'iyle bu uygulamaya
+   push gönderemez.
+3. **Bir Firebase/FCM projesi** (Android tarafı için) ve rölenin çalışacağı yer.
+4. **Gizlilik beyanının güncellenmesi**: bugün uygulama yalnızca kullanıcının kendi sunucusuna bağlanıyor ve
+   projeye hiçbir veri akmıyor. Röle bunu değiştirir, az da olsa.
+
+**Yazılmayanlar, bilerek:** sunucuya yeni bir `AlertChannelType` eklemedim ve uygulamaya bildirim
+bağımlılığı koymadım. Protokolü belli olmayan bir röleye karşı kanal yazmak, taşınacak ama çalışmayacak kod
+demekti.
+
+**"ntfy köprüsü" neden tek başına yetmiyor:** mevcut `webhook` kanalı bugün herhangi bir URL'ye gönderebilir,
+yani sunucu tarafı hazır. Ama uygulamanın içinden bir konuya abone olmak arka planda çalışmaz — iOS'ta bir
+Dart SSE bağlantısı uygulama kapalıyken yaşamaz. Bu yolun gerçek hali, kullanıcının **ntfy'nin kendi
+uygulamasını** kurup abone olmasıdır; o da bizim yazacağımız bir şey değil, bir kurulum talimatıdır.
+
 
 Bugün altyapı yok: `AlertChannelType` enum'u `slack, email, webhook, teams, pagerduty, opsgenie`.
 
