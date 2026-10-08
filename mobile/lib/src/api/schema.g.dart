@@ -1426,6 +1426,31 @@ class Trace {
   final List<Span> spans;
 }
 
+/// `TracesQueryResponse` of the openlog API contract.
+class TracesQueryResponse {
+  const TracesQueryResponse({required this.rows, this.nextCursor});
+
+  factory TracesQueryResponse.fromJson(
+    Object? json, [
+    String path = 'TracesQueryResponse',
+  ]) {
+    final m = _obj(json, path);
+    return TracesQueryResponse(
+      rows: _req(
+        m,
+        'rows',
+        path,
+        (v, p) =>
+            _list<SpanQueryRow>(v, p, (v, p) => SpanQueryRow.fromJson(v, p)),
+      ),
+      nextCursor: _opt(m, 'next_cursor', path, _str),
+    );
+  }
+
+  final List<SpanQueryRow> rows;
+  final String? nextCursor;
+}
+
 /// `DashboardSummary` of the openlog API contract.
 class DashboardSummary {
   const DashboardSummary({
@@ -1998,6 +2023,89 @@ class Span {
   final Map<String, String> attributes;
   final Map<String, String> resourceAttributes;
   final List<SpanEvent> events;
+}
+
+/// `SpanQueryRow` of the openlog API contract.
+class SpanQueryRow {
+  const SpanQueryRow({
+    required this.id,
+    required this.timestamp,
+    required this.traceId,
+    required this.spanId,
+    required this.parentSpanId,
+    required this.name,
+    required this.kind,
+    required this.statusCode,
+    required this.statusMessage,
+    required this.serviceName,
+    required this.hostId,
+    required this.durationNs,
+    required this.durationMs,
+    required this.isEntry,
+    required this.isError,
+    required this.httpStatusCode,
+    required this.transactionName,
+    required this.fields,
+    this.attributes,
+    this.resourceAttributes,
+  });
+
+  factory SpanQueryRow.fromJson(Object? json, [String path = 'SpanQueryRow']) {
+    final m = _obj(json, path);
+    return SpanQueryRow(
+      id: _req(m, 'id', path, _str),
+      timestamp: _req(m, 'timestamp', path, _time),
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      parentSpanId: _req(m, 'parent_span_id', path, _str),
+      name: _req(m, 'name', path, _str),
+      kind: _req(m, 'kind', path, SpanKind.fromJson),
+      statusCode: _req(m, 'status_code', path, SpanStatusCode.fromJson),
+      statusMessage: _req(m, 'status_message', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      durationNs: _req(m, 'duration_ns', path, _int),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      isEntry: _req(m, 'is_entry', path, _bool),
+      isError: _req(m, 'is_error', path, _bool),
+      httpStatusCode: _req(m, 'http_status_code', path, _int),
+      transactionName: _req(m, 'transaction_name', path, _str),
+      fields: _req(m, 'fields', path, (v, p) => _map<String>(v, p, _str)),
+      attributes: _opt(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      resourceAttributes: _opt(
+        m,
+        'resource_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final String id;
+  final DateTime timestamp;
+  final String traceId;
+  final String spanId;
+  final String parentSpanId;
+  final String name;
+  final SpanKind kind;
+  final SpanStatusCode statusCode;
+  final String statusMessage;
+  final String serviceName;
+  final String hostId;
+  final int durationNs;
+  final double durationMs;
+  final bool isEntry;
+  final bool isError;
+  final int httpStatusCode;
+  final String transactionName;
+  final Map<String, String> fields;
+  final Map<String, String>? attributes;
+  final Map<String, String>? resourceAttributes;
 }
 
 /// `DashboardVariable` of the openlog API contract.

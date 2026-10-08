@@ -371,5 +371,10 @@
     }
   },
   "queryRecent": "Recent",
-  "queryTruncated": "The answer was cut short by the server's limit."
+  "queryTruncated": "The answer was cut short by the server's limit.",
+  "navTraces": "Traces",
+  "tracesEmpty": "No request has been traced in the window.",
+  "tracesNewest": "Newest",
+  "tracesSlowest": "Slowest",
+  "tracesError": "error"
 }

@@ -691,4 +691,19 @@ class LTr extends L {
 
   @override
   String get queryTruncated => 'Yanıt sunucunun sınırıyla kısaldı.';
+
+  @override
+  String get navTraces => 'İzler';
+
+  @override
+  String get tracesEmpty => 'Bu aralıkta izlenmiş istek yok.';
+
+  @override
+  String get tracesNewest => 'En yeni';
+
+  @override
+  String get tracesSlowest => 'En yavaş';
+
+  @override
+  String get tracesError => 'hata';
 }

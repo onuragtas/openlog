@@ -213,6 +213,7 @@ Widget signedInApp(
   DashboardsController? dashboards,
   HostsController? hosts,
   QueryController? query,
+  TracesController? traces,
   IncidentController Function(String id)? incident,
   ServiceOverviewController Function(String name)? serviceOverview,
   ServiceErrorsController Function(String name)? serviceErrors,
@@ -229,6 +230,7 @@ Widget signedInApp(
     logs: logs ?? ScriptedLogs(),
     dashboards: dashboards ?? ScriptedDashboards(),
     query: query,
+    traces: traces,
     hosts: hosts,
     incident: incident,
     serviceOverview: serviceOverview,
@@ -240,6 +242,40 @@ Widget signedInApp(
 /// Unlike the other scripted controllers this one starts empty and fills on
 /// refresh, because what the errors tab is tested for is *when* it asks: a
 /// fake that pretends to be loaded already would make the question unaskable.
+class ScriptedTraces extends TracesController {
+  ScriptedTraces(List<SpanQueryRow> rows)
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    items = rows;
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh:$query:$slowest');
+}
+
+SpanQueryRow spanRow(String traceId, {bool error = false}) => SpanQueryRow(
+  id: traceId,
+  timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+  traceId: traceId,
+  spanId: 's1',
+  parentSpanId: '',
+  name: 'POST /checkout',
+  kind: SpanKind.server,
+  statusCode: error ? SpanStatusCode.error : SpanStatusCode.ok,
+  statusMessage: '',
+  serviceName: 'checkout',
+  hostId: 'h1',
+  durationNs: 42000000,
+  durationMs: 42,
+  isEntry: true,
+  isError: error,
+  httpStatusCode: error ? 500 : 200,
+  transactionName: 'POST /checkout',
+  fields: const {},
+);
+
 class ScriptedQuery extends QueryController {
   ScriptedQuery({this.answer, this.rejectWith})
     : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'));
@@ -1379,6 +1415,48 @@ void main() {
     );
   });
 
+  testWidgets('a trace row opens the request it stands for', (tester) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final asked = <String>[];
+    await tester.pumpWidget(
+      signedInApp(
+        s,
+        traces: ScriptedTraces([spanRow('t1'), spanRow('t2', error: true)]),
+        trace: (id) {
+          asked.add(id);
+          return ScriptedTrace(id, traceOf());
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Traces');
+
+    expect(find.byKey(const Key('trace-t1')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('trace-t2')));
+    await tester.pumpAndSettle();
+
+    expect(asked, ['t2']);
+    expect(find.byKey(const Key('span-root')), findsOneWidget);
+  });
+
+  testWidgets('the slowest switch is a new question, not a local sort', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final t = ScriptedTraces([spanRow('t1')]);
+    await tester.pumpWidget(signedInApp(s, traces: t));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Traces');
+
+    await tester.tap(find.text('Slowest'));
+    await tester.pumpAndSettle();
+
+    // The server decides which are slowest: this page holds fifty rows out of
+    // however many there were, so sorting them here would rank the wrong set.
+    expect(t.calls, ['refresh::true']);
+    expect(t.slowest, isTrue);
+  });
+
   testWidgets('the drawer lists every section the app has, in the web order', (
     tester,
   ) async {
@@ -1410,6 +1488,7 @@ void main() {
       'Job monitoring',
       'Vulnerabilities',
       'Logs',
+      'Traces',
       'Query',
       'Dashboards',
       'Alerts',

@@ -696,4 +696,19 @@ class LEn extends L {
   @override
   String get queryTruncated =>
       'The answer was cut short by the server\'s limit.';
+
+  @override
+  String get navTraces => 'Traces';
+
+  @override
+  String get tracesEmpty => 'No request has been traced in the window.';
+
+  @override
+  String get tracesNewest => 'Newest';
+
+  @override
+  String get tracesSlowest => 'Slowest';
+
+  @override
+  String get tracesError => 'error';
 }

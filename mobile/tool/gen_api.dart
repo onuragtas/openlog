@@ -34,6 +34,7 @@ const schemaTargets = <String>[
   'ApmOverview', // that service's golden signals, so the alert gets a shape
   'ApmErrorInbox', // what is actually breaking in that service
   'Trace', // one request end to end: where the time and the error went
+  'TracesQueryResponse', // the span search behind the traces section
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers

@@ -1,6 +1,8 @@
 // The eight list sections. They share a shape, so what is worth testing is
 // what each one does that the others do not -- the SLO sort, the empty query,
 // and that a 403 is reported as a permission rather than as an empty list.
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/list_controller.dart';
@@ -66,7 +68,79 @@ Map<String, Object?> slo(String id, {double? remaining, bool met = true}) => {
         },
 };
 
+Map<String, Object?> spanRow(
+  String traceId, {
+  bool error = false,
+  double durationMs = 42,
+}) => {
+  'id': traceId,
+  'timestamp': '2026-10-08T09:00:00.000000000Z',
+  'trace_id': traceId,
+  'span_id': 's1',
+  'parent_span_id': '',
+  'name': 'POST /checkout',
+  'kind': 'server',
+  'status_code': error ? 'error' : 'ok',
+  'status_message': '',
+  'service_name': 'checkout',
+  'host_id': 'h1',
+  'duration_ns': (durationMs * 1000000).round(),
+  'duration_ms': durationMs,
+  'is_entry': true,
+  'is_error': error,
+  'http_status_code': error ? 500 : 200,
+  'transaction_name': 'POST /checkout',
+  'fields': <String, String>{},
+};
+
 void main() {
+  test('the traces list asks for requests, not for every span', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'rows': [spanRow('t1'), spanRow('t2', error: true)],
+        'next_cursor': null,
+      }),
+    );
+    addTearDown(server.stop);
+    final c = TracesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+
+    final sent = server.requests.single;
+    expect(sent.method, 'POST');
+    expect(sent.path, '/api/v1/traces/query');
+    // root_only, or the first page would be database calls belonging to three
+    // requests -- a span list, not the list of requests the person opened.
+    expect(jsonDecode(sent.body), {'root_only': true, 'limit': 50});
+    expect(c.items.map((r) => r.traceId), ['t1', 't2']);
+  });
+
+  test('slowest and a search change what is asked, not what is kept', () async {
+    final server = await FakeServer.start(
+      (req, _) =>
+          writeJson(req, 200, {'rows': <Object>[], 'next_cursor': null}),
+    );
+    addTearDown(server.stop);
+    final c = TracesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    c.slowest = true;
+    c.query = '  checkout  ';
+    await c.refresh();
+
+    expect(jsonDecode(server.requests.single.body), {
+      'root_only': true,
+      'limit': 50,
+      'sort': 'duration',
+      'filters': [
+        {'key': 'service_name', 'op': 'contains', 'value': 'checkout'},
+      ],
+    });
+  });
+
   test('a section sends its search and reads the rows back', () async {
     final server = await FakeServer.start(
       (req, _) => writeJson(req, 200, {

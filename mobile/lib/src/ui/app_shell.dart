@@ -10,6 +10,7 @@ import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'query_screen.dart';
+import 'traces_screen.dart';
 import 'sections_screen.dart';
 import 'services_screen.dart';
 import 'settings_screen.dart';
@@ -28,7 +29,7 @@ class _AppShellState extends State<AppShell> {
   /// Alerts, which is the last-but-one entry. The order of the list is the
   /// web's; where the app opens is this app's own answer, and an on-call app
   /// opens on what is firing.
-  int _tab = 12;
+  int _tab = 13;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +48,7 @@ class _AppShellState extends State<AppShell> {
       l.navJobs,
       l.navVulnerabilities,
       l.navLogs,
+      l.navTraces,
       l.navQuery,
       l.navDashboards,
       l.alertsTitle,
@@ -63,6 +65,7 @@ class _AppShellState extends State<AppShell> {
       s.jobs.refresh,
       s.vulnerabilities.refresh,
       s.logs.refresh,
+      s.traces.refresh,
       null, // The console has nothing to refresh until a query is run.
       s.dashboards.refresh,
       s.alerts.refresh,
@@ -164,6 +167,7 @@ class _AppShellState extends State<AppShell> {
             card: vulnCard,
           ),
           LogsBody(session: session, logs: s.logs),
+          TracesBody(session: session, sections: s, active: _tab == 10),
           QueryBody(session: session, query: s.query),
           DashboardsBody(session: session, dashboards: s.dashboards),
           AlertsBody(session: session, sections: s, alerts: s.alerts),

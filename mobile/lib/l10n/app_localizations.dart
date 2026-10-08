@@ -1350,6 +1350,36 @@ abstract class L {
   /// In en, this message translates to:
   /// **'The answer was cut short by the server\'s limit.'**
   String get queryTruncated;
+
+  /// No description provided for @navTraces.
+  ///
+  /// In en, this message translates to:
+  /// **'Traces'**
+  String get navTraces;
+
+  /// No description provided for @tracesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No request has been traced in the window.'**
+  String get tracesEmpty;
+
+  /// No description provided for @tracesNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get tracesNewest;
+
+  /// No description provided for @tracesSlowest.
+  ///
+  /// In en, this message translates to:
+  /// **'Slowest'**
+  String get tracesSlowest;
+
+  /// No description provided for @tracesError.
+  ///
+  /// In en, this message translates to:
+  /// **'error'**
+  String get tracesError;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

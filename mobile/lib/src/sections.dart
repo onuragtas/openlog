@@ -34,6 +34,7 @@ class Sections {
     JobsController? jobs,
     VulnerabilitiesController? vulnerabilities,
     LogsController? logs,
+    TracesController? traces,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -58,6 +59,7 @@ class Sections {
        jobs = jobs ?? JobsController(client),
        vulnerabilities = vulnerabilities ?? VulnerabilitiesController(client),
        logs = logs ?? LogsController(client),
+       traces = traces ?? TracesController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -72,6 +74,7 @@ class Sections {
   final JobsController jobs;
   final VulnerabilitiesController vulnerabilities;
   final LogsController logs;
+  final TracesController traces;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -97,6 +100,7 @@ class Sections {
     jobs,
     vulnerabilities,
     logs,
+    traces,
     query,
     dashboards,
     alerts,
@@ -192,4 +196,18 @@ class DatabasesController extends SectionController<DbInstance> {
   @override
   Future<List<DbInstance>> fetch() async =>
       (await client.dbInstances(q: query)).instances;
+}
+
+/// Entry spans: the traces section, which is a list of requests.
+class TracesController extends SectionController<SpanQueryRow> {
+  TracesController(super.client);
+
+  /// Slowest instead of newest. The two questions a traces list answers are
+  /// "what just happened" and "what is slow", and on a phone a switch between
+  /// them beats the web's sort menu.
+  bool slowest = false;
+
+  @override
+  Future<List<SpanQueryRow>> fetch() async =>
+      (await client.traces(q: query.trim(), slowest: slowest)).rows;
 }

@@ -274,5 +274,10 @@
     }
   },
   "queryRecent": "Son sorgular",
-  "queryTruncated": "Yanıt sunucunun sınırıyla kısaldı."
+  "queryTruncated": "Yanıt sunucunun sınırıyla kısaldı.",
+  "navTraces": "İzler",
+  "tracesEmpty": "Bu aralıkta izlenmiş istek yok.",
+  "tracesNewest": "En yeni",
+  "tracesSlowest": "En yavaş",
+  "tracesError": "hata"
 }

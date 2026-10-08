@@ -298,6 +298,34 @@ class OpenlogClient {
     await _send('GET', '/api/v1/traces/${Uri.encodeComponent(traceId)}'),
   );
 
+  /// Entry spans, newest first, or the slowest ones.
+  ///
+  /// `root_only`, because a traces list is a list of requests: without it the
+  /// first page would be a hundred database calls belonging to three requests,
+  /// which is a span list and not what the person opened.
+  Future<TracesQueryResponse> traces({
+    String q = '',
+    bool slowest = false,
+    int limit = 50,
+  }) async {
+    final body = <String, Object?>{
+      'root_only': true,
+      'limit': limit,
+      if (slowest) 'sort': 'duration',
+    };
+    if (q.trim().isNotEmpty) {
+      // One case-insensitive contains over the service name: a phone has no
+      // room for the web's filter builder, and the service is what a person
+      // types when they are looking for a request.
+      body['filters'] = [
+        {'key': 'service_name', 'op': 'contains', 'value': q.trim()},
+      ];
+    }
+    return TracesQueryResponse.fromJson(
+      await _send('POST', '/api/v1/traces/query', body: body),
+    );
+  }
+
   /// Recent log records, newest first.
   Future<LogPage> logs({
     String q = '',
