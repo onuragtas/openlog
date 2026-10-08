@@ -313,3 +313,22 @@ class MetricController extends DetailController<MetricDetail> {
       if (p.length > 1) p[1],
   ];
 }
+
+/// One browser application: its Core Web Vitals and page views.
+class RumOverviewController extends DetailController<RumOverview> {
+  RumOverviewController(this._client, this.app);
+
+  final OpenlogClient _client;
+  final String app;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<RumOverview> fetch() => _client.rumOverview(app);
+
+  /// Page views per bucket, for the sparkline.
+  List<double> get views => [
+    for (final p in value?.points ?? const <RumOverviewPointsItem>[]) p.views,
+  ];
+}

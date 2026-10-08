@@ -739,4 +739,45 @@ class LTr extends L {
   String metricOneSeries(int count) {
     return '$count serinin biri.';
   }
+
+  @override
+  String get navRum => 'Tarayıcı';
+
+  @override
+  String get rumEmpty => 'Bu aralıkta rapor eden tarayıcı uygulaması yok.';
+
+  @override
+  String get rumViews => 'Sayfa görüntüleme';
+
+  @override
+  String get rumSessions => 'Oturum';
+
+  @override
+  String get rumErrors => 'Hata';
+
+  @override
+  String get rumAvgLoad => 'Ortalama yükleme';
+
+  @override
+  String get rumVitals => 'Temel Web Verileri';
+
+  @override
+  String get rumVitalGood => 'iyi';
+
+  @override
+  String get rumVitalNeedsImprovement => 'iyileştirilmeli';
+
+  @override
+  String get rumVitalPoor => 'kötü';
+
+  @override
+  String get rumVitalNoData => 'ölçüm yok';
+
+  @override
+  String rumVitalShare(int percent) {
+    return '%$percent iyi';
+  }
+
+  @override
+  String get rumNoPoints => 'Bu aralıkta sayfa görüntüleme yok.';
 }

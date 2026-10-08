@@ -406,5 +406,25 @@
         "type": "int"
       }
     }
-  }
+  },
+  "navRum": "Browser",
+  "rumEmpty": "No browser application has reported in the window.",
+  "rumViews": "Page views",
+  "rumSessions": "Sessions",
+  "rumErrors": "Errors",
+  "rumAvgLoad": "Average load",
+  "rumVitals": "Core Web Vitals",
+  "rumVitalGood": "good",
+  "rumVitalNeedsImprovement": "needs work",
+  "rumVitalPoor": "poor",
+  "rumVitalNoData": "no measurements",
+  "rumVitalShare": "{percent}% good",
+  "@rumVitalShare": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "rumNoPoints": "No page view in the window."
 }

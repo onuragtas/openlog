@@ -111,6 +111,9 @@ class OqlResultView extends StatelessWidget {
 
 /// Compact numbers: a dashboard value is read at a glance, and 1234567 is not.
 String formatNumber(double v) {
+  // Zero is zero. The branches below would render it "0.00", which reads as a
+  // measurement that came out very small rather than as nothing at all.
+  if (v == 0) return '0';
   final abs = v.abs();
   if (abs >= 1e9) return '${(v / 1e9).toStringAsFixed(1)}B';
   if (abs >= 1e6) return '${(v / 1e6).toStringAsFixed(1)}M';

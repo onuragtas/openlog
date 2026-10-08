@@ -11,6 +11,7 @@ import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'query_screen.dart';
 import 'metrics_screen.dart';
+import 'rum_screen.dart';
 import 'traces_screen.dart';
 import 'sections_screen.dart';
 import 'services_screen.dart';
@@ -30,7 +31,11 @@ class _AppShellState extends State<AppShell> {
   /// Alerts, which is the last-but-one entry. The order of the list is the
   /// web's; where the app opens is this app's own answer, and an on-call app
   /// opens on what is firing.
-  int _tab = 14;
+  ///
+  /// Counted from the end rather than written as a number: this was 11, then
+  /// 12, 13, 14 as sections were added in the middle, and each time it was one
+  /// more chance to open the app on the wrong screen.
+  int _tab = navItems.length - 2;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +48,7 @@ class _AppShellState extends State<AppShell> {
       l.navContainers,
       l.navKubernetes,
       l.navApm,
+      l.navRum,
       l.navDatabases,
       l.navSlos,
       l.navSynthetics,
@@ -61,6 +67,7 @@ class _AppShellState extends State<AppShell> {
       s.containers.refresh,
       s.pods.refresh,
       s.services.refresh,
+      s.rum.refresh,
       s.databases.refresh,
       s.slos.refresh,
       s.synthetics.refresh,
@@ -101,83 +108,113 @@ class _AppShellState extends State<AppShell> {
       // Every child is built, but each section loads the first time it is
       // looked at rather than when the app opens: building thirteen screens is
       // cheap, asking the server thirteen questions nobody has yet is not.
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          SectionBody(
-            session: session,
-            controller: s.hosts,
-            searchKey: 'hosts-search',
-            active: _tab == 0,
-            emptyTitle: (l) => l.hostsEmpty,
-            card: hostCard,
-          ),
-          SectionBody(
-            session: session,
-            controller: s.containers,
-            searchKey: 'containers-search',
-            active: _tab == 1,
-            emptyTitle: (l) => l.containersEmpty,
-            card: containerCard,
-          ),
-          SectionBody(
-            session: session,
-            controller: s.pods,
-            searchKey: 'pods-search',
-            active: _tab == 2,
-            emptyTitle: (l) => l.podsEmpty,
-            card: podCard,
-          ),
-          ServicesBody(session: session, sections: s, services: s.services),
-          SectionBody(
-            session: session,
-            controller: s.databases,
-            searchKey: 'databases-search',
-            active: _tab == 4,
-            emptyTitle: (l) => l.databasesEmpty,
-            card: dbCard,
-          ),
-          SectionBody(
-            session: session,
-            controller: s.slos,
-            searchKey: 'slos-search',
-            active: _tab == 5,
-            emptyTitle: (l) => l.slosEmpty,
-            card: sloCard,
-          ),
-          SectionBody(
-            session: session,
-            controller: s.synthetics,
-            searchKey: 'synthetics-search',
-            active: _tab == 6,
-            emptyTitle: (l) => l.syntheticsEmpty,
-            card: syntheticCard,
-          ),
-          SectionBody(
-            session: session,
-            controller: s.jobs,
-            searchKey: 'jobs-search',
-            active: _tab == 7,
-            emptyTitle: (l) => l.jobsEmpty,
-            card: jobCard,
-          ),
-          SectionBody(
-            session: session,
-            controller: s.vulnerabilities,
-            searchKey: 'vulnerabilities-search',
-            active: _tab == 8,
-            emptyTitle: (l) => l.vulnerabilitiesEmpty,
-            card: vulnCard,
-          ),
-          LogsBody(session: session, logs: s.logs),
-          TracesBody(session: session, sections: s, active: _tab == 10),
-          MetricsBody(session: session, sections: s, active: _tab == 11),
-          QueryBody(session: session, query: s.query),
-          DashboardsBody(session: session, dashboards: s.dashboards),
-          AlertsBody(session: session, sections: s, alerts: s.alerts),
-          SettingsBody(session: session),
-        ],
+      body: IndexedStack(index: _tab, children: _bodies(session, s)),
+    );
+  }
+
+  /// The bodies, in the drawer's order.
+  ///
+  /// Each one is told whether it is the visible tab by its own position in
+  /// this list rather than by a number written next to it. Those numbers were
+  /// here, and inserting Browser in the middle silently moved every section
+  /// after it off its own index -- which does not crash, it just makes a
+  /// section load when a different one is looked at.
+  List<Widget> _bodies(SessionController session, Sections s) {
+    final out = <Widget>[];
+    void add(Widget Function(bool active) build) =>
+        out.add(build(_tab == out.length));
+
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.hosts,
+        searchKey: 'hosts-search',
+        active: active,
+        emptyTitle: (l) => l.hostsEmpty,
+        card: hostCard,
       ),
     );
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.containers,
+        searchKey: 'containers-search',
+        active: active,
+        emptyTitle: (l) => l.containersEmpty,
+        card: containerCard,
+      ),
+    );
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.pods,
+        searchKey: 'pods-search',
+        active: active,
+        emptyTitle: (l) => l.podsEmpty,
+        card: podCard,
+      ),
+    );
+    add(
+      (_) => ServicesBody(session: session, sections: s, services: s.services),
+    );
+    add((active) => RumBody(session: session, sections: s, active: active));
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.databases,
+        searchKey: 'databases-search',
+        active: active,
+        emptyTitle: (l) => l.databasesEmpty,
+        card: dbCard,
+      ),
+    );
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.slos,
+        searchKey: 'slos-search',
+        active: active,
+        emptyTitle: (l) => l.slosEmpty,
+        card: sloCard,
+      ),
+    );
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.synthetics,
+        searchKey: 'synthetics-search',
+        active: active,
+        emptyTitle: (l) => l.syntheticsEmpty,
+        card: syntheticCard,
+      ),
+    );
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.jobs,
+        searchKey: 'jobs-search',
+        active: active,
+        emptyTitle: (l) => l.jobsEmpty,
+        card: jobCard,
+      ),
+    );
+    add(
+      (active) => SectionBody(
+        session: session,
+        controller: s.vulnerabilities,
+        searchKey: 'vulnerabilities-search',
+        active: active,
+        emptyTitle: (l) => l.vulnerabilitiesEmpty,
+        card: vulnCard,
+      ),
+    );
+    add((_) => LogsBody(session: session, logs: s.logs));
+    add((active) => TracesBody(session: session, sections: s, active: active));
+    add((active) => MetricsBody(session: session, sections: s, active: active));
+    add((_) => QueryBody(session: session, query: s.query));
+    add((_) => DashboardsBody(session: session, dashboards: s.dashboards));
+    add((_) => AlertsBody(session: session, sections: s, alerts: s.alerts));
+    add((_) => SettingsBody(session: session));
+    return out;
   }
 }

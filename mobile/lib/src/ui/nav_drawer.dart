@@ -25,6 +25,7 @@ final navItems = <NavItem>[
   NavItem(Icons.inventory_2_outlined, (l) => l.navContainers),
   NavItem(Icons.hub_outlined, (l) => l.navKubernetes),
   NavItem(Icons.monitor_heart_outlined, (l) => l.navApm),
+  NavItem(Icons.devices_outlined, (l) => l.navRum),
   NavItem(Icons.storage_outlined, (l) => l.navDatabases),
   NavItem(Icons.track_changes_outlined, (l) => l.navSlos),
   NavItem(Icons.radar_outlined, (l) => l.navSynthetics),

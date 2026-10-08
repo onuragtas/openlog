@@ -801,6 +801,34 @@ enum FieldType {
   }
 }
 
+/// RumVitalName of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum RumVitalName {
+  lcp('lcp'),
+  inp('inp'),
+  cls('cls'),
+  fcp('fcp'),
+  ttfb('ttfb'),
+  unknown('');
+
+  const RumVitalName(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static RumVitalName fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVariableType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1764,6 +1792,109 @@ class MetricQueryResponseMetric {
   final bool monotonic;
 }
 
+/// `RumOverview` of the openlog API contract.
+class RumOverview {
+  const RumOverview({
+    required this.from,
+    required this.to,
+    required this.step,
+    required this.vitals,
+    required this.points,
+    required this.totals,
+  });
+
+  factory RumOverview.fromJson(Object? json, [String path = 'RumOverview']) {
+    final m = _obj(json, path);
+    return RumOverview(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      step: _req(m, 'step', path, _str),
+      vitals: _req(
+        m,
+        'vitals',
+        path,
+        (v, p) => _list<RumVital>(v, p, (v, p) => RumVital.fromJson(v, p)),
+      ),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<RumOverviewPointsItem>(
+          v,
+          p,
+          (v, p) => RumOverviewPointsItem.fromJson(v, p),
+        ),
+      ),
+      totals: _req(
+        m,
+        'totals',
+        path,
+        (v, p) => RumOverviewTotals.fromJson(v, p),
+      ),
+    );
+  }
+
+  final DateTime from;
+  final DateTime to;
+  final String step;
+  final List<RumVital> vitals;
+  final List<RumOverviewPointsItem> points;
+  final RumOverviewTotals totals;
+}
+
+/// `RumOverviewPointsItem` of the openlog API contract.
+class RumOverviewPointsItem {
+  const RumOverviewPointsItem({
+    required this.t,
+    required this.views,
+    this.avgMs,
+  });
+
+  factory RumOverviewPointsItem.fromJson(
+    Object? json, [
+    String path = 'RumOverviewPointsItem',
+  ]) {
+    final m = _obj(json, path);
+    return RumOverviewPointsItem(
+      t: _req(m, 't', path, _int),
+      views: _req(m, 'views', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+    );
+  }
+
+  final int t;
+  final double views;
+  final double? avgMs;
+}
+
+/// `RumOverviewTotals` of the openlog API contract.
+class RumOverviewTotals {
+  const RumOverviewTotals({
+    required this.views,
+    required this.sessions,
+    required this.errors,
+    this.avgMs,
+  });
+
+  factory RumOverviewTotals.fromJson(
+    Object? json, [
+    String path = 'RumOverviewTotals',
+  ]) {
+    final m = _obj(json, path);
+    return RumOverviewTotals(
+      views: _req(m, 'views', path, _num),
+      sessions: _req(m, 'sessions', path, _int),
+      errors: _req(m, 'errors', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+    );
+  }
+
+  final double views;
+  final int sessions;
+  final double errors;
+  final double? avgMs;
+}
+
 /// `DashboardSummary` of the openlog API contract.
 class DashboardSummary {
   const DashboardSummary({
@@ -2519,6 +2650,58 @@ class MetricSeries {
   final List<List<double>> points;
 }
 
+/// One Core Web Vital over a range. Percentiles are null without measurements. The thresholds are the published Core Web Vitals boundaries and are constants, not settings (rum.md §2.1).
+class RumVital {
+  const RumVital({
+    required this.name,
+    required this.unit,
+    required this.count,
+    this.p50,
+    this.p75,
+    this.p95,
+    this.avg,
+    required this.good,
+    required this.needsImprovement,
+    required this.poor,
+    required this.rating,
+    required this.goodThreshold,
+    required this.poorThreshold,
+  });
+
+  factory RumVital.fromJson(Object? json, [String path = 'RumVital']) {
+    final m = _obj(json, path);
+    return RumVital(
+      name: _req(m, 'name', path, RumVitalName.fromJson),
+      unit: _req(m, 'unit', path, _str),
+      count: _req(m, 'count', path, _num),
+      p50: _opt(m, 'p50', path, _num),
+      p75: _opt(m, 'p75', path, _num),
+      p95: _opt(m, 'p95', path, _num),
+      avg: _opt(m, 'avg', path, _num),
+      good: _req(m, 'good', path, _num),
+      needsImprovement: _req(m, 'needs_improvement', path, _num),
+      poor: _req(m, 'poor', path, _num),
+      rating: _req(m, 'rating', path, _str),
+      goodThreshold: _req(m, 'good_threshold', path, _num),
+      poorThreshold: _req(m, 'poor_threshold', path, _num),
+    );
+  }
+
+  final RumVitalName name;
+  final String unit;
+  final double count;
+  final double? p50;
+  final double? p75;
+  final double? p95;
+  final double? avg;
+  final double good;
+  final double needsImprovement;
+  final double poor;
+  final String rating;
+  final double goodThreshold;
+  final double poorThreshold;
+}
+
 /// `DashboardVariable` of the openlog API contract.
 class DashboardVariable {
   const DashboardVariable({
@@ -3140,6 +3323,25 @@ class LogPage {
   final String? nextCursor;
 }
 
+/// `RumAppPage` of the openlog API contract.
+class RumAppPage {
+  const RumAppPage({required this.apps});
+
+  factory RumAppPage.fromJson(Object? json, [String path = 'RumAppPage']) {
+    final m = _obj(json, path);
+    return RumAppPage(
+      apps: _req(
+        m,
+        'apps',
+        path,
+        (v, p) => _list<RumApp>(v, p, (v, p) => RumApp.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<RumApp> apps;
+}
+
 /// `DashboardPageList` of the openlog API contract.
 class DashboardPageList {
   const DashboardPageList({required this.dashboards});
@@ -3414,6 +3616,37 @@ class LogRecord {
   final String spanId;
   final Map<String, String> attributes;
   final Map<String, String> resourceAttributes;
+}
+
+/// `RumApp` of the openlog API contract.
+class RumApp {
+  const RumApp({
+    required this.app,
+    required this.environment,
+    required this.views,
+    required this.sessions,
+    required this.errors,
+    required this.lastSeen,
+  });
+
+  factory RumApp.fromJson(Object? json, [String path = 'RumApp']) {
+    final m = _obj(json, path);
+    return RumApp(
+      app: _req(m, 'app', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      views: _req(m, 'views', path, _num),
+      sessions: _req(m, 'sessions', path, _int),
+      errors: _req(m, 'errors', path, _num),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  final String app;
+  final String environment;
+  final double views;
+  final int sessions;
+  final double errors;
+  final DateTime lastSeen;
 }
 
 /// `Host` of the openlog API contract.

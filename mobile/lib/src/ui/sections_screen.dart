@@ -25,6 +25,7 @@ class SectionBody<T> extends StatefulWidget {
     required this.card,
     required this.active,
     this.header,
+    this.searchable = true,
   });
 
   final SessionController session;
@@ -37,6 +38,10 @@ class SectionBody<T> extends StatefulWidget {
   /// the traces list puts its newest/slowest switch here. Optional, because
   /// most sections are a search and a list and nothing else.
   final Widget? header;
+
+  /// Whether this section has a search box. The RUM list does not: its
+  /// endpoint takes no query, and a box that does nothing is worse than none.
+  final bool searchable;
 
   /// Whether this section is the one on screen. An IndexedStack builds every
   /// child, so without this the app would fire one request per section the
@@ -86,15 +91,17 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
       builder: (context, _) => ListScreen<T>(
         controller: c,
         baseUrl: widget.session.baseUrl ?? '',
-        search: SearchField(
-          fieldKey: Key(widget.searchKey),
-          controller: _search,
-          hint: l.sectionSearch,
-          onSubmitted: (value) {
-            c.query = value;
-            c.refresh();
-          },
-        ),
+        search: widget.searchable
+            ? SearchField(
+                fieldKey: Key(widget.searchKey),
+                controller: _search,
+                hint: l.sectionSearch,
+                onSubmitted: (value) {
+                  c.query = value;
+                  c.refresh();
+                },
+              )
+            : null,
         emptyTitle: widget.emptyTitle(l),
         header: widget.header,
         itemBuilder: (context, i) => widget.card(context, c.items[i]),

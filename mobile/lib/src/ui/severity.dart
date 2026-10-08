@@ -11,7 +11,10 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import 'theme.dart';
 
-enum SeverityLevel { critical, warning, info, unknown }
+/// `good` is not a severity in the alerting sense; it is the other end of the
+/// same scale, and a Core Web Vital rated good has to be green somewhere. It
+/// lives here so there is still one answer to "what colour is this verdict".
+enum SeverityLevel { good, critical, warning, info, unknown }
 
 /// Background and foreground for a severity chip.
 ({Color background, Color foreground}) severityChipColors(
@@ -20,6 +23,7 @@ enum SeverityLevel { critical, warning, info, unknown }
 ) {
   final c = colorsOf(context);
   return switch (level) {
+    SeverityLevel.good => c.successBadge,
     SeverityLevel.critical => c.destructiveBadge,
     SeverityLevel.warning => c.warningBadge,
     SeverityLevel.info => (
@@ -34,6 +38,7 @@ enum SeverityLevel { critical, warning, info, unknown }
 Color severityTextColor(BuildContext context, SeverityLevel level) {
   final c = colorsOf(context);
   return switch (level) {
+    SeverityLevel.good => c.successText,
     SeverityLevel.critical => c.destructiveText,
     SeverityLevel.warning => c.warningText,
     SeverityLevel.info => c.mutedForeground,

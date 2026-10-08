@@ -309,5 +309,25 @@
         "type": "int"
       }
     }
-  }
+  },
+  "navRum": "Tarayıcı",
+  "rumEmpty": "Bu aralıkta rapor eden tarayıcı uygulaması yok.",
+  "rumViews": "Sayfa görüntüleme",
+  "rumSessions": "Oturum",
+  "rumErrors": "Hata",
+  "rumAvgLoad": "Ortalama yükleme",
+  "rumVitals": "Temel Web Verileri",
+  "rumVitalGood": "iyi",
+  "rumVitalNeedsImprovement": "iyileştirilmeli",
+  "rumVitalPoor": "kötü",
+  "rumVitalNoData": "ölçüm yok",
+  "rumVitalShare": "%{percent} iyi",
+  "@rumVitalShare": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "rumNoPoints": "Bu aralıkta sayfa görüntüleme yok."
 }

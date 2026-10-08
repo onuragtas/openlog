@@ -303,6 +303,18 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// Browser applications that reported in the range.
+  Future<RumAppPage> rumApps() async =>
+      RumAppPage.fromJson(await _send('GET', '/api/v1/rum/apps'));
+
+  /// One application's Core Web Vitals, page views and totals.
+  Future<RumOverview> rumOverview(String app) async => RumOverview.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/overview?${Uri(queryParameters: {'app': app}).query}',
+    ),
+  );
+
   /// Metric names with data points in the range.
   ///
   /// `q` matches the name or any service that sent it, so typing a service

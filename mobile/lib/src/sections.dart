@@ -36,6 +36,7 @@ class Sections {
     LogsController? logs,
     TracesController? traces,
     MetricsController? metrics,
+    RumController? rum,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -44,6 +45,7 @@ class Sections {
     ServiceErrorsController Function(String serviceName)? serviceErrors,
     TraceController Function(String traceId)? trace,
     MetricController Function(String name)? metric,
+    RumOverviewController Function(String app)? rumOverview,
   }) : incident = incident ?? ((id) => IncidentController(client, id)),
        serviceOverview =
            serviceOverview ??
@@ -52,6 +54,8 @@ class Sections {
            serviceErrors ?? ((name) => ServiceErrorsController(client, name)),
        trace = trace ?? ((id) => TraceController(client, id)),
        metric = metric ?? ((name) => MetricController(client, name)),
+       rumOverview =
+           rumOverview ?? ((app) => RumOverviewController(client, app)),
        hosts = hosts ?? HostsController(client),
        containers = containers ?? ContainersController(client),
        pods = pods ?? PodsController(client),
@@ -64,6 +68,7 @@ class Sections {
        logs = logs ?? LogsController(client),
        traces = traces ?? TracesController(client),
        metrics = metrics ?? MetricsController(client),
+       rum = rum ?? RumController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -80,6 +85,7 @@ class Sections {
   final LogsController logs;
   final TracesController traces;
   final MetricsController metrics;
+  final RumController rum;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -93,6 +99,7 @@ class Sections {
   final ServiceErrorsController Function(String serviceName) serviceErrors;
   final TraceController Function(String traceId) trace;
   final MetricController Function(String name) metric;
+  final RumOverviewController Function(String app) rumOverview;
 
   /// In the order the drawer lists them, which is the web's order.
   List<ChangeNotifier> get all => [
@@ -100,6 +107,7 @@ class Sections {
     containers,
     pods,
     services,
+    rum,
     databases,
     slos,
     synthetics,
@@ -226,4 +234,18 @@ class MetricsController extends SectionController<MetricInfo> {
   @override
   Future<List<MetricInfo>> fetch() async =>
       (await client.metrics(q: query.trim())).metrics;
+}
+
+/// Browser applications, for the RUM section.
+class RumController extends SectionController<RumApp> {
+  RumController(super.client);
+
+  @override
+  Future<List<RumApp>> fetch() async {
+    final apps = [...(await client.rumApps()).apps];
+    // Busiest first: the application with the page views is the one whose
+    // vitals anybody is going to look at.
+    apps.sort((a, b) => b.views.compareTo(a.views));
+    return apps;
+  }
 }

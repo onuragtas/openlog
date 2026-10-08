@@ -540,9 +540,27 @@ Future<void> openDrawer(WidgetTester tester) async {
 }
 
 /// Goes to a section by its drawer entry, which is keyed by its label.
+///
+/// Scrolls first when it has to: the drawer holds seventeen entries and the
+/// default test surface is 600 points tall, so the last few are not built
+/// until the list is scrolled -- which looked exactly like "Settings is
+/// missing from the drawer".
 Future<void> goTo(WidgetTester tester, String label) async {
   await openDrawer(tester);
-  await tester.tap(find.byKey(Key('nav-$label')));
+  final item = find.byKey(Key('nav-$label'));
+  if (item.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      item,
+      120,
+      scrollable: find
+          .descendant(
+            of: find.byType(Drawer),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+  }
+  await tester.tap(item);
   await tester.pumpAndSettle();
 }
 
@@ -1457,9 +1475,82 @@ void main() {
     expect(t.slowest, isTrue);
   });
 
+  testWidgets('each drawer entry opens the section it names', (tester) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    await tester.pumpWidget(signedInApp(session));
+    await tester.pumpAndSettle();
+
+    // The drawer, the titles and the bodies are three lists that have to stay
+    // in step. They did not: inserting a section in the middle used to move
+    // every body after it off its own index, which does not crash -- it just
+    // shows one section under another's name. Each entry below is checked by
+    // something only that section has.
+    const markers = <String, Key>{
+      'Hosts': Key('hosts-search'),
+      'Containers': Key('containers-search'),
+      'Kubernetes': Key('pods-search'),
+      'APM': Key('services-search'),
+      'Databases': Key('databases-search'),
+      'SLOs': Key('slos-search'),
+      'Synthetics': Key('synthetics-search'),
+      'Job monitoring': Key('jobs-search'),
+      'Vulnerabilities': Key('vulnerabilities-search'),
+      'Logs': Key('logs-search'),
+      'Traces': Key('traces-search'),
+      'Metrics': Key('metrics-search'),
+      'Query': Key('query-text'),
+      'Dashboards': Key('dashboards-search'),
+      'Settings': Key('signed-in-as'),
+    };
+
+    for (final entry in markers.entries) {
+      await goTo(tester, entry.key);
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text(entry.key),
+        ),
+        findsOneWidget,
+        reason: 'the app bar does not say ${entry.key}',
+      );
+      expect(
+        find.byKey(entry.value),
+        findsOneWidget,
+        reason: '${entry.key} does not show its own body',
+      );
+    }
+  });
+
+  testWidgets('the app opens on what is firing', (tester) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    await tester.pumpWidget(
+      signedInApp(
+        session,
+        alerts: ScriptedAlerts(
+          incidents: [firing('i1')],
+          counts: const IncidentPageCounts(
+            open: 1,
+            acknowledged: 0,
+            resolved: 0,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Not a number written next to the tab list: that number was wrong twice.
+    expect(find.byKey(const Key('incident-i1')), findsOneWidget);
+  });
+
   testWidgets('the drawer lists every section the app has, in the web order', (
     tester,
   ) async {
+    // Tall enough for every entry to be built at once: this reads the drawn
+    // order, so an entry that is merely off-screen would look like one that is
+    // in the wrong place.
+    await tester.binding.setSurfaceSize(const Size(420, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
     await tester.pumpWidget(signedInApp(session));
     await tester.pumpAndSettle();
@@ -1482,6 +1573,7 @@ void main() {
       'Containers',
       'Kubernetes',
       'APM',
+      'Browser',
       'Databases',
       'SLOs',
       'Synthetics',

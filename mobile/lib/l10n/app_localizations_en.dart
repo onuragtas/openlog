@@ -744,4 +744,45 @@ class LEn extends L {
   String metricOneSeries(int count) {
     return 'One of $count series.';
   }
+
+  @override
+  String get navRum => 'Browser';
+
+  @override
+  String get rumEmpty => 'No browser application has reported in the window.';
+
+  @override
+  String get rumViews => 'Page views';
+
+  @override
+  String get rumSessions => 'Sessions';
+
+  @override
+  String get rumErrors => 'Errors';
+
+  @override
+  String get rumAvgLoad => 'Average load';
+
+  @override
+  String get rumVitals => 'Core Web Vitals';
+
+  @override
+  String get rumVitalGood => 'good';
+
+  @override
+  String get rumVitalNeedsImprovement => 'needs work';
+
+  @override
+  String get rumVitalPoor => 'poor';
+
+  @override
+  String get rumVitalNoData => 'no measurements';
+
+  @override
+  String rumVitalShare(int percent) {
+    return '$percent% good';
+  }
+
+  @override
+  String get rumNoPoints => 'No page view in the window.';
 }

@@ -1434,6 +1434,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'One of {count} series.'**
   String metricOneSeries(int count);
+
+  /// No description provided for @navRum.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get navRum;
+
+  /// No description provided for @rumEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No browser application has reported in the window.'**
+  String get rumEmpty;
+
+  /// No description provided for @rumViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Page views'**
+  String get rumViews;
+
+  /// No description provided for @rumSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get rumSessions;
+
+  /// No description provided for @rumErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get rumErrors;
+
+  /// No description provided for @rumAvgLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Average load'**
+  String get rumAvgLoad;
+
+  /// No description provided for @rumVitals.
+  ///
+  /// In en, this message translates to:
+  /// **'Core Web Vitals'**
+  String get rumVitals;
+
+  /// No description provided for @rumVitalGood.
+  ///
+  /// In en, this message translates to:
+  /// **'good'**
+  String get rumVitalGood;
+
+  /// No description provided for @rumVitalNeedsImprovement.
+  ///
+  /// In en, this message translates to:
+  /// **'needs work'**
+  String get rumVitalNeedsImprovement;
+
+  /// No description provided for @rumVitalPoor.
+  ///
+  /// In en, this message translates to:
+  /// **'poor'**
+  String get rumVitalPoor;
+
+  /// No description provided for @rumVitalNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'no measurements'**
+  String get rumVitalNoData;
+
+  /// No description provided for @rumVitalShare.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% good'**
+  String rumVitalShare(int percent);
+
+  /// No description provided for @rumNoPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'No page view in the window.'**
+  String get rumNoPoints;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
