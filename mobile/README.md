@@ -17,7 +17,8 @@ openlog installation; it touches none of them.
 | `lib/src/api/client.dart` | One installation over HTTP: address handling, bearer token, org header, errors |
 | `lib/src/session.dart` | Which installation, which person, which organization — the only mutable state above the widgets |
 | `lib/src/storage/token_store.dart` | The device token in Keychain / EncryptedSharedPreferences |
-| `lib/src/ui/` | Server address, sign in and sign up, signed in |
+| `lib/src/alerts.dart` | What is firing, and taking one of them |
+| `lib/src/ui/` | Server address, sign in and sign up, the alerts list, the account drawer |
 | `lib/l10n/` | `app_en.arb`, `app_tr.arb`, and what gen-l10n makes of them |
 | `tool/check_l10n.dart` | Fails when the two dictionaries disagree |
 
@@ -74,6 +75,15 @@ Two decisions inside it are worth knowing:
 Add a type by putting it in `schemaTargets` (named schemas) or `responseTargets`
 (bodies declared inline on a path), then regenerating. Only what the app parses
 is generated, so the file stays the size of the app's needs.
+
+## Severity colours are not themeable
+
+`critical`, `warning` and `info` are spelled out as constants rather than taken
+from the theme's container slots. Taking `warning` from `tertiaryContainer`
+against this app's blue seed produced a magenta chip, which reads as a second
+kind of critical. Severity is semantic the way an error colour is: it has to
+mean the same thing at a glance in light and dark, which a generated palette
+does not promise.
 
 ## Turkish and English, without a bridge from the web
 

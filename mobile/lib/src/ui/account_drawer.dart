@@ -1,5 +1,4 @@
-// Signed in. Phase 1 ends here: it proves the app knows who it is talking to
-// and as whom, which is what everything after it rests on.
+// Who is signed in, where, and as what -- out of the way of the alerts.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -7,8 +6,8 @@ import '../api/schema.g.dart';
 import '../session.dart';
 import 'failure_text.dart';
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.session});
+class AccountDrawer extends StatelessWidget {
+  const AccountDrawer({super.key, required this.session});
 
   final SessionController session;
 
@@ -16,47 +15,35 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = L.of(context);
     final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     final me = session.me;
-    final user = me?.user;
     final orgs = me?.organizations ?? const <OrgRef>[];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('openlog'),
-        actions: [
-          IconButton(
-            key: const Key('sign-out'),
-            tooltip: l.homeSignOut,
-            onPressed: session.busy ? null : session.signOut,
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
-      body: SafeArea(
+    return Drawer(
+      child: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           children: [
+            Text(l.accountTitle, style: text.titleLarge),
+            const SizedBox(height: 16),
             Text(
-              l.homeSignedInAs(user?.email ?? ''),
+              l.homeSignedInAs(me?.user?.email ?? ''),
               key: const Key('signed-in-as'),
-              style: text.titleMedium,
+              style: text.bodyMedium,
             ),
             const SizedBox(height: 4),
             Text(
               session.baseUrl ?? '',
-              style: text.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 24),
+            const Divider(height: 32),
             _row(
               context,
               l.homeOrganization,
               session.organization?.name ?? '—',
             ),
             _row(context, l.homeRole, _roleName(l, me?.role)),
-            // Only when there is a choice to make: a single-organization person
-            // has nothing to switch between, and the control would be noise.
+            // Only when there is a choice to make.
             if (orgs.length > 1) ...[
               const SizedBox(height: 16),
               Text(l.homeSwitchOrganization, style: text.labelLarge),
@@ -80,8 +67,13 @@ class HomeScreen extends StatelessWidget {
               failure: session.failure,
               baseUrl: session.baseUrl ?? '',
             ),
-            const SizedBox(height: 32),
-            Text(l.homeNextPhase, style: text.bodyMedium),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              key: const Key('sign-out'),
+              onPressed: session.busy ? null : session.signOut,
+              icon: const Icon(Icons.logout),
+              label: Text(l.homeSignOut),
+            ),
           ],
         ),
       ),
@@ -96,9 +88,12 @@ class HomeScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: text.bodyMedium),
-          Text(
-            value,
-            style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -117,8 +112,6 @@ class HomeScreen extends StatelessWidget {
         return l.roleViewer;
       case Role.unknown:
       case null:
-        // A role this build has never heard of: the server is newer than the
-        // app, which must not leave the screen blank.
         return l.roleUnknown;
     }
   }

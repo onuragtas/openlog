@@ -254,6 +254,121 @@ enum SessionKind {
   }
 }
 
+/// AlertRuleType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertRuleType {
+  metricThreshold('metric_threshold'),
+  logMatch('log_match'),
+  noData('no_data'),
+  discovery('discovery'),
+  apm('apm'),
+  apmNoData('apm_no_data'),
+  apmError('apm_error'),
+  oql('oql'),
+  sloBurn('slo_burn'),
+  anomaly('anomaly'),
+  unknown('');
+
+  const AlertRuleType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertRuleType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertSeverity of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertSeverity {
+  critical('critical'),
+  warning('warning'),
+  info('info'),
+  unknown('');
+
+  const AlertSeverity(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertSeverity fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertIncidentState of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertIncidentState {
+  open('open'),
+  acknowledged('acknowledged'),
+  resolved('resolved'),
+  unknown('');
+
+  const AlertIncidentState(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertIncidentState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertResolveReason of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertResolveReason {
+  recovered('recovered'),
+  manual('manual'),
+  noData('no_data'),
+  expired('expired'),
+  ruleDisabled('rule_disabled'),
+  ruleDeleted('rule_deleted'),
+  ruleChanged('rule_changed'),
+  unknown('');
+
+  const AlertResolveReason(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertResolveReason fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// UserLanguage of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -445,6 +560,95 @@ class Session {
   final String deviceName;
 }
 
+/// `AlertIncident` of the openlog API contract.
+class AlertIncident {
+  const AlertIncident({
+    required this.id,
+    this.ruleId,
+    required this.ruleName,
+    required this.ruleType,
+    required this.severity,
+    required this.state,
+    required this.seriesKey,
+    required this.labels,
+    required this.summary,
+    this.value,
+    this.lastValue,
+    this.threshold,
+    required this.flapping,
+    required this.muted,
+    required this.openedAt,
+    this.acknowledgedAt,
+    this.acknowledgedByEmail,
+    this.resolvedAt,
+    this.resolvedByEmail,
+    this.resolveReason,
+    required this.channelIds,
+  });
+
+  factory AlertIncident.fromJson(
+    Object? json, [
+    String path = 'AlertIncident',
+  ]) {
+    final m = _obj(json, path);
+    return AlertIncident(
+      id: _req(m, 'id', path, _str),
+      ruleId: _opt(m, 'rule_id', path, _str),
+      ruleName: _req(m, 'rule_name', path, _str),
+      ruleType: _req(m, 'rule_type', path, AlertRuleType.fromJson),
+      severity: _req(m, 'severity', path, AlertSeverity.fromJson),
+      state: _req(m, 'state', path, AlertIncidentState.fromJson),
+      seriesKey: _req(m, 'series_key', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      summary: _req(m, 'summary', path, _str),
+      value: _opt(m, 'value', path, _num),
+      lastValue: _opt(m, 'last_value', path, _num),
+      threshold: _opt(m, 'threshold', path, _num),
+      flapping: _req(m, 'flapping', path, _bool),
+      muted: _req(m, 'muted', path, _bool),
+      openedAt: _req(m, 'opened_at', path, _time),
+      acknowledgedAt: _opt(m, 'acknowledged_at', path, _time),
+      acknowledgedByEmail: _opt(m, 'acknowledged_by_email', path, _str),
+      resolvedAt: _opt(m, 'resolved_at', path, _time),
+      resolvedByEmail: _opt(m, 'resolved_by_email', path, _str),
+      resolveReason: _opt(
+        m,
+        'resolve_reason',
+        path,
+        AlertResolveReason.fromJson,
+      ),
+      channelIds: _req(
+        m,
+        'channel_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final String id;
+  final String? ruleId;
+  final String ruleName;
+  final AlertRuleType ruleType;
+  final AlertSeverity severity;
+  final AlertIncidentState state;
+  final String seriesKey;
+  final Map<String, String> labels;
+  final String summary;
+  final double? value;
+  final double? lastValue;
+  final double? threshold;
+  final bool flapping;
+  final bool muted;
+  final DateTime openedAt;
+  final DateTime? acknowledgedAt;
+  final String? acknowledgedByEmail;
+  final DateTime? resolvedAt;
+  final String? resolvedByEmail;
+  final AlertResolveReason? resolveReason;
+  final List<String> channelIds;
+}
+
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -524,4 +728,62 @@ class DeviceSession {
   final String sessionId;
   final DateTime expiresAt;
   final Me me;
+}
+
+/// `IncidentPage` of the openlog API contract.
+class IncidentPage {
+  const IncidentPage({
+    required this.incidents,
+    this.nextCursor,
+    required this.counts,
+  });
+
+  factory IncidentPage.fromJson(Object? json, [String path = 'IncidentPage']) {
+    final m = _obj(json, path);
+    return IncidentPage(
+      incidents: _req(
+        m,
+        'incidents',
+        path,
+        (v, p) =>
+            _list<AlertIncident>(v, p, (v, p) => AlertIncident.fromJson(v, p)),
+      ),
+      nextCursor: _opt(m, 'next_cursor', path, _str),
+      counts: _req(
+        m,
+        'counts',
+        path,
+        (v, p) => IncidentPageCounts.fromJson(v, p),
+      ),
+    );
+  }
+
+  final List<AlertIncident> incidents;
+  final String? nextCursor;
+  final IncidentPageCounts counts;
+}
+
+/// All incidents of the organization by state (resolved = last 7 days)
+class IncidentPageCounts {
+  const IncidentPageCounts({
+    required this.open,
+    required this.acknowledged,
+    required this.resolved,
+  });
+
+  factory IncidentPageCounts.fromJson(
+    Object? json, [
+    String path = 'IncidentPageCounts',
+  ]) {
+    final m = _obj(json, path);
+    return IncidentPageCounts(
+      open: _req(m, 'open', path, _int),
+      acknowledged: _req(m, 'acknowledged', path, _int),
+      resolved: _req(m, 'resolved', path, _int),
+    );
+  }
+
+  final int open;
+  final int acknowledged;
+  final int resolved;
 }

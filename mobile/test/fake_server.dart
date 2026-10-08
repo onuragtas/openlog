@@ -6,9 +6,13 @@ import 'dart:io';
 
 /// One request as the server saw it.
 class Seen {
-  Seen(this.method, this.path, this.headers, this.body);
+  Seen(this.method, this.path, this.query, this.headers, this.body);
   final String method;
   final String path;
+
+  /// The raw query string, so a test can assert what actually went out rather
+  /// than what the caller meant to send.
+  final String query;
   final Map<String, String> headers;
   final String body;
 }
@@ -26,7 +30,7 @@ class FakeServer {
       final body = await utf8.decoder.bind(req).join();
       final headers = <String, String>{};
       req.headers.forEach((k, v) => headers[k.toLowerCase()] = v.join(','));
-      final seen = Seen(req.method, req.uri.path, headers, body);
+      final seen = Seen(req.method, req.uri.path, req.uri.query, headers, body);
       fake.requests.add(seen);
       handler(req, seen);
       await req.response.close();

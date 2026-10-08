@@ -6,22 +6,27 @@
 import 'package:flutter/material.dart';
 
 import 'l10n/app_localizations.dart';
+import 'src/alerts.dart';
+import 'src/api/client.dart';
 import 'src/session.dart';
 import 'src/storage/token_store.dart';
-import 'src/ui/home_screen.dart';
+import 'src/ui/alerts_screen.dart';
 import 'src/ui/server_screen.dart';
 import 'src/ui/sign_in_screen.dart';
 
 void main() => runApp(OpenlogApp(store: SecureTokenStore()));
 
 class OpenlogApp extends StatefulWidget {
-  const OpenlogApp({super.key, required this.store, this.session});
+  const OpenlogApp({super.key, required this.store, this.session, this.alerts});
 
   /// Where the device token is kept between launches.
   final TokenStore store;
 
   /// Injected by tests, which cannot reach Keychain or a real server.
   final SessionController? session;
+
+  /// Injected by tests so the alerts screen can be driven without a server.
+  final AlertsController? alerts;
 
   @override
   State<OpenlogApp> createState() => _OpenlogAppState();
@@ -41,8 +46,26 @@ class _OpenlogAppState extends State<OpenlogApp> {
     _session.restore();
   }
 
+  AlertsController? _alerts;
+  OpenlogClient? _alertsClient;
+
+  /// One alerts controller per signed-in client. Keyed on the client rather
+  /// than kept for the app's life: signing out and back in, or changing server,
+  /// must not leave the previous installation's incidents on screen.
+  AlertsController? _alertsFor(OpenlogClient? client) {
+    if (widget.alerts != null) return widget.alerts;
+    if (client == null) return null;
+    if (!identical(_alertsClient, client)) {
+      _alerts?.dispose();
+      _alerts = AlertsController(client);
+      _alertsClient = client;
+    }
+    return _alerts;
+  }
+
   @override
   void dispose() {
+    _alerts?.dispose();
     if (_ownsSession) _session.dispose();
     super.dispose();
   }
@@ -73,7 +96,16 @@ class _OpenlogAppState extends State<OpenlogApp> {
             case SessionStage.needsSignIn:
               return SignInScreen(session: _session);
             case SessionStage.signedIn:
-              return HomeScreen(session: _session);
+              final alerts = _alertsFor(_session.client);
+              if (alerts == null) {
+                // Signed in with no client is not a state the controller
+                // produces; rendering a spinner is better than crashing if it
+                // ever becomes one.
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              return AlertsScreen(session: _session, alerts: alerts);
           }
         },
       ),

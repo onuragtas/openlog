@@ -197,4 +197,89 @@ class LEn extends L {
   String errorUnexpected(String detail) {
     return 'Something went wrong: $detail';
   }
+
+  @override
+  String get alertsTitle => 'Alerts';
+
+  @override
+  String get alertsEmpty => 'Nothing is firing.';
+
+  @override
+  String get alertsEmptyHint =>
+      'Open alerts show up here the moment a rule fires.';
+
+  @override
+  String get alertsForbidden => 'Your role does not allow reading alerts.';
+
+  @override
+  String get alertsAlreadyResolved =>
+      'That alert resolved before it could be acknowledged.';
+
+  @override
+  String get alertsAcknowledge => 'Acknowledge';
+
+  @override
+  String alertsAcknowledgedBy(String email) {
+    return 'Acknowledged by $email';
+  }
+
+  @override
+  String get alertsAcknowledgedUnknown => 'Acknowledged';
+
+  @override
+  String alertsCounts(int open, int acknowledged) {
+    return '$open open, $acknowledged acknowledged';
+  }
+
+  @override
+  String alertsResolvedRecently(int count) {
+    return '$count resolved in the last 7 days';
+  }
+
+  @override
+  String get alertsMuted => 'Muted';
+
+  @override
+  String get alertsFlapping => 'Flapping';
+
+  @override
+  String alertsOpened(String when) {
+    return 'Opened $when';
+  }
+
+  @override
+  String get severityCritical => 'Critical';
+
+  @override
+  String get severityWarning => 'Warning';
+
+  @override
+  String get severityInfo => 'Info';
+
+  @override
+  String get severityUnknown => 'Unknown severity';
+
+  @override
+  String get accountTitle => 'Account';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get justNow => 'just now';
+
+  @override
+  String minutesAgo(int count) {
+    return '${count}m ago';
+  }
+
+  @override
+  String hoursAgo(int count) {
+    return '${count}h ago';
+  }
+
+  @override
+  String daysAgo(int count) {
+    return '${count}d ago';
+  }
 }

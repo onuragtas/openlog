@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/main.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
+import 'package:openlog_mobile/src/alerts.dart';
 import 'package:openlog_mobile/src/session.dart';
 import 'package:openlog_mobile/src/storage/token_store.dart';
 
@@ -40,6 +41,60 @@ Me me({List<OrgRef> orgs = const []}) => Me(
   role: Role.owner,
   organizations: orgs.isEmpty ? [org('o1', 'Org A')] : orgs,
 );
+
+/// An alerts controller that makes no requests. The controller's own behaviour
+/// is covered in alerts_test.dart against a real server; here it only has to
+/// hold a state for the screen to draw.
+class ScriptedAlerts extends AlertsController {
+  ScriptedAlerts({
+    List<AlertIncident> incidents = const [],
+    IncidentPageCounts? counts,
+  }) : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    this.incidents = incidents;
+    this.counts =
+        counts ??
+        const IncidentPageCounts(open: 0, acknowledged: 0, resolved: 0);
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh');
+
+  @override
+  Future<void> acknowledge(String id) async => calls.add('acknowledge:$id');
+}
+
+AlertIncident firing(
+  String id, {
+  String state = 'open',
+  AlertSeverity severity = AlertSeverity.critical,
+  String? ackBy,
+}) => AlertIncident(
+  id: id,
+  ruleName: 'API error rate',
+  ruleType: AlertRuleType.unknown,
+  severity: severity,
+  state: state == 'open'
+      ? AlertIncidentState.open
+      : AlertIncidentState.acknowledged,
+  seriesKey: 'service.name=checkout',
+  labels: const {'service.name': 'checkout'},
+  summary: 'error rate 12% over 5m',
+  flapping: false,
+  muted: false,
+  openedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 7)),
+  acknowledgedByEmail: ackBy,
+  channelIds: const [],
+);
+
+/// Opens the account drawer, which is where the signed-in details moved when
+/// the alerts list took over the screen.
+Future<void> openDrawer(WidgetTester tester) async {
+  tester.state<ScaffoldState>(find.byType(Scaffold).last).openDrawer();
+  await tester.pumpAndSettle();
+}
 
 /// Records calls instead of making them.
 class ScriptedSession extends SessionController {
@@ -279,9 +334,14 @@ void main() {
     (tester) async {
       final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
       await tester.pumpWidget(
-        OpenlogApp(store: MemoryTokenStore(), session: s),
+        OpenlogApp(
+          store: MemoryTokenStore(),
+          session: s,
+          alerts: ScriptedAlerts(),
+        ),
       );
       await tester.pump();
+      await openDrawer(tester);
 
       expect(find.text('Signed in as owner@example.com'), findsOneWidget);
       expect(find.text('Org A'), findsOneWidget);
@@ -296,8 +356,15 @@ void main() {
   ) async {
     final s = ScriptedSession(stage: SessionStage.signedIn)
       ..me = me(orgs: [org('o1', 'Org A'), org('o2', 'Org B')]);
-    await tester.pumpWidget(OpenlogApp(store: MemoryTokenStore(), session: s));
+    await tester.pumpWidget(
+      OpenlogApp(
+        store: MemoryTokenStore(),
+        session: s,
+        alerts: ScriptedAlerts(),
+      ),
+    );
     await tester.pump();
+    await openDrawer(tester);
 
     await tester.tap(find.byKey(const Key('org-picker')));
     await tester.pumpAndSettle();
@@ -311,8 +378,15 @@ void main() {
     tester,
   ) async {
     final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
-    await tester.pumpWidget(OpenlogApp(store: MemoryTokenStore(), session: s));
+    await tester.pumpWidget(
+      OpenlogApp(
+        store: MemoryTokenStore(),
+        session: s,
+        alerts: ScriptedAlerts(),
+      ),
+    );
     await tester.pump();
+    await openDrawer(tester);
 
     await tester.tap(find.byKey(const Key('sign-out')));
     await tester.pump();
@@ -362,5 +436,81 @@ void main() {
     await tester.pump();
 
     expect(find.text('Connect to openlog'), findsOneWidget);
+  });
+
+  testWidgets('the alerts screen lists what is firing and offers to take it', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      incidents: [
+        firing('i1'),
+        firing('i2', state: 'acknowledged', ackBy: 'ada@example.com'),
+      ],
+      counts: const IncidentPageCounts(open: 1, acknowledged: 1, resolved: 0),
+    );
+    await tester.pumpWidget(
+      OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('incident-i1')), findsOneWidget);
+    expect(find.byKey(const Key('incident-i2')), findsOneWidget);
+    // Only an open incident offers the button; an acknowledged one says who took it.
+    expect(find.byKey(const Key('ack-i1')), findsOneWidget);
+    expect(find.byKey(const Key('ack-i2')), findsNothing);
+    expect(find.text('Acknowledged by ada@example.com'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ack-i1')));
+    await tester.pump();
+    expect(a.calls, contains('acknowledge:i1'));
+  });
+
+  testWidgets('nothing firing reads as good news, not as an empty page', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts(
+      counts: const IncidentPageCounts(open: 0, acknowledged: 0, resolved: 11),
+    );
+    await tester.pumpWidget(
+      OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nothing is firing.'), findsOneWidget);
+    // "Nothing is firing" reads differently when eleven things fired and recovered today.
+    expect(find.text('11 resolved in the last 7 days'), findsOneWidget);
+  });
+
+  testWidgets(
+    'a role that may not read alerts is told so, not shown an empty list',
+    (tester) async {
+      final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+      final a = ScriptedAlerts()
+        ..failure = const SessionFailure('alertsForbidden', '');
+      await tester.pumpWidget(
+        OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Your role does not allow reading alerts.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('the alerts screen asks the server as soon as it is shown', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final a = ScriptedAlerts();
+    await tester.pumpWidget(
+      OpenlogApp(store: MemoryTokenStore(), session: s, alerts: a),
+    );
+    await tester.pumpAndSettle();
+
+    expect(a.calls, contains('refresh'));
   });
 }

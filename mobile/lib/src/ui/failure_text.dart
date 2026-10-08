@@ -30,6 +30,10 @@ String? failureText(
       return l.signUpOnWeb(baseUrl);
     case 'emailTaken':
       return l.signUpEmailTaken;
+    case 'alertsForbidden':
+      return l.alertsForbidden;
+    case 'alreadyResolved':
+      return l.alertsAlreadyResolved;
     default:
       // The server's own message, which is more useful than anything this app
       // could invent about a problem it does not recognise.

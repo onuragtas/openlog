@@ -58,6 +58,11 @@ class SessionController extends ChangeNotifier {
   /// The address being used, normalized. Null before one is chosen.
   String? get baseUrl => _client?.baseUrl;
 
+  /// The signed-in client, for the screens that read telemetry. Null until
+  /// there is one, which is why every screen that uses it is only reachable
+  /// from [SessionStage.signedIn].
+  OpenlogClient? get client => _client;
+
   /// What that server allows: whether sign-up is offered, how long a password
   /// must be, whether a CAPTCHA stands in the way, whether SSO exists.
   AuthConfig? authConfig;

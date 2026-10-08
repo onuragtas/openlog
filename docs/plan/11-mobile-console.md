@@ -242,7 +242,7 @@ bağlı. Mobil için kullanmak, raporlara bağlı bir mekanizmayı amacının d�
 |---|---|---|
 | **0** ✅ | `mobile/` iskeleti, Dart tip üretimi + CI bekçisi, API istemcisi, 22 test | Sözleşmeye bağlı temel |
 | **1** ✅ | Sunucu adresi (§2), kayıt ve giriş (§3.3), **cihaz oturumu (§3.2)**, organizasyon seçimi | Uygulama bağlanıyor, kalıcı oturum açıyor |
-| **2** | **Alarmlar:** açık alarm listesi, detay, tetikleme grafiği, susturma/onaylama | Uygulamanın var olma sebebi |
+| **2** ✅ | **Alarmlar:** açık/onaylanmış liste, önem rozetleri, onaylama, çekmecede hesap | Uygulamanın var olma sebebi |
 | **3** | **Servis sağlığı:** APM servis listesi (RED), servis detayı, hatalar | Alarmdan sonra bakılan ilk yer |
 | **4** | Loglar ve izler: arama, son hatalar, trace detayı | Teşhis |
 | **5** | Dashboard görüntüleme (salt-okuma) | Tamamlayıcı |

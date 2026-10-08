@@ -432,6 +432,144 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Something went wrong: {detail}'**
   String errorUnexpected(String detail);
+
+  /// No description provided for @alertsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTitle;
+
+  /// No description provided for @alertsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is firing.'**
+  String get alertsEmpty;
+
+  /// No description provided for @alertsEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open alerts show up here the moment a rule fires.'**
+  String get alertsEmptyHint;
+
+  /// No description provided for @alertsForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading alerts.'**
+  String get alertsForbidden;
+
+  /// No description provided for @alertsAlreadyResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'That alert resolved before it could be acknowledged.'**
+  String get alertsAlreadyResolved;
+
+  /// No description provided for @alertsAcknowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get alertsAcknowledge;
+
+  /// No description provided for @alertsAcknowledgedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged by {email}'**
+  String alertsAcknowledgedBy(String email);
+
+  /// No description provided for @alertsAcknowledgedUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged'**
+  String get alertsAcknowledgedUnknown;
+
+  /// No description provided for @alertsCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'{open} open, {acknowledged} acknowledged'**
+  String alertsCounts(int open, int acknowledged);
+
+  /// No description provided for @alertsResolvedRecently.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} resolved in the last 7 days'**
+  String alertsResolvedRecently(int count);
+
+  /// No description provided for @alertsMuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Muted'**
+  String get alertsMuted;
+
+  /// No description provided for @alertsFlapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Flapping'**
+  String get alertsFlapping;
+
+  /// No description provided for @alertsOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened {when}'**
+  String alertsOpened(String when);
+
+  /// No description provided for @severityCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get severityCritical;
+
+  /// No description provided for @severityWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get severityWarning;
+
+  /// No description provided for @severityInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get severityInfo;
+
+  /// No description provided for @severityUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown severity'**
+  String get severityUnknown;
+
+  /// No description provided for @accountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get accountTitle;
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// No description provided for @justNow.
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get justNow;
+
+  /// No description provided for @minutesAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}m ago'**
+  String minutesAgo(int count);
+
+  /// No description provided for @hoursAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}h ago'**
+  String hoursAgo(int count);
+
+  /// No description provided for @daysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}d ago'**
+  String daysAgo(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

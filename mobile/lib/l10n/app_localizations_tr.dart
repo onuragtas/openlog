@@ -197,4 +197,87 @@ class LTr extends L {
   String errorUnexpected(String detail) {
     return 'Bir şeyler ters gitti: $detail';
   }
+
+  @override
+  String get alertsTitle => 'Alarmlar';
+
+  @override
+  String get alertsEmpty => 'Açık alarm yok.';
+
+  @override
+  String get alertsEmptyHint => 'Bir kural tetiklendiği anda burada görünür.';
+
+  @override
+  String get alertsForbidden => 'Rolünüz alarmları görmeye izin vermiyor.';
+
+  @override
+  String get alertsAlreadyResolved => 'Bu alarm onaylanmadan önce çözüldü.';
+
+  @override
+  String get alertsAcknowledge => 'Onayla';
+
+  @override
+  String alertsAcknowledgedBy(String email) {
+    return '$email onayladı';
+  }
+
+  @override
+  String get alertsAcknowledgedUnknown => 'Onaylandı';
+
+  @override
+  String alertsCounts(int open, int acknowledged) {
+    return '$open açık, $acknowledged onaylanmış';
+  }
+
+  @override
+  String alertsResolvedRecently(int count) {
+    return 'Son 7 günde $count çözüldü';
+  }
+
+  @override
+  String get alertsMuted => 'Susturulmuş';
+
+  @override
+  String get alertsFlapping => 'Kararsız';
+
+  @override
+  String alertsOpened(String when) {
+    return '$when açıldı';
+  }
+
+  @override
+  String get severityCritical => 'Kritik';
+
+  @override
+  String get severityWarning => 'Uyarı';
+
+  @override
+  String get severityInfo => 'Bilgi';
+
+  @override
+  String get severityUnknown => 'Bilinmeyen önem';
+
+  @override
+  String get accountTitle => 'Hesap';
+
+  @override
+  String get refresh => 'Yenile';
+
+  @override
+  String get justNow => 'az önce';
+
+  @override
+  String minutesAgo(int count) {
+    return '$count dk önce';
+  }
+
+  @override
+  String hoursAgo(int count) {
+    return '$count sa önce';
+  }
+
+  @override
+  String daysAgo(int count) {
+    return '$count gün önce';
+  }
 }

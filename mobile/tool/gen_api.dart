@@ -28,11 +28,15 @@ const schemaTargets = <String>[
   'AuthConfig', // the server handshake: is this an openlog server, and what does its sign-in screen look like
   'Me', // who am I, which organizations, which role
   'Session', // the person's sessions, including other phones
+  'AlertIncident', // what the app exists to show: what is firing right now
 ];
 
 /// Responses that are declared inline on a path rather than as a named schema.
 /// 'METHOD path status ClassName'.
-const responseTargets = <String>['post /api/v1/auth/device 201 DeviceSession'];
+const responseTargets = <String>[
+  'post /api/v1/auth/device 201 DeviceSession',
+  'get /api/v1/alerts/incidents 200 IncidentPage',
+];
 
 void main(List<String> args) {
   final check = args.contains('--check');
@@ -266,16 +270,24 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     return schema as YamlMap;
   }
 
-  /// Strips a `oneOf` of exactly one non-null branch plus `type: "null"`, and a
-  /// `type: [x, "null"]` union, returning the branch and that it is nullable.
+  /// Strips the three ways this spec says "nullable": a `oneOf` or an `anyOf`
+  /// of one non-null branch plus `type: "null"`, and a `type: [x, "null"]`
+  /// union. Returns the branch and that it is nullable.
+  ///
+  /// `anyOf` and `oneOf` mean different things in general -- "at least one" and
+  /// "exactly one" -- but with a single real branch beside a null they say the
+  /// same thing, which is the only shape accepted here. Anything wider still
+  /// stops, because a union this cannot name is a field it would have to widen
+  /// to `dynamic`.
   (YamlMap node, bool nullable) _unwrapNullable(YamlMap node) {
-    final oneOf = node['oneOf'];
-    if (oneOf is YamlList) {
-      final branches = oneOf.cast<YamlMap>().toList();
+    for (final key in const ['oneOf', 'anyOf']) {
+      final union = node[key];
+      if (union is! YamlList) continue;
+      final branches = union.cast<YamlMap>().toList();
       final nulls = branches.where((b) => b['type'] == 'null').toList();
       final rest = branches.where((b) => b['type'] != 'null').toList();
       if (nulls.length == 1 && rest.length == 1) return (rest.single, true);
-      _fail('oneOf with ${branches.length} branches is not supported: $node');
+      _fail('$key with ${branches.length} branches is not supported: $node');
     }
     final type = node['type'];
     if (type is YamlList) {
@@ -374,6 +386,19 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       }
       return DartType('String', nullable: nullable);
     }
+    // A named schema with additionalProperties and no properties of its own is
+    // a map, not a class -- AlertLabels is `{string: string}`. Emitting a class
+    // for it produced `const AlertLabels({});`, which is not valid Dart, and
+    // would have made every call site unwrap a box around a Map anyway.
+    if (inner['type'] == 'object' &&
+        inner['properties'] == null &&
+        inner['additionalProperties'] is YamlMap) {
+      final value = _type(
+        inner['additionalProperties'] as YamlMap,
+        '${name}Value',
+      );
+      return DartType('Map<String, ${value.decl}>', nullable: nullable);
+    }
     return null;
   }
 
@@ -447,6 +472,15 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
           DartType(t.name, nullable: nullable),
           required.contains(key),
         ),
+      );
+    }
+
+    if (fields.isEmpty) {
+      // `const X({});` does not parse, and a schema with nothing in it is one
+      // this generator has misread rather than one the app can use.
+      _fail(
+        '$name would be a class with no fields; it is probably a map or an '
+        'alias this generator does not recognise yet',
       );
     }
 

@@ -198,6 +198,33 @@ class OpenlogClient {
   /// removed membership applies to the next request.
   Future<Me> me() async => Me.fromJson(await _send('GET', '/api/v1/auth/me'));
 
+  /// What is firing, newest first.
+  ///
+  /// [states] is what the on-call screen asks for: `open` and `acknowledged`,
+  /// never `resolved`, because a resolved incident is history and this is a
+  /// screen about now. The counts come back for all of them regardless, which
+  /// is how the screen can say "and 12 resolved today" without a second page.
+  Future<IncidentPage> incidents({
+    List<String> states = const ['open', 'acknowledged'],
+    int limit = 50,
+  }) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (states.isNotEmpty) query['state'] = states.join(',');
+    final path =
+        '/api/v1/alerts/incidents?${Uri(queryParameters: query).query}';
+    return IncidentPage.fromJson(await _send('GET', path));
+  }
+
+  /// Takes an incident, which stops its re-notifications.
+  ///
+  /// Idempotent on the server, and 409 when the incident has already resolved
+  /// -- which is a race the screen should report rather than hide, since the
+  /// person pressed a button about something that is no longer true.
+  Future<void> acknowledgeIncident(String id) => _send(
+    'POST',
+    '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/acknowledge',
+  );
+
   /// Ends this device's session on the server and forgets the token here.
   ///
   /// The token is dropped even when the request fails: the person asked to be
