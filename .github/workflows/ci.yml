@@ -24,6 +24,7 @@ jobs:
       actions: read
     outputs:
       php: ${{ steps.diff.outputs.php }}
+      mobile: ${{ steps.diff.outputs.mobile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,12 +42,18 @@ jobs:
               --limit 1 --json headSha --jq '.[0].headSha // ""' || true)"
           fi
           php=true
+          mobile=true
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
             files="$(git diff --name-only "$base" HEAD)"
             printf 'changed since %s:\n%s\n' "$base" "$files"
             grep -qE '^(agents/php/|\.github/workflows/ci\.yml$)' <<<"$files" || php=false
+            # docs/contracts/openapi.yaml is in here because the app is generated from it: a contract
+            # change that the app has not been regenerated against has to fail in the mobile job, not
+            # on a phone that cannot be fixed in step with a deploy.
+            grep -qE '^(mobile/|docs/contracts/openapi\.yaml$|\.github/workflows/ci\.yml$)' <<<"$files" || mobile=false
           fi
           echo "php=$php" >> "$GITHUB_OUTPUT"
+          echo "mobile=$mobile" >> "$GITHUB_OUTPUT"
 
 
   go:
@@ -411,6 +418,70 @@ jobs:
       # committed file is formatted like every other one and --check above still reproduces it exactly.
       - run: dart format --output=none --set-exit-if-changed lib test tool
       - run: flutter test
+
+  # Does it still build for a phone? `flutter test` runs on the host and proves none of this: the
+  # release Android manifest was missing INTERNET for as long as the app has existed, and iOS has
+  # broken twice on native plumbing nothing in Dart touches. Both of those are build-time facts.
+  mobile-android:
+    name: mobile (Android release build)
+    needs: changes
+    if: ${{ needs.changes.outputs.mobile == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+        env:
+          FLUTTER_VERSION: 3.41.8
+      - run: flutter pub get
+      # Debug keys, which is what android/app/build.gradle.kts is configured with: this job asks
+      # whether the app builds and what the manifest merges to, not whether it is shippable.
+      - run: flutter build apk --release
+      # Not a formality: without INTERNET in the main manifest the release build
+      # has no network at all, and nothing else in this pipeline notices. A
+      # missing aapt2 fails here rather than passing an unasked question.
+      - name: the release build can reach the network
+        run: |
+          aapt2=
+          for candidate in "$ANDROID_HOME"/build-tools/*/aapt2; do
+            [ -x "$candidate" ] && aapt2="$candidate"
+          done
+          [ -n "$aapt2" ] || { echo "no aapt2 under $ANDROID_HOME/build-tools"; exit 1; }
+          "$aapt2" dump permissions build/app/outputs/flutter-apk/app-release.apk |
+            grep -q "name='android.permission.INTERNET'"
+
+  mobile-ios:
+    name: mobile (iOS release build)
+    needs: changes
+    if: ${{ needs.changes.outputs.mobile == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+        env:
+          FLUTTER_VERSION: 3.41.8
+      - run: flutter pub get
+      # --no-codesign: the signing identity is the owner's and is not in CI. What this catches is the
+      # rest of it -- the pods, the deployment target, the native assets -- which is what has actually
+      # broken, every time.
+      - run: flutter build ios --release --no-codesign
 
   browser-agent:
     name: browser-agent (openlog-browser)

@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The whole app is one HTTPS client against the installation the person
+         entered. Flutter's template declares this only in the debug and
+         profile manifests, so a release build shipped without it and every
+         request failed with no useful error on the screen. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="openlog_mobile"
+        android:label="Openlog Mobile"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
