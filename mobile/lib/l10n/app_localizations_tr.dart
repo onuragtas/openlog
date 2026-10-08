@@ -975,4 +975,34 @@ class LTr extends L {
   @override
   String get integConfigureOnWeb =>
       'Yapılandırma webden yapılır; bu ekran ajanların bildirdiğini okur.';
+
+  @override
+  String get navProfiles => 'Profilleme';
+
+  @override
+  String get profilesEmpty => 'Bu aralıkta profillenen bir şey yok.';
+
+  @override
+  String get profilesSearch => 'Servis ve tür ara';
+
+  @override
+  String profileSamples(int count) {
+    return '$count örnek';
+  }
+
+  @override
+  String get profileFunctions => 'Kendi süresine göre';
+
+  @override
+  String get profileNoFunctions =>
+      'Bu profilin yükünü taşıyan bir fonksiyon yok.';
+
+  @override
+  String profileShare(String percent) {
+    return '%$percent';
+  }
+
+  @override
+  String get profileOfShown =>
+      'Oranlar gösterilen satırlara göre, tüm aralığa göre değil.';
 }

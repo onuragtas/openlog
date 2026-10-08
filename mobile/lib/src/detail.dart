@@ -365,3 +365,36 @@ class CostsController extends DetailController<CostHostPage> {
   @override
   Future<CostHostPage> fetch() => _client.costHosts();
 }
+
+/// The functions of one profile, ranked by self time.
+class ProfileFunctionsController extends DetailController<ProfileFunctionPage> {
+  ProfileFunctionsController(
+    this._client, {
+    required this.service,
+    required this.type,
+    required this.environment,
+  });
+
+  final OpenlogClient _client;
+  final String service;
+  final String type;
+  final String environment;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ProfileFunctionPage> fetch() => _client.profileFunctions(
+    service: service,
+    type: type,
+    environment: environment,
+  );
+
+  /// A function's share of the rows on screen. The server says `total` is the
+  /// sum of what it returned, not of the window, so this is a share of what
+  /// the person can see -- which is the only share that can be checked.
+  double shareOf(ProfileFunction f) {
+    final total = value?.total ?? 0;
+    return total <= 0 ? 0 : f.self / total;
+  }
+}

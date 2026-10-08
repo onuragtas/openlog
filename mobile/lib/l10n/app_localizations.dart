@@ -1866,6 +1866,54 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Configure on the web; this screen reads what the agents report.'**
   String get integConfigureOnWeb;
+
+  /// No description provided for @navProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Profiling'**
+  String get navProfiles;
+
+  /// No description provided for @profilesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has been profiled in the window.'**
+  String get profilesEmpty;
+
+  /// No description provided for @profilesSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search services and types'**
+  String get profilesSearch;
+
+  /// No description provided for @profileSamples.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} samples'**
+  String profileSamples(int count);
+
+  /// No description provided for @profileFunctions.
+  ///
+  /// In en, this message translates to:
+  /// **'By self time'**
+  String get profileFunctions;
+
+  /// No description provided for @profileNoFunctions.
+  ///
+  /// In en, this message translates to:
+  /// **'No function carries any of this profile.'**
+  String get profileNoFunctions;
+
+  /// No description provided for @profileShare.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String profileShare(String percent);
+
+  /// No description provided for @profileOfShown.
+  ///
+  /// In en, this message translates to:
+  /// **'Shares are of the rows shown, not of the whole window.'**
+  String get profileOfShown;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

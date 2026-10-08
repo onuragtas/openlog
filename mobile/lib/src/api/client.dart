@@ -303,6 +303,36 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// What has been profiled: one entry per service, environment and profile
+  /// type. The type is never guessed -- nanoseconds and bytes do not add up,
+  /// so the other endpoints take the type this list reports.
+  Future<ProfileServicePage> profileServices() async =>
+      ProfileServicePage.fromJson(
+        await _send('GET', '/api/v1/profiles/services'),
+      );
+
+  /// Functions ranked by self time. `total` is the sum of the rows returned,
+  /// not of the window, so a share is of something the person can see.
+  Future<ProfileFunctionPage> profileFunctions({
+    required String service,
+    required String type,
+    String environment = '',
+    int limit = 50,
+  }) async {
+    final query = <String, String>{
+      'service': service,
+      'type': type,
+      'limit': '$limit',
+    };
+    if (environment.isNotEmpty) query['environment'] = environment;
+    return ProfileFunctionPage.fromJson(
+      await _send(
+        'GET',
+        '/api/v1/profiles/functions?${Uri(queryParameters: query).query}',
+      ),
+    );
+  }
+
   /// How far behind the agents are, fleet-wide.
   Future<FleetSummary> fleetSummary() async =>
       FleetSummary.fromJson(await _send('GET', '/api/v1/fleet/summary'));

@@ -9,6 +9,7 @@ import 'alerts_screen.dart';
 import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
+import 'profiles_screen.dart';
 import 'query_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
@@ -55,6 +56,7 @@ class _AppShellState extends State<AppShell> {
       l.navIntegrations,
       l.navApm,
       l.navRum,
+      l.navProfiles,
       l.navDatabases,
       l.navSlos,
       l.navSynthetics,
@@ -78,6 +80,7 @@ class _AppShellState extends State<AppShell> {
       s.integrations.refresh,
       s.services.refresh,
       s.rum.refresh,
+      s.profiles.refresh,
       s.databases.refresh,
       s.slos.refresh,
       s.synthetics.refresh,
@@ -188,6 +191,9 @@ class _AppShellState extends State<AppShell> {
         sections: s,
         active: active,
       ),
+    );
+    add(
+      (active) => ProfilesBody(session: session, sections: s, active: active),
     );
     add(
       (active) => SectionBody(

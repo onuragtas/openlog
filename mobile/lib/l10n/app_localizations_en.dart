@@ -981,4 +981,33 @@ class LEn extends L {
   @override
   String get integConfigureOnWeb =>
       'Configure on the web; this screen reads what the agents report.';
+
+  @override
+  String get navProfiles => 'Profiling';
+
+  @override
+  String get profilesEmpty => 'Nothing has been profiled in the window.';
+
+  @override
+  String get profilesSearch => 'Search services and types';
+
+  @override
+  String profileSamples(int count) {
+    return '$count samples';
+  }
+
+  @override
+  String get profileFunctions => 'By self time';
+
+  @override
+  String get profileNoFunctions => 'No function carries any of this profile.';
+
+  @override
+  String profileShare(String percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get profileOfShown =>
+      'Shares are of the rows shown, not of the whole window.';
 }

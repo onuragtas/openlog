@@ -543,5 +543,27 @@
       }
     }
   },
-  "integConfigureOnWeb": "Configure on the web; this screen reads what the agents report."
+  "integConfigureOnWeb": "Configure on the web; this screen reads what the agents report.",
+  "navProfiles": "Profiling",
+  "profilesEmpty": "Nothing has been profiled in the window.",
+  "profilesSearch": "Search services and types",
+  "profileSamples": "{count} samples",
+  "@profileSamples": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFunctions": "By self time",
+  "profileNoFunctions": "No function carries any of this profile.",
+  "profileShare": "{percent}%",
+  "@profileShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "profileOfShown": "Shares are of the rows shown, not of the whole window."
 }

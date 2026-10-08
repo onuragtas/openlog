@@ -41,6 +41,7 @@ class Sections {
     InventoryController? inventory,
     FleetController? fleet,
     IntegrationsController? integrations,
+    ProfilesController? profiles,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -50,6 +51,12 @@ class Sections {
     TraceController Function(String traceId)? trace,
     MetricController Function(String name)? metric,
     RumOverviewController Function(String app)? rumOverview,
+    ProfileFunctionsController Function({
+      required String service,
+      required String type,
+      required String environment,
+    })?
+    profileFunctions,
   }) : incident = incident ?? ((id) => IncidentController(client, id)),
        serviceOverview =
            serviceOverview ??
@@ -60,6 +67,18 @@ class Sections {
        metric = metric ?? ((name) => MetricController(client, name)),
        rumOverview =
            rumOverview ?? ((app) => RumOverviewController(client, app)),
+       profileFunctions =
+           profileFunctions ??
+           (({
+             required String service,
+             required String type,
+             required String environment,
+           }) => ProfileFunctionsController(
+             client,
+             service: service,
+             type: type,
+             environment: environment,
+           )),
        hosts = hosts ?? HostsController(client),
        containers = containers ?? ContainersController(client),
        pods = pods ?? PodsController(client),
@@ -77,6 +96,7 @@ class Sections {
        inventory = inventory ?? InventoryController(client),
        fleet = fleet ?? FleetController(client),
        integrations = integrations ?? IntegrationsController(client),
+       profiles = profiles ?? ProfilesController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -98,6 +118,7 @@ class Sections {
   final InventoryController inventory;
   final FleetController fleet;
   final IntegrationsController integrations;
+  final ProfilesController profiles;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -112,6 +133,12 @@ class Sections {
   final TraceController Function(String traceId) trace;
   final MetricController Function(String name) metric;
   final RumOverviewController Function(String app) rumOverview;
+  final ProfileFunctionsController Function({
+    required String service,
+    required String type,
+    required String environment,
+  })
+  profileFunctions;
 
   /// In the order the drawer lists them, which is the web's order.
   List<ChangeNotifier> get all => [
@@ -122,6 +149,7 @@ class Sections {
     integrations,
     services,
     rum,
+    profiles,
     databases,
     slos,
     synthetics,
@@ -397,5 +425,28 @@ class IntegrationsController extends SectionController<IntegrationInstance> {
       error: error,
       notAvailable: notAvailable,
     );
+  }
+}
+
+/// What has been profiled, one row per service, environment and type.
+class ProfilesController extends SectionController<ProfileService> {
+  ProfilesController(super.client);
+
+  @override
+  Future<List<ProfileService>> fetch() async {
+    final all = [...(await client.profileServices()).services];
+    // Where the samples are: a profile with four samples cannot say anything,
+    // and on a phone the first screenful has to be the one worth opening.
+    all.sort((a, b) => b.samples.compareTo(a.samples));
+    // Nothing is filtered here -- the server takes no query for this list, so
+    // the search box filters what arrived rather than pretending to ask.
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return all;
+    return [
+      for (final p in all)
+        if (p.service.toLowerCase().contains(q) ||
+            p.type.toLowerCase().contains(q))
+          p,
+    ];
   }
 }

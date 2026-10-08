@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/detail.dart';
+import 'package:openlog_mobile/src/ui/profiles_screen.dart';
 
 import 'fake_server.dart';
 
@@ -610,6 +611,82 @@ void main() {
     // The list is capped; the screen has to be able to say how many were left.
     expect(c.value!.total, 12);
     expect(c.value!.pricing.estimated, isTrue);
+  });
+
+  test('a profile value is read in the unit the profile declared', () {
+    // The same number in two profiles. Reading four gigabytes as four seconds
+    // would be the worst kind of wrong, so the unit comes from the data and
+    // never from the type's name.
+    expect(formatProfileValue(4000000000, 'nanoseconds'), '4.00 s');
+    expect(formatProfileValue(4000000000, 'bytes'), '3.73 GiB');
+    expect(formatProfileValue(4000000, 'nanoseconds'), '4 ms');
+    expect(formatProfileValue(4000, 'nanoseconds'), '4 µs');
+    expect(formatProfileValue(512, 'bytes'), '512 B');
+    // A unit this build does not know is shown as the profile named it,
+    // rather than silently turned into milliseconds.
+    expect(formatProfileValue(42, 'count'), '42 count');
+    expect(formatProfileValue(42, ''), '42');
+  });
+
+  test(
+    'a function share is of the rows shown, which is what can be checked',
+    () async {
+      final server = await FakeServer.start(
+        (req, _) => writeJson(req, 200, {
+          'unit': 'nanoseconds',
+          'type': 'cpu',
+          // The server's own words: total is the sum of the rows returned, not
+          // of the window.
+          'total': 1000,
+          'functions': [
+            {'function': 'main.hot', 'self': 600, 'samples': 60},
+            {'function': 'main.warm', 'self': 400, 'samples': 40},
+          ],
+        }),
+      );
+      addTearDown(server.stop);
+      final c = ProfileFunctionsController(
+        client(server.baseUrl),
+        service: 'checkout',
+        type: 'cpu',
+        environment: 'production',
+      );
+
+      await c.refresh();
+
+      expect(
+        server.requests.single.query,
+        'service=checkout&type=cpu&limit=50&environment=production',
+      );
+      expect(c.shareOf(c.value!.functions.first), 0.6);
+      expect(c.shareOf(c.value!.functions.last), 0.4);
+    },
+  );
+
+  test('an empty profile does not divide by zero', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'unit': 'nanoseconds',
+        'type': 'cpu',
+        'total': 0,
+        'functions': <Object>[],
+      }),
+    );
+    addTearDown(server.stop);
+    final c = ProfileFunctionsController(
+      client(server.baseUrl),
+      service: 'checkout',
+      type: 'cpu',
+      environment: '',
+    );
+
+    await c.refresh();
+
+    expect(c.value!.functions, isEmpty);
+    expect(
+      c.shareOf(const ProfileFunction(function: 'x', self: 1, samples: 1)),
+      0,
+    );
   });
 
   test('a server that is not there reads as unreachable', () async {

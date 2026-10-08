@@ -446,5 +446,27 @@
       }
     }
   },
-  "integConfigureOnWeb": "Yapılandırma webden yapılır; bu ekran ajanların bildirdiğini okur."
+  "integConfigureOnWeb": "Yapılandırma webden yapılır; bu ekran ajanların bildirdiğini okur.",
+  "navProfiles": "Profilleme",
+  "profilesEmpty": "Bu aralıkta profillenen bir şey yok.",
+  "profilesSearch": "Servis ve tür ara",
+  "profileSamples": "{count} örnek",
+  "@profileSamples": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFunctions": "Kendi süresine göre",
+  "profileNoFunctions": "Bu profilin yükünü taşıyan bir fonksiyon yok.",
+  "profileShare": "%{percent}",
+  "@profileShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "profileOfShown": "Oranlar gösterilen satırlara göre, tüm aralığa göre değil."
 }

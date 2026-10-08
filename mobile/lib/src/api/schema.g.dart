@@ -4384,6 +4384,69 @@ class FleetHostPage {
   final String? nextCursor;
 }
 
+/// `ProfileServicePage` of the openlog API contract.
+class ProfileServicePage {
+  const ProfileServicePage({required this.services});
+
+  factory ProfileServicePage.fromJson(
+    Object? json, [
+    String path = 'ProfileServicePage',
+  ]) {
+    final m = _obj(json, path);
+    return ProfileServicePage(
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<ProfileService>(
+          v,
+          p,
+          (v, p) => ProfileService.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final List<ProfileService> services;
+}
+
+/// `ProfileFunctionPage` of the openlog API contract.
+class ProfileFunctionPage {
+  const ProfileFunctionPage({
+    required this.unit,
+    required this.type,
+    required this.total,
+    required this.functions,
+  });
+
+  factory ProfileFunctionPage.fromJson(
+    Object? json, [
+    String path = 'ProfileFunctionPage',
+  ]) {
+    final m = _obj(json, path);
+    return ProfileFunctionPage(
+      unit: _req(m, 'unit', path, _str),
+      type: _req(m, 'type', path, _str),
+      total: _req(m, 'total', path, _int),
+      functions: _req(
+        m,
+        'functions',
+        path,
+        (v, p) => _list<ProfileFunction>(
+          v,
+          p,
+          (v, p) => ProfileFunction.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final String unit;
+  final String type;
+  final int total;
+  final List<ProfileFunction> functions;
+}
+
 /// `DashboardPageList` of the openlog API contract.
 class DashboardPageList {
   const DashboardPageList({required this.dashboards});
@@ -5019,6 +5082,68 @@ class FleetHostUpdate {
   final String toVersion;
   final String error;
   final DateTime? changedAt;
+}
+
+/// `ProfileService` of the openlog API contract.
+class ProfileService {
+  const ProfileService({
+    required this.service,
+    required this.environment,
+    required this.type,
+    required this.unit,
+    required this.samples,
+    required this.total,
+    required this.lastSeen,
+  });
+
+  factory ProfileService.fromJson(
+    Object? json, [
+    String path = 'ProfileService',
+  ]) {
+    final m = _obj(json, path);
+    return ProfileService(
+      service: _req(m, 'service', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      type: _req(m, 'type', path, _str),
+      unit: _req(m, 'unit', path, _str),
+      samples: _req(m, 'samples', path, _int),
+      total: _req(m, 'total', path, _int),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  final String service;
+  final String environment;
+  final String type;
+  final String unit;
+  final int samples;
+  final int total;
+  final DateTime lastSeen;
+}
+
+/// `ProfileFunction` of the openlog API contract.
+class ProfileFunction {
+  const ProfileFunction({
+    required this.function,
+    required this.self,
+    required this.samples,
+  });
+
+  factory ProfileFunction.fromJson(
+    Object? json, [
+    String path = 'ProfileFunction',
+  ]) {
+    final m = _obj(json, path);
+    return ProfileFunction(
+      function: _req(m, 'function', path, _str),
+      self: _req(m, 'self', path, _int),
+      samples: _req(m, 'samples', path, _int),
+    );
+  }
+
+  final String function;
+  final int self;
+  final int samples;
 }
 
 /// `Host` of the openlog API contract.
