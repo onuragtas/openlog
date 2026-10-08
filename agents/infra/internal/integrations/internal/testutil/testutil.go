@@ -15,8 +15,17 @@ import (
 )
 
 // Instance returns a test instance.
+// Instance is the settings a collector gets under test.
+//
+// Timeout is generous on purpose. Nothing here asserts on it: the tests that
+// check unreachability dial a closed port and fail at once, and no test server
+// hangs. Its only job is to stop a wedged collector from running to the suite's
+// own timeout -- and at 3 s it did the opposite, failing TestCollectOverRuntimeSocket
+// with "read unix @->…admin.sock: i/o timeout" on a loaded Windows runner, where
+// AF_UNIX is emulated and a reply written immediately still arrived late. A
+// timeout that only fires when the runner is busy measures the runner.
 func Instance() *integrations.Instance {
-	return &integrations.Instance{Timeout: 3 * time.Second, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), HostName: "host-1"}
+	return &integrations.Instance{Timeout: 30 * time.Second, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), HostName: "host-1"}
 }
 
 // Point is a flattened data point.
