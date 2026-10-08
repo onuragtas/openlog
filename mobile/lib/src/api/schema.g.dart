@@ -497,6 +497,58 @@ enum FleetMode {
   }
 }
 
+/// DiscoveredServiceIntegrationStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DiscoveredServiceIntegrationStatus {
+  enabled('enabled'),
+  needsConfiguration('needs_configuration'),
+  error('error'),
+  notAvailable('not_available'),
+  unknown('');
+
+  const DiscoveredServiceIntegrationStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DiscoveredServiceIntegrationStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DiscoveredServiceApmHintStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DiscoveredServiceApmHintStatus {
+  active('active'),
+  notInstalled('not_installed'),
+  unknown('');
+
+  const DiscoveredServiceApmHintStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DiscoveredServiceApmHintStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVisibility of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2456,6 +2508,182 @@ class FleetSummaryLatest {
 
   final FleetReleaseInfo? stable;
   final FleetReleaseInfo? beta;
+}
+
+/// Body of `discovered_service` items (semantic-conventions §3.4). Unknown fields must be ignored; any field may be missing.
+class DiscoveredService {
+  const DiscoveredService({
+    this.ruleId,
+    this.name,
+    this.category,
+    this.instance,
+    this.command,
+    this.displayInstance,
+    this.version,
+    this.matchedBy,
+    this.pids,
+    this.ports,
+    this.systemdUnits,
+    this.services,
+    this.packages,
+    this.containerIds,
+    this.integration,
+    this.apmHint,
+  });
+
+  factory DiscoveredService.fromJson(
+    Object? json, [
+    String path = 'DiscoveredService',
+  ]) {
+    final m = _obj(json, path);
+    return DiscoveredService(
+      ruleId: _opt(m, 'rule_id', path, _str),
+      name: _opt(m, 'name', path, _str),
+      category: _opt(m, 'category', path, _str),
+      instance: _opt(m, 'instance', path, _str),
+      command: _opt(m, 'command', path, _str),
+      displayInstance: _opt(m, 'display_instance', path, _str),
+      version: _opt(m, 'version', path, _str),
+      matchedBy: _opt(
+        m,
+        'matched_by',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      pids: _opt(m, 'pids', path, (v, p) => _list<int>(v, p, _int)),
+      ports: _opt(
+        m,
+        'ports',
+        path,
+        (v, p) => _list<DiscoveredServicePortsItem>(
+          v,
+          p,
+          (v, p) => DiscoveredServicePortsItem.fromJson(v, p),
+        ),
+      ),
+      systemdUnits: _opt(
+        m,
+        'systemd_units',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      services: _opt(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+      packages: _opt(m, 'packages', path, (v, p) => _list<String>(v, p, _str)),
+      containerIds: _opt(
+        m,
+        'container_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      integration: _opt(
+        m,
+        'integration',
+        path,
+        (v, p) => DiscoveredServiceIntegration.fromJson(v, p),
+      ),
+      apmHint: _opt(
+        m,
+        'apm_hint',
+        path,
+        (v, p) => DiscoveredServiceApmHint.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String? ruleId;
+  final String? name;
+  final String? category;
+  final String? instance;
+  final String? command;
+  final String? displayInstance;
+  final String? version;
+  final List<String>? matchedBy;
+  final List<int>? pids;
+  final List<DiscoveredServicePortsItem>? ports;
+  final List<String>? systemdUnits;
+  final List<String>? services;
+  final List<String>? packages;
+  final List<String>? containerIds;
+  final DiscoveredServiceIntegration? integration;
+  final DiscoveredServiceApmHint? apmHint;
+}
+
+/// `DiscoveredServicePortsItem` of the openlog API contract.
+class DiscoveredServicePortsItem {
+  const DiscoveredServicePortsItem({this.protocol, this.address, this.port});
+
+  factory DiscoveredServicePortsItem.fromJson(
+    Object? json, [
+    String path = 'DiscoveredServicePortsItem',
+  ]) {
+    final m = _obj(json, path);
+    return DiscoveredServicePortsItem(
+      protocol: _opt(m, 'protocol', path, _str),
+      address: _opt(m, 'address', path, _str),
+      port: _opt(m, 'port', path, _int),
+    );
+  }
+
+  final String? protocol;
+  final String? address;
+  final int? port;
+}
+
+/// Running integration of the service (semantic-conventions §3.4, §6).
+class DiscoveredServiceIntegration {
+  const DiscoveredServiceIntegration({
+    this.id,
+    this.status,
+    this.error,
+    this.hint,
+    this.endpoint,
+  });
+
+  factory DiscoveredServiceIntegration.fromJson(
+    Object? json, [
+    String path = 'DiscoveredServiceIntegration',
+  ]) {
+    final m = _obj(json, path);
+    return DiscoveredServiceIntegration(
+      id: _opt(m, 'id', path, _str),
+      status: _opt(
+        m,
+        'status',
+        path,
+        DiscoveredServiceIntegrationStatus.fromJson,
+      ),
+      error: _opt(m, 'error', path, _str),
+      hint: _opt(m, 'hint', path, _str),
+      endpoint: _opt(m, 'endpoint', path, _str),
+    );
+  }
+
+  final String? id;
+  final DiscoveredServiceIntegrationStatus? status;
+  final String? error;
+  final String? hint;
+  final String? endpoint;
+}
+
+/// `DiscoveredServiceApmHint` of the openlog API contract.
+class DiscoveredServiceApmHint {
+  const DiscoveredServiceApmHint({this.language, this.agent, this.status});
+
+  factory DiscoveredServiceApmHint.fromJson(
+    Object? json, [
+    String path = 'DiscoveredServiceApmHint',
+  ]) {
+    final m = _obj(json, path);
+    return DiscoveredServiceApmHint(
+      language: _opt(m, 'language', path, _str),
+      agent: _opt(m, 'agent', path, _str),
+      status: _opt(m, 'status', path, DiscoveredServiceApmHintStatus.fromJson),
+    );
+  }
+
+  final String? language;
+  final String? agent;
+  final DiscoveredServiceApmHintStatus? status;
 }
 
 /// `DashboardSummary` of the openlog API contract.

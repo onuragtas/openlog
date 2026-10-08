@@ -424,5 +424,27 @@
   "fleetStateConfirming": "onaylanıyor",
   "fleetStateSucceeded": "başarılı",
   "fleetStateFailed": "başarısız",
-  "fleetStateRolledBack": "geri alındı"
+  "fleetStateRolledBack": "geri alındı",
+  "navIntegrations": "Entegrasyonlar",
+  "integrationsEmpty": "Ajanlar bir entegrasyon keşfetmedi.",
+  "integrationsSearch": "Entegrasyon ara",
+  "integEnabled": "topluyor",
+  "integNeedsConfig": "yapılandırma gerek",
+  "integError": "hata",
+  "integNotAvailable": "kullanılamıyor",
+  "integCounts": "{enabled} topluyor, {needs} yapılandırma bekliyor, {error} hatalı",
+  "@integCounts": {
+    "placeholders": {
+      "enabled": {
+        "type": "int"
+      },
+      "needs": {
+        "type": "int"
+      },
+      "error": {
+        "type": "int"
+      }
+    }
+  },
+  "integConfigureOnWeb": "Yapılandırma webden yapılır; bu ekran ajanların bildirdiğini okur."
 }

@@ -40,6 +40,8 @@ const schemaTargets = <String>[
   'MetricQueryResponse', // and the series to draw
   'RumOverview', // what the browser saw: Core Web Vitals and page views
   'FleetSummary', // how far behind the agents are
+  'DiscoveredService', // the body of a discovered_service inventory item,
+  // which is where an integration reports whether it is collecting
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers

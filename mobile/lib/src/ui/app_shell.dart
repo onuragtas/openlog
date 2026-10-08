@@ -12,6 +12,7 @@ import 'nav_drawer.dart';
 import 'query_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
+import 'integrations_screen.dart';
 import 'inventory_screen.dart';
 import 'metrics_screen.dart';
 import 'rum_screen.dart';
@@ -51,6 +52,7 @@ class _AppShellState extends State<AppShell> {
       l.navContainers,
       l.navCosts,
       l.navKubernetes,
+      l.navIntegrations,
       l.navApm,
       l.navRum,
       l.navDatabases,
@@ -73,6 +75,7 @@ class _AppShellState extends State<AppShell> {
       s.containers.refresh,
       s.costs.refresh,
       s.pods.refresh,
+      s.integrations.refresh,
       s.services.refresh,
       s.rum.refresh,
       s.databases.refresh,
@@ -170,6 +173,10 @@ class _AppShellState extends State<AppShell> {
         emptyTitle: (l) => l.podsEmpty,
         card: podCard,
       ),
+    );
+    add(
+      (active) =>
+          IntegrationsBody(session: session, sections: s, active: active),
     );
     add(
       (_) => ServicesBody(session: session, sections: s, services: s.services),

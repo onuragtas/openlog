@@ -40,6 +40,7 @@ class Sections {
     CostsController? costs,
     InventoryController? inventory,
     FleetController? fleet,
+    IntegrationsController? integrations,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -75,6 +76,7 @@ class Sections {
        costs = costs ?? CostsController(client),
        inventory = inventory ?? InventoryController(client),
        fleet = fleet ?? FleetController(client),
+       integrations = integrations ?? IntegrationsController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -95,6 +97,7 @@ class Sections {
   final CostsController costs;
   final InventoryController inventory;
   final FleetController fleet;
+  final IntegrationsController integrations;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -116,6 +119,7 @@ class Sections {
     containers,
     costs,
     pods,
+    integrations,
     services,
     rum,
     databases,
@@ -294,5 +298,104 @@ class FleetController extends SectionController<FleetHost> {
   Future<List<FleetHost>> fetch() async {
     summary = await client.fleetSummary();
     return (await client.fleetHosts(q: query.trim())).hosts;
+  }
+}
+
+/// One discovered integration instance, with the host it runs on.
+class IntegrationInstance {
+  const IntegrationInstance({
+    required this.hostId,
+    required this.hostName,
+    required this.key,
+    required this.service,
+  });
+
+  final String hostId;
+  final String hostName;
+
+  /// The inventory key, which is the executable path the agent matched.
+  final String key;
+  final DiscoveredService service;
+
+  DiscoveredServiceIntegrationStatus get status =>
+      service.integration?.status ??
+      DiscoveredServiceIntegrationStatus.notAvailable;
+
+  /// nginx, redis, mysql … or, when the agent did not recognise one, the
+  /// discovery rule's own name.
+  String get name =>
+      service.integration?.id ?? service.name ?? service.ruleId ?? key;
+}
+
+/// Integrations, read from the agents' own discovery.
+///
+/// The same inventory search the web's Integrations page is built on: the
+/// `discovered_service` body carries whether the integration is collecting,
+/// so neither side has to derive a status and the two cannot disagree.
+class IntegrationsController extends SectionController<IntegrationInstance> {
+  IntegrationsController(super.client);
+
+  @override
+  Future<List<IntegrationInstance>> fetch() async {
+    final page = await client.inventory(
+      category: 'discovered_service',
+      q: query.trim(),
+      limit: 200,
+    );
+    final out = <IntegrationInstance>[];
+    for (final item in page.items) {
+      // A non-JSON body comes back as a string; the contract says so, and
+      // there is nothing to show for one.
+      final data = item.data;
+      if (data is! Map) continue;
+      out.add(
+        IntegrationInstance(
+          hostId: item.hostId,
+          hostName: item.hostName ?? item.hostId,
+          key: item.key,
+          service: DiscoveredService.fromJson(data),
+        ),
+      );
+    }
+    // What is wrong first, then what needs a hand, then the rest: the two
+    // that want doing are the reason anybody opens this screen.
+    int rank(IntegrationInstance i) => switch (i.status) {
+      DiscoveredServiceIntegrationStatus.error => 0,
+      DiscoveredServiceIntegrationStatus.needsConfiguration => 1,
+      DiscoveredServiceIntegrationStatus.enabled => 2,
+      _ => 3,
+    };
+    out.sort((a, b) {
+      final byStatus = rank(a) - rank(b);
+      if (byStatus != 0) return byStatus;
+      final byName = a.name.compareTo(b.name);
+      return byName != 0 ? byName : a.hostName.compareTo(b.hostName);
+    });
+    return out;
+  }
+
+  /// How many of each status, for the header -- the same counts the web puts
+  /// above its table.
+  ({int enabled, int needsConfiguration, int error, int notAvailable})
+  get counts {
+    var enabled = 0, needs = 0, error = 0, notAvailable = 0;
+    for (final i in items) {
+      switch (i.status) {
+        case DiscoveredServiceIntegrationStatus.enabled:
+          enabled++;
+        case DiscoveredServiceIntegrationStatus.needsConfiguration:
+          needs++;
+        case DiscoveredServiceIntegrationStatus.error:
+          error++;
+        default:
+          notAvailable++;
+      }
+    }
+    return (
+      enabled: enabled,
+      needsConfiguration: needs,
+      error: error,
+      notAvailable: notAvailable,
+    );
   }
 }

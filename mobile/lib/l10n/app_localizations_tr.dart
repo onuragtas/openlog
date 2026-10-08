@@ -945,4 +945,34 @@ class LTr extends L {
 
   @override
   String get fleetStateRolledBack => 'geri alındı';
+
+  @override
+  String get navIntegrations => 'Entegrasyonlar';
+
+  @override
+  String get integrationsEmpty => 'Ajanlar bir entegrasyon keşfetmedi.';
+
+  @override
+  String get integrationsSearch => 'Entegrasyon ara';
+
+  @override
+  String get integEnabled => 'topluyor';
+
+  @override
+  String get integNeedsConfig => 'yapılandırma gerek';
+
+  @override
+  String get integError => 'hata';
+
+  @override
+  String get integNotAvailable => 'kullanılamıyor';
+
+  @override
+  String integCounts(int enabled, int needs, int error) {
+    return '$enabled topluyor, $needs yapılandırma bekliyor, $error hatalı';
+  }
+
+  @override
+  String get integConfigureOnWeb =>
+      'Yapılandırma webden yapılır; bu ekran ajanların bildirdiğini okur.';
 }

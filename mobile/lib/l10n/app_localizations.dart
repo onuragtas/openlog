@@ -1812,6 +1812,60 @@ abstract class L {
   /// In en, this message translates to:
   /// **'rolled back'**
   String get fleetStateRolledBack;
+
+  /// No description provided for @navIntegrations.
+  ///
+  /// In en, this message translates to:
+  /// **'Integrations'**
+  String get navIntegrations;
+
+  /// No description provided for @integrationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The agents have not discovered an integration.'**
+  String get integrationsEmpty;
+
+  /// No description provided for @integrationsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search integrations'**
+  String get integrationsSearch;
+
+  /// No description provided for @integEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'collecting'**
+  String get integEnabled;
+
+  /// No description provided for @integNeedsConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'needs configuration'**
+  String get integNeedsConfig;
+
+  /// No description provided for @integError.
+  ///
+  /// In en, this message translates to:
+  /// **'error'**
+  String get integError;
+
+  /// No description provided for @integNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'not available'**
+  String get integNotAvailable;
+
+  /// No description provided for @integCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'{enabled} collecting, {needs} need configuration, {error} failing'**
+  String integCounts(int enabled, int needs, int error);
+
+  /// No description provided for @integConfigureOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure on the web; this screen reads what the agents report.'**
+  String get integConfigureOnWeb;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

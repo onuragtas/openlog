@@ -94,6 +94,90 @@ Map<String, Object?> spanRow(
 };
 
 void main() {
+  test('integrations read the status the agent reported', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'items': [
+          {
+            'category': 'discovered_service',
+            'key': '/usr/bin/redis-check-rdb',
+            'data': {
+              'rule_id': 'redis',
+              'name': 'redis',
+              'instance': '/usr/bin/redis-check-rdb',
+              'display_instance': '/usr/bin/redis-server',
+              'version': '7.2.4',
+              'integration': {
+                'id': 'redis',
+                'status': 'enabled',
+                'endpoint': '127.0.0.1:6379',
+                'error': '',
+              },
+            },
+            'host_id': 'h1',
+            'host_name': 'web-1',
+          },
+          {
+            'category': 'discovered_service',
+            'key': '/usr/sbin/mysqld',
+            'data': {
+              'rule_id': 'mysql',
+              'integration': {
+                'id': 'mysql',
+                'status': 'needs_configuration',
+                'hint': 'mysql:\n  user: openlog',
+              },
+            },
+            'host_id': 'h1',
+            'host_name': 'web-1',
+          },
+          {
+            'category': 'discovered_service',
+            'key': '/usr/sbin/nginx',
+            'data': {
+              'rule_id': 'nginx',
+              'integration': {
+                'id': 'nginx',
+                'status': 'error',
+                'error': 'connection refused',
+              },
+            },
+            'host_id': 'h2',
+            'host_name': 'web-2',
+          },
+          // A non-JSON body is a string; there is nothing to show for one and
+          // it must not take the whole list down with it.
+          {
+            'category': 'discovered_service',
+            'key': '/opt/weird',
+            'data': 'not json',
+            'host_id': 'h2',
+          },
+        ],
+      }),
+    );
+    addTearDown(server.stop);
+    final c = IntegrationsController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+
+    expect(
+      server.requests.single.query,
+      'category=discovered_service&limit=200',
+    );
+    // What is wrong first, then what needs a hand: those are the two the
+    // person opened this screen for.
+    expect(c.items.map((i) => i.name), ['nginx', 'mysql', 'redis']);
+    expect(c.counts.enabled, 1);
+    expect(c.counts.needsConfiguration, 1);
+    expect(c.counts.error, 1);
+    // The invoked path, not the matched one: redis-server and redis-check-rdb
+    // are the same binary and the key names the wrong one.
+    expect(c.items.last.service.displayInstance, '/usr/bin/redis-server');
+  });
+
   test('the fleet summary and the agents come from one fetch', () async {
     final server = await FakeServer.start((req, seen) {
       if (seen.path.endsWith('/summary')) {

@@ -950,4 +950,35 @@ class LEn extends L {
 
   @override
   String get fleetStateRolledBack => 'rolled back';
+
+  @override
+  String get navIntegrations => 'Integrations';
+
+  @override
+  String get integrationsEmpty =>
+      'The agents have not discovered an integration.';
+
+  @override
+  String get integrationsSearch => 'Search integrations';
+
+  @override
+  String get integEnabled => 'collecting';
+
+  @override
+  String get integNeedsConfig => 'needs configuration';
+
+  @override
+  String get integError => 'error';
+
+  @override
+  String get integNotAvailable => 'not available';
+
+  @override
+  String integCounts(int enabled, int needs, int error) {
+    return '$enabled collecting, $needs need configuration, $error failing';
+  }
+
+  @override
+  String get integConfigureOnWeb =>
+      'Configure on the web; this screen reads what the agents report.';
 }

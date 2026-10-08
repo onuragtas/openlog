@@ -521,5 +521,27 @@
   "fleetStateConfirming": "confirming",
   "fleetStateSucceeded": "succeeded",
   "fleetStateFailed": "failed",
-  "fleetStateRolledBack": "rolled back"
+  "fleetStateRolledBack": "rolled back",
+  "navIntegrations": "Integrations",
+  "integrationsEmpty": "The agents have not discovered an integration.",
+  "integrationsSearch": "Search integrations",
+  "integEnabled": "collecting",
+  "integNeedsConfig": "needs configuration",
+  "integError": "error",
+  "integNotAvailable": "not available",
+  "integCounts": "{enabled} collecting, {needs} need configuration, {error} failing",
+  "@integCounts": {
+    "placeholders": {
+      "enabled": {
+        "type": "int"
+      },
+      "needs": {
+        "type": "int"
+      },
+      "error": {
+        "type": "int"
+      }
+    }
+  },
+  "integConfigureOnWeb": "Configure on the web; this screen reads what the agents report."
 }
