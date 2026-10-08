@@ -469,5 +469,23 @@
         "type": "int"
       }
     }
-  }
+  },
+  "navInventory": "Inventory search",
+  "inventoryEmpty": "Nothing matches in this category.",
+  "inventoryHint": "Find items across all hosts — e.g. which hosts have openssl?",
+  "inventoryCategory": "Category",
+  "inventorySearch": "Key contains",
+  "invOs": "OS",
+  "invHardware": "Hardware",
+  "invPackage": "Packages",
+  "invProcess": "Processes",
+  "invListeningPort": "Listening ports",
+  "invSystemdUnit": "systemd units",
+  "invKernelModule": "Kernel modules",
+  "invNetworkInterface": "Network interfaces",
+  "invMount": "Mounts",
+  "invUser": "Users",
+  "invLaunchdService": "launchd services",
+  "invWindowsService": "Windows services",
+  "invDiscoveredService": "Discovered services"
 }

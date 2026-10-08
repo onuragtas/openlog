@@ -94,6 +94,48 @@ Map<String, Object?> spanRow(
 };
 
 void main() {
+  test('inventory asks for one category and the typed key', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'items': [
+          {
+            'category': 'package',
+            'key': 'openssl',
+            'data': {'version': '3.0.13', 'arch': 'arm64'},
+            'host_id': 'h1',
+            'host_name': 'web-1',
+          },
+          {
+            'category': 'package',
+            'key': 'openssl',
+            // The body is whatever the category defines; the contract does
+            // not type it, and a string body has to survive too.
+            'data': 'openssl 1.1.1 (no package manager)',
+            'host_id': 'h2',
+          },
+        ],
+      }),
+    );
+    addTearDown(server.stop);
+    final c = InventoryController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    c.category = 'package';
+    c.query = ' openssl ';
+    await c.refresh();
+
+    expect(
+      server.requests.single.query,
+      'category=package&limit=100&q=openssl',
+    );
+    expect(c.items.length, 2);
+    expect((c.items.first.data! as Map)['version'], '3.0.13');
+    expect(c.items.last.data, isA<String>());
+    // The host name is omitted when the host has left the hosts table.
+    expect(c.items.last.hostName, isNull);
+  });
+
   test('the traces list asks for requests, not for every span', () async {
     final server = await FakeServer.start(
       (req, _) => writeJson(req, 200, {

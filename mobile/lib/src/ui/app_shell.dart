@@ -11,6 +11,7 @@ import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'query_screen.dart';
 import 'costs_screen.dart';
+import 'inventory_screen.dart';
 import 'metrics_screen.dart';
 import 'rum_screen.dart';
 import 'traces_screen.dart';
@@ -61,6 +62,7 @@ class _AppShellState extends State<AppShell> {
       l.navMetrics,
       l.navQuery,
       l.navDashboards,
+      l.navInventory,
       l.alertsTitle,
       l.navSettings,
     ];
@@ -81,6 +83,7 @@ class _AppShellState extends State<AppShell> {
       s.metrics.refresh,
       null, // The console has nothing to refresh until a query is run.
       s.dashboards.refresh,
+      s.inventory.refresh,
       s.alerts.refresh,
       null, // Settings reads what the session already knows.
     ];
@@ -231,6 +234,9 @@ class _AppShellState extends State<AppShell> {
     add((active) => MetricsBody(session: session, sections: s, active: active));
     add((_) => QueryBody(session: session, query: s.query));
     add((_) => DashboardsBody(session: session, dashboards: s.dashboards));
+    add(
+      (active) => InventoryBody(session: session, sections: s, active: active),
+    );
     add(
       (_) => AlertsBody(
         key: const Key('alerts-body'),

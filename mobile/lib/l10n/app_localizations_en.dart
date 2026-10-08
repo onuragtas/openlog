@@ -829,4 +829,59 @@ class LEn extends L {
   String costsMoreHosts(int count) {
     return 'and $count more';
   }
+
+  @override
+  String get navInventory => 'Inventory search';
+
+  @override
+  String get inventoryEmpty => 'Nothing matches in this category.';
+
+  @override
+  String get inventoryHint =>
+      'Find items across all hosts — e.g. which hosts have openssl?';
+
+  @override
+  String get inventoryCategory => 'Category';
+
+  @override
+  String get inventorySearch => 'Key contains';
+
+  @override
+  String get invOs => 'OS';
+
+  @override
+  String get invHardware => 'Hardware';
+
+  @override
+  String get invPackage => 'Packages';
+
+  @override
+  String get invProcess => 'Processes';
+
+  @override
+  String get invListeningPort => 'Listening ports';
+
+  @override
+  String get invSystemdUnit => 'systemd units';
+
+  @override
+  String get invKernelModule => 'Kernel modules';
+
+  @override
+  String get invNetworkInterface => 'Network interfaces';
+
+  @override
+  String get invMount => 'Mounts';
+
+  @override
+  String get invUser => 'Users';
+
+  @override
+  String get invLaunchdService => 'launchd services';
+
+  @override
+  String get invWindowsService => 'Windows services';
+
+  @override
+  String get invDiscoveredService => 'Discovered services';
 }

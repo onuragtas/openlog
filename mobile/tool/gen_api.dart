@@ -63,6 +63,7 @@ const responseTargets = <String>[
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',
   'get /api/v1/costs/hosts 200 CostHostPage',
+  'get /api/v1/inventory/search 200 InventoryPage',
   'get /api/v1/dashboards 200 DashboardPageList',
   'get /api/v1/hosts 200 HostPage',
   'get /api/v1/containers 200 ContainerPage',
@@ -495,6 +496,24 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
         _emit(name, node);
         return DartType(name, nullable: nullable);
       default:
+        // A node carrying nothing but prose is a value the contract leaves
+        // open on purpose -- an inventory item's `data` is "the category's
+        // JSON body; non-JSON bodies are returned as a string". Only when
+        // there is genuinely no schema in it: a node with a misspelled `type`
+        // still has a key this does not know, and still stops here.
+        const annotations = {
+          'description',
+          'title',
+          'example',
+          'examples',
+          'default',
+          'deprecated',
+          'readOnly',
+          'writeOnly',
+        };
+        if (node.keys.every((k) => annotations.contains(k))) {
+          return const DartType('Object', nullable: true);
+        }
         _fail('unsupported type ${type ?? '(absent)'} at $context');
     }
   }
@@ -707,7 +726,12 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     for (final f in fields) {
       final reader = _reader(f.type.name);
       final fn = f.required && !f.type.nullable ? '_req' : '_opt';
-      b.writeln('      ${f.dart}: $fn(m, \'${f.wire}\', path, $reader),');
+      // `Object` is the one reader that returns a nullable of its own type
+      // (_any is Object? Function(...)), so the type argument has to be
+      // written out: inference takes it from the field and picks Object,
+      // which _any does not fit. An inventory item's `data` is such a field.
+      final targs = f.type.name == 'Object' ? '<Object?>' : '';
+      b.writeln('      ${f.dart}: $fn$targs(m, \'${f.wire}\', path, $reader),');
     }
     b.writeln('    );');
     b.writeln('  }');

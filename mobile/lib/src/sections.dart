@@ -38,6 +38,7 @@ class Sections {
     MetricsController? metrics,
     RumController? rum,
     CostsController? costs,
+    InventoryController? inventory,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -71,6 +72,7 @@ class Sections {
        metrics = metrics ?? MetricsController(client),
        rum = rum ?? RumController(client),
        costs = costs ?? CostsController(client),
+       inventory = inventory ?? InventoryController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -89,6 +91,7 @@ class Sections {
   final MetricsController metrics;
   final RumController rum;
   final CostsController costs;
+  final InventoryController inventory;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -122,6 +125,7 @@ class Sections {
     metrics,
     query,
     dashboards,
+    inventory,
     alerts,
   ];
 
@@ -252,4 +256,18 @@ class RumController extends SectionController<RumApp> {
     apps.sort((a, b) => b.views.compareTo(a.views));
     return apps;
   }
+}
+
+/// Inventory search: one category at a time, across every host.
+class InventoryController extends SectionController<InventorySearchItem> {
+  InventoryController(super.client);
+
+  /// Packages to begin with: "which hosts have openssl" is the question this
+  /// screen exists for, and it is asked about packages far more than about
+  /// mounts.
+  String category = 'package';
+
+  @override
+  Future<List<InventorySearchItem>> fetch() async =>
+      (await client.inventory(category: category, q: query.trim())).items;
 }

@@ -26,6 +26,7 @@ class SectionBody<T> extends StatefulWidget {
     required this.active,
     this.header,
     this.searchable = true,
+    this.searchHint,
   });
 
   final SessionController session;
@@ -42,6 +43,10 @@ class SectionBody<T> extends StatefulWidget {
   /// Whether this section has a search box. The RUM list does not: its
   /// endpoint takes no query, and a box that does nothing is worse than none.
   final bool searchable;
+
+  /// What the search box is actually searching, when "Search" is too vague.
+  /// Inventory searches a key, not the row, and the web says so.
+  final String Function(L)? searchHint;
 
   /// Whether this section is the one on screen. An IndexedStack builds every
   /// child, so without this the app would fire one request per section the
@@ -95,7 +100,7 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
             ? SearchField(
                 fieldKey: Key(widget.searchKey),
                 controller: _search,
-                hint: l.sectionSearch,
+                hint: widget.searchHint?.call(l) ?? l.sectionSearch,
                 onSubmitted: (value) {
                   c.query = value;
                   c.refresh();

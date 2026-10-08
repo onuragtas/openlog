@@ -3399,6 +3399,32 @@ class CostHostPage {
   final CostPricing pricing;
 }
 
+/// `InventoryPage` of the openlog API contract.
+class InventoryPage {
+  const InventoryPage({required this.items});
+
+  factory InventoryPage.fromJson(
+    Object? json, [
+    String path = 'InventoryPage',
+  ]) {
+    final m = _obj(json, path);
+    return InventoryPage(
+      items: _req(
+        m,
+        'items',
+        path,
+        (v, p) => _list<InventorySearchItem>(
+          v,
+          p,
+          (v, p) => InventorySearchItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final List<InventorySearchItem> items;
+}
+
 /// `DashboardPageList` of the openlog API contract.
 class DashboardPageList {
   const DashboardPageList({required this.dashboards});
@@ -3857,6 +3883,37 @@ class CostPricing {
   final String note;
   final bool estimated;
   final String? overrideFile;
+}
+
+/// `InventorySearchItem` of the openlog API contract.
+class InventorySearchItem {
+  const InventorySearchItem({
+    required this.category,
+    required this.key,
+    this.data,
+    required this.hostId,
+    this.hostName,
+  });
+
+  factory InventorySearchItem.fromJson(
+    Object? json, [
+    String path = 'InventorySearchItem',
+  ]) {
+    final m = _obj(json, path);
+    return InventorySearchItem(
+      category: _req(m, 'category', path, _str),
+      key: _req(m, 'key', path, _str),
+      data: _opt<Object?>(m, 'data', path, _any),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _opt(m, 'host_name', path, _str),
+    );
+  }
+
+  final String category;
+  final String key;
+  final Object? data;
+  final String hostId;
+  final String? hostName;
 }
 
 /// `Host` of the openlog API contract.

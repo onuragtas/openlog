@@ -824,4 +824,59 @@ class LTr extends L {
   String costsMoreHosts(int count) {
     return 've $count tane daha';
   }
+
+  @override
+  String get navInventory => 'Envanter arama';
+
+  @override
+  String get inventoryEmpty => 'Bu kategoride eşleşen yok.';
+
+  @override
+  String get inventoryHint =>
+      'Tüm sunucularda öğe bulun — ör. hangi sunucularda openssl var?';
+
+  @override
+  String get inventoryCategory => 'Kategori';
+
+  @override
+  String get inventorySearch => 'Anahtar içerir';
+
+  @override
+  String get invOs => 'İşletim sistemi';
+
+  @override
+  String get invHardware => 'Donanım';
+
+  @override
+  String get invPackage => 'Paketler';
+
+  @override
+  String get invProcess => 'Süreçler';
+
+  @override
+  String get invListeningPort => 'Dinlenen portlar';
+
+  @override
+  String get invSystemdUnit => 'systemd birimleri';
+
+  @override
+  String get invKernelModule => 'Çekirdek modülleri';
+
+  @override
+  String get invNetworkInterface => 'Ağ arayüzleri';
+
+  @override
+  String get invMount => 'Bağlama noktaları';
+
+  @override
+  String get invUser => 'Kullanıcılar';
+
+  @override
+  String get invLaunchdService => 'launchd servisleri';
+
+  @override
+  String get invWindowsService => 'Windows servisleri';
+
+  @override
+  String get invDiscoveredService => 'Keşfedilen servisler';
 }

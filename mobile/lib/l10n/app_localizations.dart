@@ -1584,6 +1584,114 @@ abstract class L {
   /// In en, this message translates to:
   /// **'and {count} more'**
   String costsMoreHosts(int count);
+
+  /// No description provided for @navInventory.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory search'**
+  String get navInventory;
+
+  /// No description provided for @inventoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing matches in this category.'**
+  String get inventoryEmpty;
+
+  /// No description provided for @inventoryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Find items across all hosts — e.g. which hosts have openssl?'**
+  String get inventoryHint;
+
+  /// No description provided for @inventoryCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get inventoryCategory;
+
+  /// No description provided for @inventorySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Key contains'**
+  String get inventorySearch;
+
+  /// No description provided for @invOs.
+  ///
+  /// In en, this message translates to:
+  /// **'OS'**
+  String get invOs;
+
+  /// No description provided for @invHardware.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware'**
+  String get invHardware;
+
+  /// No description provided for @invPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages'**
+  String get invPackage;
+
+  /// No description provided for @invProcess.
+  ///
+  /// In en, this message translates to:
+  /// **'Processes'**
+  String get invProcess;
+
+  /// No description provided for @invListeningPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening ports'**
+  String get invListeningPort;
+
+  /// No description provided for @invSystemdUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd units'**
+  String get invSystemdUnit;
+
+  /// No description provided for @invKernelModule.
+  ///
+  /// In en, this message translates to:
+  /// **'Kernel modules'**
+  String get invKernelModule;
+
+  /// No description provided for @invNetworkInterface.
+  ///
+  /// In en, this message translates to:
+  /// **'Network interfaces'**
+  String get invNetworkInterface;
+
+  /// No description provided for @invMount.
+  ///
+  /// In en, this message translates to:
+  /// **'Mounts'**
+  String get invMount;
+
+  /// No description provided for @invUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get invUser;
+
+  /// No description provided for @invLaunchdService.
+  ///
+  /// In en, this message translates to:
+  /// **'launchd services'**
+  String get invLaunchdService;
+
+  /// No description provided for @invWindowsService.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows services'**
+  String get invWindowsService;
+
+  /// No description provided for @invDiscoveredService.
+  ///
+  /// In en, this message translates to:
+  /// **'Discovered services'**
+  String get invDiscoveredService;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

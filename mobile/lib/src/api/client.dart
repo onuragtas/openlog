@@ -303,6 +303,26 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// Inventory items of one category whose key contains [q], across every
+  /// host's latest snapshot.
+  ///
+  /// The category is required by the server and there is no "all": the
+  /// categories hold different things and a mixed list would be unreadable.
+  Future<InventoryPage> inventory({
+    required String category,
+    String q = '',
+    int limit = 100,
+  }) async {
+    final query = <String, String>{'category': category, 'limit': '$limit'};
+    if (q.trim().isNotEmpty) query['q'] = q.trim();
+    return InventoryPage.fromJson(
+      await _send(
+        'GET',
+        '/api/v1/inventory/search?${Uri(queryParameters: query).query}',
+      ),
+    );
+  }
+
   /// Hosts by cost, most expensive first, with the fleet summary and the
   /// provenance of the prices in the same answer.
   Future<CostHostPage> costHosts({int limit = 50}) async =>

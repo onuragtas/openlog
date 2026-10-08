@@ -372,5 +372,23 @@
         "type": "int"
       }
     }
-  }
+  },
+  "navInventory": "Envanter arama",
+  "inventoryEmpty": "Bu kategoride eşleşen yok.",
+  "inventoryHint": "Tüm sunucularda öğe bulun — ör. hangi sunucularda openssl var?",
+  "inventoryCategory": "Kategori",
+  "inventorySearch": "Anahtar içerir",
+  "invOs": "İşletim sistemi",
+  "invHardware": "Donanım",
+  "invPackage": "Paketler",
+  "invProcess": "Süreçler",
+  "invListeningPort": "Dinlenen portlar",
+  "invSystemdUnit": "systemd birimleri",
+  "invKernelModule": "Çekirdek modülleri",
+  "invNetworkInterface": "Ağ arayüzleri",
+  "invMount": "Bağlama noktaları",
+  "invUser": "Kullanıcılar",
+  "invLaunchdService": "launchd servisleri",
+  "invWindowsService": "Windows servisleri",
+  "invDiscoveredService": "Keşfedilen servisler"
 }
