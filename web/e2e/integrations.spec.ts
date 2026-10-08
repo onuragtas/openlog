@@ -25,16 +25,20 @@ test("integrations: overview, Redis panel with alert preset, needs-configuration
   // Overview: every instance across hosts with status counts and a status filter.
   await expect(page.getByRole("heading", { name: "Integrations", exact: true })).toBeVisible();
   const rows = page.getByTestId("integration-row");
-  await expect(rows).toHaveCount(6);
+  // Seven since b9437fb seeded a php-fpm instance (fixtures.ts); five of them
+  // are enabled. The numbers come from the fixtures, so a fixture that gains
+  // an instance has to change them here too -- which is what went unnoticed
+  // for a fortnight of red long-tests runs.
+  await expect(rows).toHaveCount(7);
   const counts = page.getByTestId("integration-counts");
-  await expect(counts.locator('[data-status="enabled"]')).toContainText("4");
+  await expect(counts.locator('[data-status="enabled"]')).toContainText("5");
   await expect(counts.locator('[data-status="needs_configuration"]')).toContainText("1");
   await counts.locator('[data-status="error"]').click();
   await expect(page).toHaveURL(/status=error/);
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("connection refused");
   await counts.getByRole("button", { name: /^All/ }).click();
-  await expect(rows).toHaveCount(6);
+  await expect(rows).toHaveCount(7);
   await shot(page, "integ-mock-overview");
 
   // Redis panel on web-1: curated charts and recommended alerts.
@@ -87,8 +91,9 @@ test("integrations: overview, Redis panel with alert preset, needs-configuration
   for (const [w, h, name] of [[390, 844, "390"], [768, 1024, "768"]] as const) {
     await page.setViewportSize({ width: w, height: h });
     await page.goto("/integrations");
-    if (w < 768) await expect(page.getByTestId("integration-card")).toHaveCount(6);
-    else await expect(rows).toHaveCount(6);
+    // Seven instances in the fixtures; narrow renders them as cards.
+    if (w < 768) await expect(page.getByTestId("integration-card")).toHaveCount(7);
+    else await expect(rows).toHaveCount(7);
     await shot(page, `integ-mock-overview-${name}`);
     await page.goto(`/hosts/${WEB}/integrations/redis/${encodeURIComponent("/usr/bin/redis-check-rdb")}`);
     await expect(page.getByTestId("integration-chart")).toHaveCount(6);
