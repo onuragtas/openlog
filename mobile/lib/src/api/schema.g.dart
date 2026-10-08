@@ -1046,6 +1046,33 @@ enum VulnSeverity {
   }
 }
 
+/// CostSource of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum CostSource {
+  table('table'),
+  override('override'),
+  fallback('fallback'),
+  none('none'),
+  unknown('');
+
+  const CostSource(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static CostSource fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// `AuthConfig` of the openlog API contract.
 class AuthConfig {
   const AuthConfig({
@@ -3342,6 +3369,36 @@ class RumAppPage {
   final List<RumApp> apps;
 }
 
+/// `CostHostPage` of the openlog API contract.
+class CostHostPage {
+  const CostHostPage({
+    required this.hosts,
+    required this.total,
+    required this.summary,
+    required this.pricing,
+  });
+
+  factory CostHostPage.fromJson(Object? json, [String path = 'CostHostPage']) {
+    final m = _obj(json, path);
+    return CostHostPage(
+      hosts: _req(
+        m,
+        'hosts',
+        path,
+        (v, p) => _list<CostHost>(v, p, (v, p) => CostHost.fromJson(v, p)),
+      ),
+      total: _req(m, 'total', path, _int),
+      summary: _req(m, 'summary', path, (v, p) => CostSummary.fromJson(v, p)),
+      pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
+    );
+  }
+
+  final List<CostHost> hosts;
+  final int total;
+  final CostSummary summary;
+  final CostPricing pricing;
+}
+
 /// `DashboardPageList` of the openlog API contract.
 class DashboardPageList {
   const DashboardPageList({required this.dashboards});
@@ -3647,6 +3704,159 @@ class RumApp {
   final int sessions;
   final double errors;
   final DateTime lastSeen;
+}
+
+/// `CostHost` of the openlog API contract.
+class CostHost {
+  const CostHost({
+    required this.hostId,
+    required this.hostName,
+    required this.provider,
+    required this.instanceType,
+    required this.region,
+    required this.zone,
+    required this.lifecycle,
+    required this.vcpus,
+    required this.memoryBytes,
+    required this.hours,
+    required this.price,
+    required this.total,
+    required this.services,
+    required this.unallocated,
+    required this.unattributed,
+    required this.idle,
+    required this.usedShare,
+    required this.idleShare,
+    required this.oversubscribed,
+    required this.priced,
+  });
+
+  factory CostHost.fromJson(Object? json, [String path = 'CostHost']) {
+    final m = _obj(json, path);
+    return CostHost(
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      provider: _req(m, 'provider', path, _str),
+      instanceType: _req(m, 'instance_type', path, _str),
+      region: _req(m, 'region', path, _str),
+      zone: _req(m, 'zone', path, _str),
+      lifecycle: _req(m, 'lifecycle', path, _str),
+      vcpus: _req(m, 'vcpus', path, _num),
+      memoryBytes: _req(m, 'memory_bytes', path, _num),
+      hours: _req(m, 'hours', path, _num),
+      price: _req(m, 'price', path, (v, p) => CostPrice.fromJson(v, p)),
+      total: _req(m, 'total', path, _num),
+      services: _req(m, 'services', path, _num),
+      unallocated: _req(m, 'unallocated', path, _num),
+      unattributed: _req(m, 'unattributed', path, _num),
+      idle: _req(m, 'idle', path, _num),
+      usedShare: _req(m, 'used_share', path, _num),
+      idleShare: _req(m, 'idle_share', path, _num),
+      oversubscribed: _req(m, 'oversubscribed', path, _bool),
+      priced: _req(m, 'priced', path, _bool),
+    );
+  }
+
+  final String hostId;
+  final String hostName;
+  final String provider;
+  final String instanceType;
+  final String region;
+  final String zone;
+  final String lifecycle;
+  final double vcpus;
+  final double memoryBytes;
+  final double hours;
+  final CostPrice price;
+  final double total;
+  final double services;
+  final double unallocated;
+  final double unattributed;
+  final double idle;
+  final double usedShare;
+  final double idleShare;
+  final bool oversubscribed;
+  final bool priced;
+}
+
+/// Fleet cost over the range. total = services + unallocated + unattributed + idle, always.
+class CostSummary {
+  const CostSummary({
+    required this.currency,
+    required this.total,
+    required this.services,
+    required this.unallocated,
+    required this.unattributed,
+    required this.idle,
+    required this.idleShare,
+    required this.perHour,
+    required this.hosts,
+    required this.pricedHosts,
+    required this.unpricedHosts,
+    required this.hostHours,
+  });
+
+  factory CostSummary.fromJson(Object? json, [String path = 'CostSummary']) {
+    final m = _obj(json, path);
+    return CostSummary(
+      currency: _req(m, 'currency', path, _str),
+      total: _req(m, 'total', path, _num),
+      services: _req(m, 'services', path, _num),
+      unallocated: _req(m, 'unallocated', path, _num),
+      unattributed: _req(m, 'unattributed', path, _num),
+      idle: _req(m, 'idle', path, _num),
+      idleShare: _req(m, 'idle_share', path, _num),
+      perHour: _req(m, 'per_hour', path, _num),
+      hosts: _req(m, 'hosts', path, _int),
+      pricedHosts: _req(m, 'priced_hosts', path, _int),
+      unpricedHosts: _req(m, 'unpriced_hosts', path, _int),
+      hostHours: _req(m, 'host_hours', path, _num),
+    );
+  }
+
+  final String currency;
+  final double total;
+  final double services;
+  final double unallocated;
+  final double unattributed;
+  final double idle;
+  final double idleShare;
+  final double perHour;
+  final int hosts;
+  final int pricedHosts;
+  final int unpricedHosts;
+  final double hostHours;
+}
+
+/// Provenance of every cost number; rendered next to the figures so an estimate is never mistaken for a bill.
+class CostPricing {
+  const CostPricing({
+    required this.version,
+    required this.updated,
+    required this.currency,
+    required this.note,
+    required this.estimated,
+    this.overrideFile,
+  });
+
+  factory CostPricing.fromJson(Object? json, [String path = 'CostPricing']) {
+    final m = _obj(json, path);
+    return CostPricing(
+      version: _req(m, 'version', path, _int),
+      updated: _req(m, 'updated', path, _str),
+      currency: _req(m, 'currency', path, _str),
+      note: _req(m, 'note', path, _str),
+      estimated: _req(m, 'estimated', path, _bool),
+      overrideFile: _opt(m, 'override_file', path, _str),
+    );
+  }
+
+  final int version;
+  final String updated;
+  final String currency;
+  final String note;
+  final bool estimated;
+  final String? overrideFile;
 }
 
 /// `Host` of the openlog API contract.
@@ -4218,6 +4428,31 @@ class DbInstance {
   final double? avgActiveSessions;
   final String topWait;
   final DateTime lastSeen;
+}
+
+/// `CostPrice` of the openlog API contract.
+class CostPrice {
+  const CostPrice({
+    required this.usdPerHour,
+    required this.source,
+    this.note,
+    required this.regionMultiplier,
+  });
+
+  factory CostPrice.fromJson(Object? json, [String path = 'CostPrice']) {
+    final m = _obj(json, path);
+    return CostPrice(
+      usdPerHour: _req(m, 'usd_per_hour', path, _num),
+      source: _req(m, 'source', path, CostSource.fromJson),
+      note: _opt(m, 'note', path, _str),
+      regionMultiplier: _req(m, 'region_multiplier', path, _num),
+    );
+  }
+
+  final double usdPerHour;
+  final CostSource source;
+  final String? note;
+  final double regionMultiplier;
 }
 
 /// How busy the host is over the last 5 minutes, from the same metrics its own charts draw. Every field is null when the host sent no such metric in the window — an agent that stopped reporting must not read as 0 %.

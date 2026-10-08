@@ -525,6 +525,93 @@ void main() {
     expect(server.requests.first.path, '/api/v1/metrics/queue%2Fdepth');
   });
 
+  test('costs off is said as off, not as something gone missing', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 404, {
+        'error': {'message': 'no such endpoint'},
+      }),
+    );
+    addTearDown(server.stop);
+    final c = CostsController(client(server.baseUrl));
+
+    await c.refresh();
+
+    // With OPENLOG_COST_ENABLED=false the server never registers the route,
+    // so this 404 is a statement about the installation. The base class would
+    // have called it "no longer on the server", which is a different claim.
+    expect(c.failure?.kind, 'costsOff');
+  });
+
+  test('the fleet summary and its hosts arrive together', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'hosts': [
+          {
+            'host_id': 'h1',
+            'host_name': 'web-1',
+            'provider': 'aws',
+            'instance_type': 'm5.large',
+            'region': 'eu-central-1',
+            'zone': 'eu-central-1a',
+            'lifecycle': 'on-demand',
+            'vcpus': 2,
+            'memory_bytes': 8589934592,
+            'hours': 24,
+            'price': {
+              'usd_per_hour': 0.096,
+              'source': 'table',
+              'region_multiplier': 1.0,
+            },
+            'total': 2.3,
+            'services': 1.1,
+            'unallocated': 0.2,
+            'unattributed': 0.4,
+            'idle': 0.6,
+            'used_share': 0.74,
+            'idle_share': 0.26,
+            'oversubscribed': false,
+            'priced': true,
+          },
+        ],
+        'total': 12,
+        'summary': {
+          'currency': 'USD',
+          'total': 41.2,
+          'services': 20.0,
+          'unallocated': 4.0,
+          'unattributed': 5.2,
+          'idle': 12.0,
+          'idle_share': 0.29,
+          'per_hour': 1.7,
+          'hosts': 12,
+          'priced_hosts': 11,
+          'unpriced_hosts': 1,
+          'host_hours': 288,
+        },
+        'pricing': {
+          'version': 3,
+          'updated': '2026-09-17',
+          'currency': 'USD',
+          'note': 'discounts, taxes, storage and egress are not included',
+          'estimated': true,
+        },
+      }),
+    );
+    addTearDown(server.stop);
+    final c = CostsController(client(server.baseUrl));
+
+    await c.refresh();
+
+    // One request answers all three: a summary without the hosts behind it is
+    // a number nobody can act on.
+    expect(server.requests.single.path, '/api/v1/costs/hosts');
+    expect(c.value!.summary.total, 41.2);
+    expect(c.value!.hosts.single.hostName, 'web-1');
+    // The list is capped; the screen has to be able to say how many were left.
+    expect(c.value!.total, 12);
+    expect(c.value!.pricing.estimated, isTrue);
+  });
+
   test('a server that is not there reads as unreachable', () async {
     final c = ServiceOverviewController(
       // Nothing listens here, and the controller has to name the address rather

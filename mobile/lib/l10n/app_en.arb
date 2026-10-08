@@ -426,5 +426,48 @@
       }
     }
   },
-  "rumNoPoints": "No page view in the window."
+  "rumNoPoints": "No page view in the window.",
+  "navCosts": "Costs",
+  "costsOff": "This installation does not estimate cost.",
+  "costsTotal": "Total",
+  "costsPerHour": "Per hour",
+  "costsIdle": "Idle",
+  "costsHosts": "Hosts",
+  "costsEstimate": "An estimate from a price table, not a bill. Prices collected {updated}. {note}",
+  "@costsEstimate": {
+    "placeholders": {
+      "updated": {
+        "type": "String"
+      },
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "costsUnpriced": "{count} hosts have no price.",
+  "@costsUnpriced": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "costsHostsTitle": "Most expensive hosts",
+  "costsUsed": "{percent}% used",
+  "@costsUsed": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "costsNoPrice": "no price",
+  "costsMoreHosts": "and {count} more",
+  "@costsMoreHosts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

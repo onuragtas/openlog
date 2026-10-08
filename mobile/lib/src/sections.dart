@@ -37,6 +37,7 @@ class Sections {
     TracesController? traces,
     MetricsController? metrics,
     RumController? rum,
+    CostsController? costs,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -69,6 +70,7 @@ class Sections {
        traces = traces ?? TracesController(client),
        metrics = metrics ?? MetricsController(client),
        rum = rum ?? RumController(client),
+       costs = costs ?? CostsController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -86,6 +88,7 @@ class Sections {
   final TracesController traces;
   final MetricsController metrics;
   final RumController rum;
+  final CostsController costs;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -105,6 +108,7 @@ class Sections {
   List<ChangeNotifier> get all => [
     hosts,
     containers,
+    costs,
     pods,
     services,
     rum,

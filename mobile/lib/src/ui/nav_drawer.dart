@@ -23,6 +23,7 @@ class NavItem {
 final navItems = <NavItem>[
   NavItem(Icons.dns_outlined, (l) => l.navHosts),
   NavItem(Icons.inventory_2_outlined, (l) => l.navContainers),
+  NavItem(Icons.account_balance_wallet_outlined, (l) => l.navCosts),
   NavItem(Icons.hub_outlined, (l) => l.navKubernetes),
   NavItem(Icons.monitor_heart_outlined, (l) => l.navApm),
   NavItem(Icons.devices_outlined, (l) => l.navRum),

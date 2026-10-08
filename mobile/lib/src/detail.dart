@@ -25,6 +25,12 @@ abstract class DetailController<T> extends ChangeNotifier {
   /// not an outage.
   String get forbiddenKind;
 
+  /// A screen whose status codes do not mean what they usually do says so
+  /// here. Costs is the case: with OPENLOG_COST_ENABLED=false the server does
+  /// not register the routes at all, so its 404 means "this installation does
+  /// not estimate cost", not "that record is gone".
+  SessionFailure? kindForStatus(int status) => null;
+
   Future<void> refresh() async {
     if (!loaded) {
       loadingFirst = true;
@@ -37,11 +43,13 @@ abstract class DetailController<T> extends ChangeNotifier {
     } on ApiUnreachable {
       failure = const SessionFailure('unreachable', '');
     } on ApiException catch (e) {
-      failure = switch (e.status) {
-        403 => SessionFailure(forbiddenKind, ''),
-        404 => const SessionFailure('detailGone', ''),
-        _ => SessionFailure('unexpected', e.message),
-      };
+      failure =
+          kindForStatus(e.status) ??
+          switch (e.status) {
+            403 => SessionFailure(forbiddenKind, ''),
+            404 => const SessionFailure('detailGone', ''),
+            _ => SessionFailure('unexpected', e.message),
+          };
     } finally {
       loadingFirst = false;
       notifyListeners();
@@ -331,4 +339,29 @@ class RumOverviewController extends DetailController<RumOverview> {
   List<double> get views => [
     for (final p in value?.points ?? const <RumOverviewPointsItem>[]) p.views,
   ];
+}
+
+/// What the fleet costs: the summary, the hosts behind it, and where the
+/// prices came from.
+///
+/// One request, because `/costs/hosts` answers all three at once -- and on a
+/// phone the summary without the hosts is a number nobody can act on.
+class CostsController extends DetailController<CostHostPage> {
+  CostsController(this._client);
+
+  final OpenlogClient _client;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  SessionFailure? kindForStatus(int status) => status == 404
+      // With OPENLOG_COST_ENABLED=false the server never registers these
+      // routes, so its 404 says the installation does not estimate cost at
+      // all -- not that something went missing.
+      ? const SessionFailure('costsOff', '')
+      : null;
+
+  @override
+  Future<CostHostPage> fetch() => _client.costHosts();
 }

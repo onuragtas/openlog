@@ -303,6 +303,13 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// Hosts by cost, most expensive first, with the fleet summary and the
+  /// provenance of the prices in the same answer.
+  Future<CostHostPage> costHosts({int limit = 50}) async =>
+      CostHostPage.fromJson(
+        await _send('GET', '/api/v1/costs/hosts?limit=$limit'),
+      );
+
   /// Browser applications that reported in the range.
   Future<RumAppPage> rumApps() async =>
       RumAppPage.fromJson(await _send('GET', '/api/v1/rum/apps'));

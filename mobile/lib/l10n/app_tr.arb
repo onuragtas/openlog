@@ -329,5 +329,48 @@
       }
     }
   },
-  "rumNoPoints": "Bu aralıkta sayfa görüntüleme yok."
+  "rumNoPoints": "Bu aralıkta sayfa görüntüleme yok.",
+  "navCosts": "Maliyet",
+  "costsOff": "Bu kurulum maliyet tahmini yapmıyor.",
+  "costsTotal": "Toplam",
+  "costsPerHour": "Saatlik",
+  "costsIdle": "Atıl",
+  "costsHosts": "Sunucu",
+  "costsEstimate": "Fatura değil, fiyat tablosundan tahmin. Fiyatlar {updated} tarihinde toplandı. {note}",
+  "@costsEstimate": {
+    "placeholders": {
+      "updated": {
+        "type": "String"
+      },
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "costsUnpriced": "{count} sunucunun fiyatı yok.",
+  "@costsUnpriced": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "costsHostsTitle": "En pahalı sunucular",
+  "costsUsed": "%{percent} kullanımda",
+  "@costsUsed": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "costsNoPrice": "fiyat yok",
+  "costsMoreHosts": "ve {count} tane daha",
+  "@costsMoreHosts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

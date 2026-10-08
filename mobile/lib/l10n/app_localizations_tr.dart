@@ -780,4 +780,48 @@ class LTr extends L {
 
   @override
   String get rumNoPoints => 'Bu aralıkta sayfa görüntüleme yok.';
+
+  @override
+  String get navCosts => 'Maliyet';
+
+  @override
+  String get costsOff => 'Bu kurulum maliyet tahmini yapmıyor.';
+
+  @override
+  String get costsTotal => 'Toplam';
+
+  @override
+  String get costsPerHour => 'Saatlik';
+
+  @override
+  String get costsIdle => 'Atıl';
+
+  @override
+  String get costsHosts => 'Sunucu';
+
+  @override
+  String costsEstimate(String updated, String note) {
+    return 'Fatura değil, fiyat tablosundan tahmin. Fiyatlar $updated tarihinde toplandı. $note';
+  }
+
+  @override
+  String costsUnpriced(int count) {
+    return '$count sunucunun fiyatı yok.';
+  }
+
+  @override
+  String get costsHostsTitle => 'En pahalı sunucular';
+
+  @override
+  String costsUsed(int percent) {
+    return '%$percent kullanımda';
+  }
+
+  @override
+  String get costsNoPrice => 'fiyat yok';
+
+  @override
+  String costsMoreHosts(int count) {
+    return 've $count tane daha';
+  }
 }

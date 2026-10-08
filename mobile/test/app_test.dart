@@ -1488,8 +1488,10 @@ void main() {
     const markers = <String, Key>{
       'Hosts': Key('hosts-search'),
       'Containers': Key('containers-search'),
+      'Costs': Key('costs-body'),
       'Kubernetes': Key('pods-search'),
       'APM': Key('services-search'),
+      'Browser': Key('rum-body'),
       'Databases': Key('databases-search'),
       'SLOs': Key('slos-search'),
       'Synthetics': Key('synthetics-search'),
@@ -1500,6 +1502,7 @@ void main() {
       'Metrics': Key('metrics-search'),
       'Query': Key('query-text'),
       'Dashboards': Key('dashboards-search'),
+      'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
 
@@ -1571,6 +1574,7 @@ void main() {
     expect(drawn, const [
       'Hosts',
       'Containers',
+      'Costs',
       'Kubernetes',
       'APM',
       'Browser',

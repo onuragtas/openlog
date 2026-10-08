@@ -785,4 +785,48 @@ class LEn extends L {
 
   @override
   String get rumNoPoints => 'No page view in the window.';
+
+  @override
+  String get navCosts => 'Costs';
+
+  @override
+  String get costsOff => 'This installation does not estimate cost.';
+
+  @override
+  String get costsTotal => 'Total';
+
+  @override
+  String get costsPerHour => 'Per hour';
+
+  @override
+  String get costsIdle => 'Idle';
+
+  @override
+  String get costsHosts => 'Hosts';
+
+  @override
+  String costsEstimate(String updated, String note) {
+    return 'An estimate from a price table, not a bill. Prices collected $updated. $note';
+  }
+
+  @override
+  String costsUnpriced(int count) {
+    return '$count hosts have no price.';
+  }
+
+  @override
+  String get costsHostsTitle => 'Most expensive hosts';
+
+  @override
+  String costsUsed(int percent) {
+    return '$percent% used';
+  }
+
+  @override
+  String get costsNoPrice => 'no price';
+
+  @override
+  String costsMoreHosts(int count) {
+    return 'and $count more';
+  }
 }

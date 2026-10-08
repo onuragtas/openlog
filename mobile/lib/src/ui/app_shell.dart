@@ -10,6 +10,7 @@ import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'query_screen.dart';
+import 'costs_screen.dart';
 import 'metrics_screen.dart';
 import 'rum_screen.dart';
 import 'traces_screen.dart';
@@ -46,6 +47,7 @@ class _AppShellState extends State<AppShell> {
     final titles = [
       l.navHosts,
       l.navContainers,
+      l.navCosts,
       l.navKubernetes,
       l.navApm,
       l.navRum,
@@ -65,6 +67,7 @@ class _AppShellState extends State<AppShell> {
     final refreshers = <VoidCallback?>[
       s.hosts.refresh,
       s.containers.refresh,
+      s.costs.refresh,
       s.pods.refresh,
       s.services.refresh,
       s.rum.refresh,
@@ -145,6 +148,14 @@ class _AppShellState extends State<AppShell> {
       ),
     );
     add(
+      (active) => CostsBody(
+        key: const Key('costs-body'),
+        session: session,
+        costs: s.costs,
+        active: active,
+      ),
+    );
+    add(
       (active) => SectionBody(
         session: session,
         controller: s.pods,
@@ -157,7 +168,14 @@ class _AppShellState extends State<AppShell> {
     add(
       (_) => ServicesBody(session: session, sections: s, services: s.services),
     );
-    add((active) => RumBody(session: session, sections: s, active: active));
+    add(
+      (active) => RumBody(
+        key: const Key('rum-body'),
+        session: session,
+        sections: s,
+        active: active,
+      ),
+    );
     add(
       (active) => SectionBody(
         session: session,
@@ -213,7 +231,14 @@ class _AppShellState extends State<AppShell> {
     add((active) => MetricsBody(session: session, sections: s, active: active));
     add((_) => QueryBody(session: session, query: s.query));
     add((_) => DashboardsBody(session: session, dashboards: s.dashboards));
-    add((_) => AlertsBody(session: session, sections: s, alerts: s.alerts));
+    add(
+      (_) => AlertsBody(
+        key: const Key('alerts-body'),
+        session: session,
+        sections: s,
+        alerts: s.alerts,
+      ),
+    );
     add((_) => SettingsBody(session: session));
     return out;
   }

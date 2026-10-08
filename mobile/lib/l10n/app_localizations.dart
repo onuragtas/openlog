@@ -1512,6 +1512,78 @@ abstract class L {
   /// In en, this message translates to:
   /// **'No page view in the window.'**
   String get rumNoPoints;
+
+  /// No description provided for @navCosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Costs'**
+  String get navCosts;
+
+  /// No description provided for @costsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation does not estimate cost.'**
+  String get costsOff;
+
+  /// No description provided for @costsTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get costsTotal;
+
+  /// No description provided for @costsPerHour.
+  ///
+  /// In en, this message translates to:
+  /// **'Per hour'**
+  String get costsPerHour;
+
+  /// No description provided for @costsIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get costsIdle;
+
+  /// No description provided for @costsHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get costsHosts;
+
+  /// No description provided for @costsEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'An estimate from a price table, not a bill. Prices collected {updated}. {note}'**
+  String costsEstimate(String updated, String note);
+
+  /// No description provided for @costsUnpriced.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} hosts have no price.'**
+  String costsUnpriced(int count);
+
+  /// No description provided for @costsHostsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Most expensive hosts'**
+  String get costsHostsTitle;
+
+  /// No description provided for @costsUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% used'**
+  String costsUsed(int percent);
+
+  /// No description provided for @costsNoPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'no price'**
+  String get costsNoPrice;
+
+  /// No description provided for @costsMoreHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'and {count} more'**
+  String costsMoreHosts(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
