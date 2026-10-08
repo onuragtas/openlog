@@ -1914,6 +1914,90 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Shares are of the rows shown, not of the whole window.'**
   String get profileOfShown;
+
+  /// No description provided for @navAddData.
+  ///
+  /// In en, this message translates to:
+  /// **'Add data'**
+  String get navAddData;
+
+  /// No description provided for @addDataOtlpHttp.
+  ///
+  /// In en, this message translates to:
+  /// **'OTLP over HTTP'**
+  String get addDataOtlpHttp;
+
+  /// No description provided for @addDataOtlpGrpc.
+  ///
+  /// In en, this message translates to:
+  /// **'OTLP over gRPC'**
+  String get addDataOtlpGrpc;
+
+  /// No description provided for @addDataCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get addDataCopied;
+
+  /// No description provided for @addDataVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'Versions'**
+  String get addDataVersions;
+
+  /// No description provided for @addDataServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server {version}'**
+  String addDataServer(String version);
+
+  /// No description provided for @addDataAgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Agents pinned to {version} ({channel})'**
+  String addDataAgent(String version, String channel);
+
+  /// No description provided for @addDataAgentDev.
+  ///
+  /// In en, this message translates to:
+  /// **'A development build; the commands pin nothing.'**
+  String get addDataAgentDev;
+
+  /// No description provided for @addDataBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser data'**
+  String get addDataBrowser;
+
+  /// No description provided for @addDataCorsOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed from: {origins}'**
+  String addDataCorsOn(String origins);
+
+  /// No description provided for @addDataCorsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Not configured, so a browser cannot send to this server.'**
+  String get addDataCorsOff;
+
+  /// No description provided for @addDataSourcesOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'The data sources and their install commands are on the web; this screen has what you need to point something at this server.'**
+  String get addDataSourcesOnWeb;
+
+  /// No description provided for @addDataEndpointDerived.
+  ///
+  /// In en, this message translates to:
+  /// **'Derived, not configured — check it is reachable from outside.'**
+  String get addDataEndpointDerived;
+
+  /// No description provided for @onboardingForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading this.'**
+  String get onboardingForbidden;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

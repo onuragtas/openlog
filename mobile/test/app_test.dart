@@ -560,6 +560,11 @@ Future<void> goTo(WidgetTester tester, String label) async {
           .first,
     );
   }
+  // scrollUntilVisible stops as soon as the entry exists in the tree, which
+  // can leave it half off the bottom edge -- and a tap there lands on
+  // whatever is above it. This puts it fully on screen first.
+  await tester.ensureVisible(item);
+  await tester.pumpAndSettle();
   await tester.tap(item);
   await tester.pumpAndSettle();
 }
@@ -1486,6 +1491,7 @@ void main() {
     // shows one section under another's name. Each entry below is checked by
     // something only that section has.
     const markers = <String, Key>{
+      'Add data': Key('add-data-body'),
       'Hosts': Key('hosts-search'),
       'Containers': Key('containers-search'),
       'Costs': Key('costs-body'),
@@ -1576,6 +1582,7 @@ void main() {
     ];
 
     expect(drawn, const [
+      'Add data',
       'Hosts',
       'Containers',
       'Costs',

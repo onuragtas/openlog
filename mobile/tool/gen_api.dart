@@ -40,6 +40,7 @@ const schemaTargets = <String>[
   'MetricQueryResponse', // and the series to draw
   'RumOverview', // what the browser saw: Core Web Vitals and page views
   'FleetSummary', // how far behind the agents are
+  'Onboarding', // the endpoints and versions an SDK has to be pointed at
   'DiscoveredService', // the body of a discovered_service inventory item,
   // which is where an integration reports whether it is collecting
   'DashboardSummary', // the dashboard list

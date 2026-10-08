@@ -398,3 +398,17 @@ class ProfileFunctionsController extends DetailController<ProfileFunctionPage> {
     return total <= 0 ? 0 : f.self / total;
   }
 }
+
+/// Where to send data: the endpoints, the pinned release and what this
+/// installation supports.
+class OnboardingController extends DetailController<Onboarding> {
+  OnboardingController(this._client);
+
+  final OpenlogClient _client;
+
+  @override
+  String get forbiddenKind => 'onboardingForbidden';
+
+  @override
+  Future<Onboarding> fetch() => _client.onboarding();
+}

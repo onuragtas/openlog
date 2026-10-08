@@ -468,5 +468,43 @@
       }
     }
   },
-  "profileOfShown": "Oranlar gösterilen satırlara göre, tüm aralığa göre değil."
+  "profileOfShown": "Oranlar gösterilen satırlara göre, tüm aralığa göre değil.",
+  "navAddData": "Veri ekle",
+  "addDataOtlpHttp": "HTTP üzerinden OTLP",
+  "addDataOtlpGrpc": "gRPC üzerinden OTLP",
+  "addDataCopied": "Kopyalandı",
+  "addDataVersions": "Sürümler",
+  "addDataServer": "Sunucu {version}",
+  "@addDataServer": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "addDataAgent": "Ajanlar {version} sürümüne sabitli ({channel})",
+  "@addDataAgent": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "addDataAgentDev": "Geliştirme derlemesi; komutlar bir sürüme sabitlemiyor.",
+  "addDataBrowser": "Tarayıcı verisi",
+  "addDataCorsOn": "İzin verilenler: {origins}",
+  "@addDataCorsOn": {
+    "placeholders": {
+      "origins": {
+        "type": "String"
+      }
+    }
+  },
+  "addDataCorsOff": "Yapılandırılmamış, yani tarayıcı bu sunucuya gönderemez.",
+  "addDataSourcesOnWeb": "Veri kaynakları ve kurulum komutları webde; bu ekranda bir şeyi bu sunucuya yöneltmek için gerekenler var.",
+  "addDataEndpointDerived": "Yapılandırılmamış, türetilmiş — dışarıdan erişilebildiğini doğrulayın.",
+  "onboardingForbidden": "Rolünüz bunu görmeye izin vermiyor."
 }

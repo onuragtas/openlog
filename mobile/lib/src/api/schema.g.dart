@@ -497,6 +497,56 @@ enum FleetMode {
   }
 }
 
+/// OnboardingReleaseChannel of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OnboardingReleaseChannel {
+  stable('stable'),
+  beta('beta'),
+  unknown('');
+
+  const OnboardingReleaseChannel(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OnboardingReleaseChannel fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OnboardingAuthMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OnboardingAuthMode {
+  postgres('postgres'),
+  static('static'),
+  unknown('');
+
+  const OnboardingAuthMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OnboardingAuthMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DiscoveredServiceIntegrationStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1009,6 +1059,59 @@ enum FleetRolloutState {
       if (e.wire == s) return e;
     }
     return unknown;
+  }
+}
+
+/// OnboardingEndpointSource of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OnboardingEndpointSource {
+  configured('configured'),
+  derivedPublicUrl('derived_public_url'),
+  derivedIngestUrl('derived_ingest_url'),
+  derivedRequest('derived_request'),
+  unknown('');
+
+  const OnboardingEndpointSource(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OnboardingEndpointSource fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OnboardingAgentPackageRegistry of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OnboardingAgentPackageRegistry {
+  available('available'),
+  missing('missing'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const OnboardingAgentPackageRegistry(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static OnboardingAgentPackageRegistry fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
   }
 }
 
@@ -2510,6 +2613,194 @@ class FleetSummaryLatest {
   final FleetReleaseInfo? beta;
 }
 
+/// Inputs of the web UI's "Add data" install commands (GET /api/v1/onboarding). No secrets.
+class Onboarding {
+  const Onboarding({
+    required this.uiUrl,
+    required this.otlpHttp,
+    required this.otlpGrpc,
+    required this.serverVersion,
+    this.agentVersion,
+    required this.releaseChannel,
+    required this.corsEnabled,
+    required this.corsAllowedOrigins,
+    required this.authMode,
+    required this.organization,
+    required this.role,
+    required this.features,
+    this.agentPackages,
+  });
+
+  factory Onboarding.fromJson(Object? json, [String path = 'Onboarding']) {
+    final m = _obj(json, path);
+    return Onboarding(
+      uiUrl: _req(
+        m,
+        'ui_url',
+        path,
+        (v, p) => OnboardingEndpoint.fromJson(v, p),
+      ),
+      otlpHttp: _req(
+        m,
+        'otlp_http',
+        path,
+        (v, p) => OnboardingEndpoint.fromJson(v, p),
+      ),
+      otlpGrpc: _req(
+        m,
+        'otlp_grpc',
+        path,
+        (v, p) => OnboardingEndpoint.fromJson(v, p),
+      ),
+      serverVersion: _req(m, 'server_version', path, _str),
+      agentVersion: _opt(m, 'agent_version', path, _str),
+      releaseChannel: _req(
+        m,
+        'release_channel',
+        path,
+        OnboardingReleaseChannel.fromJson,
+      ),
+      corsEnabled: _req(m, 'cors_enabled', path, _bool),
+      corsAllowedOrigins: _req(
+        m,
+        'cors_allowed_origins',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      authMode: _req(m, 'auth_mode', path, OnboardingAuthMode.fromJson),
+      organization: _req(
+        m,
+        'organization',
+        path,
+        (v, p) => OnboardingOrganization.fromJson(v, p),
+      ),
+      role: _req(m, 'role', path, Role.fromJson),
+      features: _req(
+        m,
+        'features',
+        path,
+        (v, p) => OnboardingFeatures.fromJson(v, p),
+      ),
+      agentPackages: _opt(
+        m,
+        'agent_packages',
+        path,
+        (v, p) => OnboardingAgentPackages.fromJson(v, p),
+      ),
+    );
+  }
+
+  final OnboardingEndpoint uiUrl;
+  final OnboardingEndpoint otlpHttp;
+  final OnboardingEndpoint otlpGrpc;
+  final String serverVersion;
+  final String? agentVersion;
+  final OnboardingReleaseChannel releaseChannel;
+  final bool corsEnabled;
+  final List<String> corsAllowedOrigins;
+  final OnboardingAuthMode authMode;
+  final OnboardingOrganization organization;
+  final Role role;
+  final OnboardingFeatures features;
+  final OnboardingAgentPackages? agentPackages;
+}
+
+/// `OnboardingOrganization` of the openlog API contract.
+class OnboardingOrganization {
+  const OnboardingOrganization({
+    required this.id,
+    required this.tenantId,
+    required this.name,
+  });
+
+  factory OnboardingOrganization.fromJson(
+    Object? json, [
+    String path = 'OnboardingOrganization',
+  ]) {
+    final m = _obj(json, path);
+    return OnboardingOrganization(
+      id: _req(m, 'id', path, _str),
+      tenantId: _req(m, 'tenant_id', path, _str),
+      name: _req(m, 'name', path, _str),
+    );
+  }
+
+  final String id;
+  final String tenantId;
+  final String name;
+}
+
+/// `OnboardingFeatures` of the openlog API contract.
+class OnboardingFeatures {
+  const OnboardingFeatures({
+    required this.licenseKeys,
+    required this.canCreateLicenseKeys,
+    required this.canListLicenseKeys,
+    required this.fleetPhpInstall,
+    required this.tailSampling,
+  });
+
+  factory OnboardingFeatures.fromJson(
+    Object? json, [
+    String path = 'OnboardingFeatures',
+  ]) {
+    final m = _obj(json, path);
+    return OnboardingFeatures(
+      licenseKeys: _req(m, 'license_keys', path, _bool),
+      canCreateLicenseKeys: _req(m, 'can_create_license_keys', path, _bool),
+      canListLicenseKeys: _req(m, 'can_list_license_keys', path, _bool),
+      fleetPhpInstall: _req(m, 'fleet_php_install', path, _bool),
+      tailSampling: _req(m, 'tail_sampling', path, _bool),
+    );
+  }
+
+  final bool licenseKeys;
+  final bool canCreateLicenseKeys;
+  final bool canListLicenseKeys;
+  final bool fleetPhpInstall;
+  final bool tailSampling;
+}
+
+/// `OnboardingAgentPackages` of the openlog API contract.
+class OnboardingAgentPackages {
+  const OnboardingAgentPackages({
+    required this.node,
+    required this.python,
+    required this.dotnet,
+  });
+
+  factory OnboardingAgentPackages.fromJson(
+    Object? json, [
+    String path = 'OnboardingAgentPackages',
+  ]) {
+    final m = _obj(json, path);
+    return OnboardingAgentPackages(
+      node: _req(
+        m,
+        'node',
+        path,
+        (v, p) => OnboardingAgentPackage.fromJson(v, p),
+      ),
+      python: _req(
+        m,
+        'python',
+        path,
+        (v, p) => OnboardingAgentPackage.fromJson(v, p),
+      ),
+      dotnet: _req(
+        m,
+        'dotnet',
+        path,
+        (v, p) => OnboardingAgentPackage.fromJson(v, p),
+      ),
+    );
+  }
+
+  final OnboardingAgentPackage node;
+  final OnboardingAgentPackage python;
+  final OnboardingAgentPackage dotnet;
+}
+
 /// Body of `discovered_service` items (semantic-conventions §3.4). Unknown fields must be ignored; any field may be missing.
 class DiscoveredService {
   const DiscoveredService({
@@ -3631,6 +3922,64 @@ class FleetRollout {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? endedAt;
+}
+
+/// `OnboardingEndpoint` of the openlog API contract.
+class OnboardingEndpoint {
+  const OnboardingEndpoint({required this.url, required this.source});
+
+  factory OnboardingEndpoint.fromJson(
+    Object? json, [
+    String path = 'OnboardingEndpoint',
+  ]) {
+    final m = _obj(json, path);
+    return OnboardingEndpoint(
+      url: _req(m, 'url', path, _str),
+      source: _req(m, 'source', path, OnboardingEndpointSource.fromJson),
+    );
+  }
+
+  final String url;
+  final OnboardingEndpointSource source;
+}
+
+/// `OnboardingAgentPackage` of the openlog API contract.
+class OnboardingAgentPackage {
+  const OnboardingAgentPackage({
+    required this.name,
+    required this.version,
+    required this.registry,
+    required this.registryUrl,
+    required this.releaseAssetUrl,
+    required this.releaseAssetSha256Url,
+  });
+
+  factory OnboardingAgentPackage.fromJson(
+    Object? json, [
+    String path = 'OnboardingAgentPackage',
+  ]) {
+    final m = _obj(json, path);
+    return OnboardingAgentPackage(
+      name: _req(m, 'name', path, _str),
+      version: _req(m, 'version', path, _str),
+      registry: _req(
+        m,
+        'registry',
+        path,
+        OnboardingAgentPackageRegistry.fromJson,
+      ),
+      registryUrl: _req(m, 'registry_url', path, _str),
+      releaseAssetUrl: _req(m, 'release_asset_url', path, _str),
+      releaseAssetSha256Url: _req(m, 'release_asset_sha256_url', path, _str),
+    );
+  }
+
+  final String name;
+  final String version;
+  final OnboardingAgentPackageRegistry registry;
+  final String registryUrl;
+  final String releaseAssetUrl;
+  final String releaseAssetSha256Url;
 }
 
 /// `DashboardVariable` of the openlog API contract.

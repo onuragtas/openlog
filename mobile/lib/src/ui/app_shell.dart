@@ -11,6 +11,7 @@ import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
+import 'add_data_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
 import 'integrations_screen.dart';
@@ -49,6 +50,7 @@ class _AppShellState extends State<AppShell> {
     final session = widget.session;
 
     final titles = [
+      l.navAddData,
       l.navHosts,
       l.navContainers,
       l.navCosts,
@@ -73,6 +75,7 @@ class _AppShellState extends State<AppShell> {
       l.navSettings,
     ];
     final refreshers = <VoidCallback?>[
+      s.onboarding.refresh,
       s.hosts.refresh,
       s.containers.refresh,
       s.costs.refresh,
@@ -139,6 +142,14 @@ class _AppShellState extends State<AppShell> {
     void add(Widget Function(bool active) build) =>
         out.add(build(_tab == out.length));
 
+    add(
+      (active) => AddDataBody(
+        key: const Key('add-data-body'),
+        session: session,
+        onboarding: s.onboarding,
+        active: active,
+      ),
+    );
     add(
       (active) => SectionBody(
         session: session,

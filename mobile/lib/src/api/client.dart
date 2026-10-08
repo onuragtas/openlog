@@ -303,6 +303,14 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// What an SDK or an agent has to be pointed at: the OTLP endpoints, the
+  /// release the install commands pin, and what this installation supports.
+  ///
+  /// Returns no secrets -- the contract says so -- so there is no license key
+  /// on this screen and none to keep off it.
+  Future<Onboarding> onboarding() async =>
+      Onboarding.fromJson(await _send('GET', '/api/v1/onboarding'));
+
   /// What has been profiled: one entry per service, environment and profile
   /// type. The type is never guessed -- nanoseconds and bytes do not add up,
   /// so the other endpoints take the type this list reports.

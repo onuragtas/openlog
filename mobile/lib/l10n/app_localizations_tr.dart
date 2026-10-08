@@ -1005,4 +1005,56 @@ class LTr extends L {
   @override
   String get profileOfShown =>
       'Oranlar gösterilen satırlara göre, tüm aralığa göre değil.';
+
+  @override
+  String get navAddData => 'Veri ekle';
+
+  @override
+  String get addDataOtlpHttp => 'HTTP üzerinden OTLP';
+
+  @override
+  String get addDataOtlpGrpc => 'gRPC üzerinden OTLP';
+
+  @override
+  String get addDataCopied => 'Kopyalandı';
+
+  @override
+  String get addDataVersions => 'Sürümler';
+
+  @override
+  String addDataServer(String version) {
+    return 'Sunucu $version';
+  }
+
+  @override
+  String addDataAgent(String version, String channel) {
+    return 'Ajanlar $version sürümüne sabitli ($channel)';
+  }
+
+  @override
+  String get addDataAgentDev =>
+      'Geliştirme derlemesi; komutlar bir sürüme sabitlemiyor.';
+
+  @override
+  String get addDataBrowser => 'Tarayıcı verisi';
+
+  @override
+  String addDataCorsOn(String origins) {
+    return 'İzin verilenler: $origins';
+  }
+
+  @override
+  String get addDataCorsOff =>
+      'Yapılandırılmamış, yani tarayıcı bu sunucuya gönderemez.';
+
+  @override
+  String get addDataSourcesOnWeb =>
+      'Veri kaynakları ve kurulum komutları webde; bu ekranda bir şeyi bu sunucuya yöneltmek için gerekenler var.';
+
+  @override
+  String get addDataEndpointDerived =>
+      'Yapılandırılmamış, türetilmiş — dışarıdan erişilebildiğini doğrulayın.';
+
+  @override
+  String get onboardingForbidden => 'Rolünüz bunu görmeye izin vermiyor.';
 }

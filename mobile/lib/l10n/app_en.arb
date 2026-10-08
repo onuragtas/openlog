@@ -565,5 +565,43 @@
       }
     }
   },
-  "profileOfShown": "Shares are of the rows shown, not of the whole window."
+  "profileOfShown": "Shares are of the rows shown, not of the whole window.",
+  "navAddData": "Add data",
+  "addDataOtlpHttp": "OTLP over HTTP",
+  "addDataOtlpGrpc": "OTLP over gRPC",
+  "addDataCopied": "Copied",
+  "addDataVersions": "Versions",
+  "addDataServer": "Server {version}",
+  "@addDataServer": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "addDataAgent": "Agents pinned to {version} ({channel})",
+  "@addDataAgent": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "addDataAgentDev": "A development build; the commands pin nothing.",
+  "addDataBrowser": "Browser data",
+  "addDataCorsOn": "Allowed from: {origins}",
+  "@addDataCorsOn": {
+    "placeholders": {
+      "origins": {
+        "type": "String"
+      }
+    }
+  },
+  "addDataCorsOff": "Not configured, so a browser cannot send to this server.",
+  "addDataSourcesOnWeb": "The data sources and their install commands are on the web; this screen has what you need to point something at this server.",
+  "addDataEndpointDerived": "Derived, not configured — check it is reachable from outside.",
+  "onboardingForbidden": "Your role does not allow reading this."
 }

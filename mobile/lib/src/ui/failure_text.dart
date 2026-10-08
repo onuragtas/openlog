@@ -48,6 +48,8 @@ String? failureText(
       return l.alertsAlreadyResolved;
     case 'detailGone':
       return l.detailGone;
+    case 'onboardingForbidden':
+      return l.onboardingForbidden;
     case 'costsOff':
       return l.costsOff;
     case 'queryForbidden':

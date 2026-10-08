@@ -1010,4 +1010,56 @@ class LEn extends L {
   @override
   String get profileOfShown =>
       'Shares are of the rows shown, not of the whole window.';
+
+  @override
+  String get navAddData => 'Add data';
+
+  @override
+  String get addDataOtlpHttp => 'OTLP over HTTP';
+
+  @override
+  String get addDataOtlpGrpc => 'OTLP over gRPC';
+
+  @override
+  String get addDataCopied => 'Copied';
+
+  @override
+  String get addDataVersions => 'Versions';
+
+  @override
+  String addDataServer(String version) {
+    return 'Server $version';
+  }
+
+  @override
+  String addDataAgent(String version, String channel) {
+    return 'Agents pinned to $version ($channel)';
+  }
+
+  @override
+  String get addDataAgentDev =>
+      'A development build; the commands pin nothing.';
+
+  @override
+  String get addDataBrowser => 'Browser data';
+
+  @override
+  String addDataCorsOn(String origins) {
+    return 'Allowed from: $origins';
+  }
+
+  @override
+  String get addDataCorsOff =>
+      'Not configured, so a browser cannot send to this server.';
+
+  @override
+  String get addDataSourcesOnWeb =>
+      'The data sources and their install commands are on the web; this screen has what you need to point something at this server.';
+
+  @override
+  String get addDataEndpointDerived =>
+      'Derived, not configured — check it is reachable from outside.';
+
+  @override
+  String get onboardingForbidden => 'Your role does not allow reading this.';
 }

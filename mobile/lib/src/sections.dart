@@ -42,6 +42,7 @@ class Sections {
     FleetController? fleet,
     IntegrationsController? integrations,
     ProfilesController? profiles,
+    OnboardingController? onboarding,
     DashboardsController? dashboards,
     AlertsController? alerts,
     QueryController? query,
@@ -97,6 +98,7 @@ class Sections {
        fleet = fleet ?? FleetController(client),
        integrations = integrations ?? IntegrationsController(client),
        profiles = profiles ?? ProfilesController(client),
+       onboarding = onboarding ?? OnboardingController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
@@ -119,6 +121,7 @@ class Sections {
   final FleetController fleet;
   final IntegrationsController integrations;
   final ProfilesController profiles;
+  final OnboardingController onboarding;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertsController alerts;
@@ -142,6 +145,7 @@ class Sections {
 
   /// In the order the drawer lists them, which is the web's order.
   List<ChangeNotifier> get all => [
+    onboarding,
     hosts,
     containers,
     costs,

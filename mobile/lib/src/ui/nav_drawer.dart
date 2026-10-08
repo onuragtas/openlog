@@ -21,6 +21,7 @@ class NavItem {
 /// Order taken from web/src/components/AppShell.tsx. The web lists
 /// twenty-three; these are the ones this app has, in the same places.
 final navItems = <NavItem>[
+  NavItem(Icons.add_circle_outline, (l) => l.navAddData),
   NavItem(Icons.dns_outlined, (l) => l.navHosts),
   NavItem(Icons.inventory_2_outlined, (l) => l.navContainers),
   NavItem(Icons.account_balance_wallet_outlined, (l) => l.navCosts),
