@@ -13,6 +13,7 @@ import 'dashboards.dart';
 import 'detail.dart';
 import 'list_controller.dart';
 import 'logs.dart';
+import 'query.dart';
 import 'services.dart';
 
 /// Every section's controller, for one signed-in client.
@@ -35,6 +36,7 @@ class Sections {
     LogsController? logs,
     DashboardsController? dashboards,
     AlertsController? alerts,
+    QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
     ServiceErrorsController Function(String serviceName)? serviceErrors,
@@ -57,6 +59,7 @@ class Sections {
        vulnerabilities = vulnerabilities ?? VulnerabilitiesController(client),
        logs = logs ?? LogsController(client),
        dashboards = dashboards ?? DashboardsController(client),
+       query = query ?? QueryController(client),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -70,6 +73,7 @@ class Sections {
   final VulnerabilitiesController vulnerabilities;
   final LogsController logs;
   final DashboardsController dashboards;
+  final QueryController query;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -93,6 +97,7 @@ class Sections {
     jobs,
     vulnerabilities,
     logs,
+    query,
     dashboards,
     alerts,
   ];

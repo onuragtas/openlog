@@ -664,4 +664,36 @@ class LEn extends L {
 
   @override
   String get traceRoot => 'root';
+
+  @override
+  String get navQuery => 'Query';
+
+  @override
+  String get queryHint => 'SELECT count(*) FROM logs SINCE 1 hour ago';
+
+  @override
+  String get queryRun => 'Run';
+
+  @override
+  String get queryEmpty => 'Write a query and press Run.';
+
+  @override
+  String get queryForbidden => 'Your role does not allow running queries.';
+
+  @override
+  String queryRejected(String detail) {
+    return 'The server would not run that: $detail';
+  }
+
+  @override
+  String queryMeta(int rows, int ms) {
+    return '$rows rows read in $ms ms';
+  }
+
+  @override
+  String get queryRecent => 'Recent';
+
+  @override
+  String get queryTruncated =>
+      'The answer was cut short by the server\'s limit.';
 }

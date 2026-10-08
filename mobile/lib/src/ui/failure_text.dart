@@ -48,6 +48,12 @@ String? failureText(
       return l.alertsAlreadyResolved;
     case 'detailGone':
       return l.detailGone;
+    case 'queryForbidden':
+      return l.queryForbidden;
+    case 'queryRejected':
+      // The server's own words, which on this screen are the useful ones: the
+      // person is writing OQL and the message says what is wrong with it.
+      return l.queryRejected(failure.detail);
     default:
       // The server's own message, which is more useful than anything this app
       // could invent about a problem it does not recognise.

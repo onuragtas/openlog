@@ -248,5 +248,31 @@
     }
   },
   "traceEmpty": "Bu izde span yok.",
-  "traceRoot": "kök"
+  "traceRoot": "kök",
+  "navQuery": "Sorgu",
+  "queryHint": "SELECT count(*) FROM logs SINCE 1 hour ago",
+  "queryRun": "Çalıştır",
+  "queryEmpty": "Bir sorgu yazıp Çalıştır'a basın.",
+  "queryForbidden": "Rolünüz sorgu çalıştırmaya izin vermiyor.",
+  "queryRejected": "Sunucu bunu çalıştırmadı: {detail}",
+  "@queryRejected": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "queryMeta": "{rows} satır okundu, {ms} ms",
+  "@queryMeta": {
+    "placeholders": {
+      "rows": {
+        "type": "int"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "queryRecent": "Son sorgular",
+  "queryTruncated": "Yanıt sunucunun sınırıyla kısaldı."
 }

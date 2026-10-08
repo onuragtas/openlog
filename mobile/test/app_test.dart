@@ -13,6 +13,7 @@ import 'package:openlog_mobile/src/dashboards.dart';
 import 'package:openlog_mobile/src/detail.dart';
 import 'package:openlog_mobile/src/sections.dart';
 import 'package:openlog_mobile/src/logs.dart';
+import 'package:openlog_mobile/src/query.dart';
 import 'package:openlog_mobile/src/services.dart';
 import 'package:openlog_mobile/src/session.dart';
 import 'package:openlog_mobile/src/storage/token_store.dart';
@@ -211,6 +212,7 @@ Widget signedInApp(
   LogsController? logs,
   DashboardsController? dashboards,
   HostsController? hosts,
+  QueryController? query,
   IncidentController Function(String id)? incident,
   ServiceOverviewController Function(String name)? serviceOverview,
   ServiceErrorsController Function(String name)? serviceErrors,
@@ -226,6 +228,7 @@ Widget signedInApp(
     services: services ?? ScriptedServices(),
     logs: logs ?? ScriptedLogs(),
     dashboards: dashboards ?? ScriptedDashboards(),
+    query: query,
     hosts: hosts,
     incident: incident,
     serviceOverview: serviceOverview,
@@ -237,6 +240,60 @@ Widget signedInApp(
 /// Unlike the other scripted controllers this one starts empty and fills on
 /// refresh, because what the errors tab is tested for is *when* it asks: a
 /// fake that pretends to be loaded already would make the question unaskable.
+class ScriptedQuery extends QueryController {
+  ScriptedQuery({this.answer, this.rejectWith})
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'));
+
+  final OqlResult? answer;
+  final String? rejectWith;
+  final calls = <String>[];
+
+  @override
+  Future<void> run(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    calls.add(q);
+    if (rejectWith != null) {
+      failure = SessionFailure('queryRejected', rejectWith!);
+      result = null;
+    } else {
+      result = answer;
+      ran = q;
+      history
+        ..remove(q)
+        ..insert(0, q);
+    }
+    notifyListeners();
+  }
+}
+
+OqlResult singleAnswer(double v) => OqlResult(
+  kind: OqlResultKind.single,
+  eventType: 'logs',
+  columns: const [
+    OqlColumn(name: 'count', function: 'count', type: OqlColumnType.number),
+  ],
+  facets: const [],
+  rows: [
+    OqlRow(facets: const [], values: [v]),
+  ],
+  series: const [],
+  buckets: const [],
+  metadata: OqlMetadata(
+    from: DateTime.utc(2026, 10, 7, 19),
+    to: DateTime.utc(2026, 10, 7, 20),
+    rollup: false,
+    table: 'logs',
+    rowsRead: 1200,
+    bytesRead: 99000,
+    elapsedMs: 34,
+    queries: 1,
+    facetLimit: 20,
+    truncated: false,
+    warnings: const [],
+  ),
+);
+
 class ScriptedErrors extends ServiceErrorsController {
   ScriptedErrors(String name, this._inbox)
     : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1'), name);
@@ -1244,6 +1301,84 @@ void main() {
     expect(hosts.calls, ['refresh']);
   });
 
+  testWidgets('the console runs what was typed and shows what came back', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final q = ScriptedQuery(answer: singleAnswer(42));
+    await tester.pumpWidget(signedInApp(s, query: q));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Query');
+
+    // Nothing is asked until the person asks: a console with no query has no
+    // question to put to the server.
+    expect(q.calls, isEmpty);
+    expect(find.text('Write a query and press Run.'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('query-text')),
+      'SELECT count(*) FROM logs',
+    );
+    await tester.tap(find.byKey(const Key('query-run')));
+    await tester.pumpAndSettle();
+
+    expect(q.calls, ['SELECT count(*) FROM logs']);
+    expect(find.byKey(const Key('single-query')), findsOneWidget);
+    expect(find.text('42'), findsOneWidget);
+    expect(find.text('1200 rows read in 34 ms'), findsOneWidget);
+  });
+
+  testWidgets('a rejected query shows the server reason, not a shrug', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final q = ScriptedQuery(rejectWith: 'unexpected token at position 4');
+    await tester.pumpWidget(signedInApp(s, query: q));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Query');
+
+    await tester.enterText(find.byKey(const Key('query-text')), 'bad');
+    await tester.tap(find.byKey(const Key('query-run')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'The server would not run that: unexpected token at position 4',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a recent query goes back in the box, it does not re-run', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final q = ScriptedQuery(answer: singleAnswer(42));
+    await tester.pumpWidget(signedInApp(s, query: q));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Query');
+
+    await tester.enterText(find.byKey(const Key('query-text')), 'SELECT 1');
+    await tester.tap(find.byKey(const Key('query-run')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('query-text')), '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('history-0')));
+    await tester.pumpAndSettle();
+
+    // Back in the box and not run again: a query that was expensive once
+    // should not run because a thumb brushed the list.
+    expect(q.calls, ['SELECT 1']);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('query-text')))
+          .controller!
+          .text,
+      'SELECT 1',
+    );
+  });
+
   testWidgets('the drawer lists every section the app has, in the web order', (
     tester,
   ) async {
@@ -1252,8 +1387,19 @@ void main() {
     await tester.pumpAndSettle();
     await openDrawer(tester);
 
-    // Same labels and same order as web/src/components/AppShell.tsx.
-    for (final label in const [
+    // The order as it is drawn, not "is each of these somewhere": the list
+    // mirrors web/src/components/AppShell.tsx, and an entry inserted in the
+    // wrong place is exactly the mistake this is here to catch. It also keeps
+    // the drawer honest about the tab indices behind it -- the shell's
+    // IndexedStack is this list, in this order.
+    final drawn = <String>[
+      for (final e in find.byType(InkWell).evaluate())
+        if ((e.widget.key as ValueKey<String>?)?.value case final String k
+            when k.startsWith('nav-'))
+          k.substring(4),
+    ];
+
+    expect(drawn, const [
       'Hosts',
       'Containers',
       'Kubernetes',
@@ -1264,15 +1410,10 @@ void main() {
       'Job monitoring',
       'Vulnerabilities',
       'Logs',
+      'Query',
       'Dashboards',
       'Alerts',
       'Settings',
-    ]) {
-      expect(
-        find.byKey(Key('nav-$label')),
-        findsOneWidget,
-        reason: '$label is missing',
-      );
-    }
+    ]);
   });
 }

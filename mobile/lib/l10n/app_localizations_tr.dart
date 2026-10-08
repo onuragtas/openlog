@@ -660,4 +660,35 @@ class LTr extends L {
 
   @override
   String get traceRoot => 'kök';
+
+  @override
+  String get navQuery => 'Sorgu';
+
+  @override
+  String get queryHint => 'SELECT count(*) FROM logs SINCE 1 hour ago';
+
+  @override
+  String get queryRun => 'Çalıştır';
+
+  @override
+  String get queryEmpty => 'Bir sorgu yazıp Çalıştır\'a basın.';
+
+  @override
+  String get queryForbidden => 'Rolünüz sorgu çalıştırmaya izin vermiyor.';
+
+  @override
+  String queryRejected(String detail) {
+    return 'Sunucu bunu çalıştırmadı: $detail';
+  }
+
+  @override
+  String queryMeta(int rows, int ms) {
+    return '$rows satır okundu, $ms ms';
+  }
+
+  @override
+  String get queryRecent => 'Son sorgular';
+
+  @override
+  String get queryTruncated => 'Yanıt sunucunun sınırıyla kısaldı.';
 }

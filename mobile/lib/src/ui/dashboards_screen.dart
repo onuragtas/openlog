@@ -7,7 +7,7 @@ import '../dashboards.dart';
 import '../session.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
-import 'sparkline.dart';
+import 'oql_view.dart';
 
 class DashboardsBody extends StatefulWidget {
   const DashboardsBody({
@@ -270,87 +270,6 @@ class _WidgetCard extends StatelessWidget {
       );
     }
 
-    switch (r.kind) {
-      case OqlResultKind.single:
-        final v = singleValue(r);
-        return Text(
-          v == null ? l.dashboardNoData : formatNumber(v),
-          key: Key('single-${widget.id}'),
-          style: text.displaySmall?.copyWith(fontWeight: FontWeight.w600),
-        );
-      case OqlResultKind.timeseries:
-        final values = seriesValues(r);
-        if (values.isEmpty) {
-          return Text(l.dashboardNoData, style: text.bodySmall);
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(formatNumber(values.last), style: text.headlineSmall),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 48,
-              child: Sparkline(
-                key: Key('spark-${widget.id}'),
-                values: values,
-                color: scheme.primary,
-              ),
-            ),
-          ],
-        );
-      case OqlResultKind.facets:
-        final rows = facetRows(r);
-        if (rows.isEmpty) return Text(l.dashboardNoData, style: text.bodySmall);
-        final max = rows.first.$2 == 0 ? 1.0 : rows.first.$2;
-        return Column(
-          key: Key('facets-${widget.id}'),
-          children: [
-            // Five, not all: a dashboard facet can have hundreds and the point
-            // on a phone is which few are on top.
-            for (final row in rows.take(5))
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        row.$1.isEmpty ? '—' : row.$1,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodyMedium,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 70,
-                      child: LinearProgressIndicator(
-                        value: (row.$2 / max).clamp(0.0, 1.0),
-                        backgroundColor: scheme.surfaceContainerHighest,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(formatNumber(row.$2), style: text.bodySmall),
-                  ],
-                ),
-              ),
-          ],
-        );
-      case OqlResultKind.histogram:
-      case OqlResultKind.unknown:
-        // A histogram wants width this screen does not have, and a kind this
-        // build does not know cannot be drawn at all. Saying so is better than
-        // an empty card that looks broken.
-        return Text(l.dashboardOnWeb, style: text.bodySmall);
-    }
+    return OqlResultView(result: r, id: widget.id);
   }
-}
-
-/// Compact numbers: a dashboard value is read at a glance, and 1234567 is not.
-String formatNumber(double v) {
-  final abs = v.abs();
-  if (abs >= 1e9) return '${(v / 1e9).toStringAsFixed(1)}B';
-  if (abs >= 1e6) return '${(v / 1e6).toStringAsFixed(1)}M';
-  if (abs >= 1e3) return '${(v / 1e3).toStringAsFixed(1)}k';
-  if (abs >= 10) return v.toStringAsFixed(0);
-  if (abs >= 1) return v.toStringAsFixed(1);
-  return v.toStringAsFixed(2);
 }

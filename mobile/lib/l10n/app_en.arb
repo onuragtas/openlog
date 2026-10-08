@@ -345,5 +345,31 @@
     }
   },
   "traceEmpty": "This trace has no spans.",
-  "traceRoot": "root"
+  "traceRoot": "root",
+  "navQuery": "Query",
+  "queryHint": "SELECT count(*) FROM logs SINCE 1 hour ago",
+  "queryRun": "Run",
+  "queryEmpty": "Write a query and press Run.",
+  "queryForbidden": "Your role does not allow running queries.",
+  "queryRejected": "The server would not run that: {detail}",
+  "@queryRejected": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "queryMeta": "{rows} rows read in {ms} ms",
+  "@queryMeta": {
+    "placeholders": {
+      "rows": {
+        "type": "int"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "queryRecent": "Recent",
+  "queryTruncated": "The answer was cut short by the server's limit."
 }

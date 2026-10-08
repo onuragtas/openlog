@@ -1296,6 +1296,60 @@ abstract class L {
   /// In en, this message translates to:
   /// **'root'**
   String get traceRoot;
+
+  /// No description provided for @navQuery.
+  ///
+  /// In en, this message translates to:
+  /// **'Query'**
+  String get navQuery;
+
+  /// No description provided for @queryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'SELECT count(*) FROM logs SINCE 1 hour ago'**
+  String get queryHint;
+
+  /// No description provided for @queryRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get queryRun;
+
+  /// No description provided for @queryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a query and press Run.'**
+  String get queryEmpty;
+
+  /// No description provided for @queryForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow running queries.'**
+  String get queryForbidden;
+
+  /// No description provided for @queryRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server would not run that: {detail}'**
+  String queryRejected(String detail);
+
+  /// No description provided for @queryMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'{rows} rows read in {ms} ms'**
+  String queryMeta(int rows, int ms);
+
+  /// No description provided for @queryRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get queryRecent;
+
+  /// No description provided for @queryTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'The answer was cut short by the server\'s limit.'**
+  String get queryTruncated;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
