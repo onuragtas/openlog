@@ -29,7 +29,8 @@ CLUSTER=${CLUSTER:-openlog-kind-validate}
 NS=openlog
 IMAGE=${IMAGE:-openlog-kind/openlog:dev}
 AGENT_IMAGE=${AGENT_IMAGE:-openlog-kind/agent:dev}
-MINIO_IMAGE=quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+# Frozen Bitnami archive: MinIO's own registries answer 401 to anonymous pulls (see deploy/compose).
+MINIO_IMAGE=docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r5
 STEPS=${STEPS:-base,failover,tls}
 KIND=${KIND:-kind}
 HELM=${HELM:-helm}
@@ -310,7 +311,6 @@ spec:
         - name: minio
           image: $MINIO_IMAGE
           imagePullPolicy: Never
-          args: [server, /data]
           env: [{name: MINIO_ROOT_USER, value: openlog}, {name: MINIO_ROOT_PASSWORD, value: openlog-minio-secret}]
           readinessProbe: {httpGet: {path: /minio/health/ready, port: 9000}}
           resources: {requests: {cpu: 20m, memory: 128Mi}, limits: {memory: 512Mi}}

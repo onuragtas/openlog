@@ -86,7 +86,9 @@ A move age of `0`, or one not below the retention, leaves the move out for that 
    # optional: OPENLOG_STORAGE_COLD_AFTER_DAYS_LOGS=5 ...
    ```
    Local test instead of a bucket: `COMPOSE_PROFILES=tiered` starts MinIO (bucket `openlog-cold`) and the S3 defaults
-   point at it.
+   point at it. That MinIO is the frozen `bitnamilegacy` archive, because MinIO stopped serving its community image
+   and binaries to anonymous clients; it runs as uid 1001, so a stack created before that change needs its volume
+   handed over once: `docker run --rm -v openlog_minio-data:/d alpine chown -R 1001:0 /d`.
 2. `docker compose up -d --wait` (recreates `clickhouse` with the new config and `openlog`, whose migrations apply the
    moves). Check: `docker compose exec openlog openlog-admin storage status`.
 

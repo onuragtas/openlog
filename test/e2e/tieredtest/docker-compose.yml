@@ -1,6 +1,6 @@
 # Tiered storage test stack (test/e2e/tieredtest, `make tieredtest`; docs/operations/tiered-storage.md).
 #
-#   MinIO        bucket openlog-tiered (created by minio-init), data in a small named volume
+#   MinIO        buckets openlog-tiered + openlog-backup (MINIO_DEFAULT_BUCKETS), data in a small named volume
 #   ClickHouse   cluster `openlog`, 2 shards x 2 replicas, storage policy from deploy/compose/clickhouse/
 #                storage-tiered.xml + storage-tiered-warm.xml (unchanged), one S3 prefix per {shard}/{replica}.
 #                Every replica gets its S3 credentials differently:
@@ -22,8 +22,8 @@ x-clickhouse: &clickhouse
     timeout: 5s
     retries: 60
   depends_on:
-    minio-init:
-      condition: service_completed_successfully
+    minio:
+      condition: service_healthy
 
 x-ch-env: &ch-env
   CLICKHOUSE_USER: openlog
@@ -39,31 +39,29 @@ x-ch-env: &ch-env
   OPENLOG_WARM_PATH: /var/lib/clickhouse-warm/
 
 services:
+  # MinIO stopped publishing its community image and binaries: quay.io/minio/minio and docker.io/minio/minio
+  # answer 401 to anonymous pulls and dl.min.io answers 410, which is what turned long-tests red. bitnamilegacy
+  # is the frozen Bitnami archive of the same MinIO server, still pullable without credentials.
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r5
     hostname: minio
-    command: ["server", "/data"]
     environment:
       MINIO_ROOT_USER: openlog-tiered
       MINIO_ROOT_PASSWORD: openlog-tiered-secret
+      # openlog-backup: target of the BACKUP ... TO S3 / RESTORE phase (TIEREDTEST_BACKUP=1), separate from the
+      # data bucket. The image's setup.sh creates these before the server starts for real, so a healthy container
+      # means the buckets exist -- that is why there is no separate init service any more.
+      MINIO_DEFAULT_BUCKETS: openlog-tiered,openlog-backup
     volumes:
-      - minio-data:/data
+      # MINIO_DATA_DIR default; the path exists in the image as 0:0 drwxrwxr-x, so the volume inherits a mode the
+      # image's uid 1001 (gid 0) can write. A volume at /data would be created root-only and MinIO could not start.
+      - minio-data:/bitnami/minio/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # The image's own readiness check (libminio.sh); curl is in the image, `mc ready` is not guaranteed to be.
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 3s
       timeout: 5s
       retries: 40
-
-  minio-init:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      # openlog-backup: target of the BACKUP ... TO S3 / RESTORE phase (TIEREDTEST_BACKUP=1), separate from the data bucket.
-      - mc alias set l http://minio:9000 openlog-tiered openlog-tiered-secret && mc mb -p l/openlog-tiered l/openlog-backup
-    depends_on:
-      minio:
-        condition: service_healthy
-    restart: "no"
 
   ch-s1r1:
     <<: *clickhouse

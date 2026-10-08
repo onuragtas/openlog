@@ -318,9 +318,10 @@ services:
       - ${OPENLOG_CLICKHOUSE_S3_CREDENTIALS_FILE:-./clickhouse/storage-none.xml}:/etc/clickhouse-server/config.d/zz-openlog-s3-credentials.xml:ro
       - clickhouse-warm:/var/lib/clickhouse-warm
     depends_on:
-      # Only with COMPOSE_PROFILES=tiered (local MinIO).
-      minio-init:
-        condition: service_completed_successfully
+      # Only with COMPOSE_PROFILES=tiered (local MinIO). Healthy means the bucket exists: the image creates
+      # MINIO_DEFAULT_BUCKETS before it starts serving.
+      minio:
+        condition: service_healthy
         required: false
     ulimits:
       nofile:
@@ -578,36 +579,27 @@ services:
   # Optional local S3 for tiered storage (docs/operations/tiered-storage.md): COMPOSE_PROFILES=tiered together with
   # OPENLOG_CLICKHOUSE_STORAGE_CONFIG=./clickhouse/storage-tiered.xml and OPENLOG_STORAGE_TIERING_ENABLED=true.
   # For testing only; production uses a real bucket (OPENLOG_S3_ENDPOINT) without this profile.
+  # MinIO closed anonymous distribution of its community build (quay.io/minio/minio and docker.io/minio/minio
+  # answer 401, dl.min.io answers 410), so this is the frozen Bitnami archive of the same server. It runs as
+  # uid 1001 with its data under /bitnami/minio/data and creates the bucket itself, so there is no init service.
+  # Upgrading an existing `tiered` stack: the named volume keeps its objects but was written by root, so run
+  # `docker run --rm -v openlog_minio-data:/d alpine chown -R 1001:0 /d` once before `up`.
   minio:
     profiles: ["tiered"]
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r5
     hostname: minio
-    command: ["server", "/data"]
     environment:
       MINIO_ROOT_USER: ${OPENLOG_S3_ACCESS_KEY_ID:-openlog-minio}
       MINIO_ROOT_PASSWORD: ${OPENLOG_S3_SECRET_ACCESS_KEY:-openlog-minio-secret}
+      MINIO_DEFAULT_BUCKETS: openlog-cold
     volumes:
-      - minio-data:/data
+      - minio-data:/bitnami/minio/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 30
     restart: unless-stopped
-
-  minio-init:
-    profiles: ["tiered"]
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc mb -p local/openlog-cold
-    environment:
-      MINIO_ROOT_USER: ${OPENLOG_S3_ACCESS_KEY_ID:-openlog-minio}
-      MINIO_ROOT_PASSWORD: ${OPENLOG_S3_SECRET_ACCESS_KEY:-openlog-minio-secret}
-    depends_on:
-      minio:
-        condition: service_healthy
-    restart: "no"
 
   # Optional PNG widget images in scheduled report e-mails (docs/operations/reports.md, D-097):
   #   docker compose --profile renderer up -d --build openlog-renderer
