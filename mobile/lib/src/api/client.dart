@@ -252,6 +252,27 @@ class OpenlogClient {
     );
   }
 
+  /// Dashboards the signed-in person can see.
+  Future<DashboardPageList> dashboards({String q = ''}) async {
+    final query = <String, String>{};
+    if (q.isNotEmpty) query['q'] = q;
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    return DashboardPageList.fromJson(
+      await _send('GET', '/api/v1/dashboards$suffix'),
+    );
+  }
+
+  /// One dashboard with its pages and widgets. The widgets carry queries, not
+  /// data: each one is run separately with [runQuery].
+  Future<Dashboard> dashboard(String id) async => Dashboard.fromJson(
+    await _send('GET', '/api/v1/dashboards/${Uri.encodeComponent(id)}'),
+  );
+
+  /// Runs one OQL query, which is what a dashboard widget holds.
+  Future<OqlResult> runQuery(String query) async => OqlResult.fromJson(
+    await _send('POST', '/api/v1/query', body: {'query': query}),
+  );
+
   /// Ends this device's session on the server and forgets the token here.
   ///
   /// The token is dropped even when the request fails: the person asked to be

@@ -331,4 +331,36 @@ class LTr extends L {
 
   @override
   String get logsNoService => 'servis yok';
+
+  @override
+  String get navDashboards => 'Panolar';
+
+  @override
+  String get dashboardsEmpty => 'Henüz pano yok.';
+
+  @override
+  String get dashboardsSearch => 'Pano ara';
+
+  @override
+  String get dashboardsForbidden => 'Rolünüz panoları görmeye izin vermiyor.';
+
+  @override
+  String dashboardWidgets(int count, int pages) {
+    return '$pages sayfada $count bileşen';
+  }
+
+  @override
+  String get dashboardNoQuery => 'Çalıştırılacak sorgu yok';
+
+  @override
+  String get dashboardWidgetFailed => 'Bu bileşenin sorgusu yanıt vermedi.';
+
+  @override
+  String get dashboardOnWeb => 'En iyi web\'de okunur';
+
+  @override
+  String get dashboardNoData => 'Veri yok';
+
+  @override
+  String get dashboardLoading => 'Sorgular çalışıyor…';
 }

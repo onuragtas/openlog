@@ -30,6 +30,9 @@ const schemaTargets = <String>[
   'Session', // the person's sessions, including other phones
   'AlertIncident', // what the app exists to show: what is firing right now
   'ApmService', // where to look after an alert: which service, how healthy
+  'DashboardSummary', // the dashboard list
+  'Dashboard', // one dashboard with its pages and widgets
+  'OqlResult', // what a widget's query answers
 ];
 
 /// Responses that are declared inline on a path rather than as a named schema.
@@ -39,6 +42,7 @@ const responseTargets = <String>[
   'get /api/v1/alerts/incidents 200 IncidentPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
+  'get /api/v1/dashboards 200 DashboardPageList',
 ];
 
 void main(List<String> args) {
@@ -238,6 +242,17 @@ DateTime _time(Object? v, String path) {
   return t.toUtc();
 }
 
+/// A value the contract itself declares as more than one scalar type.
+Object? _any(Object? v, String path) => v;
+
+/// Lets a reader stand in for an element that may be null.
+///
+/// A null inside a list is not a missing field: an OQL time series writes one
+/// for a bucket with no data, and reading it with the plain number reader threw
+/// where the contract says null is expected.
+T? Function(Object?, String) _nullable<T>(T Function(Object?, String) read) =>
+    (v, p) => v == null ? null : read(v, p);
+
 List<T> _list<T>(Object? v, String path, T Function(Object?, String) read) {
   if (v is! List) {
     throw ApiShapeError(path, 'expected an array, got \${v.runtimeType}');
@@ -311,6 +326,17 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
           ..['type'] = rest.single;
         return (YamlMap.wrap(copy), true);
       }
+      // A union of scalars is the one place a value really is dynamic, and
+      // the contract says so rather than this generator guessing: OqlValue is
+      // `[number, string, "null"]` because a query column holds either. It
+      // reads as Object?, and the app turns it back into something typed where
+      // it is used. Anything wider still stops.
+      const scalars = {'number', 'integer', 'string', 'boolean'};
+      if (rest.every(scalars.contains)) {
+        final copy = Map<String, Object?>.of(node.cast<String, Object?>())
+          ..['type'] = '__any';
+        return (YamlMap.wrap(copy), types.contains('null'));
+      }
       _fail('type union $types is not supported');
     }
     return (node, false);
@@ -364,6 +390,11 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
         return DartType('int', nullable: nullable);
       case 'number':
         return DartType('double', nullable: nullable);
+      case '__any':
+        // Always nullable: a value that may be a number or a string is read
+        // through a type test anyway, and a non-null Object would only move
+        // the null check somewhere worse.
+        return const DartType('Object', nullable: true);
       case 'array':
         final items = node['items'];
         if (items == null) _fail('array without items at $context');
@@ -410,6 +441,8 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
         return DartType('double', nullable: nullable);
       case 'boolean':
         return DartType('bool', nullable: nullable);
+      case '__any':
+        return const DartType('Object', nullable: true);
       case 'array':
         // MetricPoint is `[unix ms, value]`: a 2-tuple written with
         // prefixItems, which Dart has no type for, so it reads as the
@@ -607,16 +640,33 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
         return '_num';
       case 'DateTime':
         return '_time';
+      case 'Object':
+        return '_any';
     }
-    final list = RegExp(r'^List<(.+?)\??>$').firstMatch(type);
+    // The element type keeps its `?`, the reader is chosen without it:
+    // List<Object?> needs _list<Object?> so that _any, which returns Object?,
+    // fits `T Function(Object?, String)`. Dropping the `?` here produced
+    // _list<Object> against a nullable reader and did not compile.
+    String base(String t) => t.endsWith('?') ? t.substring(0, t.length - 1) : t;
+
+    // A nullable element is wrapped rather than read directly: Object? is
+    // already null-tolerant, but `double?` would otherwise be read by _num,
+    // which throws exactly where the contract says null belongs.
+    String element(String t) {
+      final b = base(t);
+      final read = _reader(b);
+      return t.endsWith('?') && b != 'Object' ? '_nullable<$b>($read)' : read;
+    }
+
+    final list = RegExp(r'^List<(.+)>$').firstMatch(type);
     if (list != null) {
       final inner = list.group(1)!;
-      return '(v, p) => _list<$inner>(v, p, ${_reader(inner)})';
+      return '(v, p) => _list<$inner>(v, p, ${element(inner)})';
     }
-    final map = RegExp(r'^Map<String, (.+?)\??>$').firstMatch(type);
+    final map = RegExp(r'^Map<String, (.+)>$').firstMatch(type);
     if (map != null) {
       final inner = map.group(1)!;
-      return '(v, p) => _map<$inner>(v, p, ${_reader(inner)})';
+      return '(v, p) => _map<$inner>(v, p, ${element(inner)})';
     }
     if (_enums.containsKey(type)) return '$type.fromJson';
     return '(v, p) => $type.fromJson(v, p)';

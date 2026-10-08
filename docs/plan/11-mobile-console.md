@@ -245,11 +245,21 @@ bağlı. Mobil için kullanmak, raporlara bağlı bir mekanizmayı amacının d�
 | **2** ✅ | **Alarmlar:** açık/onaylanmış liste, önem rozetleri, onaylama, çekmecede hesap | Uygulamanın var olma sebebi |
 | **3** ✅ | **Servis sağlığı:** APM servis listesi (RED), en kötü üstte, sunucu tarafı arama | Alarmdan sonra bakılan ilk yer |
 | **4** ✅ | Loglar: gövde araması, önem filtresi (varsayılan WARN), son kayıtlar | Teşhis |
-| **5** | Dashboard görüntüleme (salt-okuma) | Tamamlayıcı |
+| **5** ✅ | Pano listesi ve görüntüleme (salt-okuma), **sonuç türüne göre** render | Tamamlayıcı |
 | **6** | **Push bildirim (§6)** | En son |
 
-Faz 2 erken ve tam yapılır. Faz 5 cazip görünür ama en düşük getirili: telefonda dashboard okumak nadiren
-işe yarar, alarm okumak her zaman yarar.
+Faz 2 erken ve tam yapıldı: uygulamanın var olma sebebi o.
+
+**Faz 5 hakkında bir not.** "En düşük getirili" değerlendirmesi doğruydu ve kapsam o yüzden daraltıldı.
+Sözleşme sekiz görselleştirme sunuyor (`line, area, bar, table, billboard, pie, heatmap, markdown`) ama
+sonuç yalnızca dört *türde* geliyor (`single, facets, timeseries, histogram`). Telefonda ayırt edici olan
+türlerdir: bir `facets` sonucu, pano ona ister pasta ister çubuk desin, sıralı bir listedir — ve 390 puanlık
+ekranda sıralı liste hem okunur hem kesindir, beş dilimli pasta ise ikisi de değildir. Bu yüzden widget'lar
+**türe göre** çiziliyor: tek sayı, sparkline, oranlı sıralı liste. Histogram ve tanınmayan tür "en iyi web'de
+okunur" diyor — boş görünen bir kart, bozuk görünen bir karttır.
+
+Sparkline elle çiziliyor (`CustomPainter`): eksen, gösterge, ipucu ve etkileşim içermeyen tek bir çoklu çizgi
+için bir grafik kütüphanesi bağımlılık, lisans ve sürüm yükü demekti.
 
 ## 6. Push bildirim — en son faz
 

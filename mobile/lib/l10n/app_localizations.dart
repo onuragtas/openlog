@@ -672,6 +672,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'no service'**
   String get logsNoService;
+
+  /// No description provided for @navDashboards.
+  ///
+  /// In en, this message translates to:
+  /// **'Dashboards'**
+  String get navDashboards;
+
+  /// No description provided for @dashboardsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No dashboard yet.'**
+  String get dashboardsEmpty;
+
+  /// No description provided for @dashboardsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search dashboards'**
+  String get dashboardsSearch;
+
+  /// No description provided for @dashboardsForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading dashboards.'**
+  String get dashboardsForbidden;
+
+  /// No description provided for @dashboardWidgets.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} widgets on {pages} pages'**
+  String dashboardWidgets(int count, int pages);
+
+  /// No description provided for @dashboardNoQuery.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to run'**
+  String get dashboardNoQuery;
+
+  /// No description provided for @dashboardWidgetFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This widget\'s query did not answer.'**
+  String get dashboardWidgetFailed;
+
+  /// No description provided for @dashboardOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Best read on the web'**
+  String get dashboardOnWeb;
+
+  /// No description provided for @dashboardNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get dashboardNoData;
+
+  /// No description provided for @dashboardLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Running the queries…'**
+  String get dashboardLoading;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

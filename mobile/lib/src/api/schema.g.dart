@@ -79,6 +79,17 @@ DateTime _time(Object? v, String path) {
   return t.toUtc();
 }
 
+/// A value the contract itself declares as more than one scalar type.
+Object? _any(Object? v, String path) => v;
+
+/// Lets a reader stand in for an element that may be null.
+///
+/// A null inside a list is not a missing field: an OQL time series writes one
+/// for a bucket with no data, and reading it with the plain number reader threw
+/// where the contract says null is expected.
+T? Function(Object?, String) _nullable<T>(T Function(Object?, String) read) =>
+    (v, p) => v == null ? null : read(v, p);
+
 List<T> _list<T>(Object? v, String path, T Function(Object?, String) read) {
   if (v is! List) {
     throw ApiShapeError(path, 'expected an array, got ${v.runtimeType}');
@@ -369,6 +380,58 @@ enum AlertResolveReason {
   }
 }
 
+/// DashboardVisibility of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DashboardVisibility {
+  org('org'),
+  private('private'),
+  unknown('');
+
+  const DashboardVisibility(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DashboardVisibility fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OqlResultKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OqlResultKind {
+  single('single'),
+  facets('facets'),
+  timeseries('timeseries'),
+  histogram('histogram'),
+  unknown('');
+
+  const OqlResultKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OqlResultKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// UserLanguage of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -387,6 +450,143 @@ enum UserLanguage {
   final String wire;
 
   static UserLanguage fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DashboardVariableType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DashboardVariableType {
+  query('query'),
+  list('list'),
+  text('text'),
+  unknown('');
+
+  const DashboardVariableType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DashboardVariableType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OqlColumnType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OqlColumnType {
+  number('number'),
+  string('string'),
+  unknown('');
+
+  const OqlColumnType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OqlColumnType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DashboardVisualization of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DashboardVisualization {
+  line('line'),
+  area('area'),
+  bar('bar'),
+  table('table'),
+  billboard('billboard'),
+  pie('pie'),
+  heatmap('heatmap'),
+  markdown('markdown'),
+  unknown('');
+
+  const DashboardVisualization(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DashboardVisualization fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DashboardUnit of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DashboardUnit {
+  empty(''),
+  number('number'),
+  percent('percent'),
+  bytes('bytes'),
+  bytesPerSec('bytesPerSec'),
+  ms('ms'),
+  s('s'),
+  unknown('');
+
+  const DashboardUnit(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DashboardUnit fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DashboardThresholdSeverity of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DashboardThresholdSeverity {
+  warning('warning'),
+  critical('critical'),
+  unknown('');
+
+  const DashboardThresholdSeverity(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DashboardThresholdSeverity fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -719,6 +919,177 @@ class ApmService {
   final List<List<double>> sparkline;
 }
 
+/// `DashboardSummary` of the openlog API contract.
+class DashboardSummary {
+  const DashboardSummary({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.visibility,
+    required this.pageCount,
+    required this.widgetCount,
+    required this.createdByEmail,
+    required this.updatedAt,
+    required this.canEdit,
+  });
+
+  factory DashboardSummary.fromJson(
+    Object? json, [
+    String path = 'DashboardSummary',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardSummary(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      visibility: _req(m, 'visibility', path, DashboardVisibility.fromJson),
+      pageCount: _req(m, 'page_count', path, _int),
+      widgetCount: _req(m, 'widget_count', path, _int),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      canEdit: _req(m, 'can_edit', path, _bool),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String description;
+  final DashboardVisibility visibility;
+  final int pageCount;
+  final int widgetCount;
+  final String createdByEmail;
+  final DateTime updatedAt;
+  final bool canEdit;
+}
+
+/// `Dashboard` of the openlog API contract.
+class Dashboard {
+  const Dashboard({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.visibility,
+    required this.version,
+    required this.variables,
+    required this.pages,
+    this.createdByUserId,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.canEdit,
+  });
+
+  factory Dashboard.fromJson(Object? json, [String path = 'Dashboard']) {
+    final m = _obj(json, path);
+    return Dashboard(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      visibility: _req(m, 'visibility', path, DashboardVisibility.fromJson),
+      version: _req(m, 'version', path, _int),
+      variables: _req(
+        m,
+        'variables',
+        path,
+        (v, p) => _list<DashboardVariable>(
+          v,
+          p,
+          (v, p) => DashboardVariable.fromJson(v, p),
+        ),
+      ),
+      pages: _req(
+        m,
+        'pages',
+        path,
+        (v, p) =>
+            _list<DashboardPage>(v, p, (v, p) => DashboardPage.fromJson(v, p)),
+      ),
+      createdByUserId: _opt(m, 'created_by_user_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      canEdit: _req(m, 'can_edit', path, _bool),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String description;
+  final DashboardVisibility visibility;
+  final int version;
+  final List<DashboardVariable> variables;
+  final List<DashboardPage> pages;
+  final String? createdByUserId;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final bool canEdit;
+}
+
+/// `OqlResult` of the openlog API contract.
+class OqlResult {
+  const OqlResult({
+    required this.kind,
+    required this.eventType,
+    required this.columns,
+    required this.facets,
+    required this.rows,
+    required this.series,
+    required this.buckets,
+    this.compare,
+    required this.metadata,
+  });
+
+  factory OqlResult.fromJson(Object? json, [String path = 'OqlResult']) {
+    final m = _obj(json, path);
+    return OqlResult(
+      kind: _req(m, 'kind', path, OqlResultKind.fromJson),
+      eventType: _req(m, 'event_type', path, _str),
+      columns: _req(
+        m,
+        'columns',
+        path,
+        (v, p) => _list<OqlColumn>(v, p, (v, p) => OqlColumn.fromJson(v, p)),
+      ),
+      facets: _req(m, 'facets', path, (v, p) => _list<String>(v, p, _str)),
+      rows: _req(
+        m,
+        'rows',
+        path,
+        (v, p) => _list<OqlRow>(v, p, (v, p) => OqlRow.fromJson(v, p)),
+      ),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<OqlSeries>(v, p, (v, p) => OqlSeries.fromJson(v, p)),
+      ),
+      buckets: _req(
+        m,
+        'buckets',
+        path,
+        (v, p) => _list<OqlHistogramBucket>(
+          v,
+          p,
+          (v, p) => OqlHistogramBucket.fromJson(v, p),
+        ),
+      ),
+      compare: _opt(m, 'compare', path, (v, p) => OqlCompare.fromJson(v, p)),
+      metadata: _req(m, 'metadata', path, (v, p) => OqlMetadata.fromJson(v, p)),
+    );
+  }
+
+  final OqlResultKind kind;
+  final String eventType;
+  final List<OqlColumn> columns;
+  final List<String> facets;
+  final List<OqlRow> rows;
+  final List<OqlSeries> series;
+  final List<OqlHistogramBucket> buckets;
+  final OqlCompare? compare;
+  final OqlMetadata metadata;
+}
+
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -770,6 +1141,413 @@ class OrgRef {
   final String tenantId;
   final String name;
   final Role? role;
+}
+
+/// `DashboardVariable` of the openlog API contract.
+class DashboardVariable {
+  const DashboardVariable({
+    required this.name,
+    required this.label,
+    required this.type,
+    required this.query,
+    required this.values,
+    required this.defaultValue,
+    required this.multi,
+    required this.includeAll,
+  });
+
+  factory DashboardVariable.fromJson(
+    Object? json, [
+    String path = 'DashboardVariable',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardVariable(
+      name: _req(m, 'name', path, _str),
+      label: _req(m, 'label', path, _str),
+      type: _req(m, 'type', path, DashboardVariableType.fromJson),
+      query: _req(m, 'query', path, _str),
+      values: _req(m, 'values', path, (v, p) => _list<String>(v, p, _str)),
+      defaultValue: _req(
+        m,
+        'default',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      multi: _req(m, 'multi', path, _bool),
+      includeAll: _req(m, 'include_all', path, _bool),
+    );
+  }
+
+  final String name;
+  final String label;
+  final DashboardVariableType type;
+  final String query;
+  final List<String> values;
+  final List<String> defaultValue;
+  final bool multi;
+  final bool includeAll;
+}
+
+/// `DashboardPage` of the openlog API contract.
+class DashboardPage {
+  const DashboardPage({
+    required this.id,
+    required this.name,
+    required this.widgets,
+  });
+
+  factory DashboardPage.fromJson(
+    Object? json, [
+    String path = 'DashboardPage',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardPage(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      widgets: _req(
+        m,
+        'widgets',
+        path,
+        (v, p) => _list<DashboardWidget>(
+          v,
+          p,
+          (v, p) => DashboardWidget.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final String id;
+  final String name;
+  final List<DashboardWidget> widgets;
+}
+
+/// `OqlColumn` of the openlog API contract.
+class OqlColumn {
+  const OqlColumn({
+    required this.name,
+    required this.function,
+    required this.type,
+  });
+
+  factory OqlColumn.fromJson(Object? json, [String path = 'OqlColumn']) {
+    final m = _obj(json, path);
+    return OqlColumn(
+      name: _req(m, 'name', path, _str),
+      function: _req(m, 'function', path, _str),
+      type: _req(m, 'type', path, OqlColumnType.fromJson),
+    );
+  }
+
+  final String name;
+  final String function;
+  final OqlColumnType type;
+}
+
+/// `OqlRow` of the openlog API contract.
+class OqlRow {
+  const OqlRow({required this.facets, required this.values});
+
+  factory OqlRow.fromJson(Object? json, [String path = 'OqlRow']) {
+    final m = _obj(json, path);
+    return OqlRow(
+      facets: _req(m, 'facets', path, (v, p) => _list<String>(v, p, _str)),
+      values: _req(m, 'values', path, (v, p) => _list<Object?>(v, p, _any)),
+    );
+  }
+
+  final List<String> facets;
+  final List<Object?> values;
+}
+
+/// `OqlSeries` of the openlog API contract.
+class OqlSeries {
+  const OqlSeries({
+    required this.facets,
+    required this.column,
+    required this.points,
+  });
+
+  factory OqlSeries.fromJson(Object? json, [String path = 'OqlSeries']) {
+    final m = _obj(json, path);
+    return OqlSeries(
+      facets: _req(m, 'facets', path, (v, p) => _list<String>(v, p, _str)),
+      column: _req(m, 'column', path, _int),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<List<double?>>(
+          v,
+          p,
+          (v, p) => _list<double?>(v, p, _nullable<double>(_num)),
+        ),
+      ),
+    );
+  }
+
+  final List<String> facets;
+  final int column;
+  final List<List<double?>> points;
+}
+
+/// `OqlHistogramBucket` of the openlog API contract.
+class OqlHistogramBucket {
+  const OqlHistogramBucket({
+    required this.from,
+    required this.to,
+    required this.count,
+  });
+
+  factory OqlHistogramBucket.fromJson(
+    Object? json, [
+    String path = 'OqlHistogramBucket',
+  ]) {
+    final m = _obj(json, path);
+    return OqlHistogramBucket(
+      from: _req(m, 'from', path, _num),
+      to: _req(m, 'to', path, _num),
+      count: _req(m, 'count', path, _num),
+    );
+  }
+
+  final double from;
+  final double to;
+  final double count;
+}
+
+/// `OqlCompare` of the openlog API contract.
+class OqlCompare {
+  const OqlCompare({
+    required this.offsetSeconds,
+    required this.rows,
+    required this.series,
+    required this.buckets,
+  });
+
+  factory OqlCompare.fromJson(Object? json, [String path = 'OqlCompare']) {
+    final m = _obj(json, path);
+    return OqlCompare(
+      offsetSeconds: _req(m, 'offset_seconds', path, _int),
+      rows: _req(
+        m,
+        'rows',
+        path,
+        (v, p) => _list<OqlRow>(v, p, (v, p) => OqlRow.fromJson(v, p)),
+      ),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<OqlSeries>(v, p, (v, p) => OqlSeries.fromJson(v, p)),
+      ),
+      buckets: _req(
+        m,
+        'buckets',
+        path,
+        (v, p) => _list<OqlHistogramBucket>(
+          v,
+          p,
+          (v, p) => OqlHistogramBucket.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final int offsetSeconds;
+  final List<OqlRow> rows;
+  final List<OqlSeries> series;
+  final List<OqlHistogramBucket> buckets;
+}
+
+/// `OqlMetadata` of the openlog API contract.
+class OqlMetadata {
+  const OqlMetadata({
+    required this.from,
+    required this.to,
+    this.bucketSeconds,
+    required this.rollup,
+    required this.table,
+    required this.rowsRead,
+    required this.bytesRead,
+    required this.elapsedMs,
+    required this.queries,
+    required this.facetLimit,
+    required this.truncated,
+    required this.warnings,
+    this.ignoredFilters,
+  });
+
+  factory OqlMetadata.fromJson(Object? json, [String path = 'OqlMetadata']) {
+    final m = _obj(json, path);
+    return OqlMetadata(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      bucketSeconds: _opt(m, 'bucket_seconds', path, _int),
+      rollup: _req(m, 'rollup', path, _bool),
+      table: _req(m, 'table', path, _str),
+      rowsRead: _req(m, 'rows_read', path, _int),
+      bytesRead: _req(m, 'bytes_read', path, _int),
+      elapsedMs: _req(m, 'elapsed_ms', path, _int),
+      queries: _req(m, 'queries', path, _int),
+      facetLimit: _req(m, 'facet_limit', path, _int),
+      truncated: _req(m, 'truncated', path, _bool),
+      warnings: _req(m, 'warnings', path, (v, p) => _list<String>(v, p, _str)),
+      ignoredFilters: _opt(
+        m,
+        'ignored_filters',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final DateTime from;
+  final DateTime to;
+  final int? bucketSeconds;
+  final bool rollup;
+  final String table;
+  final int rowsRead;
+  final int bytesRead;
+  final int elapsedMs;
+  final int queries;
+  final int facetLimit;
+  final bool truncated;
+  final List<String> warnings;
+  final List<String>? ignoredFilters;
+}
+
+/// `DashboardWidget` of the openlog API contract.
+class DashboardWidget {
+  const DashboardWidget({
+    required this.id,
+    required this.title,
+    required this.visualization,
+    required this.layout,
+    required this.query,
+    required this.markdown,
+    required this.unit,
+    required this.thresholds,
+    required this.options,
+  });
+
+  factory DashboardWidget.fromJson(
+    Object? json, [
+    String path = 'DashboardWidget',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardWidget(
+      id: _req(m, 'id', path, _str),
+      title: _req(m, 'title', path, _str),
+      visualization: _req(
+        m,
+        'visualization',
+        path,
+        DashboardVisualization.fromJson,
+      ),
+      layout: _req(
+        m,
+        'layout',
+        path,
+        (v, p) => DashboardWidgetLayout.fromJson(v, p),
+      ),
+      query: _req(m, 'query', path, _str),
+      markdown: _req(m, 'markdown', path, _str),
+      unit: _req(m, 'unit', path, DashboardUnit.fromJson),
+      thresholds: _req(
+        m,
+        'thresholds',
+        path,
+        (v, p) => _list<DashboardThreshold>(
+          v,
+          p,
+          (v, p) => DashboardThreshold.fromJson(v, p),
+        ),
+      ),
+      options: _req(
+        m,
+        'options',
+        path,
+        (v, p) => DashboardWidgetOptions.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String id;
+  final String title;
+  final DashboardVisualization visualization;
+  final DashboardWidgetLayout layout;
+  final String query;
+  final String markdown;
+  final DashboardUnit unit;
+  final List<DashboardThreshold> thresholds;
+  final DashboardWidgetOptions options;
+}
+
+/// `DashboardWidgetLayout` of the openlog API contract.
+class DashboardWidgetLayout {
+  const DashboardWidgetLayout({
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+  });
+
+  factory DashboardWidgetLayout.fromJson(
+    Object? json, [
+    String path = 'DashboardWidgetLayout',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardWidgetLayout(
+      x: _req(m, 'x', path, _int),
+      y: _req(m, 'y', path, _int),
+      w: _req(m, 'w', path, _int),
+      h: _req(m, 'h', path, _int),
+    );
+  }
+
+  final int x;
+  final int y;
+  final int w;
+  final int h;
+}
+
+/// `DashboardThreshold` of the openlog API contract.
+class DashboardThreshold {
+  const DashboardThreshold({required this.value, required this.severity});
+
+  factory DashboardThreshold.fromJson(
+    Object? json, [
+    String path = 'DashboardThreshold',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardThreshold(
+      value: _req(m, 'value', path, _num),
+      severity: _req(m, 'severity', path, DashboardThresholdSeverity.fromJson),
+    );
+  }
+
+  final double value;
+  final DashboardThresholdSeverity severity;
+}
+
+/// `DashboardWidgetOptions` of the openlog API contract.
+class DashboardWidgetOptions {
+  const DashboardWidgetOptions({this.stacked, this.legend});
+
+  factory DashboardWidgetOptions.fromJson(
+    Object? json, [
+    String path = 'DashboardWidgetOptions',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardWidgetOptions(
+      stacked: _opt(m, 'stacked', path, _bool),
+      legend: _opt(m, 'legend', path, _bool),
+    );
+  }
+
+  final bool? stacked;
+  final bool? legend;
 }
 
 /// `DeviceSession` of the openlog API contract.
@@ -898,6 +1676,32 @@ class LogPage {
 
   final List<LogRecord> logs;
   final String? nextCursor;
+}
+
+/// `DashboardPageList` of the openlog API contract.
+class DashboardPageList {
+  const DashboardPageList({required this.dashboards});
+
+  factory DashboardPageList.fromJson(
+    Object? json, [
+    String path = 'DashboardPageList',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardPageList(
+      dashboards: _req(
+        m,
+        'dashboards',
+        path,
+        (v, p) => _list<DashboardSummary>(
+          v,
+          p,
+          (v, p) => DashboardSummary.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final List<DashboardSummary> dashboards;
 }
 
 /// `LogRecord` of the openlog API contract.

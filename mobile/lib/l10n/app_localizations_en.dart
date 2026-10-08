@@ -333,4 +333,37 @@ class LEn extends L {
 
   @override
   String get logsNoService => 'no service';
+
+  @override
+  String get navDashboards => 'Dashboards';
+
+  @override
+  String get dashboardsEmpty => 'No dashboard yet.';
+
+  @override
+  String get dashboardsSearch => 'Search dashboards';
+
+  @override
+  String get dashboardsForbidden =>
+      'Your role does not allow reading dashboards.';
+
+  @override
+  String dashboardWidgets(int count, int pages) {
+    return '$count widgets on $pages pages';
+  }
+
+  @override
+  String get dashboardNoQuery => 'Nothing to run';
+
+  @override
+  String get dashboardWidgetFailed => 'This widget\'s query did not answer.';
+
+  @override
+  String get dashboardOnWeb => 'Best read on the web';
+
+  @override
+  String get dashboardNoData => 'No data';
+
+  @override
+  String get dashboardLoading => 'Running the queries…';
 }

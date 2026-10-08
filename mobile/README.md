@@ -17,7 +17,9 @@ openlog installation; it touches none of them.
 | `lib/src/api/client.dart` | One installation over HTTP: address handling, bearer token, org header, errors |
 | `lib/src/session.dart` | Which installation, which person, which organization — the only mutable state above the widgets |
 | `lib/src/storage/token_store.dart` | The device token in Keychain / EncryptedSharedPreferences |
+| `lib/src/list_controller.dart` | What every list screen does the same way when things go wrong |
 | `lib/src/alerts.dart` | What is firing, and taking one of them |
+| `lib/src/services.dart`, `logs.dart`, `dashboards.dart` | The other three lists |
 | `lib/src/ui/` | Server address, sign in and sign up, the alerts list, the account drawer |
 | `lib/l10n/` | `app_en.arb`, `app_tr.arb`, and what gen-l10n makes of them |
 | `tool/check_l10n.dart` | Fails when the two dictionaries disagree |
@@ -75,6 +77,20 @@ Two decisions inside it are worth knowing:
 Add a type by putting it in `schemaTargets` (named schemas) or `responseTargets`
 (bodies declared inline on a path), then regenerating. Only what the app parses
 is generated, so the file stays the size of the app's needs.
+
+## A dashboard is drawn by what its query answered
+
+The contract offers eight visualizations and four result kinds, and on a phone
+the kinds are the useful distinction: a `facets` result is a ranked list
+whether the dashboard called it a pie or a bar, and at this width a ranked list
+is both readable and precise where a five-slice pie is neither. So widgets
+render by kind — a number, a sparkline, a ranked list — and `histogram` and any
+kind this build does not know say "best read on the web" rather than leaving a
+card that looks broken.
+
+The sparkline is a `CustomPainter`. It draws one polyline with no axes, legend,
+tooltip or interaction, and a charting package would be a dependency, a licence
+and an upgrade treadmill for forty lines.
 
 ## Severity colours are not themeable
 

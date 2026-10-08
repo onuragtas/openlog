@@ -10,6 +10,7 @@ import 'src/alerts.dart';
 import 'src/api/client.dart';
 import 'src/session.dart';
 import 'src/storage/token_store.dart';
+import 'src/dashboards.dart';
 import 'src/logs.dart';
 import 'src/services.dart';
 import 'src/ui/app_shell.dart';
@@ -26,6 +27,7 @@ class OpenlogApp extends StatefulWidget {
     this.alerts,
     this.services,
     this.logs,
+    this.dashboards,
   });
 
   /// Where the device token is kept between launches.
@@ -38,6 +40,7 @@ class OpenlogApp extends StatefulWidget {
   final AlertsController? alerts;
   final ServicesController? services;
   final LogsController? logs;
+  final DashboardsController? dashboards;
 
   @override
   State<OpenlogApp> createState() => _OpenlogAppState();
@@ -60,6 +63,7 @@ class _OpenlogAppState extends State<OpenlogApp> {
   AlertsController? _alerts;
   ServicesController? _services;
   LogsController? _logs;
+  DashboardsController? _dashboards;
   OpenlogClient? _listsClient;
 
   /// One set of list controllers per signed-in client. Keyed on the client
@@ -70,17 +74,23 @@ class _OpenlogAppState extends State<OpenlogApp> {
       _alerts = widget.alerts;
       _services = widget.services ?? _services;
       _logs = widget.logs ?? _logs;
+      _dashboards = widget.dashboards ?? _dashboards;
     }
     if (client == null) {
-      return _alerts != null && _services != null && _logs != null;
+      return _alerts != null &&
+          _services != null &&
+          _logs != null &&
+          _dashboards != null;
     }
     if (!identical(_listsClient, client)) {
       _alerts?.dispose();
       _services?.dispose();
       _logs?.dispose();
+      _dashboards?.dispose();
       _alerts = widget.alerts ?? AlertsController(client);
       _services = widget.services ?? ServicesController(client);
       _logs = widget.logs ?? LogsController(client);
+      _dashboards = widget.dashboards ?? DashboardsController(client);
       _listsClient = client;
     }
     return true;
@@ -91,6 +101,7 @@ class _OpenlogAppState extends State<OpenlogApp> {
     _alerts?.dispose();
     _services?.dispose();
     _logs?.dispose();
+    _dashboards?.dispose();
     if (_ownsSession) _session.dispose();
     super.dispose();
   }
@@ -133,6 +144,7 @@ class _OpenlogAppState extends State<OpenlogApp> {
                 alerts: _alerts!,
                 services: _services!,
                 logs: _logs!,
+                dashboards: _dashboards!,
               );
           }
         },

@@ -102,5 +102,15 @@
   "logsForbidden": "Rolünüz logları görmeye izin vermiyor.",
   "logsSeverity": "Önem",
   "logsSeverityAll": "Hepsi",
-  "logsNoService": "servis yok"
+  "logsNoService": "servis yok",
+  "navDashboards": "Panolar",
+  "dashboardsEmpty": "Henüz pano yok.",
+  "dashboardsSearch": "Pano ara",
+  "dashboardsForbidden": "Rolünüz panoları görmeye izin vermiyor.",
+  "dashboardWidgets": "{pages} sayfada {count} bileşen",
+  "dashboardNoQuery": "Çalıştırılacak sorgu yok",
+  "dashboardWidgetFailed": "Bu bileşenin sorgusu yanıt vermedi.",
+  "dashboardOnWeb": "En iyi web'de okunur",
+  "dashboardNoData": "Veri yok",
+  "dashboardLoading": "Sorgular çalışıyor…"
 }

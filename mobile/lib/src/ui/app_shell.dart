@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../alerts.dart';
+import '../dashboards.dart';
 import '../logs.dart';
 import '../services.dart';
 import '../session.dart';
 import 'account_drawer.dart';
 import 'alerts_screen.dart';
+import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'services_screen.dart';
 
@@ -18,12 +20,14 @@ class AppShell extends StatefulWidget {
     required this.alerts,
     required this.services,
     required this.logs,
+    required this.dashboards,
   });
 
   final SessionController session;
   final AlertsController alerts;
   final ServicesController services;
   final LogsController logs;
+  final DashboardsController dashboards;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -35,7 +39,7 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final l = L.of(context);
-    final titles = [l.alertsTitle, l.navServices, l.navLogs];
+    final titles = [l.alertsTitle, l.navServices, l.navLogs, l.navDashboards];
 
     return Scaffold(
       appBar: AppBar(
@@ -47,7 +51,8 @@ class _AppShellState extends State<AppShell> {
             onPressed: switch (_tab) {
               0 => widget.alerts.refresh,
               1 => widget.services.refresh,
-              _ => widget.logs.refresh,
+              2 => widget.logs.refresh,
+              _ => widget.dashboards.refresh,
             },
             icon: const Icon(Icons.refresh),
           ),
@@ -64,6 +69,10 @@ class _AppShellState extends State<AppShell> {
             AlertsBody(session: widget.session, alerts: widget.alerts),
             ServicesBody(session: widget.session, services: widget.services),
             LogsBody(session: widget.session, logs: widget.logs),
+            DashboardsBody(
+              session: widget.session,
+              dashboards: widget.dashboards,
+            ),
           ],
         ),
       ),
@@ -88,6 +97,12 @@ class _AppShellState extends State<AppShell> {
             icon: const Icon(Icons.article_outlined),
             selectedIcon: const Icon(Icons.article),
             label: l.navLogs,
+          ),
+          NavigationDestination(
+            key: const Key('tab-dashboards'),
+            icon: const Icon(Icons.dashboard_outlined),
+            selectedIcon: const Icon(Icons.dashboard),
+            label: l.navDashboards,
           ),
         ],
       ),

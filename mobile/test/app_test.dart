@@ -9,6 +9,7 @@ import 'package:openlog_mobile/main.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/alerts.dart';
+import 'package:openlog_mobile/src/dashboards.dart';
 import 'package:openlog_mobile/src/logs.dart';
 import 'package:openlog_mobile/src/services.dart';
 import 'package:openlog_mobile/src/session.dart';
@@ -157,19 +158,51 @@ LogRecord logLine(
   resourceAttributes: const {},
 );
 
-/// The signed-in app with all three lists scripted, which is what the shell
+class ScriptedDashboards extends DashboardsController {
+  ScriptedDashboards({List<DashboardSummary> dashboards = const []})
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    items = dashboards;
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async => calls.add('refresh:$query');
+}
+
+DashboardSummary board(
+  String id,
+  String name, {
+  int widgets = 4,
+  int pages = 1,
+}) => DashboardSummary(
+  id: id,
+  name: name,
+  description: '',
+  visibility: DashboardVisibility.unknown,
+  pageCount: pages,
+  widgetCount: widgets,
+  createdByEmail: 'ada@example.com',
+  updatedAt: DateTime.now().toUtc(),
+  canEdit: false,
+);
+
+/// The signed-in app with all four lists scripted, which is what the shell
 /// needs: it builds every tab at once so moving between them keeps their state.
 Widget signedInApp(
   SessionController session, {
   AlertsController? alerts,
   ServicesController? services,
   LogsController? logs,
+  DashboardsController? dashboards,
 }) => OpenlogApp(
   store: MemoryTokenStore(),
   session: session,
   alerts: alerts ?? ScriptedAlerts(),
   services: services ?? ScriptedServices(),
   logs: logs ?? ScriptedLogs(),
+  dashboards: dashboards ?? ScriptedDashboards(),
 );
 
 /// Opens the account drawer, which is where the signed-in details moved when
@@ -668,5 +701,24 @@ void main() {
 
     expect(find.text('0.0%'), findsOneWidget);
     expect(find.text('12%'), findsOneWidget);
+  });
+
+  testWidgets('dashboards are a fourth tab that lists what can be opened', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final boards = ScriptedDashboards(
+      dashboards: [board('d1', 'Checkout health')],
+    );
+    await tester.pumpWidget(signedInApp(session, dashboards: boards));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tab-dashboards')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('dashboard-d1')), findsOneWidget);
+    expect(find.text('Checkout health'), findsOneWidget);
+    expect(find.text('4 widgets on 1 pages'), findsOneWidget);
+    expect(boards.calls, contains('refresh:'));
   });
 }

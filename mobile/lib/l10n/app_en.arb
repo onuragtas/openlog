@@ -124,5 +124,16 @@
   "logsForbidden": "Your role does not allow reading logs.",
   "logsSeverity": "Severity",
   "logsSeverityAll": "All",
-  "logsNoService": "no service"
+  "logsNoService": "no service",
+  "navDashboards": "Dashboards",
+  "dashboardsEmpty": "No dashboard yet.",
+  "dashboardsSearch": "Search dashboards",
+  "dashboardsForbidden": "Your role does not allow reading dashboards.",
+  "dashboardWidgets": "{count} widgets on {pages} pages",
+  "@dashboardWidgets": {"placeholders": {"count": {"type": "int"}, "pages": {"type": "int"}}},
+  "dashboardNoQuery": "Nothing to run",
+  "dashboardWidgetFailed": "This widget's query did not answer.",
+  "dashboardOnWeb": "Best read on the web",
+  "dashboardNoData": "No data",
+  "dashboardLoading": "Running the queries…"
 }
