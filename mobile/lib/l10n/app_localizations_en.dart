@@ -260,9 +260,6 @@ class LEn extends L {
   String get severityUnknown => 'Unknown severity';
 
   @override
-  String get accountTitle => 'Account';
-
-  @override
   String get refresh => 'Refresh';
 
   @override
@@ -285,9 +282,6 @@ class LEn extends L {
 
   @override
   String get navAlerts => 'Alerts';
-
-  @override
-  String get navServices => 'Services';
 
   @override
   String get navLogs => 'Logs';
@@ -366,4 +360,19 @@ class LEn extends L {
 
   @override
   String get dashboardLoading => 'Running the queries…';
+
+  @override
+  String get navApm => 'APM';
+
+  @override
+  String get navSettings => 'Settings';
+
+  @override
+  String get navMain => 'Main navigation';
+
+  @override
+  String get settingsAccount => 'Account';
+
+  @override
+  String get closeMenu => 'Close menu';
 }

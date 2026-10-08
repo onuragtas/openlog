@@ -1,8 +1,6 @@
 {
   "@@locale": "tr",
-
   "appTitle": "openlog",
-
   "serverTitle": "openlog'a bağlan",
   "serverDescription": "openlog kendi sunucunuzda çalışır. Aşağıdaki adres barındırılan kurulumdur — kendi sunucunuzu çalıştırıyorsanız onunla değiştirin.",
   "serverAddressLabel": "Sunucu adresi",
@@ -12,7 +10,6 @@
   "serverUnreachable": "{address} adresine ulaşılamıyor. Adresi ve bağlantınızı kontrol edin.",
   "serverNotOpenlog": "Bu adres yanıt verdi ama bir openlog sunucusu gibi değil.",
   "serverChange": "Sunucuyu değiştir",
-
   "signInTitle": "openlog'a giriş yap",
   "signInDescription": "openlog hesabınızın e-posta adresini ve parolasını kullanın.",
   "emailLabel": "E-posta",
@@ -27,7 +24,6 @@
   "deviceNameLabel": "Cihaz adı",
   "deviceNameHelp": "Oturum listenizde görünür; bu cihazı diğerlerinden ayırmanıza ve çıkış yapmanıza yarar.",
   "deviceNameRequired": "Cihaz adı gerekli.",
-
   "signUpPrompt": "Hesabınız yok mu?",
   "signUpLink": "Hesap oluştur",
   "signUpTitle": "openlog hesabınızı oluşturun",
@@ -46,20 +42,17 @@
   "signUpVerificationNote": "Adresinizi doğrulamanız için e-postanıza bir bağlantı göndereceğiz.",
   "haveAccount": "Zaten hesabınız var mı?",
   "toSignIn": "Giriş yap",
-
   "homeSignedInAs": "{email} olarak giriş yapıldı",
   "homeOrganization": "Organizasyon",
   "homeRole": "Rol",
   "homeSignOut": "Çıkış yap",
   "homeNextPhase": "Alarmlar, servisler ve loglar bir sonraki fazda geliyor.",
   "homeSwitchOrganization": "Organizasyon değiştir",
-
   "roleOwner": "Sahip",
   "roleAdmin": "Yönetici",
   "roleMember": "Üye",
   "roleViewer": "Görüntüleyici",
   "roleUnknown": "Bilinmeyen rol",
-
   "retry": "Tekrar dene",
   "cancel": "İptal",
   "errorUnexpected": "Bir şeyler ters gitti: {detail}",
@@ -80,14 +73,12 @@
   "severityWarning": "Uyarı",
   "severityInfo": "Bilgi",
   "severityUnknown": "Bilinmeyen önem",
-  "accountTitle": "Hesap",
   "refresh": "Yenile",
   "justNow": "az önce",
   "minutesAgo": "{count} dk önce",
   "hoursAgo": "{count} sa önce",
   "daysAgo": "{count} gün önce",
   "navAlerts": "Alarmlar",
-  "navServices": "Servisler",
   "navLogs": "Loglar",
   "servicesEmpty": "Son bir saatte hiçbir servis bildirim yapmadı.",
   "servicesSearch": "Servis ara",
@@ -112,5 +103,10 @@
   "dashboardWidgetFailed": "Bu bileşenin sorgusu yanıt vermedi.",
   "dashboardOnWeb": "En iyi web'de okunur",
   "dashboardNoData": "Veri yok",
-  "dashboardLoading": "Sorgular çalışıyor…"
+  "dashboardLoading": "Sorgular çalışıyor…",
+  "navApm": "APM",
+  "navSettings": "Ayarlar",
+  "navMain": "Ana gezinme",
+  "settingsAccount": "Hesap",
+  "closeMenu": "Menüyü kapat"
 }

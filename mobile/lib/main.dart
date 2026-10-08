@@ -15,6 +15,7 @@ import 'src/logs.dart';
 import 'src/services.dart';
 import 'src/ui/app_shell.dart';
 import 'src/ui/server_screen.dart';
+import 'src/ui/theme.dart';
 import 'src/ui/sign_in_screen.dart';
 
 void main() => runApp(OpenlogApp(store: SecureTokenStore()));
@@ -108,17 +109,13 @@ class _OpenlogAppState extends State<OpenlogApp> {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2F6FEB);
     return MaterialApp(
       onGenerateTitle: (context) => L.of(context).appTitle,
       localizationsDelegates: L.localizationsDelegates,
       supportedLocales: L.supportedLocales,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(
-        colorSchemeSeed: seed,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      // The web app's tokens, not a generated palette: see src/ui/theme.dart.
+      theme: openlogTheme(Brightness.light),
+      darkTheme: openlogTheme(Brightness.dark),
       home: ListenableBuilder(
         listenable: _session,
         builder: (context, _) {

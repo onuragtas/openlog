@@ -1,8 +1,6 @@
 {
   "@@locale": "en",
-
   "appTitle": "openlog",
-
   "serverTitle": "Connect to openlog",
   "serverDescription": "openlog runs on your own server. The address below is the hosted one — replace it with yours if you run your own.",
   "serverAddressLabel": "Server address",
@@ -11,11 +9,14 @@
   "serverInvalidAddress": "That does not look like an address.",
   "serverUnreachable": "Cannot reach {address}. Check the address and your connection.",
   "@serverUnreachable": {
-    "placeholders": { "address": { "type": "String" } }
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
   },
   "serverNotOpenlog": "That address answered, but not like an openlog server.",
   "serverChange": "Change server",
-
   "signInTitle": "Sign in to openlog",
   "signInDescription": "Use the e-mail address and password of your openlog account.",
   "emailLabel": "E-mail",
@@ -30,7 +31,6 @@
   "deviceNameLabel": "Device name",
   "deviceNameHelp": "Shown in your session list, so you can tell this device from your others and sign it out.",
   "deviceNameRequired": "A device name is required.",
-
   "signUpPrompt": "No account?",
   "signUpLink": "Create an account",
   "signUpTitle": "Create your openlog account",
@@ -40,7 +40,11 @@
   "orgHint": "e.g. Acme Inc.",
   "passwordHintMin": "At least {min} characters, and not your e-mail address.",
   "@passwordHintMin": {
-    "placeholders": { "min": { "type": "int" } }
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
   },
   "signUpSubmit": "Create account",
   "signUpSubmitting": "Creating the account…",
@@ -50,33 +54,42 @@
   "signUpRateLimited": "Too many sign-up attempts. Try again later.",
   "signUpOnWeb": "This server asks for a CAPTCHA when signing up, which this app cannot show. Create the account at {address} in a browser, then sign in here.",
   "@signUpOnWeb": {
-    "placeholders": { "address": { "type": "String" } }
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
   },
   "signUpVerificationNote": "We will e-mail you a link to confirm your address.",
   "haveAccount": "Already have an account?",
   "toSignIn": "Sign in",
-
   "homeSignedInAs": "Signed in as {email}",
   "@homeSignedInAs": {
-    "placeholders": { "email": { "type": "String" } }
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
   },
   "homeOrganization": "Organization",
   "homeRole": "Role",
   "homeSignOut": "Sign out",
   "homeNextPhase": "Alerts, services and logs arrive in the next phase.",
   "homeSwitchOrganization": "Switch organization",
-
   "roleOwner": "Owner",
   "roleAdmin": "Admin",
   "roleMember": "Member",
   "roleViewer": "Viewer",
   "roleUnknown": "Unknown role",
-
   "retry": "Try again",
   "cancel": "Cancel",
   "errorUnexpected": "Something went wrong: {detail}",
   "@errorUnexpected": {
-    "placeholders": { "detail": { "type": "String" } }
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
   },
   "alertsTitle": "Alerts",
   "alertsEmpty": "Nothing is firing.",
@@ -85,31 +98,74 @@
   "alertsAlreadyResolved": "That alert resolved before it could be acknowledged.",
   "alertsAcknowledge": "Acknowledge",
   "alertsAcknowledgedBy": "Acknowledged by {email}",
-  "@alertsAcknowledgedBy": {"placeholders": {"email": {"type": "String"}}},
+  "@alertsAcknowledgedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
   "alertsAcknowledgedUnknown": "Acknowledged",
   "alertsCounts": "{open} open, {acknowledged} acknowledged",
-  "@alertsCounts": {"placeholders": {"open": {"type": "int"}, "acknowledged": {"type": "int"}}},
+  "@alertsCounts": {
+    "placeholders": {
+      "open": {
+        "type": "int"
+      },
+      "acknowledged": {
+        "type": "int"
+      }
+    }
+  },
   "alertsResolvedRecently": "{count} resolved in the last 7 days",
-  "@alertsResolvedRecently": {"placeholders": {"count": {"type": "int"}}},
+  "@alertsResolvedRecently": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "alertsMuted": "Muted",
   "alertsFlapping": "Flapping",
   "alertsOpened": "Opened {when}",
-  "@alertsOpened": {"placeholders": {"when": {"type": "String"}}},
+  "@alertsOpened": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
   "severityCritical": "Critical",
   "severityWarning": "Warning",
   "severityInfo": "Info",
   "severityUnknown": "Unknown severity",
-  "accountTitle": "Account",
   "refresh": "Refresh",
   "justNow": "just now",
   "minutesAgo": "{count}m ago",
-  "@minutesAgo": {"placeholders": {"count": {"type": "int"}}},
+  "@minutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "hoursAgo": "{count}h ago",
-  "@hoursAgo": {"placeholders": {"count": {"type": "int"}}},
+  "@hoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "daysAgo": "{count}d ago",
-  "@daysAgo": {"placeholders": {"count": {"type": "int"}}},
+  "@daysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "navAlerts": "Alerts",
-  "navServices": "Services",
   "navLogs": "Logs",
   "servicesEmpty": "No service has reported in the last hour.",
   "servicesSearch": "Search services",
@@ -130,10 +186,24 @@
   "dashboardsSearch": "Search dashboards",
   "dashboardsForbidden": "Your role does not allow reading dashboards.",
   "dashboardWidgets": "{count} widgets on {pages} pages",
-  "@dashboardWidgets": {"placeholders": {"count": {"type": "int"}, "pages": {"type": "int"}}},
+  "@dashboardWidgets": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "pages": {
+        "type": "int"
+      }
+    }
+  },
   "dashboardNoQuery": "Nothing to run",
   "dashboardWidgetFailed": "This widget's query did not answer.",
   "dashboardOnWeb": "Best read on the web",
   "dashboardNoData": "No data",
-  "dashboardLoading": "Running the queries…"
+  "dashboardLoading": "Running the queries…",
+  "navApm": "APM",
+  "navSettings": "Settings",
+  "navMain": "Main navigation",
+  "settingsAccount": "Account",
+  "closeMenu": "Close menu"
 }

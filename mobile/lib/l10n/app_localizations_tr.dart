@@ -258,9 +258,6 @@ class LTr extends L {
   String get severityUnknown => 'Bilinmeyen önem';
 
   @override
-  String get accountTitle => 'Hesap';
-
-  @override
   String get refresh => 'Yenile';
 
   @override
@@ -283,9 +280,6 @@ class LTr extends L {
 
   @override
   String get navAlerts => 'Alarmlar';
-
-  @override
-  String get navServices => 'Servisler';
 
   @override
   String get navLogs => 'Loglar';
@@ -363,4 +357,19 @@ class LTr extends L {
 
   @override
   String get dashboardLoading => 'Sorgular çalışıyor…';
+
+  @override
+  String get navApm => 'APM';
+
+  @override
+  String get navSettings => 'Ayarlar';
+
+  @override
+  String get navMain => 'Ana gezinme';
+
+  @override
+  String get settingsAccount => 'Hesap';
+
+  @override
+  String get closeMenu => 'Menüyü kapat';
 }

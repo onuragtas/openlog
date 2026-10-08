@@ -535,12 +535,6 @@ abstract class L {
   /// **'Unknown severity'**
   String get severityUnknown;
 
-  /// No description provided for @accountTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Account'**
-  String get accountTitle;
-
   /// No description provided for @refresh.
   ///
   /// In en, this message translates to:
@@ -576,12 +570,6 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Alerts'**
   String get navAlerts;
-
-  /// No description provided for @navServices.
-  ///
-  /// In en, this message translates to:
-  /// **'Services'**
-  String get navServices;
 
   /// No description provided for @navLogs.
   ///
@@ -732,6 +720,36 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Running the queries…'**
   String get dashboardLoading;
+
+  /// No description provided for @navApm.
+  ///
+  /// In en, this message translates to:
+  /// **'APM'**
+  String get navApm;
+
+  /// No description provided for @navSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get navSettings;
+
+  /// No description provided for @navMain.
+  ///
+  /// In en, this message translates to:
+  /// **'Main navigation'**
+  String get navMain;
+
+  /// No description provided for @settingsAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsAccount;
+
+  /// No description provided for @closeMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Close menu'**
+  String get closeMenu;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

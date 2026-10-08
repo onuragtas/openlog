@@ -205,10 +205,17 @@ Widget signedInApp(
   dashboards: dashboards ?? ScriptedDashboards(),
 );
 
-/// Opens the account drawer, which is where the signed-in details moved when
-/// the alerts list took over the screen.
+/// Opens the navigation drawer, which is how the web moves between sections
+/// below `lg` and now how this app does too.
 Future<void> openDrawer(WidgetTester tester) async {
   tester.state<ScaffoldState>(find.byType(Scaffold).last).openDrawer();
+  await tester.pumpAndSettle();
+}
+
+/// Goes to a section by its drawer entry, which is keyed by its label.
+Future<void> goTo(WidgetTester tester, String label) async {
+  await openDrawer(tester);
+  await tester.tap(find.byKey(Key('nav-$label')));
   await tester.pumpAndSettle();
 }
 
@@ -451,7 +458,7 @@ void main() {
       final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
       await tester.pumpWidget(signedInApp(s));
       await tester.pump();
-      await openDrawer(tester);
+      await goTo(tester, 'Settings');
 
       expect(find.text('Signed in as owner@example.com'), findsOneWidget);
       expect(find.text('Org A'), findsOneWidget);
@@ -468,7 +475,7 @@ void main() {
       ..me = me(orgs: [org('o1', 'Org A'), org('o2', 'Org B')]);
     await tester.pumpWidget(signedInApp(s));
     await tester.pump();
-    await openDrawer(tester);
+    await goTo(tester, 'Settings');
 
     await tester.tap(find.byKey(const Key('org-picker')));
     await tester.pumpAndSettle();
@@ -605,7 +612,7 @@ void main() {
   });
 
   testWidgets(
-    'the three lists are tabs, and moving between them keeps each one',
+    'the sections are reached from the drawer, and each keeps its state',
     (tester) async {
       final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
       final services = ScriptedServices(services: [service('checkout')]);
@@ -622,19 +629,16 @@ void main() {
 
       expect(find.byKey(const Key('incident-i1')), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('tab-services')));
-      await tester.pumpAndSettle();
+      await goTo(tester, 'APM');
       expect(find.byKey(const Key('service-checkout')), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('tab-logs')));
-      await tester.pumpAndSettle();
+      await goTo(tester, 'Logs');
       expect(find.text('connection refused'), findsOneWidget);
 
       // Back to the first tab: an IndexedStack keeps it built, so the list is
       // still there and was not reloaded, which on an on-call screen is the
       // difference between checking two things and losing one.
-      await tester.tap(find.byKey(const Key('tab-alerts')));
-      await tester.pumpAndSettle();
+      await goTo(tester, 'Alerts');
       expect(find.byKey(const Key('incident-i1')), findsOneWidget);
       expect(services.calls.where((c) => c.startsWith('refresh')).length, 1);
     },
@@ -647,8 +651,7 @@ void main() {
       final services = ScriptedServices(services: [service('checkout')]);
       await tester.pumpWidget(signedInApp(session, services: services));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('tab-services')));
-      await tester.pumpAndSettle();
+      await goTo(tester, 'APM');
 
       await tester.enterText(find.byKey(const Key('services-search')), 'pay');
       await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -667,8 +670,7 @@ void main() {
     final logs = ScriptedLogs(logs: [logLine('boom')]);
     await tester.pumpWidget(signedInApp(session, logs: logs));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('tab-logs')));
-    await tester.pumpAndSettle();
+    await goTo(tester, 'Logs');
 
     // Scoped to the filter: a log row shows its own severity as "ERROR" too,
     // so a bare text finder taps the list instead of the button.
@@ -696,14 +698,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('tab-services')));
-    await tester.pumpAndSettle();
+    await goTo(tester, 'APM');
 
     expect(find.text('0.0%'), findsOneWidget);
     expect(find.text('12%'), findsOneWidget);
   });
 
-  testWidgets('dashboards are a fourth tab that lists what can be opened', (
+  testWidgets('dashboards are a section that lists what can be opened', (
     tester,
   ) async {
     final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
@@ -713,8 +714,7 @@ void main() {
     await tester.pumpWidget(signedInApp(session, dashboards: boards));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('tab-dashboards')));
-    await tester.pumpAndSettle();
+    await goTo(tester, 'Dashboards');
 
     expect(find.byKey(const Key('dashboard-d1')), findsOneWidget);
     expect(find.text('Checkout health'), findsOneWidget);
