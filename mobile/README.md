@@ -145,15 +145,37 @@ already filled in.
 
 CI runs the tests on Linux. It does **not** build for iOS or Android, so the
 native side of `flutter_secure_storage` — Keychain entitlements, the Android
-`minSdk`, the CocoaPods deployment target — is not exercised there.
-`flutter build apk --debug` was run once by hand and passed; iOS has not been
-built at all.
+`minSdk`, the CocoaPods deployment target — is not exercised there. Both were
+built by hand and installed once: `flutter build apk --debug`, and an iOS debug
+build signed and installed on a device.
 
-If a build fails with `Invalid resource directory name` on something like
-`mipmap-hdpi 2`, that is not this project: the repository lives in iCloud Drive,
-which makes `<name> 2` copies of files and directories. They are not tracked by
-git, so CI stays green while the local build breaks. Delete them and build
+## iCloud breaks both builds, in two different ways
+
+This repository lives in iCloud Drive, and nothing about that is visible to git
+or to CI — both stay green while the local build fails.
+
+**Android:** iCloud makes `<name> 2` copies of files *and directories*. Gradle
+refuses one of them with `Invalid resource directory name` on something like
+`mipmap-hdpi 2`. Delete every `<name> 2` whose original still exists, then build
 again.
+
+**iOS:** iCloud puts `com.apple.FinderInfo` and `com.apple.fileprovider.fpfs#P`
+on directories it manages, and `codesign` refuses them with
+
+```
+resource fork, Finder information, or similar detritus not allowed
+```
+
+which it reports against `Flutter.framework` rather than against iCloud. The
+signing identity is fine — stripping the attributes by hand and signing the same
+file succeeds. The durable fix is to keep the build output out of iCloud:
+
+```
+rm -rf build && ln -s ~/.openlog-mobile-build build && mkdir -p ~/.openlog-mobile-build
+```
+
+`build/` is gitignored, so the symlink is invisible to git and to everyone whose
+checkout is somewhere sane.
 
 ## Releases
 

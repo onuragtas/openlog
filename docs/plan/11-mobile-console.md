@@ -332,6 +332,9 @@ birkaç kez sürüm kesebilir, mağaza kesemez.
   matris üzerinden kısıtlama, Ayarlar → Güvenlik'te "Mobil uygulama" etiketi. Mobil ekranlar bundan sonra
   gelebilir. Not: yetki matrisine **hiç** satır eklenmedi, ki beklediğimden iyisi — `UserOnly` zaten
   "kimlik, kimlik bilgileri, kurulum makineleri" kümesini tam olarak ifade ediyordu.
+- **Cihazda çalışıyor.** iOS ve Android derlemeleri elle yapıldı ve uygulama bir iPhone'a kuruldu
+  (`org.resoft.openlogMobile`). CI hâlâ iki platformu da derlemiyor, yani native taraf her sürümde değil
+  yalnızca elle doğrulanıyor.
 - **Mağaza yayını.** App Store ve Play, uygulama kimliği, imzalama sertifikaları ve gizlilik beyanı demek.
   Self-hosted bir ürün için gizlilik beyanı özellikle dikkat ister: uygulama *kullanıcının* sunucusuna
   bağlanır, veri projeye akmaz — bunu beyanda doğru anlatmak gerekir. Push rölesi (§6) bu tabloyu
