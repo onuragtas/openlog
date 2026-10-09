@@ -591,5 +591,44 @@
     }
   },
   "podCpu": "İşlemci",
-  "podMemory": "Çalışma kümesi"
+  "podMemory": "Çalışma kümesi",
+  "navRules": "Alarm kuralları",
+  "rulesEmpty": "Alarm kuralı yok.",
+  "rulesSearch": "Kural ara",
+  "ruleFiring": "tetikte",
+  "rulePending": "bekliyor",
+  "ruleOk": "normal",
+  "ruleError": "hata",
+  "ruleDisabled": "kapalı",
+  "ruleOpenIncidents": "{count} açık",
+  "@ruleOpenIncidents": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleEvery": "{seconds} sn'de bir",
+  "@ruleEvery": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleDisableTitle": "Bu kural kapatılsın mı?",
+  "ruleDisableBody": "Değerlendirmeyi bırakacak, ve {count} açık olayı da çözülecek. Şu an haber verdiği ne varsa takip edilmeyi bırakır.",
+  "@ruleDisableBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleDisableBodyNone": "Biri yeniden açana kadar değerlendirmeyi bırakacak.",
+  "ruleDisableConfirm": "Kapat",
+  "ruleEnableTitle": "Bu kural yeniden açılsın mı?",
+  "ruleEnableConfirm": "Aç",
+  "ruleCancel": "Vazgeç",
+  "ruleEditOnWeb": "Eşikler, koşullar ve kanallar webden düzenlenir."
 }

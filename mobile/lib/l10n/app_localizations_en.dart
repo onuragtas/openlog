@@ -1186,4 +1186,66 @@ class LEn extends L {
 
   @override
   String get podMemory => 'Working set';
+
+  @override
+  String get navRules => 'Alert rules';
+
+  @override
+  String get rulesEmpty => 'No alert rule.';
+
+  @override
+  String get rulesSearch => 'Search rules';
+
+  @override
+  String get ruleFiring => 'firing';
+
+  @override
+  String get rulePending => 'pending';
+
+  @override
+  String get ruleOk => 'ok';
+
+  @override
+  String get ruleError => 'error';
+
+  @override
+  String get ruleDisabled => 'off';
+
+  @override
+  String ruleOpenIncidents(int count) {
+    return '$count open';
+  }
+
+  @override
+  String ruleEvery(int seconds) {
+    return 'every ${seconds}s';
+  }
+
+  @override
+  String get ruleDisableTitle => 'Turn this rule off?';
+
+  @override
+  String ruleDisableBody(int count) {
+    return 'It will stop evaluating, and its $count open incidents are resolved as well. Anything it is paging about now stops being tracked.';
+  }
+
+  @override
+  String get ruleDisableBodyNone =>
+      'It will stop evaluating until someone turns it back on.';
+
+  @override
+  String get ruleDisableConfirm => 'Turn off';
+
+  @override
+  String get ruleEnableTitle => 'Turn this rule back on?';
+
+  @override
+  String get ruleEnableConfirm => 'Turn on';
+
+  @override
+  String get ruleCancel => 'Cancel';
+
+  @override
+  String get ruleEditOnWeb =>
+      'Thresholds, conditions and channels are edited on the web.';
 }

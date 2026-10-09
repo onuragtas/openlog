@@ -225,6 +225,21 @@ class OpenlogClient {
     '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/acknowledge',
   );
 
+  /// The rules behind the incidents, ordered by name.
+  Future<AlertRulePage> alertRules() async =>
+      AlertRulePage.fromJson(await _send('GET', '/api/v1/alerts/rules'));
+
+  /// Turns a rule on, or off.
+  ///
+  /// Disabling resolves the rule's open incidents with reason `rule_disabled`
+  /// -- the server says so, and it is not what "stop paging me" sounds like,
+  /// so the screen has to say it before the tap, not after.
+  Future<void> setAlertRuleEnabled(String id, {required bool enabled}) => _send(
+    'POST',
+    '/api/v1/alerts/rules/${Uri.encodeComponent(id)}/'
+        '${enabled ? 'enable' : 'disable'}',
+  );
+
   /// One incident with its timeline and what the server tried to deliver.
   ///
   /// The list row already says what is firing; this is what turns the row into

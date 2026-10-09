@@ -1181,4 +1181,66 @@ class LTr extends L {
 
   @override
   String get podMemory => 'Çalışma kümesi';
+
+  @override
+  String get navRules => 'Alarm kuralları';
+
+  @override
+  String get rulesEmpty => 'Alarm kuralı yok.';
+
+  @override
+  String get rulesSearch => 'Kural ara';
+
+  @override
+  String get ruleFiring => 'tetikte';
+
+  @override
+  String get rulePending => 'bekliyor';
+
+  @override
+  String get ruleOk => 'normal';
+
+  @override
+  String get ruleError => 'hata';
+
+  @override
+  String get ruleDisabled => 'kapalı';
+
+  @override
+  String ruleOpenIncidents(int count) {
+    return '$count açık';
+  }
+
+  @override
+  String ruleEvery(int seconds) {
+    return '$seconds sn\'de bir';
+  }
+
+  @override
+  String get ruleDisableTitle => 'Bu kural kapatılsın mı?';
+
+  @override
+  String ruleDisableBody(int count) {
+    return 'Değerlendirmeyi bırakacak, ve $count açık olayı da çözülecek. Şu an haber verdiği ne varsa takip edilmeyi bırakır.';
+  }
+
+  @override
+  String get ruleDisableBodyNone =>
+      'Biri yeniden açana kadar değerlendirmeyi bırakacak.';
+
+  @override
+  String get ruleDisableConfirm => 'Kapat';
+
+  @override
+  String get ruleEnableTitle => 'Bu kural yeniden açılsın mı?';
+
+  @override
+  String get ruleEnableConfirm => 'Aç';
+
+  @override
+  String get ruleCancel => 'Vazgeç';
+
+  @override
+  String get ruleEditOnWeb =>
+      'Eşikler, koşullar ve kanallar webden düzenlenir.';
 }

@@ -688,5 +688,44 @@
     }
   },
   "podCpu": "CPU",
-  "podMemory": "Working set"
+  "podMemory": "Working set",
+  "navRules": "Alert rules",
+  "rulesEmpty": "No alert rule.",
+  "rulesSearch": "Search rules",
+  "ruleFiring": "firing",
+  "rulePending": "pending",
+  "ruleOk": "ok",
+  "ruleError": "error",
+  "ruleDisabled": "off",
+  "ruleOpenIncidents": "{count} open",
+  "@ruleOpenIncidents": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleEvery": "every {seconds}s",
+  "@ruleEvery": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleDisableTitle": "Turn this rule off?",
+  "ruleDisableBody": "It will stop evaluating, and its {count} open incidents are resolved as well. Anything it is paging about now stops being tracked.",
+  "@ruleDisableBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleDisableBodyNone": "It will stop evaluating until someone turns it back on.",
+  "ruleDisableConfirm": "Turn off",
+  "ruleEnableTitle": "Turn this rule back on?",
+  "ruleEnableConfirm": "Turn on",
+  "ruleCancel": "Cancel",
+  "ruleEditOnWeb": "Thresholds, conditions and channels are edited on the web."
 }

@@ -14,6 +14,7 @@ import 'detail.dart';
 import 'discovery.dart';
 import 'list_controller.dart';
 import 'logs.dart';
+import 'session.dart';
 import 'query.dart';
 import 'services.dart';
 
@@ -46,6 +47,7 @@ class Sections {
     OnboardingController? onboarding,
     DashboardsController? dashboards,
     AlertsController? alerts,
+    AlertRulesController? rules,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -108,6 +110,7 @@ class Sections {
        onboarding = onboarding ?? OnboardingController(client),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
+       rules = rules ?? AlertRulesController(client),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -131,6 +134,7 @@ class Sections {
   final OnboardingController onboarding;
   final DashboardsController dashboards;
   final QueryController query;
+  final AlertRulesController rules;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -176,6 +180,7 @@ class Sections {
     dashboards,
     inventory,
     fleet,
+    rules,
     alerts,
   ];
 
@@ -415,5 +420,70 @@ class ProfilesController extends SectionController<ProfileService> {
             p.type.toLowerCase().contains(q))
           p,
     ];
+  }
+}
+
+/// The alert rules, and the one write an on-call person actually makes from a
+/// phone: turning a noisy rule off.
+///
+/// Everything else about a rule -- its condition, its thresholds, its
+/// channels -- is a form, and a form with a threshold in it is not something
+/// to fill in on a phone at three in the morning. Those stay on the web.
+class AlertRulesController extends SectionController<AlertRule> {
+  AlertRulesController(super.client);
+
+  /// Which rule is being switched, so only that row is busy.
+  String? busy;
+
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertRule>> fetch() async {
+    final rules = [...(await client.alertRules()).rules];
+    final q = query.trim().toLowerCase();
+    final matched = q.isEmpty
+        ? rules
+        : [
+            for (final r in rules)
+              if (r.name.toLowerCase().contains(q) ||
+                  r.description.toLowerCase().contains(q))
+                r,
+          ];
+    // Firing first, then the ones that are merely on, then the disabled: the
+    // list is read from the top and what is paging someone belongs there.
+    int rank(AlertRule r) => switch (r.status.state) {
+      AlertRuleStatusState.firing => 0,
+      AlertRuleStatusState.error => 1,
+      AlertRuleStatusState.pending => 2,
+      AlertRuleStatusState.disabled => 4,
+      _ => 3,
+    };
+    matched.sort((a, b) {
+      final byState = rank(a) - rank(b);
+      return byState != 0 ? byState : a.name.compareTo(b.name);
+    });
+    return matched;
+  }
+
+  /// Turns [id] on or off, then reloads so the row shows the server's answer
+  /// rather than this app's guess at it.
+  Future<void> setEnabled(String id, {required bool enabled}) async {
+    busy = id;
+    failure = null;
+    notifyListeners();
+    try {
+      await client.setAlertRuleEnabled(id, enabled: enabled);
+      await refresh();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('alertsForbidden', '')
+          : SessionFailure('unexpected', e.message);
+    } finally {
+      busy = null;
+      notifyListeners();
+    }
   }
 }

@@ -2214,6 +2214,114 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Working set'**
   String get podMemory;
+
+  /// No description provided for @navRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Alert rules'**
+  String get navRules;
+
+  /// No description provided for @rulesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No alert rule.'**
+  String get rulesEmpty;
+
+  /// No description provided for @rulesSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search rules'**
+  String get rulesSearch;
+
+  /// No description provided for @ruleFiring.
+  ///
+  /// In en, this message translates to:
+  /// **'firing'**
+  String get ruleFiring;
+
+  /// No description provided for @rulePending.
+  ///
+  /// In en, this message translates to:
+  /// **'pending'**
+  String get rulePending;
+
+  /// No description provided for @ruleOk.
+  ///
+  /// In en, this message translates to:
+  /// **'ok'**
+  String get ruleOk;
+
+  /// No description provided for @ruleError.
+  ///
+  /// In en, this message translates to:
+  /// **'error'**
+  String get ruleError;
+
+  /// No description provided for @ruleDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'off'**
+  String get ruleDisabled;
+
+  /// No description provided for @ruleOpenIncidents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} open'**
+  String ruleOpenIncidents(int count);
+
+  /// No description provided for @ruleEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'every {seconds}s'**
+  String ruleEvery(int seconds);
+
+  /// No description provided for @ruleDisableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn this rule off?'**
+  String get ruleDisableTitle;
+
+  /// No description provided for @ruleDisableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will stop evaluating, and its {count} open incidents are resolved as well. Anything it is paging about now stops being tracked.'**
+  String ruleDisableBody(int count);
+
+  /// No description provided for @ruleDisableBodyNone.
+  ///
+  /// In en, this message translates to:
+  /// **'It will stop evaluating until someone turns it back on.'**
+  String get ruleDisableBodyNone;
+
+  /// No description provided for @ruleDisableConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get ruleDisableConfirm;
+
+  /// No description provided for @ruleEnableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn this rule back on?'**
+  String get ruleEnableTitle;
+
+  /// No description provided for @ruleEnableConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get ruleEnableConfirm;
+
+  /// No description provided for @ruleCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get ruleCancel;
+
+  /// No description provided for @ruleEditOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Thresholds, conditions and channels are edited on the web.'**
+  String get ruleEditOnWeb;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -795,6 +795,255 @@ enum AlertNotificationStatus {
   }
 }
 
+/// AlertConditionAggregation of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionAggregation {
+  avg('avg'),
+  min('min'),
+  max('max'),
+  sum('sum'),
+  last('last'),
+  count('count'),
+  rate('rate'),
+  p50('p50'),
+  p95('p95'),
+  p99('p99'),
+  unknown('');
+
+  const AlertConditionAggregation(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionAggregation fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertConditionSeriesAggregation of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionSeriesAggregation {
+  avg('avg'),
+  sum('sum'),
+  min('min'),
+  max('max'),
+  unknown('');
+
+  const AlertConditionSeriesAggregation(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionSeriesAggregation fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertOperator of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertOperator {
+  gt('gt'),
+  gte('gte'),
+  lt('lt'),
+  lte('lte'),
+  unknown('');
+
+  const AlertOperator(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertOperator fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertConditionMissingData of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionMissingData {
+  keep('keep'),
+  ok('ok'),
+  breach('breach'),
+  unknown('');
+
+  const AlertConditionMissingData(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionMissingData fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertConditionSignal of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionSignal {
+  host('host'),
+  metric('metric'),
+  log('log'),
+  apm('apm'),
+  unknown('');
+
+  const AlertConditionSignal(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionSignal fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertConditionSeasonality of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionSeasonality {
+  none('none'),
+  hourly('hourly'),
+  daily('daily'),
+  weekly('weekly'),
+  unknown('');
+
+  const AlertConditionSeasonality(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionSeasonality fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertConditionDirection of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionDirection {
+  upper('upper'),
+  lower('lower'),
+  both('both'),
+  unknown('');
+
+  const AlertConditionDirection(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionDirection fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertConditionEvent of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertConditionEvent {
+  serviceDisappeared('service_disappeared'),
+  portOpened('port_opened'),
+  newGroup('new_group'),
+  regressed('regressed'),
+  unknown('');
+
+  const AlertConditionEvent(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertConditionEvent fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertRuleStatusState of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertRuleStatusState {
+  disabled('disabled'),
+  unknown('unknown'),
+  ok('ok'),
+  pending('pending'),
+  firing('firing'),
+  error('error'),
+  unknownToThisBuild('');
+
+  const AlertRuleStatusState(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static AlertRuleStatusState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
 /// ApmErrorStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1158,6 +1407,34 @@ enum OqlColumnType {
   final String wire;
 
   static OqlColumnType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertFilterOp of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertFilterOp {
+  eq('eq'),
+  neq('neq'),
+  inValue('in'),
+  notIn('not_in'),
+  contains('contains'),
+  unknown('');
+
+  const AlertFilterOp(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertFilterOp fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1941,6 +2218,97 @@ class AlertIncidentDetail {
   final List<String> channelIds;
   final List<AlertIncidentEvent> events;
   final List<AlertDelivery> deliveries;
+}
+
+/// `AlertRule` of the openlog API contract.
+class AlertRule {
+  const AlertRule({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.type,
+    required this.severity,
+    required this.enabled,
+    required this.intervalSeconds,
+    required this.forSeconds,
+    required this.recoveryForSeconds,
+    required this.condition,
+    required this.channelIds,
+    required this.renotifyIntervalSeconds,
+    required this.flapping,
+    required this.runbookUrl,
+    required this.labels,
+    required this.version,
+    this.createdByUserId,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.status,
+  });
+
+  factory AlertRule.fromJson(Object? json, [String path = 'AlertRule']) {
+    final m = _obj(json, path);
+    return AlertRule(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      type: _req(m, 'type', path, AlertRuleType.fromJson),
+      severity: _req(m, 'severity', path, AlertSeverity.fromJson),
+      enabled: _req(m, 'enabled', path, _bool),
+      intervalSeconds: _req(m, 'interval_seconds', path, _int),
+      forSeconds: _req(m, 'for_seconds', path, _int),
+      recoveryForSeconds: _req(m, 'recovery_for_seconds', path, _int),
+      condition: _req(
+        m,
+        'condition',
+        path,
+        (v, p) => AlertCondition.fromJson(v, p),
+      ),
+      channelIds: _req(
+        m,
+        'channel_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      renotifyIntervalSeconds: _req(m, 'renotify_interval_seconds', path, _int),
+      flapping: _req(
+        m,
+        'flapping',
+        path,
+        (v, p) => AlertFlapping.fromJson(v, p),
+      ),
+      runbookUrl: _req(m, 'runbook_url', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      version: _req(m, 'version', path, _int),
+      createdByUserId: _opt(m, 'created_by_user_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      status: _req(m, 'status', path, (v, p) => AlertRuleStatus.fromJson(v, p)),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String description;
+  final AlertRuleType type;
+  final AlertSeverity severity;
+  final bool enabled;
+  final int intervalSeconds;
+  final int forSeconds;
+  final int recoveryForSeconds;
+  final AlertCondition condition;
+  final List<String> channelIds;
+  final int renotifyIntervalSeconds;
+  final AlertFlapping flapping;
+  final String runbookUrl;
+  final Map<String, String> labels;
+  final int version;
+  final String? createdByUserId;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final AlertRuleStatus status;
 }
 
 /// `ApmService` of the openlog API contract.
@@ -3830,6 +4198,242 @@ class AlertDelivery {
   final List<AlertDeliveryAttempt> attemptLog;
 }
 
+/// Type-specific condition (alerting.md §2.2–2.5). metric_threshold: metric, aggregation, series_aggregation,
+/// window_seconds, filters, group_by, operator, threshold, recovery_threshold, missing_data. log_match: query,
+/// severity_min, filters, group_by, window_seconds, operator, threshold, recovery_threshold. no_data: signal,
+/// metric, filters, group_by, window_seconds, lookback_seconds. discovery: event, filters, match, window_seconds,
+/// lookback_seconds. apm: service_name, service_namespace, environment, transaction_type, transaction_name,
+/// metric (throughput, error_rate, errors, avg_ms, p50_ms, p95_ms, p99_ms, apdex), group_by (environment,
+/// transaction), window_seconds, min_requests, operator, threshold, recovery_threshold, missing_data.
+/// apm_no_data (§2.7): service_name ("" = every service), service_namespace, environment, group_by (namespace,
+/// environment), window_seconds, lookback_seconds.
+/// apm_error (§2.9): event (new_group, regressed), service_name ("" = every service), service_namespace, environment,
+/// match, window_seconds, min_count (new_group only).
+/// oql (§2.10): query (OQL with exactly one number column; FACET = series labels; no TIMESERIES, SINCE/UNTIL,
+/// COMPARE WITH, histogram or variables), window_seconds (60-21600), operator, threshold, recovery_threshold, missing_data.
+/// slo_burn (§2.11): slo_id, windows (1-4 long/short burn windows with their factor), min_requests. The comparison
+/// is fixed (gte 1): the value is the largest min(long, short) burn rate divided by the window's factor.
+/// anomaly (§2.12): signal (metric = the metric_threshold selector, apm = the apm selector), window_seconds,
+/// seasonality (none, hourly, daily, weekly), lookback_days, direction (upper, lower, both), sensitivity
+/// (standard deviations, default 3), min_samples, min_deviation. The comparison is fixed (gte 1): the value is
+/// the deviation from the median of the same seasonal slot divided by sensitivity x 1.4826 x MAD.
+class AlertCondition {
+  const AlertCondition({
+    this.metric,
+    this.serviceName,
+    this.serviceNamespace,
+    this.environment,
+    this.transactionType,
+    this.transactionName,
+    this.minRequests,
+    this.aggregation,
+    this.seriesAggregation,
+    this.windowSeconds,
+    this.lookbackSeconds,
+    this.filters,
+    this.groupBy,
+    this.operator,
+    this.threshold,
+    this.recoveryThreshold,
+    this.missingData,
+    this.query,
+    this.severityMin,
+    this.signal,
+    this.seasonality,
+    this.lookbackDays,
+    this.direction,
+    this.sensitivity,
+    this.minSamples,
+    this.minDeviation,
+    this.sloId,
+    this.windows,
+    this.event,
+    this.match,
+    this.minCount,
+  });
+
+  factory AlertCondition.fromJson(
+    Object? json, [
+    String path = 'AlertCondition',
+  ]) {
+    final m = _obj(json, path);
+    return AlertCondition(
+      metric: _opt(m, 'metric', path, _str),
+      serviceName: _opt(m, 'service_name', path, _str),
+      serviceNamespace: _opt(m, 'service_namespace', path, _str),
+      environment: _opt(m, 'environment', path, _str),
+      transactionType: _opt(m, 'transaction_type', path, _str),
+      transactionName: _opt(m, 'transaction_name', path, _str),
+      minRequests: _opt(m, 'min_requests', path, _num),
+      aggregation: _opt(
+        m,
+        'aggregation',
+        path,
+        AlertConditionAggregation.fromJson,
+      ),
+      seriesAggregation: _opt(
+        m,
+        'series_aggregation',
+        path,
+        AlertConditionSeriesAggregation.fromJson,
+      ),
+      windowSeconds: _opt(m, 'window_seconds', path, _int),
+      lookbackSeconds: _opt(m, 'lookback_seconds', path, _int),
+      filters: _opt(
+        m,
+        'filters',
+        path,
+        (v, p) =>
+            _list<AlertFilter>(v, p, (v, p) => AlertFilter.fromJson(v, p)),
+      ),
+      groupBy: _opt(m, 'group_by', path, (v, p) => _list<String>(v, p, _str)),
+      operator: _opt(m, 'operator', path, AlertOperator.fromJson),
+      threshold: _opt(m, 'threshold', path, _num),
+      recoveryThreshold: _opt(m, 'recovery_threshold', path, _num),
+      missingData: _opt(
+        m,
+        'missing_data',
+        path,
+        AlertConditionMissingData.fromJson,
+      ),
+      query: _opt(m, 'query', path, _str),
+      severityMin: _opt(m, 'severity_min', path, _str),
+      signal: _opt(m, 'signal', path, AlertConditionSignal.fromJson),
+      seasonality: _opt(
+        m,
+        'seasonality',
+        path,
+        AlertConditionSeasonality.fromJson,
+      ),
+      lookbackDays: _opt(m, 'lookback_days', path, _int),
+      direction: _opt(m, 'direction', path, AlertConditionDirection.fromJson),
+      sensitivity: _opt(m, 'sensitivity', path, _num),
+      minSamples: _opt(m, 'min_samples', path, _int),
+      minDeviation: _opt(m, 'min_deviation', path, _num),
+      sloId: _opt(m, 'slo_id', path, _str),
+      windows: _opt(
+        m,
+        'windows',
+        path,
+        (v, p) => _list<AlertBurnWindow>(
+          v,
+          p,
+          (v, p) => AlertBurnWindow.fromJson(v, p),
+        ),
+      ),
+      event: _opt(m, 'event', path, AlertConditionEvent.fromJson),
+      match: _opt(m, 'match', path, _str),
+      minCount: _opt(m, 'min_count', path, _num),
+    );
+  }
+
+  final String? metric;
+  final String? serviceName;
+  final String? serviceNamespace;
+  final String? environment;
+  final String? transactionType;
+  final String? transactionName;
+  final double? minRequests;
+  final AlertConditionAggregation? aggregation;
+  final AlertConditionSeriesAggregation? seriesAggregation;
+  final int? windowSeconds;
+  final int? lookbackSeconds;
+  final List<AlertFilter>? filters;
+  final List<String>? groupBy;
+  final AlertOperator? operator;
+  final double? threshold;
+  final double? recoveryThreshold;
+  final AlertConditionMissingData? missingData;
+  final String? query;
+  final String? severityMin;
+  final AlertConditionSignal? signal;
+  final AlertConditionSeasonality? seasonality;
+  final int? lookbackDays;
+  final AlertConditionDirection? direction;
+  final double? sensitivity;
+  final int? minSamples;
+  final double? minDeviation;
+  final String? sloId;
+  final List<AlertBurnWindow>? windows;
+  final AlertConditionEvent? event;
+  final String? match;
+  final double? minCount;
+}
+
+/// `AlertFlapping` of the openlog API contract.
+class AlertFlapping {
+  const AlertFlapping({
+    required this.enabled,
+    required this.transitions,
+    required this.windowSeconds,
+    required this.holdSeconds,
+  });
+
+  factory AlertFlapping.fromJson(
+    Object? json, [
+    String path = 'AlertFlapping',
+  ]) {
+    final m = _obj(json, path);
+    return AlertFlapping(
+      enabled: _req(m, 'enabled', path, _bool),
+      transitions: _req(m, 'transitions', path, _int),
+      windowSeconds: _req(m, 'window_seconds', path, _int),
+      holdSeconds: _req(m, 'hold_seconds', path, _int),
+    );
+  }
+
+  final bool enabled;
+  final int transitions;
+  final int windowSeconds;
+  final int holdSeconds;
+}
+
+/// `AlertRuleStatus` of the openlog API contract.
+class AlertRuleStatus {
+  const AlertRuleStatus({
+    required this.state,
+    required this.seriesPending,
+    required this.seriesFiring,
+    required this.openIncidents,
+    this.lastEvaluatedAt,
+    required this.lastResult,
+    required this.lastError,
+    required this.lastDurationMs,
+    this.nextEvaluationAt,
+    this.owner,
+  });
+
+  factory AlertRuleStatus.fromJson(
+    Object? json, [
+    String path = 'AlertRuleStatus',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleStatus(
+      state: _req(m, 'state', path, AlertRuleStatusState.fromJson),
+      seriesPending: _req(m, 'series_pending', path, _int),
+      seriesFiring: _req(m, 'series_firing', path, _int),
+      openIncidents: _req(m, 'open_incidents', path, _int),
+      lastEvaluatedAt: _opt(m, 'last_evaluated_at', path, _time),
+      lastResult: _req(m, 'last_result', path, _str),
+      lastError: _req(m, 'last_error', path, _str),
+      lastDurationMs: _req(m, 'last_duration_ms', path, _int),
+      nextEvaluationAt: _opt(m, 'next_evaluation_at', path, _time),
+      owner: _opt(m, 'owner', path, _str),
+    );
+  }
+
+  final AlertRuleStatusState state;
+  final int seriesPending;
+  final int seriesFiring;
+  final int openIncidents;
+  final DateTime? lastEvaluatedAt;
+  final String lastResult;
+  final String lastError;
+  final int lastDurationMs;
+  final DateTime? nextEvaluationAt;
+  final String? owner;
+}
+
 /// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
 class ApmRed {
   const ApmRed({
@@ -4946,6 +5550,56 @@ class AlertDeliveryAttempt {
   final String error;
 }
 
+/// `AlertFilter` of the openlog API contract.
+class AlertFilter {
+  const AlertFilter({
+    required this.field,
+    required this.op,
+    required this.values,
+  });
+
+  factory AlertFilter.fromJson(Object? json, [String path = 'AlertFilter']) {
+    final m = _obj(json, path);
+    return AlertFilter(
+      field: _req(m, 'field', path, _str),
+      op: _req(m, 'op', path, AlertFilterOp.fromJson),
+      values: _req(m, 'values', path, (v, p) => _list<String>(v, p, _str)),
+    );
+  }
+
+  final String field;
+  final AlertFilterOp op;
+  final List<String> values;
+}
+
+/// One long/short burn window of a slo_burn condition (alerting.md §2.11); both are rounded up to whole minutes.
+class AlertBurnWindow {
+  const AlertBurnWindow({
+    required this.name,
+    required this.factor,
+    required this.longSeconds,
+    required this.shortSeconds,
+  });
+
+  factory AlertBurnWindow.fromJson(
+    Object? json, [
+    String path = 'AlertBurnWindow',
+  ]) {
+    final m = _obj(json, path);
+    return AlertBurnWindow(
+      name: _req(m, 'name', path, _str),
+      factor: _req(m, 'factor', path, _num),
+      longSeconds: _req(m, 'long_seconds', path, _int),
+      shortSeconds: _req(m, 'short_seconds', path, _int),
+    );
+  }
+
+  final String name;
+  final double factor;
+  final int longSeconds;
+  final int shortSeconds;
+}
+
 /// `ApmErrorAssignee` of the openlog API contract.
 class ApmErrorAssignee {
   const ApmErrorAssignee({
@@ -5246,6 +5900,28 @@ class IncidentPageCounts {
   final int open;
   final int acknowledged;
   final int resolved;
+}
+
+/// `AlertRulePage` of the openlog API contract.
+class AlertRulePage {
+  const AlertRulePage({required this.rules});
+
+  factory AlertRulePage.fromJson(
+    Object? json, [
+    String path = 'AlertRulePage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRulePage(
+      rules: _req(
+        m,
+        'rules',
+        path,
+        (v, p) => _list<AlertRule>(v, p, (v, p) => AlertRule.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<AlertRule> rules;
 }
 
 /// `ServicePage` of the openlog API contract.

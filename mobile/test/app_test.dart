@@ -214,6 +214,7 @@ Widget signedInApp(
   HostsController? hosts,
   QueryController? query,
   TracesController? traces,
+  AlertRulesController? rules,
   IncidentController Function(String id)? incident,
   ServiceOverviewController Function(String name)? serviceOverview,
   ServiceErrorsController Function(String name)? serviceErrors,
@@ -231,6 +232,7 @@ Widget signedInApp(
     dashboards: dashboards ?? ScriptedDashboards(),
     query: query,
     traces: traces,
+    rules: rules,
     hosts: hosts,
     incident: incident,
     serviceOverview: serviceOverview,
@@ -242,6 +244,61 @@ Widget signedInApp(
 /// Unlike the other scripted controllers this one starts empty and fills on
 /// refresh, because what the errors tab is tested for is *when* it asks: a
 /// fake that pretends to be loaded already would make the question unaskable.
+class ScriptedRules extends AlertRulesController {
+  ScriptedRules(List<AlertRule> rules)
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    items = rules;
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> setEnabled(String id, {required bool enabled}) async =>
+      calls.add('$id:$enabled');
+}
+
+AlertRule rule(
+  String id, {
+  bool enabled = true,
+  int openIncidents = 0,
+  AlertRuleStatusState state = AlertRuleStatusState.ok,
+}) => AlertRule(
+  id: id,
+  name: 'API error rate',
+  description: '',
+  type: AlertRuleType.unknown,
+  severity: AlertSeverity.critical,
+  enabled: enabled,
+  intervalSeconds: 60,
+  forSeconds: 300,
+  recoveryForSeconds: 300,
+  condition: const AlertCondition(),
+  channelIds: const [],
+  renotifyIntervalSeconds: 0,
+  flapping: const AlertFlapping(
+    enabled: false,
+    windowSeconds: 0,
+    transitions: 0,
+    holdSeconds: 0,
+  ),
+  runbookUrl: '',
+  labels: const {},
+  version: 1,
+  createdByEmail: 'owner@example.com',
+  createdAt: DateTime.utc(2026, 10, 1),
+  updatedAt: DateTime.utc(2026, 10, 1),
+  status: AlertRuleStatus(
+    state: state,
+    seriesPending: 0,
+    seriesFiring: openIncidents,
+    openIncidents: openIncidents,
+    lastResult: '',
+    lastError: '',
+    lastDurationMs: 12,
+  ),
+);
+
 class ScriptedTraces extends TracesController {
   ScriptedTraces(List<SpanQueryRow> rows)
     : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
@@ -1512,6 +1569,7 @@ void main() {
       'Dashboards': Key('dashboards-search'),
       'Inventory search': Key('inventory-category'),
       'Fleet': Key('fleet-search'),
+      'Alert rules': Key('rules-search'),
       'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
@@ -1553,6 +1611,46 @@ void main() {
 
     // Not a number written next to the tab list: that number was wrong twice.
     expect(find.byKey(const Key('incident-i1')), findsOneWidget);
+  });
+
+  testWidgets('turning a rule off asks first, and says what else happens', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final r = ScriptedRules([rule('r1', openIncidents: 3)]);
+    await tester.pumpWidget(signedInApp(s, rules: r));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Alert rules');
+
+    await tester.tap(find.byKey(const Key('rule-switch-r1')));
+    await tester.pumpAndSettle();
+
+    // Nothing has happened yet, and the dialog says the part that is not
+    // obvious: the open incidents go too.
+    expect(r.calls, isEmpty);
+    expect(
+      find.textContaining('3 open incidents are resolved as well'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('rule-confirm')));
+    await tester.pumpAndSettle();
+    expect(r.calls, ['r1:false']);
+  });
+
+  testWidgets('cancelling leaves the rule alone', (tester) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final r = ScriptedRules([rule('r1')]);
+    await tester.pumpWidget(signedInApp(s, rules: r));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Alert rules');
+
+    await tester.tap(find.byKey(const Key('rule-switch-r1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(r.calls, isEmpty);
   });
 
   testWidgets('the drawer lists every section the app has, in the web order', (
@@ -1603,6 +1701,7 @@ void main() {
       'Dashboards',
       'Inventory search',
       'Fleet',
+      'Alert rules',
       'Alerts',
       'Settings',
     ]);
