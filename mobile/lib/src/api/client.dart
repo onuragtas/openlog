@@ -333,6 +333,36 @@ class OpenlogClient {
         ),
       );
 
+  /// One pod, with its containers, labels and the services running in it.
+  Future<KubernetesPodDetail> pod(String podUid) async =>
+      KubernetesPodDetail.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/kubernetes/pods/${Uri.encodeComponent(podUid)}',
+        ),
+      );
+
+  Future<KubernetesPodTimeseries> podTimeseries(String podUid) async =>
+      KubernetesPodTimeseries.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/kubernetes/pods/${Uri.encodeComponent(podUid)}/timeseries',
+        ),
+      );
+
+  /// The events about it, newest first. On a pod that will not start this is
+  /// the answer -- BackOff, FailedScheduling, OOMKilled -- and nothing else
+  /// on the screen says it.
+  Future<KubernetesEventList> podEvents(
+    String podUid, {
+    int limit = 50,
+  }) async => KubernetesEventList.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/kubernetes/pods/${Uri.encodeComponent(podUid)}/events?limit=$limit',
+    ),
+  );
+
   /// What an SDK or an agent has to be pointed at: the OTLP endpoints, the
   /// release the install commands pin, and what this installation supports.
   ///

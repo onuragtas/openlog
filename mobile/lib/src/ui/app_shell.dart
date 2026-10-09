@@ -9,6 +9,7 @@ import 'alerts_screen.dart';
 import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
+import 'pod_screen.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
 import 'add_data_screen.dart';
@@ -213,7 +214,20 @@ class _AppShellState extends State<AppShell> {
         searchKey: 'pods-search',
         active: active,
         emptyTitle: (l) => l.podsEmpty,
-        card: podCard,
+        card: (context, p) => podCard(
+          context,
+          p,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => PodScreen(
+                session: session,
+                sections: s,
+                podUid: p.podUid,
+                podName: p.podName,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(

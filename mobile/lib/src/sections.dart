@@ -55,6 +55,7 @@ class Sections {
     RumOverviewController Function(String app)? rumOverview,
     HostController Function(String hostId)? host,
     ContainerController Function(String containerId)? container,
+    PodController Function(String podUid)? pod,
     ProfileFunctionsController Function({
       required String service,
       required String type,
@@ -73,6 +74,7 @@ class Sections {
            rumOverview ?? ((app) => RumOverviewController(client, app)),
        host = host ?? ((id) => HostController(client, id)),
        container = container ?? ((id) => ContainerController(client, id)),
+       pod = pod ?? ((uid) => PodController(client, uid)),
        profileFunctions =
            profileFunctions ??
            (({
@@ -143,6 +145,7 @@ class Sections {
   final RumOverviewController Function(String app) rumOverview;
   final HostController Function(String hostId) host;
   final ContainerController Function(String containerId) container;
+  final PodController Function(String podUid) pod;
   final ProfileFunctionsController Function({
     required String service,
     required String type,

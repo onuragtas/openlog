@@ -564,5 +564,32 @@
     }
   },
   "containerRxTx": "gelen / giden",
-  "containerReadWrite": "okuma / yazma"
+  "containerReadWrite": "okuma / yazma",
+  "podContainers": "Konteynerler",
+  "podEvents": "Olaylar",
+  "podNoEvents": "Bu pod hakkında olay yok.",
+  "podEventsFailed": "Olaylar okunamadı: {detail}",
+  "@podEventsFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "podLabels": "Etiketler",
+  "podServices": "Servisler",
+  "podRestartsLabel": "Yeniden başlatma",
+  "podNode": "Düğüm",
+  "podReady": "hazır",
+  "podNotReady": "hazır değil",
+  "podEventCount": "{count}×",
+  "@podEventCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "podCpu": "İşlemci",
+  "podMemory": "Çalışma kümesi"
 }

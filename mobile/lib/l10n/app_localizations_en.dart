@@ -1143,4 +1143,47 @@ class LEn extends L {
 
   @override
   String get containerReadWrite => 'read / write';
+
+  @override
+  String get podContainers => 'Containers';
+
+  @override
+  String get podEvents => 'Events';
+
+  @override
+  String get podNoEvents => 'No event about this pod.';
+
+  @override
+  String podEventsFailed(String detail) {
+    return 'The events could not be read: $detail';
+  }
+
+  @override
+  String get podLabels => 'Labels';
+
+  @override
+  String get podServices => 'Services';
+
+  @override
+  String get podRestartsLabel => 'Restarts';
+
+  @override
+  String get podNode => 'Node';
+
+  @override
+  String get podReady => 'ready';
+
+  @override
+  String get podNotReady => 'not ready';
+
+  @override
+  String podEventCount(int count) {
+    return '$count×';
+  }
+
+  @override
+  String get podCpu => 'CPU';
+
+  @override
+  String get podMemory => 'Working set';
 }

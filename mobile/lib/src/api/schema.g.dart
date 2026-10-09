@@ -3063,6 +3063,266 @@ class ContainerTimeseriesSeries {
   final List<List<double>> blockioWrite;
 }
 
+/// `KubernetesPodDetail` of the openlog API contract.
+class KubernetesPodDetail {
+  const KubernetesPodDetail({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.namespace,
+    required this.podName,
+    required this.podUid,
+    required this.nodeName,
+    required this.workloadKind,
+    required this.workloadName,
+    required this.phase,
+    required this.ready,
+    required this.reason,
+    required this.status,
+    required this.restarts,
+    required this.podIp,
+    required this.qosClass,
+    this.createdAt,
+    this.startedAt,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    required this.containers,
+    required this.labels,
+    required this.services,
+    this.hostId,
+    this.hostName,
+  });
+
+  factory KubernetesPodDetail.fromJson(
+    Object? json, [
+    String path = 'KubernetesPodDetail',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPodDetail(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      namespace: _req(m, 'namespace', path, _str),
+      podName: _req(m, 'pod_name', path, _str),
+      podUid: _req(m, 'pod_uid', path, _str),
+      nodeName: _req(m, 'node_name', path, _str),
+      workloadKind: _req(m, 'workload_kind', path, _str),
+      workloadName: _req(m, 'workload_name', path, _str),
+      phase: _req(m, 'phase', path, _str),
+      ready: _req(m, 'ready', path, _bool),
+      reason: _req(m, 'reason', path, _str),
+      status: _req(m, 'status', path, _str),
+      restarts: _req(m, 'restarts', path, _int),
+      podIp: _req(m, 'pod_ip', path, _str),
+      qosClass: _req(m, 'qos_class', path, _str),
+      createdAt: _opt(m, 'created_at', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      containers: _req(
+        m,
+        'containers',
+        path,
+        (v, p) => _list<KubernetesPodContainer>(
+          v,
+          p,
+          (v, p) => KubernetesPodContainer.fromJson(v, p),
+        ),
+      ),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<KubernetesPodDetailServicesItem>(
+          v,
+          p,
+          (v, p) => KubernetesPodDetailServicesItem.fromJson(v, p),
+        ),
+      ),
+      hostId: _opt(m, 'host_id', path, _str),
+      hostName: _opt(m, 'host_name', path, _str),
+    );
+  }
+
+  final String clusterUid;
+  final String clusterName;
+  final String namespace;
+  final String podName;
+  final String podUid;
+  final String nodeName;
+  final String workloadKind;
+  final String workloadName;
+  final String phase;
+  final bool ready;
+  final String reason;
+  final String status;
+  final int restarts;
+  final String podIp;
+  final String qosClass;
+  final String? createdAt;
+  final String? startedAt;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final List<KubernetesPodContainer> containers;
+  final Map<String, String> labels;
+  final List<KubernetesPodDetailServicesItem> services;
+  final String? hostId;
+  final String? hostName;
+}
+
+/// `KubernetesPodDetailServicesItem` of the openlog API contract.
+class KubernetesPodDetailServicesItem {
+  const KubernetesPodDetailServicesItem({
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.deploymentEnvironment,
+  });
+
+  factory KubernetesPodDetailServicesItem.fromJson(
+    Object? json, [
+    String path = 'KubernetesPodDetailServicesItem',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPodDetailServicesItem(
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      deploymentEnvironment: _req(m, 'deployment_environment', path, _str),
+    );
+  }
+
+  final String serviceName;
+  final String serviceNamespace;
+  final String deploymentEnvironment;
+}
+
+/// `KubernetesPodTimeseries` of the openlog API contract.
+class KubernetesPodTimeseries {
+  const KubernetesPodTimeseries({
+    required this.step,
+    required this.from,
+    required this.to,
+    required this.series,
+  });
+
+  factory KubernetesPodTimeseries.fromJson(
+    Object? json, [
+    String path = 'KubernetesPodTimeseries',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPodTimeseries(
+      step: _req(m, 'step', path, _str),
+      from: _req(m, 'from', path, _int),
+      to: _req(m, 'to', path, _int),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => KubernetesPodTimeseriesSeries.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String step;
+  final int from;
+  final int to;
+  final KubernetesPodTimeseriesSeries series;
+}
+
+/// `KubernetesPodTimeseriesSeries` of the openlog API contract.
+class KubernetesPodTimeseriesSeries {
+  const KubernetesPodTimeseriesSeries({
+    required this.cpuUsage,
+    required this.memoryWorkingSet,
+    required this.networkReceive,
+    required this.networkTransmit,
+    required this.restarts,
+  });
+
+  factory KubernetesPodTimeseriesSeries.fromJson(
+    Object? json, [
+    String path = 'KubernetesPodTimeseriesSeries',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPodTimeseriesSeries(
+      cpuUsage: _req(
+        m,
+        'cpu_usage',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memoryWorkingSet: _req(
+        m,
+        'memory_working_set',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      networkReceive: _req(
+        m,
+        'network_receive',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      networkTransmit: _req(
+        m,
+        'network_transmit',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      restarts: _req(
+        m,
+        'restarts',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  final List<List<double>> cpuUsage;
+  final List<List<double>> memoryWorkingSet;
+  final List<List<double>> networkReceive;
+  final List<List<double>> networkTransmit;
+  final List<List<double>> restarts;
+}
+
+/// `KubernetesEventList` of the openlog API contract.
+class KubernetesEventList {
+  const KubernetesEventList({required this.events});
+
+  factory KubernetesEventList.fromJson(
+    Object? json, [
+    String path = 'KubernetesEventList',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesEventList(
+      events: _req(
+        m,
+        'events',
+        path,
+        (v, p) => _list<KubernetesEvent>(
+          v,
+          p,
+          (v, p) => KubernetesEvent.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  final List<KubernetesEvent> events;
+}
+
 /// Body of `discovered_service` items (semantic-conventions §3.4). Unknown fields must be ignored; any field may be missing.
 class DiscoveredService {
   const DiscoveredService({
@@ -4263,6 +4523,119 @@ class InventoryItem {
   final String category;
   final String key;
   final Object? data;
+}
+
+/// `KubernetesPodContainer` of the openlog API contract.
+class KubernetesPodContainer {
+  const KubernetesPodContainer({
+    required this.name,
+    required this.containerId,
+    required this.image,
+    required this.ready,
+    required this.restarts,
+    required this.state,
+    required this.reason,
+    required this.known,
+    this.hostId,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    this.cpuRequest,
+    this.cpuLimit,
+    this.memoryRequest,
+    this.memoryLimit,
+  });
+
+  factory KubernetesPodContainer.fromJson(
+    Object? json, [
+    String path = 'KubernetesPodContainer',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPodContainer(
+      name: _req(m, 'name', path, _str),
+      containerId: _req(m, 'container_id', path, _str),
+      image: _req(m, 'image', path, _str),
+      ready: _req(m, 'ready', path, _bool),
+      restarts: _req(m, 'restarts', path, _int),
+      state: _req(m, 'state', path, _str),
+      reason: _req(m, 'reason', path, _str),
+      known: _req(m, 'known', path, _bool),
+      hostId: _opt(m, 'host_id', path, _str),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      cpuRequest: _opt(m, 'cpu_request', path, _num),
+      cpuLimit: _opt(m, 'cpu_limit', path, _num),
+      memoryRequest: _opt(m, 'memory_request', path, _num),
+      memoryLimit: _opt(m, 'memory_limit', path, _num),
+    );
+  }
+
+  final String name;
+  final String containerId;
+  final String image;
+  final bool ready;
+  final int restarts;
+  final String state;
+  final String reason;
+  final bool known;
+  final String? hostId;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final double? cpuRequest;
+  final double? cpuLimit;
+  final double? memoryRequest;
+  final double? memoryLimit;
+}
+
+/// `KubernetesEvent` of the openlog API contract.
+class KubernetesEvent {
+  const KubernetesEvent({
+    required this.timestamp,
+    required this.type,
+    required this.reason,
+    required this.message,
+    required this.count,
+    required this.namespace,
+    required this.objectKind,
+    required this.objectName,
+    required this.objectUid,
+    required this.source,
+    required this.clusterUid,
+    required this.clusterName,
+  });
+
+  factory KubernetesEvent.fromJson(
+    Object? json, [
+    String path = 'KubernetesEvent',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesEvent(
+      timestamp: _req(m, 'timestamp', path, _time),
+      type: _req(m, 'type', path, _str),
+      reason: _req(m, 'reason', path, _str),
+      message: _req(m, 'message', path, _str),
+      count: _req(m, 'count', path, _int),
+      namespace: _req(m, 'namespace', path, _str),
+      objectKind: _req(m, 'object_kind', path, _str),
+      objectName: _req(m, 'object_name', path, _str),
+      objectUid: _req(m, 'object_uid', path, _str),
+      source: _req(m, 'source', path, _str),
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+    );
+  }
+
+  final DateTime timestamp;
+  final String type;
+  final String reason;
+  final String message;
+  final int count;
+  final String namespace;
+  final String objectKind;
+  final String objectName;
+  final String objectUid;
+  final String source;
+  final String clusterUid;
+  final String clusterName;
 }
 
 /// `DashboardVariable` of the openlog API contract.

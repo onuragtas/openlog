@@ -935,6 +935,106 @@ void main() {
     expect(c.value!.restartCount, 3);
   });
 
+  test(
+    'a stuck pod opens on the warning, not on the thirty normal events',
+    () async {
+      final server = await FakeServer.start((req, seen) {
+        if (seen.path.endsWith('/events')) {
+          writeJson(req, 200, {
+            'events': [
+              {
+                'timestamp': '2026-10-08T09:00:00.000000000Z',
+                'type': 'Normal',
+                'reason': 'Pulled',
+                'message': 'Container image already present',
+                'count': 1,
+                'namespace': 'prod',
+                'object_kind': 'Pod',
+                'object_name': 'checkout-abc',
+                'object_uid': 'u1',
+                'source': 'kubelet',
+                'cluster_uid': 'c1',
+                'cluster_name': 'prod-1',
+              },
+              {
+                // Older than the Normal above, and still the one that matters.
+                'timestamp': '2026-10-08T08:30:00.000000000Z',
+                'type': 'Warning',
+                'reason': 'BackOff',
+                'message': 'Back-off restarting failed container',
+                'count': 42,
+                'namespace': 'prod',
+                'object_kind': 'Pod',
+                'object_name': 'checkout-abc',
+                'object_uid': 'u1',
+                'source': 'kubelet',
+                'cluster_uid': 'c1',
+                'cluster_name': 'prod-1',
+              },
+            ],
+          });
+        } else if (seen.path.endsWith('/timeseries')) {
+          writeJson(req, 500, {
+            'error': {'message': 'metrics unavailable'},
+          });
+        } else {
+          writeJson(req, 200, {
+            'cluster_uid': 'c1',
+            'cluster_name': 'prod-1',
+            'namespace': 'prod',
+            'pod_name': 'checkout-abc',
+            'pod_uid': 'u1',
+            'node_name': 'node-3',
+            'workload_kind': 'Deployment',
+            'workload_name': 'checkout',
+            'phase': 'Running',
+            'ready': false,
+            'reason': 'CrashLoopBackOff',
+            'status': 'CrashLoopBackOff',
+            'restarts': 42,
+            'pod_ip': '10.1.2.3',
+            'qos_class': 'Burstable',
+            'created_at': null,
+            'started_at': null,
+            'cpu_usage': null,
+            'memory_working_set': null,
+            'cpu_request': null,
+            'cpu_limit': null,
+            'memory_request': null,
+            'memory_limit': null,
+            'first_seen': '2026-10-01T09:00:00.000000000Z',
+            'last_seen': '2026-10-08T09:00:00.000000000Z',
+            'reporting': true,
+            'containers': <Object>[],
+            'labels': {'app': 'checkout'},
+            'services': <Object>[],
+            'host_id': null,
+            'host_name': null,
+          });
+        }
+      });
+      addTearDown(server.stop);
+      final c = PodController(client(server.baseUrl), 'u1');
+
+      await c.refresh();
+
+      expect(server.requests.map((r) => r.path), [
+        '/api/v1/kubernetes/pods/u1',
+        '/api/v1/kubernetes/pods/u1/timeseries',
+        '/api/v1/kubernetes/pods/u1/events',
+      ]);
+      // Warnings first even when a Normal event is newer: a pod with thirty
+      // Normal events and one Warning is a pod with one problem.
+      expect(c.sortedEvents.first.reason, 'BackOff');
+      expect(c.sortedEvents.first.count, 42);
+      // One missing piece does not hide the others: the metrics failed, the
+      // events did not, and the pod itself is on screen.
+      expect(c.failure, isNull);
+      expect(c.seriesError, contains('metrics unavailable'));
+      expect(c.eventsError, isNull);
+    },
+  );
+
   test('a server that is not there reads as unreachable', () async {
     final c = ServiceOverviewController(
       // Nothing listens here, and the controller has to name the address rather

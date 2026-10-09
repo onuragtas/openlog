@@ -1138,4 +1138,47 @@ class LTr extends L {
 
   @override
   String get containerReadWrite => 'okuma / yazma';
+
+  @override
+  String get podContainers => 'Konteynerler';
+
+  @override
+  String get podEvents => 'Olaylar';
+
+  @override
+  String get podNoEvents => 'Bu pod hakkında olay yok.';
+
+  @override
+  String podEventsFailed(String detail) {
+    return 'Olaylar okunamadı: $detail';
+  }
+
+  @override
+  String get podLabels => 'Etiketler';
+
+  @override
+  String get podServices => 'Servisler';
+
+  @override
+  String get podRestartsLabel => 'Yeniden başlatma';
+
+  @override
+  String get podNode => 'Düğüm';
+
+  @override
+  String get podReady => 'hazır';
+
+  @override
+  String get podNotReady => 'hazır değil';
+
+  @override
+  String podEventCount(int count) {
+    return '$count×';
+  }
+
+  @override
+  String get podCpu => 'İşlemci';
+
+  @override
+  String get podMemory => 'Çalışma kümesi';
 }

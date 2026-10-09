@@ -44,6 +44,9 @@ const schemaTargets = <String>[
   'InventoryResponse', // a host's own snapshot, which is what runs on it
   'ContainerDetail', // one container, with the attributes the list leaves out
   'ContainerTimeseries', // and what it has been doing
+  'KubernetesPodDetail', // one pod, its containers and the services on it
+  'KubernetesPodTimeseries', // what it has been doing
+  'KubernetesEventList', // and why it is not doing it, when it is not
   'DiscoveredService', // the body of a discovered_service inventory item,
   // which is where an integration reports whether it is collecting
   'DashboardSummary', // the dashboard list

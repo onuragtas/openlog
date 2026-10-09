@@ -2136,6 +2136,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'read / write'**
   String get containerReadWrite;
+
+  /// No description provided for @podContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get podContainers;
+
+  /// No description provided for @podEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get podEvents;
+
+  /// No description provided for @podNoEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'No event about this pod.'**
+  String get podNoEvents;
+
+  /// No description provided for @podEventsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The events could not be read: {detail}'**
+  String podEventsFailed(String detail);
+
+  /// No description provided for @podLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels'**
+  String get podLabels;
+
+  /// No description provided for @podServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get podServices;
+
+  /// No description provided for @podRestartsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get podRestartsLabel;
+
+  /// No description provided for @podNode.
+  ///
+  /// In en, this message translates to:
+  /// **'Node'**
+  String get podNode;
+
+  /// No description provided for @podReady.
+  ///
+  /// In en, this message translates to:
+  /// **'ready'**
+  String get podReady;
+
+  /// No description provided for @podNotReady.
+  ///
+  /// In en, this message translates to:
+  /// **'not ready'**
+  String get podNotReady;
+
+  /// No description provided for @podEventCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}×'**
+  String podEventCount(int count);
+
+  /// No description provided for @podCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get podCpu;
+
+  /// No description provided for @podMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Working set'**
+  String get podMemory;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

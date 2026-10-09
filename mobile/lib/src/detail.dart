@@ -516,3 +516,64 @@ class ContainerController extends DetailController<ContainerDetail> {
     return out;
   }
 }
+
+/// One pod: what it is, what it has been doing, and -- when it is not doing
+/// it -- why.
+///
+/// Three requests. The events are the reason this screen exists: a pod that
+/// will not start says nothing through its metrics, and everything through
+/// `BackOff` and `FailedScheduling`.
+class PodController extends DetailController<KubernetesPodDetail> {
+  PodController(this._client, this.podUid);
+
+  final OpenlogClient _client;
+  final String podUid;
+
+  KubernetesPodTimeseries? series;
+  List<KubernetesEvent> events = const [];
+
+  /// Kept apart so one missing piece does not hide the others.
+  String? seriesError;
+  String? eventsError;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<KubernetesPodDetail> fetch() async {
+    final pod = await _client.pod(podUid);
+    seriesError = null;
+    eventsError = null;
+    series = null;
+    events = const [];
+    try {
+      series = await _client.podTimeseries(podUid);
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      seriesError = e.message;
+    }
+    try {
+      events = (await _client.podEvents(podUid)).events;
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      eventsError = e.message;
+    }
+    return pod;
+  }
+
+  /// Warnings before anything else, newest first within each. A pod with
+  /// thirty Normal events and one Warning is a pod with one problem, and the
+  /// list has to open on it.
+  List<KubernetesEvent> get sortedEvents {
+    final out = [...events];
+    out.sort((a, b) {
+      final warn =
+          (b.type == 'Warning' ? 1 : 0) - (a.type == 'Warning' ? 1 : 0);
+      if (warn != 0) return warn;
+      return b.timestamp.compareTo(a.timestamp);
+    });
+    return out;
+  }
+}

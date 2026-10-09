@@ -297,12 +297,13 @@ Widget containerCard(
   );
 }
 
-Widget podCard(BuildContext context, KubernetesPod p) {
+Widget podCard(BuildContext context, KubernetesPod p, {VoidCallback? onOpen}) {
   final l = L.of(context);
   // Running-and-ready is the only state that is not worth a colour.
   final healthy = p.ready && p.phase.toLowerCase() == 'running';
   return SectionCard(
     cardKey: Key('pod-${p.podUid}'),
+    onOpen: onOpen,
     title: p.podName,
     subtitle: '${p.namespace} · ${p.workloadKind} ${p.workloadName}'.trim(),
     trailing: p.nodeName,

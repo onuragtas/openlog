@@ -661,5 +661,32 @@
     }
   },
   "containerRxTx": "in / out",
-  "containerReadWrite": "read / write"
+  "containerReadWrite": "read / write",
+  "podContainers": "Containers",
+  "podEvents": "Events",
+  "podNoEvents": "No event about this pod.",
+  "podEventsFailed": "The events could not be read: {detail}",
+  "@podEventsFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "podLabels": "Labels",
+  "podServices": "Services",
+  "podRestartsLabel": "Restarts",
+  "podNode": "Node",
+  "podReady": "ready",
+  "podNotReady": "not ready",
+  "podEventCount": "{count}×",
+  "@podEventCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "podCpu": "CPU",
+  "podMemory": "Working set"
 }
