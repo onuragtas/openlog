@@ -54,6 +54,7 @@ class Sections {
     MetricController Function(String name)? metric,
     RumOverviewController Function(String app)? rumOverview,
     HostController Function(String hostId)? host,
+    ContainerController Function(String containerId)? container,
     ProfileFunctionsController Function({
       required String service,
       required String type,
@@ -71,6 +72,7 @@ class Sections {
        rumOverview =
            rumOverview ?? ((app) => RumOverviewController(client, app)),
        host = host ?? ((id) => HostController(client, id)),
+       container = container ?? ((id) => ContainerController(client, id)),
        profileFunctions =
            profileFunctions ??
            (({
@@ -140,6 +142,7 @@ class Sections {
   final MetricController Function(String name) metric;
   final RumOverviewController Function(String app) rumOverview;
   final HostController Function(String hostId) host;
+  final ContainerController Function(String containerId) container;
   final ProfileFunctionsController Function({
     required String service,
     required String type,

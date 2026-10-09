@@ -627,5 +627,39 @@
       }
     }
   },
-  "hostAttributes": "Resource attributes"
+  "hostAttributes": "Resource attributes",
+  "containerCpu": "CPU",
+  "containerMemory": "Memory",
+  "containerNetwork": "Network",
+  "containerDisk": "Block I/O",
+  "containerNoSeries": "Nothing was sampled in the window.",
+  "containerSeriesFailed": "The charts could not be read: {detail}",
+  "@containerSeriesFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "containerNoLimit": "No memory limit, so there is no share to show.",
+  "containerRestarts": "{count} restarts",
+  "@containerRestarts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "containerImage": "Image",
+  "containerAttributes": "Attributes",
+  "containerOn": "on {host}",
+  "@containerOn": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "containerRxTx": "in / out",
+  "containerReadWrite": "read / write"
 }

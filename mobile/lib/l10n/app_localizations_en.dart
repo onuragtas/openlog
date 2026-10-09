@@ -1097,4 +1097,50 @@ class LEn extends L {
 
   @override
   String get hostAttributes => 'Resource attributes';
+
+  @override
+  String get containerCpu => 'CPU';
+
+  @override
+  String get containerMemory => 'Memory';
+
+  @override
+  String get containerNetwork => 'Network';
+
+  @override
+  String get containerDisk => 'Block I/O';
+
+  @override
+  String get containerNoSeries => 'Nothing was sampled in the window.';
+
+  @override
+  String containerSeriesFailed(String detail) {
+    return 'The charts could not be read: $detail';
+  }
+
+  @override
+  String get containerNoLimit =>
+      'No memory limit, so there is no share to show.';
+
+  @override
+  String containerRestarts(int count) {
+    return '$count restarts';
+  }
+
+  @override
+  String get containerImage => 'Image';
+
+  @override
+  String get containerAttributes => 'Attributes';
+
+  @override
+  String containerOn(String host) {
+    return 'on $host';
+  }
+
+  @override
+  String get containerRxTx => 'in / out';
+
+  @override
+  String get containerReadWrite => 'read / write';
 }

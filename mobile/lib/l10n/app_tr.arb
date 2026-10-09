@@ -530,5 +530,39 @@
       }
     }
   },
-  "hostAttributes": "Kaynak öznitelikleri"
+  "hostAttributes": "Kaynak öznitelikleri",
+  "containerCpu": "İşlemci",
+  "containerMemory": "Bellek",
+  "containerNetwork": "Ağ",
+  "containerDisk": "Blok G/Ç",
+  "containerNoSeries": "Bu aralıkta örnek alınmamış.",
+  "containerSeriesFailed": "Grafikler okunamadı: {detail}",
+  "@containerSeriesFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "containerNoLimit": "Bellek sınırı yok, gösterilecek bir oran da yok.",
+  "containerRestarts": "{count} yeniden başlatma",
+  "@containerRestarts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "containerImage": "İmaj",
+  "containerAttributes": "Öznitelikler",
+  "containerOn": "{host} üzerinde",
+  "@containerOn": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "containerRxTx": "gelen / giden",
+  "containerReadWrite": "okuma / yazma"
 }

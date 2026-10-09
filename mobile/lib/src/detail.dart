@@ -461,3 +461,58 @@ class HostController extends DetailController<Host> {
     return host;
   }
 }
+
+/// One container: what it is, and what it has been doing.
+class ContainerController extends DetailController<ContainerDetail> {
+  ContainerController(this._client, this.containerId);
+
+  final OpenlogClient _client;
+  final String containerId;
+
+  ContainerTimeseries? series;
+
+  /// Why the charts are missing while the container is on screen. A container
+  /// in the list can have no samples in the window -- one that exited an hour
+  /// ago is still in the 30-day retention.
+  String? seriesError;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ContainerDetail> fetch() async {
+    final detail = await _client.container(containerId);
+    seriesError = null;
+    series = null;
+    try {
+      series = await _client.containerTimeseries(containerId);
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      seriesError = e.message;
+    }
+    return detail;
+  }
+
+  /// The value column of a `[unix ms, value]` series.
+  static List<double> values(List<List<double>> points) => [
+    for (final p in points)
+      if (p.length > 1) p[1],
+  ];
+
+  /// Memory as a share of the limit, where there is a limit. A container with
+  /// no limit has no share -- it can use the host's memory, and plotting
+  /// bytes against nothing would invent a ceiling.
+  List<double> get memoryShare {
+    final usage = series?.series.memoryUsage ?? const <List<double>>[];
+    final limit = series?.series.memoryLimit ?? const <List<double>>[];
+    final out = <double>[];
+    for (var i = 0; i < usage.length && i < limit.length; i++) {
+      if (usage[i].length < 2 || limit[i].length < 2) continue;
+      final max = limit[i][1];
+      if (max <= 0) continue;
+      out.add(usage[i][1] / max);
+    }
+    return out;
+  }
+}

@@ -2058,6 +2058,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Resource attributes'**
   String get hostAttributes;
+
+  /// No description provided for @containerCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get containerCpu;
+
+  /// No description provided for @containerMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get containerMemory;
+
+  /// No description provided for @containerNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get containerNetwork;
+
+  /// No description provided for @containerDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'Block I/O'**
+  String get containerDisk;
+
+  /// No description provided for @containerNoSeries.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was sampled in the window.'**
+  String get containerNoSeries;
+
+  /// No description provided for @containerSeriesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The charts could not be read: {detail}'**
+  String containerSeriesFailed(String detail);
+
+  /// No description provided for @containerNoLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'No memory limit, so there is no share to show.'**
+  String get containerNoLimit;
+
+  /// No description provided for @containerRestarts.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} restarts'**
+  String containerRestarts(int count);
+
+  /// No description provided for @containerImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get containerImage;
+
+  /// No description provided for @containerAttributes.
+  ///
+  /// In en, this message translates to:
+  /// **'Attributes'**
+  String get containerAttributes;
+
+  /// No description provided for @containerOn.
+  ///
+  /// In en, this message translates to:
+  /// **'on {host}'**
+  String containerOn(String host);
+
+  /// No description provided for @containerRxTx.
+  ///
+  /// In en, this message translates to:
+  /// **'in / out'**
+  String get containerRxTx;
+
+  /// No description provided for @containerReadWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'read / write'**
+  String get containerReadWrite;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -2832,6 +2832,237 @@ class InventoryResponse {
   final List<InventoryItem> items;
 }
 
+/// `ContainerDetail` of the openlog API contract.
+class ContainerDetail {
+  const ContainerDetail({
+    required this.containerId,
+    required this.name,
+    required this.imageName,
+    required this.imageTags,
+    required this.runtime,
+    required this.hostId,
+    required this.hostName,
+    required this.composeProject,
+    required this.composeService,
+    required this.k8sPodName,
+    required this.k8sNamespaceName,
+    required this.k8sContainerName,
+    required this.state,
+    required this.health,
+    this.startedAt,
+    required this.restartCount,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    this.cpuUtilization,
+    this.memoryUsage,
+    this.memoryLimit,
+    required this.cpuSparkline,
+    required this.memorySparkline,
+    required this.attributes,
+  });
+
+  factory ContainerDetail.fromJson(
+    Object? json, [
+    String path = 'ContainerDetail',
+  ]) {
+    final m = _obj(json, path);
+    return ContainerDetail(
+      containerId: _req(m, 'container_id', path, _str),
+      name: _req(m, 'name', path, _str),
+      imageName: _req(m, 'image_name', path, _str),
+      imageTags: _req(
+        m,
+        'image_tags',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      runtime: _req(m, 'runtime', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      composeProject: _req(m, 'compose_project', path, _str),
+      composeService: _req(m, 'compose_service', path, _str),
+      k8sPodName: _req(m, 'k8s_pod_name', path, _str),
+      k8sNamespaceName: _req(m, 'k8s_namespace_name', path, _str),
+      k8sContainerName: _req(m, 'k8s_container_name', path, _str),
+      state: _req(m, 'state', path, _str),
+      health: _req(m, 'health', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      restartCount: _req(m, 'restart_count', path, _int),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      cpuUtilization: _opt(m, 'cpu_utilization', path, _num),
+      memoryUsage: _opt(m, 'memory_usage', path, _num),
+      memoryLimit: _opt(m, 'memory_limit', path, _num),
+      cpuSparkline: _req(
+        m,
+        'cpu_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memorySparkline: _req(
+        m,
+        'memory_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final String containerId;
+  final String name;
+  final String imageName;
+  final List<String> imageTags;
+  final String runtime;
+  final String hostId;
+  final String hostName;
+  final String composeProject;
+  final String composeService;
+  final String k8sPodName;
+  final String k8sNamespaceName;
+  final String k8sContainerName;
+  final String state;
+  final String health;
+  final String? startedAt;
+  final int restartCount;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final double? cpuUtilization;
+  final double? memoryUsage;
+  final double? memoryLimit;
+  final List<List<double>> cpuSparkline;
+  final List<List<double>> memorySparkline;
+  final Map<String, String> attributes;
+}
+
+/// `ContainerTimeseries` of the openlog API contract.
+class ContainerTimeseries {
+  const ContainerTimeseries({
+    required this.containerId,
+    required this.hostId,
+    required this.step,
+    required this.from,
+    required this.to,
+    required this.series,
+  });
+
+  factory ContainerTimeseries.fromJson(
+    Object? json, [
+    String path = 'ContainerTimeseries',
+  ]) {
+    final m = _obj(json, path);
+    return ContainerTimeseries(
+      containerId: _req(m, 'container_id', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      step: _req(m, 'step', path, _str),
+      from: _req(m, 'from', path, _int),
+      to: _req(m, 'to', path, _int),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => ContainerTimeseriesSeries.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String containerId;
+  final String hostId;
+  final String step;
+  final int from;
+  final int to;
+  final ContainerTimeseriesSeries series;
+}
+
+/// `ContainerTimeseriesSeries` of the openlog API contract.
+class ContainerTimeseriesSeries {
+  const ContainerTimeseriesSeries({
+    required this.cpuUtilization,
+    required this.memoryUsage,
+    required this.memoryLimit,
+    required this.networkReceive,
+    required this.networkTransmit,
+    required this.blockioRead,
+    required this.blockioWrite,
+  });
+
+  factory ContainerTimeseriesSeries.fromJson(
+    Object? json, [
+    String path = 'ContainerTimeseriesSeries',
+  ]) {
+    final m = _obj(json, path);
+    return ContainerTimeseriesSeries(
+      cpuUtilization: _req(
+        m,
+        'cpu_utilization',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memoryUsage: _req(
+        m,
+        'memory_usage',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memoryLimit: _req(
+        m,
+        'memory_limit',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      networkReceive: _req(
+        m,
+        'network_receive',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      networkTransmit: _req(
+        m,
+        'network_transmit',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      blockioRead: _req(
+        m,
+        'blockio_read',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      blockioWrite: _req(
+        m,
+        'blockio_write',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  final List<List<double>> cpuUtilization;
+  final List<List<double>> memoryUsage;
+  final List<List<double>> memoryLimit;
+  final List<List<double>> networkReceive;
+  final List<List<double>> networkTransmit;
+  final List<List<double>> blockioRead;
+  final List<List<double>> blockioWrite;
+}
+
 /// Body of `discovered_service` items (semantic-conventions §3.4). Unknown fields must be ignored; any field may be missing.
 class DiscoveredService {
   const DiscoveredService({

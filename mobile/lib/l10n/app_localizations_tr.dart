@@ -1092,4 +1092,50 @@ class LTr extends L {
 
   @override
   String get hostAttributes => 'Kaynak öznitelikleri';
+
+  @override
+  String get containerCpu => 'İşlemci';
+
+  @override
+  String get containerMemory => 'Bellek';
+
+  @override
+  String get containerNetwork => 'Ağ';
+
+  @override
+  String get containerDisk => 'Blok G/Ç';
+
+  @override
+  String get containerNoSeries => 'Bu aralıkta örnek alınmamış.';
+
+  @override
+  String containerSeriesFailed(String detail) {
+    return 'Grafikler okunamadı: $detail';
+  }
+
+  @override
+  String get containerNoLimit =>
+      'Bellek sınırı yok, gösterilecek bir oran da yok.';
+
+  @override
+  String containerRestarts(int count) {
+    return '$count yeniden başlatma';
+  }
+
+  @override
+  String get containerImage => 'İmaj';
+
+  @override
+  String get containerAttributes => 'Öznitelikler';
+
+  @override
+  String containerOn(String host) {
+    return '$host üzerinde';
+  }
+
+  @override
+  String get containerRxTx => 'gelen / giden';
+
+  @override
+  String get containerReadWrite => 'okuma / yazma';
 }

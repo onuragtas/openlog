@@ -254,7 +254,11 @@ Widget hostCard(BuildContext context, Host h, {VoidCallback? onOpen}) {
   );
 }
 
-Widget containerCard(BuildContext context, ApiContainer x) {
+Widget containerCard(
+  BuildContext context,
+  ApiContainer x, {
+  VoidCallback? onOpen,
+}) {
   final l = L.of(context);
   final memory =
       x.memoryLimit != null && x.memoryLimit! > 0 && x.memoryUsage != null
@@ -262,6 +266,7 @@ Widget containerCard(BuildContext context, ApiContainer x) {
       : null;
   return SectionCard(
     cardKey: Key('container-${x.containerId}'),
+    onOpen: onOpen,
     title: x.name.isEmpty ? x.containerId : x.name,
     subtitle: x.imageName,
     trailing: x.hostName,

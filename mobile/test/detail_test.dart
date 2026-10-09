@@ -796,6 +796,145 @@ void main() {
     expect(c.services, isEmpty);
   });
 
+  test('a container without a memory limit has no share to show', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.path.endsWith('/timeseries')) {
+        writeJson(req, 200, {
+          'container_id': 'c1',
+          'host_id': 'h1',
+          'step': '20s',
+          'from': 1760000000000,
+          'to': 1760000600000,
+          'series': {
+            'cpu_utilization': [
+              [1760000000000, 0.12],
+              [1760000020000, 0.31],
+            ],
+            'memory_usage': [
+              [1760000000000, 104857600],
+              [1760000020000, 125829120],
+            ],
+            // No limit: the server reports zeroes rather than omitting it.
+            'memory_limit': [
+              [1760000000000, 0],
+              [1760000020000, 0],
+            ],
+            'network_receive': <Object>[],
+            'network_transmit': <Object>[],
+            'blockio_read': <Object>[],
+            'blockio_write': <Object>[],
+          },
+        });
+      } else {
+        writeJson(req, 200, {
+          'container_id': 'c1',
+          'name': 'checkout-1',
+          'image_name': 'ghcr.io/resoft/checkout',
+          'image_tags': ['v3'],
+          'runtime': 'docker',
+          'host_id': 'h1',
+          'host_name': 'web-1',
+          'compose_project': '',
+          'compose_service': '',
+          'k8s_pod_name': '',
+          'k8s_namespace_name': '',
+          'k8s_container_name': '',
+          'state': 'running',
+          'health': 'healthy',
+          'started_at': null,
+          'restart_count': 0,
+          'first_seen': '2026-10-01T09:00:00.000000000Z',
+          'last_seen': '2026-10-08T09:00:00.000000000Z',
+          'reporting': true,
+          'cpu_utilization': 0.31,
+          'memory_usage': 125829120,
+          'memory_limit': 0,
+          'cpu_sparkline': <Object>[],
+          'memory_sparkline': <Object>[],
+          'attributes': {'com.docker.compose.project': 'resoft'},
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = ContainerController(client(server.baseUrl), 'c1');
+
+    await c.refresh();
+
+    expect(server.requests.map((r) => r.path), [
+      '/api/v1/containers/c1',
+      '/api/v1/containers/c1/timeseries',
+    ]);
+    expect(ContainerController.values(c.series!.series.cpuUtilization), [
+      0.12,
+      0.31,
+    ]);
+    // A limit of zero is not a limit: plotting a share against it would
+    // invent a ceiling the container does not have.
+    expect(c.memoryShare, isEmpty);
+  });
+
+  test('a container with a limit gets a share of it', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.path.endsWith('/timeseries')) {
+        writeJson(req, 200, {
+          'container_id': 'c1',
+          'host_id': 'h1',
+          'step': '20s',
+          'from': 1760000000000,
+          'to': 1760000600000,
+          'series': {
+            'cpu_utilization': <Object>[],
+            'memory_usage': [
+              [1760000000000, 536870912],
+            ],
+            'memory_limit': [
+              [1760000000000, 1073741824],
+            ],
+            'network_receive': <Object>[],
+            'network_transmit': <Object>[],
+            'blockio_read': <Object>[],
+            'blockio_write': <Object>[],
+          },
+        });
+      } else {
+        writeJson(req, 200, {
+          'container_id': 'c1',
+          'name': 'checkout-1',
+          'image_name': 'ghcr.io/resoft/checkout',
+          'image_tags': <String>[],
+          'runtime': 'docker',
+          'host_id': 'h1',
+          'host_name': 'web-1',
+          'compose_project': '',
+          'compose_service': '',
+          'k8s_pod_name': '',
+          'k8s_namespace_name': '',
+          'k8s_container_name': '',
+          'state': 'running',
+          'health': '',
+          'started_at': null,
+          'restart_count': 3,
+          'first_seen': '2026-10-01T09:00:00.000000000Z',
+          'last_seen': '2026-10-08T09:00:00.000000000Z',
+          'reporting': true,
+          'cpu_utilization': null,
+          'memory_usage': 536870912,
+          'memory_limit': 1073741824,
+          'cpu_sparkline': <Object>[],
+          'memory_sparkline': <Object>[],
+          'attributes': <String, String>{},
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = ContainerController(client(server.baseUrl), 'c1');
+
+    await c.refresh();
+
+    expect(c.memoryShare, [0.5]);
+    expect(c.value!.restartCount, 3);
+  });
+
   test('a server that is not there reads as unreachable', () async {
     final c = ServiceOverviewController(
       // Nothing listens here, and the controller has to name the address rather

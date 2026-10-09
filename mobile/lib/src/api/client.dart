@@ -318,6 +318,21 @@ class OpenlogClient {
         ),
       );
 
+  /// One container, with the attributes the list leaves out.
+  Future<ContainerDetail> container(String id) async =>
+      ContainerDetail.fromJson(
+        await _send('GET', '/api/v1/containers/${Uri.encodeComponent(id)}'),
+      );
+
+  /// And what it has been doing.
+  Future<ContainerTimeseries> containerTimeseries(String id) async =>
+      ContainerTimeseries.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/containers/${Uri.encodeComponent(id)}/timeseries',
+        ),
+      );
+
   /// What an SDK or an agent has to be pointed at: the OTLP endpoints, the
   /// release the install commands pin, and what this installation supports.
   ///

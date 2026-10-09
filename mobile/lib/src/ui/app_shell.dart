@@ -12,6 +12,7 @@ import 'nav_drawer.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
 import 'add_data_screen.dart';
+import 'container_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
 import 'host_screen.dart';
@@ -181,7 +182,20 @@ class _AppShellState extends State<AppShell> {
         searchKey: 'containers-search',
         active: active,
         emptyTitle: (l) => l.containersEmpty,
-        card: containerCard,
+        card: (context, x) => containerCard(
+          context,
+          x,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ContainerScreen(
+                session: session,
+                sections: s,
+                containerId: x.containerId,
+                name: x.name.isEmpty ? x.containerId : x.name,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(

@@ -42,6 +42,8 @@ const schemaTargets = <String>[
   'FleetSummary', // how far behind the agents are
   'Onboarding', // the endpoints and versions an SDK has to be pointed at
   'InventoryResponse', // a host's own snapshot, which is what runs on it
+  'ContainerDetail', // one container, with the attributes the list leaves out
+  'ContainerTimeseries', // and what it has been doing
   'DiscoveredService', // the body of a discovered_service inventory item,
   // which is where an integration reports whether it is collecting
   'DashboardSummary', // the dashboard list
