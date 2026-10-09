@@ -6118,6 +6118,25 @@ class AlertChannelPage {
   final bool secretsConfigured;
 }
 
+/// `SessionPage` of the openlog API contract.
+class SessionPage {
+  const SessionPage({required this.sessions});
+
+  factory SessionPage.fromJson(Object? json, [String path = 'SessionPage']) {
+    final m = _obj(json, path);
+    return SessionPage(
+      sessions: _req(
+        m,
+        'sessions',
+        path,
+        (v, p) => _list<Session>(v, p, (v, p) => Session.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<Session> sessions;
+}
+
 /// `ServicePage` of the openlog API contract.
 class ServicePage {
   const ServicePage({required this.step, required this.services});

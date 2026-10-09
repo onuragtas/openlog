@@ -325,7 +325,10 @@ class _AppShellState extends State<AppShell> {
         alerts: s.alerts,
       ),
     );
-    add((_) => SettingsBody(session: session));
+    add(
+      (active) =>
+          SettingsBody(session: session, sessions: s.sessions, active: active),
+    );
     return out;
   }
 }

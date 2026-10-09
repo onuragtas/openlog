@@ -2388,6 +2388,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Channels are created and edited on the web; here you can check one still works.'**
   String get channelEditOnWeb;
+
+  /// No description provided for @sessionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in on'**
+  String get sessionsTitle;
+
+  /// No description provided for @sessionsThisDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'this device'**
+  String get sessionsThisDevice;
+
+  /// No description provided for @sessionsBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'browser'**
+  String get sessionsBrowser;
+
+  /// No description provided for @sessionsLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'last used {when}'**
+  String sessionsLastSeen(String when);
+
+  /// No description provided for @sessionsExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'expires {when}'**
+  String sessionsExpires(String when);
+
+  /// No description provided for @sessionsEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get sessionsEnd;
+
+  /// No description provided for @sessionsEndTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'End this session?'**
+  String get sessionsEndTitle;
+
+  /// No description provided for @sessionsEndBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Whatever is signed in there is signed out. If it is a device you no longer have, this is the thing to do.'**
+  String get sessionsEndBody;
+
+  /// No description provided for @sessionsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No other session.'**
+  String get sessionsNone;
+
+  /// No description provided for @sessionsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The sessions could not be read: {detail}'**
+  String sessionsFailed(String detail);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -577,3 +577,63 @@ class PodController extends DetailController<KubernetesPodDetail> {
     return out;
   }
 }
+
+/// The person's own sessions, and the one write that belongs on a phone:
+/// ending one of them.
+///
+/// This is the screen for the phone left in a taxi. Everything else about an
+/// account -- members, API keys, roles -- is administration, and a pocket is
+/// where those get tapped by accident.
+class SessionsController extends DetailController<SessionPage> {
+  SessionsController(this._client);
+
+  final OpenlogClient _client;
+
+  /// Which session is being ended, so only that row is busy.
+  String? revoking;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<SessionPage> fetch() => _client.sessions();
+
+  /// This device first, then the rest by when they were last used. The one
+  /// the person is holding is the one they need to recognise to rule out.
+  List<Session> get sessions {
+    final out = [...?value?.sessions];
+    out.sort((a, b) {
+      if (a.current != b.current) return a.current ? -1 : 1;
+      return b.lastSeenAt.compareTo(a.lastSeenAt);
+    });
+    return out;
+  }
+
+  /// Ends [id], then reloads so the list is the server's answer.
+  ///
+  /// The current session is not offered here: ending it is signing out, which
+  /// has its own button and leaves the app in a state it knows how to be in.
+  Future<void> revoke(String id) async {
+    revoking = id;
+    failure = null;
+    notifyListeners();
+    try {
+      await _client.revokeSession(id);
+      await refresh();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      // 404: it ended on its own between the list being drawn and the button
+      // being pressed, which is not an error worth a red banner -- reload and
+      // let the row disappear.
+      if (e.status == 404) {
+        await refresh();
+      } else {
+        failure = SessionFailure('unexpected', e.message);
+      }
+    } finally {
+      revoking = null;
+      notifyListeners();
+    }
+  }
+}

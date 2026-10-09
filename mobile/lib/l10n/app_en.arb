@@ -769,5 +769,36 @@
     }
   },
   "channelOff": "off",
-  "channelEditOnWeb": "Channels are created and edited on the web; here you can check one still works."
+  "channelEditOnWeb": "Channels are created and edited on the web; here you can check one still works.",
+  "sessionsTitle": "Signed in on",
+  "sessionsThisDevice": "this device",
+  "sessionsBrowser": "browser",
+  "sessionsLastSeen": "last used {when}",
+  "@sessionsLastSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionsExpires": "expires {when}",
+  "@sessionsExpires": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionsEnd": "End",
+  "sessionsEndTitle": "End this session?",
+  "sessionsEndBody": "Whatever is signed in there is signed out. If it is a device you no longer have, this is the thing to do.",
+  "sessionsNone": "No other session.",
+  "sessionsFailed": "The sessions could not be read: {detail}",
+  "@sessionsFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  }
 }

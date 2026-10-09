@@ -1286,4 +1286,41 @@ class LTr extends L {
   @override
   String get channelEditOnWeb =>
       'Kanallar webden oluşturulur ve düzenlenir; burada birinin hâlâ çalıştığını deneyebilirsiniz.';
+
+  @override
+  String get sessionsTitle => 'Açık oturumlar';
+
+  @override
+  String get sessionsThisDevice => 'bu cihaz';
+
+  @override
+  String get sessionsBrowser => 'tarayıcı';
+
+  @override
+  String sessionsLastSeen(String when) {
+    return 'son kullanım $when';
+  }
+
+  @override
+  String sessionsExpires(String when) {
+    return '$when doluyor';
+  }
+
+  @override
+  String get sessionsEnd => 'Sonlandır';
+
+  @override
+  String get sessionsEndTitle => 'Bu oturum sonlandırılsın mı?';
+
+  @override
+  String get sessionsEndBody =>
+      'Orada açık olan ne varsa çıkış yapmış olur. Artık sizde olmayan bir cihazsa yapılacak şey budur.';
+
+  @override
+  String get sessionsNone => 'Başka oturum yok.';
+
+  @override
+  String sessionsFailed(String detail) {
+    return 'Oturumlar okunamadı: $detail';
+  }
 }

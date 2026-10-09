@@ -215,6 +215,7 @@ Widget signedInApp(
   QueryController? query,
   TracesController? traces,
   AlertRulesController? rules,
+  SessionsController? sessions,
   IncidentController Function(String id)? incident,
   ServiceOverviewController Function(String name)? serviceOverview,
   ServiceErrorsController Function(String name)? serviceErrors,
@@ -233,6 +234,7 @@ Widget signedInApp(
     query: query,
     traces: traces,
     rules: rules,
+    sessions: sessions,
     hosts: hosts,
     incident: incident,
     serviceOverview: serviceOverview,
@@ -244,6 +246,39 @@ Widget signedInApp(
 /// Unlike the other scripted controllers this one starts empty and fills on
 /// refresh, because what the errors tab is tested for is *when* it asks: a
 /// fake that pretends to be loaded already would make the question unaskable.
+class ScriptedSessions extends SessionsController {
+  ScriptedSessions(List<Session> list)
+    : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
+    value = SessionPage(sessions: list);
+    loaded = true;
+  }
+
+  final calls = <String>[];
+
+  @override
+  Future<void> refresh() async {}
+
+  @override
+  Future<void> revoke(String id) async => calls.add(id);
+}
+
+Session deviceSession(
+  String id, {
+  bool current = false,
+  String name = 'Onur iPhone',
+  SessionKind kind = SessionKind.device,
+}) => Session(
+  id: id,
+  createdAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
+  lastSeenAt: DateTime.now().toUtc().subtract(const Duration(minutes: 3)),
+  expiresAt: DateTime.now().toUtc().add(const Duration(days: 88)),
+  ip: '203.0.113.7',
+  userAgent: kind == SessionKind.browser ? 'Firefox on macOS' : '',
+  current: current,
+  kind: kind,
+  deviceName: kind == SessionKind.browser ? '' : name,
+);
+
 class ScriptedRules extends AlertRulesController {
   ScriptedRules(List<AlertRule> rules)
     : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
@@ -1652,6 +1687,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(r.calls, isEmpty);
+  });
+
+  testWidgets('this device is marked and cannot be ended from the list', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final sessions = ScriptedSessions([
+      deviceSession('s1', current: true),
+      deviceSession('s2', name: 'Onur iPad'),
+      deviceSession('s3', kind: SessionKind.browser),
+    ]);
+    await tester.pumpWidget(signedInApp(s, sessions: sessions));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Settings');
+
+    expect(find.text('this device'), findsOneWidget);
+    // Ending the current session is signing out, which has its own button;
+    // offering it here would leave the app somewhere it does not know how
+    // to be.
+    expect(find.byKey(const Key('session-end-s1')), findsNothing);
+    expect(find.byKey(const Key('session-end-s2')), findsOneWidget);
+    expect(find.byKey(const Key('session-end-s3')), findsOneWidget);
+  });
+
+  testWidgets('ending another session asks first', (tester) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final sessions = ScriptedSessions([
+      deviceSession('s1', current: true),
+      deviceSession('s2', name: 'Onur iPad'),
+    ]);
+    await tester.pumpWidget(signedInApp(s, sessions: sessions));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Settings');
+
+    await tester.tap(find.byKey(const Key('session-end-s2')));
+    await tester.pumpAndSettle();
+    expect(sessions.calls, isEmpty);
+
+    await tester.tap(find.byKey(const Key('session-confirm')));
+    await tester.pumpAndSettle();
+    expect(sessions.calls, ['s2']);
   });
 
   testWidgets('the drawer lists every section the app has, in the web order', (

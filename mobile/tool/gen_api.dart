@@ -73,6 +73,7 @@ const responseTargets = <String>[
   'get /api/v1/alerts/incidents 200 IncidentPage',
   'get /api/v1/alerts/rules 200 AlertRulePage',
   'get /api/v1/alerts/channels 200 AlertChannelPage',
+  'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',

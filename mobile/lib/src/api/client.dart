@@ -225,6 +225,15 @@ class OpenlogClient {
     '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/acknowledge',
   );
 
+  /// The caller's own sessions: this phone, their browsers, their other
+  /// devices.
+  Future<SessionPage> sessions() async =>
+      SessionPage.fromJson(await _send('GET', '/api/v1/sessions'));
+
+  /// Ends one of them. The phone in a taxi is the case this exists for.
+  Future<void> revokeSession(String id) =>
+      _send('DELETE', '/api/v1/sessions/${Uri.encodeComponent(id)}');
+
   /// The notification channels, with their secrets masked by the server.
   Future<AlertChannelPage> alertChannels() async =>
       AlertChannelPage.fromJson(await _send('GET', '/api/v1/alerts/channels'));

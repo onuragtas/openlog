@@ -672,5 +672,36 @@
     }
   },
   "channelOff": "kapalı",
-  "channelEditOnWeb": "Kanallar webden oluşturulur ve düzenlenir; burada birinin hâlâ çalıştığını deneyebilirsiniz."
+  "channelEditOnWeb": "Kanallar webden oluşturulur ve düzenlenir; burada birinin hâlâ çalıştığını deneyebilirsiniz.",
+  "sessionsTitle": "Açık oturumlar",
+  "sessionsThisDevice": "bu cihaz",
+  "sessionsBrowser": "tarayıcı",
+  "sessionsLastSeen": "son kullanım {when}",
+  "@sessionsLastSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionsExpires": "{when} doluyor",
+  "@sessionsExpires": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionsEnd": "Sonlandır",
+  "sessionsEndTitle": "Bu oturum sonlandırılsın mı?",
+  "sessionsEndBody": "Orada açık olan ne varsa çıkış yapmış olur. Artık sizde olmayan bir cihazsa yapılacak şey budur.",
+  "sessionsNone": "Başka oturum yok.",
+  "sessionsFailed": "Oturumlar okunamadı: {detail}",
+  "@sessionsFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  }
 }

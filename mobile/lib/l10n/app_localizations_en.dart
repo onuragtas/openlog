@@ -1291,4 +1291,41 @@ class LEn extends L {
   @override
   String get channelEditOnWeb =>
       'Channels are created and edited on the web; here you can check one still works.';
+
+  @override
+  String get sessionsTitle => 'Signed in on';
+
+  @override
+  String get sessionsThisDevice => 'this device';
+
+  @override
+  String get sessionsBrowser => 'browser';
+
+  @override
+  String sessionsLastSeen(String when) {
+    return 'last used $when';
+  }
+
+  @override
+  String sessionsExpires(String when) {
+    return 'expires $when';
+  }
+
+  @override
+  String get sessionsEnd => 'End';
+
+  @override
+  String get sessionsEndTitle => 'End this session?';
+
+  @override
+  String get sessionsEndBody =>
+      'Whatever is signed in there is signed out. If it is a device you no longer have, this is the thing to do.';
+
+  @override
+  String get sessionsNone => 'No other session.';
+
+  @override
+  String sessionsFailed(String detail) {
+    return 'The sessions could not be read: $detail';
+  }
 }
