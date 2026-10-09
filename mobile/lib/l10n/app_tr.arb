@@ -895,5 +895,41 @@
       }
     }
   },
-  "mutesCalendars": "Tatil takvimleri"
+  "mutesCalendars": "Tatil takvimleri",
+  "deliveriesTitle": "Teslimat günlüğü",
+  "deliveriesFor": "{channel} teslimatları",
+  "@deliveriesFor": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "deliveriesEmpty": "Bu filtreyle teslimat yok.",
+  "deliveriesAll": "Hepsi",
+  "deliveriesOpen": "Teslimat günlüğü",
+  "deliveryForRule": "kural: {rule}",
+  "@deliveryForRule": {
+    "placeholders": {
+      "rule": {
+        "type": "String"
+      }
+    }
+  },
+  "deliveryAttempt": "{attempt}. deneme: {status}, {ms} ms",
+  "@deliveryAttempt": {
+    "placeholders": {
+      "attempt": {
+        "type": "int"
+      },
+      "status": {
+        "type": "String"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "deliveryAttemptOk": "başarılı",
+  "deliveryAttemptFailed": "başarısız"
 }

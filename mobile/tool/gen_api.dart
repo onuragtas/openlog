@@ -79,6 +79,7 @@ const responseTargets = <String>[
   'get /api/v1/alerts/mutes 200 AlertMutePage',
   'get /api/v1/alerts/routing-rules 200 AlertRoutingRulePage',
   'get /api/v1/alerts/holiday-calendars 200 AlertHolidayCalendarPage',
+  'get /api/v1/alerts/deliveries 200 AlertDeliveryPage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',

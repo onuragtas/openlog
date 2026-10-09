@@ -390,7 +390,9 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
 - [x] Tatil takvimleri (`alerts/holiday-calendars`): susturmalar ekranından açılan liste,
       oluşturma, düzenleme, silme; tarihler metin olarak (`YYYY-AA-GG` ve her yıl için `AA-GG`).
 - [ ] Kural oluşturma/düzenleme (`alerts/rule-types`, `alerts/rules/preview`, `alerts/templates`)
-- [ ] Teslimat günlüğü (`alerts/deliveries`)
+- [x] Teslimat günlüğü (`alerts/deliveries`): kanallar ekranından, tümü ya da tek kanal için;
+      durum süzgeci sunucuda, her denemenin kodu ve süresiyle. (Webde bu uç için sorgu tanımlı
+      ama hiçbir ekran çağırmıyor; web yalnızca olayın kendi teslimatlarını gösteriyor.)
 
 ### 9.2 APM
 - [ ] Hata gelen kutusu kendi bölümü olarak (`apm/errors`, `apm/errors/groups`)

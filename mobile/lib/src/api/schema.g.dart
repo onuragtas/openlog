@@ -7746,6 +7746,33 @@ class AlertHolidayCalendarPage {
   final List<AlertHolidayCalendar> calendars;
 }
 
+/// `AlertDeliveryPage` of the openlog API contract.
+class AlertDeliveryPage {
+  const AlertDeliveryPage({required this.deliveries});
+
+  factory AlertDeliveryPage.fromJson(
+    Object? json, [
+    String path = 'AlertDeliveryPage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertDeliveryPage(
+      deliveries: _req(
+        m,
+        'deliveries',
+        path,
+        (v, p) =>
+            _list<AlertDelivery>(v, p, (v, p) => AlertDelivery.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'deliveries': [for (final e in deliveries) e.toJson()],
+  };
+
+  final List<AlertDelivery> deliveries;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});

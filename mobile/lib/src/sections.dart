@@ -59,6 +59,7 @@ class Sections {
     AlertMutesController? mutes,
     AlertRoutesController? routes,
     AlertCalendarsController? calendars,
+    AlertDeliveriesController Function(String channelId)? deliveries,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -139,6 +140,10 @@ class Sections {
        mutes = mutes ?? AlertMutesController(client),
        routes = routes ?? AlertRoutesController(client),
        calendars = calendars ?? AlertCalendarsController(client),
+       deliveries =
+           deliveries ??
+           ((channelId) =>
+               AlertDeliveriesController(client, channelId: channelId)),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -179,6 +184,11 @@ class Sections {
 
   /// Reached from the mutes screen, which is the only thing that uses them.
   final AlertCalendarsController calendars;
+
+  /// The delivery log, for one channel or for all of them. A controller per
+  /// screen, like the detail ones: which channel it is about is fixed when
+  /// the screen opens.
+  final AlertDeliveriesController Function(String channelId) deliveries;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -888,4 +898,34 @@ class AlertCalendarsController extends SectionController<AlertHolidayCalendar> {
       notifyListeners();
     }
   }
+}
+
+/// The delivery log: what was sent, where, and whether it arrived.
+///
+/// Opened from a channel, or from the channels screen for all of them. The
+/// question is always the same one -- "did the page actually go out" -- which
+/// is why the filter is the status rather than a search box.
+class AlertDeliveriesController extends SectionController<AlertDelivery> {
+  AlertDeliveriesController(super.client, {this.channelId = ''});
+
+  /// Empty for every channel. Fixed for the life of the controller: the
+  /// screen is opened from one channel or from none.
+  final String channelId;
+
+  /// The wire value of [AlertNotificationStatus], or empty for all of them.
+  String status = '';
+
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertDelivery>> fetch() async =>
+      // Filtered by the server, not here: the limit is applied before any
+      // filtering, so keeping the failures out of a page of 200 would show
+      // the failures among the last 200 notifications rather than the last
+      // 200 failures.
+      (await client.alertDeliveries(
+        channelId: channelId,
+        status: status,
+      )).deliveries;
 }

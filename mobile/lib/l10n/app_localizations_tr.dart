@@ -1556,4 +1556,37 @@ class LTr extends L {
 
   @override
   String get mutesCalendars => 'Tatil takvimleri';
+
+  @override
+  String get deliveriesTitle => 'Teslimat günlüğü';
+
+  @override
+  String deliveriesFor(String channel) {
+    return '$channel teslimatları';
+  }
+
+  @override
+  String get deliveriesEmpty => 'Bu filtreyle teslimat yok.';
+
+  @override
+  String get deliveriesAll => 'Hepsi';
+
+  @override
+  String get deliveriesOpen => 'Teslimat günlüğü';
+
+  @override
+  String deliveryForRule(String rule) {
+    return 'kural: $rule';
+  }
+
+  @override
+  String deliveryAttempt(int attempt, String status, int ms) {
+    return '$attempt. deneme: $status, $ms ms';
+  }
+
+  @override
+  String get deliveryAttemptOk => 'başarılı';
+
+  @override
+  String get deliveryAttemptFailed => 'başarısız';
 }

@@ -2832,6 +2832,60 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Holiday calendars'**
   String get mutesCalendars;
+
+  /// No description provided for @deliveriesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery log'**
+  String get deliveriesTitle;
+
+  /// No description provided for @deliveriesFor.
+  ///
+  /// In en, this message translates to:
+  /// **'{channel} deliveries'**
+  String deliveriesFor(String channel);
+
+  /// No description provided for @deliveriesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No deliveries with this filter.'**
+  String get deliveriesEmpty;
+
+  /// No description provided for @deliveriesAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get deliveriesAll;
+
+  /// No description provided for @deliveriesOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery log'**
+  String get deliveriesOpen;
+
+  /// No description provided for @deliveryForRule.
+  ///
+  /// In en, this message translates to:
+  /// **'rule: {rule}'**
+  String deliveryForRule(String rule);
+
+  /// No description provided for @deliveryAttempt.
+  ///
+  /// In en, this message translates to:
+  /// **'Attempt {attempt}: {status}, {ms} ms'**
+  String deliveryAttempt(int attempt, String status, int ms);
+
+  /// No description provided for @deliveryAttemptOk.
+  ///
+  /// In en, this message translates to:
+  /// **'succeeded'**
+  String get deliveryAttemptOk;
+
+  /// No description provided for @deliveryAttemptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get deliveryAttemptFailed;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

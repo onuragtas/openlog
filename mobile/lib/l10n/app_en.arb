@@ -992,5 +992,41 @@
       }
     }
   },
-  "mutesCalendars": "Holiday calendars"
+  "mutesCalendars": "Holiday calendars",
+  "deliveriesTitle": "Delivery log",
+  "deliveriesFor": "{channel} deliveries",
+  "@deliveriesFor": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "deliveriesEmpty": "No deliveries with this filter.",
+  "deliveriesAll": "All",
+  "deliveriesOpen": "Delivery log",
+  "deliveryForRule": "rule: {rule}",
+  "@deliveryForRule": {
+    "placeholders": {
+      "rule": {
+        "type": "String"
+      }
+    }
+  },
+  "deliveryAttempt": "Attempt {attempt}: {status}, {ms} ms",
+  "@deliveryAttempt": {
+    "placeholders": {
+      "attempt": {
+        "type": "int"
+      },
+      "status": {
+        "type": "String"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "deliveryAttemptOk": "succeeded",
+  "deliveryAttemptFailed": "failed"
 }

@@ -339,6 +339,31 @@ class OpenlogClient {
     '/api/v1/alerts/holiday-calendars/${Uri.encodeComponent(id)}',
   );
 
+  /// The delivery log: notifications with their attempts, newest first.
+  ///
+  /// [channelId] and [status] are the server's own filters rather than a
+  /// local one, because the limit is applied before any filtering -- asking
+  /// for 200 and then keeping the failures would show the failures among the
+  /// last 200 notifications, not the last 200 failures.
+  Future<AlertDeliveryPage> alertDeliveries({
+    String channelId = '',
+    String status = '',
+    int limit = 200,
+  }) async => AlertDeliveryPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/alerts/deliveries',
+        '',
+        extra: {
+          if (channelId.isNotEmpty) 'channel_id': channelId,
+          if (status.isNotEmpty) 'status': status,
+          'limit': '$limit',
+        },
+      ),
+    ),
+  );
+
   /// The notification channels, with their secrets masked by the server.
   Future<AlertChannelPage> alertChannels() async =>
       AlertChannelPage.fromJson(await _send('GET', '/api/v1/alerts/channels'));

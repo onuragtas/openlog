@@ -6,6 +6,7 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'deliveries_screen.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
@@ -44,13 +45,33 @@ class ChannelsBody extends StatelessWidget {
           final theme = Theme.of(context);
           return Padding(
             padding: const EdgeInsets.only(bottom: 8, left: 4),
-            child: Text(
-              c.secretsConfigured ? l.channelEditOnWeb : l.channelsNoSecrets,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: c.secretsConfigured
-                    ? theme.colorScheme.onSurfaceVariant
-                    : severityTextColor(context, SeverityLevel.warning),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  c.secretsConfigured
+                      ? l.channelEditOnWeb
+                      : l.channelsNoSecrets,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: c.secretsConfigured
+                        ? theme.colorScheme.onSurfaceVariant
+                        : severityTextColor(context, SeverityLevel.warning),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const Key('channels-deliveries'),
+                    onPressed: () => openDeliveries(
+                      context,
+                      session: session,
+                      sections: sections,
+                    ),
+                    icon: const Icon(Icons.outbox),
+                    label: Text(l.deliveriesOpen),
+                  ),
+                ),
+              ],
             ),
           );
         },
@@ -63,6 +84,13 @@ class ChannelsBody extends StatelessWidget {
           result: c.results[channel.id],
           canTest: c.secretsConfigured,
           onTest: () => c.test(channel.id),
+          onDeliveries: () => openDeliveries(
+            context,
+            session: session,
+            sections: sections,
+            channelId: channel.id,
+            channelName: channel.name,
+          ),
         ),
       ),
     );
@@ -76,6 +104,7 @@ class _ChannelCard extends StatelessWidget {
     required this.result,
     required this.canTest,
     required this.onTest,
+    required this.onDeliveries,
   });
 
   final AlertChannel channel;
@@ -83,6 +112,10 @@ class _ChannelCard extends StatelessWidget {
   final AlertChannelTestResult? result;
   final bool canTest;
   final VoidCallback onTest;
+
+  /// This channel's own log, which is the answer to "did it reach anyone"
+  /// when the test button says it would today.
+  final VoidCallback onDeliveries;
 
   @override
   Widget build(BuildContext context) {
@@ -149,19 +182,26 @@ class _ChannelCard extends StatelessWidget {
                 ),
               ),
             if (result != null) _Result(result: result!),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                key: Key('channel-test-${channel.id}'),
-                onPressed: busy || !canTest ? null : onTest,
-                child: busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(l.channelTest),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: Key('channel-deliveries-${channel.id}'),
+                  onPressed: onDeliveries,
+                  child: Text(l.deliveriesOpen),
+                ),
+                TextButton(
+                  key: Key('channel-test-${channel.id}'),
+                  onPressed: busy || !canTest ? null : onTest,
+                  child: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(l.channelTest),
+                ),
+              ],
             ),
           ],
         ),

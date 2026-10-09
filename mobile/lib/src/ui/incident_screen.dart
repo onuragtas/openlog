@@ -12,6 +12,7 @@ import '../api/schema.g.dart';
 import '../detail.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'delivery.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
@@ -208,7 +209,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
               ]
             : [
                 for (final d in i.deliveries)
-                  _Delivery(delivery: d, key: Key('delivery-${d.id}')),
+                  DeliveryTile(delivery: d, key: Key('delivery-${d.id}')),
               ],
       ),
     ];
@@ -354,100 +355,6 @@ class _Event extends StatelessWidget {
           ),
           if (event.message.isNotEmpty)
             Text(event.message, style: theme.textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
-
-/// One notification: where it was supposed to go, whether it got there, and the
-/// server's error if it did not -- which is the difference between "nobody was
-/// told" and "nobody looked".
-class _Delivery extends StatelessWidget {
-  const _Delivery({super.key, required this.delivery});
-
-  final AlertDelivery delivery;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = L.of(context);
-    final theme = Theme.of(context);
-    final (label, level) = switch (delivery.status) {
-      AlertNotificationStatus.delivered => (
-        l.deliveryDelivered,
-        SeverityLevel.info,
-      ),
-      AlertNotificationStatus.failed => (
-        l.deliveryFailed,
-        SeverityLevel.critical,
-      ),
-      AlertNotificationStatus.suppressed => (
-        l.deliverySuppressed,
-        SeverityLevel.warning,
-      ),
-      AlertNotificationStatus.sending => (
-        l.deliverySending,
-        SeverityLevel.unknown,
-      ),
-      AlertNotificationStatus.pending => (
-        l.deliveryPending,
-        SeverityLevel.unknown,
-      ),
-      AlertNotificationStatus.unknown => (
-        l.deliveryUnknown,
-        SeverityLevel.unknown,
-      ),
-    };
-    final colors = severityChipColors(context, level);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: colors.foreground,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Text(delivery.channelName, style: theme.textTheme.bodyMedium),
-              Text(
-                delivery.channelType.wire,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (delivery.attempts > 1)
-                Text(
-                  l.deliveryAttempts(delivery.attempts),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-          if (delivery.lastError.isNotEmpty)
-            Text(
-              delivery.lastError,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            ),
         ],
       ),
     );

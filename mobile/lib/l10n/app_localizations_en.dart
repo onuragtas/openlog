@@ -1561,4 +1561,37 @@ class LEn extends L {
 
   @override
   String get mutesCalendars => 'Holiday calendars';
+
+  @override
+  String get deliveriesTitle => 'Delivery log';
+
+  @override
+  String deliveriesFor(String channel) {
+    return '$channel deliveries';
+  }
+
+  @override
+  String get deliveriesEmpty => 'No deliveries with this filter.';
+
+  @override
+  String get deliveriesAll => 'All';
+
+  @override
+  String get deliveriesOpen => 'Delivery log';
+
+  @override
+  String deliveryForRule(String rule) {
+    return 'rule: $rule';
+  }
+
+  @override
+  String deliveryAttempt(int attempt, String status, int ms) {
+    return 'Attempt $attempt: $status, $ms ms';
+  }
+
+  @override
+  String get deliveryAttemptOk => 'succeeded';
+
+  @override
+  String get deliveryAttemptFailed => 'failed';
 }
