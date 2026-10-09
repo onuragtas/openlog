@@ -1651,6 +1651,141 @@ enum VulnSeverity {
   }
 }
 
+/// AlertChannelConfigSmtpTls of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertChannelConfigSmtpTls {
+  starttls('starttls'),
+  tls('tls'),
+  none('none'),
+  unknown('');
+
+  const AlertChannelConfigSmtpTls(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertChannelConfigSmtpTls fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertChannelConfigPagerdutyRegion of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertChannelConfigPagerdutyRegion {
+  us('us'),
+  eu('eu'),
+  unknown('');
+
+  const AlertChannelConfigPagerdutyRegion(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertChannelConfigPagerdutyRegion fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertChannelConfigOpsgenieRegion of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertChannelConfigOpsgenieRegion {
+  us('us'),
+  eu('eu'),
+  unknown('');
+
+  const AlertChannelConfigOpsgenieRegion(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertChannelConfigOpsgenieRegion fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertChannelConfigOpsgeniePriority of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertChannelConfigOpsgeniePriority {
+  empty(''),
+  p1('P1'),
+  p2('P2'),
+  p3('P3'),
+  p4('P4'),
+  p5('P5'),
+  unknown('');
+
+  const AlertChannelConfigOpsgeniePriority(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertChannelConfigOpsgeniePriority fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertChannelConfigOpsgenieRespondersItemType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertChannelConfigOpsgenieRespondersItemType {
+  team('team'),
+  user('user'),
+  escalation('escalation'),
+  schedule('schedule'),
+  unknown('');
+
+  const AlertChannelConfigOpsgenieRespondersItemType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertChannelConfigOpsgenieRespondersItemType fromJson(
+    Object? v,
+    String path,
+  ) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// CostSource of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2309,6 +2444,37 @@ class AlertRule {
   final DateTime createdAt;
   final DateTime updatedAt;
   final AlertRuleStatus status;
+}
+
+/// `AlertChannelTestResult` of the openlog API contract.
+class AlertChannelTestResult {
+  const AlertChannelTestResult({
+    required this.success,
+    required this.statusCode,
+    required this.error,
+    required this.durationMs,
+    required this.notificationId,
+  });
+
+  factory AlertChannelTestResult.fromJson(
+    Object? json, [
+    String path = 'AlertChannelTestResult',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelTestResult(
+      success: _req(m, 'success', path, _bool),
+      statusCode: _req(m, 'status_code', path, _int),
+      error: _req(m, 'error', path, _str),
+      durationMs: _req(m, 'duration_ms', path, _int),
+      notificationId: _req(m, 'notification_id', path, _str),
+    );
+  }
+
+  final bool success;
+  final int statusCode;
+  final String error;
+  final int durationMs;
+  final String notificationId;
 }
 
 /// `ApmService` of the openlog API contract.
@@ -5924,6 +6090,34 @@ class AlertRulePage {
   final List<AlertRule> rules;
 }
 
+/// `AlertChannelPage` of the openlog API contract.
+class AlertChannelPage {
+  const AlertChannelPage({
+    required this.channels,
+    required this.secretsConfigured,
+  });
+
+  factory AlertChannelPage.fromJson(
+    Object? json, [
+    String path = 'AlertChannelPage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelPage(
+      channels: _req(
+        m,
+        'channels',
+        path,
+        (v, p) =>
+            _list<AlertChannel>(v, p, (v, p) => AlertChannel.fromJson(v, p)),
+      ),
+      secretsConfigured: _req(m, 'secrets_configured', path, _bool),
+    );
+  }
+
+  final List<AlertChannel> channels;
+  final bool secretsConfigured;
+}
+
 /// `ServicePage` of the openlog API contract.
 class ServicePage {
   const ServicePage({required this.step, required this.services});
@@ -6349,6 +6543,97 @@ class DbInstancePage {
   }
 
   final List<DbInstance> instances;
+}
+
+/// `AlertChannel` of the openlog API contract.
+class AlertChannel {
+  const AlertChannel({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.enabled,
+    required this.config,
+    required this.secretHints,
+    this.generatedSecrets,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    this.lastDelivery,
+  });
+
+  factory AlertChannel.fromJson(Object? json, [String path = 'AlertChannel']) {
+    final m = _obj(json, path);
+    return AlertChannel(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, AlertChannelType.fromJson),
+      enabled: _req(m, 'enabled', path, _bool),
+      config: _req(
+        m,
+        'config',
+        path,
+        (v, p) => AlertChannelConfig.fromJson(v, p),
+      ),
+      secretHints: _req(
+        m,
+        'secret_hints',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      generatedSecrets: _opt(
+        m,
+        'generated_secrets',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      lastDelivery: _opt(
+        m,
+        'last_delivery',
+        path,
+        (v, p) => AlertChannelLastDelivery.fromJson(v, p),
+      ),
+    );
+  }
+
+  final String id;
+  final String name;
+  final AlertChannelType type;
+  final bool enabled;
+  final AlertChannelConfig config;
+  final Map<String, String> secretHints;
+  final Map<String, String>? generatedSecrets;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final AlertChannelLastDelivery? lastDelivery;
+}
+
+/// `AlertChannelLastDelivery` of the openlog API contract.
+class AlertChannelLastDelivery {
+  const AlertChannelLastDelivery({
+    required this.at,
+    required this.status,
+    required this.error,
+  });
+
+  factory AlertChannelLastDelivery.fromJson(
+    Object? json, [
+    String path = 'AlertChannelLastDelivery',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelLastDelivery(
+      at: _req(m, 'at', path, _time),
+      status: _req(m, 'status', path, AlertNotificationStatus.fromJson),
+      error: _req(m, 'error', path, _str),
+    );
+  }
+
+  final DateTime at;
+  final AlertNotificationStatus status;
+  final String error;
 }
 
 /// `LogRecord` of the openlog API contract.
@@ -7396,6 +7681,174 @@ class DbInstance {
   final double? avgActiveSessions;
   final String topWait;
   final DateTime lastSeen;
+}
+
+/// Non-secret settings, one section per channel type. email: to (required), smtp (optional override); pagerduty: pagerduty; opsgenie: opsgenie (alerting.md §5.3).
+class AlertChannelConfig {
+  const AlertChannelConfig({this.to, this.smtp, this.pagerduty, this.opsgenie});
+
+  factory AlertChannelConfig.fromJson(
+    Object? json, [
+    String path = 'AlertChannelConfig',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelConfig(
+      to: _opt(m, 'to', path, (v, p) => _list<String>(v, p, _str)),
+      smtp: _opt(
+        m,
+        'smtp',
+        path,
+        (v, p) => AlertChannelConfigSmtp.fromJson(v, p),
+      ),
+      pagerduty: _opt(
+        m,
+        'pagerduty',
+        path,
+        (v, p) => AlertChannelConfigPagerduty.fromJson(v, p),
+      ),
+      opsgenie: _opt(
+        m,
+        'opsgenie',
+        path,
+        (v, p) => AlertChannelConfigOpsgenie.fromJson(v, p),
+      ),
+    );
+  }
+
+  final List<String>? to;
+  final AlertChannelConfigSmtp? smtp;
+  final AlertChannelConfigPagerduty? pagerduty;
+  final AlertChannelConfigOpsgenie? opsgenie;
+}
+
+/// `AlertChannelConfigSmtp` of the openlog API contract.
+class AlertChannelConfigSmtp {
+  const AlertChannelConfigSmtp({
+    this.host,
+    this.port,
+    this.username,
+    this.from,
+    this.tls,
+  });
+
+  factory AlertChannelConfigSmtp.fromJson(
+    Object? json, [
+    String path = 'AlertChannelConfigSmtp',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelConfigSmtp(
+      host: _opt(m, 'host', path, _str),
+      port: _opt(m, 'port', path, _int),
+      username: _opt(m, 'username', path, _str),
+      from: _opt(m, 'from', path, _str),
+      tls: _opt(m, 'tls', path, AlertChannelConfigSmtpTls.fromJson),
+    );
+  }
+
+  final String? host;
+  final int? port;
+  final String? username;
+  final String? from;
+  final AlertChannelConfigSmtpTls? tls;
+}
+
+/// `AlertChannelConfigPagerduty` of the openlog API contract.
+class AlertChannelConfigPagerduty {
+  const AlertChannelConfigPagerduty({this.region});
+
+  factory AlertChannelConfigPagerduty.fromJson(
+    Object? json, [
+    String path = 'AlertChannelConfigPagerduty',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelConfigPagerduty(
+      region: _opt(
+        m,
+        'region',
+        path,
+        AlertChannelConfigPagerdutyRegion.fromJson,
+      ),
+    );
+  }
+
+  final AlertChannelConfigPagerdutyRegion? region;
+}
+
+/// `AlertChannelConfigOpsgenie` of the openlog API contract.
+class AlertChannelConfigOpsgenie {
+  const AlertChannelConfigOpsgenie({
+    this.region,
+    this.priority,
+    this.responders,
+    this.tags,
+  });
+
+  factory AlertChannelConfigOpsgenie.fromJson(
+    Object? json, [
+    String path = 'AlertChannelConfigOpsgenie',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelConfigOpsgenie(
+      region: _opt(
+        m,
+        'region',
+        path,
+        AlertChannelConfigOpsgenieRegion.fromJson,
+      ),
+      priority: _opt(
+        m,
+        'priority',
+        path,
+        AlertChannelConfigOpsgeniePriority.fromJson,
+      ),
+      responders: _opt(
+        m,
+        'responders',
+        path,
+        (v, p) => _list<AlertChannelConfigOpsgenieRespondersItem>(
+          v,
+          p,
+          (v, p) => AlertChannelConfigOpsgenieRespondersItem.fromJson(v, p),
+        ),
+      ),
+      tags: _opt(m, 'tags', path, (v, p) => _list<String>(v, p, _str)),
+    );
+  }
+
+  final AlertChannelConfigOpsgenieRegion? region;
+  final AlertChannelConfigOpsgeniePriority? priority;
+  final List<AlertChannelConfigOpsgenieRespondersItem>? responders;
+  final List<String>? tags;
+}
+
+/// `AlertChannelConfigOpsgenieRespondersItem` of the openlog API contract.
+class AlertChannelConfigOpsgenieRespondersItem {
+  const AlertChannelConfigOpsgenieRespondersItem({
+    required this.type,
+    this.name,
+    this.id,
+  });
+
+  factory AlertChannelConfigOpsgenieRespondersItem.fromJson(
+    Object? json, [
+    String path = 'AlertChannelConfigOpsgenieRespondersItem',
+  ]) {
+    final m = _obj(json, path);
+    return AlertChannelConfigOpsgenieRespondersItem(
+      type: _req(
+        m,
+        'type',
+        path,
+        AlertChannelConfigOpsgenieRespondersItemType.fromJson,
+      ),
+      name: _opt(m, 'name', path, _str),
+      id: _opt(m, 'id', path, _str),
+    );
+  }
+
+  final AlertChannelConfigOpsgenieRespondersItemType type;
+  final String? name;
+  final String? id;
 }
 
 /// `CostPrice` of the openlog API contract.

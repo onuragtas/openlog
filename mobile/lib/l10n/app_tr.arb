@@ -630,5 +630,47 @@
   "ruleEnableTitle": "Bu kural yeniden açılsın mı?",
   "ruleEnableConfirm": "Aç",
   "ruleCancel": "Vazgeç",
-  "ruleEditOnWeb": "Eşikler, koşullar ve kanallar webden düzenlenir."
+  "ruleEditOnWeb": "Eşikler, koşullar ve kanallar webden düzenlenir.",
+  "navChannels": "Kanallar",
+  "channelsEmpty": "Bildirim kanalı yok.",
+  "channelsSearch": "Kanal ara",
+  "channelsNoSecrets": "Bu kurulumda sır anahtarı yok; kanallar saklanamaz ve denenemez.",
+  "channelTest": "Test gönder",
+  "channelTestOk": "{ms} ms'de ulaştı",
+  "@channelTestOk": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "channelTestFailedCode": "{code} ile reddedildi: {error}",
+  "@channelTestFailedCode": {
+    "placeholders": {
+      "code": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "channelTestFailed": "Ulaşmadı: {error}",
+  "@channelTestFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "channelLastDelivery": "son {when}",
+  "@channelLastDelivery": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "channelOff": "kapalı",
+  "channelEditOnWeb": "Kanallar webden oluşturulur ve düzenlenir; burada birinin hâlâ çalıştığını deneyebilirsiniz."
 }

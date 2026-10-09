@@ -31,6 +31,7 @@ const schemaTargets = <String>[
   'AlertIncident', // what the app exists to show: what is firing right now
   'AlertIncidentDetail', // one incident with its timeline and what was delivered
   'AlertRule', // the rules behind the incidents, and whether they are on
+  'AlertChannelTestResult', // whether a channel would actually reach anyone
   'ApmService', // where to look after an alert: which service, how healthy
   'ApmOverview', // that service's golden signals, so the alert gets a shape
   'ApmErrorInbox', // what is actually breaking in that service
@@ -71,6 +72,7 @@ const responseTargets = <String>[
   'post /api/v1/auth/device 201 DeviceSession',
   'get /api/v1/alerts/incidents 200 IncidentPage',
   'get /api/v1/alerts/rules 200 AlertRulePage',
+  'get /api/v1/alerts/channels 200 AlertChannelPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',

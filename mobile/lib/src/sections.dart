@@ -48,6 +48,7 @@ class Sections {
     DashboardsController? dashboards,
     AlertsController? alerts,
     AlertRulesController? rules,
+    AlertChannelsController? channels,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -111,6 +112,7 @@ class Sections {
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        rules = rules ?? AlertRulesController(client),
+       channels = channels ?? AlertChannelsController(client),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -135,6 +137,7 @@ class Sections {
   final DashboardsController dashboards;
   final QueryController query;
   final AlertRulesController rules;
+  final AlertChannelsController channels;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -181,6 +184,7 @@ class Sections {
     inventory,
     fleet,
     rules,
+    channels,
     alerts,
   ];
 
@@ -483,6 +487,72 @@ class AlertRulesController extends SectionController<AlertRule> {
           : SessionFailure('unexpected', e.message);
     } finally {
       busy = null;
+      notifyListeners();
+    }
+  }
+}
+
+/// The notification channels, and the one thing worth doing to them from a
+/// phone: finding out whether they still reach anyone.
+///
+/// Creating and editing a channel means typing a webhook URL or an SMTP
+/// password, which is neither pleasant nor wise on a phone; those stay on the
+/// web. Testing one before a shift is exactly a phone job.
+class AlertChannelsController extends SectionController<AlertChannel> {
+  AlertChannelsController(super.client);
+
+  /// False when OPENLOG_SECRETS_KEY is not set: the installation cannot store
+  /// channel secrets at all, so an empty list means "not possible here"
+  /// rather than "nobody made one".
+  bool secretsConfigured = true;
+
+  /// Which channel is being tested, so only that row is busy.
+  String? testing;
+
+  /// What each test said, kept by channel id. Not cleared on refresh: the
+  /// answer to "did this work" should survive the list reloading under it.
+  final results = <String, AlertChannelTestResult>{};
+
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertChannel>> fetch() async {
+    final page = await client.alertChannels();
+    secretsConfigured = page.secretsConfigured;
+    final q = query.trim().toLowerCase();
+    return [
+      for (final c in page.channels)
+        if (q.isEmpty ||
+            c.name.toLowerCase().contains(q) ||
+            c.type.wire.contains(q))
+          c,
+    ];
+  }
+
+  /// Tests [id] and keeps the answer.
+  ///
+  /// The result is the body, not the status code: the server answers 200 with
+  /// `success: false` when the receiver refused, and reporting that as a
+  /// success would tell someone their pager works when it does not.
+  Future<void> test(String id) async {
+    testing = id;
+    failure = null;
+    notifyListeners();
+    try {
+      results[id] = await client.testAlertChannel(id);
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = switch (e.status) {
+        403 => const SessionFailure('alertsForbidden', ''),
+        // 409: the installation has no secrets key, so there is nothing to
+        // send with. Saying "forbidden" would send someone to the wrong place.
+        409 => const SessionFailure('channelsNoSecrets', ''),
+        _ => SessionFailure('unexpected', e.message),
+      };
+    } finally {
+      testing = null;
       notifyListeners();
     }
   }

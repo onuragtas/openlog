@@ -1248,4 +1248,47 @@ class LEn extends L {
   @override
   String get ruleEditOnWeb =>
       'Thresholds, conditions and channels are edited on the web.';
+
+  @override
+  String get navChannels => 'Channels';
+
+  @override
+  String get channelsEmpty => 'No notification channel.';
+
+  @override
+  String get channelsSearch => 'Search channels';
+
+  @override
+  String get channelsNoSecrets =>
+      'This installation has no secrets key, so channels cannot be stored or tested.';
+
+  @override
+  String get channelTest => 'Send a test';
+
+  @override
+  String channelTestOk(int ms) {
+    return 'Reached in $ms ms';
+  }
+
+  @override
+  String channelTestFailedCode(int code, String error) {
+    return 'Refused with $code: $error';
+  }
+
+  @override
+  String channelTestFailed(String error) {
+    return 'Did not get through: $error';
+  }
+
+  @override
+  String channelLastDelivery(String when) {
+    return 'last $when';
+  }
+
+  @override
+  String get channelOff => 'off';
+
+  @override
+  String get channelEditOnWeb =>
+      'Channels are created and edited on the web; here you can check one still works.';
 }

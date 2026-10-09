@@ -94,6 +94,103 @@ Map<String, Object?> spanRow(
 };
 
 void main() {
+  test('a channel test that the receiver refused is not a success', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.path.endsWith('/test')) {
+        // 200, and it did not work. This is the trap: the status code is
+        // about the API call, the body is about the pager.
+        writeJson(req, 200, {
+          'success': false,
+          'status_code': 404,
+          'error': 'no_service: that Slack webhook no longer exists',
+          'duration_ms': 143,
+          'notification_id': 'n1',
+        });
+      } else {
+        writeJson(req, 200, {
+          'channels': [
+            {
+              'id': 'ch1',
+              'name': 'oncall-slack',
+              'type': 'slack',
+              'enabled': true,
+              'config': <String, Object?>{},
+              'secret_hints': {'url': 'https://hooks.slack.com/…/•••f3a9'},
+              'created_by_email': 'owner@example.com',
+              'created_at': '2026-10-01T09:00:00.000000000Z',
+              'updated_at': '2026-10-01T09:00:00.000000000Z',
+              'last_delivery': null,
+            },
+          ],
+          'secrets_configured': true,
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = AlertChannelsController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+    await c.test('ch1');
+
+    // No failure banner -- the call itself worked.
+    expect(c.failure, isNull);
+    // But the answer is a refusal, and the screen reads it from the body.
+    expect(c.results['ch1']!.success, isFalse);
+    expect(c.results['ch1']!.statusCode, 404);
+    expect(c.results['ch1']!.error, contains('no longer exists'));
+  });
+
+  test(
+    'an installation with no secrets key says so, not "no channels"',
+    () async {
+      final server = await FakeServer.start(
+        (req, _) => writeJson(req, 200, {
+          'channels': <Object>[],
+          'secrets_configured': false,
+        }),
+      );
+      addTearDown(server.stop);
+      final c = AlertChannelsController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      );
+
+      await c.refresh();
+
+      // An empty list means two different things and the screen has to tell
+      // them apart: nobody made one, or this installation cannot store one.
+      expect(c.items, isEmpty);
+      expect(c.secretsConfigured, isFalse);
+    },
+  );
+
+  test(
+    'testing without a secrets key is reported as that, not forbidden',
+    () async {
+      final server = await FakeServer.start((req, seen) {
+        if (seen.path.endsWith('/test')) {
+          writeJson(req, 409, {
+            'error': {'message': 'failed_precondition: no secrets key'},
+          });
+        } else {
+          writeJson(req, 200, {
+            'channels': <Object>[],
+            'secrets_configured': false,
+          });
+        }
+      });
+      addTearDown(server.stop);
+      final c = AlertChannelsController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      );
+
+      await c.test('ch1');
+
+      expect(c.failure?.kind, 'channelsNoSecrets');
+    },
+  );
+
   test('integrations read the status the agent reported', () async {
     final server = await FakeServer.start(
       (req, _) => writeJson(req, 200, {

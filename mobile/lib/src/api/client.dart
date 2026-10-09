@@ -225,6 +225,25 @@ class OpenlogClient {
     '/api/v1/alerts/incidents/${Uri.encodeComponent(id)}/acknowledge',
   );
 
+  /// The notification channels, with their secrets masked by the server.
+  Future<AlertChannelPage> alertChannels() async =>
+      AlertChannelPage.fromJson(await _send('GET', '/api/v1/alerts/channels'));
+
+  /// Sends a test notification through one, synchronously and without
+  /// retries.
+  ///
+  /// A 200 does not mean it worked: the body carries `success`, and a channel
+  /// whose receiver refused answers 200 with success false. Treating the
+  /// status code as the answer would tell someone their pager works when it
+  /// does not.
+  Future<AlertChannelTestResult> testAlertChannel(String id) async =>
+      AlertChannelTestResult.fromJson(
+        await _send(
+          'POST',
+          '/api/v1/alerts/channels/${Uri.encodeComponent(id)}/test',
+        ),
+      );
+
   /// The rules behind the incidents, ordered by name.
   Future<AlertRulePage> alertRules() async =>
       AlertRulePage.fromJson(await _send('GET', '/api/v1/alerts/rules'));

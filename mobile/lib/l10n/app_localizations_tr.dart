@@ -1243,4 +1243,47 @@ class LTr extends L {
   @override
   String get ruleEditOnWeb =>
       'Eşikler, koşullar ve kanallar webden düzenlenir.';
+
+  @override
+  String get navChannels => 'Kanallar';
+
+  @override
+  String get channelsEmpty => 'Bildirim kanalı yok.';
+
+  @override
+  String get channelsSearch => 'Kanal ara';
+
+  @override
+  String get channelsNoSecrets =>
+      'Bu kurulumda sır anahtarı yok; kanallar saklanamaz ve denenemez.';
+
+  @override
+  String get channelTest => 'Test gönder';
+
+  @override
+  String channelTestOk(int ms) {
+    return '$ms ms\'de ulaştı';
+  }
+
+  @override
+  String channelTestFailedCode(int code, String error) {
+    return '$code ile reddedildi: $error';
+  }
+
+  @override
+  String channelTestFailed(String error) {
+    return 'Ulaşmadı: $error';
+  }
+
+  @override
+  String channelLastDelivery(String when) {
+    return 'son $when';
+  }
+
+  @override
+  String get channelOff => 'kapalı';
+
+  @override
+  String get channelEditOnWeb =>
+      'Kanallar webden oluşturulur ve düzenlenir; burada birinin hâlâ çalıştığını deneyebilirsiniz.';
 }

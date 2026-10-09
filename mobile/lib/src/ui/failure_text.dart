@@ -50,6 +50,8 @@ String? failureText(
       return l.detailGone;
     case 'onboardingForbidden':
       return l.onboardingForbidden;
+    case 'channelsNoSecrets':
+      return l.channelsNoSecrets;
     case 'costsOff':
       return l.costsOff;
     case 'queryForbidden':

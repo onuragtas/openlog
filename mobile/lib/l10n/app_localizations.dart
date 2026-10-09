@@ -2322,6 +2322,72 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Thresholds, conditions and channels are edited on the web.'**
   String get ruleEditOnWeb;
+
+  /// No description provided for @navChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'Channels'**
+  String get navChannels;
+
+  /// No description provided for @channelsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notification channel.'**
+  String get channelsEmpty;
+
+  /// No description provided for @channelsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search channels'**
+  String get channelsSearch;
+
+  /// No description provided for @channelsNoSecrets.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation has no secrets key, so channels cannot be stored or tested.'**
+  String get channelsNoSecrets;
+
+  /// No description provided for @channelTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a test'**
+  String get channelTest;
+
+  /// No description provided for @channelTestOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Reached in {ms} ms'**
+  String channelTestOk(int ms);
+
+  /// No description provided for @channelTestFailedCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Refused with {code}: {error}'**
+  String channelTestFailedCode(int code, String error);
+
+  /// No description provided for @channelTestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Did not get through: {error}'**
+  String channelTestFailed(String error);
+
+  /// No description provided for @channelLastDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'last {when}'**
+  String channelLastDelivery(String when);
+
+  /// No description provided for @channelOff.
+  ///
+  /// In en, this message translates to:
+  /// **'off'**
+  String get channelOff;
+
+  /// No description provided for @channelEditOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Channels are created and edited on the web; here you can check one still works.'**
+  String get channelEditOnWeb;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

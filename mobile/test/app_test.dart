@@ -1570,6 +1570,7 @@ void main() {
       'Inventory search': Key('inventory-category'),
       'Fleet': Key('fleet-search'),
       'Alert rules': Key('rules-search'),
+      'Channels': Key('channels-search'),
       'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
@@ -1702,6 +1703,7 @@ void main() {
       'Inventory search',
       'Fleet',
       'Alert rules',
+      'Channels',
       'Alerts',
       'Settings',
     ]);

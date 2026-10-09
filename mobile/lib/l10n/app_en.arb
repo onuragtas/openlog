@@ -727,5 +727,47 @@
   "ruleEnableTitle": "Turn this rule back on?",
   "ruleEnableConfirm": "Turn on",
   "ruleCancel": "Cancel",
-  "ruleEditOnWeb": "Thresholds, conditions and channels are edited on the web."
+  "ruleEditOnWeb": "Thresholds, conditions and channels are edited on the web.",
+  "navChannels": "Channels",
+  "channelsEmpty": "No notification channel.",
+  "channelsSearch": "Search channels",
+  "channelsNoSecrets": "This installation has no secrets key, so channels cannot be stored or tested.",
+  "channelTest": "Send a test",
+  "channelTestOk": "Reached in {ms} ms",
+  "@channelTestOk": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "channelTestFailedCode": "Refused with {code}: {error}",
+  "@channelTestFailedCode": {
+    "placeholders": {
+      "code": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "channelTestFailed": "Did not get through: {error}",
+  "@channelTestFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "channelLastDelivery": "last {when}",
+  "@channelLastDelivery": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "channelOff": "off",
+  "channelEditOnWeb": "Channels are created and edited on the web; here you can check one still works."
 }

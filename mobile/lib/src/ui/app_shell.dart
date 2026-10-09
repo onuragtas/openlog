@@ -14,6 +14,7 @@ import 'profiles_screen.dart';
 import 'query_screen.dart';
 import 'rules_screen.dart';
 import 'add_data_screen.dart';
+import 'channels_screen.dart';
 import 'container_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
@@ -76,6 +77,7 @@ class _AppShellState extends State<AppShell> {
       l.navInventory,
       l.navFleet,
       l.navRules,
+      l.navChannels,
       l.alertsTitle,
       l.navSettings,
     ];
@@ -102,6 +104,7 @@ class _AppShellState extends State<AppShell> {
       s.inventory.refresh,
       s.fleet.refresh,
       s.rules.refresh,
+      s.channels.refresh,
       s.alerts.refresh,
       null, // Settings reads what the session already knows.
     ];
@@ -311,6 +314,9 @@ class _AppShellState extends State<AppShell> {
     );
     add((active) => FleetBody(session: session, sections: s, active: active));
     add((active) => RulesBody(session: session, sections: s, active: active));
+    add(
+      (active) => ChannelsBody(session: session, sections: s, active: active),
+    );
     add(
       (_) => AlertsBody(
         key: const Key('alerts-body'),
