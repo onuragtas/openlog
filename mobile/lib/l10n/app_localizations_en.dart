@@ -1438,4 +1438,58 @@ class LEn extends L {
   String inDays(int count) {
     return 'in $count days';
   }
+
+  @override
+  String get navRoutes => 'Routing';
+
+  @override
+  String get routesEmpty =>
+      'No routing rule; every incident goes to the rule\'s own channels.';
+
+  @override
+  String get routesOrder =>
+      'Tried in this order; the first match wins. Drag to reorder.';
+
+  @override
+  String get routesDefault => 'default';
+
+  @override
+  String get routesOff => 'off';
+
+  @override
+  String routesChannels(int count) {
+    return '$count channels';
+  }
+
+  @override
+  String get routesMatchAll => 'matches everything';
+
+  @override
+  String routesSeverities(String list) {
+    return 'severity $list';
+  }
+
+  @override
+  String routesServices(String list) {
+    return 'service $list';
+  }
+
+  @override
+  String routesTypes(String list) {
+    return 'type $list';
+  }
+
+  @override
+  String routesLabels(int count) {
+    return '$count label conditions';
+  }
+
+  @override
+  String routesWindow(String start, String end, String tz) {
+    return '$start–$end $tz';
+  }
+
+  @override
+  String get routesEditOnWeb =>
+      'Conditions and channels are edited on the web.';
 }

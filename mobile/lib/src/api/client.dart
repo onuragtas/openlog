@@ -234,6 +234,40 @@ class OpenlogClient {
   Future<void> revokeSession(String id) =>
       _send('DELETE', '/api/v1/sessions/${Uri.encodeComponent(id)}');
 
+  /// The routing rules, in evaluation order: where a page goes, and why it
+  /// went where it did.
+  Future<AlertRoutingRulePage> alertRoutingRules() async =>
+      AlertRoutingRulePage.fromJson(
+        await _send('GET', '/api/v1/alerts/routing-rules'),
+      );
+
+  /// Sets the evaluation order. Every rule of the organization has to be in
+  /// the list exactly once -- the server checks, and a partial list is a 400
+  /// rather than a quiet reshuffle.
+  Future<void> reorderAlertRoutingRules(List<String> ids) =>
+      _send('POST', '/api/v1/alerts/routing-rules/reorder', body: {'ids': ids});
+
+  /// Turns one on or off.
+  ///
+  /// There is no enable endpoint, so this is a PUT of the whole rule; the
+  /// other fields are sent back as they came to avoid editing them by
+  /// omission.
+  Future<void> setAlertRoutingRuleEnabled(
+    AlertRoutingRule rule, {
+    required bool enabled,
+  }) => _send(
+    'PUT',
+    '/api/v1/alerts/routing-rules/${Uri.encodeComponent(rule.id)}',
+    body: {
+      'name': rule.name,
+      'position': rule.position,
+      'enabled': enabled,
+      'is_default': rule.isDefault,
+      'channel_ids': rule.channelIds,
+      'match': rule.match.toJson(),
+    },
+  );
+
   /// The mute windows: what is silenced, and until when.
   Future<AlertMutePage> alertMutes() async =>
       AlertMutePage.fromJson(await _send('GET', '/api/v1/alerts/mutes'));

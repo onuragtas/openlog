@@ -57,6 +57,7 @@ class Sections {
     AlertRulesController? rules,
     AlertChannelsController? channels,
     AlertMutesController? mutes,
+    AlertRoutesController? routes,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -135,6 +136,7 @@ class Sections {
        rules = rules ?? AlertRulesController(client),
        channels = channels ?? AlertChannelsController(client),
        mutes = mutes ?? AlertMutesController(client),
+       routes = routes ?? AlertRoutesController(client),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -171,6 +173,7 @@ class Sections {
   final AlertRulesController rules;
   final AlertChannelsController channels;
   final AlertMutesController mutes;
+  final AlertRoutesController routes;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -220,6 +223,7 @@ class Sections {
     rules,
     channels,
     mutes,
+    routes,
     alerts,
   ];
 
@@ -682,6 +686,91 @@ class AlertMutesController extends SectionController<AlertMute> {
             ? const SessionFailure('alertsForbidden', '')
             : SessionFailure('unexpected', e.message);
       }
+    } finally {
+      busy = null;
+      notifyListeners();
+    }
+  }
+}
+
+/// The routing rules, in the order the server evaluates them.
+///
+/// The question this screen answers is "why did that page go there": routes
+/// are tried in order and the first match wins, so the order is the answer
+/// and a list that showed them any other way would be misleading.
+class AlertRoutesController extends SectionController<AlertRoutingRule> {
+  AlertRoutesController(super.client);
+
+  /// Which rule is being switched, so only that row is busy.
+  String? busy;
+
+  /// True while a new order is being saved.
+  bool reordering = false;
+
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertRoutingRule>> fetch() async {
+    final rules = (await client.alertRoutingRules()).routingRules;
+    // Evaluation order, which is what `position` means. Not sorted by name,
+    // not filtered: a search box that hid a route would hide the reason a
+    // page went somewhere.
+    return [...rules]..sort((a, b) => a.position.compareTo(b.position));
+  }
+
+  /// Moves the rule at [from] to [to] and saves the whole order.
+  ///
+  /// The list is reordered locally first so the row follows the finger, then
+  /// the server is told; a failure reloads, which puts it back.
+  Future<void> move(int from, int to) async {
+    if (from == to) return;
+    final next = [...items];
+    final moved = next.removeAt(from);
+    next.insert(to > from ? to - 1 : to, moved);
+    items = next;
+    reordering = true;
+    failure = null;
+    notifyListeners();
+    try {
+      // Every id exactly once: the server rejects a partial list rather than
+      // reshuffling quietly, so this sends the whole order it just drew.
+      await client.reorderAlertRoutingRules([for (final r in next) r.id]);
+      await refresh();
+    } on ApiUnreachable {
+      // Reload first and report after: a successful refresh() clears
+      // `failure`, so setting it before the reload throws the message away
+      // and leaves an order the server never accepted looking accepted.
+      await refresh();
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      final reported = e.status == 403
+          ? const SessionFailure('alertsForbidden', '')
+          : SessionFailure('unexpected', e.message);
+      await refresh();
+      failure = reported;
+    } finally {
+      reordering = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setEnabled(
+    AlertRoutingRule rule, {
+    required bool enabled,
+  }) async {
+    busy = rule.id;
+    failure = null;
+    notifyListeners();
+    try {
+      await client.setAlertRoutingRuleEnabled(rule, enabled: enabled);
+      await refresh();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('alertsForbidden', '')
+          : SessionFailure('unexpected', e.message);
     } finally {
       busy = null;
       notifyListeners();

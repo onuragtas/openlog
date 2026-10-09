@@ -45,6 +45,7 @@ final navItems = <NavItem>[
   NavItem(Icons.rule_outlined, (l) => l.navRules),
   NavItem(Icons.send_outlined, (l) => l.navChannels),
   NavItem(Icons.notifications_paused_outlined, (l) => l.navMutes),
+  NavItem(Icons.alt_route_outlined, (l) => l.navRoutes),
   NavItem(Icons.notifications_outlined, (l) => l.navAlerts),
   NavItem(Icons.settings_outlined, (l) => l.navSettings),
 ];

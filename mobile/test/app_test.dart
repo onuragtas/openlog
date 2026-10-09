@@ -1609,6 +1609,7 @@ void main() {
       'Alert rules': Key('rules-search'),
       'Channels': Key('channels-search'),
       'Mutes': Key('mutes-search'),
+      'Routing': Key('routes-order-note'),
       'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
@@ -1831,6 +1832,7 @@ void main() {
       'Alert rules',
       'Channels',
       'Mutes',
+      'Routing',
       'Alerts',
       'Settings',
     ]);

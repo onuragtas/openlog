@@ -1433,4 +1433,57 @@ class LTr extends L {
   String inDays(int count) {
     return '$count gün sonra';
   }
+
+  @override
+  String get navRoutes => 'Yönlendirme';
+
+  @override
+  String get routesEmpty =>
+      'Yönlendirme kuralı yok; her olay kuralın kendi kanallarına gider.';
+
+  @override
+  String get routesOrder =>
+      'Bu sırayla denenir; ilk eşleşen kazanır. Sıralamak için sürükleyin.';
+
+  @override
+  String get routesDefault => 'varsayılan';
+
+  @override
+  String get routesOff => 'kapalı';
+
+  @override
+  String routesChannels(int count) {
+    return '$count kanal';
+  }
+
+  @override
+  String get routesMatchAll => 'her şeye uyar';
+
+  @override
+  String routesSeverities(String list) {
+    return 'önem $list';
+  }
+
+  @override
+  String routesServices(String list) {
+    return 'servis $list';
+  }
+
+  @override
+  String routesTypes(String list) {
+    return 'tür $list';
+  }
+
+  @override
+  String routesLabels(int count) {
+    return '$count etiket koşulu';
+  }
+
+  @override
+  String routesWindow(String start, String end, String tz) {
+    return '$start–$end $tz';
+  }
+
+  @override
+  String get routesEditOnWeb => 'Koşullar ve kanallar webden düzenlenir.';
 }

@@ -33,6 +33,7 @@ const schemaTargets = <String>[
   'AlertRule', // the rules behind the incidents, and whether they are on
   'AlertChannelTestResult', // whether a channel would actually reach anyone
   'AlertMute', // what is silenced, and until when
+  'AlertRoutingRule', // where a page goes, and why it went there
   'ApmService', // where to look after an alert: which service, how healthy
   'ApmOverview', // that service's golden signals, so the alert gets a shape
   'ApmErrorInbox', // what is actually breaking in that service
@@ -75,6 +76,7 @@ const responseTargets = <String>[
   'get /api/v1/alerts/rules 200 AlertRulePage',
   'get /api/v1/alerts/channels 200 AlertChannelPage',
   'get /api/v1/alerts/mutes 200 AlertMutePage',
+  'get /api/v1/alerts/routing-rules 200 AlertRoutingRulePage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
@@ -756,11 +758,85 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     b.writeln('    );');
     b.writeln('  }');
     b.writeln();
+    // Writing it back out. Needed because several endpoints take the whole
+    // object they gave: a routing rule has no enable endpoint, so turning one
+    // off is a PUT of everything else unchanged, and hand-writing that for
+    // each nested type is how a field gets dropped by omission.
+    b.writeln('  Map<String, Object?> toJson() => {');
+    for (final f in fields) {
+      final value = _writer(f.type, f.dart);
+      // A null that was absent should stay absent: the contract distinguishes
+      // "not sent" from "sent as null" in several inputs, and sending null
+      // where the server expected nothing is how a default gets cleared.
+      //
+      // A field that needs no conversion says that with Dart's null-aware map
+      // entry; one that does keeps the `if`, because `?` cannot guard a
+      // method call on the value.
+      if (!f.type.nullable) {
+        b.writeln("    '${f.wire}': $value,");
+      } else if (value == '${f.dart}!') {
+        b.writeln("    '${f.wire}': ?${f.dart},");
+      } else {
+        b.writeln("    if (${f.dart} != null) '${f.wire}': $value,");
+      }
+    }
+    b.writeln('  };');
+    b.writeln();
     for (final f in fields) {
       b.writeln('  final ${f.type.decl} ${f.dart};');
     }
     b.writeln('}');
     _classes[name] = b.toString();
+  }
+
+  /// The expression that turns one field into something `jsonEncode` accepts.
+  ///
+  /// `!` on a nullable field is safe because the caller only emits this inside
+  /// an `if (field != null)`.
+  String _writer(DartType type, String expr) {
+    final bang = type.nullable ? '!' : '';
+    final base = type.name;
+    final list = RegExp(r'^List<(.+)>$').firstMatch(base);
+    if (list != null) {
+      final inner = DartType(
+        list.group(1)!.replaceAll('?', ''),
+        nullable: list.group(1)!.endsWith('?'),
+      );
+      // A nullable element stays null in the output; the list itself keeps
+      // its length, because dropping a gap would shift every later point.
+      final e = _writer(DartType(inner.name), 'e');
+      final written = inner.nullable && e != 'e'
+          ? '(e == null ? null : $e)'
+          : e;
+      // A list of things that need no conversion is already what jsonEncode
+      // wants; rebuilding it element by element says nothing and reads worse.
+      if (written == 'e') return '$expr$bang';
+      return '[for (final e in $expr$bang) $written]';
+    }
+    final map = RegExp(r'^Map<String, (.+)>$').firstMatch(base);
+    if (map != null) {
+      final inner = DartType(
+        map.group(1)!.replaceAll('?', ''),
+        nullable: map.group(1)!.endsWith('?'),
+      );
+      if (inner.name == 'String' || inner.name == 'Object') {
+        return '$expr$bang';
+      }
+      final v = _writer(inner, 'e.value');
+      return '{for (final e in $expr$bang.entries) e.key: $v}';
+    }
+    switch (base) {
+      case 'String':
+      case 'bool':
+      case 'int':
+      case 'double':
+      case 'Object':
+        return '$expr$bang';
+      case 'DateTime':
+        return '$expr$bang.toUtc().toIso8601String()';
+    }
+    if (_enums.containsKey(base)) return '$expr$bang.wire';
+    return '$expr$bang.toJson()';
   }
 
   /// The `(Object?, String) -> T` function that reads one value.

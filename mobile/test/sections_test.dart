@@ -117,7 +117,104 @@ Map<String, Object?> mute(
   'updated_at': '2026-10-01T09:00:00.000000000Z',
 };
 
+Map<String, Object?> route(String id, int position, {bool enabled = true}) => {
+  'id': id,
+  'name': 'route $id',
+  'position': position,
+  'enabled': enabled,
+  'is_default': false,
+  'match': <String, Object?>{},
+  'channel_ids': ['c1'],
+  'created_by_email': 'owner@example.com',
+  'created_at': '2026-10-01T09:00:00.000000000Z',
+  'updated_at': '2026-10-01T09:00:00.000000000Z',
+};
+
 void main() {
+  test('reordering sends every id once, in the new order', () async {
+    final sent = <Map<String, Object?>>[];
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'POST') {
+        sent.add(jsonDecode(seen.body) as Map<String, Object?>);
+        writeJson(req, 200, {'routing_rules': <Object>[]});
+      } else {
+        writeJson(req, 200, {
+          'routing_rules': [route('a', 0), route('b', 1), route('c', 2)],
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = AlertRoutesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+    expect(c.items.map((r) => r.id), ['a', 'b', 'c']);
+
+    // Drag the last one to the top.
+    await c.move(2, 0);
+
+    // The whole order, every id exactly once: the server rejects a partial
+    // list rather than reshuffling quietly.
+    expect(sent.single['ids'], ['c', 'a', 'b']);
+  });
+
+  test('a rejected reorder puts the list back', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'POST') {
+        writeJson(req, 403, {
+          'error': {'message': 'admin or owner'},
+        });
+      } else {
+        writeJson(req, 200, {
+          'routing_rules': [route('a', 0), route('b', 1)],
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = AlertRoutesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+    await c.move(1, 0);
+
+    // The row followed the finger, then the server said no; the reload is
+    // what puts it back, so the screen never shows an order the server does
+    // not have.
+    expect(c.items.map((r) => r.id), ['a', 'b']);
+    expect(c.failure?.kind, 'alertsForbidden');
+  });
+
+  test('turning a route off sends the rest of it back unchanged', () async {
+    final puts = <Map<String, Object?>>[];
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'PUT') {
+        puts.add(jsonDecode(seen.body) as Map<String, Object?>);
+        writeJson(req, 200, route('a', 0, enabled: false));
+      } else {
+        writeJson(req, 200, {
+          'routing_rules': [route('a', 0)],
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = AlertRoutesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+    await c.setEnabled(c.items.single, enabled: false);
+
+    // There is no enable endpoint, so this is a PUT of the whole rule. Every
+    // other field has to go back as it came, or it gets edited by omission.
+    expect(puts.single['enabled'], false);
+    expect(puts.single['name'], 'route a');
+    expect(puts.single['position'], 0);
+    expect(puts.single['channel_ids'], ['c1']);
+    expect(puts.single['is_default'], false);
+  });
+
   test('a mute is a window that starts now, in UTC', () async {
     final posted = <Map<String, Object?>>[];
     final server = await FakeServer.start((req, seen) {

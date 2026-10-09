@@ -12,6 +12,7 @@ import 'nav_drawer.dart';
 import 'pod_screen.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
+import 'routes_screen.dart';
 import 'rules_screen.dart';
 import 'add_data_screen.dart';
 import 'channels_screen.dart';
@@ -80,6 +81,7 @@ class _AppShellState extends State<AppShell> {
       l.navRules,
       l.navChannels,
       l.navMutes,
+      l.navRoutes,
       l.alertsTitle,
       l.navSettings,
     ];
@@ -108,6 +110,7 @@ class _AppShellState extends State<AppShell> {
       s.rules.refresh,
       s.channels.refresh,
       s.mutes.refresh,
+      s.routes.refresh,
       s.alerts.refresh,
       null, // Settings reads what the session already knows.
     ];
@@ -321,6 +324,7 @@ class _AppShellState extends State<AppShell> {
       (active) => ChannelsBody(session: session, sections: s, active: active),
     );
     add((active) => MutesBody(session: session, sections: s, active: active));
+    add((active) => RoutesBody(session: session, sections: s, active: active));
     add(
       (_) => AlertsBody(
         key: const Key('alerts-body'),

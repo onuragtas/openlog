@@ -385,7 +385,8 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
 ### 9.1 Alarmlar
 - [x] Susturmalar (`alerts/mutes`): liste, süreli oluşturma, bitirme. Tekrarlayan takvim
       düzenleyicisi (`mutes/preview`, `AlertMuteScheduleInput`) hâlâ webde; okunuyor, yazılmıyor.
-- [ ] Yönlendirme kuralları (`alerts/routing-rules`, `.../reorder`)
+- [x] Yönlendirme kuralları (`alerts/routing-rules`, `.../reorder`): sıralı liste, sürükleyerek
+      yeniden sıralama, açma/kapama. Koşul düzenleyicisi (`AlertRouteMatch` yazma) hâlâ webde.
 - [ ] Tatil takvimleri (`alerts/holiday-calendars`)
 - [ ] Kural oluşturma/düzenleme (`alerts/rule-types`, `alerts/rules/preview`, `alerts/templates`)
 - [ ] Teslimat günlüğü (`alerts/deliveries`)

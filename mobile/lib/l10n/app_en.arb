@@ -874,5 +874,66 @@
         "type": "int"
       }
     }
-  }
+  },
+  "navRoutes": "Routing",
+  "routesEmpty": "No routing rule; every incident goes to the rule's own channels.",
+  "routesOrder": "Tried in this order; the first match wins. Drag to reorder.",
+  "routesDefault": "default",
+  "routesOff": "off",
+  "routesChannels": "{count} channels",
+  "@routesChannels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesMatchAll": "matches everything",
+  "routesSeverities": "severity {list}",
+  "@routesSeverities": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "routesServices": "service {list}",
+  "@routesServices": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "routesTypes": "type {list}",
+  "@routesTypes": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "routesLabels": "{count} label conditions",
+  "@routesLabels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesWindow": "{start}–{end} {tz}",
+  "@routesWindow": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      },
+      "tz": {
+        "type": "String"
+      }
+    }
+  },
+  "routesEditOnWeb": "Conditions and channels are edited on the web."
 }

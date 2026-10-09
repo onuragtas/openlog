@@ -1499,6 +1499,62 @@ enum AlertFilterOp {
   }
 }
 
+/// AlertRouteMatcherOp of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertRouteMatcherOp {
+  eq('eq'),
+  neq('neq'),
+  contains('contains'),
+  unknown('');
+
+  const AlertRouteMatcherOp(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertRouteMatcherOp fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertRouteWindowDaysItem of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertRouteWindowDaysItem {
+  mon('mon'),
+  tue('tue'),
+  wed('wed'),
+  thu('thu'),
+  fri('fri'),
+  sat('sat'),
+  sun('sun'),
+  unknown('');
+
+  const AlertRouteWindowDaysItem(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertRouteWindowDaysItem fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVisualization of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2082,6 +2138,16 @@ class AuthConfig {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'mode': mode.wire,
+    'signup_enabled': signupEnabled,
+    'password_min_length': passwordMinLength,
+    'email_enabled': emailEnabled,
+    'email_verification_required': emailVerificationRequired,
+    if (captcha != null) 'captcha': captcha!.toJson(),
+    'sso_enabled': ?ssoEnabled,
+  };
+
   final AuthConfigMode mode;
   final bool signupEnabled;
   final int passwordMinLength;
@@ -2105,6 +2171,11 @@ class AuthConfigCaptcha {
       siteKey: _req(m, 'site_key', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'provider': provider.wire,
+    'site_key': siteKey,
+  };
 
   final AuthConfigCaptchaProvider provider;
   final String siteKey;
@@ -2145,6 +2216,16 @@ class Me {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'auth': auth.wire,
+    if (user != null) 'user': user!.toJson(),
+    if (apiKey != null) 'api_key': apiKey!.toJson(),
+    if (organization != null) 'organization': organization!.toJson(),
+    if (role != null) 'role': role!.wire,
+    'organizations': [for (final e in organizations) e.toJson()],
+    'csrf_token': ?csrfToken,
+  };
+
   final MeAuth auth;
   final User? user;
   final MeApiKey? apiKey;
@@ -2166,6 +2247,8 @@ class MeApiKey {
       role: _req(m, 'role', path, MeApiKeyRole.fromJson),
     );
   }
+
+  Map<String, Object?> toJson() => {'id': id, 'name': name, 'role': role.wire};
 
   final String id;
   final String name;
@@ -2200,6 +2283,18 @@ class Session {
       deviceName: _req(m, 'device_name', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'last_seen_at': lastSeenAt.toUtc().toIso8601String(),
+    'expires_at': expiresAt.toUtc().toIso8601String(),
+    'ip': ip,
+    'user_agent': userAgent,
+    'current': current,
+    'kind': kind.wire,
+    'device_name': deviceName,
+  };
 
   final String id;
   final DateTime createdAt;
@@ -2277,6 +2372,32 @@ class AlertIncident {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'rule_id': ?ruleId,
+    'rule_name': ruleName,
+    'rule_type': ruleType.wire,
+    'severity': severity.wire,
+    'state': state.wire,
+    'series_key': seriesKey,
+    'labels': labels,
+    'summary': summary,
+    'value': ?value,
+    'last_value': ?lastValue,
+    'threshold': ?threshold,
+    'flapping': flapping,
+    'muted': muted,
+    'opened_at': openedAt.toUtc().toIso8601String(),
+    if (acknowledgedAt != null)
+      'acknowledged_at': acknowledgedAt!.toUtc().toIso8601String(),
+    'acknowledged_by_email': ?acknowledgedByEmail,
+    if (resolvedAt != null)
+      'resolved_at': resolvedAt!.toUtc().toIso8601String(),
+    'resolved_by_email': ?resolvedByEmail,
+    if (resolveReason != null) 'resolve_reason': resolveReason!.wire,
+    'channel_ids': channelIds,
+  };
 
   final String id;
   final String? ruleId;
@@ -2386,6 +2507,34 @@ class AlertIncidentDetail {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'rule_id': ?ruleId,
+    'rule_name': ruleName,
+    'rule_type': ruleType.wire,
+    'severity': severity.wire,
+    'state': state.wire,
+    'series_key': seriesKey,
+    'labels': labels,
+    'summary': summary,
+    'value': ?value,
+    'last_value': ?lastValue,
+    'threshold': ?threshold,
+    'flapping': flapping,
+    'muted': muted,
+    'opened_at': openedAt.toUtc().toIso8601String(),
+    if (acknowledgedAt != null)
+      'acknowledged_at': acknowledgedAt!.toUtc().toIso8601String(),
+    'acknowledged_by_email': ?acknowledgedByEmail,
+    if (resolvedAt != null)
+      'resolved_at': resolvedAt!.toUtc().toIso8601String(),
+    'resolved_by_email': ?resolvedByEmail,
+    if (resolveReason != null) 'resolve_reason': resolveReason!.wire,
+    'channel_ids': channelIds,
+    'events': [for (final e in events) e.toJson()],
+    'deliveries': [for (final e in deliveries) e.toJson()],
+  };
+
   final String id;
   final String? ruleId;
   final String ruleName;
@@ -2479,6 +2628,30 @@ class AlertRule {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'type': type.wire,
+    'severity': severity.wire,
+    'enabled': enabled,
+    'interval_seconds': intervalSeconds,
+    'for_seconds': forSeconds,
+    'recovery_for_seconds': recoveryForSeconds,
+    'condition': condition.toJson(),
+    'channel_ids': channelIds,
+    'renotify_interval_seconds': renotifyIntervalSeconds,
+    'flapping': flapping.toJson(),
+    'runbook_url': runbookUrl,
+    'labels': labels,
+    'version': version,
+    'created_by_user_id': ?createdByUserId,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'status': status.toJson(),
+  };
+
   final String id;
   final String name;
   final String description;
@@ -2525,6 +2698,14 @@ class AlertChannelTestResult {
       notificationId: _req(m, 'notification_id', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'success': success,
+    'status_code': statusCode,
+    'error': error,
+    'duration_ms': durationMs,
+    'notification_id': notificationId,
+  };
 
   final bool success;
   final int statusCode;
@@ -2595,6 +2776,23 @@ class AlertMute {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'comment': comment,
+    'starts_at': startsAt.toUtc().toIso8601String(),
+    'ends_at': endsAt.toUtc().toIso8601String(),
+    'rule_ids': ruleIds,
+    'matchers': [for (final e in matchers) e.toJson()],
+    if (schedule != null) 'schedule': schedule!.toJson(),
+    'upcoming': [for (final e in upcoming) e.toJson()],
+    'active': active,
+    'created_by_user_id': ?createdByUserId,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
   final String id;
   final String name;
   final String comment;
@@ -2606,6 +2804,70 @@ class AlertMute {
   final List<AlertMuteOccurrence> upcoming;
   final bool active;
   final String? createdByUserId;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+/// `AlertRoutingRule` of the openlog API contract.
+class AlertRoutingRule {
+  const AlertRoutingRule({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.enabled,
+    required this.isDefault,
+    required this.match,
+    required this.channelIds,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AlertRoutingRule.fromJson(
+    Object? json, [
+    String path = 'AlertRoutingRule',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRoutingRule(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      position: _req(m, 'position', path, _int),
+      enabled: _req(m, 'enabled', path, _bool),
+      isDefault: _req(m, 'is_default', path, _bool),
+      match: _req(m, 'match', path, (v, p) => AlertRouteMatch.fromJson(v, p)),
+      channelIds: _req(
+        m,
+        'channel_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'position': position,
+    'enabled': enabled,
+    'is_default': isDefault,
+    'match': match.toJson(),
+    'channel_ids': channelIds,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final int position;
+  final bool enabled;
+  final bool isDefault;
+  final AlertRouteMatch match;
+  final List<String> channelIds;
   final String createdByEmail;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -2662,6 +2924,26 @@ class ApmService {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'language': language,
+    'version': version,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'apdex_t_ms': apdexTMs,
+    'sparkline': sparkline,
+  };
+
   final double requests;
   final double throughput;
   final double errors;
@@ -2705,6 +2987,13 @@ class ApmOverview {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'apdex_t_ms': apdexTMs,
+    'totals': totals.toJson(),
+    'series': [for (final e in series) e.toJson()],
+  };
+
   final String step;
   final double apdexTMs;
   final ApmRed totals;
@@ -2746,6 +3035,14 @@ class ApmErrorInbox {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'groups': [for (final e in groups) e.toJson()],
+    'counts': counts.toJson(),
+    'truncated': truncated,
+    'workflow': workflow,
+  };
+
   final String step;
   final List<ApmErrorGroup> groups;
   final ApmErrorInboxCounts counts;
@@ -2773,6 +3070,12 @@ class ApmErrorInboxCounts {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'unresolved': unresolved,
+    'resolved': resolved,
+    'ignored': ignored,
+  };
+
   final int unresolved;
   final int resolved;
   final int ignored;
@@ -2794,6 +3097,11 @@ class Trace {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'trace_id': traceId,
+    'spans': [for (final e in spans) e.toJson()],
+  };
 
   final String traceId;
   final List<Span> spans;
@@ -2820,6 +3128,11 @@ class TracesQueryResponse {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'rows': [for (final e in rows) e.toJson()],
+    'next_cursor': ?nextCursor,
+  };
+
   final List<SpanQueryRow> rows;
   final String? nextCursor;
 }
@@ -2843,6 +3156,11 @@ class MetricListResponse {
       truncated: _req(m, 'truncated', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'metrics': [for (final e in metrics) e.toJson()],
+    'truncated': truncated,
+  };
 
   final List<MetricInfo> metrics;
   final bool truncated;
@@ -2905,6 +3223,22 @@ class MetricDetail {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.wire,
+    'unit': unit,
+    'description': description,
+    'temporality': temporality.wire,
+    'monotonic': monotonic,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'series': series,
+    'services': services,
+    'attribute_keys': [for (final e in attributeKeys) e.toJson()],
+    'resource_keys': [for (final e in resourceKeys) e.toJson()],
+    'aggregations': [for (final e in aggregations) e.wire],
+    'default_aggregation': defaultAggregation.wire,
+  };
+
   final String name;
   final MetricType type;
   final String unit;
@@ -2955,6 +3289,14 @@ class MetricQueryResponse {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'metric': metric.toJson(),
+    'aggregation': aggregation.wire,
+    'step': step,
+    'series': [for (final e in series) e.toJson()],
+    'truncated': truncated,
+  };
+
   final MetricQueryResponseMetric metric;
   final MetricAggregation aggregation;
   final String step;
@@ -2985,6 +3327,14 @@ class MetricQueryResponseMetric {
       monotonic: _req(m, 'monotonic', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.wire,
+    'unit': unit,
+    'temporality': temporality.wire,
+    'monotonic': monotonic,
+  };
 
   final String name;
   final MetricType type;
@@ -3035,6 +3385,15 @@ class RumOverview {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step': step,
+    'vitals': [for (final e in vitals) e.toJson()],
+    'points': [for (final e in points) e.toJson()],
+    'totals': totals.toJson(),
+  };
+
   final DateTime from;
   final DateTime to;
   final String step;
@@ -3063,6 +3422,8 @@ class RumOverviewPointsItem {
     );
   }
 
+  Map<String, Object?> toJson() => {'t': t, 'views': views, 'avg_ms': ?avgMs};
+
   final int t;
   final double views;
   final double? avgMs;
@@ -3089,6 +3450,13 @@ class RumOverviewTotals {
       avgMs: _opt(m, 'avg_ms', path, _num),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'views': views,
+    'sessions': sessions,
+    'errors': errors,
+    'avg_ms': ?avgMs,
+  };
 
   final double views;
   final int sessions;
@@ -3183,6 +3551,28 @@ class FleetSummary {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'total_hosts': totalHosts,
+    'active_hosts': activeHosts,
+    'update_capable': updateCapable,
+    'not_update_capable': [for (final e in notUpdateCapable) e.toJson()],
+    'outdated': outdated,
+    'unsupported': unsupported,
+    'in_progress': inProgress,
+    'failed': failed,
+    'held': held,
+    'pinned': pinned,
+    'versions': [for (final e in versions) e.toJson()],
+    'latest': latest.toJson(),
+    if (target != null) 'target': target!.toJson(),
+    'oldest_supported_version': oldestSupportedVersion,
+    'policy_mode': policyMode.wire,
+    'update_available': updateAvailable,
+    'stale_after_seconds': staleAfterSeconds,
+    'catalog': catalog.toJson(),
+    if (currentRollout != null) 'current_rollout': currentRollout!.toJson(),
+  };
+
   final int totalHosts;
   final int activeHosts;
   final int updateCapable;
@@ -3222,6 +3612,8 @@ class FleetSummaryNotUpdateCapableItem {
     );
   }
 
+  Map<String, Object?> toJson() => {'reason': reason, 'hosts': hosts};
+
   final String reason;
   final int hosts;
 }
@@ -3250,6 +3642,14 @@ class FleetSummaryVersionsItem {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'hosts': hosts,
+    'latest': latest,
+    'outdated': outdated,
+    'supported': supported,
+  };
+
   final String version;
   final int hosts;
   final bool latest;
@@ -3276,6 +3676,11 @@ class FleetSummaryLatest {
       beta: _opt(m, 'beta', path, (v, p) => FleetReleaseInfo.fromJson(v, p)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    if (stable != null) 'stable': stable!.toJson(),
+    if (beta != null) 'beta': beta!.toJson(),
+  };
 
   final FleetReleaseInfo? stable;
   final FleetReleaseInfo? beta;
@@ -3358,6 +3763,22 @@ class Onboarding {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'ui_url': uiUrl.toJson(),
+    'otlp_http': otlpHttp.toJson(),
+    'otlp_grpc': otlpGrpc.toJson(),
+    'server_version': serverVersion,
+    'agent_version': ?agentVersion,
+    'release_channel': releaseChannel.wire,
+    'cors_enabled': corsEnabled,
+    'cors_allowed_origins': corsAllowedOrigins,
+    'auth_mode': authMode.wire,
+    'organization': organization.toJson(),
+    'role': role.wire,
+    'features': features.toJson(),
+    if (agentPackages != null) 'agent_packages': agentPackages!.toJson(),
+  };
+
   final OnboardingEndpoint uiUrl;
   final OnboardingEndpoint otlpHttp;
   final OnboardingEndpoint otlpGrpc;
@@ -3393,6 +3814,12 @@ class OnboardingOrganization {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'tenant_id': tenantId,
+    'name': name,
+  };
+
   final String id;
   final String tenantId;
   final String name;
@@ -3421,6 +3848,14 @@ class OnboardingFeatures {
       tailSampling: _req(m, 'tail_sampling', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'license_keys': licenseKeys,
+    'can_create_license_keys': canCreateLicenseKeys,
+    'can_list_license_keys': canListLicenseKeys,
+    'fleet_php_install': fleetPhpInstall,
+    'tail_sampling': tailSampling,
+  };
 
   final bool licenseKeys;
   final bool canCreateLicenseKeys;
@@ -3464,6 +3899,12 @@ class OnboardingAgentPackages {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'node': node.toJson(),
+    'python': python.toJson(),
+    'dotnet': dotnet.toJson(),
+  };
+
   final OnboardingAgentPackage node;
   final OnboardingAgentPackage python;
   final OnboardingAgentPackage dotnet;
@@ -3494,6 +3935,13 @@ class InventoryResponse {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'snapshot_id': snapshotId,
+    if (snapshotTime != null)
+      'snapshot_time': snapshotTime!.toUtc().toIso8601String(),
+    'items': [for (final e in items) e.toJson()],
+  };
 
   final String snapshotId;
   final DateTime? snapshotTime;
@@ -3586,6 +4034,34 @@ class ContainerDetail {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'container_id': containerId,
+    'name': name,
+    'image_name': imageName,
+    'image_tags': imageTags,
+    'runtime': runtime,
+    'host_id': hostId,
+    'host_name': hostName,
+    'compose_project': composeProject,
+    'compose_service': composeService,
+    'k8s_pod_name': k8sPodName,
+    'k8s_namespace_name': k8sNamespaceName,
+    'k8s_container_name': k8sContainerName,
+    'state': state,
+    'health': health,
+    'started_at': ?startedAt,
+    'restart_count': restartCount,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'cpu_utilization': ?cpuUtilization,
+    'memory_usage': ?memoryUsage,
+    'memory_limit': ?memoryLimit,
+    'cpu_sparkline': cpuSparkline,
+    'memory_sparkline': memorySparkline,
+    'attributes': attributes,
+  };
+
   final String containerId;
   final String name;
   final String imageName;
@@ -3643,6 +4119,15 @@ class ContainerTimeseries {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'container_id': containerId,
+    'host_id': hostId,
+    'step': step,
+    'from': from,
+    'to': to,
+    'series': series.toJson(),
+  };
 
   final String containerId;
   final String hostId;
@@ -3721,6 +4206,16 @@ class ContainerTimeseriesSeries {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'cpu_utilization': cpuUtilization,
+    'memory_usage': memoryUsage,
+    'memory_limit': memoryLimit,
+    'network_receive': networkReceive,
+    'network_transmit': networkTransmit,
+    'blockio_read': blockioRead,
+    'blockio_write': blockioWrite,
+  };
 
   final List<List<double>> cpuUtilization;
   final List<List<double>> memoryUsage;
@@ -3817,6 +4312,36 @@ class KubernetesPodDetail {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'namespace': namespace,
+    'pod_name': podName,
+    'pod_uid': podUid,
+    'node_name': nodeName,
+    'workload_kind': workloadKind,
+    'workload_name': workloadName,
+    'phase': phase,
+    'ready': ready,
+    'reason': reason,
+    'status': status,
+    'restarts': restarts,
+    'pod_ip': podIp,
+    'qos_class': qosClass,
+    'created_at': ?createdAt,
+    'started_at': ?startedAt,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'containers': [for (final e in containers) e.toJson()],
+    'labels': labels,
+    'services': [for (final e in services) e.toJson()],
+    'host_id': ?hostId,
+    'host_name': ?hostName,
+  };
+
   final String clusterUid;
   final String clusterName;
   final String namespace;
@@ -3866,6 +4391,12 @@ class KubernetesPodDetailServicesItem {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'deployment_environment': deploymentEnvironment,
+  };
+
   final String serviceName;
   final String serviceNamespace;
   final String deploymentEnvironment;
@@ -3897,6 +4428,13 @@ class KubernetesPodTimeseries {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'from': from,
+    'to': to,
+    'series': series.toJson(),
+  };
 
   final String step;
   final int from;
@@ -3958,6 +4496,14 @@ class KubernetesPodTimeseriesSeries {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'cpu_usage': cpuUsage,
+    'memory_working_set': memoryWorkingSet,
+    'network_receive': networkReceive,
+    'network_transmit': networkTransmit,
+    'restarts': restarts,
+  };
+
   final List<List<double>> cpuUsage;
   final List<List<double>> memoryWorkingSet;
   final List<List<double>> networkReceive;
@@ -3987,6 +4533,10 @@ class KubernetesEventList {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'events': [for (final e in events) e.toJson()],
+  };
 
   final List<KubernetesEvent> events;
 }
@@ -4071,6 +4621,25 @@ class DiscoveredService {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'rule_id': ?ruleId,
+    'name': ?name,
+    'category': ?category,
+    'instance': ?instance,
+    'command': ?command,
+    'display_instance': ?displayInstance,
+    'version': ?version,
+    'matched_by': ?matchedBy,
+    'pids': ?pids,
+    if (ports != null) 'ports': [for (final e in ports!) e.toJson()],
+    'systemd_units': ?systemdUnits,
+    'services': ?services,
+    'packages': ?packages,
+    'container_ids': ?containerIds,
+    if (integration != null) 'integration': integration!.toJson(),
+    if (apmHint != null) 'apm_hint': apmHint!.toJson(),
+  };
+
   final String? ruleId;
   final String? name;
   final String? category;
@@ -4104,6 +4673,12 @@ class DiscoveredServicePortsItem {
       port: _opt(m, 'port', path, _int),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'protocol': ?protocol,
+    'address': ?address,
+    'port': ?port,
+  };
 
   final String? protocol;
   final String? address;
@@ -4139,6 +4714,14 @@ class DiscoveredServiceIntegration {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': ?id,
+    if (status != null) 'status': status!.wire,
+    'error': ?error,
+    'hint': ?hint,
+    'endpoint': ?endpoint,
+  };
+
   final String? id;
   final DiscoveredServiceIntegrationStatus? status;
   final String? error;
@@ -4161,6 +4744,12 @@ class DiscoveredServiceApmHint {
       status: _opt(m, 'status', path, DiscoveredServiceApmHintStatus.fromJson),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'language': ?language,
+    'agent': ?agent,
+    if (status != null) 'status': status!.wire,
+  };
 
   final String? language;
   final String? agent;
@@ -4198,6 +4787,18 @@ class DashboardSummary {
       canEdit: _req(m, 'can_edit', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'visibility': visibility.wire,
+    'page_count': pageCount,
+    'widget_count': widgetCount,
+    'created_by_email': createdByEmail,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'can_edit': canEdit,
+  };
 
   final String id;
   final String name;
@@ -4259,6 +4860,21 @@ class Dashboard {
       canEdit: _req(m, 'can_edit', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'visibility': visibility.wire,
+    'version': version,
+    'variables': [for (final e in variables) e.toJson()],
+    'pages': [for (final e in pages) e.toJson()],
+    'created_by_user_id': ?createdByUserId,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'can_edit': canEdit,
+  };
 
   final String id;
   final String name;
@@ -4327,6 +4943,18 @@ class OqlResult {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'kind': kind.wire,
+    'event_type': eventType,
+    'columns': [for (final e in columns) e.toJson()],
+    'facets': facets,
+    'rows': [for (final e in rows) e.toJson()],
+    'series': [for (final e in series) e.toJson()],
+    'buckets': [for (final e in buckets) e.toJson()],
+    if (compare != null) 'compare': compare!.toJson(),
+    'metadata': metadata.toJson(),
+  };
+
   final OqlResultKind kind;
   final String eventType;
   final List<OqlColumn> columns;
@@ -4359,6 +4987,14 @@ class User {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'email': email,
+    'name': name,
+    'email_verified': emailVerified,
+    'language': language.wire,
+  };
+
   final String id;
   final String email;
   final String name;
@@ -4384,6 +5020,13 @@ class OrgRef {
       role: _opt(m, 'role', path, Role.fromJson),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'tenant_id': tenantId,
+    'name': name,
+    if (role != null) 'role': role!.wire,
+  };
 
   final String id;
   final String tenantId;
@@ -4416,6 +5059,15 @@ class AlertIncidentEvent {
       details: _req(m, 'details', path, (v, p) => _map<Object?>(v, p, _any)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'at': at.toUtc().toIso8601String(),
+    'kind': kind.wire,
+    'actor_email': ?actorEmail,
+    'message': message,
+    'details': details,
+  };
 
   final int id;
   final DateTime at;
@@ -4479,6 +5131,27 @@ class AlertDelivery {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'incident_id': ?incidentId,
+    'rule_id': ?ruleId,
+    'rule_name': ruleName,
+    'channel_id': ?channelId,
+    'channel_name': channelName,
+    'channel_type': channelType.wire,
+    'kind': kind.wire,
+    'status': status.wire,
+    'attempts': attempts,
+    'idempotency_key': idempotencyKey,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    if (finishedAt != null)
+      'finished_at': finishedAt!.toUtc().toIso8601String(),
+    if (nextAttemptAt != null)
+      'next_attempt_at': nextAttemptAt!.toUtc().toIso8601String(),
+    'last_error': lastError,
+    'attempt_log': [for (final e in attemptLog) e.toJson()],
+  };
 
   final String id;
   final String? incidentId;
@@ -4627,6 +5300,41 @@ class AlertCondition {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'metric': ?metric,
+    'service_name': ?serviceName,
+    'service_namespace': ?serviceNamespace,
+    'environment': ?environment,
+    'transaction_type': ?transactionType,
+    'transaction_name': ?transactionName,
+    'min_requests': ?minRequests,
+    if (aggregation != null) 'aggregation': aggregation!.wire,
+    if (seriesAggregation != null)
+      'series_aggregation': seriesAggregation!.wire,
+    'window_seconds': ?windowSeconds,
+    'lookback_seconds': ?lookbackSeconds,
+    if (filters != null) 'filters': [for (final e in filters!) e.toJson()],
+    'group_by': ?groupBy,
+    if (operator != null) 'operator': operator!.wire,
+    'threshold': ?threshold,
+    'recovery_threshold': ?recoveryThreshold,
+    if (missingData != null) 'missing_data': missingData!.wire,
+    'query': ?query,
+    'severity_min': ?severityMin,
+    if (signal != null) 'signal': signal!.wire,
+    if (seasonality != null) 'seasonality': seasonality!.wire,
+    'lookback_days': ?lookbackDays,
+    if (direction != null) 'direction': direction!.wire,
+    'sensitivity': ?sensitivity,
+    'min_samples': ?minSamples,
+    'min_deviation': ?minDeviation,
+    'slo_id': ?sloId,
+    if (windows != null) 'windows': [for (final e in windows!) e.toJson()],
+    if (event != null) 'event': event!.wire,
+    'match': ?match,
+    'min_count': ?minCount,
+  };
+
   final String? metric;
   final String? serviceName;
   final String? serviceNamespace;
@@ -4682,6 +5390,13 @@ class AlertFlapping {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'enabled': enabled,
+    'transitions': transitions,
+    'window_seconds': windowSeconds,
+    'hold_seconds': holdSeconds,
+  };
+
   final bool enabled;
   final int transitions;
   final int windowSeconds;
@@ -4722,6 +5437,21 @@ class AlertRuleStatus {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'state': state.wire,
+    'series_pending': seriesPending,
+    'series_firing': seriesFiring,
+    'open_incidents': openIncidents,
+    if (lastEvaluatedAt != null)
+      'last_evaluated_at': lastEvaluatedAt!.toUtc().toIso8601String(),
+    'last_result': lastResult,
+    'last_error': lastError,
+    'last_duration_ms': lastDurationMs,
+    if (nextEvaluationAt != null)
+      'next_evaluation_at': nextEvaluationAt!.toUtc().toIso8601String(),
+    'owner': ?owner,
+  };
+
   final AlertRuleStatusState state;
   final int seriesPending;
   final int seriesFiring;
@@ -4753,6 +5483,12 @@ class AlertMuteMatcher {
       value: _req(m, 'value', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'label': label,
+    'op': op.wire,
+    'value': value,
+  };
 
   final String label;
   final AlertMuteMatcherOp op;
@@ -4805,6 +5541,18 @@ class AlertMuteSchedule {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'timezone': timezone,
+    'days': [for (final e in days) e.wire],
+    'rrule': ?rrule,
+    'start_time': startTime,
+    'end_time': endTime,
+    'from': from.toUtc().toIso8601String(),
+    if (until != null) 'until': until!.toUtc().toIso8601String(),
+    'exdates': exdates,
+    'holiday_calendar_ids': holidayCalendarIds,
+  };
+
   final String timezone;
   final List<AlertMuteScheduleDaysItem> days;
   final String? rrule;
@@ -4831,8 +5579,76 @@ class AlertMuteOccurrence {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'starts_at': startsAt.toUtc().toIso8601String(),
+    'ends_at': endsAt.toUtc().toIso8601String(),
+  };
+
   final DateTime startsAt;
   final DateTime endsAt;
+}
+
+/// Route condition; the parts are AND-ed and an empty part matches everything.
+class AlertRouteMatch {
+  const AlertRouteMatch({
+    this.severities,
+    this.services,
+    this.ruleTypes,
+    this.labels,
+    this.timeWindow,
+  });
+
+  factory AlertRouteMatch.fromJson(
+    Object? json, [
+    String path = 'AlertRouteMatch',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRouteMatch(
+      severities: _opt(
+        m,
+        'severities',
+        path,
+        (v, p) => _list<AlertSeverity>(v, p, AlertSeverity.fromJson),
+      ),
+      services: _opt(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+      ruleTypes: _opt(
+        m,
+        'rule_types',
+        path,
+        (v, p) => _list<AlertRuleType>(v, p, AlertRuleType.fromJson),
+      ),
+      labels: _opt(
+        m,
+        'labels',
+        path,
+        (v, p) => _list<AlertRouteMatcher>(
+          v,
+          p,
+          (v, p) => AlertRouteMatcher.fromJson(v, p),
+        ),
+      ),
+      timeWindow: _opt(
+        m,
+        'time_window',
+        path,
+        (v, p) => AlertRouteWindow.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    if (severities != null) 'severities': [for (final e in severities!) e.wire],
+    'services': ?services,
+    if (ruleTypes != null) 'rule_types': [for (final e in ruleTypes!) e.wire],
+    if (labels != null) 'labels': [for (final e in labels!) e.toJson()],
+    if (timeWindow != null) 'time_window': timeWindow!.toJson(),
+  };
+
+  final List<AlertSeverity>? severities;
+  final List<String>? services;
+  final List<AlertRuleType>? ruleTypes;
+  final List<AlertRouteMatcher>? labels;
+  final AlertRouteWindow? timeWindow;
 }
 
 /// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
@@ -4863,6 +5679,18 @@ class ApmRed {
       apdex: _opt(m, 'apdex', path, _num),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+  };
 
   final double requests;
   final double throughput;
@@ -4905,6 +5733,19 @@ class ApmPoint {
       t: _req(m, 't', path, _int),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+    't': t,
+  };
 
   final double requests;
   final double throughput;
@@ -4989,6 +5830,34 @@ class ApmErrorGroup {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'status': status.wire,
+    if (assignee != null) 'assignee': assignee!.toJson(),
+    if (resolvedAt != null)
+      'resolved_at': resolvedAt!.toUtc().toIso8601String(),
+    'resolved_in_version': resolvedInVersion,
+    'resolved_by_email': resolvedByEmail,
+    if (regressedAt != null)
+      'regressed_at': regressedAt!.toUtc().toIso8601String(),
+    'regression_count': regressionCount,
+    'comment_count': commentCount,
+    if (updatedAt != null) 'updated_at': updatedAt!.toUtc().toIso8601String(),
+    'updated_by_email': updatedByEmail,
+    'group_id': groupId,
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'error_type': errorType,
+    'message': message,
+    'count': count,
+    'total_count': totalCount,
+    if (firstSeen != null) 'first_seen': firstSeen!.toUtc().toIso8601String(),
+    if (lastSeen != null) 'last_seen': lastSeen!.toUtc().toIso8601String(),
+    'last_trace_id': lastTraceId,
+    'last_span_name': lastSpanName,
+    'sparkline': sparkline,
+  };
+
   final ApmErrorStatus status;
   final ApmErrorAssignee? assignee;
   final DateTime? resolvedAt;
@@ -5063,6 +5932,21 @@ class Span {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'span_id': spanId,
+    'parent_span_id': parentSpanId,
+    'name': name,
+    'kind': kind.wire,
+    'service_name': serviceName,
+    'start': start.toUtc().toIso8601String(),
+    'duration_ns': durationNs,
+    'status_code': statusCode.wire,
+    'status_message': statusMessage,
+    'attributes': attributes,
+    'resource_attributes': resourceAttributes,
+    'events': [for (final e in events) e.toJson()],
+  };
 
   final String spanId;
   final String parentSpanId;
@@ -5139,6 +6023,29 @@ class SpanQueryRow {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'trace_id': traceId,
+    'span_id': spanId,
+    'parent_span_id': parentSpanId,
+    'name': name,
+    'kind': kind.wire,
+    'status_code': statusCode.wire,
+    'status_message': statusMessage,
+    'service_name': serviceName,
+    'host_id': hostId,
+    'duration_ns': durationNs,
+    'duration_ms': durationMs,
+    'is_entry': isEntry,
+    'is_error': isError,
+    'http_status_code': httpStatusCode,
+    'transaction_name': transactionName,
+    'fields': fields,
+    'attributes': ?attributes,
+    'resource_attributes': ?resourceAttributes,
+  };
+
   final String id;
   final DateTime timestamp;
   final String traceId;
@@ -5190,6 +6097,18 @@ class MetricInfo {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.wire,
+    'unit': unit,
+    'description': description,
+    'temporality': temporality.wire,
+    'monotonic': monotonic,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'series': series,
+    'services': services,
+  };
+
   final String name;
   final MetricType type;
   final String unit;
@@ -5224,6 +6143,15 @@ class FieldKey {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'name': name,
+    'source': source.wire,
+    'type': type.wire,
+    'count': ?count,
+    'cardinality': ?cardinality,
+  };
+
   final String key;
   final String name;
   final FieldSource source;
@@ -5254,6 +6182,8 @@ class MetricSeries {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {'attributes': attributes, 'points': points};
 
   final Map<String, String> attributes;
   final List<List<double>> points;
@@ -5296,6 +6226,22 @@ class RumVital {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name.wire,
+    'unit': unit,
+    'count': count,
+    'p50': ?p50,
+    'p75': ?p75,
+    'p95': ?p95,
+    'avg': ?avg,
+    'good': good,
+    'needs_improvement': needsImprovement,
+    'poor': poor,
+    'rating': rating,
+    'good_threshold': goodThreshold,
+    'poor_threshold': poorThreshold,
+  };
+
   final RumVitalName name;
   final String unit;
   final double count;
@@ -5333,6 +6279,13 @@ class FleetReleaseInfo {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'channel': channel.wire,
+    'released_at': releasedAt.toUtc().toIso8601String(),
+    'notes_url': notesUrl,
+  };
+
   final String version;
   final FleetChannel channel;
   final DateTime releasedAt;
@@ -5366,6 +6319,17 @@ class FleetCatalogStatus {
       warnings: _req(m, 'warnings', path, (v, p) => _list<String>(v, p, _str)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'status': status.wire,
+    'source': source,
+    if (checkedAt != null) 'checked_at': checkedAt!.toUtc().toIso8601String(),
+    if (lastSuccessAt != null)
+      'last_success_at': lastSuccessAt!.toUtc().toIso8601String(),
+    'error': error,
+    'releases': releases,
+    'warnings': warnings,
+  };
 
   final FleetCatalogStatusStatus status;
   final String source;
@@ -5430,6 +6394,29 @@ class FleetRollout {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'action': action.wire,
+    'from_version': ?fromVersion,
+    'to_version': ?toVersion,
+    'targets': targets,
+    'waves': waves,
+    'current_wave': currentWave,
+    'wave_percent': wavePercent,
+    'wave_started_at': waveStartedAt.toUtc().toIso8601String(),
+    if (nextWaveAt != null)
+      'next_wave_at': nextWaveAt!.toUtc().toIso8601String(),
+    'wave_soak_minutes': waveSoakMinutes,
+    'halt_failure_rate': haltFailureRate,
+    'state': state.wire,
+    'state_reason': stateReason,
+    'counters': counters.toJson(),
+    'created_by_email': ?createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    if (endedAt != null) 'ended_at': endedAt!.toUtc().toIso8601String(),
+  };
+
   final String id;
   final FleetRolloutAction action;
   final String? fromVersion;
@@ -5466,6 +6453,8 @@ class OnboardingEndpoint {
     );
   }
 
+  Map<String, Object?> toJson() => {'url': url, 'source': source.wire};
+
   final String url;
   final OnboardingEndpointSource source;
 }
@@ -5501,6 +6490,15 @@ class OnboardingAgentPackage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'version': version,
+    'registry': registry.wire,
+    'registry_url': registryUrl,
+    'release_asset_url': releaseAssetUrl,
+    'release_asset_sha256_url': releaseAssetSha256Url,
+  };
+
   final String name;
   final String version;
   final OnboardingAgentPackageRegistry registry;
@@ -5524,6 +6522,12 @@ class InventoryItem {
       data: _opt<Object?>(m, 'data', path, _any),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'category': category,
+    'key': key,
+    'data': ?data,
+  };
 
   final String category;
   final String key;
@@ -5573,6 +6577,24 @@ class KubernetesPodContainer {
       memoryLimit: _opt(m, 'memory_limit', path, _num),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'container_id': containerId,
+    'image': image,
+    'ready': ready,
+    'restarts': restarts,
+    'state': state,
+    'reason': reason,
+    'known': known,
+    'host_id': ?hostId,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'cpu_request': ?cpuRequest,
+    'cpu_limit': ?cpuLimit,
+    'memory_request': ?memoryRequest,
+    'memory_limit': ?memoryLimit,
+  };
 
   final String name;
   final String containerId;
@@ -5629,6 +6651,21 @@ class KubernetesEvent {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'type': type,
+    'reason': reason,
+    'message': message,
+    'count': count,
+    'namespace': namespace,
+    'object_kind': objectKind,
+    'object_name': objectName,
+    'object_uid': objectUid,
+    'source': source,
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+  };
+
   final DateTime timestamp;
   final String type;
   final String reason;
@@ -5678,6 +6715,17 @@ class DashboardVariable {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'label': label,
+    'type': type.wire,
+    'query': query,
+    'values': values,
+    'default': defaultValue,
+    'multi': multi,
+    'include_all': includeAll,
+  };
+
   final String name;
   final String label;
   final DashboardVariableType type;
@@ -5717,6 +6765,12 @@ class DashboardPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'widgets': [for (final e in widgets) e.toJson()],
+  };
+
   final String id;
   final String name;
   final List<DashboardWidget> widgets;
@@ -5739,6 +6793,12 @@ class OqlColumn {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'function': function,
+    'type': type.wire,
+  };
+
   final String name;
   final String function;
   final OqlColumnType type;
@@ -5755,6 +6815,8 @@ class OqlRow {
       values: _req(m, 'values', path, (v, p) => _list<Object?>(v, p, _any)),
     );
   }
+
+  Map<String, Object?> toJson() => {'facets': facets, 'values': values};
 
   final List<String> facets;
   final List<Object?> values;
@@ -5786,6 +6848,12 @@ class OqlSeries {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'facets': facets,
+    'column': column,
+    'points': points,
+  };
+
   final List<String> facets;
   final int column;
   final List<List<double?>> points;
@@ -5810,6 +6878,8 @@ class OqlHistogramBucket {
       count: _req(m, 'count', path, _num),
     );
   }
+
+  Map<String, Object?> toJson() => {'from': from, 'to': to, 'count': count};
 
   final double from;
   final double to;
@@ -5853,6 +6923,13 @@ class OqlCompare {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'offset_seconds': offsetSeconds,
+    'rows': [for (final e in rows) e.toJson()],
+    'series': [for (final e in series) e.toJson()],
+    'buckets': [for (final e in buckets) e.toJson()],
+  };
 
   final int offsetSeconds;
   final List<OqlRow> rows;
@@ -5902,6 +6979,22 @@ class OqlMetadata {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'bucket_seconds': ?bucketSeconds,
+    'rollup': rollup,
+    'table': table,
+    'rows_read': rowsRead,
+    'bytes_read': bytesRead,
+    'elapsed_ms': elapsedMs,
+    'queries': queries,
+    'facet_limit': facetLimit,
+    'truncated': truncated,
+    'warnings': warnings,
+    'ignored_filters': ?ignoredFilters,
+  };
+
   final DateTime from;
   final DateTime to;
   final int? bucketSeconds;
@@ -5943,6 +7036,15 @@ class AlertDeliveryAttempt {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'attempt': attempt,
+    'at': at.toUtc().toIso8601String(),
+    'duration_ms': durationMs,
+    'success': success,
+    'status_code': statusCode,
+    'error': error,
+  };
+
   final int attempt;
   final DateTime at;
   final int durationMs;
@@ -5967,6 +7069,12 @@ class AlertFilter {
       values: _req(m, 'values', path, (v, p) => _list<String>(v, p, _str)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'field': field,
+    'op': op.wire,
+    'values': values,
+  };
 
   final String field;
   final AlertFilterOp op;
@@ -5995,10 +7103,92 @@ class AlertBurnWindow {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'factor': factor,
+    'long_seconds': longSeconds,
+    'short_seconds': shortSeconds,
+  };
+
   final String name;
   final double factor;
   final int longSeconds;
   final int shortSeconds;
+}
+
+/// `AlertRouteMatcher` of the openlog API contract.
+class AlertRouteMatcher {
+  const AlertRouteMatcher({
+    required this.label,
+    required this.op,
+    required this.value,
+  });
+
+  factory AlertRouteMatcher.fromJson(
+    Object? json, [
+    String path = 'AlertRouteMatcher',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRouteMatcher(
+      label: _req(m, 'label', path, _str),
+      op: _req(m, 'op', path, AlertRouteMatcherOp.fromJson),
+      value: _req(m, 'value', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'label': label,
+    'op': op.wire,
+    'value': value,
+  };
+
+  final String label;
+  final AlertRouteMatcherOp op;
+  final String value;
+}
+
+/// Local window of a route (alerting.md §5.6); end_time at or before start_time means the next day.
+class AlertRouteWindow {
+  const AlertRouteWindow({
+    required this.timezone,
+    this.days,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  factory AlertRouteWindow.fromJson(
+    Object? json, [
+    String path = 'AlertRouteWindow',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRouteWindow(
+      timezone: _req(m, 'timezone', path, _str),
+      days: _opt(
+        m,
+        'days',
+        path,
+        (v, p) => _list<AlertRouteWindowDaysItem>(
+          v,
+          p,
+          AlertRouteWindowDaysItem.fromJson,
+        ),
+      ),
+      startTime: _req(m, 'start_time', path, _str),
+      endTime: _req(m, 'end_time', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timezone': timezone,
+    if (days != null) 'days': [for (final e in days!) e.wire],
+    'start_time': startTime,
+    'end_time': endTime,
+  };
+
+  final String timezone;
+  final List<AlertRouteWindowDaysItem>? days;
+  final String startTime;
+  final String endTime;
 }
 
 /// `ApmErrorAssignee` of the openlog API contract.
@@ -6020,6 +7210,12 @@ class ApmErrorAssignee {
       name: _req(m, 'name', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'user_id': userId,
+    'email': email,
+    'name': name,
+  };
 
   final String userId;
   final String email;
@@ -6047,6 +7243,12 @@ class SpanEvent {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp,
+    'name': name,
+    'attributes': attributes,
+  };
 
   final String timestamp;
   final String name;
@@ -6076,6 +7278,14 @@ class FleetRolloutCounters {
       rolledBack: _req(m, 'rolled_back', path, _int),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'pending': pending,
+    'attempted': attempted,
+    'succeeded': succeeded,
+    'failed': failed,
+    'rolled_back': rolledBack,
+  };
 
   final int pending;
   final int attempted;
@@ -6140,6 +7350,18 @@ class DashboardWidget {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'title': title,
+    'visualization': visualization.wire,
+    'layout': layout.toJson(),
+    'query': query,
+    'markdown': markdown,
+    'unit': unit.wire,
+    'thresholds': [for (final e in thresholds) e.toJson()],
+    'options': options.toJson(),
+  };
+
   final String id;
   final String title;
   final DashboardVisualization visualization;
@@ -6173,6 +7395,8 @@ class DashboardWidgetLayout {
     );
   }
 
+  Map<String, Object?> toJson() => {'x': x, 'y': y, 'w': w, 'h': h};
+
   final int x;
   final int y;
   final int w;
@@ -6194,6 +7418,8 @@ class DashboardThreshold {
     );
   }
 
+  Map<String, Object?> toJson() => {'value': value, 'severity': severity.wire};
+
   final double value;
   final DashboardThresholdSeverity severity;
 }
@@ -6212,6 +7438,8 @@ class DashboardWidgetOptions {
       legend: _opt(m, 'legend', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {'stacked': ?stacked, 'legend': ?legend};
 
   final bool? stacked;
   final bool? legend;
@@ -6238,6 +7466,13 @@ class DeviceSession {
       me: _req(m, 'me', path, (v, p) => Me.fromJson(v, p)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'token': token,
+    'session_id': sessionId,
+    'expires_at': expiresAt.toUtc().toIso8601String(),
+    'me': me.toJson(),
+  };
 
   final String token;
   final String sessionId;
@@ -6273,6 +7508,12 @@ class IncidentPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'incidents': [for (final e in incidents) e.toJson()],
+    'next_cursor': ?nextCursor,
+    'counts': counts.toJson(),
+  };
+
   final List<AlertIncident> incidents;
   final String? nextCursor;
   final IncidentPageCounts counts;
@@ -6298,6 +7539,12 @@ class IncidentPageCounts {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'open': open,
+    'acknowledged': acknowledged,
+    'resolved': resolved,
+  };
+
   final int open;
   final int acknowledged;
   final int resolved;
@@ -6321,6 +7568,10 @@ class AlertRulePage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'rules': [for (final e in rules) e.toJson()],
+  };
 
   final List<AlertRule> rules;
 }
@@ -6349,6 +7600,11 @@ class AlertChannelPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'channels': [for (final e in channels) e.toJson()],
+    'secrets_configured': secretsConfigured,
+  };
+
   final List<AlertChannel> channels;
   final bool secretsConfigured;
 }
@@ -6372,7 +7628,41 @@ class AlertMutePage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'mutes': [for (final e in mutes) e.toJson()],
+  };
+
   final List<AlertMute> mutes;
+}
+
+/// `AlertRoutingRulePage` of the openlog API contract.
+class AlertRoutingRulePage {
+  const AlertRoutingRulePage({required this.routingRules});
+
+  factory AlertRoutingRulePage.fromJson(
+    Object? json, [
+    String path = 'AlertRoutingRulePage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRoutingRulePage(
+      routingRules: _req(
+        m,
+        'routing_rules',
+        path,
+        (v, p) => _list<AlertRoutingRule>(
+          v,
+          p,
+          (v, p) => AlertRoutingRule.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'routing_rules': [for (final e in routingRules) e.toJson()],
+  };
+
+  final List<AlertRoutingRule> routingRules;
 }
 
 /// `SessionPage` of the openlog API contract.
@@ -6390,6 +7680,10 @@ class SessionPage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'sessions': [for (final e in sessions) e.toJson()],
+  };
 
   final List<Session> sessions;
 }
@@ -6410,6 +7704,11 @@ class ServicePage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'services': [for (final e in services) e.toJson()],
+  };
 
   final String step;
   final List<ApmService> services;
@@ -6432,6 +7731,11 @@ class LogPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'logs': [for (final e in logs) e.toJson()],
+    'next_cursor': ?nextCursor,
+  };
+
   final List<LogRecord> logs;
   final String? nextCursor;
 }
@@ -6451,6 +7755,10 @@ class RumAppPage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'apps': [for (final e in apps) e.toJson()],
+  };
 
   final List<RumApp> apps;
 }
@@ -6478,6 +7786,13 @@ class CostHostPage {
       pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'hosts': [for (final e in hosts) e.toJson()],
+    'total': total,
+    'summary': summary.toJson(),
+    'pricing': pricing.toJson(),
+  };
 
   final List<CostHost> hosts;
   final int total;
@@ -6508,6 +7823,10 @@ class InventoryPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'items': [for (final e in items) e.toJson()],
+  };
+
   final List<InventorySearchItem> items;
 }
 
@@ -6530,6 +7849,11 @@ class FleetHostPage {
       nextCursor: _opt(m, 'next_cursor', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'hosts': [for (final e in hosts) e.toJson()],
+    'next_cursor': ?nextCursor,
+  };
 
   final List<FleetHost> hosts;
   final String? nextCursor;
@@ -6557,6 +7881,10 @@ class ProfileServicePage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'services': [for (final e in services) e.toJson()],
+  };
 
   final List<ProfileService> services;
 }
@@ -6592,6 +7920,13 @@ class ProfileFunctionPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'unit': unit,
+    'type': type,
+    'total': total,
+    'functions': [for (final e in functions) e.toJson()],
+  };
+
   final String unit;
   final String type;
   final int total;
@@ -6621,6 +7956,10 @@ class DashboardPageList {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'dashboards': [for (final e in dashboards) e.toJson()],
+  };
+
   final List<DashboardSummary> dashboards;
 }
 
@@ -6639,6 +7978,10 @@ class HostPage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'hosts': [for (final e in hosts) e.toJson()],
+  };
 
   final List<Host> hosts;
 }
@@ -6669,6 +8012,12 @@ class ContainerPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'containers': [for (final e in containers) e.toJson()],
+    'total': total,
+    'step': step,
+  };
+
   final List<ApiContainer> containers;
   final int total;
   final String step;
@@ -6692,6 +8041,11 @@ class PodPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'pods': [for (final e in pods) e.toJson()],
+    'total': total,
+  };
+
   final List<KubernetesPod> pods;
   final int total;
 }
@@ -6713,6 +8067,11 @@ class SloPage {
       statusTruncated: _req(m, 'status_truncated', path, _bool),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'slos': [for (final e in slos) e.toJson()],
+    'status_truncated': statusTruncated,
+  };
 
   final List<SloListItem> slos;
   final bool statusTruncated;
@@ -6747,6 +8106,11 @@ class SyntheticPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'checks': [for (final e in checks) e.toJson()],
+    'locations': locations,
+  };
+
   final List<SyntheticCheckListItem> checks;
   final List<String> locations;
 }
@@ -6769,6 +8133,10 @@ class JobMonitorPage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'monitors': [for (final e in monitors) e.toJson()],
+  };
 
   final List<JobMonitor> monitors;
 }
@@ -6795,6 +8163,11 @@ class VulnPage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'vulnerabilities': [for (final e in vulnerabilities) e.toJson()],
+    'severity_counts': {for (final e in severityCounts.entries) e.key: e.value},
+  };
+
   final List<VulnGroup> vulnerabilities;
   final Map<String, int> severityCounts;
 }
@@ -6817,6 +8190,10 @@ class DbInstancePage {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'instances': [for (final e in instances) e.toJson()],
+  };
 
   final List<DbInstance> instances;
 }
@@ -6874,6 +8251,20 @@ class AlertChannel {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type.wire,
+    'enabled': enabled,
+    'config': config.toJson(),
+    'secret_hints': secretHints,
+    'generated_secrets': ?generatedSecrets,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    if (lastDelivery != null) 'last_delivery': lastDelivery!.toJson(),
+  };
+
   final String id;
   final String name;
   final AlertChannelType type;
@@ -6906,6 +8297,12 @@ class AlertChannelLastDelivery {
       error: _req(m, 'error', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'at': at.toUtc().toIso8601String(),
+    'status': status.wire,
+    'error': error,
+  };
 
   final DateTime at;
   final AlertNotificationStatus status;
@@ -6953,6 +8350,19 @@ class LogRecord {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'severity_text': severityText,
+    'severity_number': severityNumber,
+    'body': body,
+    'host_id': hostId,
+    'service_name': serviceName,
+    'trace_id': traceId,
+    'span_id': spanId,
+    'attributes': attributes,
+    'resource_attributes': resourceAttributes,
+  };
+
   final DateTime timestamp;
   final String severityText;
   final int severityNumber;
@@ -6987,6 +8397,15 @@ class RumApp {
       lastSeen: _req(m, 'last_seen', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'app': app,
+    'environment': environment,
+    'views': views,
+    'sessions': sessions,
+    'errors': errors,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
 
   final String app;
   final String environment;
@@ -7047,6 +8466,29 @@ class CostHost {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'host_name': hostName,
+    'provider': provider,
+    'instance_type': instanceType,
+    'region': region,
+    'zone': zone,
+    'lifecycle': lifecycle,
+    'vcpus': vcpus,
+    'memory_bytes': memoryBytes,
+    'hours': hours,
+    'price': price.toJson(),
+    'total': total,
+    'services': services,
+    'unallocated': unallocated,
+    'unattributed': unattributed,
+    'idle': idle,
+    'used_share': usedShare,
+    'idle_share': idleShare,
+    'oversubscribed': oversubscribed,
+    'priced': priced,
+  };
+
   final String hostId;
   final String hostName;
   final String provider;
@@ -7104,6 +8546,21 @@ class CostSummary {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'currency': currency,
+    'total': total,
+    'services': services,
+    'unallocated': unallocated,
+    'unattributed': unattributed,
+    'idle': idle,
+    'idle_share': idleShare,
+    'per_hour': perHour,
+    'hosts': hosts,
+    'priced_hosts': pricedHosts,
+    'unpriced_hosts': unpricedHosts,
+    'host_hours': hostHours,
+  };
+
   final String currency;
   final double total;
   final double services;
@@ -7141,6 +8598,15 @@ class CostPricing {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'updated': updated,
+    'currency': currency,
+    'note': note,
+    'estimated': estimated,
+    'override_file': ?overrideFile,
+  };
+
   final int version;
   final String updated;
   final String currency;
@@ -7172,6 +8638,14 @@ class InventorySearchItem {
       hostName: _opt(m, 'host_name', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'category': category,
+    'key': key,
+    'data': ?data,
+    'host_id': hostId,
+    'host_name': ?hostName,
+  };
 
   final String category;
   final String key;
@@ -7241,6 +8715,24 @@ class FleetHost {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'host_name': hostName,
+    'agent': agent.toJson(),
+    'update': update.toJson(),
+    'first_seen_at': firstSeenAt.toUtc().toIso8601String(),
+    'last_sync_at': lastSyncAt.toUtc().toIso8601String(),
+    'rollout_id': ?rolloutId,
+    if (override != null) 'override': override!.toJson(),
+    'outdated': outdated,
+    'supported': supported,
+    'status': status.wire,
+    'status_target': ?statusTarget,
+    'php_agent': phpAgent.toJson(),
+    if (phpAccess != null) 'php_access': phpAccess!.toJson(),
+    'java_agent': javaAgent.toJson(),
+  };
+
   final String hostId;
   final String hostName;
   final FleetHostAgent agent;
@@ -7286,6 +8778,16 @@ class FleetHostAgent {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'version': version,
+    'commit': commit,
+    'os': os,
+    'arch': arch,
+    'install_method': installMethod,
+    'update_capable': updateCapable,
+  };
+
   final String name;
   final String version;
   final String commit;
@@ -7318,6 +8820,14 @@ class FleetHostUpdate {
       changedAt: _opt(m, 'changed_at', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'state': state,
+    'from_version': fromVersion,
+    'to_version': toVersion,
+    'error': error,
+    if (changedAt != null) 'changed_at': changedAt!.toUtc().toIso8601String(),
+  };
 
   final String state;
   final String fromVersion;
@@ -7354,6 +8864,16 @@ class ProfileService {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'service': service,
+    'environment': environment,
+    'type': type,
+    'unit': unit,
+    'samples': samples,
+    'total': total,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
   final String service;
   final String environment;
   final String type;
@@ -7382,6 +8902,12 @@ class ProfileFunction {
       samples: _req(m, 'samples', path, _int),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'function': function,
+    'self': self,
+    'samples': samples,
+  };
 
   final String function;
   final int self;
@@ -7419,6 +8945,17 @@ class Host {
       usage: _opt(m, 'usage', path, (v, p) => HostUsage.fromJson(v, p)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'host_name': hostName,
+    'os_description': osDescription,
+    'arch': arch,
+    'agent_version': agentVersion,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'resource_attributes': resourceAttributes,
+    if (usage != null) 'usage': usage!.toJson(),
+  };
 
   final String hostId;
   final String hostName;
@@ -7506,6 +9043,33 @@ class ApiContainer {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'container_id': containerId,
+    'name': name,
+    'image_name': imageName,
+    'image_tags': imageTags,
+    'runtime': runtime,
+    'host_id': hostId,
+    'host_name': hostName,
+    'compose_project': composeProject,
+    'compose_service': composeService,
+    'k8s_pod_name': k8sPodName,
+    'k8s_namespace_name': k8sNamespaceName,
+    'k8s_container_name': k8sContainerName,
+    'state': state,
+    'health': health,
+    'started_at': ?startedAt,
+    'restart_count': restartCount,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'cpu_utilization': ?cpuUtilization,
+    'memory_usage': ?memoryUsage,
+    'memory_limit': ?memoryLimit,
+    'cpu_sparkline': cpuSparkline,
+    'memory_sparkline': memorySparkline,
+  };
+
   final String containerId;
   final String name;
   final String imageName;
@@ -7590,6 +9154,31 @@ class KubernetesPod {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'namespace': namespace,
+    'pod_name': podName,
+    'pod_uid': podUid,
+    'node_name': nodeName,
+    'workload_kind': workloadKind,
+    'workload_name': workloadName,
+    'phase': phase,
+    'ready': ready,
+    'reason': reason,
+    'status': status,
+    'restarts': restarts,
+    'pod_ip': podIp,
+    'qos_class': qosClass,
+    'created_at': ?createdAt,
+    'started_at': ?startedAt,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+  };
+
   final String clusterUid;
   final String clusterName;
   final String namespace;
@@ -7654,6 +9243,24 @@ class SloListItem {
       status: _opt(m, 'status', path, (v, p) => SloStatus.fromJson(v, p)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'service_name': serviceName,
+    'service_namespace': ?serviceNamespace,
+    'environment': ?environment,
+    'sli_type': sliType.wire,
+    'latency_threshold_ms': ?latencyThresholdMs,
+    'objective': objective,
+    'window_days': windowDays,
+    'created_by_email': createdByEmail,
+    'updated_by_email': updatedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    if (status != null) 'status': status!.toJson(),
+  };
 
   final String id;
   final String name;
@@ -7770,6 +9377,34 @@ class SyntheticCheckListItem {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type,
+    'enabled': enabled,
+    'url': url,
+    'method': method,
+    'headers': headers,
+    'body': body,
+    'expected_status': expectedStatus,
+    'assertion_type': assertionType.wire,
+    'assertion_path': assertionPath,
+    'assertion_value': assertionValue,
+    'timeout_ms': timeoutMs,
+    'interval_seconds': intervalSeconds,
+    'locations': locations,
+    'target': target,
+    'dns_record_type': dnsRecordType,
+    'dns_expected': dnsExpected,
+    'tls_warning_days': tlsWarningDays,
+    'created_by_email': createdByEmail,
+    'updated_by_email': updatedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'status': [for (final e in status) e.toJson()],
+    if (summary != null) 'summary': summary!.toJson(),
+  };
+
   final String id;
   final String name;
   final String type;
@@ -7842,6 +9477,26 @@ class JobMonitor {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'kind': kind,
+    'cron': cron,
+    'time_zone': timeZone,
+    'interval_seconds': intervalSeconds,
+    'grace_seconds': graceSeconds,
+    'enabled': enabled,
+    'tags': tags,
+    'ping_url': pingUrl,
+    'created_by_email': createdByEmail,
+    'updated_by_email': updatedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'state': state.toJson(),
+    if (summary != null) 'summary': summary!.toJson(),
+  };
+
   final String id;
   final String name;
   final String description;
@@ -7889,6 +9544,18 @@ class VulnGroup {
       lastSeen: _req(m, 'last_seen', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'vuln_id': vulnId,
+    'cve': cve,
+    'severity': severity.wire,
+    'score': score,
+    'summary': summary,
+    'hosts': hosts,
+    'packages': packages,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
 
   final String vulnId;
   final String cve;
@@ -7942,6 +9609,24 @@ class DbInstance {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'instance': instance,
+    'db_system': dbSystem,
+    'host_id': hostId,
+    'host_name': hostName,
+    'server_address': serverAddress,
+    'server_port': serverPort,
+    'calls': calls,
+    'throughput': throughput,
+    'total_time_ms': totalTimeMs,
+    'avg_ms': ?avgMs,
+    'statements': statements,
+    'errors': errors,
+    'avg_active_sessions': ?avgActiveSessions,
+    'top_wait': topWait,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
   final String instance;
   final String dbSystem;
   final String hostId;
@@ -7991,6 +9676,13 @@ class AlertChannelConfig {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'to': ?to,
+    if (smtp != null) 'smtp': smtp!.toJson(),
+    if (pagerduty != null) 'pagerduty': pagerduty!.toJson(),
+    if (opsgenie != null) 'opsgenie': opsgenie!.toJson(),
+  };
+
   final List<String>? to;
   final AlertChannelConfigSmtp? smtp;
   final AlertChannelConfigPagerduty? pagerduty;
@@ -8021,6 +9713,14 @@ class AlertChannelConfigSmtp {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'host': ?host,
+    'port': ?port,
+    'username': ?username,
+    'from': ?from,
+    if (tls != null) 'tls': tls!.wire,
+  };
+
   final String? host;
   final int? port;
   final String? username;
@@ -8046,6 +9746,8 @@ class AlertChannelConfigPagerduty {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {if (region != null) 'region': region!.wire};
 
   final AlertChannelConfigPagerdutyRegion? region;
 }
@@ -8091,6 +9793,14 @@ class AlertChannelConfigOpsgenie {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    if (region != null) 'region': region!.wire,
+    if (priority != null) 'priority': priority!.wire,
+    if (responders != null)
+      'responders': [for (final e in responders!) e.toJson()],
+    'tags': ?tags,
+  };
+
   final AlertChannelConfigOpsgenieRegion? region;
   final AlertChannelConfigOpsgeniePriority? priority;
   final List<AlertChannelConfigOpsgenieRespondersItem>? responders;
@@ -8122,6 +9832,12 @@ class AlertChannelConfigOpsgenieRespondersItem {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'type': type.wire,
+    'name': ?name,
+    'id': ?id,
+  };
+
   final AlertChannelConfigOpsgenieRespondersItemType type;
   final String? name;
   final String? id;
@@ -8145,6 +9861,13 @@ class CostPrice {
       regionMultiplier: _req(m, 'region_multiplier', path, _num),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'usd_per_hour': usdPerHour,
+    'source': source.wire,
+    'note': ?note,
+    'region_multiplier': regionMultiplier,
+  };
 
   final double usdPerHour;
   final CostSource source;
@@ -8171,6 +9894,12 @@ class FleetOverride {
       updatedAt: _req(m, 'updated_at', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'action': action.wire,
+    'version': ?version,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
 
   final FleetOverrideAction action;
   final String? version;
@@ -8241,6 +9970,22 @@ class FleetHostPHPAgent {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'reported': reported,
+    'mode': mode.wire,
+    'agent_mode': agentMode,
+    'source': source,
+    'capable': capable,
+    'reason': reason,
+    'managed_by': managedBy.wire,
+    'version': ?version,
+    'runtimes': [for (final e in runtimes) e.toJson()],
+    if (update != null) 'update': update!.toJson(),
+    if (override != null) 'override': override!.toJson(),
+    'status': status.wire,
+    'status_target': ?statusTarget,
+  };
+
   final bool reported;
   final FleetPHPAgentMode mode;
   final String agentMode;
@@ -8290,6 +10035,15 @@ class FleetPHPAccess {
       ),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'socket_group': socketGroup,
+    'group': group,
+    'group_exists': groupExists,
+    'agent_member': agentMember,
+    'grants': grants,
+    'pools': [for (final e in pools) e.toJson()],
+  };
 
   final String socketGroup;
   final String group;
@@ -8363,6 +10117,26 @@ class FleetHostJavaAgent {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'reported': reported,
+    'mode': mode.wire,
+    'agent_mode': agentMode,
+    'source': source,
+    'capable': capable,
+    'reason': reason,
+    'managed': managed,
+    'version': ?version,
+    'state': state,
+    'detail': detail,
+    'link_path': linkPath,
+    'link_state': linkState,
+    'jvms': [for (final e in jvms) e.toJson()],
+    if (update != null) 'update': update!.toJson(),
+    if (override != null) 'override': override!.toJson(),
+    'status': status.wire,
+    'status_target': ?statusTarget,
+  };
+
   final bool reported;
   final FleetJavaAgentMode mode;
   final String agentMode;
@@ -8403,6 +10177,14 @@ class HostUsage {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'cpu': ?cpu,
+    'memory': ?memory,
+    'disk': ?disk,
+    'load1': ?load1,
+    'load_per_cpu': ?loadPerCpu,
+  };
+
   final double? cpu;
   final double? memory;
   final double? disk;
@@ -8428,6 +10210,13 @@ class SloStatus {
       budget: _req(m, 'budget', path, (v, p) => SloBudget.fromJson(v, p)),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'window_days': windowDays,
+    'budget': budget.toJson(),
+  };
 
   final DateTime from;
   final DateTime to;
@@ -8464,6 +10253,17 @@ class SyntheticLocationStatus {
       lastError: _req(m, 'last_error', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'location': location,
+    'next_run_at': nextRunAt.toUtc().toIso8601String(),
+    if (lastRunAt != null) 'last_run_at': lastRunAt!.toUtc().toIso8601String(),
+    'last_success': ?lastSuccess,
+    'last_status_code': lastStatusCode,
+    'last_duration_ms': lastDurationMs,
+    'last_error_kind': lastErrorKind,
+    'last_error': lastError,
+  };
 
   final String location;
   final DateTime nextRunAt;
@@ -8520,6 +10320,20 @@ class SyntheticSummary {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step': step,
+    'runs': runs,
+    'failures': failures,
+    'uptime': ?uptime,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'points': [for (final e in points) e.toJson()],
+  };
+
   final DateTime from;
   final DateTime to;
   final String step;
@@ -8567,6 +10381,22 @@ class JobMonitorState {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'status': status,
+    if (lastPingAt != null)
+      'last_ping_at': lastPingAt!.toUtc().toIso8601String(),
+    if (lastStartedAt != null)
+      'last_started_at': lastStartedAt!.toUtc().toIso8601String(),
+    if (lastFinishedAt != null)
+      'last_finished_at': lastFinishedAt!.toUtc().toIso8601String(),
+    'last_duration_ms': lastDurationMs,
+    'last_exit_code': lastExitCode,
+    'last_message': lastMessage,
+    'expected_at': expectedAt.toUtc().toIso8601String(),
+    'consecutive_failures': consecutiveFailures,
+    'late': late,
+  };
+
   final String status;
   final DateTime? lastPingAt;
   final DateTime? lastStartedAt;
@@ -8601,6 +10431,15 @@ class JobSummary {
       lastAt: _opt(m, 'last_at', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'runs': runs,
+    'failures': failures,
+    'missed': missed,
+    'avg_ms': ?avgMs,
+    'max_ms': ?maxMs,
+    if (lastAt != null) 'last_at': lastAt!.toUtc().toIso8601String(),
+  };
 
   final int runs;
   final int failures;
@@ -8648,6 +10487,21 @@ class FleetPHPRuntime {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'bin': bin,
+    'version': version,
+    'api': api,
+    'zts': zts,
+    'debug': debug,
+    'libc': libc,
+    'scan_dir': scanDir,
+    'module': module,
+    'supported': supported,
+    'enabled': enabled,
+    'loaded': loaded,
+    'excluded': excluded,
+  };
+
   final String bin;
   final String version;
   final String api;
@@ -8686,6 +10540,14 @@ class FleetPHPAgentUpdate {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'operation': operation,
+    'version': version,
+    'state': state,
+    'error': error,
+    'changed_at': changedAt,
+  };
+
   final String operation;
   final String version;
   final String state;
@@ -8707,6 +10569,11 @@ class FleetPHPOverride {
       updatedAt: _req(m, 'updated_at', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'mode': mode.wire,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
 
   final FleetPHPAgentMode mode;
   final DateTime updatedAt;
@@ -8735,6 +10602,14 @@ class FleetPHPPoolAccess {
       access: _req(m, 'access', path, _str),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'pool': pool,
+    'php_version': phpVersion,
+    'user': user,
+    'unit': unit,
+    'access': access,
+  };
 
   final String pool;
   final String phpVersion;
@@ -8772,6 +10647,18 @@ class FleetJavaJVM {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'pid': pid,
+    'name': name,
+    'command': command,
+    'agent_path': agentPath,
+    'loaded_version': loadedVersion,
+    'managed': managed,
+    'restart_pending': restartPending,
+    'started_at': startedAt,
+    'container': container,
+  };
+
   final int pid;
   final String name;
   final String command;
@@ -8807,6 +10694,14 @@ class FleetJavaAgentUpdate {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'operation': operation,
+    'version': version,
+    'state': state,
+    'error': error,
+    'changed_at': changedAt,
+  };
+
   final String operation;
   final String version;
   final String state;
@@ -8828,6 +10723,11 @@ class FleetJavaOverride {
       updatedAt: _req(m, 'updated_at', path, _time),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    'mode': mode.wire,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
 
   final FleetJavaAgentMode mode;
   final DateTime updatedAt;
@@ -8864,6 +10764,19 @@ class SloBudget {
     );
   }
 
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'good': good,
+    'bad': bad,
+    'sli': ?sli,
+    'budget_requests': budgetRequests,
+    'budget_consumed': budgetConsumed,
+    'budget_remaining': budgetRemaining,
+    'remaining_ratio': ?remainingRatio,
+    'burn_rate': ?burnRate,
+    'met': met,
+  };
+
   final double requests;
   final double good;
   final double bad;
@@ -8899,6 +10812,14 @@ class SyntheticPoint {
       p95Ms: _opt(m, 'p95_ms', path, _num),
     );
   }
+
+  Map<String, Object?> toJson() => {
+    't': t,
+    'runs': runs,
+    'failures': failures,
+    'uptime': ?uptime,
+    'p95_ms': ?p95Ms,
+  };
 
   final int t;
   final int runs;

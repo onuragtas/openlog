@@ -777,5 +777,66 @@
         "type": "int"
       }
     }
-  }
+  },
+  "navRoutes": "Yönlendirme",
+  "routesEmpty": "Yönlendirme kuralı yok; her olay kuralın kendi kanallarına gider.",
+  "routesOrder": "Bu sırayla denenir; ilk eşleşen kazanır. Sıralamak için sürükleyin.",
+  "routesDefault": "varsayılan",
+  "routesOff": "kapalı",
+  "routesChannels": "{count} kanal",
+  "@routesChannels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesMatchAll": "her şeye uyar",
+  "routesSeverities": "önem {list}",
+  "@routesSeverities": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "routesServices": "servis {list}",
+  "@routesServices": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "routesTypes": "tür {list}",
+  "@routesTypes": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "routesLabels": "{count} etiket koşulu",
+  "@routesLabels": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesWindow": "{start}–{end} {tz}",
+  "@routesWindow": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      },
+      "tz": {
+        "type": "String"
+      }
+    }
+  },
+  "routesEditOnWeb": "Koşullar ve kanallar webden düzenlenir."
 }

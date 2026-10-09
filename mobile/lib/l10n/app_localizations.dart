@@ -2640,6 +2640,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'in {count} days'**
   String inDays(int count);
+
+  /// No description provided for @navRoutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Routing'**
+  String get navRoutes;
+
+  /// No description provided for @routesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No routing rule; every incident goes to the rule\'s own channels.'**
+  String get routesEmpty;
+
+  /// No description provided for @routesOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Tried in this order; the first match wins. Drag to reorder.'**
+  String get routesOrder;
+
+  /// No description provided for @routesDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'default'**
+  String get routesDefault;
+
+  /// No description provided for @routesOff.
+  ///
+  /// In en, this message translates to:
+  /// **'off'**
+  String get routesOff;
+
+  /// No description provided for @routesChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} channels'**
+  String routesChannels(int count);
+
+  /// No description provided for @routesMatchAll.
+  ///
+  /// In en, this message translates to:
+  /// **'matches everything'**
+  String get routesMatchAll;
+
+  /// No description provided for @routesSeverities.
+  ///
+  /// In en, this message translates to:
+  /// **'severity {list}'**
+  String routesSeverities(String list);
+
+  /// No description provided for @routesServices.
+  ///
+  /// In en, this message translates to:
+  /// **'service {list}'**
+  String routesServices(String list);
+
+  /// No description provided for @routesTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'type {list}'**
+  String routesTypes(String list);
+
+  /// No description provided for @routesLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} label conditions'**
+  String routesLabels(int count);
+
+  /// No description provided for @routesWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'{start}–{end} {tz}'**
+  String routesWindow(String start, String end, String tz);
+
+  /// No description provided for @routesEditOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Conditions and channels are edited on the web.'**
+  String get routesEditOnWeb;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
