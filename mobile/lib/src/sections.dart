@@ -16,6 +16,7 @@ import 'list_controller.dart';
 import 'logs.dart';
 import 'session.dart';
 import 'query.dart';
+import 'templates.dart';
 import 'services.dart';
 
 /// Every section's controller, for one signed-in client.
@@ -60,6 +61,9 @@ class Sections {
     AlertRoutesController? routes,
     AlertCalendarsController? calendars,
     AlertDeliveriesController Function(String channelId)? deliveries,
+    TemplatesController? templates,
+    TemplateSetupController Function(AlertTemplate template, String language)?
+    templateSetup,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -144,6 +148,11 @@ class Sections {
            deliveries ??
            ((channelId) =>
                AlertDeliveriesController(client, channelId: channelId)),
+       templates = templates ?? TemplatesController(client),
+       templateSetup =
+           templateSetup ??
+           ((template, language) =>
+               TemplateSetupController(client, template, language: language)),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -189,6 +198,16 @@ class Sections {
   /// screen, like the detail ones: which channel it is about is fixed when
   /// the screen opens.
   final AlertDeliveriesController Function(String channelId) deliveries;
+
+  /// The template catalog, and one template being set up. The setup is a
+  /// controller per screen: it holds a rendered rule and its preview, which
+  /// belong to that one visit.
+  final TemplatesController templates;
+  final TemplateSetupController Function(
+    AlertTemplate template,
+    String language,
+  )
+  templateSetup;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -243,6 +262,7 @@ class Sections {
     mutes,
     calendars,
     routes,
+    templates,
     alerts,
   ];
 

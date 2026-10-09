@@ -1589,4 +1589,95 @@ class LTr extends L {
 
   @override
   String get deliveryAttemptFailed => 'başarısız';
+
+  @override
+  String get templatesTitle => 'Yeni kural';
+
+  @override
+  String get templatesAll => 'Hepsi';
+
+  @override
+  String get templatesHosts => 'Sunucular';
+
+  @override
+  String get templatesContainers => 'Konteynerler';
+
+  @override
+  String get templatesApm => 'APM';
+
+  @override
+  String get templatesIntegrations => 'Entegrasyonlar';
+
+  @override
+  String get templatesKubernetes => 'Kubernetes';
+
+  @override
+  String get templatesEmpty => 'Bu kategoride hazır kural yok.';
+
+  @override
+  String get templatesSetUp => 'Kur';
+
+  @override
+  String get templatesPreview => 'Önizle';
+
+  @override
+  String get templatesCreate => 'Kuralı oluştur';
+
+  @override
+  String templatesCreated(String name) {
+    return '$name oluşturuldu.';
+  }
+
+  @override
+  String templatesWouldFire(int count) {
+    return 'Son 6 saatte $count kez tetiklenirdi.';
+  }
+
+  @override
+  String get templatesNoData => 'Son 6 saatte bu kuralın bakacağı veri yok.';
+
+  @override
+  String templatesThreshold(String value) {
+    return 'Eşik: $value';
+  }
+
+  @override
+  String templatesOneSeries(int count) {
+    return '$count seriden en çok tetikleneni çizildi.';
+  }
+
+  @override
+  String templatesReference(String metric, String value) {
+    return '$metric şu an $value; eşik bunun oranı olarak hesaplandı.';
+  }
+
+  @override
+  String get templatesRequired => 'Zorunlu.';
+
+  @override
+  String get templatesNumber => 'Bir sayı girin.';
+
+  @override
+  String templatesRange(String min, String max) {
+    return '$min ile $max arasında olmalı.';
+  }
+
+  @override
+  String get templatesSeconds => 'sn';
+
+  @override
+  String get templatesPerSecond => '/sn';
+
+  @override
+  String get rulesNew => 'Yeni kural';
+
+  @override
+  String templatesUnavailable(String list) {
+    return 'Kullanılamayan kural türleri: $list';
+  }
+
+  @override
+  String templatesPercent(String value) {
+    return '%$value';
+  }
 }

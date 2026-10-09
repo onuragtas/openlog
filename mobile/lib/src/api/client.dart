@@ -47,6 +47,30 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// A template rendered into a rule, before anybody stores it.
+///
+/// [rule] is the server's own JSON, kept verbatim: it goes back to the server
+/// twice, once to be previewed and once to be created, and anything this app
+/// does not understand has to survive both trips.
+class RenderedRule {
+  const RenderedRule({
+    required this.rule,
+    required this.name,
+    required this.type,
+    this.severity,
+    this.reference,
+  });
+
+  final Map<String, Object?> rule;
+  final String name;
+  final AlertRuleType type;
+  final AlertSeverity? severity;
+
+  /// Ratio templates: the metric the threshold was computed from, its latest
+  /// value and the ratio. Shown because "80% of what" is the question.
+  final AlertTemplateRenderReference? reference;
+}
+
 /// The address could not be reached at all: no DNS, no route, TLS refused,
 /// or nothing answered in time. Separate from [ApiException] because the thing
 /// to tell the person is different -- check the address, not your password.
@@ -382,6 +406,80 @@ class OpenlogClient {
           '/api/v1/alerts/channels/${Uri.encodeComponent(id)}/test',
         ),
       );
+
+  /// The recommended templates, which is how a rule gets made on a phone.
+  ///
+  /// Making one from scratch means choosing a metric, an aggregation, a
+  /// window and two thresholds; a template is the same rule with the choices
+  /// already made by someone who knew the metric.
+  Future<AlertTemplatePage> alertTemplates({String category = ''}) async =>
+      AlertTemplatePage.fromJson(
+        await _send(
+          'GET',
+          _listPath(
+            '/api/v1/alerts/templates',
+            '',
+            extra: {if (category.isNotEmpty) 'category': category},
+          ),
+        ),
+      );
+
+  /// Which rule types this installation can use, and why not when it cannot.
+  Future<AlertRuleTypePage> alertRuleTypes() async =>
+      AlertRuleTypePage.fromJson(
+        await _send('GET', '/api/v1/alerts/rule-types'),
+      );
+
+  /// Turns a template and its values into a rule nobody has stored yet.
+  ///
+  /// [language] is the language of the generated name and description, so a
+  /// rule made from a Turkish phone reads as Turkish on the web too.
+  Future<RenderedRule> renderAlertTemplate(
+    String id, {
+    required Map<String, Object?> params,
+    required String language,
+    List<String> channelIds = const [],
+  }) async {
+    final body = await _send(
+      'POST',
+      '/api/v1/alerts/templates/${Uri.encodeComponent(id)}/render',
+      body: {
+        'params': params,
+        'language': language,
+        if (channelIds.isNotEmpty) 'channel_ids': channelIds,
+      },
+    );
+    final parsed = AlertTemplateRender.fromJson(body);
+    // The rule is kept exactly as it arrived and sent on untouched. Parsing
+    // it into the typed input and writing that back would quietly drop any
+    // condition field this app's copy of the contract does not know about --
+    // and a rule with a field missing is a different rule.
+    final raw = (body as Map<String, Object?>)['rule'];
+    return RenderedRule(
+      rule: raw is Map<String, Object?> ? raw : const {},
+      reference: parsed.reference,
+      name: parsed.rule.name,
+      severity: parsed.rule.severity,
+      type: parsed.rule.type,
+    );
+  }
+
+  /// What a rule would have done over the last [hours] hours, without storing
+  /// it. Viewer is enough: this reads telemetry, it does not change anything.
+  Future<AlertRulePreview> previewAlertRule(
+    Map<String, Object?> rule, {
+    int hours = 6,
+  }) async => AlertRulePreview.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/alerts/rules/preview',
+      body: {'rule': rule, 'hours': hours},
+    ),
+  );
+
+  /// Stores it. The body is the rendered rule as the server wrote it.
+  Future<void> createAlertRule(Map<String, Object?> rule) =>
+      _send('POST', '/api/v1/alerts/rules', body: rule);
 
   /// The rules behind the incidents, ordered by name.
   Future<AlertRulePage> alertRules() async =>

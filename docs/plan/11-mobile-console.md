@@ -389,7 +389,10 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
       yeniden sıralama, açma/kapama. Koşul düzenleyicisi (`AlertRouteMatch` yazma) hâlâ webde.
 - [x] Tatil takvimleri (`alerts/holiday-calendars`): susturmalar ekranından açılan liste,
       oluşturma, düzenleme, silme; tarihler metin olarak (`YYYY-AA-GG` ve her yıl için `AA-GG`).
-- [ ] Kural oluşturma/düzenleme (`alerts/rule-types`, `alerts/rules/preview`, `alerts/templates`)
+- [x] Kural oluşturma (`alerts/templates`, `.../render`, `alerts/rules/preview`, `alerts/rule-types`,
+      `POST alerts/rules`): kurallar ekranından "Yeni kural" → hazır kural seç → değerleri gir →
+      önizle → oluştur. Önizlenen kural neyse o saklanıyor. Boş sayfadan kural yazmak (metrik,
+      toplama, pencere, iki eşik) ve var olan kuralı düzenlemek hâlâ webde.
 - [x] Teslimat günlüğü (`alerts/deliveries`): kanallar ekranından, tümü ya da tek kanal için;
       durum süzgeci sunucuda, her denemenin kodu ve süresiyle. (Webde bu uç için sorgu tanımlı
       ama hiçbir ekran çağırmıyor; web yalnızca olayın kendi teslimatlarını gösteriyor.)

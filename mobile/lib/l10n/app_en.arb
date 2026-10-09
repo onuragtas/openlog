@@ -1028,5 +1028,92 @@
     }
   },
   "deliveryAttemptOk": "succeeded",
-  "deliveryAttemptFailed": "failed"
+  "deliveryAttemptFailed": "failed",
+  "templatesTitle": "New rule",
+  "templatesAll": "All",
+  "templatesHosts": "Hosts",
+  "templatesContainers": "Containers",
+  "templatesApm": "APM",
+  "templatesIntegrations": "Integrations",
+  "templatesKubernetes": "Kubernetes",
+  "templatesEmpty": "No ready-made rules in this category.",
+  "templatesSetUp": "Set up",
+  "templatesPreview": "Preview",
+  "templatesCreate": "Create rule",
+  "templatesCreated": "{name} created.",
+  "@templatesCreated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesWouldFire": "Would have fired {count} times in the last 6 hours.",
+  "@templatesWouldFire": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "templatesNoData": "No data for this rule to look at in the last 6 hours.",
+  "templatesThreshold": "Threshold: {value}",
+  "@templatesThreshold": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesOneSeries": "The busiest of {count} series is drawn.",
+  "@templatesOneSeries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "templatesReference": "{metric} is {value} now; the threshold is a ratio of it.",
+  "@templatesReference": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesRequired": "Required.",
+  "templatesNumber": "Enter a number.",
+  "templatesRange": "Must be between {min} and {max}.",
+  "@templatesRange": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesSeconds": "s",
+  "templatesPerSecond": "/s",
+  "rulesNew": "New rule",
+  "templatesUnavailable": "Rule types this installation cannot use: {list}",
+  "@templatesUnavailable": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesPercent": "{value}%",
+  "@templatesPercent": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

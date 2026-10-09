@@ -35,6 +35,9 @@ const schemaTargets = <String>[
   'AlertMute', // what is silenced, and until when
   'AlertRoutingRule', // where a page goes, and why it went there
   'AlertHolidayCalendar', // the dated lists a recurring mute skips
+  'AlertTemplate', // the recommended rules, which is how a rule gets made on a phone
+  'AlertTemplateRender', // a template plus its values, as a rule nobody has stored yet
+  'AlertRulePreview', // what that rule would have done over the last few hours
   'ApmService', // where to look after an alert: which service, how healthy
   'ApmOverview', // that service's golden signals, so the alert gets a shape
   'ApmErrorInbox', // what is actually breaking in that service
@@ -80,6 +83,8 @@ const responseTargets = <String>[
   'get /api/v1/alerts/routing-rules 200 AlertRoutingRulePage',
   'get /api/v1/alerts/holiday-calendars 200 AlertHolidayCalendarPage',
   'get /api/v1/alerts/deliveries 200 AlertDeliveryPage',
+  'get /api/v1/alerts/templates 200 AlertTemplatePage',
+  'get /api/v1/alerts/rule-types 200 AlertRuleTypePage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
@@ -322,6 +327,26 @@ List<T> _list<T>(Object? v, String path, T Function(Object?, String) read) {
 Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read) {
   final m = _obj(v, path);
   return {for (final e in m.entries) e.key: read(e.value, '\$path.\${e.key}')};
+}
+
+/// A fixed-length array the contract declares positionally (`prefixItems`),
+/// such as an alert preview's `[unix ms, value]`.
+///
+/// A record rather than a generated class: the contract gives the positions no
+/// names, and a class would have to invent two.
+(A, B) _tuple2<A, B>(
+  Object? v,
+  String path,
+  A Function(Object?, String) a,
+  B Function(Object?, String) b,
+) {
+  if (v is! List) {
+    throw ApiShapeError(path, 'expected an array, got \${v.runtimeType}');
+  }
+  if (v.length != 2) {
+    throw ApiShapeError(path, 'expected an array of 2, got \${v.length}');
+  }
+  return (a(v[0], '\$path[0]'), b(v[1], '\$path[1]'));
 }''';
 
   void _queue(String name) {
@@ -501,6 +526,31 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
         return const DartType('Object', nullable: true);
       case 'array':
         final items = node['items'];
+        // A positional array: `prefixItems` names types by position and
+        // nothing else, so it becomes a Dart record of the same shape. Only a
+        // fixed length, because a record has one.
+        final prefix = node['prefixItems'];
+        if (items == null && prefix is YamlList) {
+          final min = node['minItems'];
+          final max = node['maxItems'];
+          if (min != prefix.length || max != prefix.length) {
+            _fail(
+              'prefixItems of ${prefix.length} without matching '
+              'minItems/maxItems at $context',
+            );
+          }
+          if (prefix.length != 2) {
+            _fail('prefixItems of ${prefix.length} at $context: only 2 so far');
+          }
+          final parts = [
+            for (var i = 0; i < prefix.length; i++)
+              _type(prefix[i] as YamlMap, '$context${i + 1}'),
+          ];
+          return DartType(
+            '(${[for (final p in parts) p.decl].join(', ')})',
+            nullable: nullable,
+          );
+        }
         if (items == null) _fail('array without items at $context');
         final inner = _type(items as YamlMap, '${context}Item');
         return DartType('List<${inner.decl}>', nullable: nullable);
@@ -799,6 +849,25 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
   String _writer(DartType type, String expr) {
     final bang = type.nullable ? '!' : '';
     final base = type.name;
+    if (base.startsWith('(') && base.endsWith(')')) {
+      final parts = _splitTypes(base.substring(1, base.length - 1));
+      final written = <String>[];
+      for (var i = 0; i < parts.length; i++) {
+        final raw = parts[i];
+        final optional = raw.endsWith('?');
+        final element = DartType(
+          optional ? raw.substring(0, raw.length - 1) : raw,
+        );
+        final access = '$expr$bang.\$${i + 1}';
+        final value = _writer(element, access);
+        written.add(
+          optional && value != access
+              ? '($access == null ? null : $value)'
+              : value,
+        );
+      }
+      return '[${written.join(', ')}]';
+    }
     final list = RegExp(r'^List<(.+)>$').firstMatch(base);
     if (list != null) {
       final inner = DartType(
@@ -873,6 +942,12 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       return t.endsWith('?') && b != 'Object' ? '_nullable<$b>($read)' : read;
     }
 
+    if (type.startsWith('(') && type.endsWith(')')) {
+      final parts = _splitTypes(type.substring(1, type.length - 1));
+      final args = [for (final t in parts) element(t)].join(', ');
+      final targs = [for (final t in parts) t].join(', ');
+      return '(v, p) => _tuple${parts.length}<$targs>(v, p, $args)';
+    }
     final list = RegExp(r'^List<(.+)>$').firstMatch(type);
     if (list != null) {
       final inner = list.group(1)!;
@@ -885,6 +960,25 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     }
     if (_enums.containsKey(type)) return '$type.fromJson';
     return '(v, p) => $type.fromJson(v, p)';
+  }
+
+  /// Splits a record's parts on the commas between them, not on the commas
+  /// inside a `Map<String, X>` within one.
+  static List<String> _splitTypes(String body) {
+    final out = <String>[];
+    var depth = 0;
+    var start = 0;
+    for (var i = 0; i < body.length; i++) {
+      final c = body[i];
+      if (c == '<' || c == '(') depth++;
+      if (c == '>' || c == ')') depth--;
+      if (c == ',' && depth == 0) {
+        out.add(body.substring(start, i).trim());
+        start = i + 1;
+      }
+    }
+    out.add(body.substring(start).trim());
+    return out;
   }
 
   String _className(String context) => _pascal(context);

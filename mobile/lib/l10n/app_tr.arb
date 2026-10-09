@@ -931,5 +931,92 @@
     }
   },
   "deliveryAttemptOk": "başarılı",
-  "deliveryAttemptFailed": "başarısız"
+  "deliveryAttemptFailed": "başarısız",
+  "templatesTitle": "Yeni kural",
+  "templatesAll": "Hepsi",
+  "templatesHosts": "Sunucular",
+  "templatesContainers": "Konteynerler",
+  "templatesApm": "APM",
+  "templatesIntegrations": "Entegrasyonlar",
+  "templatesKubernetes": "Kubernetes",
+  "templatesEmpty": "Bu kategoride hazır kural yok.",
+  "templatesSetUp": "Kur",
+  "templatesPreview": "Önizle",
+  "templatesCreate": "Kuralı oluştur",
+  "templatesCreated": "{name} oluşturuldu.",
+  "@templatesCreated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesWouldFire": "Son 6 saatte {count} kez tetiklenirdi.",
+  "@templatesWouldFire": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "templatesNoData": "Son 6 saatte bu kuralın bakacağı veri yok.",
+  "templatesThreshold": "Eşik: {value}",
+  "@templatesThreshold": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesOneSeries": "{count} seriden en çok tetikleneni çizildi.",
+  "@templatesOneSeries": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "templatesReference": "{metric} şu an {value}; eşik bunun oranı olarak hesaplandı.",
+  "@templatesReference": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesRequired": "Zorunlu.",
+  "templatesNumber": "Bir sayı girin.",
+  "templatesRange": "{min} ile {max} arasında olmalı.",
+  "@templatesRange": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesSeconds": "sn",
+  "templatesPerSecond": "/sn",
+  "rulesNew": "Yeni kural",
+  "templatesUnavailable": "Kullanılamayan kural türleri: {list}",
+  "@templatesUnavailable": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "templatesPercent": "%{value}",
+  "@templatesPercent": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

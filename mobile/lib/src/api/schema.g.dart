@@ -110,6 +110,26 @@ Map<String, T> _map<T>(
   return {for (final e in m.entries) e.key: read(e.value, '$path.${e.key}')};
 }
 
+/// A fixed-length array the contract declares positionally (`prefixItems`),
+/// such as an alert preview's `[unix ms, value]`.
+///
+/// A record rather than a generated class: the contract gives the positions no
+/// names, and a class would have to invent two.
+(A, B) _tuple2<A, B>(
+  Object? v,
+  String path,
+  A Function(Object?, String) a,
+  B Function(Object?, String) b,
+) {
+  if (v is! List) {
+    throw ApiShapeError(path, 'expected an array, got ${v.runtimeType}');
+  }
+  if (v.length != 2) {
+    throw ApiShapeError(path, 'expected an array of 2, got ${v.length}');
+  }
+  return (a(v[0], '$path[0]'), b(v[1], '$path[1]'));
+}
+
 /// AuthConfigMode of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -372,6 +392,34 @@ enum AlertResolveReason {
   final String wire;
 
   static AlertResolveReason fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertTemplateCategory of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertTemplateCategory {
+  host('host'),
+  container('container'),
+  apm('apm'),
+  integration('integration'),
+  kubernetes('kubernetes'),
+  unknown('');
+
+  const AlertTemplateCategory(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertTemplateCategory fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1092,6 +1140,62 @@ enum AlertMuteScheduleDaysItem {
   final String wire;
 
   static AlertMuteScheduleDaysItem fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertTemplateParamKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertTemplateParamKind {
+  number('number'),
+  duration('duration'),
+  host('host'),
+  instance('instance'),
+  service('service'),
+  environment('environment'),
+  text('text'),
+  unknown('');
+
+  const AlertTemplateParamKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertTemplateParamKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertSeriesStateName of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertSeriesStateName {
+  ok('ok'),
+  pending('pending'),
+  firing('firing'),
+  unknown('');
+
+  const AlertSeriesStateName(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertSeriesStateName fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -2922,6 +3026,207 @@ class AlertHolidayCalendar {
   final String createdByEmail;
   final DateTime createdAt;
   final DateTime updatedAt;
+}
+
+/// `AlertTemplate` of the openlog API contract.
+class AlertTemplate {
+  const AlertTemplate({
+    required this.id,
+    required this.category,
+    this.integration,
+    required this.ruleType,
+    required this.severity,
+    this.metric,
+    this.referenceMetric,
+    required this.name,
+    required this.description,
+    required this.params,
+  });
+
+  factory AlertTemplate.fromJson(
+    Object? json, [
+    String path = 'AlertTemplate',
+  ]) {
+    final m = _obj(json, path);
+    return AlertTemplate(
+      id: _req(m, 'id', path, _str),
+      category: _req(m, 'category', path, AlertTemplateCategory.fromJson),
+      integration: _opt(m, 'integration', path, _str),
+      ruleType: _req(m, 'rule_type', path, AlertRuleType.fromJson),
+      severity: _req(m, 'severity', path, AlertSeverity.fromJson),
+      metric: _opt(m, 'metric', path, _str),
+      referenceMetric: _opt(m, 'reference_metric', path, _str),
+      name: _req(m, 'name', path, (v, p) => AlertTemplateText.fromJson(v, p)),
+      description: _req(
+        m,
+        'description',
+        path,
+        (v, p) => AlertTemplateText.fromJson(v, p),
+      ),
+      params: _req(
+        m,
+        'params',
+        path,
+        (v, p) => _list<AlertTemplateParam>(
+          v,
+          p,
+          (v, p) => AlertTemplateParam.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'category': category.wire,
+    'integration': ?integration,
+    'rule_type': ruleType.wire,
+    'severity': severity.wire,
+    'metric': ?metric,
+    'reference_metric': ?referenceMetric,
+    'name': name.toJson(),
+    'description': description.toJson(),
+    'params': [for (final e in params) e.toJson()],
+  };
+
+  final String id;
+  final AlertTemplateCategory category;
+  final String? integration;
+  final AlertRuleType ruleType;
+  final AlertSeverity severity;
+  final String? metric;
+  final String? referenceMetric;
+  final AlertTemplateText name;
+  final AlertTemplateText description;
+  final List<AlertTemplateParam> params;
+}
+
+/// `AlertTemplateRender` of the openlog API contract.
+class AlertTemplateRender {
+  const AlertTemplateRender({required this.rule, this.reference});
+
+  factory AlertTemplateRender.fromJson(
+    Object? json, [
+    String path = 'AlertTemplateRender',
+  ]) {
+    final m = _obj(json, path);
+    return AlertTemplateRender(
+      rule: _req(m, 'rule', path, (v, p) => AlertRuleInput.fromJson(v, p)),
+      reference: _opt(
+        m,
+        'reference',
+        path,
+        (v, p) => AlertTemplateRenderReference.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'rule': rule.toJson(),
+    if (reference != null) 'reference': reference!.toJson(),
+  };
+
+  final AlertRuleInput rule;
+  final AlertTemplateRenderReference? reference;
+}
+
+/// `AlertTemplateRenderReference` of the openlog API contract.
+class AlertTemplateRenderReference {
+  const AlertTemplateRenderReference({
+    required this.metric,
+    required this.value,
+    required this.ratio,
+  });
+
+  factory AlertTemplateRenderReference.fromJson(
+    Object? json, [
+    String path = 'AlertTemplateRenderReference',
+  ]) {
+    final m = _obj(json, path);
+    return AlertTemplateRenderReference(
+      metric: _req(m, 'metric', path, _str),
+      value: _req(m, 'value', path, _num),
+      ratio: _req(m, 'ratio', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'metric': metric,
+    'value': value,
+    'ratio': ratio,
+  };
+
+  final String metric;
+  final double value;
+  final double ratio;
+}
+
+/// `AlertRulePreview` of the openlog API contract.
+class AlertRulePreview {
+  const AlertRulePreview({
+    required this.from,
+    required this.to,
+    required this.stepSeconds,
+    this.operator,
+    this.threshold,
+    this.recoveryThreshold,
+    required this.unit,
+    required this.series,
+    required this.truncated,
+    required this.approximate,
+  });
+
+  factory AlertRulePreview.fromJson(
+    Object? json, [
+    String path = 'AlertRulePreview',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRulePreview(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      stepSeconds: _req(m, 'step_seconds', path, _int),
+      operator: _opt(m, 'operator', path, _str),
+      threshold: _opt(m, 'threshold', path, _num),
+      recoveryThreshold: _opt(m, 'recovery_threshold', path, _num),
+      unit: _req(m, 'unit', path, _str),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<AlertPreviewSeries>(
+          v,
+          p,
+          (v, p) => AlertPreviewSeries.fromJson(v, p),
+        ),
+      ),
+      truncated: _req(m, 'truncated', path, _bool),
+      approximate: _req(m, 'approximate', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step_seconds': stepSeconds,
+    'operator': ?operator,
+    'threshold': ?threshold,
+    'recovery_threshold': ?recoveryThreshold,
+    'unit': unit,
+    'series': [for (final e in series) e.toJson()],
+    'truncated': truncated,
+    'approximate': approximate,
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final int stepSeconds;
+  final String? operator;
+  final double? threshold;
+  final double? recoveryThreshold;
+  final String unit;
+  final List<AlertPreviewSeries> series;
+  final bool truncated;
+  final bool approximate;
 }
 
 /// `ApmService` of the openlog API contract.
@@ -5702,6 +6007,303 @@ class AlertRouteMatch {
   final AlertRouteWindow? timeWindow;
 }
 
+/// Text per language
+class AlertTemplateText {
+  const AlertTemplateText({required this.en, required this.tr});
+
+  factory AlertTemplateText.fromJson(
+    Object? json, [
+    String path = 'AlertTemplateText',
+  ]) {
+    final m = _obj(json, path);
+    return AlertTemplateText(
+      en: _req(m, 'en', path, _str),
+      tr: _req(m, 'tr', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'en': en, 'tr': tr};
+
+  final String en;
+  final String tr;
+}
+
+/// `AlertTemplateParam` of the openlog API contract.
+class AlertTemplateParam {
+  const AlertTemplateParam({
+    required this.key,
+    required this.kind,
+    this.unit,
+    required this.required,
+    this.defaultValue,
+    this.min,
+    this.max,
+    required this.label,
+  });
+
+  factory AlertTemplateParam.fromJson(
+    Object? json, [
+    String path = 'AlertTemplateParam',
+  ]) {
+    final m = _obj(json, path);
+    return AlertTemplateParam(
+      key: _req(m, 'key', path, _str),
+      kind: _req(m, 'kind', path, AlertTemplateParamKind.fromJson),
+      unit: _opt(m, 'unit', path, _str),
+      required: _req(m, 'required', path, _bool),
+      defaultValue: _opt<Object?>(m, 'default', path, _any),
+      min: _opt(m, 'min', path, _num),
+      max: _opt(m, 'max', path, _num),
+      label: _req(m, 'label', path, (v, p) => AlertTemplateText.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'kind': kind.wire,
+    'unit': ?unit,
+    'required': required,
+    'default': ?defaultValue,
+    'min': ?min,
+    'max': ?max,
+    'label': label.toJson(),
+  };
+
+  final String key;
+  final AlertTemplateParamKind kind;
+  final String? unit;
+  final bool required;
+  final Object? defaultValue;
+  final double? min;
+  final double? max;
+  final AlertTemplateText label;
+}
+
+/// `AlertRuleInput` of the openlog API contract.
+class AlertRuleInput {
+  const AlertRuleInput({
+    required this.name,
+    this.description,
+    required this.type,
+    this.severity,
+    this.enabled,
+    this.intervalSeconds,
+    this.forSeconds,
+    this.recoveryForSeconds,
+    required this.condition,
+    this.channelIds,
+    this.renotifyIntervalSeconds,
+    this.flapping,
+    this.runbookUrl,
+    this.labels,
+    this.version,
+  });
+
+  factory AlertRuleInput.fromJson(
+    Object? json, [
+    String path = 'AlertRuleInput',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleInput(
+      name: _req(m, 'name', path, _str),
+      description: _opt(m, 'description', path, _str),
+      type: _req(m, 'type', path, AlertRuleType.fromJson),
+      severity: _opt(m, 'severity', path, AlertSeverity.fromJson),
+      enabled: _opt(m, 'enabled', path, _bool),
+      intervalSeconds: _opt(m, 'interval_seconds', path, _int),
+      forSeconds: _opt(m, 'for_seconds', path, _int),
+      recoveryForSeconds: _opt(m, 'recovery_for_seconds', path, _int),
+      condition: _req(
+        m,
+        'condition',
+        path,
+        (v, p) => AlertCondition.fromJson(v, p),
+      ),
+      channelIds: _opt(
+        m,
+        'channel_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      renotifyIntervalSeconds: _opt(m, 'renotify_interval_seconds', path, _int),
+      flapping: _opt(
+        m,
+        'flapping',
+        path,
+        (v, p) => AlertFlapping.fromJson(v, p),
+      ),
+      runbookUrl: _opt(m, 'runbook_url', path, _str),
+      labels: _opt(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      version: _opt(m, 'version', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'description': ?description,
+    'type': type.wire,
+    if (severity != null) 'severity': severity!.wire,
+    'enabled': ?enabled,
+    'interval_seconds': ?intervalSeconds,
+    'for_seconds': ?forSeconds,
+    'recovery_for_seconds': ?recoveryForSeconds,
+    'condition': condition.toJson(),
+    'channel_ids': ?channelIds,
+    'renotify_interval_seconds': ?renotifyIntervalSeconds,
+    if (flapping != null) 'flapping': flapping!.toJson(),
+    'runbook_url': ?runbookUrl,
+    'labels': ?labels,
+    'version': ?version,
+  };
+
+  final String name;
+  final String? description;
+  final AlertRuleType type;
+  final AlertSeverity? severity;
+  final bool? enabled;
+  final int? intervalSeconds;
+  final int? forSeconds;
+  final int? recoveryForSeconds;
+  final AlertCondition condition;
+  final List<String>? channelIds;
+  final int? renotifyIntervalSeconds;
+  final AlertFlapping? flapping;
+  final String? runbookUrl;
+  final Map<String, String>? labels;
+  final int? version;
+}
+
+/// `AlertPreviewSeries` of the openlog API contract.
+class AlertPreviewSeries {
+  const AlertPreviewSeries({
+    required this.key,
+    required this.labels,
+    required this.points,
+    required this.transitions,
+    required this.incidents,
+  });
+
+  factory AlertPreviewSeries.fromJson(
+    Object? json, [
+    String path = 'AlertPreviewSeries',
+  ]) {
+    final m = _obj(json, path);
+    return AlertPreviewSeries(
+      key: _req(m, 'key', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<(int, double?)>(
+          v,
+          p,
+          (v, p) => _tuple2<int, double?>(v, p, _int, _nullable<double>(_num)),
+        ),
+      ),
+      transitions: _req(
+        m,
+        'transitions',
+        path,
+        (v, p) => _list<AlertPreviewSeriesTransitionsItem>(
+          v,
+          p,
+          (v, p) => AlertPreviewSeriesTransitionsItem.fromJson(v, p),
+        ),
+      ),
+      incidents: _req(
+        m,
+        'incidents',
+        path,
+        (v, p) => _list<AlertPreviewSeriesIncidentsItem>(
+          v,
+          p,
+          (v, p) => AlertPreviewSeriesIncidentsItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'labels': labels,
+    'points': [
+      for (final e in points) [e.$1, e.$2],
+    ],
+    'transitions': [for (final e in transitions) e.toJson()],
+    'incidents': [for (final e in incidents) e.toJson()],
+  };
+
+  final String key;
+  final Map<String, String> labels;
+  final List<(int, double?)> points;
+  final List<AlertPreviewSeriesTransitionsItem> transitions;
+  final List<AlertPreviewSeriesIncidentsItem> incidents;
+}
+
+/// `AlertPreviewSeriesTransitionsItem` of the openlog API contract.
+class AlertPreviewSeriesTransitionsItem {
+  const AlertPreviewSeriesTransitionsItem({
+    required this.at,
+    required this.state,
+    this.value,
+  });
+
+  factory AlertPreviewSeriesTransitionsItem.fromJson(
+    Object? json, [
+    String path = 'AlertPreviewSeriesTransitionsItem',
+  ]) {
+    final m = _obj(json, path);
+    return AlertPreviewSeriesTransitionsItem(
+      at: _req(m, 'at', path, _time),
+      state: _req(m, 'state', path, AlertSeriesStateName.fromJson),
+      value: _opt(m, 'value', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'at': at.toUtc().toIso8601String(),
+    'state': state.wire,
+    'value': ?value,
+  };
+
+  final DateTime at;
+  final AlertSeriesStateName state;
+  final double? value;
+}
+
+/// `AlertPreviewSeriesIncidentsItem` of the openlog API contract.
+class AlertPreviewSeriesIncidentsItem {
+  const AlertPreviewSeriesIncidentsItem({
+    required this.openedAt,
+    this.resolvedAt,
+    this.peak,
+  });
+
+  factory AlertPreviewSeriesIncidentsItem.fromJson(
+    Object? json, [
+    String path = 'AlertPreviewSeriesIncidentsItem',
+  ]) {
+    final m = _obj(json, path);
+    return AlertPreviewSeriesIncidentsItem(
+      openedAt: _req(m, 'opened_at', path, _time),
+      resolvedAt: _opt(m, 'resolved_at', path, _time),
+      peak: _opt(m, 'peak', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'opened_at': openedAt.toUtc().toIso8601String(),
+    if (resolvedAt != null)
+      'resolved_at': resolvedAt!.toUtc().toIso8601String(),
+    'peak': ?peak,
+  };
+
+  final DateTime openedAt;
+  final DateTime? resolvedAt;
+  final double? peak;
+}
+
 /// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
 class ApmRed {
   const ApmRed({
@@ -7773,6 +8375,63 @@ class AlertDeliveryPage {
   final List<AlertDelivery> deliveries;
 }
 
+/// `AlertTemplatePage` of the openlog API contract.
+class AlertTemplatePage {
+  const AlertTemplatePage({required this.templates});
+
+  factory AlertTemplatePage.fromJson(
+    Object? json, [
+    String path = 'AlertTemplatePage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertTemplatePage(
+      templates: _req(
+        m,
+        'templates',
+        path,
+        (v, p) =>
+            _list<AlertTemplate>(v, p, (v, p) => AlertTemplate.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'templates': [for (final e in templates) e.toJson()],
+  };
+
+  final List<AlertTemplate> templates;
+}
+
+/// `AlertRuleTypePage` of the openlog API contract.
+class AlertRuleTypePage {
+  const AlertRuleTypePage({required this.types});
+
+  factory AlertRuleTypePage.fromJson(
+    Object? json, [
+    String path = 'AlertRuleTypePage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleTypePage(
+      types: _req(
+        m,
+        'types',
+        path,
+        (v, p) => _list<AlertRuleTypeInfo>(
+          v,
+          p,
+          (v, p) => AlertRuleTypeInfo.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'types': [for (final e in types) e.toJson()],
+  };
+
+  final List<AlertRuleTypeInfo> types;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -8415,6 +9074,37 @@ class AlertChannelLastDelivery {
   final DateTime at;
   final AlertNotificationStatus status;
   final String error;
+}
+
+/// `AlertRuleTypeInfo` of the openlog API contract.
+class AlertRuleTypeInfo {
+  const AlertRuleTypeInfo({
+    required this.type,
+    required this.available,
+    required this.reason,
+  });
+
+  factory AlertRuleTypeInfo.fromJson(
+    Object? json, [
+    String path = 'AlertRuleTypeInfo',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleTypeInfo(
+      type: _req(m, 'type', path, AlertRuleType.fromJson),
+      available: _req(m, 'available', path, _bool),
+      reason: _req(m, 'reason', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'type': type.wire,
+    'available': available,
+    'reason': reason,
+  };
+
+  final AlertRuleType type;
+  final bool available;
+  final String reason;
 }
 
 /// `LogRecord` of the openlog API contract.

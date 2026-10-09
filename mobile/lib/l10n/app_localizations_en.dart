@@ -1594,4 +1594,96 @@ class LEn extends L {
 
   @override
   String get deliveryAttemptFailed => 'failed';
+
+  @override
+  String get templatesTitle => 'New rule';
+
+  @override
+  String get templatesAll => 'All';
+
+  @override
+  String get templatesHosts => 'Hosts';
+
+  @override
+  String get templatesContainers => 'Containers';
+
+  @override
+  String get templatesApm => 'APM';
+
+  @override
+  String get templatesIntegrations => 'Integrations';
+
+  @override
+  String get templatesKubernetes => 'Kubernetes';
+
+  @override
+  String get templatesEmpty => 'No ready-made rules in this category.';
+
+  @override
+  String get templatesSetUp => 'Set up';
+
+  @override
+  String get templatesPreview => 'Preview';
+
+  @override
+  String get templatesCreate => 'Create rule';
+
+  @override
+  String templatesCreated(String name) {
+    return '$name created.';
+  }
+
+  @override
+  String templatesWouldFire(int count) {
+    return 'Would have fired $count times in the last 6 hours.';
+  }
+
+  @override
+  String get templatesNoData =>
+      'No data for this rule to look at in the last 6 hours.';
+
+  @override
+  String templatesThreshold(String value) {
+    return 'Threshold: $value';
+  }
+
+  @override
+  String templatesOneSeries(int count) {
+    return 'The busiest of $count series is drawn.';
+  }
+
+  @override
+  String templatesReference(String metric, String value) {
+    return '$metric is $value now; the threshold is a ratio of it.';
+  }
+
+  @override
+  String get templatesRequired => 'Required.';
+
+  @override
+  String get templatesNumber => 'Enter a number.';
+
+  @override
+  String templatesRange(String min, String max) {
+    return 'Must be between $min and $max.';
+  }
+
+  @override
+  String get templatesSeconds => 's';
+
+  @override
+  String get templatesPerSecond => '/s';
+
+  @override
+  String get rulesNew => 'New rule';
+
+  @override
+  String templatesUnavailable(String list) {
+    return 'Rule types this installation cannot use: $list';
+  }
+
+  @override
+  String templatesPercent(String value) {
+    return '$value%';
+  }
 }

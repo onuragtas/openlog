@@ -2886,6 +2886,156 @@ abstract class L {
   /// In en, this message translates to:
   /// **'failed'**
   String get deliveryAttemptFailed;
+
+  /// No description provided for @templatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New rule'**
+  String get templatesTitle;
+
+  /// No description provided for @templatesAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get templatesAll;
+
+  /// No description provided for @templatesHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get templatesHosts;
+
+  /// No description provided for @templatesContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get templatesContainers;
+
+  /// No description provided for @templatesApm.
+  ///
+  /// In en, this message translates to:
+  /// **'APM'**
+  String get templatesApm;
+
+  /// No description provided for @templatesIntegrations.
+  ///
+  /// In en, this message translates to:
+  /// **'Integrations'**
+  String get templatesIntegrations;
+
+  /// No description provided for @templatesKubernetes.
+  ///
+  /// In en, this message translates to:
+  /// **'Kubernetes'**
+  String get templatesKubernetes;
+
+  /// No description provided for @templatesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No ready-made rules in this category.'**
+  String get templatesEmpty;
+
+  /// No description provided for @templatesSetUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up'**
+  String get templatesSetUp;
+
+  /// No description provided for @templatesPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get templatesPreview;
+
+  /// No description provided for @templatesCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create rule'**
+  String get templatesCreate;
+
+  /// No description provided for @templatesCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} created.'**
+  String templatesCreated(String name);
+
+  /// No description provided for @templatesWouldFire.
+  ///
+  /// In en, this message translates to:
+  /// **'Would have fired {count} times in the last 6 hours.'**
+  String templatesWouldFire(int count);
+
+  /// No description provided for @templatesNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'No data for this rule to look at in the last 6 hours.'**
+  String get templatesNoData;
+
+  /// No description provided for @templatesThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Threshold: {value}'**
+  String templatesThreshold(String value);
+
+  /// No description provided for @templatesOneSeries.
+  ///
+  /// In en, this message translates to:
+  /// **'The busiest of {count} series is drawn.'**
+  String templatesOneSeries(int count);
+
+  /// No description provided for @templatesReference.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric} is {value} now; the threshold is a ratio of it.'**
+  String templatesReference(String metric, String value);
+
+  /// No description provided for @templatesRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required.'**
+  String get templatesRequired;
+
+  /// No description provided for @templatesNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number.'**
+  String get templatesNumber;
+
+  /// No description provided for @templatesRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Must be between {min} and {max}.'**
+  String templatesRange(String min, String max);
+
+  /// No description provided for @templatesSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'s'**
+  String get templatesSeconds;
+
+  /// No description provided for @templatesPerSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'/s'**
+  String get templatesPerSecond;
+
+  /// No description provided for @rulesNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New rule'**
+  String get rulesNew;
+
+  /// No description provided for @templatesUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Rule types this installation cannot use: {list}'**
+  String templatesUnavailable(String list);
+
+  /// No description provided for @templatesPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}%'**
+  String templatesPercent(String value);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -1,9 +1,10 @@
-// The alert rules, and the one write an on-call person makes from a phone:
-// turning a noisy rule off.
+// The alert rules, and the two writes worth making from a phone: turning a
+// noisy rule off, and adding one from a template.
 //
-// Everything else about a rule is a form with a threshold in it, and three in
-// the morning on a phone is the worst place to fill one in. The screen says
-// where that is done instead.
+// Editing an existing rule is still on the web: that form is a metric, an
+// aggregation, a window and two thresholds, and three in the morning on a
+// phone is the worst place to fill it in. A template is the same rule with
+// those choices already made, which is a form a thumb can finish.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -11,6 +12,7 @@ import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'sections_screen.dart';
+import 'templates_screen.dart';
 import 'severity.dart';
 
 class RulesBody extends StatelessWidget {
@@ -38,11 +40,30 @@ class RulesBody extends StatelessWidget {
       emptyTitle: (l) => l.rulesEmpty,
       header: Padding(
         padding: const EdgeInsets.only(bottom: 8, left: 4),
-        child: Text(
-          L.of(context).ruleEditOnWeb,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              L.of(context).ruleEditOnWeb,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('rules-new'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        TemplatesScreen(session: session, sections: sections),
+                  ),
+                ),
+                icon: const Icon(Icons.add),
+                label: Text(L.of(context).rulesNew),
+              ),
+            ),
+          ],
         ),
       ),
       card: (context, rule) => ListenableBuilder(
