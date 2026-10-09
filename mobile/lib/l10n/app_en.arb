@@ -603,5 +603,29 @@
   "addDataCorsOff": "Not configured, so a browser cannot send to this server.",
   "addDataSourcesOnWeb": "The data sources and their install commands are on the web; this screen has what you need to point something at this server.",
   "addDataEndpointDerived": "Derived, not configured — check it is reachable from outside.",
-  "onboardingForbidden": "Your role does not allow reading this."
+  "onboardingForbidden": "Your role does not allow reading this.",
+  "hostRuns": "Running here",
+  "hostNoServices": "The agent has not reported a snapshot for this host yet.",
+  "hostServicesFailed": "What runs here could not be read: {detail}",
+  "@hostServicesFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "hostNothingFound": "The agent found nothing it recognises.",
+  "hostCpu": "CPU",
+  "hostMemory": "Memory",
+  "hostDisk": "Disk",
+  "hostLoad": "Load",
+  "hostAgent": "Agent {version}",
+  "@hostAgent": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "hostAttributes": "Resource attributes"
 }

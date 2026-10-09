@@ -1062,4 +1062,39 @@ class LEn extends L {
 
   @override
   String get onboardingForbidden => 'Your role does not allow reading this.';
+
+  @override
+  String get hostRuns => 'Running here';
+
+  @override
+  String get hostNoServices =>
+      'The agent has not reported a snapshot for this host yet.';
+
+  @override
+  String hostServicesFailed(String detail) {
+    return 'What runs here could not be read: $detail';
+  }
+
+  @override
+  String get hostNothingFound => 'The agent found nothing it recognises.';
+
+  @override
+  String get hostCpu => 'CPU';
+
+  @override
+  String get hostMemory => 'Memory';
+
+  @override
+  String get hostDisk => 'Disk';
+
+  @override
+  String get hostLoad => 'Load';
+
+  @override
+  String hostAgent(String version) {
+    return 'Agent $version';
+  }
+
+  @override
+  String get hostAttributes => 'Resource attributes';
 }

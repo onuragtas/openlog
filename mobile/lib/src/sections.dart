@@ -11,6 +11,7 @@ import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
 import 'detail.dart';
+import 'discovery.dart';
 import 'list_controller.dart';
 import 'logs.dart';
 import 'query.dart';
@@ -52,6 +53,7 @@ class Sections {
     TraceController Function(String traceId)? trace,
     MetricController Function(String name)? metric,
     RumOverviewController Function(String app)? rumOverview,
+    HostController Function(String hostId)? host,
     ProfileFunctionsController Function({
       required String service,
       required String type,
@@ -68,6 +70,7 @@ class Sections {
        metric = metric ?? ((name) => MetricController(client, name)),
        rumOverview =
            rumOverview ?? ((app) => RumOverviewController(client, app)),
+       host = host ?? ((id) => HostController(client, id)),
        profileFunctions =
            profileFunctions ??
            (({
@@ -136,6 +139,7 @@ class Sections {
   final TraceController Function(String traceId) trace;
   final MetricController Function(String name) metric;
   final RumOverviewController Function(String app) rumOverview;
+  final HostController Function(String hostId) host;
   final ProfileFunctionsController Function({
     required String service,
     required String type,
@@ -333,32 +337,6 @@ class FleetController extends SectionController<FleetHost> {
   }
 }
 
-/// One discovered integration instance, with the host it runs on.
-class IntegrationInstance {
-  const IntegrationInstance({
-    required this.hostId,
-    required this.hostName,
-    required this.key,
-    required this.service,
-  });
-
-  final String hostId;
-  final String hostName;
-
-  /// The inventory key, which is the executable path the agent matched.
-  final String key;
-  final DiscoveredService service;
-
-  DiscoveredServiceIntegrationStatus get status =>
-      service.integration?.status ??
-      DiscoveredServiceIntegrationStatus.notAvailable;
-
-  /// nginx, redis, mysql … or, when the agent did not recognise one, the
-  /// discovery rule's own name.
-  String get name =>
-      service.integration?.id ?? service.name ?? service.ruleId ?? key;
-}
-
 /// Integrations, read from the agents' own discovery.
 ///
 /// The same inventory search the web's Integrations page is built on: the
@@ -374,36 +352,15 @@ class IntegrationsController extends SectionController<IntegrationInstance> {
       q: query.trim(),
       limit: 200,
     );
-    final out = <IntegrationInstance>[];
-    for (final item in page.items) {
-      // A non-JSON body comes back as a string; the contract says so, and
-      // there is nothing to show for one.
-      final data = item.data;
-      if (data is! Map) continue;
-      out.add(
-        IntegrationInstance(
+    return [
+      for (final item in page.items)
+        ?instanceOf(
           hostId: item.hostId,
           hostName: item.hostName ?? item.hostId,
           key: item.key,
-          service: DiscoveredService.fromJson(data),
+          data: item.data,
         ),
-      );
-    }
-    // What is wrong first, then what needs a hand, then the rest: the two
-    // that want doing are the reason anybody opens this screen.
-    int rank(IntegrationInstance i) => switch (i.status) {
-      DiscoveredServiceIntegrationStatus.error => 0,
-      DiscoveredServiceIntegrationStatus.needsConfiguration => 1,
-      DiscoveredServiceIntegrationStatus.enabled => 2,
-      _ => 3,
-    };
-    out.sort((a, b) {
-      final byStatus = rank(a) - rank(b);
-      if (byStatus != 0) return byStatus;
-      final byName = a.name.compareTo(b.name);
-      return byName != 0 ? byName : a.hostName.compareTo(b.hostName);
-    });
-    return out;
+    ]..sort(compareInstances);
   }
 
   /// How many of each status, for the header -- the same counts the web puts

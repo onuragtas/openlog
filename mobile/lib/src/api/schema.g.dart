@@ -2801,6 +2801,37 @@ class OnboardingAgentPackages {
   final OnboardingAgentPackage dotnet;
 }
 
+/// `InventoryResponse` of the openlog API contract.
+class InventoryResponse {
+  const InventoryResponse({
+    required this.snapshotId,
+    this.snapshotTime,
+    required this.items,
+  });
+
+  factory InventoryResponse.fromJson(
+    Object? json, [
+    String path = 'InventoryResponse',
+  ]) {
+    final m = _obj(json, path);
+    return InventoryResponse(
+      snapshotId: _req(m, 'snapshot_id', path, _str),
+      snapshotTime: _opt(m, 'snapshot_time', path, _time),
+      items: _req(
+        m,
+        'items',
+        path,
+        (v, p) =>
+            _list<InventoryItem>(v, p, (v, p) => InventoryItem.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final String snapshotId;
+  final DateTime? snapshotTime;
+  final List<InventoryItem> items;
+}
+
 /// Body of `discovered_service` items (semantic-conventions §3.4). Unknown fields must be ignored; any field may be missing.
 class DiscoveredService {
   const DiscoveredService({
@@ -3980,6 +4011,27 @@ class OnboardingAgentPackage {
   final String registryUrl;
   final String releaseAssetUrl;
   final String releaseAssetSha256Url;
+}
+
+/// `InventoryItem` of the openlog API contract.
+class InventoryItem {
+  const InventoryItem({required this.category, required this.key, this.data});
+
+  factory InventoryItem.fromJson(
+    Object? json, [
+    String path = 'InventoryItem',
+  ]) {
+    final m = _obj(json, path);
+    return InventoryItem(
+      category: _req(m, 'category', path, _str),
+      key: _req(m, 'key', path, _str),
+      data: _opt<Object?>(m, 'data', path, _any),
+    );
+  }
+
+  final String category;
+  final String key;
+  final Object? data;
 }
 
 /// `DashboardVariable` of the openlog API contract.

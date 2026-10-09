@@ -1057,4 +1057,39 @@ class LTr extends L {
 
   @override
   String get onboardingForbidden => 'Rolünüz bunu görmeye izin vermiyor.';
+
+  @override
+  String get hostRuns => 'Burada koşanlar';
+
+  @override
+  String get hostNoServices =>
+      'Ajan bu sunucu için henüz bir anlık görüntü bildirmedi.';
+
+  @override
+  String hostServicesFailed(String detail) {
+    return 'Burada ne koştuğu okunamadı: $detail';
+  }
+
+  @override
+  String get hostNothingFound => 'Ajan tanıdığı bir şey bulamadı.';
+
+  @override
+  String get hostCpu => 'İşlemci';
+
+  @override
+  String get hostMemory => 'Bellek';
+
+  @override
+  String get hostDisk => 'Disk';
+
+  @override
+  String get hostLoad => 'Yük';
+
+  @override
+  String hostAgent(String version) {
+    return 'Ajan $version';
+  }
+
+  @override
+  String get hostAttributes => 'Kaynak öznitelikleri';
 }

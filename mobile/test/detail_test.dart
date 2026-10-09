@@ -689,6 +689,113 @@ void main() {
     );
   });
 
+  test(
+    'a host says what runs on it, and survives having no snapshot',
+    () async {
+      var snapshots = 0;
+      final server = await FakeServer.start((req, seen) {
+        if (seen.path.endsWith('/services')) {
+          snapshots++;
+          writeJson(req, 200, {
+            'snapshot_id': 's1',
+            'snapshot_time': '2026-10-08T09:00:00.000000000Z',
+            'items': [
+              {
+                'category': 'discovered_service',
+                'key': '/usr/sbin/nginx',
+                'data': {
+                  'rule_id': 'nginx',
+                  'version': '1.27.0',
+                  'integration': {
+                    'id': 'nginx',
+                    'status': 'error',
+                    'error': 'connection refused',
+                  },
+                },
+              },
+              {
+                'category': 'discovered_service',
+                'key': '/usr/bin/redis-server',
+                'data': {
+                  'rule_id': 'redis',
+                  'integration': {'id': 'redis', 'status': 'enabled'},
+                },
+              },
+              // Not JSON: skipped rather than taking the screen down.
+              {
+                'category': 'discovered_service',
+                'key': '/opt/weird',
+                'data': 'not json',
+              },
+            ],
+          });
+        } else {
+          writeJson(req, 200, {
+            'host_id': 'h1',
+            'host_name': 'web-1',
+            'os_description': 'Ubuntu 24.04',
+            'arch': 'arm64',
+            'agent_version': '0.1.113',
+            'last_seen': '2026-10-08T09:00:00.000000000Z',
+            'resource_attributes': {'cloud.provider': 'aws'},
+            'usage': {
+              'cpu': 0.42,
+              'memory': 0.77,
+              'disk': 0.2,
+              'load1': 3.1,
+              'load_per_cpu': 0.78,
+            },
+          });
+        }
+      });
+      addTearDown(server.stop);
+      final c = HostController(client(server.baseUrl), 'h1');
+
+      await c.refresh();
+
+      expect(server.requests.map((r) => r.path), [
+        '/api/v1/hosts/h1',
+        '/api/v1/hosts/h1/services',
+      ]);
+      expect(snapshots, 1);
+      // Same ordering as the Integrations section: what is wrong comes first.
+      expect(c.services.map((s) => s.name), ['nginx', 'redis']);
+      expect(c.servicesError, isNull);
+    },
+  );
+
+  test('a host with no snapshot still shows the host', () async {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.path.endsWith('/services')) {
+        writeJson(req, 404, {
+          'error': {'message': 'no snapshot for this host'},
+        });
+      } else {
+        writeJson(req, 200, {
+          'host_id': 'h1',
+          'host_name': 'web-1',
+          'os_description': 'Ubuntu 24.04',
+          'arch': 'arm64',
+          'agent_version': '0.1.113',
+          'last_seen': '2026-10-08T09:00:00.000000000Z',
+          'resource_attributes': <String, String>{},
+          'usage': null,
+        });
+      }
+    });
+    addTearDown(server.stop);
+    final c = HostController(client(server.baseUrl), 'h1');
+
+    await c.refresh();
+
+    // The host arrived, so the screen is worth showing; only the list of what
+    // runs on it is missing, and the reason is kept.
+    expect(c.failure, isNull);
+    expect(c.value!.hostName, 'web-1');
+    expect(c.servicesError, contains('no snapshot'));
+    expect(c.services, isEmpty);
+  });
+
   test('a server that is not there reads as unreachable', () async {
     final c = ServiceOverviewController(
       // Nothing listens here, and the controller has to name the address rather

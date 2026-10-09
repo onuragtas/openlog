@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../discovery.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'sections_screen.dart';

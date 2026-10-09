@@ -1998,6 +1998,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Your role does not allow reading this.'**
   String get onboardingForbidden;
+
+  /// No description provided for @hostRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Running here'**
+  String get hostRuns;
+
+  /// No description provided for @hostNoServices.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent has not reported a snapshot for this host yet.'**
+  String get hostNoServices;
+
+  /// No description provided for @hostServicesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'What runs here could not be read: {detail}'**
+  String hostServicesFailed(String detail);
+
+  /// No description provided for @hostNothingFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent found nothing it recognises.'**
+  String get hostNothingFound;
+
+  /// No description provided for @hostCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get hostCpu;
+
+  /// No description provided for @hostMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get hostMemory;
+
+  /// No description provided for @hostDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk'**
+  String get hostDisk;
+
+  /// No description provided for @hostLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get hostLoad;
+
+  /// No description provided for @hostAgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent {version}'**
+  String hostAgent(String version);
+
+  /// No description provided for @hostAttributes.
+  ///
+  /// In en, this message translates to:
+  /// **'Resource attributes'**
+  String get hostAttributes;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -506,5 +506,29 @@
   "addDataCorsOff": "Yapılandırılmamış, yani tarayıcı bu sunucuya gönderemez.",
   "addDataSourcesOnWeb": "Veri kaynakları ve kurulum komutları webde; bu ekranda bir şeyi bu sunucuya yöneltmek için gerekenler var.",
   "addDataEndpointDerived": "Yapılandırılmamış, türetilmiş — dışarıdan erişilebildiğini doğrulayın.",
-  "onboardingForbidden": "Rolünüz bunu görmeye izin vermiyor."
+  "onboardingForbidden": "Rolünüz bunu görmeye izin vermiyor.",
+  "hostRuns": "Burada koşanlar",
+  "hostNoServices": "Ajan bu sunucu için henüz bir anlık görüntü bildirmedi.",
+  "hostServicesFailed": "Burada ne koştuğu okunamadı: {detail}",
+  "@hostServicesFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "hostNothingFound": "Ajan tanıdığı bir şey bulamadı.",
+  "hostCpu": "İşlemci",
+  "hostMemory": "Bellek",
+  "hostDisk": "Disk",
+  "hostLoad": "Yük",
+  "hostAgent": "Ajan {version}",
+  "@hostAgent": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "hostAttributes": "Kaynak öznitelikleri"
 }

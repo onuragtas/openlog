@@ -125,6 +125,7 @@ class SectionCard extends StatelessWidget {
     this.trailing,
     this.tags = const [],
     this.stats = const [],
+    this.onOpen,
   });
 
   final Key cardKey;
@@ -134,75 +135,88 @@ class SectionCard extends StatelessWidget {
   final List<Widget> tags;
   final List<({String label, String value, Color? emphasis})> stats;
 
+  /// What the card opens, when there is something behind it. Sections whose
+  /// rows have no detail yet pass nothing and stay untappable, rather than
+  /// offering a tap that does nothing.
+  final VoidCallback? onOpen;
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final c = colorsOf(context);
 
-    return Card(
-      key: cardKey,
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final body = Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: Text(title, style: text.titleMedium)),
+              if (trailing != null)
+                Text(
+                  trailing!,
+                  style: text.bodySmall?.copyWith(color: c.mutedForeground),
+                ),
+            ],
+          ),
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(
+              subtitle!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodySmall?.copyWith(color: c.mutedForeground),
+            ),
+          ],
+          if (tags.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 4, children: tags),
+          ],
+          if (stats.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 18,
+              runSpacing: 6,
               children: [
-                Expanded(child: Text(title, style: text.titleMedium)),
-                if (trailing != null)
-                  Text(
-                    trailing!,
-                    style: text.bodySmall?.copyWith(color: c.mutedForeground),
+                for (final s in stats)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        s.label,
+                        style: text.bodySmall?.copyWith(
+                          color: c.mutedForeground,
+                        ),
+                      ),
+                      Text(
+                        s.value,
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: s.emphasis,
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
-            if (subtitle != null && subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 3),
-              Text(
-                subtitle!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: text.bodySmall?.copyWith(color: c.mutedForeground),
-              ),
-            ],
-            if (tags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 4, children: tags),
-            ],
-            if (stats.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 18,
-                runSpacing: 6,
-                children: [
-                  for (final s in stats)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          s.label,
-                          style: text.bodySmall?.copyWith(
-                            color: c.mutedForeground,
-                          ),
-                        ),
-                        Text(
-                          s.value,
-                          style: text.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: s.emphasis,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ],
           ],
-        ),
+        ],
       ),
+    );
+
+    return Card(
+      key: cardKey,
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: onOpen == null
+          ? body
+          : InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(Radii.lg),
+              child: body,
+            ),
     );
   }
 }
@@ -215,11 +229,12 @@ String _ms(double? v) => v == null ? '—' : '${v.toStringAsFixed(0)} ms';
 Color? _hot(BuildContext context, double? ratio) =>
     ratio != null && ratio >= 0.9 ? colorsOf(context).destructiveText : null;
 
-Widget hostCard(BuildContext context, Host h) {
+Widget hostCard(BuildContext context, Host h, {VoidCallback? onOpen}) {
   final l = L.of(context);
   final u = h.usage;
   return SectionCard(
     cardKey: Key('host-${h.hostId}'),
+    onOpen: onOpen,
     title: h.hostName.isEmpty ? h.hostId : h.hostName,
     subtitle: h.osDescription,
     trailing: relativeTimeOf(l, h.lastSeen),

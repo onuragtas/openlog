@@ -14,6 +14,7 @@ import 'query_screen.dart';
 import 'add_data_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
+import 'host_screen.dart';
 import 'integrations_screen.dart';
 import 'inventory_screen.dart';
 import 'metrics_screen.dart';
@@ -157,7 +158,20 @@ class _AppShellState extends State<AppShell> {
         searchKey: 'hosts-search',
         active: active,
         emptyTitle: (l) => l.hostsEmpty,
-        card: hostCard,
+        card: (context, h) => hostCard(
+          context,
+          h,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => HostScreen(
+                session: session,
+                sections: s,
+                hostId: h.hostId,
+                hostName: h.hostName.isEmpty ? h.hostId : h.hostName,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(

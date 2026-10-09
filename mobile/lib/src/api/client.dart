@@ -303,6 +303,21 @@ class OpenlogClient {
   /// `root_only`, because a traces list is a list of requests: without it the
   /// first page would be a hundred database calls belonging to three requests,
   /// which is a span list and not what the person opened.
+  /// One host.
+  Future<Host> host(String hostId) async => Host.fromJson(
+    await _send('GET', '/api/v1/hosts/${Uri.encodeComponent(hostId)}'),
+  );
+
+  /// What the agent found running on it: the `discovered_service` items of the
+  /// host's latest snapshot, integration status and all.
+  Future<InventoryResponse> hostServices(String hostId) async =>
+      InventoryResponse.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/hosts/${Uri.encodeComponent(hostId)}/services',
+        ),
+      );
+
   /// What an SDK or an agent has to be pointed at: the OTLP endpoints, the
   /// release the install commands pin, and what this installation supports.
   ///

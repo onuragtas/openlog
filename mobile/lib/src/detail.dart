@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'api/client.dart';
 import 'api/schema.g.dart';
+import 'discovery.dart';
 import 'session.dart';
 
 /// A single record behind a detail screen.
@@ -411,4 +412,52 @@ class OnboardingController extends DetailController<Onboarding> {
 
   @override
   Future<Onboarding> fetch() => _client.onboarding();
+}
+
+/// One host: what it is, how loaded it is, and what runs on it.
+///
+/// Two requests in one fetch. The second is the reason to open the screen at
+/// all -- a host row already says the name and the load, and "what is actually
+/// running here" is the thing the list cannot show.
+class HostController extends DetailController<Host> {
+  HostController(this._client, this.hostId);
+
+  final OpenlogClient _client;
+  final String hostId;
+
+  /// The discovered services, worst integration status first, reusing the
+  /// ordering the Integrations section uses so the two agree.
+  List<IntegrationInstance> services = const [];
+
+  /// Why the service list is missing while the host is on screen. A host can
+  /// be in the hosts table and have no inventory snapshot yet.
+  String? servicesError;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<Host> fetch() async {
+    final host = await _client.host(hostId);
+    servicesError = null;
+    services = const [];
+    try {
+      final snapshot = await _client.hostServices(hostId);
+      services = [
+        for (final item in snapshot.items)
+          ?instanceOf(
+            hostId: hostId,
+            hostName: host.hostName,
+            key: item.key,
+            data: item.data,
+          ),
+      ]..sort(compareInstances);
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      // The host itself came back, so the screen is worth showing.
+      servicesError = e.message;
+    }
+    return host;
+  }
 }
