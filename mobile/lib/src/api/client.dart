@@ -234,6 +234,38 @@ class OpenlogClient {
   Future<void> revokeSession(String id) =>
       _send('DELETE', '/api/v1/sessions/${Uri.encodeComponent(id)}');
 
+  /// The mute windows: what is silenced, and until when.
+  Future<AlertMutePage> alertMutes() async =>
+      AlertMutePage.fromJson(await _send('GET', '/api/v1/alerts/mutes'));
+
+  /// Silences alerting until [endsAt], optionally only for [ruleIds].
+  ///
+  /// `starts_at` is sent explicitly rather than left out: the server would
+  /// reject the body without it, and "now" has to be this device's idea of
+  /// now, in UTC, so a phone in another timezone does not open a window in
+  /// the past.
+  Future<void> createAlertMute({
+    required String name,
+    required DateTime startsAt,
+    required DateTime endsAt,
+    List<String> ruleIds = const [],
+    String comment = '',
+  }) => _send(
+    'POST',
+    '/api/v1/alerts/mutes',
+    body: {
+      'name': name,
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'ends_at': endsAt.toUtc().toIso8601String(),
+      if (comment.isNotEmpty) 'comment': comment,
+      if (ruleIds.isNotEmpty) 'rule_ids': ruleIds,
+    },
+  );
+
+  /// Ends one, by deleting it.
+  Future<void> deleteAlertMute(String id) =>
+      _send('DELETE', '/api/v1/alerts/mutes/${Uri.encodeComponent(id)}');
+
   /// The notification channels, with their secrets masked by the server.
   Future<AlertChannelPage> alertChannels() async =>
       AlertChannelPage.fromJson(await _send('GET', '/api/v1/alerts/channels'));

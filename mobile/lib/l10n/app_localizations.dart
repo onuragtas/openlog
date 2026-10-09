@@ -2490,6 +2490,156 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Nothing was logged for this.'**
   String get logsEmptyScoped;
+
+  /// No description provided for @navMutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Mutes'**
+  String get navMutes;
+
+  /// No description provided for @mutesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is silenced.'**
+  String get mutesEmpty;
+
+  /// No description provided for @mutesSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search mutes'**
+  String get mutesSearch;
+
+  /// No description provided for @mutesActive.
+  ///
+  /// In en, this message translates to:
+  /// **'silencing now'**
+  String get mutesActive;
+
+  /// No description provided for @mutesUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'starts {when}'**
+  String mutesUpcoming(String when);
+
+  /// No description provided for @mutesUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'until {when}'**
+  String mutesUntil(String when);
+
+  /// No description provided for @mutesEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End now'**
+  String get mutesEnd;
+
+  /// No description provided for @mutesEndTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'End this mute?'**
+  String get mutesEndTitle;
+
+  /// No description provided for @mutesEndBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerting starts again immediately for whatever this was silencing.'**
+  String get mutesEndBody;
+
+  /// No description provided for @mutesNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Silence alerting'**
+  String get mutesNew;
+
+  /// No description provided for @mutesNewName.
+  ///
+  /// In en, this message translates to:
+  /// **'Why'**
+  String get mutesNewName;
+
+  /// No description provided for @mutesNewNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. deploying checkout'**
+  String get mutesNewNameHint;
+
+  /// No description provided for @mutesFor.
+  ///
+  /// In en, this message translates to:
+  /// **'for'**
+  String get mutesFor;
+
+  /// No description provided for @mutesCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Silence'**
+  String get mutesCreate;
+
+  /// No description provided for @mutesAllRules.
+  ///
+  /// In en, this message translates to:
+  /// **'every rule'**
+  String get mutesAllRules;
+
+  /// No description provided for @mutesSomeRules.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} rules'**
+  String mutesSomeRules(int count);
+
+  /// No description provided for @mutesRecurring.
+  ///
+  /// In en, this message translates to:
+  /// **'recurring; edited on the web'**
+  String get mutesRecurring;
+
+  /// No description provided for @mutesDuration30m.
+  ///
+  /// In en, this message translates to:
+  /// **'30 min'**
+  String get mutesDuration30m;
+
+  /// No description provided for @mutesDuration1h.
+  ///
+  /// In en, this message translates to:
+  /// **'1 hour'**
+  String get mutesDuration1h;
+
+  /// No description provided for @mutesDuration2h.
+  ///
+  /// In en, this message translates to:
+  /// **'2 hours'**
+  String get mutesDuration2h;
+
+  /// No description provided for @mutesDuration4h.
+  ///
+  /// In en, this message translates to:
+  /// **'4 hours'**
+  String get mutesDuration4h;
+
+  /// No description provided for @rightNow.
+  ///
+  /// In en, this message translates to:
+  /// **'any moment'**
+  String get rightNow;
+
+  /// No description provided for @inMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'in {count} min'**
+  String inMinutes(int count);
+
+  /// No description provided for @inHours.
+  ///
+  /// In en, this message translates to:
+  /// **'in {count} h'**
+  String inHours(int count);
+
+  /// No description provided for @inDays.
+  ///
+  /// In en, this message translates to:
+  /// **'in {count} days'**
+  String inDays(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

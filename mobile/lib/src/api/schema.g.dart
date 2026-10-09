@@ -1044,6 +1044,62 @@ enum AlertRuleStatusState {
   }
 }
 
+/// AlertMuteMatcherOp of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertMuteMatcherOp {
+  eq('eq'),
+  neq('neq'),
+  contains('contains'),
+  unknown('');
+
+  const AlertMuteMatcherOp(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertMuteMatcherOp fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// AlertMuteScheduleDaysItem of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertMuteScheduleDaysItem {
+  mon('mon'),
+  tue('tue'),
+  wed('wed'),
+  thu('thu'),
+  fri('fri'),
+  sat('sat'),
+  sun('sun'),
+  unknown('');
+
+  const AlertMuteScheduleDaysItem(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertMuteScheduleDaysItem fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// ApmErrorStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2475,6 +2531,84 @@ class AlertChannelTestResult {
   final String error;
   final int durationMs;
   final String notificationId;
+}
+
+/// `AlertMute` of the openlog API contract.
+class AlertMute {
+  const AlertMute({
+    required this.id,
+    required this.name,
+    required this.comment,
+    required this.startsAt,
+    required this.endsAt,
+    required this.ruleIds,
+    required this.matchers,
+    this.schedule,
+    required this.upcoming,
+    required this.active,
+    this.createdByUserId,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AlertMute.fromJson(Object? json, [String path = 'AlertMute']) {
+    final m = _obj(json, path);
+    return AlertMute(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      comment: _req(m, 'comment', path, _str),
+      startsAt: _req(m, 'starts_at', path, _time),
+      endsAt: _req(m, 'ends_at', path, _time),
+      ruleIds: _req(m, 'rule_ids', path, (v, p) => _list<String>(v, p, _str)),
+      matchers: _req(
+        m,
+        'matchers',
+        path,
+        (v, p) => _list<AlertMuteMatcher>(
+          v,
+          p,
+          (v, p) => AlertMuteMatcher.fromJson(v, p),
+        ),
+      ),
+      schedule: _opt(
+        m,
+        'schedule',
+        path,
+        (v, p) => AlertMuteSchedule.fromJson(v, p),
+      ),
+      upcoming: _req(
+        m,
+        'upcoming',
+        path,
+        (v, p) => _list<AlertMuteOccurrence>(
+          v,
+          p,
+          (v, p) => AlertMuteOccurrence.fromJson(v, p),
+        ),
+      ),
+      active: _req(m, 'active', path, _bool),
+      createdByUserId: _opt(m, 'created_by_user_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  final String id;
+  final String name;
+  final String comment;
+  final DateTime startsAt;
+  final DateTime endsAt;
+  final List<String> ruleIds;
+  final List<AlertMuteMatcher> matchers;
+  final AlertMuteSchedule? schedule;
+  final List<AlertMuteOccurrence> upcoming;
+  final bool active;
+  final String? createdByUserId;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 }
 
 /// `ApmService` of the openlog API contract.
@@ -4600,6 +4734,107 @@ class AlertRuleStatus {
   final String? owner;
 }
 
+/// `AlertMuteMatcher` of the openlog API contract.
+class AlertMuteMatcher {
+  const AlertMuteMatcher({
+    required this.label,
+    required this.op,
+    required this.value,
+  });
+
+  factory AlertMuteMatcher.fromJson(
+    Object? json, [
+    String path = 'AlertMuteMatcher',
+  ]) {
+    final m = _obj(json, path);
+    return AlertMuteMatcher(
+      label: _req(m, 'label', path, _str),
+      op: _req(m, 'op', path, AlertMuteMatcherOp.fromJson),
+      value: _req(m, 'value', path, _str),
+    );
+  }
+
+  final String label;
+  final AlertMuteMatcherOp op;
+  final String value;
+}
+
+/// `AlertMuteSchedule` of the openlog API contract.
+class AlertMuteSchedule {
+  const AlertMuteSchedule({
+    required this.timezone,
+    required this.days,
+    this.rrule,
+    required this.startTime,
+    required this.endTime,
+    required this.from,
+    this.until,
+    required this.exdates,
+    required this.holidayCalendarIds,
+  });
+
+  factory AlertMuteSchedule.fromJson(
+    Object? json, [
+    String path = 'AlertMuteSchedule',
+  ]) {
+    final m = _obj(json, path);
+    return AlertMuteSchedule(
+      timezone: _req(m, 'timezone', path, _str),
+      days: _req(
+        m,
+        'days',
+        path,
+        (v, p) => _list<AlertMuteScheduleDaysItem>(
+          v,
+          p,
+          AlertMuteScheduleDaysItem.fromJson,
+        ),
+      ),
+      rrule: _opt(m, 'rrule', path, _str),
+      startTime: _req(m, 'start_time', path, _str),
+      endTime: _req(m, 'end_time', path, _str),
+      from: _req(m, 'from', path, _time),
+      until: _opt(m, 'until', path, _time),
+      exdates: _req(m, 'exdates', path, (v, p) => _list<String>(v, p, _str)),
+      holidayCalendarIds: _req(
+        m,
+        'holiday_calendar_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  final String timezone;
+  final List<AlertMuteScheduleDaysItem> days;
+  final String? rrule;
+  final String startTime;
+  final String endTime;
+  final DateTime from;
+  final DateTime? until;
+  final List<String> exdates;
+  final List<String> holidayCalendarIds;
+}
+
+/// `AlertMuteOccurrence` of the openlog API contract.
+class AlertMuteOccurrence {
+  const AlertMuteOccurrence({required this.startsAt, required this.endsAt});
+
+  factory AlertMuteOccurrence.fromJson(
+    Object? json, [
+    String path = 'AlertMuteOccurrence',
+  ]) {
+    final m = _obj(json, path);
+    return AlertMuteOccurrence(
+      startsAt: _req(m, 'starts_at', path, _time),
+      endsAt: _req(m, 'ends_at', path, _time),
+    );
+  }
+
+  final DateTime startsAt;
+  final DateTime endsAt;
+}
+
 /// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
 class ApmRed {
   const ApmRed({
@@ -6116,6 +6351,28 @@ class AlertChannelPage {
 
   final List<AlertChannel> channels;
   final bool secretsConfigured;
+}
+
+/// `AlertMutePage` of the openlog API contract.
+class AlertMutePage {
+  const AlertMutePage({required this.mutes});
+
+  factory AlertMutePage.fromJson(
+    Object? json, [
+    String path = 'AlertMutePage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertMutePage(
+      mutes: _req(
+        m,
+        'mutes',
+        path,
+        (v, p) => _list<AlertMute>(v, p, (v, p) => AlertMute.fromJson(v, p)),
+      ),
+    );
+  }
+
+  final List<AlertMute> mutes;
 }
 
 /// `SessionPage` of the openlog API contract.

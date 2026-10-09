@@ -807,5 +807,72 @@
   "logsScopedContainer": "Logs of this container",
   "logsScopedAll": "Every level, because a request's logs are all of them.",
   "logsOpenForTrace": "Logs",
-  "logsEmptyScoped": "Nothing was logged for this."
+  "logsEmptyScoped": "Nothing was logged for this.",
+  "navMutes": "Mutes",
+  "mutesEmpty": "Nothing is silenced.",
+  "mutesSearch": "Search mutes",
+  "mutesActive": "silencing now",
+  "mutesUpcoming": "starts {when}",
+  "@mutesUpcoming": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "mutesUntil": "until {when}",
+  "@mutesUntil": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "mutesEnd": "End now",
+  "mutesEndTitle": "End this mute?",
+  "mutesEndBody": "Alerting starts again immediately for whatever this was silencing.",
+  "mutesNew": "Silence alerting",
+  "mutesNewName": "Why",
+  "mutesNewNameHint": "e.g. deploying checkout",
+  "mutesFor": "for",
+  "mutesCreate": "Silence",
+  "mutesAllRules": "every rule",
+  "mutesSomeRules": "{count} rules",
+  "@mutesSomeRules": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mutesRecurring": "recurring; edited on the web",
+  "mutesDuration30m": "30 min",
+  "mutesDuration1h": "1 hour",
+  "mutesDuration2h": "2 hours",
+  "mutesDuration4h": "4 hours",
+  "rightNow": "any moment",
+  "inMinutes": "in {count} min",
+  "@inMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inHours": "in {count} h",
+  "@inHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inDays": "in {count} days",
+  "@inDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

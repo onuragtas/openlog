@@ -710,5 +710,72 @@
   "logsScopedContainer": "Bu konteynerin logları",
   "logsScopedAll": "Her seviye; bir isteğin logları zaten onun hepsidir.",
   "logsOpenForTrace": "Loglar",
-  "logsEmptyScoped": "Buna dair bir log yok."
+  "logsEmptyScoped": "Buna dair bir log yok.",
+  "navMutes": "Susturmalar",
+  "mutesEmpty": "Susturulmuş bir şey yok.",
+  "mutesSearch": "Susturma ara",
+  "mutesActive": "şu an susturuyor",
+  "mutesUpcoming": "{when} başlıyor",
+  "@mutesUpcoming": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "mutesUntil": "{when} kadar",
+  "@mutesUntil": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "mutesEnd": "Şimdi bitir",
+  "mutesEndTitle": "Bu susturma bitirilsin mi?",
+  "mutesEndBody": "Bunun susturduğu ne varsa alarmlar hemen yeniden çalışmaya başlar.",
+  "mutesNew": "Alarmları sustur",
+  "mutesNewName": "Neden",
+  "mutesNewNameHint": "ör. checkout dağıtımı",
+  "mutesFor": "süre",
+  "mutesCreate": "Sustur",
+  "mutesAllRules": "her kural",
+  "mutesSomeRules": "{count} kural",
+  "@mutesSomeRules": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mutesRecurring": "tekrarlayan; webden düzenlenir",
+  "mutesDuration30m": "30 dk",
+  "mutesDuration1h": "1 saat",
+  "mutesDuration2h": "2 saat",
+  "mutesDuration4h": "4 saat",
+  "rightNow": "birazdan",
+  "inMinutes": "{count} dk sonra",
+  "@inMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inHours": "{count} sa sonra",
+  "@inHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inDays": "{count} gün sonra",
+  "@inDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

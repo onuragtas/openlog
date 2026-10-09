@@ -124,10 +124,26 @@ class SearchField extends StatelessWidget {
   }
 }
 
-/// "3 dk önce". Coarse on purpose: how long something has been going matters
-/// more than its exact second, and a phone screen has little room.
+/// "3 dk önce", or "2 sa sonra". Coarse on purpose: how long something has
+/// been going matters more than its exact second, and a phone screen has
+/// little room.
+///
+/// Both directions, because not every timestamp is in the past: a mute ends
+/// later, a rule is evaluated next at some point. This read every future time
+/// as "just now" until a mute window made it obvious.
 String relativeTimeOf(L l, DateTime at) {
   final d = DateTime.now().toUtc().difference(at.toUtc());
+  if (d.isNegative) {
+    final ahead = -d;
+    // Minutes round up, because four minutes and fifty-nine seconds is five
+    // and truncating it says the deadline is nearer than it is. Hours and
+    // days truncate, like the past does: rounding ninety minutes up to two
+    // hours overstates by more than it clarifies.
+    if (ahead.inSeconds < 60) return l.rightNow;
+    if (ahead.inMinutes < 60) return l.inMinutes((ahead.inSeconds / 60).ceil());
+    if (ahead.inHours < 48) return l.inHours(ahead.inHours);
+    return l.inDays(ahead.inDays);
+  }
   if (d.inMinutes < 1) return l.justNow;
   if (d.inMinutes < 60) return l.minutesAgo(d.inMinutes);
   if (d.inHours < 48) return l.hoursAgo(d.inHours);

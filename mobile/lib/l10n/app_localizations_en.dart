@@ -1350,4 +1350,92 @@ class LEn extends L {
 
   @override
   String get logsEmptyScoped => 'Nothing was logged for this.';
+
+  @override
+  String get navMutes => 'Mutes';
+
+  @override
+  String get mutesEmpty => 'Nothing is silenced.';
+
+  @override
+  String get mutesSearch => 'Search mutes';
+
+  @override
+  String get mutesActive => 'silencing now';
+
+  @override
+  String mutesUpcoming(String when) {
+    return 'starts $when';
+  }
+
+  @override
+  String mutesUntil(String when) {
+    return 'until $when';
+  }
+
+  @override
+  String get mutesEnd => 'End now';
+
+  @override
+  String get mutesEndTitle => 'End this mute?';
+
+  @override
+  String get mutesEndBody =>
+      'Alerting starts again immediately for whatever this was silencing.';
+
+  @override
+  String get mutesNew => 'Silence alerting';
+
+  @override
+  String get mutesNewName => 'Why';
+
+  @override
+  String get mutesNewNameHint => 'e.g. deploying checkout';
+
+  @override
+  String get mutesFor => 'for';
+
+  @override
+  String get mutesCreate => 'Silence';
+
+  @override
+  String get mutesAllRules => 'every rule';
+
+  @override
+  String mutesSomeRules(int count) {
+    return '$count rules';
+  }
+
+  @override
+  String get mutesRecurring => 'recurring; edited on the web';
+
+  @override
+  String get mutesDuration30m => '30 min';
+
+  @override
+  String get mutesDuration1h => '1 hour';
+
+  @override
+  String get mutesDuration2h => '2 hours';
+
+  @override
+  String get mutesDuration4h => '4 hours';
+
+  @override
+  String get rightNow => 'any moment';
+
+  @override
+  String inMinutes(int count) {
+    return 'in $count min';
+  }
+
+  @override
+  String inHours(int count) {
+    return 'in $count h';
+  }
+
+  @override
+  String inDays(int count) {
+    return 'in $count days';
+  }
 }

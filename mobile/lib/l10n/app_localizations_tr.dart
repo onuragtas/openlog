@@ -1345,4 +1345,92 @@ class LTr extends L {
 
   @override
   String get logsEmptyScoped => 'Buna dair bir log yok.';
+
+  @override
+  String get navMutes => 'Susturmalar';
+
+  @override
+  String get mutesEmpty => 'Susturulmuş bir şey yok.';
+
+  @override
+  String get mutesSearch => 'Susturma ara';
+
+  @override
+  String get mutesActive => 'şu an susturuyor';
+
+  @override
+  String mutesUpcoming(String when) {
+    return '$when başlıyor';
+  }
+
+  @override
+  String mutesUntil(String when) {
+    return '$when kadar';
+  }
+
+  @override
+  String get mutesEnd => 'Şimdi bitir';
+
+  @override
+  String get mutesEndTitle => 'Bu susturma bitirilsin mi?';
+
+  @override
+  String get mutesEndBody =>
+      'Bunun susturduğu ne varsa alarmlar hemen yeniden çalışmaya başlar.';
+
+  @override
+  String get mutesNew => 'Alarmları sustur';
+
+  @override
+  String get mutesNewName => 'Neden';
+
+  @override
+  String get mutesNewNameHint => 'ör. checkout dağıtımı';
+
+  @override
+  String get mutesFor => 'süre';
+
+  @override
+  String get mutesCreate => 'Sustur';
+
+  @override
+  String get mutesAllRules => 'her kural';
+
+  @override
+  String mutesSomeRules(int count) {
+    return '$count kural';
+  }
+
+  @override
+  String get mutesRecurring => 'tekrarlayan; webden düzenlenir';
+
+  @override
+  String get mutesDuration30m => '30 dk';
+
+  @override
+  String get mutesDuration1h => '1 saat';
+
+  @override
+  String get mutesDuration2h => '2 saat';
+
+  @override
+  String get mutesDuration4h => '4 saat';
+
+  @override
+  String get rightNow => 'birazdan';
+
+  @override
+  String inMinutes(int count) {
+    return '$count dk sonra';
+  }
+
+  @override
+  String inHours(int count) {
+    return '$count sa sonra';
+  }
+
+  @override
+  String inDays(int count) {
+    return '$count gün sonra';
+  }
 }

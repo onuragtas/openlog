@@ -93,7 +93,114 @@ Map<String, Object?> spanRow(
   'fields': <String, String>{},
 };
 
+Map<String, Object?> mute(
+  String id, {
+  bool active = true,
+  int endsInHours = 2,
+}) => {
+  'id': id,
+  'name': 'mute $id',
+  'comment': '',
+  'starts_at': DateTime.now().toUtc().toIso8601String(),
+  'ends_at': DateTime.now()
+      .toUtc()
+      .add(Duration(hours: endsInHours))
+      .toIso8601String(),
+  'rule_ids': <String>[],
+  'matchers': <Object>[],
+  'schedule': null,
+  'upcoming': <Object>[],
+  'active': active,
+  'created_by_user_id': null,
+  'created_by_email': 'owner@example.com',
+  'created_at': '2026-10-01T09:00:00.000000000Z',
+  'updated_at': '2026-10-01T09:00:00.000000000Z',
+};
+
 void main() {
+  test('a mute is a window that starts now, in UTC', () async {
+    final posted = <Map<String, Object?>>[];
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'POST') {
+        posted.add(jsonDecode(seen.body) as Map<String, Object?>);
+        writeJson(req, 201, mute('m9', active: true));
+      } else {
+        writeJson(req, 200, {'mutes': <Object>[]});
+      }
+    });
+    addTearDown(server.stop);
+    final c = AlertMutesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    final before = DateTime.now().toUtc();
+    await c.createFor(
+      name: 'checkout dagitimi',
+      duration: const Duration(hours: 2),
+    );
+
+    expect(posted.single['name'], 'checkout dagitimi');
+    final starts = DateTime.parse(posted.single['starts_at']! as String);
+    final ends = DateTime.parse(posted.single['ends_at']! as String);
+    // UTC, and two hours apart: a phone in another timezone must not open a
+    // window that already closed.
+    expect(starts.isUtc, isTrue);
+    expect(ends.difference(starts), const Duration(hours: 2));
+    expect(
+      starts.isBefore(before.subtract(const Duration(minutes: 1))),
+      isFalse,
+    );
+    // No rule_ids at all rather than an empty list: empty means every rule to
+    // the server either way, and sending nothing says it once.
+    expect(posted.single.containsKey('rule_ids'), isFalse);
+  });
+
+  test('what is silencing now comes first', () async {
+    final server = await FakeServer.start(
+      (req, _) => writeJson(req, 200, {
+        'mutes': [
+          mute('m1', active: false, endsInHours: 1),
+          mute('m2', active: true, endsInHours: 5),
+          mute('m3', active: true, endsInHours: 2),
+        ],
+      }),
+    );
+    addTearDown(server.stop);
+    final c = AlertMutesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.refresh();
+
+    // Active first, then by when they end.
+    expect(c.items.map((m) => m.id), ['m3', 'm2', 'm1']);
+  });
+
+  test('a mute that expired under the button is not an error', () async {
+    var deletes = 0;
+    final server = await FakeServer.start((req, seen) {
+      if (seen.method == 'DELETE') {
+        deletes++;
+        writeJson(req, 404, {
+          'error': {'message': 'no such mute'},
+        });
+      } else {
+        writeJson(req, 200, {'mutes': <Object>[]});
+      }
+    });
+    addTearDown(server.stop);
+    final c = AlertMutesController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await c.end('m1');
+
+    expect(deletes, 1);
+    // It ended on its own between the list being drawn and the button being
+    // pressed. The row goes; no red banner.
+    expect(c.failure, isNull);
+  });
+
   test('a channel test that the receiver refused is not a success', () async {
     final server = await FakeServer.start((req, seen) {
       if (seen.path.endsWith('/test')) {

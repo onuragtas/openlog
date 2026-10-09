@@ -5,6 +5,7 @@
 // server allows.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openlog_mobile/l10n/app_localizations.dart';
 import 'package:openlog_mobile/main.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
@@ -17,6 +18,7 @@ import 'package:openlog_mobile/src/query.dart';
 import 'package:openlog_mobile/src/services.dart';
 import 'package:openlog_mobile/src/session.dart';
 import 'package:openlog_mobile/src/storage/token_store.dart';
+import 'package:openlog_mobile/src/ui/list_scaffold.dart';
 
 AuthConfig config({
   bool signup = true,
@@ -1606,6 +1608,7 @@ void main() {
       'Fleet': Key('fleet-search'),
       'Alert rules': Key('rules-search'),
       'Channels': Key('channels-search'),
+      'Mutes': Key('mutes-search'),
       'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
@@ -1730,6 +1733,53 @@ void main() {
     expect(sessions.calls, ['s2']);
   });
 
+  testWidgets('a time in the future does not read as the past', (tester) async {
+    late L l;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: L.localizationsDelegates,
+        supportedLocales: L.supportedLocales,
+        home: Builder(
+          builder: (context) {
+            l = L.of(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final now = DateTime.now().toUtc();
+    // Off the unit boundaries on purpose: the clock moves between building
+    // these and reading them, and a value sitting exactly on a boundary makes
+    // the test flaky rather than strict.
+    //
+    // Every future timestamp read as "just now" until a mute window made it
+    // obvious: the difference is negative and every branch compared it as if
+    // it were not.
+    expect(relativeTimeOf(l, now.add(const Duration(minutes: 95))), 'in 1 h');
+    expect(
+      relativeTimeOf(l, now.add(const Duration(minutes: 5, seconds: 30))),
+      'in 6 min',
+    );
+    expect(
+      relativeTimeOf(l, now.add(const Duration(days: 3, hours: 5))),
+      'in 3 days',
+    );
+    expect(
+      relativeTimeOf(l, now.add(const Duration(seconds: 20))),
+      'any moment',
+    );
+    // The past still reads as the past.
+    expect(
+      relativeTimeOf(l, now.subtract(const Duration(minutes: 5, seconds: 30))),
+      '5m ago',
+    );
+    expect(
+      relativeTimeOf(l, now.subtract(const Duration(seconds: 20))),
+      'just now',
+    );
+  });
+
   testWidgets('the drawer lists every section the app has, in the web order', (
     tester,
   ) async {
@@ -1780,6 +1830,7 @@ void main() {
       'Fleet',
       'Alert rules',
       'Channels',
+      'Mutes',
       'Alerts',
       'Settings',
     ]);

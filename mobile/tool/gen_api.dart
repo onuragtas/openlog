@@ -32,6 +32,7 @@ const schemaTargets = <String>[
   'AlertIncidentDetail', // one incident with its timeline and what was delivered
   'AlertRule', // the rules behind the incidents, and whether they are on
   'AlertChannelTestResult', // whether a channel would actually reach anyone
+  'AlertMute', // what is silenced, and until when
   'ApmService', // where to look after an alert: which service, how healthy
   'ApmOverview', // that service's golden signals, so the alert gets a shape
   'ApmErrorInbox', // what is actually breaking in that service
@@ -73,6 +74,7 @@ const responseTargets = <String>[
   'get /api/v1/alerts/incidents 200 IncidentPage',
   'get /api/v1/alerts/rules 200 AlertRulePage',
   'get /api/v1/alerts/channels 200 AlertChannelPage',
+  'get /api/v1/alerts/mutes 200 AlertMutePage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',

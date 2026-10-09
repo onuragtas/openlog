@@ -56,6 +56,7 @@ class Sections {
     AlertsController? alerts,
     AlertRulesController? rules,
     AlertChannelsController? channels,
+    AlertMutesController? mutes,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -133,6 +134,7 @@ class Sections {
        query = query ?? QueryController(client),
        rules = rules ?? AlertRulesController(client),
        channels = channels ?? AlertChannelsController(client),
+       mutes = mutes ?? AlertMutesController(client),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -168,6 +170,7 @@ class Sections {
   final QueryController query;
   final AlertRulesController rules;
   final AlertChannelsController channels;
+  final AlertMutesController mutes;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -216,6 +219,7 @@ class Sections {
     fleet,
     rules,
     channels,
+    mutes,
     alerts,
   ];
 
@@ -584,6 +588,102 @@ class AlertChannelsController extends SectionController<AlertChannel> {
       };
     } finally {
       testing = null;
+      notifyListeners();
+    }
+  }
+}
+
+/// The mute windows: what is silenced, and until when.
+///
+/// The on-call write this screen exists for is "silence everything for the
+/// next two hours while we deploy". Recurring schedules are read here and
+/// edited on the web; building a weekly-recurrence editor on a phone would
+/// produce a worse one than the web already has.
+class AlertMutesController extends SectionController<AlertMute> {
+  AlertMutesController(super.client);
+
+  /// Which mute is being ended, so only that row is busy.
+  String? busy;
+
+  /// True while a new one is being created.
+  bool creating = false;
+
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertMute>> fetch() async {
+    final mutes = [...(await client.alertMutes()).mutes];
+    final q = query.trim().toLowerCase();
+    final matched = q.isEmpty
+        ? mutes
+        : [
+            for (final m in mutes)
+              if (m.name.toLowerCase().contains(q) ||
+                  m.comment.toLowerCase().contains(q))
+                m,
+          ];
+    // Active first, then by when they end: what is silencing alerts right now
+    // is the thing somebody came here to find.
+    matched.sort((a, b) {
+      if (a.active != b.active) return a.active ? -1 : 1;
+      return a.endsAt.compareTo(b.endsAt);
+    });
+    return matched;
+  }
+
+  /// Silences for [duration] from now.
+  Future<void> createFor({
+    required String name,
+    required Duration duration,
+    List<String> ruleIds = const [],
+  }) async {
+    creating = true;
+    failure = null;
+    notifyListeners();
+    final now = DateTime.now().toUtc();
+    try {
+      await client.createAlertMute(
+        name: name,
+        startsAt: now,
+        endsAt: now.add(duration),
+        ruleIds: ruleIds,
+      );
+      await refresh();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('alertsForbidden', '')
+          : SessionFailure('unexpected', e.message);
+    } finally {
+      creating = false;
+      notifyListeners();
+    }
+  }
+
+  /// Ends [id] now, by deleting the window.
+  Future<void> end(String id) async {
+    busy = id;
+    failure = null;
+    notifyListeners();
+    try {
+      await client.deleteAlertMute(id);
+      await refresh();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      // 404: it expired between the list being drawn and the button being
+      // pressed. Reload and let the row go rather than show a red banner.
+      if (e.status == 404) {
+        await refresh();
+      } else {
+        failure = e.status == 403
+            ? const SessionFailure('alertsForbidden', '')
+            : SessionFailure('unexpected', e.message);
+      }
+    } finally {
+      busy = null;
       notifyListeners();
     }
   }

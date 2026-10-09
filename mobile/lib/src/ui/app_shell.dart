@@ -22,6 +22,7 @@ import 'host_screen.dart';
 import 'integrations_screen.dart';
 import 'inventory_screen.dart';
 import 'metrics_screen.dart';
+import 'mutes_screen.dart';
 import 'rum_screen.dart';
 import 'traces_screen.dart';
 import 'sections_screen.dart';
@@ -78,6 +79,7 @@ class _AppShellState extends State<AppShell> {
       l.navFleet,
       l.navRules,
       l.navChannels,
+      l.navMutes,
       l.alertsTitle,
       l.navSettings,
     ];
@@ -105,6 +107,7 @@ class _AppShellState extends State<AppShell> {
       s.fleet.refresh,
       s.rules.refresh,
       s.channels.refresh,
+      s.mutes.refresh,
       s.alerts.refresh,
       null, // Settings reads what the session already knows.
     ];
@@ -317,6 +320,7 @@ class _AppShellState extends State<AppShell> {
     add(
       (active) => ChannelsBody(session: session, sections: s, active: active),
     );
+    add((active) => MutesBody(session: session, sections: s, active: active));
     add(
       (_) => AlertsBody(
         key: const Key('alerts-body'),

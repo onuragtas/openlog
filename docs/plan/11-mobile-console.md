@@ -366,3 +366,77 @@ birkaç kez sürüm kesebilir, mağaza kesemez.
 - **`apm.resoft.org`'da captcha açılırsa uygulama içi kayıt kapanır** (§3.4). Bugün kapalı olduğu için
   Faz 1'de captcha işi yok; açılması bir hata üretmez ama kayıt akışı sessizce web'e taşınır. Spam
   nedeniyle açmak gerekirse bunun mobil kayıt oranına etkisi önceden bilinmeli.
+
+## 9. Web ile birebir eşitlik: ölçülmüş fark ve çalışma listesi
+
+Sahibin kararı: mobil ve web **aynı** özellikleri sunmalı. Daha önce "telefona ait değil" diye webde
+bırakılan yönetim işlemleri de buna dahil; yıkıcı olanlarda onay kutusu kalır, çünkü bu bir özellik farkı
+değil, dokunmatik bir cihazda doğru davranıştır.
+
+Fark tahminle değil ölçülerek çıkarıldı: webin `web/src` içinden çağırdığı `/api/v1/...` yolları ile
+mobilin `mobile/lib/src/api/client.dart` içinden çağırdıkları karşılaştırıldı, sonra sözleşmede gerçekten
+var olanlara indirgendi (regex artıkları elendi). **119 uç** mobilde yok. Bunların ~20'si imzalı konsolun
+parçası değil ve listede değil: `operator/*` (ayrı süper-yönetici konsolu, ayrı giriş), `admin/*`,
+`render/*` (e-posta için sunucu tarafı PNG), SSO yönlendirme uçları (`sso/oidc/callback`,
+`sso/saml/complete`) ve tarayıcıya özgü giriş akışları.
+
+Kalanlar, konu konu. Her satır bitince işaretlenir.
+
+### 9.1 Alarmlar
+- [x] Susturmalar (`alerts/mutes`): liste, süreli oluşturma, bitirme. Tekrarlayan takvim
+      düzenleyicisi (`mutes/preview`, `AlertMuteScheduleInput`) hâlâ webde; okunuyor, yazılmıyor.
+- [ ] Yönlendirme kuralları (`alerts/routing-rules`, `.../reorder`)
+- [ ] Tatil takvimleri (`alerts/holiday-calendars`)
+- [ ] Kural oluşturma/düzenleme (`alerts/rule-types`, `alerts/rules/preview`, `alerts/templates`)
+- [ ] Teslimat günlüğü (`alerts/deliveries`)
+
+### 9.2 APM
+- [ ] Hata gelen kutusu kendi bölümü olarak (`apm/errors`, `apm/errors/groups`)
+- [ ] Servis haritası (`apm/map`, `apm/map/path`)
+- [ ] Ajanlar (`apm/agents`)
+- [ ] Örnekleme ayarları (`apm/sampling`, `.../preview`)
+- [ ] Servis izleri (`apm/traces`)
+
+### 9.3 Organizasyon ve hesap
+- [ ] Üyeler (`members`), davetler (`invitations`, `.../accept`, `.../lookup`)
+- [ ] API anahtarları (`api-keys`), lisans anahtarları (`license-keys`), tarayıcı anahtarları (`browser-keys`)
+- [ ] Denetim günlüğü (`audit-log`)
+- [ ] Organizasyon ayarları (`orgs/current`, `.../saas`, `.../support-access`, `.../deletion`)
+- [ ] SSO yönetimi (`sso/connection(s)`, `sso/domains`, `sso/enforcement`, `sso/role-mappings`, `scim/tokens`)
+- [ ] Hesap: parola değiştirme (`auth/password`), e-posta doğrulama (`auth/verify-email`),
+      veri dışa aktarma ve hesap silme (`account/*`, `data-exports`)
+
+### 9.4 Keşif ekranlarının derinliği
+- [ ] Filtre kurucusunun sözlüğü (`fields/keys`, `fields/values`) — log, iz ve metrik filtrelerinin temeli
+- [ ] Log gelişmiş sorgu ve desenler (`logs/query`, `logs/aggregate`, `logs/patterns`)
+- [ ] İz toplulaştırma (`traces/aggregate`)
+- [ ] Metrik adları, korelasyon, exemplar (`metrics/names`, `metrics/correlate`, `metrics/exemplars`)
+- [ ] Kayıtlı görünümler (`saved-views`)
+- [ ] OQL şema ve doğrulama (`query/schema`, `query/validate`)
+- [ ] Alev grafiği (`profiles/flame`)
+
+### 9.5 Altyapı
+- [ ] Kubernetes: kümeler, düğümler, iş yükleri, olaylar (`kubernetes/clusters|nodes|workloads|events`)
+- [ ] Veritabanı: etkinlik, sorgular, oturumlar, arama (`db/activity|queries|sessions|lookup`)
+- [ ] Konteyner grupları (`containers/groups`)
+- [ ] Maliyet: özet, servisler, konteynerler, eğilim, fiyatlar (`costs/*`)
+- [ ] Bulut bağlantıları (`cloud/providers`, `cloud/connections`, `.../test`)
+- [ ] Filo politikası ve dağıtımlar (`fleet/policy`, `fleet/rollouts`, `fleet/rollback`)
+- [ ] Entegrasyon ayarlarını düzenleme (`integrations/settings` yazma)
+- [ ] Depolama (`storage/disk`, `.../settings`)
+
+### 9.6 RUM
+- [ ] Sayfalar, vitals ayrıntısı, oturumlar, sürümler, huni (`rum/pages|vitals|sessions|releases|funnel`)
+- [ ] Kaynak haritaları (`source-maps`)
+
+### 9.7 Kullanım, sürüm, panolar
+- [ ] Kullanım ve kotalar (`usage`, `.../daily|top|status|query-limits|export`), planlar (`plans`)
+- [ ] Sürüm ve güncelleme (`version`, `.../check`, `.../update`), durum (`status`)
+- [ ] Pano içe aktarma ve ayarları (`dashboards/import`, `dashboards/settings`)
+- [ ] Güvenlik açığı kataloğu durumu (`vulnerabilities/catalog/status`)
+
+### Yöntem notu
+
+Bu liste uç bazında; bir satır bir ekran demek değil. Ölçüm tekrarlanabilir: webin ve mobilin çağırdığı
+yolları çıkarıp sözleşmedekilerle kesiştirmek yeter. Bitirme ölçütü de bu — tahmin değil, aynı ölçümün
+boş dönmesi.
