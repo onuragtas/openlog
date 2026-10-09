@@ -13,10 +13,20 @@ import 'severity.dart';
 const logSeverities = ['', 'INFO', 'WARN', 'ERROR'];
 
 class LogsBody extends StatefulWidget {
-  const LogsBody({super.key, required this.session, required this.logs});
+  const LogsBody({
+    super.key,
+    required this.session,
+    required this.logs,
+    this.scopeLabel,
+  });
 
   final SessionController session;
   final LogsController logs;
+
+  /// What this list is about, when it is about one thing. Set by the screen
+  /// that pushed it -- a request, a pod, a container -- so the reader is not
+  /// left wondering why the whole stream is missing.
+  final String? scopeLabel;
 
   @override
   State<LogsBody> createState() => _LogsBodyState();
@@ -24,6 +34,7 @@ class LogsBody extends StatefulWidget {
 
 class _LogsBodyState extends State<LogsBody> {
   final _search = TextEditingController();
+  final _service = TextEditingController();
 
   @override
   void initState() {
@@ -34,6 +45,7 @@ class _LogsBodyState extends State<LogsBody> {
   @override
   void dispose() {
     _search.dispose();
+    _service.dispose();
     super.dispose();
   }
 
@@ -58,29 +70,61 @@ class _LogsBodyState extends State<LogsBody> {
                 c.refresh();
               },
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SegmentedButton<String>(
-                key: const Key('logs-severity'),
-                showSelectedIcon: false,
-                segments: [
-                  for (final s in logSeverities)
-                    ButtonSegment(
-                      value: s,
-                      label: Text(s.isEmpty ? l.logsSeverityAll : s),
-                    ),
-                ],
-                selected: {c.severityMin},
-                onSelectionChanged: (set) {
-                  c.severityMin = set.first;
+            // A scoped list already answers about one thing; a service box
+            // and a severity filter on top of it would be three ways of
+            // narrowing the same handful of lines.
+            if (widget.scopeLabel != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${widget.scopeLabel!} · ${l.logsScopedAll}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('logs-service'),
+                controller: _service,
+                textInputAction: TextInputAction.search,
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText: l.logsService,
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (value) {
+                  c.service = value;
                   c.refresh();
                 },
               ),
-            ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<String>(
+                  key: const Key('logs-severity'),
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final s in logSeverities)
+                      ButtonSegment(
+                        value: s,
+                        label: Text(s.isEmpty ? l.logsSeverityAll : s),
+                      ),
+                  ],
+                  selected: {c.severityMin},
+                  onSelectionChanged: (set) {
+                    c.severityMin = set.first;
+                    c.refresh();
+                  },
+                ),
+              ),
+            ],
           ],
         ),
-        emptyTitle: l.logsEmpty,
+        emptyTitle: c.scoped ? l.logsEmptyScoped : l.logsEmpty,
         itemBuilder: (context, i) => _LogTile(record: c.items[i]),
       ),
     );
@@ -151,4 +195,45 @@ class _LogTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The logs of one thing, on a screen of its own.
+///
+/// Pushed from wherever that thing is: a trace, a pod, a container. Typing a
+/// trace id into a search box is the part a phone is worst at, and this is
+/// how it never has to be typed.
+class LogsScreen extends StatefulWidget {
+  const LogsScreen({
+    super.key,
+    required this.session,
+    required this.logs,
+    required this.title,
+    required this.scopeLabel,
+  });
+
+  final SessionController session;
+  final LogsController logs;
+  final String title;
+  final String scopeLabel;
+
+  @override
+  State<LogsScreen> createState() => _LogsScreenState();
+}
+
+class _LogsScreenState extends State<LogsScreen> {
+  @override
+  void dispose() {
+    widget.logs.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(widget.title, overflow: TextOverflow.ellipsis)),
+    body: LogsBody(
+      session: widget.session,
+      logs: widget.logs,
+      scopeLabel: widget.scopeLabel,
+    ),
+  );
 }

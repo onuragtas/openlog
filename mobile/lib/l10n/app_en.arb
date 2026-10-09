@@ -800,5 +800,12 @@
         "type": "String"
       }
     }
-  }
+  },
+  "logsService": "Service",
+  "logsScopedTrace": "Logs of this request",
+  "logsScopedPod": "Logs of this pod",
+  "logsScopedContainer": "Logs of this container",
+  "logsScopedAll": "Every level, because a request's logs are all of them.",
+  "logsOpenForTrace": "Logs",
+  "logsEmptyScoped": "Nothing was logged for this."
 }

@@ -47,6 +47,65 @@ Map<String, Object?> line(String body, {int severity = 17}) => {
 };
 
 void main() {
+  test('a request\'s logs are asked for by trace, at every level', () async {
+    final server = await FakeServer.start(
+      (req, _) =>
+          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+    );
+    addTearDown(server.stop);
+    final c = LogsController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      traceId: 'abc123',
+    );
+
+    await c.refresh();
+
+    // No severity_min: narrowing one request's logs to WARN is how you miss
+    // the line that explains it. The default WARN is for the whole stream.
+    expect(server.requests.single.query, 'limit=50&trace_id=abc123');
+    expect(c.scoped, isTrue);
+  });
+
+  test('a pod and a container ask by their own key', () async {
+    final server = await FakeServer.start(
+      (req, _) =>
+          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+    );
+    addTearDown(server.stop);
+    final client = OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x';
+
+    await LogsController(client, podUid: 'u1').refresh();
+    await LogsController(client, containerId: 'c1').refresh();
+
+    expect(server.requests.map((r) => r.query), [
+      'limit=50&k8s_pod_uid=u1',
+      'limit=50&container_id=c1',
+    ]);
+  });
+
+  test(
+    'the unscoped list keeps its severity floor and takes a service',
+    () async {
+      final server = await FakeServer.start(
+        (req, _) =>
+            writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+      );
+      addTearDown(server.stop);
+      final c = LogsController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      );
+
+      c.service = '  checkout  ';
+      await c.refresh();
+
+      expect(
+        server.requests.single.query,
+        'limit=50&severity_min=WARN&service=checkout',
+      );
+      expect(c.scoped, isFalse);
+    },
+  );
+
   group('services', () {
     test(
       'the worst service is first, because the top is what gets read',

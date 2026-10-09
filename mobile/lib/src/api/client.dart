@@ -563,11 +563,22 @@ class OpenlogClient {
   Future<LogPage> logs({
     String q = '',
     String severityMin = '',
+    String service = '',
+    String traceId = '',
+    String podUid = '',
+    String containerId = '',
     int limit = 50,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (q.isNotEmpty) query['q'] = q;
     if (severityMin.isNotEmpty) query['severity_min'] = severityMin;
+    if (service.isNotEmpty) query['service'] = service;
+    // The three that make this screen reachable from somewhere else: a
+    // request, a pod or a container has logs, and finding them by typing is
+    // the part a phone is worst at.
+    if (traceId.isNotEmpty) query['trace_id'] = traceId;
+    if (podUid.isNotEmpty) query['k8s_pod_uid'] = podUid;
+    if (containerId.isNotEmpty) query['container_id'] = containerId;
     return LogPage.fromJson(
       await _send('GET', '/api/v1/logs?${Uri(queryParameters: query).query}'),
     );

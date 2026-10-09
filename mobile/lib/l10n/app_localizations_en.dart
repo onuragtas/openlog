@@ -1328,4 +1328,26 @@ class LEn extends L {
   String sessionsFailed(String detail) {
     return 'The sessions could not be read: $detail';
   }
+
+  @override
+  String get logsService => 'Service';
+
+  @override
+  String get logsScopedTrace => 'Logs of this request';
+
+  @override
+  String get logsScopedPod => 'Logs of this pod';
+
+  @override
+  String get logsScopedContainer => 'Logs of this container';
+
+  @override
+  String get logsScopedAll =>
+      'Every level, because a request\'s logs are all of them.';
+
+  @override
+  String get logsOpenForTrace => 'Logs';
+
+  @override
+  String get logsEmptyScoped => 'Nothing was logged for this.';
 }

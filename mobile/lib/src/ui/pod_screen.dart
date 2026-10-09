@@ -9,6 +9,7 @@ import '../session.dart';
 import 'container_screen.dart' show formatBytes;
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'logs_screen.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 import 'theme.dart';
@@ -125,6 +126,26 @@ class _PodScreenState extends State<PodScreen> {
           if (pod.podIp.isNotEmpty) Text(pod.podIp, style: muted),
           if (pod.qosClass.isNotEmpty) Text(pod.qosClass, style: muted),
         ],
+      ),
+
+      const SizedBox(height: 12),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const Key('pod-logs'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LogsScreen(
+                session: widget.session,
+                logs: widget.sections.scopedLogs(podUid: widget.podUid),
+                title: l.logsOpenForTrace,
+                scopeLabel: l.logsScopedPod,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.article_outlined, size: 18),
+          label: Text(l.logsScopedPod),
+        ),
       ),
 
       // Events first, above the charts: a pod nobody opened for fun is a pod

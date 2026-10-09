@@ -2448,6 +2448,48 @@ abstract class L {
   /// In en, this message translates to:
   /// **'The sessions could not be read: {detail}'**
   String sessionsFailed(String detail);
+
+  /// No description provided for @logsService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get logsService;
+
+  /// No description provided for @logsScopedTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs of this request'**
+  String get logsScopedTrace;
+
+  /// No description provided for @logsScopedPod.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs of this pod'**
+  String get logsScopedPod;
+
+  /// No description provided for @logsScopedContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs of this container'**
+  String get logsScopedContainer;
+
+  /// No description provided for @logsScopedAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Every level, because a request\'s logs are all of them.'**
+  String get logsScopedAll;
+
+  /// No description provided for @logsOpenForTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get logsOpenForTrace;
+
+  /// No description provided for @logsEmptyScoped.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing was logged for this.'**
+  String get logsEmptyScoped;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

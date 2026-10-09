@@ -9,6 +9,7 @@ import '../detail.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
+import 'logs_screen.dart';
 import 'severity.dart';
 import 'theme.dart';
 
@@ -68,6 +69,25 @@ class _TraceScreenState extends State<TraceScreen> {
             ];
           }
           return [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('trace-logs'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => LogsScreen(
+                      session: widget.session,
+                      logs: widget.sections.scopedLogs(traceId: widget.traceId),
+                      title: l.logsOpenForTrace,
+                      scopeLabel: l.logsScopedTrace,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.article_outlined, size: 18),
+                label: Text(l.logsScopedTrace),
+              ),
+            ),
+            const SizedBox(height: 12),
             Text(
               l.traceSpans(rows.length),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(

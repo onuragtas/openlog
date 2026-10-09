@@ -1323,4 +1323,26 @@ class LTr extends L {
   String sessionsFailed(String detail) {
     return 'Oturumlar okunamadı: $detail';
   }
+
+  @override
+  String get logsService => 'Servis';
+
+  @override
+  String get logsScopedTrace => 'Bu isteğin logları';
+
+  @override
+  String get logsScopedPod => 'Bu pod\'un logları';
+
+  @override
+  String get logsScopedContainer => 'Bu konteynerin logları';
+
+  @override
+  String get logsScopedAll =>
+      'Her seviye; bir isteğin logları zaten onun hepsidir.';
+
+  @override
+  String get logsOpenForTrace => 'Loglar';
+
+  @override
+  String get logsEmptyScoped => 'Buna dair bir log yok.';
 }

@@ -46,6 +46,12 @@ class Sections {
     ProfilesController? profiles,
     OnboardingController? onboarding,
     SessionsController? sessions,
+    LogsController Function({
+      String traceId,
+      String podUid,
+      String containerId,
+    })?
+    scopedLogs,
     DashboardsController? dashboards,
     AlertsController? alerts,
     AlertRulesController? rules,
@@ -111,6 +117,18 @@ class Sections {
        profiles = profiles ?? ProfilesController(client),
        onboarding = onboarding ?? OnboardingController(client),
        sessions = sessions ?? SessionsController(client),
+       scopedLogs =
+           scopedLogs ??
+           (({
+             String traceId = '',
+             String podUid = '',
+             String containerId = '',
+           }) => LogsController(
+             client,
+             traceId: traceId,
+             podUid: podUid,
+             containerId: containerId,
+           )),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
        rules = rules ?? AlertRulesController(client),
@@ -137,6 +155,15 @@ class Sections {
   final ProfilesController profiles;
   final OnboardingController onboarding;
   final SessionsController sessions;
+
+  /// The logs of one request, pod or container. A controller per screen,
+  /// disposed with it, because each one answers about a different thing.
+  final LogsController Function({
+    String traceId,
+    String podUid,
+    String containerId,
+  })
+  scopedLogs;
   final DashboardsController dashboards;
   final QueryController query;
   final AlertRulesController rules;

@@ -703,5 +703,12 @@
         "type": "String"
       }
     }
-  }
+  },
+  "logsService": "Servis",
+  "logsScopedTrace": "Bu isteğin logları",
+  "logsScopedPod": "Bu pod'un logları",
+  "logsScopedContainer": "Bu konteynerin logları",
+  "logsScopedAll": "Her seviye; bir isteğin logları zaten onun hepsidir.",
+  "logsOpenForTrace": "Loglar",
+  "logsEmptyScoped": "Buna dair bir log yok."
 }

@@ -8,6 +8,7 @@ import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'logs_screen.dart';
 import 'oql_view.dart';
 import 'severity.dart';
 import 'sparkline.dart';
@@ -110,6 +111,28 @@ class _ContainerScreenState extends State<ContainerScreen> {
             ),
           Text(relativeTimeOf(l, x.lastSeen), style: muted),
         ],
+      ),
+
+      const SizedBox(height: 12),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const Key('container-logs'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LogsScreen(
+                session: widget.session,
+                logs: widget.sections.scopedLogs(
+                  containerId: widget.containerId,
+                ),
+                title: l.logsOpenForTrace,
+                scopeLabel: l.logsScopedContainer,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.article_outlined, size: 18),
+          label: Text(l.logsScopedContainer),
+        ),
       ),
 
       DetailSection(
