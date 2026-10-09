@@ -300,6 +300,45 @@ class OpenlogClient {
   Future<void> deleteAlertMute(String id) =>
       _send('DELETE', '/api/v1/alerts/mutes/${Uri.encodeComponent(id)}');
 
+  /// The named date lists a recurring mute skips, ordered by name.
+  Future<AlertHolidayCalendarPage> alertHolidayCalendars() async =>
+      AlertHolidayCalendarPage.fromJson(
+        await _send('GET', '/api/v1/alerts/holiday-calendars'),
+      );
+
+  /// Creates one.
+  ///
+  /// `description` is sent even when empty: the contract does not require it,
+  /// but an edit that clears the description has to reach the server as an
+  /// empty string rather than as "leave it alone".
+  Future<void> createAlertHolidayCalendar({
+    required String name,
+    required String description,
+    required List<String> dates,
+  }) => _send(
+    'POST',
+    '/api/v1/alerts/holiday-calendars',
+    body: {'name': name, 'description': description, 'dates': dates},
+  );
+
+  /// Replaces one. Mutes that use it pick up the new dates at their next check.
+  Future<void> updateAlertHolidayCalendar(
+    String id, {
+    required String name,
+    required String description,
+    required List<String> dates,
+  }) => _send(
+    'PUT',
+    '/api/v1/alerts/holiday-calendars/${Uri.encodeComponent(id)}',
+    body: {'name': name, 'description': description, 'dates': dates},
+  );
+
+  /// Deletes one. The server answers 409 while a mute still references it.
+  Future<void> deleteAlertHolidayCalendar(String id) => _send(
+    'DELETE',
+    '/api/v1/alerts/holiday-calendars/${Uri.encodeComponent(id)}',
+  );
+
   /// The notification channels, with their secrets masked by the server.
   Future<AlertChannelPage> alertChannels() async =>
       AlertChannelPage.fromJson(await _send('GET', '/api/v1/alerts/channels'));

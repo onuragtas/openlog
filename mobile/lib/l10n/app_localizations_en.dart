@@ -1492,4 +1492,73 @@ class LEn extends L {
   @override
   String get routesEditOnWeb =>
       'Conditions and channels are edited on the web.';
+
+  @override
+  String get calendarsTitle => 'Holiday calendars';
+
+  @override
+  String get calendarsAbout =>
+      'Named lists of dates a recurring mute skips, such as public holidays.';
+
+  @override
+  String get calendarsEmpty => 'No holiday calendars.';
+
+  @override
+  String get calendarsNew => 'New holiday calendar';
+
+  @override
+  String get calendarsName => 'Name';
+
+  @override
+  String get calendarsDescription => 'Description';
+
+  @override
+  String get calendarsDates => 'Dates';
+
+  @override
+  String get calendarsDatesHint =>
+      'One per line: YYYY-MM-DD for one date, MM-DD for every year.';
+
+  @override
+  String calendarsInvalid(String list) {
+    return 'Invalid dates: $list';
+  }
+
+  @override
+  String calendarsCount(int count) {
+    return '$count dates';
+  }
+
+  @override
+  String calendarsSummary(int count, int mutes) {
+    return '$count dates, used by $mutes mutes';
+  }
+
+  @override
+  String get calendarsCreate => 'Create';
+
+  @override
+  String get calendarsSave => 'Save';
+
+  @override
+  String get calendarsEdit => 'Edit';
+
+  @override
+  String get calendarsDelete => 'Delete';
+
+  @override
+  String calendarsDeleteTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get calendarsDeleteBody => 'The calendar goes; no mute uses it.';
+
+  @override
+  String calendarsDeleteInUse(int count) {
+    return '$count mutes use this calendar; the server refuses to delete it while they do.';
+  }
+
+  @override
+  String get mutesCalendars => 'Holiday calendars';
 }

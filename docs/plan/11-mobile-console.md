@@ -387,7 +387,8 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
       düzenleyicisi (`mutes/preview`, `AlertMuteScheduleInput`) hâlâ webde; okunuyor, yazılmıyor.
 - [x] Yönlendirme kuralları (`alerts/routing-rules`, `.../reorder`): sıralı liste, sürükleyerek
       yeniden sıralama, açma/kapama. Koşul düzenleyicisi (`AlertRouteMatch` yazma) hâlâ webde.
-- [ ] Tatil takvimleri (`alerts/holiday-calendars`)
+- [x] Tatil takvimleri (`alerts/holiday-calendars`): susturmalar ekranından açılan liste,
+      oluşturma, düzenleme, silme; tarihler metin olarak (`YYYY-AA-GG` ve her yıl için `AA-GG`).
 - [ ] Kural oluşturma/düzenleme (`alerts/rule-types`, `alerts/rules/preview`, `alerts/templates`)
 - [ ] Teslimat günlüğü (`alerts/deliveries`)
 

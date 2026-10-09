@@ -1486,4 +1486,74 @@ class LTr extends L {
 
   @override
   String get routesEditOnWeb => 'Koşullar ve kanallar webden düzenlenir.';
+
+  @override
+  String get calendarsTitle => 'Tatil takvimleri';
+
+  @override
+  String get calendarsAbout =>
+      'Tekrarlayan susturmaların atladığı adlandırılmış tarih listeleri, örneğin resmi tatiller.';
+
+  @override
+  String get calendarsEmpty => 'Tatil takvimi yok.';
+
+  @override
+  String get calendarsNew => 'Yeni tatil takvimi';
+
+  @override
+  String get calendarsName => 'Ad';
+
+  @override
+  String get calendarsDescription => 'Açıklama';
+
+  @override
+  String get calendarsDates => 'Tarihler';
+
+  @override
+  String get calendarsDatesHint =>
+      'Her satıra bir tane: tek tarih için YYYY-AA-GG, her yıl için AA-GG.';
+
+  @override
+  String calendarsInvalid(String list) {
+    return 'Geçersiz tarihler: $list';
+  }
+
+  @override
+  String calendarsCount(int count) {
+    return '$count tarih';
+  }
+
+  @override
+  String calendarsSummary(int count, int mutes) {
+    return '$count tarih, $mutes susturmada kullanılıyor';
+  }
+
+  @override
+  String get calendarsCreate => 'Oluştur';
+
+  @override
+  String get calendarsSave => 'Kaydet';
+
+  @override
+  String get calendarsEdit => 'Düzenle';
+
+  @override
+  String get calendarsDelete => 'Sil';
+
+  @override
+  String calendarsDeleteTitle(String name) {
+    return '$name silinsin mi?';
+  }
+
+  @override
+  String get calendarsDeleteBody =>
+      'Takvim silinir; onu kullanan susturma yok.';
+
+  @override
+  String calendarsDeleteInUse(int count) {
+    return '$count susturma bu takvimi kullanıyor; sunucu onlar varken silmeyi reddeder.';
+  }
+
+  @override
+  String get mutesCalendars => 'Tatil takvimleri';
 }

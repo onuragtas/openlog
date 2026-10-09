@@ -58,6 +58,7 @@ class Sections {
     AlertChannelsController? channels,
     AlertMutesController? mutes,
     AlertRoutesController? routes,
+    AlertCalendarsController? calendars,
     QueryController? query,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
@@ -137,6 +138,7 @@ class Sections {
        channels = channels ?? AlertChannelsController(client),
        mutes = mutes ?? AlertMutesController(client),
        routes = routes ?? AlertRoutesController(client),
+       calendars = calendars ?? AlertCalendarsController(client),
        alerts = alerts ?? AlertsController(client);
 
   final HostsController hosts;
@@ -174,6 +176,9 @@ class Sections {
   final AlertChannelsController channels;
   final AlertMutesController mutes;
   final AlertRoutesController routes;
+
+  /// Reached from the mutes screen, which is the only thing that uses them.
+  final AlertCalendarsController calendars;
   final AlertsController alerts;
 
   /// Detail screens get a controller each, made when the screen opens and
@@ -196,7 +201,10 @@ class Sections {
   })
   profileFunctions;
 
-  /// In the order the drawer lists them, which is the web's order.
+  /// Everything that has to be disposed, in the order the drawer lists them,
+  /// which is the web's order. Calendars are in here too although the drawer
+  /// does not list them: they are reached from the mutes screen, and a
+  /// controller left out of this list is a controller never disposed.
   List<ChangeNotifier> get all => [
     onboarding,
     sessions,
@@ -223,6 +231,7 @@ class Sections {
     rules,
     channels,
     mutes,
+    calendars,
     routes,
     alerts,
   ];
@@ -771,6 +780,109 @@ class AlertRoutesController extends SectionController<AlertRoutingRule> {
       failure = e.status == 403
           ? const SessionFailure('alertsForbidden', '')
           : SessionFailure('unexpected', e.message);
+    } finally {
+      busy = null;
+      notifyListeners();
+    }
+  }
+}
+
+/// The holiday calendars: named date lists a recurring mute skips.
+///
+/// They belong to the mutes screen because that is the only thing that uses
+/// them, and the only reason to open this list is a mute that fired on a
+/// holiday.
+class AlertCalendarsController extends SectionController<AlertHolidayCalendar> {
+  AlertCalendarsController(super.client);
+
+  /// Which calendar is being deleted, so only that row is busy.
+  String? busy;
+
+  /// True while the form is saving.
+  bool saving = false;
+
+  @override
+  String get forbiddenKind => 'alertsForbidden';
+
+  @override
+  Future<List<AlertHolidayCalendar>> fetch() async =>
+      (await client.alertHolidayCalendars()).calendars;
+
+  /// Creates one, or replaces [id] when it is given.
+  ///
+  /// Returns whether it was saved, so the form can close itself only when the
+  /// server took it -- a form that closed on failure would lose the dates
+  /// somebody just typed.
+  Future<bool> save({
+    String? id,
+    required String name,
+    required String description,
+    required List<String> dates,
+  }) async {
+    saving = true;
+    failure = null;
+    notifyListeners();
+    try {
+      if (id == null) {
+        await client.createAlertHolidayCalendar(
+          name: name,
+          description: description,
+          dates: dates,
+        );
+      } else {
+        await client.updateAlertHolidayCalendar(
+          id,
+          name: name,
+          description: description,
+          dates: dates,
+        );
+      }
+      await refresh();
+      return true;
+    } on ApiUnreachable {
+      await refresh();
+      failure = const SessionFailure('unreachable', '');
+      return false;
+    } on ApiException catch (e) {
+      // 409 is a name already taken; the message says which, so it is shown
+      // rather than replaced with something about calendars in general.
+      final reported = e.status == 403
+          ? const SessionFailure('alertsForbidden', '')
+          : SessionFailure('unexpected', e.message);
+      await refresh();
+      failure = reported;
+      return false;
+    } finally {
+      saving = false;
+      notifyListeners();
+    }
+  }
+
+  /// Deletes [id].
+  ///
+  /// The server answers 409 while a mute still references the calendar, which
+  /// is the whole reason the rows show how many use it.
+  Future<void> remove(String id) async {
+    busy = id;
+    failure = null;
+    notifyListeners();
+    try {
+      await client.deleteAlertHolidayCalendar(id);
+      await refresh();
+    } on ApiUnreachable {
+      await refresh();
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      if (e.status == 404) {
+        // Already gone. Reload and let the row go rather than say so.
+        await refresh();
+      } else {
+        final reported = e.status == 403
+            ? const SessionFailure('alertsForbidden', '')
+            : SessionFailure('unexpected', e.message);
+        await refresh();
+        failure = reported;
+      }
     } finally {
       busy = null;
       notifyListeners();

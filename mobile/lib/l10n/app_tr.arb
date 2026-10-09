@@ -838,5 +838,62 @@
       }
     }
   },
-  "routesEditOnWeb": "Koşullar ve kanallar webden düzenlenir."
+  "routesEditOnWeb": "Koşullar ve kanallar webden düzenlenir.",
+  "calendarsTitle": "Tatil takvimleri",
+  "calendarsAbout": "Tekrarlayan susturmaların atladığı adlandırılmış tarih listeleri, örneğin resmi tatiller.",
+  "calendarsEmpty": "Tatil takvimi yok.",
+  "calendarsNew": "Yeni tatil takvimi",
+  "calendarsName": "Ad",
+  "calendarsDescription": "Açıklama",
+  "calendarsDates": "Tarihler",
+  "calendarsDatesHint": "Her satıra bir tane: tek tarih için YYYY-AA-GG, her yıl için AA-GG.",
+  "calendarsInvalid": "Geçersiz tarihler: {list}",
+  "@calendarsInvalid": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarsCount": "{count} tarih",
+  "@calendarsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarsSummary": "{count} tarih, {mutes} susturmada kullanılıyor",
+  "@calendarsSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "mutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarsCreate": "Oluştur",
+  "calendarsSave": "Kaydet",
+  "calendarsEdit": "Düzenle",
+  "calendarsDelete": "Sil",
+  "calendarsDeleteTitle": "{name} silinsin mi?",
+  "@calendarsDeleteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarsDeleteBody": "Takvim silinir; onu kullanan susturma yok.",
+  "calendarsDeleteInUse": "{count} susturma bu takvimi kullanıyor; sunucu onlar varken silmeyi reddeder.",
+  "@calendarsDeleteInUse": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mutesCalendars": "Tatil takvimleri"
 }

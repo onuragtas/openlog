@@ -2718,6 +2718,120 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Conditions and channels are edited on the web.'**
   String get routesEditOnWeb;
+
+  /// No description provided for @calendarsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Holiday calendars'**
+  String get calendarsTitle;
+
+  /// No description provided for @calendarsAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Named lists of dates a recurring mute skips, such as public holidays.'**
+  String get calendarsAbout;
+
+  /// No description provided for @calendarsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No holiday calendars.'**
+  String get calendarsEmpty;
+
+  /// No description provided for @calendarsNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New holiday calendar'**
+  String get calendarsNew;
+
+  /// No description provided for @calendarsName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get calendarsName;
+
+  /// No description provided for @calendarsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get calendarsDescription;
+
+  /// No description provided for @calendarsDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Dates'**
+  String get calendarsDates;
+
+  /// No description provided for @calendarsDatesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line: YYYY-MM-DD for one date, MM-DD for every year.'**
+  String get calendarsDatesHint;
+
+  /// No description provided for @calendarsInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid dates: {list}'**
+  String calendarsInvalid(String list);
+
+  /// No description provided for @calendarsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} dates'**
+  String calendarsCount(int count);
+
+  /// No description provided for @calendarsSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} dates, used by {mutes} mutes'**
+  String calendarsSummary(int count, int mutes);
+
+  /// No description provided for @calendarsCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get calendarsCreate;
+
+  /// No description provided for @calendarsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get calendarsSave;
+
+  /// No description provided for @calendarsEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get calendarsEdit;
+
+  /// No description provided for @calendarsDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get calendarsDelete;
+
+  /// No description provided for @calendarsDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String calendarsDeleteTitle(String name);
+
+  /// No description provided for @calendarsDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The calendar goes; no mute uses it.'**
+  String get calendarsDeleteBody;
+
+  /// No description provided for @calendarsDeleteInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} mutes use this calendar; the server refuses to delete it while they do.'**
+  String calendarsDeleteInUse(int count);
+
+  /// No description provided for @mutesCalendars.
+  ///
+  /// In en, this message translates to:
+  /// **'Holiday calendars'**
+  String get mutesCalendars;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

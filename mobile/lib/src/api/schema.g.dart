@@ -2873,6 +2873,57 @@ class AlertRoutingRule {
   final DateTime updatedAt;
 }
 
+/// `AlertHolidayCalendar` of the openlog API contract.
+class AlertHolidayCalendar {
+  const AlertHolidayCalendar({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.dates,
+    required this.muteCount,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory AlertHolidayCalendar.fromJson(
+    Object? json, [
+    String path = 'AlertHolidayCalendar',
+  ]) {
+    final m = _obj(json, path);
+    return AlertHolidayCalendar(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      dates: _req(m, 'dates', path, (v, p) => _list<String>(v, p, _str)),
+      muteCount: _req(m, 'mute_count', path, _int),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'dates': dates,
+    'mute_count': muteCount,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final String description;
+  final List<String> dates;
+  final int muteCount;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
 /// `ApmService` of the openlog API contract.
 class ApmService {
   const ApmService({
@@ -7663,6 +7714,36 @@ class AlertRoutingRulePage {
   };
 
   final List<AlertRoutingRule> routingRules;
+}
+
+/// `AlertHolidayCalendarPage` of the openlog API contract.
+class AlertHolidayCalendarPage {
+  const AlertHolidayCalendarPage({required this.calendars});
+
+  factory AlertHolidayCalendarPage.fromJson(
+    Object? json, [
+    String path = 'AlertHolidayCalendarPage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertHolidayCalendarPage(
+      calendars: _req(
+        m,
+        'calendars',
+        path,
+        (v, p) => _list<AlertHolidayCalendar>(
+          v,
+          p,
+          (v, p) => AlertHolidayCalendar.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'calendars': [for (final e in calendars) e.toJson()],
+  };
+
+  final List<AlertHolidayCalendar> calendars;
 }
 
 /// `SessionPage` of the openlog API contract.

@@ -4,12 +4,17 @@
 // deploy about to start: silence everything for the next two hours. Recurring
 // schedules are shown but edited on the web -- a weekly-recurrence editor on
 // a phone would be a worse one than the web already has.
+//
+// The holiday calendars those schedules skip are a screen of their own,
+// reached from here as on the web, because a calendar is only ever
+// interesting because of a mute.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'calendars_screen.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
@@ -53,7 +58,27 @@ class _MutesBodyState extends State<MutesBody> {
       emptyTitle: (l) => l.mutesEmpty,
       header: ListenableBuilder(
         listenable: c,
-        builder: (context, _) => _NewMute(controller: c),
+        builder: (context, _) => Column(
+          children: [
+            _NewMute(controller: c),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('mutes-calendars'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CalendarsScreen(
+                      session: widget.session,
+                      calendars: widget.sections.calendars,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.event_busy),
+                label: Text(L.of(context).mutesCalendars),
+              ),
+            ),
+          ],
+        ),
       ),
       card: (context, mute) => ListenableBuilder(
         listenable: c,

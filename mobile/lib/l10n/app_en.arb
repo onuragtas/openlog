@@ -935,5 +935,62 @@
       }
     }
   },
-  "routesEditOnWeb": "Conditions and channels are edited on the web."
+  "routesEditOnWeb": "Conditions and channels are edited on the web.",
+  "calendarsTitle": "Holiday calendars",
+  "calendarsAbout": "Named lists of dates a recurring mute skips, such as public holidays.",
+  "calendarsEmpty": "No holiday calendars.",
+  "calendarsNew": "New holiday calendar",
+  "calendarsName": "Name",
+  "calendarsDescription": "Description",
+  "calendarsDates": "Dates",
+  "calendarsDatesHint": "One per line: YYYY-MM-DD for one date, MM-DD for every year.",
+  "calendarsInvalid": "Invalid dates: {list}",
+  "@calendarsInvalid": {
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarsCount": "{count} dates",
+  "@calendarsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarsSummary": "{count} dates, used by {mutes} mutes",
+  "@calendarsSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "mutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarsCreate": "Create",
+  "calendarsSave": "Save",
+  "calendarsEdit": "Edit",
+  "calendarsDelete": "Delete",
+  "calendarsDeleteTitle": "Delete {name}?",
+  "@calendarsDeleteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendarsDeleteBody": "The calendar goes; no mute uses it.",
+  "calendarsDeleteInUse": "{count} mutes use this calendar; the server refuses to delete it while they do.",
+  "@calendarsDeleteInUse": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mutesCalendars": "Holiday calendars"
 }
