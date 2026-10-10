@@ -429,7 +429,9 @@ karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan b
 - [x] İşlemler (`apm/services/{s}/transactions`): servis ekranında webin sırasındaki ikinci
       sekme; sunucu sıralamasıyla (harcanan süre, hacim, en yavaş, hata). Tek işlem ayrıntısı
       (`.../transaction`) henüz yok.
-- [ ] Servis içi hata grubu (`apm/services/{s}/errors/{group_id}`)
+- [x] Servis içi hata grubu (`apm/services/{s}/errors/{group_id}`): grup ekranı artık ayrıntı
+      ucunu okuyor — yığın izi, etkilenen sürüm/sunucu/konteyner/işlem, örnek istekler (ize
+      gidiyor), yorumlar ve geçmiş.
 - [x] Dağıtımlar ve karşılaştırma (`apm/services/{s}/deployments`, `.../compare`): genel bakış
       sekmesinde, webdeki gibi; satıra dokununca öncesi/sonrası RED ve Apdex farkı, ve o
       dağıtımdan sonra ilk kez görülen hata grupları.
@@ -438,7 +440,8 @@ karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan b
 - [x] Servisin sunucuları, konteynerleri, pod'ları (`apm/services/{s}` içindeki `hosts`,
       `.../containers`, `.../kubernetes`): aynı panelde, her biri kendi ekranına açılıyor;
       ajan verisi olmayan sunucu açılmıyor ve nedeni söyleniyor.
-- [ ] Bir sunucunun servisleri (`apm/hosts/{host_id}/services`) — sunucu ekranında
+- [x] Bir sunucunun servisleri (`apm/hosts/{host_id}/services`): sunucu ekranında "iz gönderen
+      servisler" bölümü; keşfedilen servisler listesinden ayrı, çünkü ayrı şeyler.
 - [x] Ajanlar (`apm/agents`): servisler listesinden; servis × ajan × sürüm başına bir satır,
       geride olanlar üstte, arama ve "yalnızca geride olanlar". Yükseltme komutları webde
       (`upgrade=true` sunucuya her servis için paket deposu sorgulatıyor).

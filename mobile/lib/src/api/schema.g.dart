@@ -428,6 +428,32 @@ enum AlertTemplateCategory {
   }
 }
 
+/// ApmErrorStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmErrorStatus {
+  unresolved('unresolved'),
+  resolved('resolved'),
+  ignored('ignored'),
+  unknown('');
+
+  const ApmErrorStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmErrorStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// MetricType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1250,32 +1276,6 @@ enum ApmMapEdgeTargetType {
   final String wire;
 
   static ApmMapEdgeTargetType fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// ApmErrorStatus of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum ApmErrorStatus {
-  unresolved('unresolved'),
-  resolved('resolved'),
-  ignored('ignored'),
-  unknown('');
-
-  const ApmErrorStatus(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static ApmErrorStatus fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -3564,6 +3564,206 @@ class ApmDeploymentCompareNewErrorGroupsItem {
   final String message;
   final DateTime firstSeen;
   final double totalCount;
+}
+
+/// `ApmErrorGroupDetail` of the openlog API contract.
+class ApmErrorGroupDetail {
+  const ApmErrorGroupDetail({
+    required this.status,
+    this.assignee,
+    this.resolvedAt,
+    required this.resolvedInVersion,
+    required this.resolvedByEmail,
+    this.regressedAt,
+    required this.regressionCount,
+    required this.commentCount,
+    this.updatedAt,
+    required this.updatedByEmail,
+    required this.groupId,
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.affected,
+    required this.comments,
+    required this.activity,
+    required this.workflow,
+    required this.errorType,
+    required this.message,
+    required this.count,
+    required this.totalCount,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.lastMessage,
+    required this.stacktrace,
+    required this.stacktraceMinified,
+    required this.symbolicatedFrames,
+    required this.lastTraceId,
+    required this.lastSpanId,
+    required this.lastSpanName,
+    required this.step,
+    required this.series,
+    required this.samples,
+  });
+
+  factory ApmErrorGroupDetail.fromJson(
+    Object? json, [
+    String path = 'ApmErrorGroupDetail',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorGroupDetail(
+      status: _req(m, 'status', path, ApmErrorStatus.fromJson),
+      assignee: _opt(
+        m,
+        'assignee',
+        path,
+        (v, p) => ApmErrorAssignee.fromJson(v, p),
+      ),
+      resolvedAt: _opt(m, 'resolved_at', path, _time),
+      resolvedInVersion: _req(m, 'resolved_in_version', path, _str),
+      resolvedByEmail: _req(m, 'resolved_by_email', path, _str),
+      regressedAt: _opt(m, 'regressed_at', path, _time),
+      regressionCount: _req(m, 'regression_count', path, _int),
+      commentCount: _req(m, 'comment_count', path, _int),
+      updatedAt: _opt(m, 'updated_at', path, _time),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      groupId: _req(m, 'group_id', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      affected: _req(
+        m,
+        'affected',
+        path,
+        (v, p) => ApmErrorAffected.fromJson(v, p),
+      ),
+      comments: _req(
+        m,
+        'comments',
+        path,
+        (v, p) => _list<ApmErrorComment>(
+          v,
+          p,
+          (v, p) => ApmErrorComment.fromJson(v, p),
+        ),
+      ),
+      activity: _req(
+        m,
+        'activity',
+        path,
+        (v, p) => _list<ApmErrorActivity>(
+          v,
+          p,
+          (v, p) => ApmErrorActivity.fromJson(v, p),
+        ),
+      ),
+      workflow: _req(m, 'workflow', path, _bool),
+      errorType: _req(m, 'error_type', path, _str),
+      message: _req(m, 'message', path, _str),
+      count: _req(m, 'count', path, _num),
+      totalCount: _req(m, 'total_count', path, _num),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      lastMessage: _req(m, 'last_message', path, _str),
+      stacktrace: _req(m, 'stacktrace', path, _str),
+      stacktraceMinified: _req(m, 'stacktrace_minified', path, _str),
+      symbolicatedFrames: _req(m, 'symbolicated_frames', path, _int),
+      lastTraceId: _req(m, 'last_trace_id', path, _str),
+      lastSpanId: _req(m, 'last_span_id', path, _str),
+      lastSpanName: _req(m, 'last_span_name', path, _str),
+      step: _req(m, 'step', path, _str),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      samples: _req(
+        m,
+        'samples',
+        path,
+        (v, p) => _list<ApmErrorSample>(
+          v,
+          p,
+          (v, p) => ApmErrorSample.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'status': status.wire,
+    if (assignee != null) 'assignee': assignee!.toJson(),
+    if (resolvedAt != null)
+      'resolved_at': resolvedAt!.toUtc().toIso8601String(),
+    'resolved_in_version': resolvedInVersion,
+    'resolved_by_email': resolvedByEmail,
+    if (regressedAt != null)
+      'regressed_at': regressedAt!.toUtc().toIso8601String(),
+    'regression_count': regressionCount,
+    'comment_count': commentCount,
+    if (updatedAt != null) 'updated_at': updatedAt!.toUtc().toIso8601String(),
+    'updated_by_email': updatedByEmail,
+    'group_id': groupId,
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'affected': affected.toJson(),
+    'comments': [for (final e in comments) e.toJson()],
+    'activity': [for (final e in activity) e.toJson()],
+    'workflow': workflow,
+    'error_type': errorType,
+    'message': message,
+    'count': count,
+    'total_count': totalCount,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'last_message': lastMessage,
+    'stacktrace': stacktrace,
+    'stacktrace_minified': stacktraceMinified,
+    'symbolicated_frames': symbolicatedFrames,
+    'last_trace_id': lastTraceId,
+    'last_span_id': lastSpanId,
+    'last_span_name': lastSpanName,
+    'step': step,
+    'series': series,
+    'samples': [for (final e in samples) e.toJson()],
+  };
+
+  final ApmErrorStatus status;
+  final ApmErrorAssignee? assignee;
+  final DateTime? resolvedAt;
+  final String resolvedInVersion;
+  final String resolvedByEmail;
+  final DateTime? regressedAt;
+  final int regressionCount;
+  final int commentCount;
+  final DateTime? updatedAt;
+  final String updatedByEmail;
+  final String groupId;
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final ApmErrorAffected affected;
+  final List<ApmErrorComment> comments;
+  final List<ApmErrorActivity> activity;
+  final bool workflow;
+  final String errorType;
+  final String message;
+  final double count;
+  final double totalCount;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final String lastMessage;
+  final String stacktrace;
+  final String stacktraceMinified;
+  final int symbolicatedFrames;
+  final String lastTraceId;
+  final String lastSpanId;
+  final String lastSpanName;
+  final String step;
+  final List<List<double>> series;
+  final List<ApmErrorSample> samples;
 }
 
 /// `ApmServiceDetail` of the openlog API contract.
@@ -6996,6 +7196,229 @@ class ApmPeriod {
   final double? apdex;
 }
 
+/// `ApmErrorAssignee` of the openlog API contract.
+class ApmErrorAssignee {
+  const ApmErrorAssignee({
+    required this.userId,
+    required this.email,
+    required this.name,
+  });
+
+  factory ApmErrorAssignee.fromJson(
+    Object? json, [
+    String path = 'ApmErrorAssignee',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorAssignee(
+      userId: _req(m, 'user_id', path, _str),
+      email: _req(m, 'email', path, _str),
+      name: _req(m, 'name', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'user_id': userId,
+    'email': email,
+    'name': name,
+  };
+
+  final String userId;
+  final String email;
+  final String name;
+}
+
+/// Top 20 per dimension over retention (apm_error_group_dims)
+class ApmErrorAffected {
+  const ApmErrorAffected({
+    required this.versions,
+    required this.hosts,
+    required this.containers,
+    required this.transactions,
+  });
+
+  factory ApmErrorAffected.fromJson(
+    Object? json, [
+    String path = 'ApmErrorAffected',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorAffected(
+      versions: _req(
+        m,
+        'versions',
+        path,
+        (v, p) =>
+            _list<ApmAffected>(v, p, (v, p) => ApmAffected.fromJson(v, p)),
+      ),
+      hosts: _req(
+        m,
+        'hosts',
+        path,
+        (v, p) =>
+            _list<ApmAffected>(v, p, (v, p) => ApmAffected.fromJson(v, p)),
+      ),
+      containers: _req(
+        m,
+        'containers',
+        path,
+        (v, p) =>
+            _list<ApmAffected>(v, p, (v, p) => ApmAffected.fromJson(v, p)),
+      ),
+      transactions: _req(
+        m,
+        'transactions',
+        path,
+        (v, p) =>
+            _list<ApmAffected>(v, p, (v, p) => ApmAffected.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'versions': [for (final e in versions) e.toJson()],
+    'hosts': [for (final e in hosts) e.toJson()],
+    'containers': [for (final e in containers) e.toJson()],
+    'transactions': [for (final e in transactions) e.toJson()],
+  };
+
+  final List<ApmAffected> versions;
+  final List<ApmAffected> hosts;
+  final List<ApmAffected> containers;
+  final List<ApmAffected> transactions;
+}
+
+/// `ApmErrorComment` of the openlog API contract.
+class ApmErrorComment {
+  const ApmErrorComment({
+    required this.id,
+    required this.authorUserId,
+    required this.authorEmail,
+    required this.authorName,
+    required this.body,
+    required this.createdAt,
+  });
+
+  factory ApmErrorComment.fromJson(
+    Object? json, [
+    String path = 'ApmErrorComment',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorComment(
+      id: _req(m, 'id', path, _str),
+      authorUserId: _req(m, 'author_user_id', path, _str),
+      authorEmail: _req(m, 'author_email', path, _str),
+      authorName: _req(m, 'author_name', path, _str),
+      body: _req(m, 'body', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'author_user_id': authorUserId,
+    'author_email': authorEmail,
+    'author_name': authorName,
+    'body': body,
+    'created_at': createdAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String authorUserId;
+  final String authorEmail;
+  final String authorName;
+  final String body;
+  final DateTime createdAt;
+}
+
+/// `ApmErrorActivity` of the openlog API contract.
+class ApmErrorActivity {
+  const ApmErrorActivity({
+    required this.action,
+    required this.actorEmail,
+    required this.details,
+    required this.createdAt,
+  });
+
+  factory ApmErrorActivity.fromJson(
+    Object? json, [
+    String path = 'ApmErrorActivity',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorActivity(
+      action: _req(m, 'action', path, _str),
+      actorEmail: _req(m, 'actor_email', path, _str),
+      details: _req(m, 'details', path, (v, p) => _map<Object?>(v, p, _any)),
+      createdAt: _req(m, 'created_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'action': action,
+    'actor_email': actorEmail,
+    'details': details,
+    'created_at': createdAt.toUtc().toIso8601String(),
+  };
+
+  final String action;
+  final String actorEmail;
+  final Map<String, Object?> details;
+  final DateTime createdAt;
+}
+
+/// `ApmErrorSample` of the openlog API contract.
+class ApmErrorSample {
+  const ApmErrorSample({
+    required this.traceId,
+    required this.spanId,
+    required this.timestamp,
+    required this.spanName,
+    required this.transactionName,
+    required this.durationMs,
+    required this.message,
+    required this.version,
+    required this.hostId,
+  });
+
+  factory ApmErrorSample.fromJson(
+    Object? json, [
+    String path = 'ApmErrorSample',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorSample(
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      timestamp: _req(m, 'timestamp', path, _time),
+      spanName: _req(m, 'span_name', path, _str),
+      transactionName: _req(m, 'transaction_name', path, _str),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      message: _req(m, 'message', path, _str),
+      version: _req(m, 'version', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'trace_id': traceId,
+    'span_id': spanId,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'span_name': spanName,
+    'transaction_name': transactionName,
+    'duration_ms': durationMs,
+    'message': message,
+    'version': version,
+    'host_id': hostId,
+  };
+
+  final String traceId;
+  final String spanId;
+  final DateTime timestamp;
+  final String spanName;
+  final String transactionName;
+  final double durationMs;
+  final String message;
+  final String version;
+  final String hostId;
+}
+
 /// `ApmServiceInstance` of the openlog API contract.
 class ApmServiceInstance {
   const ApmServiceInstance({
@@ -8799,6 +9222,42 @@ class AlertRouteWindow {
   final String endTime;
 }
 
+/// `ApmAffected` of the openlog API contract.
+class ApmAffected {
+  const ApmAffected({
+    required this.value,
+    required this.name,
+    required this.count,
+    required this.firstSeen,
+    required this.lastSeen,
+  });
+
+  factory ApmAffected.fromJson(Object? json, [String path = 'ApmAffected']) {
+    final m = _obj(json, path);
+    return ApmAffected(
+      value: _req(m, 'value', path, _str),
+      name: _req(m, 'name', path, _str),
+      count: _req(m, 'count', path, _num),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'value': value,
+    'name': name,
+    'count': count,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
+  final String value;
+  final String name;
+  final double count;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+}
+
 /// One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2).
 class TailSamplingRule {
   const TailSamplingRule({
@@ -8852,37 +9311,6 @@ class TailSamplingRule {
   final String? route;
   final String? key;
   final String? value;
-}
-
-/// `ApmErrorAssignee` of the openlog API contract.
-class ApmErrorAssignee {
-  const ApmErrorAssignee({
-    required this.userId,
-    required this.email,
-    required this.name,
-  });
-
-  factory ApmErrorAssignee.fromJson(
-    Object? json, [
-    String path = 'ApmErrorAssignee',
-  ]) {
-    final m = _obj(json, path);
-    return ApmErrorAssignee(
-      userId: _req(m, 'user_id', path, _str),
-      email: _req(m, 'email', path, _str),
-      name: _req(m, 'name', path, _str),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'user_id': userId,
-    'email': email,
-    'name': name,
-  };
-
-  final String userId;
-  final String email;
-  final String name;
 }
 
 /// `SpanEvent` of the openlog API contract.
@@ -9692,6 +10120,36 @@ class ApmServicePodPage {
   final List<KubernetesServicePod> pods;
 }
 
+/// `ApmHostServicePage` of the openlog API contract.
+class ApmHostServicePage {
+  const ApmHostServicePage({required this.services});
+
+  factory ApmHostServicePage.fromJson(
+    Object? json, [
+    String path = 'ApmHostServicePage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmHostServicePage(
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<ApmHostService>(
+          v,
+          p,
+          (v, p) => ApmHostService.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'services': [for (final e in services) e.toJson()],
+  };
+
+  final List<ApmHostService> services;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -10367,49 +10825,6 @@ class AlertRuleTypeInfo {
   final String reason;
 }
 
-/// `ApmErrorComment` of the openlog API contract.
-class ApmErrorComment {
-  const ApmErrorComment({
-    required this.id,
-    required this.authorUserId,
-    required this.authorEmail,
-    required this.authorName,
-    required this.body,
-    required this.createdAt,
-  });
-
-  factory ApmErrorComment.fromJson(
-    Object? json, [
-    String path = 'ApmErrorComment',
-  ]) {
-    final m = _obj(json, path);
-    return ApmErrorComment(
-      id: _req(m, 'id', path, _str),
-      authorUserId: _req(m, 'author_user_id', path, _str),
-      authorEmail: _req(m, 'author_email', path, _str),
-      authorName: _req(m, 'author_name', path, _str),
-      body: _req(m, 'body', path, _str),
-      createdAt: _req(m, 'created_at', path, _time),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'author_user_id': authorUserId,
-    'author_email': authorEmail,
-    'author_name': authorName,
-    'body': body,
-    'created_at': createdAt.toUtc().toIso8601String(),
-  };
-
-  final String id;
-  final String authorUserId;
-  final String authorEmail;
-  final String authorName;
-  final String body;
-  final DateTime createdAt;
-}
-
 /// `ApmAgentRelease` of the openlog API contract.
 class ApmAgentRelease {
   const ApmAgentRelease({
@@ -10882,6 +11297,45 @@ class KubernetesServicePod {
   final String phase;
   final bool ready;
   final bool reporting;
+}
+
+/// `ApmHostService` of the openlog API contract.
+class ApmHostService {
+  const ApmHostService({
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.firstSeen,
+    required this.lastSeen,
+  });
+
+  factory ApmHostService.fromJson(
+    Object? json, [
+    String path = 'ApmHostService',
+  ]) {
+    final m = _obj(json, path);
+    return ApmHostService(
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
 }
 
 /// `LogRecord` of the openlog API contract.

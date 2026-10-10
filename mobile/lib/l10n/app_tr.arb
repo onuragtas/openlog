@@ -1353,5 +1353,25 @@
     }
   },
   "apdexUnavailable": "Bu kurulumda servis ayarı saklanamıyor.",
-  "serviceUnknownHost": "Bunun ajan verisi yok; açılacak bir sayfası yok."
+  "serviceUnknownHost": "Bunun ajan verisi yok; açılacak bir sayfası yok.",
+  "errorsLastMessage": "Son mesaj",
+  "errorsStacktrace": "Yığın izi",
+  "errorsNoStack": "Bu grup için yığın izi yok.",
+  "errorsSymbolicated": "{count} çerçeve source map ile çözüldü.",
+  "@errorsSymbolicated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsAffected": "Etkilenenler",
+  "errorsAffectedVersions": "Sürümler",
+  "errorsAffectedHosts": "Sunucular",
+  "errorsAffectedContainers": "Konteynerler",
+  "errorsAffectedTransactions": "İşlemler",
+  "errorsSamples": "Örnek istekler",
+  "errorsNoSamples": "Saklanmış örnek istek yok.",
+  "errorsActivity": "Geçmiş",
+  "hostApmServices": "İz gönderen servisler"
 }

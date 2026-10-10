@@ -12,6 +12,7 @@ import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'service_screen.dart';
 import 'severity.dart';
 
 class HostScreen extends StatefulWidget {
@@ -148,6 +149,36 @@ class _HostScreenState extends State<HostScreen> {
               _ServiceRow(instance: s, key: Key('runs-${s.key}')),
         ],
       ),
+
+      // What sent traces from here, which is not the same list as what the
+      // infra agent found running: a service can be instrumented without
+      // being discovered, and discovered without being instrumented.
+      if (_c.apmServices.isNotEmpty)
+        DetailSection(
+          title: l.hostApmServices,
+          children: [
+            for (final s in _c.apmServices)
+              ListTile(
+                key: Key('host-apm-${s.serviceName}'),
+                contentPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                title: Text(s.serviceName, style: theme.textTheme.bodyMedium),
+                subtitle: s.environment.isEmpty
+                    ? null
+                    : Text(s.environment, style: theme.textTheme.bodySmall),
+                trailing: const Icon(Icons.chevron_right, size: 18),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ServiceScreen(
+                      session: widget.session,
+                      sections: widget.sections,
+                      serviceName: s.serviceName,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
 
       if (host.resourceAttributes.isNotEmpty)
         DetailSection(

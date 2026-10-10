@@ -1450,5 +1450,25 @@
     }
   },
   "apdexUnavailable": "This installation cannot store service settings.",
-  "serviceUnknownHost": "No agent data for this one; there is no page to open."
+  "serviceUnknownHost": "No agent data for this one; there is no page to open.",
+  "errorsLastMessage": "Last message",
+  "errorsStacktrace": "Stack trace",
+  "errorsNoStack": "No stack trace for this group.",
+  "errorsSymbolicated": "{count} frames resolved with a source map.",
+  "@errorsSymbolicated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsAffected": "Affected",
+  "errorsAffectedVersions": "Versions",
+  "errorsAffectedHosts": "Hosts",
+  "errorsAffectedContainers": "Containers",
+  "errorsAffectedTransactions": "Transactions",
+  "errorsSamples": "Sample requests",
+  "errorsNoSamples": "No sample requests were kept.",
+  "errorsActivity": "History",
+  "hostApmServices": "Services sending traces"
 }

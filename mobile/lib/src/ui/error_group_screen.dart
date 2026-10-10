@@ -207,6 +207,11 @@ class _ErrorGroupScreenState extends State<ErrorGroupScreen> {
                       ),
                   ],
                 ),
+                _Detail(
+                  detail: _group.detail,
+                  session: widget.session,
+                  sections: widget.sections,
+                ),
                 const SizedBox(height: 18),
                 Text(l.errorsComments, style: theme.textTheme.titleSmall),
                 if (_group.loading)
@@ -233,6 +238,7 @@ class _ErrorGroupScreenState extends State<ErrorGroupScreen> {
                       busy: _group.busy,
                       onDelete: () => _group.deleteComment(c.id),
                     ),
+                _Activity(detail: _group.detail),
                 const SizedBox(height: 8),
                 TextField(
                   key: const Key('error-comment'),
@@ -375,6 +381,204 @@ class _Comment extends StatelessWidget {
             ],
           ),
           Text(comment.body, style: theme.textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+}
+
+/// The parts of the group that only the detail endpoint carries: what it
+/// threw, who it hit, and the requests it happened in.
+class _Detail extends StatelessWidget {
+  const _Detail({
+    required this.detail,
+    required this.session,
+    required this.sections,
+  });
+
+  final ApmErrorGroupDetail? detail;
+  final SessionController session;
+  final Sections sections;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final d = detail;
+    if (d == null) return const SizedBox.shrink();
+    final affected = d.affected;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (d.lastMessage.isNotEmpty && d.lastMessage != d.message) ...[
+          const SizedBox(height: 14),
+          Text(l.errorsLastMessage, style: theme.textTheme.titleSmall),
+          Text(d.lastMessage, style: theme.textTheme.bodySmall),
+        ],
+        const SizedBox(height: 14),
+        Text(l.errorsStacktrace, style: theme.textTheme.titleSmall),
+        if (d.stacktrace.isEmpty)
+          Text(
+            l.errorsNoStack,
+            key: const Key('error-no-stack'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          )
+        else
+          // Scrolls sideways rather than wrapping: a stack frame broken
+          // across two lines stops looking like a stack frame.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Text(
+              d.stacktrace,
+              key: const Key('error-stack'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        if (d.symbolicatedFrames > 0)
+          Text(
+            l.errorsSymbolicated(d.symbolicatedFrames),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        if (affected.versions.isNotEmpty ||
+            affected.hosts.isNotEmpty ||
+            affected.containers.isNotEmpty ||
+            affected.transactions.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(l.errorsAffected, style: theme.textTheme.titleSmall),
+          _AffectedList(
+            title: l.errorsAffectedVersions,
+            items: affected.versions,
+          ),
+          _AffectedList(title: l.errorsAffectedHosts, items: affected.hosts),
+          _AffectedList(
+            title: l.errorsAffectedContainers,
+            items: affected.containers,
+          ),
+          _AffectedList(
+            title: l.errorsAffectedTransactions,
+            items: affected.transactions,
+          ),
+        ],
+        const SizedBox(height: 14),
+        Text(l.errorsSamples, style: theme.textTheme.titleSmall),
+        if (d.samples.isEmpty)
+          Text(
+            l.errorsNoSamples,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          )
+        else
+          for (final sample in d.samples.take(5))
+            ListTile(
+              key: Key('error-sample-${sample.spanId}'),
+              contentPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              title: Text(
+                sample.transactionName.isEmpty
+                    ? sample.spanName
+                    : sample.transactionName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+              subtitle: Text(
+                [
+                  relativeTimeOf(l, sample.timestamp),
+                  '${sample.durationMs.toStringAsFixed(sample.durationMs >= 100 ? 0 : 1)} ms',
+                  if (sample.version.isNotEmpty) 'v${sample.version}',
+                ].join(' · '),
+                style: theme.textTheme.bodySmall,
+              ),
+              trailing: const Icon(Icons.chevron_right, size: 18),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => TraceScreen(
+                    session: session,
+                    sections: sections,
+                    traceId: sample.traceId,
+                  ),
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _AffectedList extends StatelessWidget {
+  const _AffectedList({required this.title, required this.items});
+
+  final String title;
+  final List<ApmAffected> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          // The count next to each one: "every version" and "one version"
+          // are different answers to "what broke".
+          Text(
+            [
+              for (final a in items.take(6))
+                '${a.name.isEmpty ? (a.value.isEmpty ? '–' : a.value) : a.name}'
+                    ' (${a.count.round()})',
+            ].join(', '),
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What people did to this group, newest last, as the server recorded it.
+class _Activity extends StatelessWidget {
+  const _Activity({required this.detail});
+
+  final ApmErrorGroupDetail? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final activity = detail?.activity ?? const <ApmErrorActivity>[];
+    if (activity.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l.errorsActivity, style: theme.textTheme.titleSmall),
+          for (final a in activity)
+            Text(
+              // The action as the server names it: inventing friendlier
+              // words for `apm.error_group.regressed` would mean guessing
+              // which ones exist.
+              '${relativeTimeOf(l, a.createdAt)} · ${a.actorEmail.isEmpty ? '—' : a.actorEmail} · ${a.action}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
     );

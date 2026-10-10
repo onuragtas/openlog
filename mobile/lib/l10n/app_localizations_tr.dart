@@ -2184,4 +2184,45 @@ class LTr extends L {
   @override
   String get serviceUnknownHost =>
       'Bunun ajan verisi yok; açılacak bir sayfası yok.';
+
+  @override
+  String get errorsLastMessage => 'Son mesaj';
+
+  @override
+  String get errorsStacktrace => 'Yığın izi';
+
+  @override
+  String get errorsNoStack => 'Bu grup için yığın izi yok.';
+
+  @override
+  String errorsSymbolicated(int count) {
+    return '$count çerçeve source map ile çözüldü.';
+  }
+
+  @override
+  String get errorsAffected => 'Etkilenenler';
+
+  @override
+  String get errorsAffectedVersions => 'Sürümler';
+
+  @override
+  String get errorsAffectedHosts => 'Sunucular';
+
+  @override
+  String get errorsAffectedContainers => 'Konteynerler';
+
+  @override
+  String get errorsAffectedTransactions => 'İşlemler';
+
+  @override
+  String get errorsSamples => 'Örnek istekler';
+
+  @override
+  String get errorsNoSamples => 'Saklanmış örnek istek yok.';
+
+  @override
+  String get errorsActivity => 'Geçmiş';
+
+  @override
+  String get hostApmServices => 'İz gönderen servisler';
 }

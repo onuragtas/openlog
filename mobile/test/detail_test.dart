@@ -694,6 +694,22 @@ void main() {
     () async {
       var snapshots = 0;
       final server = await FakeServer.start((req, seen) {
+        // The host screen also asks which services sent traces from here --
+        // a different list from the discovered one, and a different path.
+        if (seen.path.startsWith('/api/v1/apm/')) {
+          writeJson(req, 200, {
+            'services': [
+              {
+                'service_name': 'checkout',
+                'service_namespace': '',
+                'environment': 'prod',
+                'first_seen': '2026-10-01T09:00:00.000000000Z',
+                'last_seen': '2026-10-10T09:00:00.000000000Z',
+              },
+            ],
+          });
+          return;
+        }
         if (seen.path.endsWith('/services')) {
           snapshots++;
           writeJson(req, 200, {
@@ -756,6 +772,7 @@ void main() {
       expect(server.requests.map((r) => r.path), [
         '/api/v1/hosts/h1',
         '/api/v1/hosts/h1/services',
+        '/api/v1/apm/hosts/h1/services',
       ]);
       expect(snapshots, 1);
       // Same ordering as the Integrations section: what is wrong comes first.

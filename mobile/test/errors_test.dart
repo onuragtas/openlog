@@ -192,6 +192,56 @@ void main() {
     expect(c.truncated, isTrue);
   });
 
+  test('the group screen reads the detail, not just the comments', () async {
+    final paths = <String>[];
+    final server = await FakeServer.start((req, seen) {
+      paths.add(seen.path);
+      writeJson(req, 200, {
+        ...group('a'),
+        'last_message': 'cart.items is null (order 42)',
+        'stacktrace': 'at Cart.total (cart.go:31)',
+        'stacktrace_minified': 'at Cart.total (cart.go:31)',
+        'symbolicated_frames': 0,
+        'last_span_id': 's1',
+        'step': '1m',
+        'series': <Object>[],
+        'samples': <Object>[],
+        'affected': {
+          'versions': [
+            {
+              'value': '1.4.2',
+              'name': '',
+              'count': 12.0,
+              'first_seen': '2026-10-09T10:00:00.000000000Z',
+              'last_seen': '2026-10-10T01:00:00.000000000Z',
+            },
+          ],
+          'hosts': <Object>[],
+          'containers': <Object>[],
+          'transactions': <Object>[],
+        },
+        'comments': <Object>[],
+        'activity': <Object>[],
+        'workflow': true,
+      });
+    });
+    addTearDown(server.stop);
+    final c = ErrorGroupController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      ApmErrorGroup.fromJson(group('a')),
+    );
+    addTearDown(c.dispose);
+
+    await c.load();
+
+    // One request, to the service's own group endpoint: the detail carries
+    // the comments, and asking for them separately would draw the screen
+    // from two different answers.
+    expect(paths, ['/api/v1/apm/services/checkout/errors/a']);
+    expect(c.detail?.stacktrace, contains('cart.go:31'));
+    expect(c.detail?.affected.versions.single.value, '1.4.2');
+  });
+
   test(
     'comments are reloaded after writing one, and only mine can go',
     () async {

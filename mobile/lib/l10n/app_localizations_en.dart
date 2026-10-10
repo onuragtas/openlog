@@ -2189,4 +2189,45 @@ class LEn extends L {
   @override
   String get serviceUnknownHost =>
       'No agent data for this one; there is no page to open.';
+
+  @override
+  String get errorsLastMessage => 'Last message';
+
+  @override
+  String get errorsStacktrace => 'Stack trace';
+
+  @override
+  String get errorsNoStack => 'No stack trace for this group.';
+
+  @override
+  String errorsSymbolicated(int count) {
+    return '$count frames resolved with a source map.';
+  }
+
+  @override
+  String get errorsAffected => 'Affected';
+
+  @override
+  String get errorsAffectedVersions => 'Versions';
+
+  @override
+  String get errorsAffectedHosts => 'Hosts';
+
+  @override
+  String get errorsAffectedContainers => 'Containers';
+
+  @override
+  String get errorsAffectedTransactions => 'Transactions';
+
+  @override
+  String get errorsSamples => 'Sample requests';
+
+  @override
+  String get errorsNoSamples => 'No sample requests were kept.';
+
+  @override
+  String get errorsActivity => 'History';
+
+  @override
+  String get hostApmServices => 'Services sending traces';
 }

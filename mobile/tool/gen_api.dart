@@ -39,6 +39,7 @@ const schemaTargets = <String>[
   'AlertTemplateRender', // a template plus its values, as a rule nobody has stored yet
   'AlertRulePreview', // what that rule would have done over the last few hours
   'ApmDeploymentCompare', // what a deployment did to the service
+  'ApmErrorGroupDetail', // one error group: its stack, its samples, who it hit
   'ApmServiceDetail', // where the service runs: its instances and hosts
   'ApmSettings', // its Apdex threshold, and whether it is the default one
   'ApmMap', // what calls what: the service map, as two lists on a phone
@@ -100,6 +101,7 @@ const responseTargets = <String>[
   'get /api/v1/apm/services/{service_name}/deployments 200 ApmDeploymentPage',
   'get /api/v1/apm/services/{service_name}/containers 200 ApmServiceContainerPage',
   'get /api/v1/apm/services/{service_name}/kubernetes 200 ApmServicePodPage',
+  'get /api/v1/apm/hosts/{host_id}/services 200 ApmHostServicePage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',

@@ -791,6 +791,29 @@ class OpenlogClient {
     ),
   );
 
+  /// One error group, with everything the web's panel shows: the stack
+  /// trace, the sample requests it happened in, who it hit, the comments and
+  /// the history.
+  Future<ApmErrorGroupDetail> apmErrorGroup({
+    required String service,
+    required String groupId,
+  }) async => ApmErrorGroupDetail.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/apm/services/${Uri.encodeComponent(service)}'
+          '/errors/${Uri.encodeComponent(groupId)}',
+    ),
+  );
+
+  /// Which services a host runs.
+  Future<ApmHostServicePage> apmHostServices(String hostId) async =>
+      ApmHostServicePage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/hosts/${Uri.encodeComponent(hostId)}/services',
+        ),
+      );
+
   /// The error inbox of every service.
   ///
   /// The filters the web offers are all here now: a phone that could only

@@ -120,6 +120,10 @@ class ErrorGroupController extends ChangeNotifier {
   /// unknown, which hides the delete rather than showing one that 403s.
   String myUserId = '';
 
+  /// Everything the web's panel shows, once it has been read. The list's
+  /// row is enough to draw the top of the screen; this is the rest.
+  ApmErrorGroupDetail? detail;
+
   List<ApmErrorComment> comments = const [];
   bool loading = false;
   bool busy = false;
@@ -130,7 +134,15 @@ class ErrorGroupController extends ChangeNotifier {
     failure = null;
     notifyListeners();
     try {
-      comments = (await client.apmErrorComments(group.groupId)).comments;
+      // One request rather than two: the detail carries the comments with
+      // it, and asking for them separately would show a different list than
+      // the one the rest of the screen was drawn from.
+      final d = await client.apmErrorGroup(
+        service: group.serviceName,
+        groupId: group.groupId,
+      );
+      detail = d;
+      comments = d.comments;
     } on ApiUnreachable {
       failure = const SessionFailure('unreachable', '');
     } on ApiException catch (e) {

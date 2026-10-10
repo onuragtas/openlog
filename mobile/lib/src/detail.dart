@@ -433,6 +433,11 @@ class HostController extends DetailController<Host> {
   /// be in the hosts table and have no inventory snapshot yet.
   String? servicesError;
 
+  /// The APM services whose spans came from this host -- a different list
+  /// from the discovered ones above: that one is what the infra agent found
+  /// running, this one is what sent traces.
+  List<ApmHostService> apmServices = const [];
+
   @override
   String get forbiddenKind => 'sectionForbidden';
 
@@ -457,6 +462,15 @@ class HostController extends DetailController<Host> {
     } on ApiException catch (e) {
       // The host itself came back, so the screen is worth showing.
       servicesError = e.message;
+    }
+    apmServices = const [];
+    try {
+      apmServices = (await _client.apmHostServices(hostId)).services;
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException {
+      // A host with no traces is the common case, not a problem worth a
+      // message: the section simply does not appear.
     }
     return host;
   }

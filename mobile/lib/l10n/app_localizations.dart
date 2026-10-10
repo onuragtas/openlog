@@ -3912,6 +3912,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'No agent data for this one; there is no page to open.'**
   String get serviceUnknownHost;
+
+  /// No description provided for @errorsLastMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Last message'**
+  String get errorsLastMessage;
+
+  /// No description provided for @errorsStacktrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Stack trace'**
+  String get errorsStacktrace;
+
+  /// No description provided for @errorsNoStack.
+  ///
+  /// In en, this message translates to:
+  /// **'No stack trace for this group.'**
+  String get errorsNoStack;
+
+  /// No description provided for @errorsSymbolicated.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} frames resolved with a source map.'**
+  String errorsSymbolicated(int count);
+
+  /// No description provided for @errorsAffected.
+  ///
+  /// In en, this message translates to:
+  /// **'Affected'**
+  String get errorsAffected;
+
+  /// No description provided for @errorsAffectedVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'Versions'**
+  String get errorsAffectedVersions;
+
+  /// No description provided for @errorsAffectedHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get errorsAffectedHosts;
+
+  /// No description provided for @errorsAffectedContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get errorsAffectedContainers;
+
+  /// No description provided for @errorsAffectedTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Transactions'**
+  String get errorsAffectedTransactions;
+
+  /// No description provided for @errorsSamples.
+  ///
+  /// In en, this message translates to:
+  /// **'Sample requests'**
+  String get errorsSamples;
+
+  /// No description provided for @errorsNoSamples.
+  ///
+  /// In en, this message translates to:
+  /// **'No sample requests were kept.'**
+  String get errorsNoSamples;
+
+  /// No description provided for @errorsActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get errorsActivity;
+
+  /// No description provided for @hostApmServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services sending traces'**
+  String get hostApmServices;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
