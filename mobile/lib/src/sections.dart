@@ -11,6 +11,7 @@ import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
 import 'detail.dart';
+import 'agents.dart';
 import 'discovery.dart';
 import 'errors.dart';
 import 'list_controller.dart';
@@ -62,6 +63,7 @@ class Sections {
     AlertRoutesController? routes,
     AlertCalendarsController? calendars,
     AlertDeliveriesController Function(String channelId)? deliveries,
+    ApmAgentsController? agents,
     ErrorInboxController? errors,
     ErrorGroupController Function(ApmErrorGroup group)? errorGroup,
     TemplatesController? templates,
@@ -151,6 +153,7 @@ class Sections {
            deliveries ??
            ((channelId) =>
                AlertDeliveriesController(client, channelId: channelId)),
+       agents = agents ?? ApmAgentsController(client),
        errors = errors ?? ErrorInboxController(client),
        errorGroup =
            errorGroup ?? ((group) => ErrorGroupController(client, group)),
@@ -205,6 +208,10 @@ class Sections {
   /// the screen opens.
   final AlertDeliveriesController Function(String channelId) deliveries;
 
+  /// Which language agent each service runs, reached from the services
+  /// list as on the web.
+  final ApmAgentsController agents;
+
   /// The error inbox of every service, and one group's comments and
   /// actions. The group controller is per screen: it holds the comments of
   /// the group that was opened.
@@ -255,6 +262,7 @@ class Sections {
     pods,
     integrations,
     services,
+    agents,
     errors,
     rum,
     profiles,

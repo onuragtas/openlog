@@ -1096,5 +1096,35 @@
   "errorsComment": "Yorum",
   "errorsCommentTooLong": "Yorum çok uzun.",
   "errorsSend": "Gönder",
-  "errorsDeleteComment": "Yorumu sil"
+  "errorsDeleteComment": "Yorumu sil",
+  "agentsTitle": "Ajan sürümleri",
+  "agentsSearch": "Servis, ajan ya da sürüm ara",
+  "agentsEmpty": "Bu süzgeçle ajan yok.",
+  "agentsOutdatedOnly": "Yalnızca geride olanlar",
+  "agentsLatest": "En yeni sürüm {version} ({channel})",
+  "@agentsLatest": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "agentsNoCatalog": "Sürüm kataloğu okunamadı; durumlar bilinmiyor.",
+  "agentsOk": "güncel",
+  "agentsOutdated": "eski",
+  "agentsUnsupported": "desteklenmiyor",
+  "agentsThirdParty": "üçüncü taraf",
+  "agentsUnknown": "bilinmiyor",
+  "agentsInstances": "{count} örnek",
+  "@agentsInstances": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "servicesAgents": "Ajan sürümleri"
 }

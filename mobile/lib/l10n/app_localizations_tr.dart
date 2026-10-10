@@ -1783,4 +1783,48 @@ class LTr extends L {
 
   @override
   String get errorsDeleteComment => 'Yorumu sil';
+
+  @override
+  String get agentsTitle => 'Ajan sürümleri';
+
+  @override
+  String get agentsSearch => 'Servis, ajan ya da sürüm ara';
+
+  @override
+  String get agentsEmpty => 'Bu süzgeçle ajan yok.';
+
+  @override
+  String get agentsOutdatedOnly => 'Yalnızca geride olanlar';
+
+  @override
+  String agentsLatest(String version, String channel) {
+    return 'En yeni sürüm $version ($channel)';
+  }
+
+  @override
+  String get agentsNoCatalog =>
+      'Sürüm kataloğu okunamadı; durumlar bilinmiyor.';
+
+  @override
+  String get agentsOk => 'güncel';
+
+  @override
+  String get agentsOutdated => 'eski';
+
+  @override
+  String get agentsUnsupported => 'desteklenmiyor';
+
+  @override
+  String get agentsThirdParty => 'üçüncü taraf';
+
+  @override
+  String get agentsUnknown => 'bilinmiyor';
+
+  @override
+  String agentsInstances(int count) {
+    return '$count örnek';
+  }
+
+  @override
+  String get servicesAgents => 'Ajan sürümleri';
 }

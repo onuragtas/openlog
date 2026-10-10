@@ -1193,5 +1193,35 @@
   "errorsComment": "Comment",
   "errorsCommentTooLong": "The comment is too long.",
   "errorsSend": "Send",
-  "errorsDeleteComment": "Delete the comment"
+  "errorsDeleteComment": "Delete the comment",
+  "agentsTitle": "Agent versions",
+  "agentsSearch": "Search service, agent or version",
+  "agentsEmpty": "No agents with this filter.",
+  "agentsOutdatedOnly": "Behind only",
+  "agentsLatest": "Latest release {version} ({channel})",
+  "@agentsLatest": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "agentsNoCatalog": "The release catalog could not be read; statuses are unknown.",
+  "agentsOk": "current",
+  "agentsOutdated": "outdated",
+  "agentsUnsupported": "unsupported",
+  "agentsThirdParty": "third party",
+  "agentsUnknown": "unknown",
+  "agentsInstances": "{count} instances",
+  "@agentsInstances": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "servicesAgents": "Agent versions"
 }

@@ -3216,6 +3216,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Delete the comment'**
   String get errorsDeleteComment;
+
+  /// No description provided for @agentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent versions'**
+  String get agentsTitle;
+
+  /// No description provided for @agentsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search service, agent or version'**
+  String get agentsSearch;
+
+  /// No description provided for @agentsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No agents with this filter.'**
+  String get agentsEmpty;
+
+  /// No description provided for @agentsOutdatedOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Behind only'**
+  String get agentsOutdatedOnly;
+
+  /// No description provided for @agentsLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest release {version} ({channel})'**
+  String agentsLatest(String version, String channel);
+
+  /// No description provided for @agentsNoCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'The release catalog could not be read; statuses are unknown.'**
+  String get agentsNoCatalog;
+
+  /// No description provided for @agentsOk.
+  ///
+  /// In en, this message translates to:
+  /// **'current'**
+  String get agentsOk;
+
+  /// No description provided for @agentsOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'outdated'**
+  String get agentsOutdated;
+
+  /// No description provided for @agentsUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'unsupported'**
+  String get agentsUnsupported;
+
+  /// No description provided for @agentsThirdParty.
+  ///
+  /// In en, this message translates to:
+  /// **'third party'**
+  String get agentsThirdParty;
+
+  /// No description provided for @agentsUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get agentsUnknown;
+
+  /// No description provided for @agentsInstances.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} instances'**
+  String agentsInstances(int count);
+
+  /// No description provided for @servicesAgents.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent versions'**
+  String get servicesAgents;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

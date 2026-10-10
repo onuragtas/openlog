@@ -402,7 +402,9 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
       `.../comments`): durum sekmeleri ve sayıları, arama, sıralama; grup ekranında çözüldü,
       sürümde çözüldü, yoksay, yeniden aç ve yorumlar. Başkasına atama webde (üye listesi gerekir).
 - [ ] Servis haritası (`apm/map`, `apm/map/path`)
-- [ ] Ajanlar (`apm/agents`)
+- [x] Ajanlar (`apm/agents`): servisler listesinden; servis × ajan × sürüm başına bir satır,
+      geride olanlar üstte, arama ve "yalnızca geride olanlar". Yükseltme komutları webde
+      (`upgrade=true` sunucuya her servis için paket deposu sorgulatıyor).
 - [ ] Örnekleme ayarları (`apm/sampling`, `.../preview`)
 - [ ] Servis izleri (`apm/traces`)
 

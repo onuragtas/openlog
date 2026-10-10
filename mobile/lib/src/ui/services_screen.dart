@@ -6,6 +6,7 @@ import '../api/schema.g.dart';
 import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
+import 'agents_screen.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
 import 'theme.dart';
@@ -63,6 +64,22 @@ class _ServicesBodyState extends State<ServicesBody> {
             c.query = value;
             c.refresh();
           },
+        ),
+        header: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('services-agents'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => AgentsScreen(
+                  session: widget.session,
+                  agents: widget.sections.agents,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.extension_outlined),
+            label: Text(l.servicesAgents),
+          ),
         ),
         emptyTitle: l.servicesEmpty,
         itemBuilder: (context, i) => _ServiceCard(

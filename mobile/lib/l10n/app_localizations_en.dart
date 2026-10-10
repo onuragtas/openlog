@@ -1788,4 +1788,48 @@ class LEn extends L {
 
   @override
   String get errorsDeleteComment => 'Delete the comment';
+
+  @override
+  String get agentsTitle => 'Agent versions';
+
+  @override
+  String get agentsSearch => 'Search service, agent or version';
+
+  @override
+  String get agentsEmpty => 'No agents with this filter.';
+
+  @override
+  String get agentsOutdatedOnly => 'Behind only';
+
+  @override
+  String agentsLatest(String version, String channel) {
+    return 'Latest release $version ($channel)';
+  }
+
+  @override
+  String get agentsNoCatalog =>
+      'The release catalog could not be read; statuses are unknown.';
+
+  @override
+  String get agentsOk => 'current';
+
+  @override
+  String get agentsOutdated => 'outdated';
+
+  @override
+  String get agentsUnsupported => 'unsupported';
+
+  @override
+  String get agentsThirdParty => 'third party';
+
+  @override
+  String get agentsUnknown => 'unknown';
+
+  @override
+  String agentsInstances(int count) {
+    return '$count instances';
+  }
+
+  @override
+  String get servicesAgents => 'Agent versions';
 }

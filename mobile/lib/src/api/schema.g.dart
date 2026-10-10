@@ -1745,6 +1745,85 @@ enum DashboardThresholdSeverity {
   }
 }
 
+/// ApmAgentReleaseCatalog of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmAgentReleaseCatalog {
+  ok('ok'),
+  unavailable('unavailable'),
+  disabled('disabled'),
+  unknown('');
+
+  const ApmAgentReleaseCatalog(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmAgentReleaseCatalog fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// ApmAgentReleaseChannel of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmAgentReleaseChannel {
+  stable('stable'),
+  beta('beta'),
+  unknown('');
+
+  const ApmAgentReleaseChannel(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmAgentReleaseChannel fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// ApmAgentStatus of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmAgentStatus {
+  ok('ok'),
+  outdated('outdated'),
+  unsupported('unsupported'),
+  unknown('unknown'),
+  thirdParty('third_party'),
+  unknownToThisBuild('');
+
+  const ApmAgentStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static ApmAgentStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
 /// FleetHostStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2002,6 +2081,37 @@ enum AlertChannelConfigOpsgenieRespondersItemType {
   }
 }
 
+/// ApmServiceAgentKind of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmServiceAgentKind {
+  go('go'),
+  node('node'),
+  python('python'),
+  java('java'),
+  dotnet('dotnet'),
+  php('php'),
+  unknown('unknown'),
+  thirdParty('third_party'),
+  unknownToThisBuild('');
+
+  const ApmServiceAgentKind(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static ApmServiceAgentKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
 /// CostSource of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2199,6 +2309,60 @@ enum FleetHostJavaAgentStatus {
   final String wire;
 
   static FleetHostJavaAgentStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// ApmAgentUpgradeRegistry of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmAgentUpgradeRegistry {
+  available('available'),
+  missing('missing'),
+  unknown('unknown'),
+  empty(''),
+  unknownToThisBuild('');
+
+  const ApmAgentUpgradeRegistry(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static ApmAgentUpgradeRegistry fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
+/// ApmAgentUpgradeNotesItem of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmAgentUpgradeNotesItem {
+  goModules('go_modules'),
+  javaFleetAuto('java_fleet_auto'),
+  phpFleetAuto('php_fleet_auto'),
+  registryFallback('registry_fallback'),
+  unknown('');
+
+  const ApmAgentUpgradeNotesItem(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmAgentUpgradeNotesItem fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -8462,6 +8626,44 @@ class ApmErrorCommentPage {
   final List<ApmErrorComment> comments;
 }
 
+/// `ApmAgentsResponse` of the openlog API contract.
+class ApmAgentsResponse {
+  const ApmAgentsResponse({required this.release, required this.services});
+
+  factory ApmAgentsResponse.fromJson(
+    Object? json, [
+    String path = 'ApmAgentsResponse',
+  ]) {
+    final m = _obj(json, path);
+    return ApmAgentsResponse(
+      release: _req(
+        m,
+        'release',
+        path,
+        (v, p) => ApmAgentRelease.fromJson(v, p),
+      ),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<ApmServiceAgents>(
+          v,
+          p,
+          (v, p) => ApmServiceAgents.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'release': release.toJson(),
+    'services': [for (final e in services) e.toJson()],
+  };
+
+  final ApmAgentRelease release;
+  final List<ApmServiceAgents> services;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -9178,6 +9380,93 @@ class ApmErrorComment {
   final String authorName;
   final String body;
   final DateTime createdAt;
+}
+
+/// `ApmAgentRelease` of the openlog API contract.
+class ApmAgentRelease {
+  const ApmAgentRelease({
+    required this.catalog,
+    required this.channel,
+    this.latest,
+    this.oldestSupported,
+    required this.notesUrl,
+  });
+
+  factory ApmAgentRelease.fromJson(
+    Object? json, [
+    String path = 'ApmAgentRelease',
+  ]) {
+    final m = _obj(json, path);
+    return ApmAgentRelease(
+      catalog: _req(m, 'catalog', path, ApmAgentReleaseCatalog.fromJson),
+      channel: _req(m, 'channel', path, ApmAgentReleaseChannel.fromJson),
+      latest: _opt(m, 'latest', path, _str),
+      oldestSupported: _opt(m, 'oldest_supported', path, _str),
+      notesUrl: _req(m, 'notes_url', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'catalog': catalog.wire,
+    'channel': channel.wire,
+    'latest': ?latest,
+    'oldest_supported': ?oldestSupported,
+    'notes_url': notesUrl,
+  };
+
+  final ApmAgentReleaseCatalog catalog;
+  final ApmAgentReleaseChannel channel;
+  final String? latest;
+  final String? oldestSupported;
+  final String notesUrl;
+}
+
+/// `ApmServiceAgents` of the openlog API contract.
+class ApmServiceAgents {
+  const ApmServiceAgents({
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.status,
+    required this.agents,
+  });
+
+  factory ApmServiceAgents.fromJson(
+    Object? json, [
+    String path = 'ApmServiceAgents',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceAgents(
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      status: _req(m, 'status', path, ApmAgentStatus.fromJson),
+      agents: _req(
+        m,
+        'agents',
+        path,
+        (v, p) => _list<ApmServiceAgent>(
+          v,
+          p,
+          (v, p) => ApmServiceAgent.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'status': status.wire,
+    'agents': [for (final e in agents) e.toJson()],
+  };
+
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final ApmAgentStatus status;
+  final List<ApmServiceAgent> agents;
 }
 
 /// `LogRecord` of the openlog API contract.
@@ -10714,6 +11003,88 @@ class AlertChannelConfigOpsgenieRespondersItem {
   final String? id;
 }
 
+/// `ApmServiceAgent` of the openlog API contract.
+class ApmServiceAgent {
+  const ApmServiceAgent({
+    required this.kind,
+    required this.distroName,
+    required this.sdkName,
+    required this.sdkLanguage,
+    required this.status,
+    required this.instances,
+    required this.lastSeen,
+    required this.versions,
+    required this.versionsTruncated,
+    required this.instrumentationModules,
+    this.upgrade,
+  });
+
+  factory ApmServiceAgent.fromJson(
+    Object? json, [
+    String path = 'ApmServiceAgent',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceAgent(
+      kind: _req(m, 'kind', path, ApmServiceAgentKind.fromJson),
+      distroName: _req(m, 'distro_name', path, _str),
+      sdkName: _req(m, 'sdk_name', path, _str),
+      sdkLanguage: _req(m, 'sdk_language', path, _str),
+      status: _req(m, 'status', path, ApmAgentStatus.fromJson),
+      instances: _req(m, 'instances', path, _int),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      versions: _req(
+        m,
+        'versions',
+        path,
+        (v, p) => _list<ApmAgentVersion>(
+          v,
+          p,
+          (v, p) => ApmAgentVersion.fromJson(v, p),
+        ),
+      ),
+      versionsTruncated: _req(m, 'versions_truncated', path, _bool),
+      instrumentationModules: _req(
+        m,
+        'instrumentation_modules',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      upgrade: _opt(
+        m,
+        'upgrade',
+        path,
+        (v, p) => ApmAgentUpgrade.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'kind': kind.wire,
+    'distro_name': distroName,
+    'sdk_name': sdkName,
+    'sdk_language': sdkLanguage,
+    'status': status.wire,
+    'instances': instances,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'versions': [for (final e in versions) e.toJson()],
+    'versions_truncated': versionsTruncated,
+    'instrumentation_modules': instrumentationModules,
+    if (upgrade != null) 'upgrade': upgrade!.toJson(),
+  };
+
+  final ApmServiceAgentKind kind;
+  final String distroName;
+  final String sdkName;
+  final String sdkLanguage;
+  final ApmAgentStatus status;
+  final int instances;
+  final DateTime lastSeen;
+  final List<ApmAgentVersion> versions;
+  final bool versionsTruncated;
+  final List<String> instrumentationModules;
+  final ApmAgentUpgrade? upgrade;
+}
+
 /// `CostPrice` of the openlog API contract.
 class CostPrice {
   const CostPrice({
@@ -11318,6 +11689,113 @@ class JobSummary {
   final double? avgMs;
   final double? maxMs;
   final DateTime? lastAt;
+}
+
+/// `ApmAgentVersion` of the openlog API contract.
+class ApmAgentVersion {
+  const ApmAgentVersion({
+    required this.version,
+    required this.status,
+    required this.instances,
+    required this.spans,
+    required this.lastSeen,
+  });
+
+  factory ApmAgentVersion.fromJson(
+    Object? json, [
+    String path = 'ApmAgentVersion',
+  ]) {
+    final m = _obj(json, path);
+    return ApmAgentVersion(
+      version: _req(m, 'version', path, _str),
+      status: _req(m, 'status', path, ApmAgentStatus.fromJson),
+      instances: _req(m, 'instances', path, _int),
+      spans: _req(m, 'spans', path, _int),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'status': status.wire,
+    'instances': instances,
+    'spans': spans,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
+  final String version;
+  final ApmAgentStatus status;
+  final int instances;
+  final int spans;
+  final DateTime lastSeen;
+}
+
+/// `ApmAgentUpgrade` of the openlog API contract.
+class ApmAgentUpgrade {
+  const ApmAgentUpgrade({
+    required this.package,
+    required this.version,
+    required this.command,
+    required this.lang,
+    required this.registry,
+    required this.registryUrl,
+    required this.releaseAssetUrl,
+    required this.docsUrl,
+    required this.docsSection,
+    required this.notes,
+  });
+
+  factory ApmAgentUpgrade.fromJson(
+    Object? json, [
+    String path = 'ApmAgentUpgrade',
+  ]) {
+    final m = _obj(json, path);
+    return ApmAgentUpgrade(
+      package: _req(m, 'package', path, _str),
+      version: _req(m, 'version', path, _str),
+      command: _req(m, 'command', path, _str),
+      lang: _req(m, 'lang', path, _str),
+      registry: _req(m, 'registry', path, ApmAgentUpgradeRegistry.fromJson),
+      registryUrl: _req(m, 'registry_url', path, _str),
+      releaseAssetUrl: _req(m, 'release_asset_url', path, _str),
+      docsUrl: _req(m, 'docs_url', path, _str),
+      docsSection: _req(m, 'docs_section', path, _str),
+      notes: _req(
+        m,
+        'notes',
+        path,
+        (v, p) => _list<ApmAgentUpgradeNotesItem>(
+          v,
+          p,
+          ApmAgentUpgradeNotesItem.fromJson,
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'package': package,
+    'version': version,
+    'command': command,
+    'lang': lang,
+    'registry': registry.wire,
+    'registry_url': registryUrl,
+    'release_asset_url': releaseAssetUrl,
+    'docs_url': docsUrl,
+    'docs_section': docsSection,
+    'notes': [for (final e in notes) e.wire],
+  };
+
+  final String package;
+  final String version;
+  final String command;
+  final String lang;
+  final ApmAgentUpgradeRegistry registry;
+  final String registryUrl;
+  final String releaseAssetUrl;
+  final String docsUrl;
+  final String docsSection;
+  final List<ApmAgentUpgradeNotesItem> notes;
 }
 
 /// One PHP binary of the host (openlog-php-install status --json, php-agent.md §7.2)

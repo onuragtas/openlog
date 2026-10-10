@@ -564,6 +564,17 @@ class OpenlogClient {
         ),
       );
 
+  /// Which language agent each service runs, and how far behind it is.
+  ///
+  /// `upgrade=false`: the upgrade commands make the server check package
+  /// registries, and a phone shows versions rather than running the upgrade.
+  Future<ApmAgentsResponse> apmAgents() async => ApmAgentsResponse.fromJson(
+    await _send(
+      'GET',
+      _listPath('/api/v1/apm/agents', '', extra: {'upgrade': 'false'}),
+    ),
+  );
+
   /// The error inbox of every service.
   ///
   /// The filters the web offers are all here now: a phone that could only
