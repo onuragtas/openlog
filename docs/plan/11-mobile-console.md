@@ -591,6 +591,15 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       başka bir görünüm. Bu yüzden `_kept` artık sinyale göre ayrı anahtar
       kümeleri kullanıyor: `order` logların, izlerin `sort`/`root_only`'si
       onların.
+- [x] Liste ekranlarında arama alanı artık listenin içinde ve **yüzer başlık**
+      (`SliverFloatingHeader`): aşağı kaydırınca yoldan çekiliyor, en küçük yukarı
+      çekişte geri geliyor. Sahibin ölçüsü (2026-10-10): telefonda logların üst alanı
+      ekranın yarısıydı, liste bir yarıktan okunuyordu. Ayrıca loglarda arama ve servis
+      kutuları yan yana, "Görünümler", sıralama, "Sütunlar" ve koşullar tek bir saran
+      satırda (her biri bir satır kaplıyordu; webin araç çubuğu da tek satır). Üst alan
+      ~410 → ~255 bağımsız piksel, ilk kayıt ekranın %52'si yerine %31'inde başlıyor.
+      `SavedViewsBar` artık çip, `FilterChips` bir `leading` listesi alıyor -- izler
+      ekranı da aynı satırı kullanıyor.
 - [x] OQL şema ve doğrulama (`query/schema`, `query/validate`): konsol artık webin
       konsolu — yazarken doğrulama (yazmayı bırakınca sorulur, hata ve uyarılar satır
       ve sütunuyla kutunun altında, kutunun çerçevesi kırmızı), webin altı örneği aynı

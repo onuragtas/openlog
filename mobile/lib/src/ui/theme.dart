@@ -276,6 +276,17 @@ ThemeData openlogTheme(Brightness brightness) {
       color: c.primary,
       linearTrackColor: c.muted,
     ),
+    // Chips are how this app says "a condition", "a saved view", "the
+    // table options" -- a logs screen has five of them in one row. At the
+    // stock density that row is three lines tall on a phone, which is
+    // three of the ten lines the list has.
+    chipTheme: const ChipThemeData(
+      labelPadding: EdgeInsets.symmetric(horizontal: 4),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    ),
+    segmentedButtonTheme: const SegmentedButtonThemeData(
+      style: ButtonStyle(visualDensity: VisualDensity.compact),
+    ),
     listTileTheme: ListTileThemeData(
       iconColor: c.mutedForeground,
       textColor: c.foreground,

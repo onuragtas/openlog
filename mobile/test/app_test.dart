@@ -1395,6 +1395,31 @@ void main() {
     },
   );
 
+  testWidgets('scrolling the list gets the search area out of the way', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final logs = ScriptedLogs(
+      logs: [for (var i = 0; i < 20; i++) logLine('line $i')],
+    );
+    await tester.pumpWidget(signedInApp(session, logs: logs));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Logs');
+
+    expect(find.byKey(const Key('logs-search')), findsOneWidget);
+
+    // A phone screen is about ten log lines tall and the search area is a
+    // third of it; it floats away when the list is read, and the smallest
+    // pull back down returns it.
+    await tester.drag(find.text('line 2'), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('logs-search')), findsNothing);
+
+    await tester.drag(find.text('line 8'), const Offset(0, 120));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('logs-search')), findsOneWidget);
+  });
+
   testWidgets('a log row opens the record, with its attributes', (
     tester,
   ) async {

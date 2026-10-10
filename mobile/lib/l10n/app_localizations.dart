@@ -7162,13 +7162,13 @@ abstract class L {
   /// No description provided for @logOrderNewest.
   ///
   /// In en, this message translates to:
-  /// **'Newest first'**
+  /// **'Newest'**
   String get logOrderNewest;
 
   /// No description provided for @logOrderOldest.
   ///
   /// In en, this message translates to:
-  /// **'Oldest first'**
+  /// **'Oldest'**
   String get logOrderOldest;
 }
 

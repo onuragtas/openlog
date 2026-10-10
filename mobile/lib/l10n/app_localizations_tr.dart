@@ -4022,8 +4022,8 @@ class LTr extends L {
   String get logColumnsApply => 'Uygula';
 
   @override
-  String get logOrderNewest => 'Önce en yeni';
+  String get logOrderNewest => 'En yeni';
 
   @override
-  String get logOrderOldest => 'Önce en eski';
+  String get logOrderOldest => 'En eski';
 }

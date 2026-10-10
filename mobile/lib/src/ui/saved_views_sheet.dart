@@ -93,25 +93,22 @@ class _SavedViewsBarState extends State<SavedViewsBar> {
       builder: (context, _) {
         if (c.unavailable) return const SizedBox.shrink();
         final active = c.views.where((v) => v.id == c.activeId).firstOrNull;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              key: const Key('saved-views'),
-              onPressed: () => openSavedViews(
-                context,
-                session: widget.session,
-                controller: c,
-                state: widget.state,
-                onApply: widget.onApply,
-              ),
-              icon: const Icon(Icons.bookmark_border, size: 18),
-              label: Text(
-                active?.name ?? l.savedViewsButton,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+        // A chip, and no padding of its own: it sits in the same row as
+        // the conditions and the table options. It had a line to itself,
+        // and four such lines left the log list reading through a slot.
+        return ActionChip(
+          key: const Key('saved-views'),
+          avatar: const Icon(Icons.bookmark_border, size: 16),
+          onPressed: () => openSavedViews(
+            context,
+            session: widget.session,
+            controller: c,
+            state: widget.state,
+            onApply: widget.onApply,
+          ),
+          label: Text(
+            active?.name ?? l.savedViewsButton,
+            overflow: TextOverflow.ellipsis,
           ),
         );
       },

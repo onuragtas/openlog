@@ -65,18 +65,6 @@ class TracesBody extends StatelessWidget {
         builder: (context, _) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SavedViewsBar(
-              session: session,
-              controller: sections.traceViews,
-              active: active,
-              state: ({keep = const {}}) => tracesViewState(
-                filters: c.filters,
-                query: c.query,
-                slowest: c.slowest,
-                keep: keep,
-              ),
-              onApply: (view) => _apply(context, view),
-            ),
             _SortToggle(
               slowest: c.slowest,
               onChanged: (v) {
@@ -88,6 +76,22 @@ class TracesBody extends StatelessWidget {
             // The same dictionary the logs use, for the span attributes a
             // trace carries.
             FilterChips(
+              // In the same row as the conditions, as on the logs screen:
+              // a button per line is a line per button.
+              leading: [
+                SavedViewsBar(
+                  session: session,
+                  controller: sections.traceViews,
+                  active: active,
+                  state: ({keep = const {}}) => tracesViewState(
+                    filters: c.filters,
+                    query: c.query,
+                    slowest: c.slowest,
+                    keep: keep,
+                  ),
+                  onApply: (view) => _apply(context, view),
+                ),
+              ],
               filters: c.filters,
               onRemove: (i) {
                 c.filters = [...c.filters]..removeAt(i);

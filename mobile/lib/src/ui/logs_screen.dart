@@ -179,15 +179,46 @@ class _LogsBodyState extends State<LogsBody>
         baseUrl: widget.session.baseUrl ?? '',
         search: Column(
           children: [
-            SearchField(
-              fieldKey: const Key('logs-search'),
-              controller: _search,
-              hint: l.logsSearch,
-              onSubmitted: (value) {
-                c.query = value;
-                c.refresh();
-                if (widget.scopeLabel == null) _reloadVolume();
-                if (widget.patterns.loaded) _reloadPatterns();
+            Builder(
+              builder: (context) {
+                final search = SearchField(
+                  fieldKey: const Key('logs-search'),
+                  controller: _search,
+                  hint: l.logsSearch,
+                  onSubmitted: (value) {
+                    c.query = value;
+                    c.refresh();
+                    if (widget.scopeLabel == null) _reloadVolume();
+                    if (widget.patterns.loaded) _reloadPatterns();
+                  },
+                );
+                // Beside the search box, not under it: two full-width
+                // boxes are two of the ten lines this screen has.
+                if (widget.scopeLabel != null) return search;
+                return Row(
+                  children: [
+                    Expanded(flex: 3, child: search),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        key: const Key('logs-service'),
+                        controller: _service,
+                        textInputAction: TextInputAction.search,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: l.logsService,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onSubmitted: (value) {
+                          c.service = value;
+                          c.refresh();
+                        },
+                      ),
+                    ),
+                  ],
+                );
               },
             ),
             // A scoped list already answers about one thing; a service box
@@ -206,44 +237,73 @@ class _LogsBodyState extends State<LogsBody>
               ),
             ] else ...[
               const SizedBox(height: 8),
-              TextField(
-                key: const Key('logs-service'),
-                controller: _service,
-                textInputAction: TextInputAction.search,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: l.logsService,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                ),
-                onSubmitted: (value) {
-                  c.service = value;
-                  c.refresh();
-                },
-              ),
-              const SizedBox(height: 8),
-              // The views the organization kept, in the web's own shape:
-              // this is the same list a browser shows, and applying one
-              // here puts the browser's filters in the chips below.
-              SavedViewsBar(
-                session: widget.session,
-                controller: widget.sections.logViews,
-                active: true,
-                state: ({keep = const {}}) => logsViewState(
-                  filters: c.filters,
-                  query: c.query,
-                  severityMin: c.severityMin,
-                  service: c.service,
-                  columns: c.columns,
-                  oldestFirst: c.oldestFirst,
-                  keep: keep,
-                ),
-                onApply: _apply,
-              ),
+              // One wrapping row for everything that is a button: the
+              // views, the table options and the conditions. They were a
+              // stack of four single-button rows, which on a phone is a
+              // third of the screen spent on controls above ten log
+              // lines. The web's toolbar is one row too.
+              //
               // Picked, not typed: a key somebody has to remember is a key
               // they will get wrong, and the dictionary knows which ones
               // the range actually has.
               FilterChips(
+                leading: [
+                  // The views the organization kept, in the web's own
+                  // shape: the same list a browser shows, and applying
+                  // one here puts the browser's filters in the chips
+                  // beside it.
+                  SavedViewsBar(
+                    session: widget.session,
+                    controller: widget.sections.logViews,
+                    active: true,
+                    state: ({keep = const {}}) => logsViewState(
+                      filters: c.filters,
+                      query: c.query,
+                      severityMin: c.severityMin,
+                      service: c.service,
+                      columns: c.columns,
+                      oldestFirst: c.oldestFirst,
+                      keep: keep,
+                    ),
+                    onApply: _apply,
+                  ),
+                  ActionChip(
+                    key: const Key('logs-order'),
+                    avatar: Icon(
+                      c.oldestFirst ? Icons.arrow_upward : Icons.arrow_downward,
+                      size: 16,
+                    ),
+                    label: Text(
+                      c.oldestFirst ? l.logOrderOldest : l.logOrderNewest,
+                    ),
+                    onPressed: () {
+                      c.oldestFirst = !c.oldestFirst;
+                      c.refresh();
+                    },
+                  ),
+                  ActionChip(
+                    key: const Key('logs-columns'),
+                    avatar: const Icon(Icons.view_column_outlined, size: 16),
+                    label: Text(
+                      isDefaultColumns(c.columns)
+                          ? l.logColumns
+                          : '${l.logColumns} · ${c.columns.length}',
+                    ),
+                    onPressed: () async {
+                      final picked = await pickColumns(
+                        context,
+                        session: widget.session,
+                        fields: widget.sections.fields('logs'),
+                        columns: c.columns,
+                      );
+                      if (picked == null) return;
+                      c.columns = picked;
+                      // A column is a key the server has to be asked for,
+                      // so this is a new request, not a redraw.
+                      await c.refresh();
+                    },
+                  ),
+                ],
                 filters: c.filters,
                 onRemove: (i) {
                   c.filters = [...c.filters]..removeAt(i);
@@ -264,56 +324,6 @@ class _LogsBodyState extends State<LogsBody>
                 },
               ),
               VolumeChart(session: widget.session, controller: widget.volume),
-              const SizedBox(height: 8),
-              // The web's table options, minus the ones a phone has no
-              // room to mean: wrapping and density decide themselves on a
-              // list of cards.
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      key: const Key('logs-order'),
-                      onPressed: () {
-                        c.oldestFirst = !c.oldestFirst;
-                        c.refresh();
-                      },
-                      icon: Icon(
-                        c.oldestFirst
-                            ? Icons.arrow_upward
-                            : Icons.arrow_downward,
-                        size: 18,
-                      ),
-                      label: Text(
-                        c.oldestFirst ? l.logOrderOldest : l.logOrderNewest,
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      key: const Key('logs-columns'),
-                      onPressed: () async {
-                        final picked = await pickColumns(
-                          context,
-                          session: widget.session,
-                          fields: widget.sections.fields('logs'),
-                          columns: c.columns,
-                        );
-                        if (picked == null) return;
-                        c.columns = picked;
-                        // A column is a key the server has to be asked
-                        // for, so this is a new request, not a redraw.
-                        await c.refresh();
-                      },
-                      icon: const Icon(Icons.view_column_outlined, size: 18),
-                      label: Text(
-                        isDefaultColumns(c.columns)
-                            ? l.logColumns
-                            : '${l.logColumns} · ${c.columns.length}',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,

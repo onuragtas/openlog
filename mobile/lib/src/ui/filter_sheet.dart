@@ -259,11 +259,17 @@ class FilterChips extends StatelessWidget {
     required this.filters,
     required this.onRemove,
     required this.onAdd,
+    this.leading = const [],
   });
 
   final List<Filter> filters;
   final void Function(int index) onRemove;
   final VoidCallback onAdd;
+
+  /// What goes before the conditions in the same flow: the saved views
+  /// chip and the table options. One wrapping row instead of a stack of
+  /// single-button rows, which is also how the web's toolbar reads.
+  final List<Widget> leading;
 
   @override
   Widget build(BuildContext context) {
@@ -282,6 +288,7 @@ class FilterChips extends StatelessWidget {
           runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
+            ...leading,
             for (var i = 0; i < filters.length; i++)
               InputChip(
                 key: Key('filter-chip-$i'),

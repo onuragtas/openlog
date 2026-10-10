@@ -4026,8 +4026,8 @@ class LEn extends L {
   String get logColumnsApply => 'Apply';
 
   @override
-  String get logOrderNewest => 'Newest first';
+  String get logOrderNewest => 'Newest';
 
   @override
-  String get logOrderOldest => 'Oldest first';
+  String get logOrderOldest => 'Oldest';
 }

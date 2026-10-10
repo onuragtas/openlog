@@ -36,48 +36,67 @@ class ListScreen<T> extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: controller.refresh,
-      child: Column(
-        children: [
+      // One scroll view, with the search area inside it rather than nailed
+      // above it. A phone screen is about ten log lines tall and the logs
+      // search area -- box, service, views, conditions, chart, table
+      // options, severity -- is a third of it; keeping that on screen
+      // while reading means reading the list through a slot.
+      //
+      // A floating header rather than a plain first row: scrolling down
+      // gets it out of the way, and the smallest pull back up returns it,
+      // so changing a filter never means scrolling to the top first.
+      child: CustomScrollView(
+        slivers: [
           if (search != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-              child: search,
+            SliverFloatingHeader(
+              child: ColoredBox(
+                // The rows scroll under it, so it cannot be transparent.
+                color: Theme.of(context).colorScheme.surface,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: search,
+                ),
+              ),
             ),
-          Expanded(
-            child: controller.loadingFirst
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                    // Header, rows (or the empty state), banner. Always at
-                    // least two, so pull-to-refresh has something to pull on
-                    // when the list is empty -- which is exactly when the
-                    // person wants to check again.
-                    itemCount: controller.items.isEmpty
-                        ? 2
-                        : (itemCount ?? controller.items.length) + 2,
-                    itemBuilder: (context, i) {
-                      if (i == 0) {
-                        // Above the rows, not under them: a refresh that
-                        // failed leaves the previous rows on screen, and
-                        // an explanation at the end of a long list is an
-                        // explanation nobody reads.
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (controller.items.isNotEmpty) banner,
-                            header ?? const SizedBox.shrink(),
-                          ],
-                        );
-                      }
-                      if (controller.items.isEmpty) {
-                        return _Empty(title: emptyTitle, banner: banner);
-                      }
-                      final rows = itemCount ?? controller.items.length;
-                      if (i == rows + 1) return const SizedBox.shrink();
-                      return itemBuilder(context, i - 1);
-                    },
-                  ),
-          ),
+          if (controller.loadingFirst)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+              sliver: SliverList.builder(
+                // Header, rows (or the empty state), banner. Always at
+                // least two, so pull-to-refresh has something to pull on
+                // when the list is empty -- which is exactly when the
+                // person wants to check again.
+                itemCount: controller.items.isEmpty
+                    ? 2
+                    : (itemCount ?? controller.items.length) + 2,
+                itemBuilder: (context, i) {
+                  if (i == 0) {
+                    // Above the rows, not under them: a refresh that
+                    // failed leaves the previous rows on screen, and
+                    // an explanation at the end of a long list is an
+                    // explanation nobody reads.
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (controller.items.isNotEmpty) banner,
+                        header ?? const SizedBox.shrink(),
+                      ],
+                    );
+                  }
+                  if (controller.items.isEmpty) {
+                    return _Empty(title: emptyTitle, banner: banner);
+                  }
+                  final rows = itemCount ?? controller.items.length;
+                  if (i == rows + 1) return const SizedBox.shrink();
+                  return itemBuilder(context, i - 1);
+                },
+              ),
+            ),
         ],
       ),
     );
