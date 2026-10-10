@@ -2363,4 +2363,122 @@ class LEn extends L {
   String invitationsExpiredAt(String when) {
     return 'ended $when';
   }
+
+  @override
+  String get settingsLicenseKeys => 'License keys';
+
+  @override
+  String get settingsApiKeys => 'API keys';
+
+  @override
+  String get settingsBrowserKeys => 'Browser keys';
+
+  @override
+  String get keysName => 'Name';
+
+  @override
+  String get keysCreate => 'Create';
+
+  @override
+  String keysCreated(String name) {
+    return '$name was created.';
+  }
+
+  @override
+  String get keysShownOnce => 'This value is shown only once.';
+
+  @override
+  String get keysImported =>
+      'The value was supplied from outside, so there is nothing to show.';
+
+  @override
+  String get keysRevoke => 'Revoke';
+
+  @override
+  String get keysRevoked => 'revoked';
+
+  @override
+  String keysRevokeTitle(String name) {
+    return 'Revoke $name?';
+  }
+
+  @override
+  String keysLastUsed(String when) {
+    return 'last used $when';
+  }
+
+  @override
+  String get keysNeverUsed => 'never used';
+
+  @override
+  String keysExpires(String when) {
+    return 'expires $when';
+  }
+
+  @override
+  String get keysForbidden => 'Your role does not allow managing these keys.';
+
+  @override
+  String get licenseKeysEmpty => 'No license keys.';
+
+  @override
+  String get licenseKeysNew => 'New license key';
+
+  @override
+  String get licenseKeysRevokeBody =>
+      'Agents sending data with this key stop. The server may keep accepting it for a short while, until its auth cache expires.';
+
+  @override
+  String get apiKeysEmpty => 'No API keys.';
+
+  @override
+  String get apiKeysNew => 'New API key';
+
+  @override
+  String get apiKeysViewerOnly => 'Only admins can create a key that writes.';
+
+  @override
+  String get apiKeysRevokeBody =>
+      'Scripts using this key stop working immediately.';
+
+  @override
+  String get browserKeysEmpty => 'No browser keys.';
+
+  @override
+  String get browserKeysNew => 'New browser key';
+
+  @override
+  String get browserKeysService => 'Service name';
+
+  @override
+  String get browserKeysKindBrowser => 'Browser';
+
+  @override
+  String get browserKeysKindMobile => 'Mobile';
+
+  @override
+  String get browserKeysOriginsLabel => 'Allowed origins';
+
+  @override
+  String get browserKeysOriginsHint => 'One per line: https://app.example.com';
+
+  @override
+  String get browserKeysAppIds => 'Allowed app ids';
+
+  @override
+  String get browserKeysAppIdsHint => 'One per line: com.example.shop';
+
+  @override
+  String browserKeysOrigins(int count) {
+    return '$count origins';
+  }
+
+  @override
+  String browserKeysApps(int count) {
+    return '$count apps';
+  }
+
+  @override
+  String get browserKeysRevokeBody =>
+      'Pages and apps sending data with this key stop.';
 }

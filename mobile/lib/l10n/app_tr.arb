@@ -1467,5 +1467,81 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsLicenseKeys": "Lisans anahtarları",
+  "settingsApiKeys": "API anahtarları",
+  "settingsBrowserKeys": "Tarayıcı anahtarları",
+  "keysName": "Ad",
+  "keysCreate": "Oluştur",
+  "keysCreated": "{name} oluşturuldu.",
+  "@keysCreated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keysShownOnce": "Bu değer yalnızca bir kez gösterilir.",
+  "keysImported": "Değer dışarıdan verildiği için gösterilecek bir şey yok.",
+  "keysRevoke": "İptal et",
+  "keysRevoked": "iptal edildi",
+  "keysRevokeTitle": "{name} iptal edilsin mi?",
+  "@keysRevokeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keysLastUsed": "son kullanım {when}",
+  "@keysLastUsed": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "keysNeverUsed": "hiç kullanılmadı",
+  "keysExpires": "biter {when}",
+  "@keysExpires": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "keysForbidden": "Rolünüz bu anahtarları yönetmeye yetmiyor.",
+  "licenseKeysEmpty": "Lisans anahtarı yok.",
+  "licenseKeysNew": "Yeni lisans anahtarı",
+  "licenseKeysRevokeBody": "Bu anahtarla veri gönderen ajanlar durur. Sunucu, yetki önbelleği dolana kadar kısa bir süre kabul etmeye devam edebilir.",
+  "apiKeysEmpty": "API anahtarı yok.",
+  "apiKeysNew": "Yeni API anahtarı",
+  "apiKeysViewerOnly": "Yazma yetkisi olan anahtarı yalnızca yöneticiler oluşturabilir.",
+  "apiKeysRevokeBody": "Bu anahtarı kullanan betikler hemen çalışmaz olur.",
+  "browserKeysEmpty": "Tarayıcı anahtarı yok.",
+  "browserKeysNew": "Yeni tarayıcı anahtarı",
+  "browserKeysService": "Servis adı",
+  "browserKeysKindBrowser": "Tarayıcı",
+  "browserKeysKindMobile": "Mobil",
+  "browserKeysOriginsLabel": "İzinli adresler",
+  "browserKeysOriginsHint": "Her satıra bir tane: https://app.example.com",
+  "browserKeysAppIds": "İzinli uygulama kimlikleri",
+  "browserKeysAppIdsHint": "Her satıra bir tane: com.example.shop",
+  "browserKeysOrigins": "{count} adres",
+  "@browserKeysOrigins": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserKeysApps": "{count} uygulama",
+  "@browserKeysApps": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserKeysRevokeBody": "Bu anahtarla veri gönderen sayfalar ve uygulamalar durur."
 }

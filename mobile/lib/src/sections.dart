@@ -15,6 +15,7 @@ import 'detail.dart';
 import 'agents.dart';
 import 'discovery.dart';
 import 'errors.dart';
+import 'keys.dart';
 import 'list_controller.dart';
 import 'logs.dart';
 import 'members.dart';
@@ -54,6 +55,9 @@ class Sections {
     SessionsController? sessions,
     AccountController? account,
     MembersController? members,
+    LicenseKeysController? licenseKeys,
+    ApiKeysController? apiKeys,
+    BrowserKeysController? browserKeys,
     LogsController Function({
       String traceId,
       String podUid,
@@ -161,6 +165,9 @@ class Sections {
        sessions = sessions ?? SessionsController(client),
        account = account ?? AccountController(client),
        members = members ?? MembersController(client),
+       licenseKeys = licenseKeys ?? LicenseKeysController(client),
+       apiKeys = apiKeys ?? ApiKeysController(client),
+       browserKeys = browserKeys ?? BrowserKeysController(client),
        scopedLogs =
            scopedLogs ??
            (({
@@ -222,6 +229,11 @@ class Sections {
 
   /// Who is in the organization, and who has been asked to join.
   final MembersController members;
+
+  /// The three kinds of key the settings tabs manage.
+  final LicenseKeysController licenseKeys;
+  final ApiKeysController apiKeys;
+  final BrowserKeysController browserKeys;
 
   /// The logs of one request, pod or container. A controller per screen,
   /// disposed with it, because each one answers about a different thing.
@@ -309,6 +321,9 @@ class Sections {
     sessions,
     account,
     members,
+    licenseKeys,
+    apiKeys,
+    browserKeys,
     hosts,
     containers,
     costs,

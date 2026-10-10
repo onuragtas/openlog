@@ -11178,8 +11178,8 @@ components:
         created_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         updated_at: { $ref: "#/components/schemas/Timestamp" }
-        last_used_at: { $ref: "#/components/schemas/Timestamp" }
-        revoked_at: { $ref: "#/components/schemas/Timestamp" }
+        last_used_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        revoked_at: { $ref: "#/components/schemas/NullableTimestamp" }
     BrowserKeyKind:
       type: string
       enum: [browser, mobile]

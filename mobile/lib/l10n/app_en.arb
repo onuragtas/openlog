@@ -1564,5 +1564,81 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsLicenseKeys": "License keys",
+  "settingsApiKeys": "API keys",
+  "settingsBrowserKeys": "Browser keys",
+  "keysName": "Name",
+  "keysCreate": "Create",
+  "keysCreated": "{name} was created.",
+  "@keysCreated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keysShownOnce": "This value is shown only once.",
+  "keysImported": "The value was supplied from outside, so there is nothing to show.",
+  "keysRevoke": "Revoke",
+  "keysRevoked": "revoked",
+  "keysRevokeTitle": "Revoke {name}?",
+  "@keysRevokeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keysLastUsed": "last used {when}",
+  "@keysLastUsed": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "keysNeverUsed": "never used",
+  "keysExpires": "expires {when}",
+  "@keysExpires": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "keysForbidden": "Your role does not allow managing these keys.",
+  "licenseKeysEmpty": "No license keys.",
+  "licenseKeysNew": "New license key",
+  "licenseKeysRevokeBody": "Agents sending data with this key stop. The server may keep accepting it for a short while, until its auth cache expires.",
+  "apiKeysEmpty": "No API keys.",
+  "apiKeysNew": "New API key",
+  "apiKeysViewerOnly": "Only admins can create a key that writes.",
+  "apiKeysRevokeBody": "Scripts using this key stop working immediately.",
+  "browserKeysEmpty": "No browser keys.",
+  "browserKeysNew": "New browser key",
+  "browserKeysService": "Service name",
+  "browserKeysKindBrowser": "Browser",
+  "browserKeysKindMobile": "Mobile",
+  "browserKeysOriginsLabel": "Allowed origins",
+  "browserKeysOriginsHint": "One per line: https://app.example.com",
+  "browserKeysAppIds": "Allowed app ids",
+  "browserKeysAppIdsHint": "One per line: com.example.shop",
+  "browserKeysOrigins": "{count} origins",
+  "@browserKeysOrigins": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserKeysApps": "{count} apps",
+  "@browserKeysApps": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browserKeysRevokeBody": "Pages and apps sending data with this key stop."
 }

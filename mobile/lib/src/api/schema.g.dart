@@ -1906,6 +1906,82 @@ enum ApmAgentStatus {
   }
 }
 
+/// APIKeyRole of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum APIKeyRole {
+  viewer('viewer'),
+  member('member'),
+  admin('admin'),
+  unknown('');
+
+  const APIKeyRole(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static APIKeyRole fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// APIKeyScope of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum APIKeyScope {
+  read('read'),
+  write('write'),
+  unknown('');
+
+  const APIKeyScope(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static APIKeyScope fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// BrowserKeyKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum BrowserKeyKind {
+  browser('browser'),
+  mobile('mobile'),
+  unknown('');
+
+  const BrowserKeyKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static BrowserKeyKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FleetHostStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -10258,6 +10334,160 @@ class InvitationCreated {
   final bool emailSent;
 }
 
+/// `LicenseKeyPage` of the openlog API contract.
+class LicenseKeyPage {
+  const LicenseKeyPage({required this.licenseKeys});
+
+  factory LicenseKeyPage.fromJson(
+    Object? json, [
+    String path = 'LicenseKeyPage',
+  ]) {
+    final m = _obj(json, path);
+    return LicenseKeyPage(
+      licenseKeys: _req(
+        m,
+        'license_keys',
+        path,
+        (v, p) => _list<LicenseKey>(v, p, (v, p) => LicenseKey.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'license_keys': [for (final e in licenseKeys) e.toJson()],
+  };
+
+  final List<LicenseKey> licenseKeys;
+}
+
+/// `LicenseKeyCreated` of the openlog API contract.
+class LicenseKeyCreated {
+  const LicenseKeyCreated({required this.licenseKey, this.key});
+
+  factory LicenseKeyCreated.fromJson(
+    Object? json, [
+    String path = 'LicenseKeyCreated',
+  ]) {
+    final m = _obj(json, path);
+    return LicenseKeyCreated(
+      licenseKey: _req(
+        m,
+        'license_key',
+        path,
+        (v, p) => LicenseKey.fromJson(v, p),
+      ),
+      key: _opt(m, 'key', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'license_key': licenseKey.toJson(),
+    'key': ?key,
+  };
+
+  final LicenseKey licenseKey;
+  final String? key;
+}
+
+/// `ApiKeyPage` of the openlog API contract.
+class ApiKeyPage {
+  const ApiKeyPage({required this.apiKeys});
+
+  factory ApiKeyPage.fromJson(Object? json, [String path = 'ApiKeyPage']) {
+    final m = _obj(json, path);
+    return ApiKeyPage(
+      apiKeys: _req(
+        m,
+        'api_keys',
+        path,
+        (v, p) => _list<APIKey>(v, p, (v, p) => APIKey.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'api_keys': [for (final e in apiKeys) e.toJson()],
+  };
+
+  final List<APIKey> apiKeys;
+}
+
+/// `ApiKeyCreated` of the openlog API contract.
+class ApiKeyCreated {
+  const ApiKeyCreated({required this.apiKey, required this.key});
+
+  factory ApiKeyCreated.fromJson(
+    Object? json, [
+    String path = 'ApiKeyCreated',
+  ]) {
+    final m = _obj(json, path);
+    return ApiKeyCreated(
+      apiKey: _req(m, 'api_key', path, (v, p) => APIKey.fromJson(v, p)),
+      key: _req(m, 'key', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'api_key': apiKey.toJson(), 'key': key};
+
+  final APIKey apiKey;
+  final String key;
+}
+
+/// `BrowserKeyPage` of the openlog API contract.
+class BrowserKeyPage {
+  const BrowserKeyPage({required this.browserKeys});
+
+  factory BrowserKeyPage.fromJson(
+    Object? json, [
+    String path = 'BrowserKeyPage',
+  ]) {
+    final m = _obj(json, path);
+    return BrowserKeyPage(
+      browserKeys: _req(
+        m,
+        'browser_keys',
+        path,
+        (v, p) => _list<BrowserKey>(v, p, (v, p) => BrowserKey.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'browser_keys': [for (final e in browserKeys) e.toJson()],
+  };
+
+  final List<BrowserKey> browserKeys;
+}
+
+/// `BrowserKeyCreated` of the openlog API contract.
+class BrowserKeyCreated {
+  const BrowserKeyCreated({required this.browserKey, required this.key});
+
+  factory BrowserKeyCreated.fromJson(
+    Object? json, [
+    String path = 'BrowserKeyCreated',
+  ]) {
+    final m = _obj(json, path);
+    return BrowserKeyCreated(
+      browserKey: _req(
+        m,
+        'browser_key',
+        path,
+        (v, p) => BrowserKey.fromJson(v, p),
+      ),
+      key: _req(m, 'key', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'browser_key': browserKey.toJson(),
+    'key': key,
+  };
+
+  final BrowserKey browserKey;
+  final String key;
+}
+
 /// `ServicePage` of the openlog API contract.
 class ServicePage {
   const ServicePage({required this.step, required this.services});
@@ -11510,6 +11740,197 @@ class Invitation {
   final bool expired;
   final DateTime? lastSentAt;
   final int sendCount;
+}
+
+/// `LicenseKey` of the openlog API contract.
+class LicenseKey {
+  const LicenseKey({
+    required this.id,
+    required this.name,
+    required this.prefix,
+    required this.custom,
+    required this.createdByEmail,
+    required this.createdAt,
+    this.lastUsedAt,
+    this.revokedAt,
+  });
+
+  factory LicenseKey.fromJson(Object? json, [String path = 'LicenseKey']) {
+    final m = _obj(json, path);
+    return LicenseKey(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      prefix: _req(m, 'prefix', path, _str),
+      custom: _req(m, 'custom', path, _bool),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      lastUsedAt: _opt(m, 'last_used_at', path, _time),
+      revokedAt: _opt(m, 'revoked_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'prefix': prefix,
+    'custom': custom,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    if (lastUsedAt != null)
+      'last_used_at': lastUsedAt!.toUtc().toIso8601String(),
+    if (revokedAt != null) 'revoked_at': revokedAt!.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final String prefix;
+  final bool custom;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime? lastUsedAt;
+  final DateTime? revokedAt;
+}
+
+/// `APIKey` of the openlog API contract.
+class APIKey {
+  const APIKey({
+    required this.id,
+    required this.name,
+    required this.prefix,
+    required this.role,
+    required this.scope,
+    required this.createdByUserId,
+    required this.createdByEmail,
+    required this.createdAt,
+    this.lastUsedAt,
+    this.expiresAt,
+    this.revokedAt,
+  });
+
+  factory APIKey.fromJson(Object? json, [String path = 'APIKey']) {
+    final m = _obj(json, path);
+    return APIKey(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      prefix: _req(m, 'prefix', path, _str),
+      role: _req(m, 'role', path, APIKeyRole.fromJson),
+      scope: _req(m, 'scope', path, APIKeyScope.fromJson),
+      createdByUserId: _req(m, 'created_by_user_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      lastUsedAt: _opt(m, 'last_used_at', path, _time),
+      expiresAt: _opt(m, 'expires_at', path, _time),
+      revokedAt: _opt(m, 'revoked_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'prefix': prefix,
+    'role': role.wire,
+    'scope': scope.wire,
+    'created_by_user_id': createdByUserId,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    if (lastUsedAt != null)
+      'last_used_at': lastUsedAt!.toUtc().toIso8601String(),
+    if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
+    if (revokedAt != null) 'revoked_at': revokedAt!.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final String prefix;
+  final APIKeyRole role;
+  final APIKeyScope scope;
+  final String createdByUserId;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime? lastUsedAt;
+  final DateTime? expiresAt;
+  final DateTime? revokedAt;
+}
+
+/// A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the API is not a place to read credentials back from.
+class BrowserKey {
+  const BrowserKey({
+    required this.id,
+    required this.name,
+    required this.prefix,
+    required this.key,
+    required this.serviceName,
+    required this.environment,
+    required this.kind,
+    required this.origins,
+    required this.appIds,
+    required this.rateLimitPerMinute,
+    required this.sampleRate,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    this.lastUsedAt,
+    this.revokedAt,
+  });
+
+  factory BrowserKey.fromJson(Object? json, [String path = 'BrowserKey']) {
+    final m = _obj(json, path);
+    return BrowserKey(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      prefix: _req(m, 'prefix', path, _str),
+      key: _req(m, 'key', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      kind: _req(m, 'kind', path, BrowserKeyKind.fromJson),
+      origins: _req(m, 'origins', path, (v, p) => _list<String>(v, p, _str)),
+      appIds: _req(m, 'app_ids', path, (v, p) => _list<String>(v, p, _str)),
+      rateLimitPerMinute: _req(m, 'rate_limit_per_minute', path, _int),
+      sampleRate: _req(m, 'sample_rate', path, _num),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      lastUsedAt: _opt(m, 'last_used_at', path, _time),
+      revokedAt: _opt(m, 'revoked_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'prefix': prefix,
+    'key': key,
+    'service_name': serviceName,
+    'environment': environment,
+    'kind': kind.wire,
+    'origins': origins,
+    'app_ids': appIds,
+    'rate_limit_per_minute': rateLimitPerMinute,
+    'sample_rate': sampleRate,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    if (lastUsedAt != null)
+      'last_used_at': lastUsedAt!.toUtc().toIso8601String(),
+    if (revokedAt != null) 'revoked_at': revokedAt!.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final String prefix;
+  final String key;
+  final String serviceName;
+  final String environment;
+  final BrowserKeyKind kind;
+  final List<String> origins;
+  final List<String> appIds;
+  final int rateLimitPerMinute;
+  final double sampleRate;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? lastUsedAt;
+  final DateTime? revokedAt;
 }
 
 /// `LogRecord` of the openlog API contract.

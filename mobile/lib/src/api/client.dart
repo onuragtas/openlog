@@ -1215,6 +1215,66 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// The ingest license keys, including revoked ones.
+  Future<LicenseKeyPage> licenseKeys() async =>
+      LicenseKeyPage.fromJson(await _send('GET', '/api/v1/license-keys'));
+
+  /// Makes one. The generated value comes back once and never again.
+  Future<LicenseKeyCreated> createLicenseKey(String name) async =>
+      LicenseKeyCreated.fromJson(
+        await _send('POST', '/api/v1/license-keys', body: {'name': name}),
+      );
+
+  /// Revokes one. Ingest keeps accepting it for up to the auth cache TTL,
+  /// which is the server's own behaviour and worth saying on screen.
+  Future<void> revokeLicenseKey(String id) =>
+      _send('DELETE', '/api/v1/license-keys/${Uri.encodeComponent(id)}');
+
+  Future<ApiKeyPage> apiKeys() async =>
+      ApiKeyPage.fromJson(await _send('GET', '/api/v1/api-keys'));
+
+  Future<ApiKeyCreated> createApiKey({
+    required String name,
+    required String role,
+  }) async => ApiKeyCreated.fromJson(
+    await _send('POST', '/api/v1/api-keys', body: {'name': name, 'role': role}),
+  );
+
+  /// Revokes one, effective immediately.
+  Future<void> revokeApiKey(String id) =>
+      _send('DELETE', '/api/v1/api-keys/${Uri.encodeComponent(id)}');
+
+  Future<BrowserKeyPage> browserKeys() async =>
+      BrowserKeyPage.fromJson(await _send('GET', '/api/v1/browser-keys'));
+
+  /// Makes one.
+  ///
+  /// Exactly one allowlist goes with the kind -- `origins` for a browser
+  /// key, `app_ids` for a mobile one -- and sending the other, or neither,
+  /// is a 400. The screen asks for the one that belongs to the choice.
+  Future<BrowserKeyCreated> createBrowserKey({
+    required String name,
+    required String serviceName,
+    required String kind,
+    required List<String> allowlist,
+    String environment = '',
+  }) async => BrowserKeyCreated.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/browser-keys',
+      body: {
+        'name': name,
+        'service_name': serviceName,
+        if (environment.isNotEmpty) 'environment': environment,
+        'kind': kind,
+        if (kind == 'mobile') 'app_ids': allowlist else 'origins': allowlist,
+      },
+    ),
+  );
+
+  Future<void> revokeBrowserKey(String id) =>
+      _send('DELETE', '/api/v1/browser-keys/${Uri.encodeComponent(id)}');
+
   /// Who is in the organization.
   Future<MemberPage> members() async =>
       MemberPage.fromJson(await _send('GET', '/api/v1/members'));

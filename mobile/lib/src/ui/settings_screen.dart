@@ -11,10 +11,13 @@ import '../../l10n/app_localizations.dart';
 import '../account.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
+import '../keys.dart';
 import '../members.dart';
+import '../roles.dart';
 import '../session.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
+import 'keys_tabs.dart';
 import 'members_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
@@ -26,6 +29,9 @@ class SettingsBody extends StatefulWidget {
     required this.sessions,
     required this.account,
     required this.members,
+    required this.licenseKeys,
+    required this.apiKeys,
+    required this.browserKeys,
     required this.active,
   });
 
@@ -42,22 +48,72 @@ class SettingsBody extends StatefulWidget {
 
   /// Who is in the organization, and who has been asked to join.
   final MembersController members;
+
+  /// The three kinds of key, each its own tab as on the web.
+  final LicenseKeysController licenseKeys;
+  final ApiKeysController apiKeys;
+  final BrowserKeysController browserKeys;
   final bool active;
 
   @override
   State<SettingsBody> createState() => _SettingsBodyState();
 }
 
+/// One settings tab: its label, what it needs to be allowed to see, and
+/// the thing that fills it. The list is the web's, in the web's order.
+class _Tab {
+  const _Tab(this.key, this.label, this.permission, this.build);
+
+  final String key;
+  final String Function(L) label;
+
+  /// Null when every role may look, as the web's own table has it.
+  final String? permission;
+  final Widget Function(_SettingsBodyState) build;
+}
+
+final _tabs = <_Tab>[
+  _Tab('profile', (l) => l.settingsProfile, null, (s) => s._profileTab()),
+  _Tab('security', (l) => l.settingsSecurity, null, (s) => s._securityTab()),
+  _Tab('members', (l) => l.settingsMembers, null, (s) => s._membersTab()),
+  _Tab(
+    'license-keys',
+    (l) => l.settingsLicenseKeys,
+    'license_keys.list',
+    (s) => LicenseKeysTab(
+      session: s.widget.session,
+      controller: s.widget.licenseKeys,
+    ),
+  ),
+  _Tab(
+    'api-keys',
+    (l) => l.settingsApiKeys,
+    'api_keys.list',
+    (s) => ApiKeysTab(session: s.widget.session, controller: s.widget.apiKeys),
+  ),
+  _Tab(
+    'browser-keys',
+    (l) => l.settingsBrowserKeys,
+    'browser_keys.list',
+    (s) => BrowserKeysTab(
+      session: s.widget.session,
+      controller: s.widget.browserKeys,
+    ),
+  ),
+];
+
 class _SettingsBodyState extends State<SettingsBody>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+    with TickerProviderStateMixin {
+  late TabController _tabsController;
+  List<_Tab> _visible = const [];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this)
+    _visible = _allowed();
+    _tabsController = TabController(length: _visible.length, vsync: this)
       ..addListener(() {
-        if (!_tabs.indexIsChanging) _loadIfVisible();
+        if (!_tabsController.indexIsChanging) _loadIfVisible();
       });
     _loadIfVisible();
   }
@@ -65,28 +121,66 @@ class _SettingsBodyState extends State<SettingsBody>
   @override
   void didUpdateWidget(SettingsBody old) {
     super.didUpdateWidget(old);
+    // The role arrives with `me`, which can come after the first build:
+    // the tabs it unlocks appear then rather than on the next visit.
+    final allowed = _allowed();
+    if (allowed.length != _visible.length) {
+      final was = _visible.isEmpty
+          ? null
+          : _visible[_tabsController.index.clamp(0, _visible.length - 1)].key;
+      _visible = allowed;
+      _tabsController.dispose();
+      final index = allowed.indexWhere((t) => t.key == was);
+      _tabsController =
+          TabController(
+            length: allowed.length,
+            initialIndex: index < 0 ? 0 : index,
+            vsync: this,
+          )..addListener(() {
+            if (!_tabsController.indexIsChanging) _loadIfVisible();
+          });
+    }
     _loadIfVisible();
+  }
+
+  List<_Tab> _allowed() {
+    final role = widget.session.me?.role;
+    return [
+      for (final t in _tabs)
+        if (t.permission == null || can(role, t.permission!)) t,
+    ];
   }
 
   @override
   void dispose() {
-    _tabs.dispose();
+    _tabsController.dispose();
     super.dispose();
   }
 
   /// Each tab asks for its own when it is looked at, not when settings is
   /// opened: the web does not read the member list of a tab nobody chose.
   void _loadIfVisible() {
-    if (!widget.active) return;
-    if (_tabs.index == 1) {
-      final c = widget.sessions;
-      if (c.loaded || c.loadingFirst) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
-    }
-    if (_tabs.index == 2) {
-      final c = widget.members;
-      if (c.loading || c.members.isNotEmpty) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) => c.load());
+    if (!widget.active || _visible.isEmpty) return;
+    final key =
+        _visible[_tabsController.index.clamp(0, _visible.length - 1)].key;
+    void later(void Function() load) =>
+        WidgetsBinding.instance.addPostFrameCallback((_) => load());
+    switch (key) {
+      case 'security':
+        final c = widget.sessions;
+        if (!c.loaded && !c.loadingFirst) later(c.refresh);
+      case 'members':
+        final c = widget.members;
+        if (!c.loading && c.members.isEmpty) later(c.load);
+      case 'license-keys':
+        final c = widget.licenseKeys;
+        if (!c.loading && c.items.isEmpty) later(c.load);
+      case 'api-keys':
+        final c = widget.apiKeys;
+        if (!c.loading && c.items.isEmpty) later(c.load);
+      case 'browser-keys':
+        final c = widget.browserKeys;
+        if (!c.loading && c.items.isEmpty) later(c.load);
     }
   }
 
@@ -96,41 +190,34 @@ class _SettingsBodyState extends State<SettingsBody>
     return Column(
       children: [
         TabBar(
-          controller: _tabs,
+          controller: _tabsController,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           tabs: [
-            Tab(
-              key: const Key('settings-tab-profile'),
-              text: l.settingsProfile,
-            ),
-            Tab(
-              key: const Key('settings-tab-security'),
-              text: l.settingsSecurity,
-            ),
-            Tab(
-              key: const Key('settings-tab-members'),
-              text: l.settingsMembers,
-            ),
+            for (final t in _visible)
+              Tab(key: Key('settings-tab-${t.key}'), text: t.label(l)),
           ],
         ),
         Expanded(
           child: TabBarView(
-            controller: _tabs,
-            children: [
-              _profile(context),
-              SecurityTab(
-                session: widget.session,
-                sessions: widget.sessions,
-                account: widget.account,
-              ),
-              MembersTab(session: widget.session, members: widget.members),
-            ],
+            controller: _tabsController,
+            children: [for (final t in _visible) t.build(this)],
           ),
         ),
       ],
     );
   }
+
+  Widget _securityTab() => SecurityTab(
+    session: widget.session,
+    sessions: widget.sessions,
+    account: widget.account,
+  );
+
+  Widget _membersTab() =>
+      MembersTab(session: widget.session, members: widget.members);
+
+  Widget _profileTab() => Builder(builder: _profile);
 
   Widget _profile(BuildContext context) {
     final session = widget.session;

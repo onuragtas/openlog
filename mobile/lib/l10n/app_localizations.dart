@@ -4218,6 +4218,210 @@ abstract class L {
   /// In en, this message translates to:
   /// **'ended {when}'**
   String invitationsExpiredAt(String when);
+
+  /// No description provided for @settingsLicenseKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'License keys'**
+  String get settingsLicenseKeys;
+
+  /// No description provided for @settingsApiKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'API keys'**
+  String get settingsApiKeys;
+
+  /// No description provided for @settingsBrowserKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser keys'**
+  String get settingsBrowserKeys;
+
+  /// No description provided for @keysName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get keysName;
+
+  /// No description provided for @keysCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get keysCreate;
+
+  /// No description provided for @keysCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was created.'**
+  String keysCreated(String name);
+
+  /// No description provided for @keysShownOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'This value is shown only once.'**
+  String get keysShownOnce;
+
+  /// No description provided for @keysImported.
+  ///
+  /// In en, this message translates to:
+  /// **'The value was supplied from outside, so there is nothing to show.'**
+  String get keysImported;
+
+  /// No description provided for @keysRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get keysRevoke;
+
+  /// No description provided for @keysRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'revoked'**
+  String get keysRevoked;
+
+  /// No description provided for @keysRevokeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke {name}?'**
+  String keysRevokeTitle(String name);
+
+  /// No description provided for @keysLastUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'last used {when}'**
+  String keysLastUsed(String when);
+
+  /// No description provided for @keysNeverUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'never used'**
+  String get keysNeverUsed;
+
+  /// No description provided for @keysExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'expires {when}'**
+  String keysExpires(String when);
+
+  /// No description provided for @keysForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow managing these keys.'**
+  String get keysForbidden;
+
+  /// No description provided for @licenseKeysEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No license keys.'**
+  String get licenseKeysEmpty;
+
+  /// No description provided for @licenseKeysNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New license key'**
+  String get licenseKeysNew;
+
+  /// No description provided for @licenseKeysRevokeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Agents sending data with this key stop. The server may keep accepting it for a short while, until its auth cache expires.'**
+  String get licenseKeysRevokeBody;
+
+  /// No description provided for @apiKeysEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No API keys.'**
+  String get apiKeysEmpty;
+
+  /// No description provided for @apiKeysNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New API key'**
+  String get apiKeysNew;
+
+  /// No description provided for @apiKeysViewerOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only admins can create a key that writes.'**
+  String get apiKeysViewerOnly;
+
+  /// No description provided for @apiKeysRevokeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Scripts using this key stop working immediately.'**
+  String get apiKeysRevokeBody;
+
+  /// No description provided for @browserKeysEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No browser keys.'**
+  String get browserKeysEmpty;
+
+  /// No description provided for @browserKeysNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New browser key'**
+  String get browserKeysNew;
+
+  /// No description provided for @browserKeysService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service name'**
+  String get browserKeysService;
+
+  /// No description provided for @browserKeysKindBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get browserKeysKindBrowser;
+
+  /// No description provided for @browserKeysKindMobile.
+  ///
+  /// In en, this message translates to:
+  /// **'Mobile'**
+  String get browserKeysKindMobile;
+
+  /// No description provided for @browserKeysOriginsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed origins'**
+  String get browserKeysOriginsLabel;
+
+  /// No description provided for @browserKeysOriginsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line: https://app.example.com'**
+  String get browserKeysOriginsHint;
+
+  /// No description provided for @browserKeysAppIds.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed app ids'**
+  String get browserKeysAppIds;
+
+  /// No description provided for @browserKeysAppIdsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line: com.example.shop'**
+  String get browserKeysAppIdsHint;
+
+  /// No description provided for @browserKeysOrigins.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} origins'**
+  String browserKeysOrigins(int count);
+
+  /// No description provided for @browserKeysApps.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} apps'**
+  String browserKeysApps(int count);
+
+  /// No description provided for @browserKeysRevokeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages and apps sending data with this key stop.'**
+  String get browserKeysRevokeBody;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

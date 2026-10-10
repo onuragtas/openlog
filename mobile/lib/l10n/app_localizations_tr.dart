@@ -2358,4 +2358,124 @@ class LTr extends L {
   String invitationsExpiredAt(String when) {
     return 'bitti $when';
   }
+
+  @override
+  String get settingsLicenseKeys => 'Lisans anahtarları';
+
+  @override
+  String get settingsApiKeys => 'API anahtarları';
+
+  @override
+  String get settingsBrowserKeys => 'Tarayıcı anahtarları';
+
+  @override
+  String get keysName => 'Ad';
+
+  @override
+  String get keysCreate => 'Oluştur';
+
+  @override
+  String keysCreated(String name) {
+    return '$name oluşturuldu.';
+  }
+
+  @override
+  String get keysShownOnce => 'Bu değer yalnızca bir kez gösterilir.';
+
+  @override
+  String get keysImported =>
+      'Değer dışarıdan verildiği için gösterilecek bir şey yok.';
+
+  @override
+  String get keysRevoke => 'İptal et';
+
+  @override
+  String get keysRevoked => 'iptal edildi';
+
+  @override
+  String keysRevokeTitle(String name) {
+    return '$name iptal edilsin mi?';
+  }
+
+  @override
+  String keysLastUsed(String when) {
+    return 'son kullanım $when';
+  }
+
+  @override
+  String get keysNeverUsed => 'hiç kullanılmadı';
+
+  @override
+  String keysExpires(String when) {
+    return 'biter $when';
+  }
+
+  @override
+  String get keysForbidden => 'Rolünüz bu anahtarları yönetmeye yetmiyor.';
+
+  @override
+  String get licenseKeysEmpty => 'Lisans anahtarı yok.';
+
+  @override
+  String get licenseKeysNew => 'Yeni lisans anahtarı';
+
+  @override
+  String get licenseKeysRevokeBody =>
+      'Bu anahtarla veri gönderen ajanlar durur. Sunucu, yetki önbelleği dolana kadar kısa bir süre kabul etmeye devam edebilir.';
+
+  @override
+  String get apiKeysEmpty => 'API anahtarı yok.';
+
+  @override
+  String get apiKeysNew => 'Yeni API anahtarı';
+
+  @override
+  String get apiKeysViewerOnly =>
+      'Yazma yetkisi olan anahtarı yalnızca yöneticiler oluşturabilir.';
+
+  @override
+  String get apiKeysRevokeBody =>
+      'Bu anahtarı kullanan betikler hemen çalışmaz olur.';
+
+  @override
+  String get browserKeysEmpty => 'Tarayıcı anahtarı yok.';
+
+  @override
+  String get browserKeysNew => 'Yeni tarayıcı anahtarı';
+
+  @override
+  String get browserKeysService => 'Servis adı';
+
+  @override
+  String get browserKeysKindBrowser => 'Tarayıcı';
+
+  @override
+  String get browserKeysKindMobile => 'Mobil';
+
+  @override
+  String get browserKeysOriginsLabel => 'İzinli adresler';
+
+  @override
+  String get browserKeysOriginsHint =>
+      'Her satıra bir tane: https://app.example.com';
+
+  @override
+  String get browserKeysAppIds => 'İzinli uygulama kimlikleri';
+
+  @override
+  String get browserKeysAppIdsHint => 'Her satıra bir tane: com.example.shop';
+
+  @override
+  String browserKeysOrigins(int count) {
+    return '$count adres';
+  }
+
+  @override
+  String browserKeysApps(int count) {
+    return '$count uygulama';
+  }
+
+  @override
+  String get browserKeysRevokeBody =>
+      'Bu anahtarla veri gönderen sayfalar ve uygulamalar durur.';
 }

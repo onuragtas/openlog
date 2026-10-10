@@ -7694,8 +7694,8 @@ export interface components {
             created_by_email: string;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
-            last_used_at: components["schemas"]["Timestamp"];
-            revoked_at: components["schemas"]["Timestamp"];
+            last_used_at: components["schemas"]["NullableTimestamp"];
+            revoked_at: components["schemas"]["NullableTimestamp"];
         };
         /**
          * @description Which allowlist bounds the key. A browser key is scoped by origins, which a browser sets and page JavaScript cannot forge; a mobile key is scoped by application ids, which the application declares about itself. The two are mutually exclusive and not equally strong (rum.md §3.6).

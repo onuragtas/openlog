@@ -465,7 +465,13 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       webdeki gibi; rol değiştirme, çıkarma/ayrılma (onaylı), davet gönderme, yenileme, iptal.
       Tek seferlik davet kodu e-posta gidemediğinde ekranda duruyor. Daveti kabul etme
       (`.../accept`, `.../lookup`) girişten önceki akış; mobilde oturum açmış kişi için yok.
-- [ ] API anahtarları (`api-keys`), lisans anahtarları (`license-keys`), tarayıcı anahtarları (`browser-keys`)
+- [x] API anahtarları (`api-keys`), lisans anahtarları (`license-keys`), tarayıcı anahtarları
+      (`browser-keys`): üçü webdeki gibi ayrı sekme, rolüne göre görünüyor; listeleme, oluşturma
+      (değer bir kez gösteriliyor) ve onaylı iptal. Tarayıcı anahtarında tür seçimi izin
+      listesini değiştiriyor, çünkü yanlışını göndermek 400.
+      Bu iş sözleşmede bir hata ortaya çıkardı: `BrowserKey.last_used_at` ve `revoked_at`
+      zorunlu `Timestamp` yazıyordu ama sunucu `*string` gönderiyor; `NullableTimestamp`
+      olarak düzeltildi (webin kendi kodu da zaten null bekliyordu).
 - [ ] Denetim günlüğü (`audit-log`)
 - [ ] Organizasyon ayarları (`orgs/current`, `.../saas`, `.../support-access`, `.../deletion`)
 - [ ] SSO yönetimi (`sso/connection(s)`, `sso/domains`, `sso/enforcement`, `sso/role-mappings`, `scim/tokens`)
