@@ -2491,5 +2491,21 @@
       }
   },
   "storageLevelsOnWeb": "Seviyeler webde değiştirilir.",
-  "savedViewNothingToApply": "Bu görünümde bu ekranın uygulayabileceği bir koşul yok."
+  "savedViewNothingToApply": "Bu görünümde bu ekranın uygulayabileceği bir koşul yok.",
+  "rangeTitle": "Zaman aralığı",
+  "range15m": "Son 15 dakika",
+  "range1h": "Son 1 saat",
+  "range6h": "Son 6 saat",
+  "range24h": "Son 24 saat",
+  "range7d": "Son 7 gün",
+  "rangeCustom": "Özel aralık",
+  "rangeFrom": "Başlangıç",
+  "rangeTo": "Bitiş",
+  "rangeInvalid": "Başlangıç bitişten önce olmalı.",
+  "rangeApply": "Uygula",
+  "range15mShort": "15 dk",
+  "range1hShort": "1 sa",
+  "range6hShort": "6 sa",
+  "range24hShort": "24 sa",
+  "range7dShort": "7 g"
 }

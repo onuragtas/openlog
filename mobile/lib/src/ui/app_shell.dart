@@ -12,6 +12,7 @@ import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
+import 'range_picker.dart';
 import 'add_data_screen.dart';
 import 'containers_screen.dart';
 import 'costs_screen.dart';
@@ -121,6 +122,17 @@ class _AppShellState extends State<AppShell> {
       appBar: AppBar(
         title: Text(titles[_tab]),
         actions: [
+          // The window every screen is about, as the web keeps it in the
+          // top bar. Changing it is a different question, so what was
+          // loaded for the old one is marked stale and the section on
+          // view asks again.
+          RangeChip(
+            controller: s.range,
+            onPick: () {
+              s.markRangeStale();
+              refreshers[_tab]?.call();
+            },
+          ),
           if (refreshers[_tab] != null)
             IconButton(
               key: const Key('refresh'),

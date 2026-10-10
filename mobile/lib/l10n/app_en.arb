@@ -2588,5 +2588,21 @@
       }
   },
   "storageLevelsOnWeb": "The levels are changed on the web.",
-  "savedViewNothingToApply": "This view carries nothing this screen can apply."
+  "savedViewNothingToApply": "This view carries nothing this screen can apply.",
+  "rangeTitle": "Time range",
+  "range15m": "Last 15 minutes",
+  "range1h": "Last hour",
+  "range6h": "Last 6 hours",
+  "range24h": "Last 24 hours",
+  "range7d": "Last 7 days",
+  "rangeCustom": "Custom range",
+  "rangeFrom": "From",
+  "rangeTo": "To",
+  "rangeInvalid": "From must be before to.",
+  "rangeApply": "Apply",
+  "range15mShort": "15m",
+  "range1hShort": "1h",
+  "range6hShort": "6h",
+  "range24hShort": "24h",
+  "range7dShort": "7d"
 }

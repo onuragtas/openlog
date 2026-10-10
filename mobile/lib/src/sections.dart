@@ -34,6 +34,7 @@ import 'query.dart';
 import 'sampling.dart';
 import 'saved_views.dart';
 import 'templates.dart';
+import 'time_range.dart';
 import 'services.dart';
 
 /// Every section's controller, for one signed-in client.
@@ -44,6 +45,7 @@ import 'services.dart';
 class Sections {
   Sections({
     required OpenlogClient client,
+    TimeRangeController? range,
     HostsController? hosts,
     ContainersController? containers,
     PodsController? pods,
@@ -152,7 +154,8 @@ class Sections {
       required String environment,
     })?
     profileFlame,
-  }) : incident = incident ?? ((id) => IncidentController(client, id)),
+  }) : range = range ?? TimeRangeController(),
+       incident = incident ?? ((id) => IncidentController(client, id)),
        serviceOverview =
            serviceOverview ??
            ((name) => ServiceOverviewController(client, name)),
@@ -304,7 +307,16 @@ class Sections {
            templateSetup ??
            ((template, language) =>
                TemplateSetupController(client, template, language: language)),
-       alerts = alerts ?? AlertsController(client);
+       alerts = alerts ?? AlertsController(client) {
+    // Every ranged request carries the chosen window, resolved when it is
+    // made. This is the one place that has both the client and the range,
+    // and threading a window argument through forty call sites would be
+    // forty chances to forget one.
+    client.window = () => this.range.value;
+  }
+
+  /// The window every screen is about, as the web's URL range is.
+  final TimeRangeController range;
 
   final HostsController hosts;
   final ContainersController containers;
@@ -561,10 +573,25 @@ class Sections {
     alerts,
   ];
 
+  /// A different window is a different question, so what was loaded for
+  /// the old one is not an answer any more.
+  ///
+  /// Marked stale rather than reloaded: reloading thirteen sections at
+  /// once would be thirteen requests for screens nobody is looking at.
+  /// Each one asks again the first time it is looked at, which is the
+  /// same rule as the first load.
+  void markRangeStale() {
+    for (final c in all) {
+      if (c is ListController) c.loaded = false;
+      if (c is DetailController) c.loaded = false;
+    }
+  }
+
   void dispose() {
     for (final c in all) {
       c.dispose();
     }
+    range.dispose();
   }
 }
 

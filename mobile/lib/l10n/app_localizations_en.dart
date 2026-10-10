@@ -3898,4 +3898,52 @@ class LEn extends L {
   @override
   String get savedViewNothingToApply =>
       'This view carries nothing this screen can apply.';
+
+  @override
+  String get rangeTitle => 'Time range';
+
+  @override
+  String get range15m => 'Last 15 minutes';
+
+  @override
+  String get range1h => 'Last hour';
+
+  @override
+  String get range6h => 'Last 6 hours';
+
+  @override
+  String get range24h => 'Last 24 hours';
+
+  @override
+  String get range7d => 'Last 7 days';
+
+  @override
+  String get rangeCustom => 'Custom range';
+
+  @override
+  String get rangeFrom => 'From';
+
+  @override
+  String get rangeTo => 'To';
+
+  @override
+  String get rangeInvalid => 'From must be before to.';
+
+  @override
+  String get rangeApply => 'Apply';
+
+  @override
+  String get range15mShort => '15m';
+
+  @override
+  String get range1hShort => '1h';
+
+  @override
+  String get range6hShort => '6h';
+
+  @override
+  String get range24hShort => '24h';
+
+  @override
+  String get range7dShort => '7d';
 }

@@ -130,6 +130,86 @@ Map<String, T> _map<T>(
   return (a(v[0], '$path[0]'), b(v[1], '$path[1]'));
 }
 
+/// The paths whose GET takes a `from`/`to` window, from the
+/// contract. `{}` stands for a path parameter.
+const _rangedPaths = <List<String>>[
+  ['api', 'v1', 'apm', 'agents'],
+  ['api', 'v1', 'apm', 'errors'],
+  ['api', 'v1', 'apm', 'map'],
+  ['api', 'v1', 'apm', 'map', 'path'],
+  ['api', 'v1', 'apm', 'services'],
+  ['api', 'v1', 'apm', 'services', '{}', 'containers'],
+  ['api', 'v1', 'apm', 'services', '{}', 'databases'],
+  ['api', 'v1', 'apm', 'services', '{}', 'deployments'],
+  ['api', 'v1', 'apm', 'services', '{}', 'errors'],
+  ['api', 'v1', 'apm', 'services', '{}', 'errors', '{}'],
+  ['api', 'v1', 'apm', 'services', '{}', 'kubernetes'],
+  ['api', 'v1', 'apm', 'services', '{}', 'overview'],
+  ['api', 'v1', 'apm', 'services', '{}', 'transaction'],
+  ['api', 'v1', 'apm', 'services', '{}', 'transactions'],
+  ['api', 'v1', 'apm', 'traces'],
+  ['api', 'v1', 'containers'],
+  ['api', 'v1', 'containers', 'groups'],
+  ['api', 'v1', 'containers', '{}'],
+  ['api', 'v1', 'containers', '{}', 'services'],
+  ['api', 'v1', 'containers', '{}', 'timeseries'],
+  ['api', 'v1', 'costs', 'containers'],
+  ['api', 'v1', 'costs', 'hosts'],
+  ['api', 'v1', 'costs', 'hosts', '{}'],
+  ['api', 'v1', 'costs', 'services'],
+  ['api', 'v1', 'costs', 'summary'],
+  ['api', 'v1', 'costs', 'trend'],
+  ['api', 'v1', 'fields', 'keys'],
+  ['api', 'v1', 'fields', 'values'],
+  ['api', 'v1', 'hosts', '{}', 'metrics'],
+  ['api', 'v1', 'kubernetes', 'clusters'],
+  ['api', 'v1', 'kubernetes', 'clusters', '{}'],
+  ['api', 'v1', 'kubernetes', 'events'],
+  ['api', 'v1', 'kubernetes', 'nodes'],
+  ['api', 'v1', 'kubernetes', 'pods'],
+  ['api', 'v1', 'kubernetes', 'pods', '{}'],
+  ['api', 'v1', 'kubernetes', 'pods', '{}', 'events'],
+  ['api', 'v1', 'kubernetes', 'pods', '{}', 'timeseries'],
+  ['api', 'v1', 'kubernetes', 'workloads'],
+  ['api', 'v1', 'kubernetes', 'workloads', '{}', '{}', '{}', '{}'],
+  [
+    'api',
+    'v1',
+    'kubernetes',
+    'workloads',
+    '{}',
+    '{}',
+    '{}',
+    '{}',
+    'timeseries',
+  ],
+  ['api', 'v1', 'logs'],
+  ['api', 'v1', 'metrics'],
+  ['api', 'v1', 'metrics', 'names'],
+  ['api', 'v1', 'metrics', '{}'],
+];
+
+/// Whether [path] (no query string) takes `from`/`to`.
+///
+/// The client adds the window to these and to nothing else:
+/// a parameter an endpoint ignores would make a screen look
+/// filtered by a range it never applied.
+bool pathTakesRange(String path) {
+  final segments = [
+    for (final s in path.split('/'))
+      if (s.isNotEmpty) s,
+  ];
+  for (final candidate in _rangedPaths) {
+    if (candidate.length != segments.length) continue;
+    var same = true;
+    for (var i = 0; i < candidate.length && same; i++) {
+      same = candidate[i] == '{}' || candidate[i] == segments[i];
+    }
+    if (same) return true;
+  }
+  return false;
+}
+
 /// AuthConfigMode of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never

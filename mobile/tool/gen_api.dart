@@ -294,7 +294,9 @@ class Generator {
         '// ignore_for_file: lines_longer_than_80_chars, unused_element',
       )
       ..writeln()
-      ..writeln(_header);
+      ..writeln(_header)
+      ..writeln()
+      ..writeln(_rangedSource());
     for (final src in _enums.values) {
       b
         ..writeln()
@@ -429,6 +431,75 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       'Teach tool/gen_api.dart the construct rather than widening a field to dynamic.',
     );
     exit(2);
+  }
+
+  /// The GET paths whose query takes `from`/`to`
+  /// (`components/parameters/From`), as segment lists with `{}` where the
+  /// path has a parameter.
+  ///
+  /// Read from the contract rather than written by hand: an endpoint that
+  /// gains a time range is covered the day it does, and one that has none
+  /// never gets a window it would ignore.
+  List<List<String>> _rangedPaths() {
+    final out = <List<String>>[];
+    final paths = spec['paths'] as YamlMap;
+    for (final entry in paths.entries) {
+      final path = entry.key as String;
+      final node = entry.value;
+      if (node is! YamlMap) continue;
+      final get = node['get'];
+      if (get is! YamlMap) continue;
+      final params = [
+        ...(node['parameters'] as YamlList? ?? const []),
+        ...(get['parameters'] as YamlList? ?? const []),
+      ];
+      final ranged = params.any(
+        (p) => p is YamlMap && p[r'$ref'] == '#/components/parameters/From',
+      );
+      if (!ranged) continue;
+      out.add([
+        for (final seg in path.split('/'))
+          if (seg.isNotEmpty) (seg.startsWith('{') ? '{}' : seg),
+      ]);
+    }
+    out.sort((a, b) => a.join('/').compareTo(b.join('/')));
+    return out;
+  }
+
+  String _rangedSource() {
+    final b = StringBuffer()
+      ..writeln('/// The paths whose GET takes a `from`/`to` window, from the')
+      ..writeln('/// contract. `{}` stands for a path parameter.')
+      ..writeln('const _rangedPaths = <List<String>>[');
+    for (final p in _rangedPaths()) {
+      b.writeln("  ['${p.join("', '")}'],");
+    }
+    b
+      ..writeln('];')
+      ..writeln()
+      ..writeln('/// Whether [path] (no query string) takes `from`/`to`.')
+      ..writeln('///')
+      ..writeln('/// The client adds the window to these and to nothing else:')
+      ..writeln('/// a parameter an endpoint ignores would make a screen look')
+      ..writeln('/// filtered by a range it never applied.')
+      ..writeln('bool pathTakesRange(String path) {')
+      ..writeln('  final segments = [')
+      ..writeln("    for (final s in path.split('/'))")
+      ..writeln('      if (s.isNotEmpty) s,')
+      ..writeln('  ];')
+      ..writeln('  for (final candidate in _rangedPaths) {')
+      ..writeln('    if (candidate.length != segments.length) continue;')
+      ..writeln('    var same = true;')
+      ..writeln('    for (var i = 0; i < candidate.length && same; i++) {')
+      ..writeln(
+        "      same = candidate[i] == '{}' || candidate[i] == segments[i];",
+      )
+      ..writeln('    }')
+      ..writeln('    if (same) return true;')
+      ..writeln('  }')
+      ..writeln('  return false;')
+      ..writeln('}');
+    return b.toString();
   }
 
   YamlMap _responseSchema(String method, String path, String status) {

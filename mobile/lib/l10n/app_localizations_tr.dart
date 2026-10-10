@@ -3893,4 +3893,52 @@ class LTr extends L {
   @override
   String get savedViewNothingToApply =>
       'Bu görünümde bu ekranın uygulayabileceği bir koşul yok.';
+
+  @override
+  String get rangeTitle => 'Zaman aralığı';
+
+  @override
+  String get range15m => 'Son 15 dakika';
+
+  @override
+  String get range1h => 'Son 1 saat';
+
+  @override
+  String get range6h => 'Son 6 saat';
+
+  @override
+  String get range24h => 'Son 24 saat';
+
+  @override
+  String get range7d => 'Son 7 gün';
+
+  @override
+  String get rangeCustom => 'Özel aralık';
+
+  @override
+  String get rangeFrom => 'Başlangıç';
+
+  @override
+  String get rangeTo => 'Bitiş';
+
+  @override
+  String get rangeInvalid => 'Başlangıç bitişten önce olmalı.';
+
+  @override
+  String get rangeApply => 'Uygula';
+
+  @override
+  String get range15mShort => '15 dk';
+
+  @override
+  String get range1hShort => '1 sa';
+
+  @override
+  String get range6hShort => '6 sa';
+
+  @override
+  String get range24hShort => '24 sa';
+
+  @override
+  String get range7dShort => '7 g';
 }

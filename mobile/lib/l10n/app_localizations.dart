@@ -6912,6 +6912,102 @@ abstract class L {
   /// In en, this message translates to:
   /// **'This view carries nothing this screen can apply.'**
   String get savedViewNothingToApply;
+
+  /// No description provided for @rangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Time range'**
+  String get rangeTitle;
+
+  /// No description provided for @range15m.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 15 minutes'**
+  String get range15m;
+
+  /// No description provided for @range1h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last hour'**
+  String get range1h;
+
+  /// No description provided for @range6h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 6 hours'**
+  String get range6h;
+
+  /// No description provided for @range24h.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 24 hours'**
+  String get range24h;
+
+  /// No description provided for @range7d.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get range7d;
+
+  /// No description provided for @rangeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom range'**
+  String get rangeCustom;
+
+  /// No description provided for @rangeFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get rangeFrom;
+
+  /// No description provided for @rangeTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get rangeTo;
+
+  /// No description provided for @rangeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'From must be before to.'**
+  String get rangeInvalid;
+
+  /// No description provided for @rangeApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get rangeApply;
+
+  /// No description provided for @range15mShort.
+  ///
+  /// In en, this message translates to:
+  /// **'15m'**
+  String get range15mShort;
+
+  /// No description provided for @range1hShort.
+  ///
+  /// In en, this message translates to:
+  /// **'1h'**
+  String get range1hShort;
+
+  /// No description provided for @range6hShort.
+  ///
+  /// In en, this message translates to:
+  /// **'6h'**
+  String get range6hShort;
+
+  /// No description provided for @range24hShort.
+  ///
+  /// In en, this message translates to:
+  /// **'24h'**
+  String get range24hShort;
+
+  /// No description provided for @range7dShort.
+  ///
+  /// In en, this message translates to:
+  /// **'7d'**
+  String get range7dShort;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

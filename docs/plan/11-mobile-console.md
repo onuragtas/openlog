@@ -393,6 +393,24 @@ Sahibin uyarısı (2026-10-10): mobilin menüsü webde olmayan girişler taşıy
       Yönlendirme, Susturmalar. Önce dördü ayrı menü girişiydi.
 - Bir test sekmelerin adını ve sırasını tutuyor; sırayı bozup kırmızıya döndüğünü gördüm.
 
+### 9.0b Zaman aralığı ve otomatik yenileme
+
+Sahibin sorusu (2026-10-10): webde üst çubukta bir zaman aralığı seçici ve bir otomatik
+yenileme var; mobilde yoktu. Ölçüm: istemcinin 174 metodundan 173'ü hiç `from`/`to`
+göndermiyordu, yani her ekran sunucunun varsayılanını (son 1 saat) gösteriyordu.
+
+- [x] Zaman aralığı: webin `RangeSpec`'inin karşılığı (`15m/1h/6h/24h/7d` ya da mutlak
+      from/to), uygulama çubuğunda aralığı yazan bir çip ve altında hazır aralıklar +
+      özel aralık sayfası. Pencere istek anında çözülüyor, seçim anında değil — "son 1
+      saat" her yenilemede son 1 saat demek.
+      Hangi uçların aralık aldığını **üreteç sözleşmeden çıkarıyor** (`pathTakesRange`):
+      43 yol. Aralık almayan bir uca pencere eklemek, o ekranı uygulanmamış bir aralıkla
+      süzülmüş gibi gösterirdi. Kendi penceresini veren çağrı (olay korelasyonu)
+      dokunulmadan bırakılıyor.
+      Aralık değişince yüklenmiş her bölüm bayatlıyor, görünen bölüm hemen yeniden
+      soruyor; diğerleri açıldıklarında. Hepsini birden yenilemek on üç istek olurdu.
+- [ ] Otomatik yenileme (webin 5s/10s/30s/1m/5m/15m denetimi)
+
 ### 9.1 Alarmlar
 - [x] Susturmalar (`alerts/mutes`): liste, süreli oluşturma, bitirme. Tekrarlayan takvim
       düzenleyicisi (`mutes/preview`, `AlertMuteScheduleInput`) hâlâ webde; okunuyor, yazılmıyor.

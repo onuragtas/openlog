@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../time_range.dart';
 import 'schema.g.dart';
 
 /// The address the app offers first. openlog is self-hosted, so this is a
@@ -144,7 +145,31 @@ class OpenlogClient {
 
   void close() => _http.close();
 
-  Uri _uri(String path) => Uri.parse('$baseUrl$path');
+  /// The window every ranged request carries, or null while nothing has
+  /// chosen one (tests, sign-in). Set by the app shell from the range
+  /// picker.
+  ///
+  /// A function, not a value: a relative range has to be resolved when
+  /// the request is made, or "the last hour" would freeze at the moment
+  /// it was picked.
+  TimeRange Function()? window;
+
+  Uri _uri(String path) {
+    final uri = Uri.parse('$baseUrl$path');
+    final range = window?.call();
+    // Only the paths the contract gives a `from`/`to`, and only when the
+    // caller did not set its own window (the correlation screen asks
+    // about an incident's window, not the screen's).
+    if (range == null ||
+        !pathTakesRange(uri.path) ||
+        uri.queryParameters.containsKey('from') ||
+        uri.queryParameters.containsKey('to')) {
+      return uri;
+    }
+    return uri.replace(
+      queryParameters: {...uri.queryParameters, ...range.query(DateTime.now())},
+    );
+  }
 
   Map<String, String> _headers({bool json = false}) {
     final h = <String, String>{'accept': 'application/json'};
