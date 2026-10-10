@@ -3894,4 +3894,8 @@ class LEn extends L {
 
   @override
   String get storageLevelsOnWeb => 'The levels are changed on the web.';
+
+  @override
+  String get savedViewNothingToApply =>
+      'This view carries nothing this screen can apply.';
 }

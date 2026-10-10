@@ -45,11 +45,27 @@ class Filter {
 
   /// Reads one out of a saved view's state, which is somebody else's JSON.
   ///
+  /// Two shapes, as `sanitizeFilter` in the web's query builder takes
+  /// them: the object `{key, op, value|values}` and the compact tuple
+  /// `[key, op, value]` that the web's URLs carry. A view written in
+  /// either form has to open on both ends; reading only one of them made
+  /// a browser's view look empty here.
+  ///
   /// Null for anything this app would not be able to send: an unknown
   /// operator, a missing value, a value that is not a scalar. A view made in
   /// a browser version this app does not know must drop the condition it
   /// cannot show rather than send it back as something else.
   static Filter? fromJson(Object? json) {
+    if (json is List) {
+      // [key, op] for exists/not_exists, [key, op, value|values] for the
+      // rest -- the same positions the web writes.
+      if (json.length < 2 || json.length > 3) return null;
+      return fromJson({
+        'key': json[0],
+        'op': json[1],
+        if (json.length == 3) 'value': json[2],
+      });
+    }
     if (json is! Map) return null;
     final key = json['key'];
     final op = json['op'];

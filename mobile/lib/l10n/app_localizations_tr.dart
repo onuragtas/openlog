@@ -3889,4 +3889,8 @@ class LTr extends L {
 
   @override
   String get storageLevelsOnWeb => 'Seviyeler webde değiştirilir.';
+
+  @override
+  String get savedViewNothingToApply =>
+      'Bu görünümde bu ekranın uygulayabileceği bir koşul yok.';
 }

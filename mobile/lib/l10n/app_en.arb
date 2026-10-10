@@ -2587,5 +2587,6 @@
           }
       }
   },
-  "storageLevelsOnWeb": "The levels are changed on the web."
+  "storageLevelsOnWeb": "The levels are changed on the web.",
+  "savedViewNothingToApply": "This view carries nothing this screen can apply."
 }

@@ -2490,5 +2490,6 @@
           }
       }
   },
-  "storageLevelsOnWeb": "Seviyeler webde değiştirilir."
+  "storageLevelsOnWeb": "Seviyeler webde değiştirilir.",
+  "savedViewNothingToApply": "Bu görünümde bu ekranın uygulayabileceği bir koşul yok."
 }

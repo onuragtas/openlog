@@ -186,8 +186,12 @@ class ViewState {
 
   /// Read out of a view's `state`, which is somebody else's JSON.
   factory ViewState.of(Map<String, Object?> state, {required String signal}) {
-    final filters = filtersFromJson(state['filters']);
-    final groups = state['groups'];
+    // `f`/`g` before `filters`/`groups`: the web's own decoder reads
+    // either, because a view's state is untrusted JSON that may have been
+    // written by another build, by hand or by a copied URL. Reading only
+    // the long form made such a view apply as nothing at all.
+    final filters = filtersFromJson(state['f'] ?? state['filters']);
+    final groups = state['g'] ?? state['groups'];
     final q = state['q'];
     if (signal == 'traces') {
       return ViewState(
@@ -234,6 +238,12 @@ class ViewState {
   /// True when applying this view here shows something other than what it
   /// was saved as.
   bool get partial => hiddenGroups > 0 || allSpans;
+
+  /// True when the view carries nothing this screen can act on: no
+  /// conditions, no search, no severity, no sort. Applying it is a
+  /// no-op, and a screen that looks unchanged has to say why.
+  bool get empty =>
+      filters.isEmpty && query.isEmpty && severityMin.isEmpty && !slowest;
 }
 
 /// `severity_number >= 13` is how this app's severity button reaches the

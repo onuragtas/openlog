@@ -6906,6 +6906,12 @@ abstract class L {
   /// In en, this message translates to:
   /// **'The levels are changed on the web.'**
   String get storageLevelsOnWeb;
+
+  /// No description provided for @savedViewNothingToApply.
+  ///
+  /// In en, this message translates to:
+  /// **'This view carries nothing this screen can apply.'**
+  String get savedViewNothingToApply;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -164,7 +164,9 @@ class _SavedViewsSheetState extends State<_SavedViewsSheet> {
     );
     if (view == null || !mounted) return;
     _name.clear();
-    widget.onApply(view);
+    // No apply: the state was read off this screen a moment ago, so
+    // applying it would change nothing and the second message would
+    // push "saved" off the screen before it was read.
     Navigator.of(context).pop();
     // The sheet closing is not an answer. A view that reached the server
     // and came back says so; one that did not keeps the sheet open with
@@ -390,20 +392,27 @@ class _SavedViewsSheetState extends State<_SavedViewsSheet> {
   }
 }
 
-/// Says what a view asks for that this screen cannot show. Nothing when the
-/// view applies as it was saved.
-void reportPartialView(BuildContext context, ViewState state) {
-  if (!state.partial) return;
+/// Says what applying a view did: its name, what it could not show, or
+/// that it carried nothing this screen can act on.
+///
+/// Silence is the one thing this must not do. A view whose conditions are
+/// already on screen changes nothing, and without a word that is
+/// indistinguishable from a tap that did not register.
+void reportAppliedView(BuildContext context, SavedView view, ViewState state) {
   final l = L.of(context);
   final lines = [
+    if (state.empty)
+      l.savedViewNothingToApply
+    else
+      l.savedViewApplied(view.name),
     if (state.hiddenGroups > 0) l.savedViewGroupsIgnored(state.hiddenGroups),
     if (state.allSpans) l.savedViewAllSpans,
   ];
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      key: const Key('view-partial'),
+      key: const Key('view-applied'),
       content: Text(lines.join('\n')),
-      duration: const Duration(seconds: 6),
+      duration: Duration(seconds: lines.length > 1 ? 6 : 3),
     ),
   );
 }

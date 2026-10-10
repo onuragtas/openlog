@@ -107,7 +107,7 @@ class _LogsBodyState extends State<LogsBody>
     c.refresh();
     _reloadVolume();
     if (widget.patterns.loaded) _reloadPatterns();
-    reportPartialView(context, state);
+    reportAppliedView(context, view, state);
   }
 
   /// The patterns answer the same question as the list, so they are asked

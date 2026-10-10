@@ -46,7 +46,7 @@ class TracesBody extends StatelessWidget {
     c.slowest = state.slowest;
     c.refresh();
     _loadVolume();
-    reportPartialView(context, state);
+    reportAppliedView(context, view, state);
   }
 
   @override

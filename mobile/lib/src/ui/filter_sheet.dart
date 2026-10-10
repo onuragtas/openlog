@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../api/schema.g.dart';
 import '../fields.dart';
 import '../session.dart';
 import 'failure_text.dart';
@@ -46,6 +47,14 @@ class _FilterSheet extends StatefulWidget {
 class _FilterSheetState extends State<_FilterSheet> {
   final _search = TextEditingController();
 
+  /// What is in the search box right now.
+  ///
+  /// The list is narrowed as it is typed, over the keys and values the
+  /// server already sent, and pressing search asks the server for the
+  /// ones it did not send. Waiting for submit was the whole interaction
+  /// doing nothing while somebody typed.
+  String _query = '';
+
   /// The values ticked so far. Several make an `in` filter, which is one
   /// condition rather than three the server has to OR together.
   final _picked = <String>{};
@@ -55,6 +64,22 @@ class _FilterSheetState extends State<_FilterSheet> {
     _search.dispose();
     super.dispose();
   }
+
+  bool _matches(String text) =>
+      _query.isEmpty || text.toLowerCase().contains(_query.toLowerCase());
+
+  List<FieldKey> _shownKeys(FieldsController f) => [
+    for (final k in f.keys)
+      if (_matches(k.key)) k,
+  ];
+
+  List<FieldValue> _shownValues(FieldsController f) => [
+    for (final v in f.values)
+      // A ticked value stays on the list whatever is typed: unticking
+      // something that scrolled out of the search is otherwise
+      // impossible, and it would still be in the filter.
+      if (_matches(v.value) || _picked.contains(v.value)) v,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +103,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       onPressed: () {
                         _picked.clear();
                         _search.clear();
+                        setState(() => _query = '');
                         f.loadKeys();
                       },
                       icon: const Icon(Icons.arrow_back),
@@ -110,6 +136,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 key: const Key('filter-search'),
                 controller: _search,
                 textInputAction: TextInputAction.search,
+                onChanged: (q) => setState(() => _query = q),
                 onSubmitted: (q) => f.key.isEmpty
                     ? f.loadKeys(q: q.trim())
                     : f.loadValues(f.key, q: q.trim()),
@@ -149,7 +176,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                   : f.key.isEmpty
                   ? ListView(
                       children: [
-                        for (final k in f.keys)
+                        for (final k in _shownKeys(f))
                           ListTile(
                             key: Key('filter-key-${k.key}'),
                             dense: true,
@@ -168,7 +195,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                     )
                   : ListView(
                       children: [
-                        for (final v in f.values)
+                        for (final v in _shownValues(f))
                           CheckboxListTile(
                             key: Key('filter-value-${v.value}'),
                             dense: true,

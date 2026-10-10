@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/fields.dart';
+import 'package:openlog_mobile/src/logs.dart';
 import 'package:openlog_mobile/src/saved_views.dart';
 
 import 'fake_server.dart';
@@ -66,6 +67,46 @@ void main() {
     // as well.
     expect(state.filters.last.values, ['500', '503']);
     expect(state.partial, isFalse);
+  });
+
+  test('the compact shape a browser URL carries is read too', () {
+    // `f` with tuples is what the web's own decoder accepts beside
+    // `filters` with objects; a view written either way has to open on
+    // both ends.
+    final state = ViewState.of(const {
+      'f': [
+        ['service.name', '=', 'checkout'],
+        [
+          'http.status_code',
+          'in',
+          [500, 503],
+        ],
+        ['error.stack', 'exists'],
+        ['severity_number', '>=', 13],
+      ],
+      'q': 'timeout',
+    }, signal: 'logs');
+
+    expect(
+      [for (final f in state.filters) f.key],
+      ['service.name', 'http.status_code', 'error.stack'],
+    );
+    expect(state.filters[1].values, ['500', '503']);
+    expect(state.filters[2].values, isEmpty);
+    expect(state.severityMin, 'WARN');
+    expect(state.query, 'timeout');
+    expect(state.empty, isFalse);
+  });
+
+  test('a view with nothing in it says so rather than looking applied', () {
+    expect(ViewState.of(const {}, signal: 'logs').empty, isTrue);
+    expect(
+      ViewState.of(const {
+        'columns': ['body'],
+      }, signal: 'logs').empty,
+      isTrue,
+    );
+    expect(ViewState.of(const {'q': 'timeout'}, signal: 'logs').empty, isFalse);
   });
 
   test('conditions this app could not send are dropped', () {
@@ -185,6 +226,46 @@ void main() {
     expect(read.severityMin, 'ERROR');
     expect(read.filters.single.values, ['500', '503']);
     expect(read.partial, isFalse);
+  });
+
+  test('a view applied to the logs changes what is asked for', () async {
+    final server = await FakeServer.start(
+      (req, seen) =>
+          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+    );
+    addTearDown(server.stop);
+    final logs = LogsController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+    );
+
+    await logs.refresh();
+
+    // What a screen does with a view: read it, put it on the controller,
+    // ask again. The wire is the thing being checked -- a filter that is
+    // held but not sent looks exactly like a view that did nothing.
+    final state = ViewState.of(const {
+      'filters': [
+        {'key': 'service.name', 'op': '=', 'value': 'checkout'},
+        {'key': 'severity_number', 'op': '>=', 'value': 17},
+      ],
+      'q': 'timeout',
+    }, signal: 'logs');
+    logs
+      ..filters = state.filters
+      ..query = state.query
+      ..severityMin = state.severityMin
+      ..service = '';
+    await logs.refresh();
+
+    expect(
+      Uri.decodeQueryComponent(server.requests.first.query),
+      'limit=50&severity_min=WARN',
+    );
+    expect(
+      Uri.decodeQueryComponent(server.requests.last.query),
+      'limit=50&filters=[{"key":"service.name","op":"=","value":"checkout"}]'
+      '&q=timeout&severity_min=ERROR',
+    );
   });
 
   group('against a server', () {

@@ -56,12 +56,24 @@ class ListScreen<T> extends StatelessWidget {
                         ? 2
                         : (itemCount ?? controller.items.length) + 2,
                     itemBuilder: (context, i) {
-                      if (i == 0) return header ?? const SizedBox.shrink();
+                      if (i == 0) {
+                        // Above the rows, not under them: a refresh that
+                        // failed leaves the previous rows on screen, and
+                        // an explanation at the end of a long list is an
+                        // explanation nobody reads.
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (controller.items.isNotEmpty) banner,
+                            header ?? const SizedBox.shrink(),
+                          ],
+                        );
+                      }
                       if (controller.items.isEmpty) {
                         return _Empty(title: emptyTitle, banner: banner);
                       }
                       final rows = itemCount ?? controller.items.length;
-                      if (i == rows + 1) return banner;
+                      if (i == rows + 1) return const SizedBox.shrink();
                       return itemBuilder(context, i - 1);
                     },
                   ),

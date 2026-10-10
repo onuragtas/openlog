@@ -191,6 +191,50 @@ void main() {
     expect(find.text('Ödeme hataları'), findsOneWidget);
   });
 
+  testWidgets('applying a view that carries nothing says so', (tester) async {
+    final views = ScriptedViews(
+      views: [
+        savedView('v1', state: const {'filters': [], 'q': ''}),
+      ],
+    );
+    await pump(tester, views);
+
+    await tester.tap(find.byKey(const Key('saved-views')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('view-v1')));
+    await tester.pumpAndSettle();
+
+    // The list cannot change, so the screen says why rather than
+    // looking like the tap was missed.
+    expect(
+      find.text('Bu görünümde bu ekranın uygulayabileceği bir koşul yok.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('applying a view says which one', (tester) async {
+    final views = ScriptedViews(
+      views: [
+        savedView(
+          'v1',
+          state: const {
+            'filters': [
+              {'key': 'service.name', 'op': '=', 'value': 'checkout'},
+            ],
+          },
+        ),
+      ],
+    );
+    await pump(tester, views);
+
+    await tester.tap(find.byKey(const Key('saved-views')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('view-v1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ödeme hataları uygulandı'), findsOneWidget);
+  });
+
   testWidgets('a view with OR groups says what it could not show', (
     tester,
   ) async {
@@ -218,7 +262,7 @@ void main() {
     await tester.tap(find.byKey(const Key('view-v1')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('view-partial')), findsOneWidget);
+    expect(find.byKey(const Key('view-applied')), findsOneWidget);
   });
 
   testWidgets('saving sends what is on screen, under the chosen visibility', (
@@ -254,7 +298,8 @@ void main() {
     ]);
     // Saving closes the sheet, says it was kept, and names it on the
     // button -- the sheet closing on its own would look the same whether
-    // the server took it or not.
+    // the server took it or not. It does not also "apply" the view: the
+    // state came off this screen a second ago.
     expect(find.byKey(const Key('view-name')), findsNothing);
     expect(find.byKey(const Key('view-saved')), findsOneWidget);
     expect(find.text('“Gece nöbeti” kaydedildi'), findsOneWidget);
