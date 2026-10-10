@@ -4045,4 +4045,15 @@ class LTr extends L {
 
   @override
   String get traceSpanFromLog => 'logun span\'i';
+
+  @override
+  String logDetailPosition(int index, int total) {
+    return '$index / $total';
+  }
+
+  @override
+  String get logDetailPrev => 'Önceki kayıt';
+
+  @override
+  String get logDetailNext => 'Sonraki kayıt';
 }

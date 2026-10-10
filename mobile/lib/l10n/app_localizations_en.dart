@@ -4049,4 +4049,15 @@ class LEn extends L {
 
   @override
   String get traceSpanFromLog => 'the log\'s span';
+
+  @override
+  String logDetailPosition(int index, int total) {
+    return '$index / $total';
+  }
+
+  @override
+  String get logDetailPrev => 'Previous record';
+
+  @override
+  String get logDetailNext => 'Next record';
 }

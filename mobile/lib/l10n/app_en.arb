@@ -2647,5 +2647,18 @@
       }
     }
   },
-  "traceSpanFromLog": "the log's span"
+  "traceSpanFromLog": "the log's span",
+  "logDetailPosition": "{index} / {total}",
+  "logDetailPrev": "Previous record",
+  "logDetailNext": "Next record",
+  "@logDetailPosition": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

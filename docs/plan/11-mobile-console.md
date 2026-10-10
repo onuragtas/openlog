@@ -588,6 +588,13 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       (3) "Span'i aç": iz ekranı artık bir span'e açılabiliyor (`TraceScreen.spanId`),
       o satır vurgulanıp görünür alana kaydırılıyor. Seksen span'lik bir izde
       yalnız iz bağlantısı, gözle arama demekti.
+      Sahibin üçüncü notu (2026-10-11): kayıttan kayda geçmek için açıp kapatmak
+      gerekiyordu. Ayrıntı artık tek kayıt değil, listenin sayfası: yana kaydırma
+      sonraki/önceki kayda geçiyor, çubukta "2 / 3" ve iki ok var (uçlarda pasif),
+      alan araması sayfalar arasında taşınıyor -- `http.status_code`'u bu kayıtta
+      arayan, sonrakinde de arıyor. JSON sekmesi kaldırıldı; alanların üstünde
+      katlanır bir bölüm oldu: sekme, cevabı neredeyse her zaman "alanlar" olan
+      bir soruya telefon ekranından bir satır harcıyordu.
 - [x] Dinamik sütunlar ve sıralama (webin tablo seçenekleri): "Sütunlar" düğmesi
       sözlükten anahtar seçtiriyor (`timestamp` sabit, en çok 50, "Sıfırla" webin
       dört varsayılanına döner) ve "Önce en yeni / en eski" sıralamayı çeviriyor.

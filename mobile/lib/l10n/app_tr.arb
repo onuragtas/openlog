@@ -2550,5 +2550,18 @@
       }
     }
   },
-  "traceSpanFromLog": "logun span'i"
+  "traceSpanFromLog": "logun span'i",
+  "logDetailPosition": "{index} / {total}",
+  "logDetailPrev": "Önceki kayıt",
+  "logDetailNext": "Sonraki kayıt",
+  "@logDetailPosition": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

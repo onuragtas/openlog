@@ -7200,6 +7200,24 @@ abstract class L {
   /// In en, this message translates to:
   /// **'the log\'s span'**
   String get traceSpanFromLog;
+
+  /// No description provided for @logDetailPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} / {total}'**
+  String logDetailPosition(int index, int total);
+
+  /// No description provided for @logDetailPrev.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous record'**
+  String get logDetailPrev;
+
+  /// No description provided for @logDetailNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next record'**
+  String get logDetailNext;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -355,7 +355,10 @@ class _LogsBodyState extends State<LogsBody>
             context,
             session: widget.session,
             sections: widget.sections,
-            record: c.items[i],
+            // The whole page, so the next record is a swipe: reading
+            // logs is reading a sequence, not opening one line.
+            records: c.items,
+            index: i,
             columns: c.columns,
             // A field can become a column from the record itself, as it
             // can in the browser -- it is the same gesture as filtering

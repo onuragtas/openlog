@@ -228,7 +228,7 @@ void main() {
     });
   });
 
-  test('the JSON tab is the record, with the body opened up', () {
+  test('the JSON fold is the record, with the body opened up', () {
     final text = recordJson(row(body: '{"level":"error"}'));
     final m = jsonDecode(text) as Map<String, Object?>;
     expect(m['body'], {'level': 'error'});
@@ -242,7 +242,9 @@ void main() {
 
     Future<List<Filter>> pump(
       WidgetTester tester, {
-      required LogQueryRow record,
+      LogQueryRow? record,
+      List<LogQueryRow> records = const [],
+      int index = 0,
       List<String> columns = const [],
     }) async {
       final added = <Filter>[];
@@ -268,7 +270,8 @@ void main() {
                   context,
                   session: session,
                   sections: sections,
-                  record: record,
+                  records: records.isEmpty ? [record!] : records,
+                  index: index,
                   onFilter: added.add,
                   columns: columns,
                   onToggleColumn: toggled.add,
@@ -394,6 +397,89 @@ void main() {
       await pump(tester, record: row());
       expect(find.byKey(const Key('log-open-trace')), findsNothing);
       expect(find.byKey(const Key('log-open-span')), findsNothing);
+    });
+
+    testWidgets('the next record is a swipe, and the bar says which', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        records: [
+          row(body: 'first'),
+          row(body: 'second'),
+          row(body: 'third'),
+        ],
+      );
+
+      expect(find.text('1 / 3'), findsOneWidget);
+      expect(find.text('first'), findsWidgets);
+      // Back is disabled on the first record rather than wrapping around
+      // to the oldest one.
+      expect(
+        tester.widget<IconButton>(find.byKey(const Key('log-prev'))).onPressed,
+        isNull,
+      );
+
+      await tester.fling(
+        find.byKey(const Key('log-pages')),
+        const Offset(-400, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(find.text('second'), findsWidgets);
+
+      // And the bar's own buttons, for a thumb that is already up there.
+      await tester.tap(find.byKey(const Key('log-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('3 / 3'), findsOneWidget);
+      expect(
+        tester.widget<IconButton>(find.byKey(const Key('log-next'))).onPressed,
+        isNull,
+      );
+      await tester.tap(find.byKey(const Key('log-prev')));
+      await tester.pumpAndSettle();
+      expect(find.text('2 / 3'), findsOneWidget);
+    });
+
+    testWidgets('the field search carries over to the next record', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        records: [
+          row(attributes: {'http.method': 'GET', 'db.system': 'pg'}),
+          row(attributes: {'http.method': 'POST', 'db.system': 'pg'}),
+        ],
+      );
+
+      await tester.enterText(find.byKey(const Key('log-field-search')), 'http');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('log-next')));
+      await tester.pumpAndSettle();
+
+      // Looking for one key across records is the whole reason the next
+      // record is one gesture away.
+      expect(find.text('attributes.http.method'), findsOneWidget);
+      expect(find.text('attributes.db.system'), findsNothing);
+      expect(find.text('POST'), findsOneWidget);
+    });
+
+    testWidgets('the JSON is a fold, closed until it is asked for', (
+      tester,
+    ) async {
+      await pump(tester, record: row(body: '{"level":"error"}'));
+
+      expect(find.byKey(const Key('log-json-text')), findsNothing);
+      // The fields are what the screen is for; the JSON is what somebody
+      // pastes into a ticket once in a while.
+      expect(find.text('attributes.http.method'), findsNothing);
+
+      await tester.tap(find.text('JSON'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('log-json-text')), findsOneWidget);
     });
 
     testWidgets('a value too long to filter by says so and changes nothing', (
