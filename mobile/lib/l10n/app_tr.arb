@@ -2466,5 +2466,29 @@
               "type": "String"
           }
       }
-  }
+  },
+  "storageShedOn": "Yer açmak için eski veri siliniyor: %{start} üstünde başlar, %{stop} altında durur.",
+  "@storageShedOn": {
+      "placeholders": {
+          "start": {
+              "type": "int"
+          },
+          "stop": {
+              "type": "int"
+          }
+      }
+  },
+  "storageShedOff": "Yer açmak için veri silinmiyor.",
+  "storageConfiguredBy": "Seviyeleri {who} ayarladı ({when}).",
+  "@storageConfiguredBy": {
+      "placeholders": {
+          "who": {
+              "type": "String"
+          },
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "storageLevelsOnWeb": "Seviyeler webde değiştirilir."
 }

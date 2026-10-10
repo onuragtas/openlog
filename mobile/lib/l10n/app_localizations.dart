@@ -6882,6 +6882,30 @@ abstract class L {
   /// In en, this message translates to:
   /// **'A setting for this scope already exists: {message}'**
   String integrationConflict(String message);
+
+  /// No description provided for @storageShedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Old data is deleted to make room: starts above {start}%, stops below {stop}%.'**
+  String storageShedOn(int start, int stop);
+
+  /// No description provided for @storageShedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'No data is deleted to make room.'**
+  String get storageShedOff;
+
+  /// No description provided for @storageConfiguredBy.
+  ///
+  /// In en, this message translates to:
+  /// **'{who} set these levels ({when}).'**
+  String storageConfiguredBy(String who, String when);
+
+  /// No description provided for @storageLevelsOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'The levels are changed on the web.'**
+  String get storageLevelsOnWeb;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

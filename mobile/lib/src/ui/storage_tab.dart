@@ -1,8 +1,13 @@
 // How full the ClickHouse disks are.
 //
-// The web's Depolama tab: one row per disk of each replica, the levels in
-// force, and when the measurement was taken. Read-only here as there --
-// changing the levels is the operator's, server-side.
+// The web's Depolama tab: one row per disk of each replica, the levels
+// they are reported at, whether openlog is allowed to delete old data to
+// make room, and when the last measurement was taken.
+//
+// Read-only. The web lets an owner move the levels; that form carries a
+// switch which, once on, lets the server delete telemetry -- five number
+// fields with three ordering rules between them is not a thing to get
+// right on a phone, and the screen says where it is done instead.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -10,6 +15,7 @@ import '../api/schema.g.dart';
 import '../session.dart';
 import '../usage.dart';
 import 'failure_text.dart';
+import 'list_scaffold.dart' show relativeTimeOf;
 import 'severity.dart';
 
 class StorageTab extends StatelessWidget {
@@ -58,6 +64,41 @@ class StorageTab extends StatelessWidget {
                       space.effective.warnPercent,
                       space.effective.highPercent,
                     ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    // Whether old data is deleted to make room, and
+                    // between which levels. Off is the default and the
+                    // safe answer, so it is worth saying either way.
+                    space.effective.shedEnabled
+                        ? l.storageShedOn(
+                            space.effective.shedStartPercent,
+                            space.effective.shedStopPercent,
+                          )
+                        : l.storageShedOff,
+                    key: const Key('storage-shedding'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: space.effective.shedEnabled
+                          ? severityTextColor(context, SeverityLevel.warning)
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (space.configured != null)
+                    Text(
+                      // Somebody set these; the built-in levels are
+                      // different and it matters which is in force.
+                      l.storageConfiguredBy(
+                        space.configured!.updatedBy,
+                        relativeTimeOf(l, space.configured!.updatedAt),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  Text(
+                    l.storageLevelsOnWeb,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

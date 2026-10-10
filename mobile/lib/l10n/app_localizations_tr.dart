@@ -3873,4 +3873,20 @@ class LTr extends L {
   String integrationConflict(String message) {
     return 'Bu kapsam için zaten bir ayar var: $message';
   }
+
+  @override
+  String storageShedOn(int start, int stop) {
+    return 'Yer açmak için eski veri siliniyor: %$start üstünde başlar, %$stop altında durur.';
+  }
+
+  @override
+  String get storageShedOff => 'Yer açmak için veri silinmiyor.';
+
+  @override
+  String storageConfiguredBy(String who, String when) {
+    return 'Seviyeleri $who ayarladı ($when).';
+  }
+
+  @override
+  String get storageLevelsOnWeb => 'Seviyeler webde değiştirilir.';
 }

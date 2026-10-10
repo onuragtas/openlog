@@ -604,7 +604,12 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       uzaktan yapılandırma kapalıysa kaydetmeden önce söylüyor.
       Yalnızca yapılandırılabilen entegrasyonlarda ve yalnızca yöneticide görünüyor —
       docker ve IIS'i ajan kendi yapılandırır, üyenin dokunuşu 403 alırdı.
-- [ ] Depolama (`storage/disk`, `.../settings`)
+- [x] Depolama (`storage/disk`): depolama sekmesi diskleri ve seviyeleri gösteriyordu;
+      artık yer açmak için eski verinin silinip silinmediğini (hangi seviyede başlayıp
+      hangisinde durduğunu), seviyeleri kimin ne zaman ayarladığını da söylüyor.
+      `storage/disk/settings` yazma dışarıda: beş sayı alanı ve aralarında üç sıralama
+      kuralı olan, bir anahtarı açılınca sunucunun telemetriyi silmesine izin veren bir
+      form telefonda doğru doldurulacak şey değil — ekran nerede yapıldığını söylüyor.
 
 ### 9.6 RUM
 - [ ] Sayfalar, vitals ayrıntısı, oturumlar, sürümler, huni (`rum/pages|vitals|sessions|releases|funnel`)

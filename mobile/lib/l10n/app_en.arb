@@ -2563,5 +2563,29 @@
               "type": "String"
           }
       }
-  }
+  },
+  "storageShedOn": "Old data is deleted to make room: starts above {start}%, stops below {stop}%.",
+  "@storageShedOn": {
+      "placeholders": {
+          "start": {
+              "type": "int"
+          },
+          "stop": {
+              "type": "int"
+          }
+      }
+  },
+  "storageShedOff": "No data is deleted to make room.",
+  "storageConfiguredBy": "{who} set these levels ({when}).",
+  "@storageConfiguredBy": {
+      "placeholders": {
+          "who": {
+              "type": "String"
+          },
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "storageLevelsOnWeb": "The levels are changed on the web."
 }

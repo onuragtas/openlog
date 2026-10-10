@@ -3878,4 +3878,20 @@ class LEn extends L {
   String integrationConflict(String message) {
     return 'A setting for this scope already exists: $message';
   }
+
+  @override
+  String storageShedOn(int start, int stop) {
+    return 'Old data is deleted to make room: starts above $start%, stops below $stop%.';
+  }
+
+  @override
+  String get storageShedOff => 'No data is deleted to make room.';
+
+  @override
+  String storageConfiguredBy(String who, String when) {
+    return '$who set these levels ($when).';
+  }
+
+  @override
+  String get storageLevelsOnWeb => 'The levels are changed on the web.';
 }
