@@ -215,3 +215,71 @@ class ServiceDatabasesController extends ListController<ApmDbQuery> {
     sort: sort,
   )).queries;
 }
+
+/// When each version of a service first appeared, and what one of them did.
+///
+/// Newest first, which is the order somebody reads them in: the question is
+/// almost always about the last deployment.
+class ServiceDeploymentsController extends ListController<ApmDeployment> {
+  ServiceDeploymentsController(this.client, this.serviceName);
+
+  final OpenlogClient client;
+  final String serviceName;
+
+  /// The comparison of one deployment, by its unix-millisecond timestamp.
+  /// Null until somebody asks for one.
+  ApmDeploymentCompare? compare;
+  int? comparing;
+  bool comparingBusy = false;
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  @override
+  Future<List<ApmDeployment>> fetch() async {
+    final page = await client.apmDeployments(service: serviceName);
+    return [...page.deployments]..sort((a, b) => b.t.compareTo(a.t));
+  }
+
+  /// Asks what the deployment at [atMillis] did. Tapping the open one closes
+  /// it, because a comparison nobody is looking at is a panel in the way.
+  Future<void> toggleCompare(int atMillis) async {
+    if (comparing == atMillis) {
+      comparing = null;
+      compare = null;
+      notifyListeners();
+      return;
+    }
+    comparing = atMillis;
+    compare = null;
+    comparingBusy = true;
+    failure = null;
+    notifyListeners();
+    try {
+      compare = await client.apmDeploymentCompare(
+        service: serviceName,
+        atMillis: atMillis,
+      );
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('servicesForbidden', '')
+          : SessionFailure('unexpected', e.message);
+    } finally {
+      comparingBusy = false;
+      notifyListeners();
+    }
+  }
+}
+
+/// How a number moved across a deployment, as a ratio, or null when there is
+/// nothing to compare with.
+///
+/// Null before, null after, or a zero before all mean "no comparison", not
+/// "no change": dividing by the zero would say infinity and reading it as
+/// 0% would say the deployment did nothing.
+double? deltaRatio(double? before, double? after) {
+  if (before == null || after == null || before == 0) return null;
+  return (after - before) / before;
+}

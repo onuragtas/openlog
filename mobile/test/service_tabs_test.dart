@@ -143,13 +143,16 @@ void main() {
     await tester.pumpAndSettle();
 
     // Every tab is built at once by TabBarView, so building cannot be the
-    // signal: opening a service would ask the server six questions.
+    // signal: opening a service would ask the server six questions. The
+    // transactions are the exception -- the overview shows the top of them,
+    // as the web's does, so they come with it.
     expect(overview.calls, ['overview']);
-    expect(transactions.calls, isEmpty);
+    expect(transactions.calls, ['transactions']);
     expect(databases.calls, isEmpty);
 
     await tester.tap(find.byKey(const Key('tab-transactions')));
     await tester.pumpAndSettle();
+    // Not asked again: the overview already has them.
     expect(transactions.calls, ['transactions']);
     expect(databases.calls, isEmpty);
 

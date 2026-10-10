@@ -2118,4 +2118,38 @@ class LEn extends L {
 
   @override
   String get sortErrors => 'Errors';
+
+  @override
+  String get deploymentsTitle => 'Deployments';
+
+  @override
+  String get deploymentsEmpty => 'No version changes in this range.';
+
+  @override
+  String get deploymentsRollback => 'rollback';
+
+  @override
+  String get deploymentsFirst => 'first version';
+
+  @override
+  String deploymentsWindow(int minutes) {
+    return '$minutes minutes before and after';
+  }
+
+  @override
+  String deploymentsNewErrors(int count) {
+    return '$count error groups first seen after this deployment';
+  }
+
+  @override
+  String get serviceLatencyChart => 'Latency (p95)';
+
+  @override
+  String get serviceApdexChart => 'Apdex';
+
+  @override
+  String get serviceTopTransactions => 'Top transactions by time consumed';
+
+  @override
+  String get serviceAllTransactions => 'All transactions';
 }

@@ -38,6 +38,7 @@ const schemaTargets = <String>[
   'AlertTemplate', // the recommended rules, which is how a rule gets made on a phone
   'AlertTemplateRender', // a template plus its values, as a rule nobody has stored yet
   'AlertRulePreview', // what that rule would have done over the last few hours
+  'ApmDeploymentCompare', // what a deployment did to the service
   'ApmMap', // what calls what: the service map, as two lists on a phone
   'ApmMapPath', // and which of it one transaction touches
   'TailSamplingPolicyState', // which traces are kept, and which are thrown away
@@ -94,6 +95,7 @@ const responseTargets = <String>[
   'get /api/v1/apm/traces 200 ApmTracePage',
   'get /api/v1/apm/services/{service_name}/transactions 200 ApmTransactionPage',
   'get /api/v1/apm/services/{service_name}/databases 200 ApmDbQueryPage',
+  'get /api/v1/apm/services/{service_name}/deployments 200 ApmDeploymentPage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',

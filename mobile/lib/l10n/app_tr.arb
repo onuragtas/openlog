@@ -1305,5 +1305,29 @@
   "sortThroughput": "Hacim",
   "sortCalls": "Çağrı",
   "sortSlowest": "En yavaş",
-  "sortErrors": "Hata"
+  "sortErrors": "Hata",
+  "deploymentsTitle": "Dağıtımlar",
+  "deploymentsEmpty": "Bu aralıkta sürüm değişikliği yok.",
+  "deploymentsRollback": "geri alma",
+  "deploymentsFirst": "ilk sürüm",
+  "deploymentsWindow": "Öncesi ve sonrası {minutes} dakika",
+  "@deploymentsWindow": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "deploymentsNewErrors": "Bu dağıtımdan sonra ilk kez görülen {count} hata grubu",
+  "@deploymentsNewErrors": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceLatencyChart": "Gecikme (p95)",
+  "serviceApdexChart": "Apdex",
+  "serviceTopTransactions": "Harcanan süreye göre en üst işlemler",
+  "serviceAllTransactions": "Tüm işlemler"
 }

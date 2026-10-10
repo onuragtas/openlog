@@ -8,6 +8,7 @@ import '../detail.dart';
 import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
+import 'deployments_card.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
 import 'service_lists_tabs.dart';
@@ -42,6 +43,7 @@ class _ServiceScreenState extends State<ServiceScreen>
   late final ServiceDatabasesController _databases;
   late final ServiceTracesController _traces;
   late final ServiceMapController _map;
+  late final ServiceDeploymentsController _deployments;
   late final TabController _tabs;
 
   @override
@@ -53,8 +55,17 @@ class _ServiceScreenState extends State<ServiceScreen>
     _databases = widget.sections.serviceDatabases(widget.serviceName);
     _traces = widget.sections.serviceTraces(widget.serviceName);
     _map = widget.sections.serviceMap(widget.serviceName);
+    _deployments = widget.sections.serviceDeployments(widget.serviceName);
     _tabs = TabController(length: 6, vsync: this)..addListener(_loadTab);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _c.refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _c.refresh();
+      // The deployments are part of the overview, as on the web: a version
+      // that went out ten minutes ago is the first thing to suspect.
+      _deployments.refresh();
+      // The top transactions are on the overview too, so the list the tab
+      // uses is loaded with it rather than when the tab is opened.
+      _transactions.refresh();
+    });
   }
 
   /// A tab is asked for the first time it is looked at. Every tab is built at
@@ -67,9 +78,8 @@ class _ServiceScreenState extends State<ServiceScreen>
     // controllers have no supertype that carries `refresh` with it.
     switch (_tabs.index) {
       case 1:
-        if (!_transactions.loaded && !_transactions.loadingFirst) {
-          _transactions.refresh();
-        }
+        // Already asked for with the overview, which shows the top of it.
+        break;
       case 2:
         if (!_errors.loaded && !_errors.loadingFirst) _errors.refresh();
       case 3:
@@ -87,6 +97,7 @@ class _ServiceScreenState extends State<ServiceScreen>
   void dispose() {
     _tabs.removeListener(_loadTab);
     _tabs.dispose();
+    _deployments.dispose();
     _map.dispose();
     _traces.dispose();
     _databases.dispose();
@@ -281,14 +292,87 @@ class _ServiceScreenState extends State<ServiceScreen>
         _chart(context, l.serviceThroughputChart, [
           for (final p in o.series) p.throughput,
         ], colors.primary),
+        // The web draws four: throughput, latency, error rate and Apdex.
+        if (o.series.any((p) => p.p95Ms != null))
+          _chart(context, l.serviceLatencyChart, [
+            for (final p in o.series) p.p95Ms ?? 0,
+          ], colors.primary),
         _chart(
           context,
           l.serviceErrorRateChart,
           [for (final p in o.series) p.errorRate * 100],
           severityTextColor(context, SeverityLevel.critical),
         ),
+        if (o.series.any((p) => p.apdex != null))
+          _chart(context, l.serviceApdexChart, [
+            for (final p in o.series) p.apdex ?? 0,
+          ], colors.primary),
       ],
+      DeploymentsCard(session: widget.session, controller: _deployments),
+      _topTransactions(context, l),
     ];
+  }
+
+  /// The handful of transactions the service spends most of its time on,
+  /// with a way to the whole list -- the web's overview ends the same way.
+  Widget _topTransactions(BuildContext context, L l) => ListenableBuilder(
+    listenable: _transactions,
+    builder: (context, _) {
+      final theme = Theme.of(context);
+      final top = _transactions.items.take(5).toList();
+      if (top.isEmpty) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l.serviceTopTransactions,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              TextButton(
+                key: const Key('service-all-transactions'),
+                onPressed: () => _tabs.animateTo(1),
+                child: Text(l.serviceAllTransactions),
+              ),
+            ],
+          ),
+          for (final t in top)
+            Padding(
+              key: Key('top-transaction-${t.transactionName}'),
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      t.transactionName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    l.transactionsShare(_share(t.timeShare)),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    },
+  );
+
+  static String _share(double ratio) {
+    final v = ratio * 100;
+    if (v == 0) return '0';
+    return v >= 10 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
   }
 
   /// A latency column. [label] is empty for the second and third, so the three

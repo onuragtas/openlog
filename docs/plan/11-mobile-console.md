@@ -429,7 +429,9 @@ karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan b
       sekme; sunucu sıralamasıyla (harcanan süre, hacim, en yavaş, hata). Tek işlem ayrıntısı
       (`.../transaction`) henüz yok.
 - [ ] Servis içi hata grubu (`apm/services/{s}/errors/{group_id}`)
-- [ ] Dağıtımlar ve karşılaştırma (`apm/services/{s}/deployments`, `.../compare`)
+- [x] Dağıtımlar ve karşılaştırma (`apm/services/{s}/deployments`, `.../compare`): genel bakış
+      sekmesinde, webdeki gibi; satıra dokununca öncesi/sonrası RED ve Apdex farkı, ve o
+      dağıtımdan sonra ilk kez görülen hata grupları.
 - [x] Servisin veritabanları (`apm/services/{s}/databases`): dördüncü sekme; normalize edilmiş
       ifade, sistem/veritabanı/işlem ve aynı dört sayı, sunucu sıralamasıyla.
 - [ ] Servisin sunucuları, konteynerleri, pod'ları (`apm/services/{s}/hosts`, `.../containers`,

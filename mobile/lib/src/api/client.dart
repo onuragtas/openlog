@@ -564,6 +564,38 @@ class OpenlogClient {
         ),
       );
 
+  /// When each version of a service first appeared.
+  Future<ApmDeploymentPage> apmDeployments({required String service}) async =>
+      ApmDeploymentPage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(service)}/deployments',
+        ),
+      );
+
+  /// What one deployment did: the half hour before it against the half hour
+  /// after, and the error groups first seen since.
+  ///
+  /// [at] is sent as unix milliseconds, which the server truncates to the
+  /// minute -- the same value its own deployment list carries, so the
+  /// comparison is of the deployment that was tapped and not of a timestamp
+  /// this app re-formatted.
+  Future<ApmDeploymentCompare> apmDeploymentCompare({
+    required String service,
+    required int atMillis,
+    String window = '30m',
+  }) async => ApmDeploymentCompare.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/services/${Uri.encodeComponent(service)}'
+            '/deployments/compare',
+        '',
+        extra: {'at': '$atMillis', 'window': window},
+      ),
+    ),
+  );
+
   /// The transactions of one service: what it spends its time on.
   ///
   /// `time` is the server's default sort and means "by time consumed",

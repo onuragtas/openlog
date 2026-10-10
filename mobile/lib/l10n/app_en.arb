@@ -1402,5 +1402,29 @@
   "sortThroughput": "Throughput",
   "sortCalls": "Calls",
   "sortSlowest": "Slowest",
-  "sortErrors": "Errors"
+  "sortErrors": "Errors",
+  "deploymentsTitle": "Deployments",
+  "deploymentsEmpty": "No version changes in this range.",
+  "deploymentsRollback": "rollback",
+  "deploymentsFirst": "first version",
+  "deploymentsWindow": "{minutes} minutes before and after",
+  "@deploymentsWindow": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "deploymentsNewErrors": "{count} error groups first seen after this deployment",
+  "@deploymentsNewErrors": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "serviceLatencyChart": "Latency (p95)",
+  "serviceApdexChart": "Apdex",
+  "serviceTopTransactions": "Top transactions by time consumed",
+  "serviceAllTransactions": "All transactions"
 }

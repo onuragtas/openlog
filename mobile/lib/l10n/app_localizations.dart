@@ -3792,6 +3792,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Errors'**
   String get sortErrors;
+
+  /// No description provided for @deploymentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deployments'**
+  String get deploymentsTitle;
+
+  /// No description provided for @deploymentsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No version changes in this range.'**
+  String get deploymentsEmpty;
+
+  /// No description provided for @deploymentsRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'rollback'**
+  String get deploymentsRollback;
+
+  /// No description provided for @deploymentsFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'first version'**
+  String get deploymentsFirst;
+
+  /// No description provided for @deploymentsWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes before and after'**
+  String deploymentsWindow(int minutes);
+
+  /// No description provided for @deploymentsNewErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} error groups first seen after this deployment'**
+  String deploymentsNewErrors(int count);
+
+  /// No description provided for @serviceLatencyChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency (p95)'**
+  String get serviceLatencyChart;
+
+  /// No description provided for @serviceApdexChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Apdex'**
+  String get serviceApdexChart;
+
+  /// No description provided for @serviceTopTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Top transactions by time consumed'**
+  String get serviceTopTransactions;
+
+  /// No description provided for @serviceAllTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'All transactions'**
+  String get serviceAllTransactions;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

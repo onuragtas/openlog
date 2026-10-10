@@ -3475,6 +3475,97 @@ class AlertRulePreview {
   final bool approximate;
 }
 
+/// `ApmDeploymentCompare` of the openlog API contract.
+class ApmDeploymentCompare {
+  const ApmDeploymentCompare({
+    required this.at,
+    required this.windowSeconds,
+    required this.apdexTMs,
+    required this.before,
+    required this.after,
+    required this.newErrorGroups,
+  });
+
+  factory ApmDeploymentCompare.fromJson(
+    Object? json, [
+    String path = 'ApmDeploymentCompare',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDeploymentCompare(
+      at: _req(m, 'at', path, _time),
+      windowSeconds: _req(m, 'window_seconds', path, _int),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      before: _req(m, 'before', path, (v, p) => ApmPeriod.fromJson(v, p)),
+      after: _req(m, 'after', path, (v, p) => ApmPeriod.fromJson(v, p)),
+      newErrorGroups: _req(
+        m,
+        'new_error_groups',
+        path,
+        (v, p) => _list<ApmDeploymentCompareNewErrorGroupsItem>(
+          v,
+          p,
+          (v, p) => ApmDeploymentCompareNewErrorGroupsItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'at': at.toUtc().toIso8601String(),
+    'window_seconds': windowSeconds,
+    'apdex_t_ms': apdexTMs,
+    'before': before.toJson(),
+    'after': after.toJson(),
+    'new_error_groups': [for (final e in newErrorGroups) e.toJson()],
+  };
+
+  final DateTime at;
+  final int windowSeconds;
+  final double apdexTMs;
+  final ApmPeriod before;
+  final ApmPeriod after;
+  final List<ApmDeploymentCompareNewErrorGroupsItem> newErrorGroups;
+}
+
+/// `ApmDeploymentCompareNewErrorGroupsItem` of the openlog API contract.
+class ApmDeploymentCompareNewErrorGroupsItem {
+  const ApmDeploymentCompareNewErrorGroupsItem({
+    required this.groupId,
+    required this.errorType,
+    required this.message,
+    required this.firstSeen,
+    required this.totalCount,
+  });
+
+  factory ApmDeploymentCompareNewErrorGroupsItem.fromJson(
+    Object? json, [
+    String path = 'ApmDeploymentCompareNewErrorGroupsItem',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDeploymentCompareNewErrorGroupsItem(
+      groupId: _req(m, 'group_id', path, _str),
+      errorType: _req(m, 'error_type', path, _str),
+      message: _req(m, 'message', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      totalCount: _req(m, 'total_count', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'group_id': groupId,
+    'error_type': errorType,
+    'message': message,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'total_count': totalCount,
+  };
+
+  final String groupId;
+  final String errorType;
+  final String message;
+  final DateTime firstSeen;
+  final double totalCount;
+}
+
 /// `ApmMap` of the openlog API contract.
 class ApmMap {
   const ApmMap({required this.nodes, required this.edges});
@@ -6744,6 +6835,66 @@ class AlertPreviewSeriesIncidentsItem {
   final double? peak;
 }
 
+/// `ApmPeriod` of the openlog API contract.
+class ApmPeriod {
+  const ApmPeriod({
+    required this.from,
+    required this.to,
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+  });
+
+  factory ApmPeriod.fromJson(Object? json, [String path = 'ApmPeriod']) {
+    final m = _obj(json, path);
+    return ApmPeriod(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+}
+
 /// `ApmMapNode` of the openlog API contract.
 class ApmMapNode {
   const ApmMapNode({
@@ -9252,6 +9403,39 @@ class ApmDbQueryPage {
   final List<ApmDbQuery> queries;
 }
 
+/// `ApmDeploymentPage` of the openlog API contract.
+class ApmDeploymentPage {
+  const ApmDeploymentPage({
+    required this.gapSeconds,
+    required this.deployments,
+  });
+
+  factory ApmDeploymentPage.fromJson(
+    Object? json, [
+    String path = 'ApmDeploymentPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDeploymentPage(
+      gapSeconds: _req(m, 'gap_seconds', path, _int),
+      deployments: _req(
+        m,
+        'deployments',
+        path,
+        (v, p) =>
+            _list<ApmDeployment>(v, p, (v, p) => ApmDeployment.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'gap_seconds': gapSeconds,
+    'deployments': [for (final e in deployments) e.toJson()],
+  };
+
+  final int gapSeconds;
+  final List<ApmDeployment> deployments;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -10261,6 +10445,57 @@ class ApmDbQuery {
   final double maxMs;
   final double timeConsumedMs;
   final double timeShare;
+}
+
+/// `ApmDeployment` of the openlog API contract.
+class ApmDeployment {
+  const ApmDeployment({
+    required this.timestamp,
+    required this.t,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.version,
+    required this.previousVersion,
+    required this.initial,
+    required this.rollback,
+  });
+
+  factory ApmDeployment.fromJson(
+    Object? json, [
+    String path = 'ApmDeployment',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDeployment(
+      timestamp: _req(m, 'timestamp', path, _time),
+      t: _req(m, 't', path, _int),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      version: _req(m, 'version', path, _str),
+      previousVersion: _req(m, 'previous_version', path, _str),
+      initial: _req(m, 'initial', path, _bool),
+      rollback: _req(m, 'rollback', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    't': t,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'version': version,
+    'previous_version': previousVersion,
+    'initial': initial,
+    'rollback': rollback,
+  };
+
+  final DateTime timestamp;
+  final int t;
+  final String serviceNamespace;
+  final String environment;
+  final String version;
+  final String previousVersion;
+  final bool initial;
+  final bool rollback;
 }
 
 /// `LogRecord` of the openlog API contract.

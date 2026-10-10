@@ -2114,4 +2114,38 @@ class LTr extends L {
 
   @override
   String get sortErrors => 'Hata';
+
+  @override
+  String get deploymentsTitle => 'Dağıtımlar';
+
+  @override
+  String get deploymentsEmpty => 'Bu aralıkta sürüm değişikliği yok.';
+
+  @override
+  String get deploymentsRollback => 'geri alma';
+
+  @override
+  String get deploymentsFirst => 'ilk sürüm';
+
+  @override
+  String deploymentsWindow(int minutes) {
+    return 'Öncesi ve sonrası $minutes dakika';
+  }
+
+  @override
+  String deploymentsNewErrors(int count) {
+    return 'Bu dağıtımdan sonra ilk kez görülen $count hata grubu';
+  }
+
+  @override
+  String get serviceLatencyChart => 'Gecikme (p95)';
+
+  @override
+  String get serviceApdexChart => 'Apdex';
+
+  @override
+  String get serviceTopTransactions => 'Harcanan süreye göre en üst işlemler';
+
+  @override
+  String get serviceAllTransactions => 'Tüm işlemler';
 }
