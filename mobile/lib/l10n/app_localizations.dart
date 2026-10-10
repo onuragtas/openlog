@@ -5148,6 +5148,18 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{count} errors'**
   String patternsErrors(int count);
+
+  /// No description provided for @volumeTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} records · {step} buckets'**
+  String volumeTotal(int count, String step);
+
+  /// No description provided for @volumeP95.
+  ///
+  /// In en, this message translates to:
+  /// **'p95 {ms} ms'**
+  String volumeP95(String ms);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

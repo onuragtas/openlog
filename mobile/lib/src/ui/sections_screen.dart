@@ -24,6 +24,7 @@ class SectionBody<T> extends StatefulWidget {
     required this.emptyTitle,
     required this.card,
     required this.active,
+    this.onSearch,
     this.header,
     this.searchable = true,
     this.searchHint,
@@ -54,6 +55,11 @@ class SectionBody<T> extends StatefulWidget {
   /// nobody has opened.
   final bool active;
 
+  /// Told after the search box changed what the list is about, for the
+  /// things beside the list that have to agree with it -- the volume chart
+  /// above the traces, for one.
+  final VoidCallback? onSearch;
+
   @override
   State<SectionBody<T>> createState() => _SectionBodyState<T>();
 }
@@ -77,7 +83,10 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
   void _loadIfVisible() {
     final c = widget.controller;
     if (!widget.active || c.loaded || c.loadingFirst) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      c.refresh();
+      widget.onSearch?.call();
+    });
   }
 
   @override
@@ -104,6 +113,7 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
                 onSubmitted: (value) {
                   c.query = value;
                   c.refresh();
+                  widget.onSearch?.call();
                 },
               )
             : null,

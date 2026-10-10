@@ -6,6 +6,7 @@ import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'filter_sheet.dart';
+import 'volume_chart.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
@@ -24,6 +25,14 @@ class TracesBody extends StatelessWidget {
   final Sections sections;
   final bool active;
 
+  /// The chart is of the rows underneath it, so it is asked with the same
+  /// conditions -- including the search box, which the list sends as a
+  /// contains over the service name.
+  Future<void> _loadVolume() => sections.traceVolume.load(
+    q: sections.traces.query,
+    filters: sections.traces.filters,
+  );
+
   @override
   Widget build(BuildContext context) {
     final c = sections.traces;
@@ -33,6 +42,7 @@ class TracesBody extends StatelessWidget {
       controller: c,
       searchKey: 'traces-search',
       active: active,
+      onSearch: _loadVolume,
       emptyTitle: (l) => l.tracesEmpty,
       header: ListenableBuilder(
         listenable: c,
@@ -46,6 +56,7 @@ class TracesBody extends StatelessWidget {
                 c.refresh();
               },
             ),
+            VolumeChart(session: session, controller: sections.traceVolume),
             // The same dictionary the logs use, for the span attributes a
             // trace carries.
             FilterChips(
@@ -53,6 +64,7 @@ class TracesBody extends StatelessWidget {
               onRemove: (i) {
                 c.filters = [...c.filters]..removeAt(i);
                 c.refresh();
+                _loadVolume();
               },
               onAdd: () async {
                 final filter = await pickFilter(
@@ -63,6 +75,7 @@ class TracesBody extends StatelessWidget {
                 if (filter == null) return;
                 c.filters = [...c.filters, filter];
                 await c.refresh();
+                await _loadVolume();
               },
             ),
           ],

@@ -317,6 +317,7 @@ class _AppShellState extends State<AppShell> {
         sections: s,
         logs: s.logs,
         patterns: s.logPatterns,
+        volume: s.logVolume,
       ),
     );
     add((active) => TracesBody(session: session, sections: s, active: active));

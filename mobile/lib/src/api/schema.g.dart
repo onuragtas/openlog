@@ -3550,6 +3550,100 @@ class LogsAggregateResponse {
   final List<LogsAggregateSeries> series;
 }
 
+/// `TracesAggregateResponse` of the openlog API contract.
+class TracesAggregateResponse {
+  const TracesAggregateResponse({
+    required this.step,
+    required this.total,
+    required this.series,
+    required this.latency,
+  });
+
+  factory TracesAggregateResponse.fromJson(
+    Object? json, [
+    String path = 'TracesAggregateResponse',
+  ]) {
+    final m = _obj(json, path);
+    return TracesAggregateResponse(
+      step: _req(m, 'step', path, _str),
+      total: _req(m, 'total', path, _int),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<LogsAggregateSeries>(
+          v,
+          p,
+          (v, p) => LogsAggregateSeries.fromJson(v, p),
+        ),
+      ),
+      latency: _req(
+        m,
+        'latency',
+        path,
+        (v, p) => TracesAggregateResponseLatency.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'total': total,
+    'series': [for (final e in series) e.toJson()],
+    'latency': latency.toJson(),
+  };
+
+  final String step;
+  final int total;
+  final List<LogsAggregateSeries> series;
+  final TracesAggregateResponseLatency latency;
+}
+
+/// Span duration percentiles in milliseconds per bucket
+class TracesAggregateResponseLatency {
+  const TracesAggregateResponseLatency({
+    required this.p50,
+    required this.p95,
+    required this.p99,
+  });
+
+  factory TracesAggregateResponseLatency.fromJson(
+    Object? json, [
+    String path = 'TracesAggregateResponseLatency',
+  ]) {
+    final m = _obj(json, path);
+    return TracesAggregateResponseLatency(
+      p50: _req(
+        m,
+        'p50',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      p95: _req(
+        m,
+        'p95',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      p99: _req(
+        m,
+        'p99',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'p50': p50, 'p95': p95, 'p99': p99};
+
+  final List<List<double>> p50;
+  final List<List<double>> p95;
+  final List<List<double>> p99;
+}
+
 /// `FieldKeysResponse` of the openlog API contract.
 class FieldKeysResponse {
   const FieldKeysResponse({required this.keys, required this.sampled});

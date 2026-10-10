@@ -1221,6 +1221,29 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// Spans per bucket for the traces list's conditions, with the p50, p95
+  /// and p99 of their duration.
+  Future<TracesAggregateResponse> traceVolume({
+    String q = '',
+    List<Map<String, Object?>> filters = const [],
+  }) async => TracesAggregateResponse.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/traces/aggregate',
+      body: {
+        // The same shape the list is asked with, so the chart is of the
+        // rows underneath it rather than of everything.
+        'root_only': true,
+        if (filters.isNotEmpty || q.isNotEmpty)
+          'filters': [
+            if (q.trim().isNotEmpty)
+              {'key': 'service_name', 'op': 'contains', 'value': q.trim()},
+            ...filters,
+          ],
+      },
+    ),
+  );
+
   /// The distinct messages behind the matching logs.
   ///
   /// The processor masks the variable parts of a body into a template, so

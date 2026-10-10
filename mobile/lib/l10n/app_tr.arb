@@ -1791,5 +1791,24 @@
         "type": "int"
       }
     }
+  },
+  "volumeTotal": "{count} kayıt · {step} aralıklarla",
+  "@volumeTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "volumeP95": "p95 {ms} ms",
+  "@volumeP95": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
   }
 }

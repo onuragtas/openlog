@@ -33,6 +33,7 @@ const schemaTargets = <String>[
   'AccountPrivacy', // what this account may ask for: an export, a deletion
   'LogsPatternsResponse', // the distinct messages behind the matching logs
   'LogsAggregateResponse', // and how many of them arrived when
+  'TracesAggregateResponse', // spans per bucket, with their percentiles
   'FieldKeysResponse', // the keys a filter can be built from
   'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads

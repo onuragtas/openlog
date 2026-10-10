@@ -2887,4 +2887,14 @@ class LTr extends L {
   String patternsErrors(int count) {
     return '$count hata';
   }
+
+  @override
+  String volumeTotal(int count, String step) {
+    return '$count kayıt · $step aralıklarla';
+  }
+
+  @override
+  String volumeP95(String ms) {
+    return 'p95 $ms ms';
+  }
 }

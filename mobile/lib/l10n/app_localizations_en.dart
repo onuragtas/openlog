@@ -2895,4 +2895,14 @@ class LEn extends L {
   String patternsErrors(int count) {
     return '$count errors';
   }
+
+  @override
+  String volumeTotal(int count, String step) {
+    return '$count records · $step buckets';
+  }
+
+  @override
+  String volumeP95(String ms) {
+    return 'p95 $ms ms';
+  }
 }

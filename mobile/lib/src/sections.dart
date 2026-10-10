@@ -22,6 +22,7 @@ import 'list_controller.dart';
 import 'logs.dart';
 import 'members.dart';
 import 'session.dart';
+import 'volume.dart';
 import 'sso.dart';
 import 'usage.dart';
 import 'query.dart';
@@ -48,6 +49,8 @@ class Sections {
     VulnerabilitiesController? vulnerabilities,
     LogsController? logs,
     LogPatternsController? logPatterns,
+    VolumeController? logVolume,
+    VolumeController? traceVolume,
     FieldsController Function(String signal)? fields,
     TracesController? traces,
     MetricsController? metrics,
@@ -167,6 +170,8 @@ class Sections {
        vulnerabilities = vulnerabilities ?? VulnerabilitiesController(client),
        logs = logs ?? LogsController(client),
        logPatterns = logPatterns ?? LogPatternsController(client),
+       logVolume = logVolume ?? VolumeController(client, signal: 'logs'),
+       traceVolume = traceVolume ?? VolumeController(client, signal: 'traces'),
        fields =
            fields ?? ((signal) => FieldsController(client, signal: signal)),
        traces = traces ?? TracesController(client),
@@ -239,6 +244,10 @@ class Sections {
 
   /// The same logs, grouped by what they say.
   final LogPatternsController logPatterns;
+
+  /// How much arrived and when, above each explorer.
+  final VolumeController logVolume;
+  final VolumeController traceVolume;
 
   /// The dictionary a filter is built from, one per signal. Made per
   /// sheet, because it holds which key is being looked at.
@@ -398,6 +407,8 @@ class Sections {
     vulnerabilities,
     logs,
     logPatterns,
+    logVolume,
+    traceVolume,
     traces,
     metrics,
     query,

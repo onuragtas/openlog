@@ -499,8 +499,9 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       yazarak değil — hatırlanması gereken bir alan adı yanlış yazılan alan adıdır.
 - [x] Log desenleri (`logs/patterns`): loglarda ikinci sekme, webdeki gibi; aynı arama ve
       süzgeçlerle, bir desene dokununca `pattern_id` süzgeciyle kayıtlarına dönüyor.
-      `logs/aggregate` istemcide hazır, hacim grafiği sırada.
-- [ ] İz toplulaştırma (`traces/aggregate`)
+      Hacim grafiği (`logs/aggregate`) listenin üstünde, aynı koşullarla.
+- [x] İz toplulaştırma (`traces/aggregate`): izler listesinin üstünde hacim ve p95 çizgisi,
+      listenin koşullarıyla — kova sayısı tek başına isteklerin yavaş olup olmadığını söylemez.
 - [ ] Metrik adları, korelasyon, exemplar (`metrics/names`, `metrics/correlate`, `metrics/exemplars`)
 - [ ] Kayıtlı görünümler (`saved-views`)
 - [ ] OQL şema ve doğrulama (`query/schema`, `query/validate`)

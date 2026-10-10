@@ -9,9 +9,11 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../logs.dart';
 import '../session.dart';
+import '../volume.dart';
 import '../sections.dart';
 import 'filter_sheet.dart';
 import 'log_patterns_body.dart';
+import 'volume_chart.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
 
@@ -26,6 +28,7 @@ class LogsBody extends StatefulWidget {
     required this.sections,
     required this.logs,
     required this.patterns,
+    required this.volume,
     this.scopeLabel,
   });
 
@@ -38,6 +41,9 @@ class LogsBody extends StatefulWidget {
 
   /// The same logs, grouped by what they say.
   final LogPatternsController patterns;
+
+  /// How many arrived and when, above the list.
+  final VolumeController volume;
 
   /// What this list is about, when it is about one thing. Set by the screen
   /// that pushed it -- a request, a pod, a container -- so the reader is not
@@ -63,8 +69,16 @@ class _LogsBodyState extends State<LogsBody>
         final p = widget.patterns;
         if (_tabs.index == 1 && !p.loaded && !p.loadingFirst) _reloadPatterns();
       });
-    WidgetsBinding.instance.addPostFrameCallback((_) => widget.logs.refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.logs.refresh();
+      // The chart is of the rows underneath it, so it is asked with the
+      // same conditions and reloaded with them.
+      if (widget.scopeLabel == null) _reloadVolume();
+    });
   }
+
+  Future<void> _reloadVolume() =>
+      widget.volume.load(q: widget.logs.query, filters: widget.logs.filters);
 
   @override
   void dispose() {
@@ -142,6 +156,7 @@ class _LogsBodyState extends State<LogsBody>
               onSubmitted: (value) {
                 c.query = value;
                 c.refresh();
+                if (widget.scopeLabel == null) _reloadVolume();
                 if (widget.patterns.loaded) _reloadPatterns();
               },
             ),
@@ -185,6 +200,7 @@ class _LogsBodyState extends State<LogsBody>
                 onRemove: (i) {
                   c.filters = [...c.filters]..removeAt(i);
                   c.refresh();
+                  _reloadVolume();
                 },
                 onAdd: () async {
                   final filter = await pickFilter(
@@ -195,9 +211,11 @@ class _LogsBodyState extends State<LogsBody>
                   if (filter == null) return;
                   c.filters = [...c.filters, filter];
                   await c.refresh();
+                  await _reloadVolume();
                   if (widget.patterns.loaded) await _reloadPatterns();
                 },
               ),
+              VolumeChart(session: widget.session, controller: widget.volume),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
@@ -333,9 +351,10 @@ class _LogsScreenState extends State<LogsScreen> {
       session: widget.session,
       sections: widget.sections,
       logs: widget.logs,
-      // A scoped list has no patterns tab, so this one is never read; it
-      // is here because the body asks for it.
+      // A scoped list has neither tab nor chart, so these are never read;
+      // they are here because the body asks for them.
       patterns: widget.sections.logPatterns,
+      volume: widget.sections.logVolume,
       scopeLabel: widget.scopeLabel,
     ),
   );

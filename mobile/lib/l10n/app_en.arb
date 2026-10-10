@@ -1888,5 +1888,24 @@
         "type": "int"
       }
     }
+  },
+  "volumeTotal": "{count} records · {step} buckets",
+  "@volumeTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "volumeP95": "p95 {ms} ms",
+  "@volumeP95": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
   }
 }
