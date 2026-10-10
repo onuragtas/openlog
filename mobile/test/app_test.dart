@@ -112,7 +112,7 @@ class ScriptedServices extends ServicesController {
 }
 
 class ScriptedLogs extends LogsController {
-  ScriptedLogs({List<LogRecord> logs = const []})
+  ScriptedLogs({List<LogQueryRow> logs = const []})
     : super(OpenlogClient(baseUrl: 'http://127.0.0.1:1')) {
     items = logs;
     loaded = true;
@@ -146,22 +146,27 @@ ApmService service(
   sparkline: const [],
 );
 
-LogRecord logLine(
+LogQueryRow logLine(
   String body, {
   int severity = 17,
   String service = 'checkout',
-}) => LogRecord(
-  timestamp: DateTime.now().toUtc().subtract(const Duration(minutes: 2)),
-  severityText: severity >= 17 ? 'ERROR' : 'WARN',
-  severityNumber: severity,
-  body: body,
-  hostId: 'h1',
-  serviceName: service,
-  traceId: '',
-  spanId: '',
-  attributes: const {},
-  resourceAttributes: const {},
-);
+}) {
+  final at = DateTime.now().toUtc().subtract(const Duration(minutes: 2));
+  return LogQueryRow(
+    id: '$at:$body',
+    timestamp: at,
+    observedTimestamp: at,
+    severityText: severity >= 17 ? 'ERROR' : 'WARN',
+    severityNumber: severity,
+    body: body,
+    hostId: 'h1',
+    hostName: 'web-1',
+    serviceName: service,
+    traceId: '',
+    spanId: '',
+    fields: const {},
+  );
+}
 
 class ScriptedDashboards extends DashboardsController {
   ScriptedDashboards({List<DashboardSummary> dashboards = const []})

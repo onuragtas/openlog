@@ -246,19 +246,13 @@ class ViewState {
       filters.isEmpty && query.isEmpty && severityMin.isEmpty && !slowest;
 }
 
-/// `severity_number >= 13` is how this app's severity button reaches the
-/// server, and it is a condition like any other in a saved view -- so a view
-/// made here reads as a severity filter in a browser, and a severity filter
-/// made in a browser moves the button here.
-const _severityNumbers = {'INFO': 9, 'WARN': 13, 'ERROR': 17};
-
 ({String min, List<Filter> rest}) _severityOf(List<Filter> filters) {
   for (var i = 0; i < filters.length; i++) {
     final f = filters[i];
     if (f.key != 'severity_number' || f.op != '>=' || f.values.length != 1) {
       continue;
     }
-    for (final e in _severityNumbers.entries) {
+    for (final e in severityNumbers.entries) {
       if (f.values.first != '${e.value}') continue;
       return (min: e.key, rest: [...filters]..removeAt(i));
     }
@@ -285,11 +279,11 @@ Map<String, Object?> logsViewState({
     // is what makes the browser show the same rows for the same view.
     if (service.trim().isNotEmpty)
       Filter(key: 'service.name', op: '=', values: [service.trim()]).toJson(),
-    if (_severityNumbers[severityMin] != null)
+    if (severityNumbers[severityMin] != null)
       Filter(
         key: 'severity_number',
         op: '>=',
-        values: ['${_severityNumbers[severityMin]}'],
+        values: ['${severityNumbers[severityMin]}'],
       ).toJson(),
   ],
   // Written empty rather than left out: this screen has no OR groups, so a

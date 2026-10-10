@@ -231,7 +231,7 @@ void main() {
   test('a view applied to the logs changes what is asked for', () async {
     final server = await FakeServer.start(
       (req, seen) =>
-          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+          writeJson(req, 200, {'rows': <Object>[], 'next_cursor': null}),
     );
     addTearDown(server.stop);
     final logs = LogsController(
@@ -257,15 +257,26 @@ void main() {
       ..service = '';
     await logs.refresh();
 
-    expect(
-      Uri.decodeQueryComponent(server.requests.first.query),
-      'limit=50&severity_min=WARN',
-    );
-    expect(
-      Uri.decodeQueryComponent(server.requests.last.query),
-      'limit=50&filters=[{"key":"service.name","op":"=","value":"checkout"}]'
-      '&q=timeout&severity_min=ERROR',
-    );
+    // On the explorer endpoint, because that is the only place a
+    // condition is applied: the list used to be asked for with
+    // `GET /logs?filters=…`, which has no such parameter -- the server
+    // dropped it and answered with the whole stream, so every view
+    // looked like it did nothing.
+    expect(server.requests.last.path, '/api/v1/logs/query');
+    expect(jsonDecode(server.requests.first.body), {
+      'limit': 50,
+      'filters': [
+        {'key': 'severity_number', 'op': '>=', 'value': 13},
+      ],
+    });
+    expect(jsonDecode(server.requests.last.body), {
+      'limit': 50,
+      'q': 'timeout',
+      'filters': [
+        {'key': 'service.name', 'op': '=', 'value': 'checkout'},
+        {'key': 'severity_number', 'op': '>=', 'value': 17},
+      ],
+    });
   });
 
   group('against a server', () {

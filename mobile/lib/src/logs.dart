@@ -4,7 +4,7 @@ import 'api/schema.g.dart';
 import 'fields.dart';
 import 'list_controller.dart';
 
-class LogsController extends ListController<LogRecord> {
+class LogsController extends ListController<LogQueryRow> {
   LogsController(
     this._client, {
     this.traceId = '',
@@ -48,20 +48,46 @@ class LogsController extends ListController<LogRecord> {
   String get forbiddenKind => 'logsForbidden';
 
   @override
-  Future<List<LogRecord>> fetch() async {
-    final page = await _client.logs(
-      q: query.trim(),
-      // A request's logs are all of them: narrowing one trace to WARN is how
-      // you miss the line that explains it.
-      severityMin: scoped ? '' : severityMin,
-      service: service.trim(),
-      traceId: traceId,
-      podUid: podUid,
-      containerId: containerId,
-      filters: encodeFilters(filters),
-    );
-    return page.logs;
+  Future<List<LogQueryRow>> fetch() async {
+    final page = await _client.logs(q: query.trim(), filters: _conditions());
+    return page.rows;
   }
+
+  /// Everything this screen asks, as conditions.
+  ///
+  /// The explorer endpoint has no `service`, no `severity_min` and no
+  /// `trace_id` of its own -- it has one list of conditions, and the named
+  /// parameters of `GET /logs` are each a condition underneath. Writing
+  /// them out here is what makes the service box, the severity button and
+  /// a saved view's chips the same kind of thing, which is what they are
+  /// in the browser too.
+  ///
+  /// The keys are the server's canonical ones (`internal/querybuilder`):
+  /// `service.name`, `trace_id`, and the resource attributes a container's
+  /// and a pod's logs carry.
+  List<Map<String, Object?>> _conditions() => [
+    for (final f in filters) f.toJson(),
+    if (service.trim().isNotEmpty)
+      {'key': 'service.name', 'op': '=', 'value': service.trim()},
+    // A request's logs are all of them: narrowing one trace to WARN is how
+    // you miss the line that explains it.
+    if (!scoped && severityNumbers[severityMin] != null)
+      {
+        'key': 'severity_number',
+        'op': '>=',
+        'value': severityNumbers[severityMin],
+      },
+    if (traceId.isNotEmpty)
+      {'key': 'trace_id', 'op': '=', 'value': traceId.toLowerCase()},
+    if (podUid.isNotEmpty)
+      {'key': 'resource.k8s.pod.uid', 'op': '=', 'value': podUid},
+    if (containerId.isNotEmpty)
+      {
+        'key': 'resource.container.id',
+        'op': '=',
+        'value': containerId.toLowerCase(),
+      },
+  ];
 }
 
 /// What is being said in the logs, rather than what was said at 10:04.

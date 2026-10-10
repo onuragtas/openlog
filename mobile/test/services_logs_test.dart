@@ -1,5 +1,7 @@
 // The two list controllers added in phase 3 and 4, against a real server: what
 // they ask for and how they order what comes back.
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/logs.dart';
@@ -34,23 +36,31 @@ Map<String, Object?> svc(
 };
 
 Map<String, Object?> line(String body, {int severity = 17}) => {
+  'id': body,
   'timestamp': '2026-10-08T09:00:00.000000000Z',
+  'observed_timestamp': '2026-10-08T09:00:00.000000000Z',
   'severity_text': severity >= 17 ? 'ERROR' : 'WARN',
   'severity_number': severity,
   'body': body,
   'host_id': 'h1',
+  'host_name': 'web-1',
   'service_name': 'checkout',
   'trace_id': '',
   'span_id': '',
-  'attributes': <String, String>{},
-  'resource_attributes': <String, String>{},
+  'fields': <String, String>{},
 };
+
+/// An empty page, in the shape `POST /logs/query` answers with.
+Map<String, Object?> noRows = {'rows': <Object>[], 'next_cursor': null};
+
+/// What the conditions of the one request were.
+List<Object?> sentFilters(Seen seen) =>
+    (jsonDecode(seen.body) as Map<String, Object?>)['filters'] as List<Object?>;
 
 void main() {
   test('a request\'s logs are asked for by trace, at every level', () async {
     final server = await FakeServer.start(
-      (req, _) =>
-          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+      (req, _) => writeJson(req, 200, noRows),
     );
     addTearDown(server.stop);
     final c = LogsController(
@@ -60,16 +70,23 @@ void main() {
 
     await c.refresh();
 
-    // No severity_min: narrowing one request's logs to WARN is how you miss
-    // the line that explains it. The default WARN is for the whole stream.
-    expect(server.requests.single.query, 'limit=50&trace_id=abc123');
+    // The explorer endpoint, because it is the only one that applies
+    // conditions: `GET /logs` has no `filters` parameter at all and
+    // silently answered with the unfiltered stream.
+    expect(server.requests.single.method, 'POST');
+    expect(server.requests.single.path, '/api/v1/logs/query');
+    // No severity floor: narrowing one request's logs to WARN is how you
+    // miss the line that explains it. The default WARN is for the whole
+    // stream.
+    expect(sentFilters(server.requests.single), [
+      {'key': 'trace_id', 'op': '=', 'value': 'abc123'},
+    ]);
     expect(c.scoped, isTrue);
   });
 
   test('a pod and a container ask by their own key', () async {
     final server = await FakeServer.start(
-      (req, _) =>
-          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+      (req, _) => writeJson(req, 200, noRows),
     );
     addTearDown(server.stop);
     final client = OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x';
@@ -77,9 +94,16 @@ void main() {
     await LogsController(client, podUid: 'u1').refresh();
     await LogsController(client, containerId: 'c1').refresh();
 
-    expect(server.requests.map((r) => r.query), [
-      'limit=50&k8s_pod_uid=u1',
-      'limit=50&container_id=c1',
+    // The server's own keys (`internal/querybuilder`), not the names the
+    // old GET parameters had: a pod's and a container's logs are resource
+    // attributes.
+    expect(server.requests.map(sentFilters), [
+      [
+        {'key': 'resource.k8s.pod.uid', 'op': '=', 'value': 'u1'},
+      ],
+      [
+        {'key': 'resource.container.id', 'op': '=', 'value': 'c1'},
+      ],
     ]);
   });
 
@@ -87,8 +111,7 @@ void main() {
     'the unscoped list keeps its severity floor and takes a service',
     () async {
       final server = await FakeServer.start(
-        (req, _) =>
-            writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+        (req, _) => writeJson(req, 200, noRows),
       );
       addTearDown(server.stop);
       final c = LogsController(
@@ -98,10 +121,10 @@ void main() {
       c.service = '  checkout  ';
       await c.refresh();
 
-      expect(
-        server.requests.single.query,
-        'limit=50&severity_min=WARN&service=checkout',
-      );
+      expect(sentFilters(server.requests.single), [
+        {'key': 'service.name', 'op': '=', 'value': 'checkout'},
+        {'key': 'severity_number', 'op': '>=', 'value': 13},
+      ]);
       expect(c.scoped, isFalse);
     },
   );
@@ -174,7 +197,7 @@ void main() {
       () async {
         final server = await FakeServer.start(
           (req, _) => writeJson(req, 200, {
-            'logs': [line('boom')],
+            'rows': [line('boom')],
             'next_cursor': null,
           }),
         );
@@ -186,8 +209,13 @@ void main() {
         await c.refresh();
 
         expect(c.severityMin, 'WARN');
-        expect(server.requests.single.query, contains('severity_min=WARN'));
-        expect(server.requests.single.query, contains('limit=50'));
+        expect(sentFilters(server.requests.single), [
+          {'key': 'severity_number', 'op': '>=', 'value': 13},
+        ]);
+        expect(
+          jsonDecode(server.requests.single.body),
+          containsPair('limit', 50),
+        );
         expect(c.items.single.body, 'boom');
         expect(c.items.single.severityNumber, 17);
       },
@@ -197,8 +225,7 @@ void main() {
       'choosing "all" drops the filter instead of sending an empty one',
       () async {
         final server = await FakeServer.start(
-          (req, _) =>
-              writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null}),
+          (req, _) => writeJson(req, 200, noRows),
         );
         addTearDown(server.stop);
         final client = OpenlogClient(baseUrl: server.baseUrl);
@@ -207,7 +234,13 @@ void main() {
 
         await c.refresh();
 
-        expect(server.requests.single.query, isNot(contains('severity_min')));
+        // No conditions at all rather than an empty one: `filters: []`
+        // and no `filters` are the same question, and the shorter one is
+        // the one the browser sends.
+        expect(
+          jsonDecode(server.requests.single.body),
+          isNot(contains('filters')),
+        );
       },
     );
 
@@ -221,7 +254,7 @@ void main() {
           return;
         }
         writeJson(req, 200, {
-          'logs': [line('first')],
+          'rows': [line('first')],
           'next_cursor': null,
         });
       });

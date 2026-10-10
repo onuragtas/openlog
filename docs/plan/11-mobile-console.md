@@ -544,6 +544,21 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       ise metrik ekranı henüz bir liste — kaydedilecek bir durum yok (9.7).
       Bu sırada bulunan hata: filtre çipleri `eq` gönderiyordu, sözleşmede operatör
       `=` — sunucu her tek değerli çipi 400 ile reddediyormuş.
+      **İkinci ve büyük olan hata (2026-10-10, sahibin prod kurulumunda bulundu):** log
+      listesi `GET /api/v1/logs`'a soruluyordu ve oraya `filters` diye bir parametre
+      ekliyordu. Sözleşmede öyle bir parametre yok; sunucu bilmediği parametreyi
+      sessizce atıp süzülmemiş listeyi döndürüyordu. Yani telefondaki her filtre çipi
+      ve her kayıtlı görünüm hiçbir şey yapmıyordu — ekran değişmediği için de hata
+      "görünümler uygulanmıyor" diye bildirildi. Liste artık webin kullandığı uca
+      gidiyor: `POST /api/v1/logs/query`. O ucun `service`, `severity_min`, `trace_id`
+      gibi adlandırılmış parametreleri yok; her biri bir koşul (`service.name`,
+      `severity_number >=`, `trace_id`, `resource.k8s.pod.uid`,
+      `resource.container.id`) — anahtarlar sunucunun kanonik adları
+      (`internal/querybuilder`). Pencere de gövdede gidiyor, çünkü o uçta sorgu
+      parametresi yok.
+      Testler bu hatayı neden yakalamadı: sahte sunucu her yola aynı cevabı veriyor,
+      yani testler "istemci ne gönderdi"yi doğruluyordu, "sunucu ne kabul eder"i değil.
+      Artık log testleri yolu ve POST gövdesini birlikte tutuyor.
 - [x] OQL şema ve doğrulama (`query/schema`, `query/validate`): konsol artık webin
       konsolu — yazarken doğrulama (yazmayı bırakınca sorulur, hata ve uyarılar satır
       ve sütunuyla kutunun altında, kutunun çerçevesi kırmızı), webin altı örneği aynı

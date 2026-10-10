@@ -4031,6 +4031,36 @@ class AccountPrivacy {
   final List<OrgDeletion> orgDeletions;
 }
 
+/// `LogsQueryResponse` of the openlog API contract.
+class LogsQueryResponse {
+  const LogsQueryResponse({required this.rows, this.nextCursor});
+
+  factory LogsQueryResponse.fromJson(
+    Object? json, [
+    String path = 'LogsQueryResponse',
+  ]) {
+    final m = _obj(json, path);
+    return LogsQueryResponse(
+      rows: _req(
+        m,
+        'rows',
+        path,
+        (v, p) =>
+            _list<LogQueryRow>(v, p, (v, p) => LogQueryRow.fromJson(v, p)),
+      ),
+      nextCursor: _opt(m, 'next_cursor', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'rows': [for (final e in rows) e.toJson()],
+    'next_cursor': ?nextCursor,
+  };
+
+  final List<LogQueryRow> rows;
+  final String? nextCursor;
+}
+
 /// `LogsPatternsResponse` of the openlog API contract.
 class LogsPatternsResponse {
   const LogsPatternsResponse({
@@ -9872,6 +9902,88 @@ class OrgDeletion {
   final bool cancellable;
   final String? certificateId;
   final String? lastError;
+}
+
+/// `LogQueryRow` of the openlog API contract.
+class LogQueryRow {
+  const LogQueryRow({
+    required this.id,
+    required this.timestamp,
+    required this.observedTimestamp,
+    required this.severityText,
+    required this.severityNumber,
+    required this.body,
+    required this.serviceName,
+    required this.hostId,
+    required this.hostName,
+    required this.traceId,
+    required this.spanId,
+    required this.fields,
+    this.attributes,
+    this.resourceAttributes,
+  });
+
+  factory LogQueryRow.fromJson(Object? json, [String path = 'LogQueryRow']) {
+    final m = _obj(json, path);
+    return LogQueryRow(
+      id: _req(m, 'id', path, _str),
+      timestamp: _req(m, 'timestamp', path, _time),
+      observedTimestamp: _req(m, 'observed_timestamp', path, _time),
+      severityText: _req(m, 'severity_text', path, _str),
+      severityNumber: _req(m, 'severity_number', path, _int),
+      body: _req(m, 'body', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      fields: _req(m, 'fields', path, (v, p) => _map<String>(v, p, _str)),
+      attributes: _opt(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      resourceAttributes: _opt(
+        m,
+        'resource_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'observed_timestamp': observedTimestamp.toUtc().toIso8601String(),
+    'severity_text': severityText,
+    'severity_number': severityNumber,
+    'body': body,
+    'service_name': serviceName,
+    'host_id': hostId,
+    'host_name': hostName,
+    'trace_id': traceId,
+    'span_id': spanId,
+    'fields': fields,
+    'attributes': ?attributes,
+    'resource_attributes': ?resourceAttributes,
+  };
+
+  final String id;
+  final DateTime timestamp;
+  final DateTime observedTimestamp;
+  final String severityText;
+  final int severityNumber;
+  final String body;
+  final String serviceName;
+  final String hostId;
+  final String hostName;
+  final String traceId;
+  final String spanId;
+  final Map<String, String> fields;
+  final Map<String, String>? attributes;
+  final Map<String, String>? resourceAttributes;
 }
 
 /// `LogPattern` of the openlog API contract.
@@ -15844,32 +15956,6 @@ class ServicePage {
   final List<ApmService> services;
 }
 
-/// `LogPage` of the openlog API contract.
-class LogPage {
-  const LogPage({required this.logs, this.nextCursor});
-
-  factory LogPage.fromJson(Object? json, [String path = 'LogPage']) {
-    final m = _obj(json, path);
-    return LogPage(
-      logs: _req(
-        m,
-        'logs',
-        path,
-        (v, p) => _list<LogRecord>(v, p, (v, p) => LogRecord.fromJson(v, p)),
-      ),
-      nextCursor: _opt(m, 'next_cursor', path, _str),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'logs': [for (final e in logs) e.toJson()],
-    'next_cursor': ?nextCursor,
-  };
-
-  final List<LogRecord> logs;
-  final String? nextCursor;
-}
-
 /// `RumAppPage` of the openlog API contract.
 class RumAppPage {
   const RumAppPage({required this.apps});
@@ -17786,72 +17872,6 @@ class SCIMToken {
   final DateTime? lastUsedAt;
   final DateTime? expiresAt;
   final DateTime? revokedAt;
-}
-
-/// `LogRecord` of the openlog API contract.
-class LogRecord {
-  const LogRecord({
-    required this.timestamp,
-    required this.severityText,
-    required this.severityNumber,
-    required this.body,
-    required this.hostId,
-    required this.serviceName,
-    required this.traceId,
-    required this.spanId,
-    required this.attributes,
-    required this.resourceAttributes,
-  });
-
-  factory LogRecord.fromJson(Object? json, [String path = 'LogRecord']) {
-    final m = _obj(json, path);
-    return LogRecord(
-      timestamp: _req(m, 'timestamp', path, _time),
-      severityText: _req(m, 'severity_text', path, _str),
-      severityNumber: _req(m, 'severity_number', path, _int),
-      body: _req(m, 'body', path, _str),
-      hostId: _req(m, 'host_id', path, _str),
-      serviceName: _req(m, 'service_name', path, _str),
-      traceId: _req(m, 'trace_id', path, _str),
-      spanId: _req(m, 'span_id', path, _str),
-      attributes: _req(
-        m,
-        'attributes',
-        path,
-        (v, p) => _map<String>(v, p, _str),
-      ),
-      resourceAttributes: _req(
-        m,
-        'resource_attributes',
-        path,
-        (v, p) => _map<String>(v, p, _str),
-      ),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'timestamp': timestamp.toUtc().toIso8601String(),
-    'severity_text': severityText,
-    'severity_number': severityNumber,
-    'body': body,
-    'host_id': hostId,
-    'service_name': serviceName,
-    'trace_id': traceId,
-    'span_id': spanId,
-    'attributes': attributes,
-    'resource_attributes': resourceAttributes,
-  };
-
-  final DateTime timestamp;
-  final String severityText;
-  final int severityNumber;
-  final String body;
-  final String hostId;
-  final String serviceName;
-  final String traceId;
-  final String spanId;
-  final Map<String, String> attributes;
-  final Map<String, String> resourceAttributes;
 }
 
 /// `RumApp` of the openlog API contract.

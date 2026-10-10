@@ -31,6 +31,8 @@ const schemaTargets = <String>[
   'UsageOverview', // what the organization used this period, against its plan
   'DiskSpace', // how full the ClickHouse disks are, and at what level
   'AccountPrivacy', // what this account may ask for: an export, a deletion
+  'LogsQueryResponse', // the log list itself: the explorer's own endpoint,
+  // which is the only one that applies `filters`
   'LogsPatternsResponse', // the distinct messages behind the matching logs
   'LogsAggregateResponse', // and how many of them arrived when
   'TracesAggregateResponse', // spans per bucket, with their percentiles
@@ -146,7 +148,6 @@ const responseTargets = <String>[
   'get /api/v1/scim/tokens 200 ScimTokenPage',
   'get /api/v1/saved-views 200 SavedViewPage',
   'get /api/v1/apm/services 200 ServicePage',
-  'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',
   'get /api/v1/costs/hosts 200 CostHostPage',
   'get /api/v1/costs/services 200 CostServicePage',

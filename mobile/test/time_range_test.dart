@@ -1,4 +1,6 @@
 // The window: what it resolves to, and which requests carry it.
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/api/schema.g.dart';
@@ -84,7 +86,7 @@ void main() {
             'counts': {'open': 0, 'acknowledged': 0, 'resolved': 0},
           });
         } else {
-          writeJson(req, 200, {'logs': <Object>[], 'next_cursor': null});
+          writeJson(req, 200, {'rows': <Object>[], 'next_cursor': null});
         }
       });
       addTearDown(server.stop);
@@ -94,11 +96,15 @@ void main() {
       await client.logs();
       await client.incidents();
 
-      final logs = Uri.splitQueryString(server.requests.first.query);
+      // The log list is a POST, so its window is in the body: the same
+      // window, by the only road that endpoint has.
+      final logs = jsonDecode(server.requests.first.body) as Map;
       expect(logs['from'], isNotNull);
       expect(logs['to'], isNotNull);
       expect(
-        DateTime.parse(logs['to']!).difference(DateTime.parse(logs['from']!)),
+        DateTime.parse(
+          logs['to']! as String,
+        ).difference(DateTime.parse(logs['from']! as String)),
         const Duration(hours: 6),
       );
       expect(

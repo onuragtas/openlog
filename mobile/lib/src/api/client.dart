@@ -1262,32 +1262,36 @@ class OpenlogClient {
     );
   }
 
-  /// Recent log records, newest first.
-  Future<LogPage> logs({
+  /// Log records, newest first: the explorer's own endpoint.
+  ///
+  /// `POST /logs/query`, not `GET /logs`, and this is the whole reason the
+  /// filter chips and the saved views did nothing for a while. `GET /logs`
+  /// takes a fixed set of named parameters (`service`, `severity_min`,
+  /// `trace_id`…) and **no** `filters`; the one this app sent was not in
+  /// the contract, so the server dropped it without a word and answered
+  /// with the unfiltered list. Everything a condition can say goes through
+  /// here, as it does in the browser.
+  ///
+  /// The window is part of the body here rather than the query string,
+  /// which is why [window] is read by hand: `pathTakesRange` is about
+  /// parameters and this endpoint has none.
+  Future<LogsQueryResponse> logs({
     String q = '',
-    String severityMin = '',
-    String service = '',
-    String traceId = '',
-    String podUid = '',
-    String containerId = '',
-    String filters = '',
+    List<Map<String, Object?>> filters = const [],
     int limit = 50,
   }) async {
-    final query = <String, String>{'limit': '$limit'};
-    // The filter builder's conditions, already JSON: the parameter is a
-    // JSON array of QueryFilter and the server parses it.
-    if (filters.isNotEmpty) query['filters'] = filters;
-    if (q.isNotEmpty) query['q'] = q;
-    if (severityMin.isNotEmpty) query['severity_min'] = severityMin;
-    if (service.isNotEmpty) query['service'] = service;
-    // The three that make this screen reachable from somewhere else: a
-    // request, a pod or a container has logs, and finding them by typing is
-    // the part a phone is worst at.
-    if (traceId.isNotEmpty) query['trace_id'] = traceId;
-    if (podUid.isNotEmpty) query['k8s_pod_uid'] = podUid;
-    if (containerId.isNotEmpty) query['container_id'] = containerId;
-    return LogPage.fromJson(
-      await _send('GET', '/api/v1/logs?${Uri(queryParameters: query).query}'),
+    final body = <String, Object?>{
+      'limit': limit,
+      // No `include_record`: this list shows a severity, a service, a time
+      // and a body, and asking for every attribute map of every row would
+      // be a few hundred kilobytes a page that nothing reads.
+      if (q.isNotEmpty) 'q': q,
+      if (filters.isNotEmpty) 'filters': filters,
+    };
+    final range = window?.call();
+    if (range != null) body.addAll(range.query(DateTime.now()));
+    return LogsQueryResponse.fromJson(
+      await _send('POST', '/api/v1/logs/query', body: body),
     );
   }
 

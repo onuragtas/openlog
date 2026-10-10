@@ -36,6 +36,11 @@ const filterOps = [
   '<=',
 ];
 
+/// `severity_number >= 13` is how a minimum severity reaches the server:
+/// there is no severity of its own in a logs query, only conditions. The
+/// same table turns a saved view's condition back into the button's value.
+const severityNumbers = {'INFO': 9, 'WARN': 13, 'ERROR': 17};
+
 const _noValueOps = {'exists', 'not_exists'};
 const _multiValueOps = {'in', 'not_in'};
 

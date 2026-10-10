@@ -287,7 +287,7 @@ class _LogsBodyState extends State<LogsBody>
 class _LogTile extends StatelessWidget {
   const _LogTile({required this.record});
 
-  final LogRecord record;
+  final LogQueryRow record;
 
   @override
   Widget build(BuildContext context) {
