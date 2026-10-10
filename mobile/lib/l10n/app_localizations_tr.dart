@@ -3375,4 +3375,134 @@ class LTr extends L {
 
   @override
   String get k8sCpuTrend => 'CPU';
+
+  @override
+  String get dbTabActivity => 'Etkinlik';
+
+  @override
+  String get dbTabQueries => 'Sorgular';
+
+  @override
+  String get dbTabSessions => 'Oturumlar';
+
+  @override
+  String get dbActivityTitle => 'Ortalama etkin oturum';
+
+  @override
+  String get dbActivityAbout =>
+      'Bekleme türüne göre: veritabanı CPU\'da mı, kilitte mi, diskte mi.';
+
+  @override
+  String get dbNoSamples => 'Bu aralıkta oturum örneği yok.';
+
+  @override
+  String get dbWaits => 'Bekleme olayları';
+
+  @override
+  String get dbTopQueries => 'En çok örneklenen ifadeler';
+
+  @override
+  String get dbAas => 'ort. etkin oturum';
+
+  @override
+  String get dbNoQueries => 'Bu aralıkta ifade yok.';
+
+  @override
+  String get dbQuerySearch => 'İfade içinde ara';
+
+  @override
+  String get dbSortTime => 'Süre';
+
+  @override
+  String get dbSortCalls => 'Çağrı';
+
+  @override
+  String get dbSortAvg => 'Ortalama';
+
+  @override
+  String get dbSortRows => 'Satır';
+
+  @override
+  String get dbSortErrors => 'Hata';
+
+  @override
+  String get dbSortReads => 'Okuma';
+
+  @override
+  String get dbShare => 'Pay';
+
+  @override
+  String get dbThroughput => 'Hız';
+
+  @override
+  String get dbAvg => 'Ortalama';
+
+  @override
+  String get dbRowsPerCall => 'Çağrı başına satır';
+
+  @override
+  String get dbErrors => 'Hata';
+
+  @override
+  String dbPerSecond(String value) {
+    return '$value/sn';
+  }
+
+  @override
+  String get dbNoSessions => 'Şu anda açık oturum yok.';
+
+  @override
+  String dbSampledAt(String when) {
+    return 'Örnek alındı: $when';
+  }
+
+  @override
+  String get dbBlocking => 'Engelleyen oturumlar';
+
+  @override
+  String get dbSessions => 'Oturumlar';
+
+  @override
+  String dbBlocks(int count) {
+    return '$count oturumu engelliyor';
+  }
+
+  @override
+  String get dbQueryTitle => 'İfade';
+
+  @override
+  String get dbQueryCost => 'Maliyet';
+
+  @override
+  String get dbCalls => 'Çağrı';
+
+  @override
+  String get dbTotalTime => 'Toplam süre';
+
+  @override
+  String get dbRows => 'Satır';
+
+  @override
+  String get dbNoIndex => 'İndekssiz';
+
+  @override
+  String get dbCacheHit => 'Önbellek isabeti';
+
+  @override
+  String get dbAvgTrend => 'Ortalama süre';
+
+  @override
+  String get dbPlans => 'Planlar';
+
+  @override
+  String get dbCurrentPlan => 'güncel';
+
+  @override
+  String get dbPlanChanged => 'plan değişti';
+
+  @override
+  String get dbPlanCost => 'maliyet';
+
+  @override
+  String get dbCallers => 'Çağıran servisler';
 }

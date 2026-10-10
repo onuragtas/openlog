@@ -12,6 +12,7 @@ import 'api/client.dart';
 import 'audit.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
+import 'databases.dart';
 import 'detail.dart';
 import 'agents.dart';
 import 'discovery.dart';
@@ -52,6 +53,14 @@ class Sections {
     KubernetesEventsController? k8sEvents,
     ServicesController? services,
     DatabasesController? databases,
+    DbActivityController Function(String instance)? dbActivity,
+    DbQueriesController Function(String instance)? dbQueries,
+    DbSessionsController Function(String instance)? dbSessions,
+    DbQueryController Function({
+      required String instance,
+      required String fingerprint,
+    })?
+    dbQuery,
     SlosController? slos,
     SyntheticsController? synthetics,
     JobsController? jobs,
@@ -201,6 +210,20 @@ class Sections {
        k8sEvents = k8sEvents ?? KubernetesEventsController(client),
        services = services ?? ServicesController(client),
        databases = databases ?? DatabasesController(client),
+       dbActivity =
+           dbActivity ?? ((instance) => DbActivityController(client, instance)),
+       dbQueries =
+           dbQueries ?? ((instance) => DbQueriesController(client, instance)),
+       dbSessions =
+           dbSessions ?? ((instance) => DbSessionsController(client, instance)),
+       dbQuery =
+           dbQuery ??
+           (({required String instance, required String fingerprint}) =>
+               DbQueryController(
+                 client,
+                 instance: instance,
+                 fingerprint: fingerprint,
+               )),
        slos = slos ?? SlosController(client),
        synthetics = synthetics ?? SyntheticsController(client),
        jobs = jobs ?? JobsController(client),
@@ -291,6 +314,17 @@ class Sections {
   final KubernetesEventsController k8sEvents;
   final ServicesController services;
   final DatabasesController databases;
+
+  /// One instance's three tabs and one statement, made per screen: they
+  /// are about an instance the person opened, not about the section.
+  final DbActivityController Function(String instance) dbActivity;
+  final DbQueriesController Function(String instance) dbQueries;
+  final DbSessionsController Function(String instance) dbSessions;
+  final DbQueryController Function({
+    required String instance,
+    required String fingerprint,
+  })
+  dbQuery;
   final SlosController slos;
   final SyntheticsController synthetics;
   final JobsController jobs;

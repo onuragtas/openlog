@@ -2182,5 +2182,67 @@
           }
       }
   },
-  "k8sCpuTrend": "CPU"
+  "k8sCpuTrend": "CPU",
+  "dbTabActivity": "Activity",
+  "dbTabQueries": "Queries",
+  "dbTabSessions": "Sessions",
+  "dbActivityTitle": "Average active sessions",
+  "dbActivityAbout": "By wait type: whether the database is busy on CPU, on locks or on disk.",
+  "dbNoSamples": "No session samples in this range.",
+  "dbWaits": "Wait events",
+  "dbTopQueries": "Most sampled statements",
+  "dbAas": "avg active sessions",
+  "dbNoQueries": "No statements in this range.",
+  "dbQuerySearch": "Search statements",
+  "dbSortTime": "Time",
+  "dbSortCalls": "Calls",
+  "dbSortAvg": "Average",
+  "dbSortRows": "Rows",
+  "dbSortErrors": "Errors",
+  "dbSortReads": "Reads",
+  "dbShare": "Share",
+  "dbThroughput": "Throughput",
+  "dbAvg": "Average",
+  "dbRowsPerCall": "Rows per call",
+  "dbErrors": "Errors",
+  "dbPerSecond": "{value}/s",
+  "@dbPerSecond": {
+      "placeholders": {
+          "value": {
+              "type": "String"
+          }
+      }
+  },
+  "dbNoSessions": "No open sessions right now.",
+  "dbSampledAt": "Sampled {when}",
+  "@dbSampledAt": {
+      "placeholders": {
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "dbBlocking": "Blocking sessions",
+  "dbSessions": "Sessions",
+  "dbBlocks": "blocks {count} sessions",
+  "@dbBlocks": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "dbQueryTitle": "Statement",
+  "dbQueryCost": "Cost",
+  "dbCalls": "Calls",
+  "dbTotalTime": "Total time",
+  "dbRows": "Rows",
+  "dbNoIndex": "No index",
+  "dbCacheHit": "Cache hit",
+  "dbAvgTrend": "Average time",
+  "dbPlans": "Plans",
+  "dbCurrentPlan": "current",
+  "dbPlanChanged": "plan changed",
+  "dbPlanCost": "cost",
+  "dbCallers": "Calling services"
 }

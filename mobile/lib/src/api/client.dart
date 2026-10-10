@@ -1352,6 +1352,58 @@ class OpenlogClient {
         await _send('GET', _listPath('/api/v1/db/instances', q)),
       );
 
+  /// What one instance is busy with: average active sessions per wait type,
+  /// the top wait events and the statements the samples were running.
+  Future<DbActivity> dbActivity(String instance) async => DbActivity.fromJson(
+    await _send(
+      'GET',
+      _listPath('/api/v1/db/activity', '', extra: {'instance': instance}),
+    ),
+  );
+
+  /// The statements of an instance, heaviest first by [sort].
+  Future<DbQueryPage> dbQueries({
+    required String instance,
+    String sort = 'time',
+    String q = '',
+    int limit = 50,
+  }) async => DbQueryPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/db/queries',
+        q,
+        extra: {'instance': instance, 'sort': sort, 'limit': '$limit'},
+      ),
+    ),
+  );
+
+  /// One statement: its series, its plans, its waits and the services that
+  /// run it.
+  Future<DbQueryDetail> dbQuery({
+    required String instance,
+    required String fingerprint,
+  }) async => DbQueryDetail.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/db/queries/${Uri.encodeComponent(fingerprint)}',
+        '',
+        extra: {'instance': instance},
+      ),
+    ),
+  );
+
+  /// The latest session sample: who is connected, what they are waiting on
+  /// and who is blocking whom.
+  Future<DbSessionPage> dbSessions(String instance) async =>
+      DbSessionPage.fromJson(
+        await _send(
+          'GET',
+          _listPath('/api/v1/db/sessions', '', extra: {'instance': instance}),
+        ),
+      );
+
   /// A path with `q` only when there is one: an empty `q=` is a filter that
   /// matches the empty string on some endpoints and everything on others, and
   /// neither is what an empty search box means.

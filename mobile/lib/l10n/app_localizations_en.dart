@@ -3383,4 +3383,134 @@ class LEn extends L {
 
   @override
   String get k8sCpuTrend => 'CPU';
+
+  @override
+  String get dbTabActivity => 'Activity';
+
+  @override
+  String get dbTabQueries => 'Queries';
+
+  @override
+  String get dbTabSessions => 'Sessions';
+
+  @override
+  String get dbActivityTitle => 'Average active sessions';
+
+  @override
+  String get dbActivityAbout =>
+      'By wait type: whether the database is busy on CPU, on locks or on disk.';
+
+  @override
+  String get dbNoSamples => 'No session samples in this range.';
+
+  @override
+  String get dbWaits => 'Wait events';
+
+  @override
+  String get dbTopQueries => 'Most sampled statements';
+
+  @override
+  String get dbAas => 'avg active sessions';
+
+  @override
+  String get dbNoQueries => 'No statements in this range.';
+
+  @override
+  String get dbQuerySearch => 'Search statements';
+
+  @override
+  String get dbSortTime => 'Time';
+
+  @override
+  String get dbSortCalls => 'Calls';
+
+  @override
+  String get dbSortAvg => 'Average';
+
+  @override
+  String get dbSortRows => 'Rows';
+
+  @override
+  String get dbSortErrors => 'Errors';
+
+  @override
+  String get dbSortReads => 'Reads';
+
+  @override
+  String get dbShare => 'Share';
+
+  @override
+  String get dbThroughput => 'Throughput';
+
+  @override
+  String get dbAvg => 'Average';
+
+  @override
+  String get dbRowsPerCall => 'Rows per call';
+
+  @override
+  String get dbErrors => 'Errors';
+
+  @override
+  String dbPerSecond(String value) {
+    return '$value/s';
+  }
+
+  @override
+  String get dbNoSessions => 'No open sessions right now.';
+
+  @override
+  String dbSampledAt(String when) {
+    return 'Sampled $when';
+  }
+
+  @override
+  String get dbBlocking => 'Blocking sessions';
+
+  @override
+  String get dbSessions => 'Sessions';
+
+  @override
+  String dbBlocks(int count) {
+    return 'blocks $count sessions';
+  }
+
+  @override
+  String get dbQueryTitle => 'Statement';
+
+  @override
+  String get dbQueryCost => 'Cost';
+
+  @override
+  String get dbCalls => 'Calls';
+
+  @override
+  String get dbTotalTime => 'Total time';
+
+  @override
+  String get dbRows => 'Rows';
+
+  @override
+  String get dbNoIndex => 'No index';
+
+  @override
+  String get dbCacheHit => 'Cache hit';
+
+  @override
+  String get dbAvgTrend => 'Average time';
+
+  @override
+  String get dbPlans => 'Plans';
+
+  @override
+  String get dbCurrentPlan => 'current';
+
+  @override
+  String get dbPlanChanged => 'plan changed';
+
+  @override
+  String get dbPlanCost => 'cost';
+
+  @override
+  String get dbCallers => 'Calling services';
 }

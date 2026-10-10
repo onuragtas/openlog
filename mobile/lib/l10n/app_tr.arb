@@ -2085,5 +2085,67 @@
           }
       }
   },
-  "k8sCpuTrend": "CPU"
+  "k8sCpuTrend": "CPU",
+  "dbTabActivity": "Etkinlik",
+  "dbTabQueries": "Sorgular",
+  "dbTabSessions": "Oturumlar",
+  "dbActivityTitle": "Ortalama etkin oturum",
+  "dbActivityAbout": "Bekleme türüne göre: veritabanı CPU'da mı, kilitte mi, diskte mi.",
+  "dbNoSamples": "Bu aralıkta oturum örneği yok.",
+  "dbWaits": "Bekleme olayları",
+  "dbTopQueries": "En çok örneklenen ifadeler",
+  "dbAas": "ort. etkin oturum",
+  "dbNoQueries": "Bu aralıkta ifade yok.",
+  "dbQuerySearch": "İfade içinde ara",
+  "dbSortTime": "Süre",
+  "dbSortCalls": "Çağrı",
+  "dbSortAvg": "Ortalama",
+  "dbSortRows": "Satır",
+  "dbSortErrors": "Hata",
+  "dbSortReads": "Okuma",
+  "dbShare": "Pay",
+  "dbThroughput": "Hız",
+  "dbAvg": "Ortalama",
+  "dbRowsPerCall": "Çağrı başına satır",
+  "dbErrors": "Hata",
+  "dbPerSecond": "{value}/sn",
+  "@dbPerSecond": {
+      "placeholders": {
+          "value": {
+              "type": "String"
+          }
+      }
+  },
+  "dbNoSessions": "Şu anda açık oturum yok.",
+  "dbSampledAt": "Örnek alındı: {when}",
+  "@dbSampledAt": {
+      "placeholders": {
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "dbBlocking": "Engelleyen oturumlar",
+  "dbSessions": "Oturumlar",
+  "dbBlocks": "{count} oturumu engelliyor",
+  "@dbBlocks": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "dbQueryTitle": "İfade",
+  "dbQueryCost": "Maliyet",
+  "dbCalls": "Çağrı",
+  "dbTotalTime": "Toplam süre",
+  "dbRows": "Satır",
+  "dbNoIndex": "İndekssiz",
+  "dbCacheHit": "Önbellek isabeti",
+  "dbAvgTrend": "Ortalama süre",
+  "dbPlans": "Planlar",
+  "dbCurrentPlan": "güncel",
+  "dbPlanChanged": "plan değişti",
+  "dbPlanCost": "maliyet",
+  "dbCallers": "Çağıran servisler"
 }

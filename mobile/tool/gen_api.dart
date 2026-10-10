@@ -38,6 +38,8 @@ const schemaTargets = <String>[
   'MetricExemplarsResponse', // the traces behind a metric's points
   'SavedView', // an explorer view somebody kept
   'KubernetesClusterDetail', // one cluster, with its warnings and totals
+  'DbActivity', // what a database instance is busy with
+  'DbQueryDetail', // one statement: its series, its plans, who runs it
   'FieldKeysResponse', // the keys a filter can be built from
   'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads
@@ -158,6 +160,8 @@ const responseTargets = <String>[
   'get /api/v1/jobs/monitors 200 JobMonitorPage',
   'get /api/v1/vulnerabilities 200 VulnPage',
   'get /api/v1/db/instances 200 DbInstancePage',
+  'get /api/v1/db/queries 200 DbQueryPage',
+  'get /api/v1/db/sessions 200 DbSessionPage',
 ];
 
 void main(List<String> args) {

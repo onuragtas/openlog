@@ -7,6 +7,7 @@ import '../sections.dart';
 import '../session.dart';
 import 'alerts_section.dart';
 import 'dashboards_screen.dart';
+import 'database_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'profiles_screen.dart';
@@ -253,7 +254,20 @@ class _AppShellState extends State<AppShell> {
         searchKey: 'databases-search',
         active: active,
         emptyTitle: (l) => l.databasesEmpty,
-        card: dbCard,
+        card: (context, d) => dbCard(
+          context,
+          d,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => DatabaseScreen(
+                session: session,
+                sections: s,
+                instance: d.instance,
+                dbSystem: d.dbSystem,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(

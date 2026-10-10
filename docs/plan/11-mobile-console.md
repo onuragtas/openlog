@@ -548,7 +548,17 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       pod'larını kendi ekranında açıyor.
       Eksik kalan ve not edilen: iş yükü ayrıntı sayfası (zaman serileri, HPA, durum
       öznitelikleri) ile olay listesi ekranı — veri uçları bağlandı, ekranları yok.
-- [ ] Veritabanı: etkinlik, sorgular, oturumlar, arama (`db/activity|queries|sessions|lookup`)
+- [x] Veritabanı: etkinlik, sorgular, oturumlar (`db/activity|queries|sessions`): bir
+      örneğe dokununca webin üç sekmesi açılıyor — Etkinlik (bekleme türüne göre ortalama
+      etkin oturum, bekleme olayları, en çok örneklenen ifadeler), Sorgular (arama, altı
+      sıralama, pay çubuğu) ve Oturumlar (engelleme ağacı). Bir ifadeye dokununca
+      maliyeti, zaman serisi, planları, beklemeleri ve çağıran servisleriyle kendi
+      ekranı. Engelleme ağacı `web/src/lib/db.ts`'in birebir kopyası: örneklenmemiş
+      tutucu da baş sayılıyor, döngü en çok engelleyenden başlıyor.
+      Telefonda tek fark: webin tek yığılmış alan grafiği yerine bekleme türü başına bir
+      çizgi ve bir ortalama — 360 puanda on iki yığılmış seri lekeden ibaret.
+      `db/lookup` dışarıda: APM'in veritabanı sekmesinden gelen bağlantı için var,
+      mobilde o yol henüz yok (9.2'de de yoktu).
 - [ ] Konteyner grupları (`containers/groups`)
 - [ ] Maliyet: özet, servisler, konteynerler, eğilim, fiyatlar (`costs/*`)
 - [ ] Bulut bağlantıları (`cloud/providers`, `cloud/connections`, `.../test`)

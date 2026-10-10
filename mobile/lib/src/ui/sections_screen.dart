@@ -470,10 +470,11 @@ Widget vulnCard(BuildContext context, VulnGroup v) {
   );
 }
 
-Widget dbCard(BuildContext context, DbInstance d) {
+Widget dbCard(BuildContext context, DbInstance d, {VoidCallback? onOpen}) {
   final l = L.of(context);
   return SectionCard(
     cardKey: Key('db-${d.instance}-${d.hostId}'),
+    onOpen: onOpen,
     title: d.instance.isEmpty ? d.dbSystem : d.instance,
     subtitle: '${d.dbSystem} · ${d.serverAddress}:${d.serverPort}',
     trailing: d.hostName,

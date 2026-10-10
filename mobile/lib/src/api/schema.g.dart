@@ -1114,6 +1114,31 @@ enum MetricCorrelationDirection {
   }
 }
 
+/// DbPlanFormat of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DbPlanFormat {
+  json('json'),
+  xml('xml'),
+  unknown('');
+
+  const DbPlanFormat(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DbPlanFormat fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FieldSource of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -4192,6 +4217,300 @@ class KubernetesClusterDetailPods {
   final int succeeded;
   final int failed;
   final int unknown;
+}
+
+/// `DbActivity` of the openlog API contract.
+class DbActivity {
+  const DbActivity({
+    required this.from,
+    required this.to,
+    required this.step,
+    required this.series,
+    required this.waits,
+    required this.topQueries,
+  });
+
+  factory DbActivity.fromJson(Object? json, [String path = 'DbActivity']) {
+    final m = _obj(json, path);
+    return DbActivity(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      step: _req(m, 'step', path, _str),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<DbActivitySeriesItem>(
+          v,
+          p,
+          (v, p) => DbActivitySeriesItem.fromJson(v, p),
+        ),
+      ),
+      waits: _req(
+        m,
+        'waits',
+        path,
+        (v, p) => _list<DbWait>(v, p, (v, p) => DbWait.fromJson(v, p)),
+      ),
+      topQueries: _req(
+        m,
+        'top_queries',
+        path,
+        (v, p) => _list<DbActivityTopQueriesItem>(
+          v,
+          p,
+          (v, p) => DbActivityTopQueriesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step': step,
+    'series': [for (final e in series) e.toJson()],
+    'waits': [for (final e in waits) e.toJson()],
+    'top_queries': [for (final e in topQueries) e.toJson()],
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final String step;
+  final List<DbActivitySeriesItem> series;
+  final List<DbWait> waits;
+  final List<DbActivityTopQueriesItem> topQueries;
+}
+
+/// `DbActivitySeriesItem` of the openlog API contract.
+class DbActivitySeriesItem {
+  const DbActivitySeriesItem({required this.waitType, required this.points});
+
+  factory DbActivitySeriesItem.fromJson(
+    Object? json, [
+    String path = 'DbActivitySeriesItem',
+  ]) {
+    final m = _obj(json, path);
+    return DbActivitySeriesItem(
+      waitType: _req(m, 'wait_type', path, _str),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'wait_type': waitType, 'points': points};
+
+  final String waitType;
+  final List<List<double>> points;
+}
+
+/// `DbActivityTopQueriesItem` of the openlog API contract.
+class DbActivityTopQueriesItem {
+  const DbActivityTopQueriesItem({
+    required this.fingerprint,
+    required this.text,
+    required this.samples,
+    required this.avgActiveSessions,
+    required this.topWait,
+  });
+
+  factory DbActivityTopQueriesItem.fromJson(
+    Object? json, [
+    String path = 'DbActivityTopQueriesItem',
+  ]) {
+    final m = _obj(json, path);
+    return DbActivityTopQueriesItem(
+      fingerprint: _req(m, 'fingerprint', path, _str),
+      text: _req(m, 'text', path, _str),
+      samples: _req(m, 'samples', path, _int),
+      avgActiveSessions: _req(m, 'avg_active_sessions', path, _num),
+      topWait: _req(m, 'top_wait', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'fingerprint': fingerprint,
+    'text': text,
+    'samples': samples,
+    'avg_active_sessions': avgActiveSessions,
+    'top_wait': topWait,
+  };
+
+  final String fingerprint;
+  final String text;
+  final int samples;
+  final double avgActiveSessions;
+  final String topWait;
+}
+
+/// `DbQueryDetail` of the openlog API contract.
+class DbQueryDetail {
+  const DbQueryDetail({
+    required this.from,
+    required this.to,
+    required this.step,
+    required this.dbSystem,
+    required this.query,
+    required this.points,
+    required this.plans,
+    required this.waits,
+    required this.callers,
+  });
+
+  factory DbQueryDetail.fromJson(
+    Object? json, [
+    String path = 'DbQueryDetail',
+  ]) {
+    final m = _obj(json, path);
+    return DbQueryDetail(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      step: _req(m, 'step', path, _str),
+      dbSystem: _req(m, 'db_system', path, _str),
+      query: _req(m, 'query', path, (v, p) => DbQuery.fromJson(v, p)),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<DbQueryDetailPointsItem>(
+          v,
+          p,
+          (v, p) => DbQueryDetailPointsItem.fromJson(v, p),
+        ),
+      ),
+      plans: _req(
+        m,
+        'plans',
+        path,
+        (v, p) => _list<DbPlan>(v, p, (v, p) => DbPlan.fromJson(v, p)),
+      ),
+      waits: _req(
+        m,
+        'waits',
+        path,
+        (v, p) => _list<DbWait>(v, p, (v, p) => DbWait.fromJson(v, p)),
+      ),
+      callers: _req(
+        m,
+        'callers',
+        path,
+        (v, p) => _list<DbQueryDetailCallersItem>(
+          v,
+          p,
+          (v, p) => DbQueryDetailCallersItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step': step,
+    'db_system': dbSystem,
+    'query': query.toJson(),
+    'points': [for (final e in points) e.toJson()],
+    'plans': [for (final e in plans) e.toJson()],
+    'waits': [for (final e in waits) e.toJson()],
+    'callers': [for (final e in callers) e.toJson()],
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final String step;
+  final String dbSystem;
+  final DbQuery query;
+  final List<DbQueryDetailPointsItem> points;
+  final List<DbPlan> plans;
+  final List<DbWait> waits;
+  final List<DbQueryDetailCallersItem> callers;
+}
+
+/// `DbQueryDetailPointsItem` of the openlog API contract.
+class DbQueryDetailPointsItem {
+  const DbQueryDetailPointsItem({
+    required this.t,
+    required this.calls,
+    required this.throughput,
+    required this.totalTimeMs,
+    this.avgMs,
+    required this.rows,
+  });
+
+  factory DbQueryDetailPointsItem.fromJson(
+    Object? json, [
+    String path = 'DbQueryDetailPointsItem',
+  ]) {
+    final m = _obj(json, path);
+    return DbQueryDetailPointsItem(
+      t: _req(m, 't', path, _int),
+      calls: _req(m, 'calls', path, _int),
+      throughput: _req(m, 'throughput', path, _num),
+      totalTimeMs: _req(m, 'total_time_ms', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      rows: _req(m, 'rows', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    't': t,
+    'calls': calls,
+    'throughput': throughput,
+    'total_time_ms': totalTimeMs,
+    'avg_ms': ?avgMs,
+    'rows': rows,
+  };
+
+  final int t;
+  final int calls;
+  final double throughput;
+  final double totalTimeMs;
+  final double? avgMs;
+  final int rows;
+}
+
+/// `DbQueryDetailCallersItem` of the openlog API contract.
+class DbQueryDetailCallersItem {
+  const DbQueryDetailCallersItem({
+    required this.serviceName,
+    required this.environment,
+    required this.calls,
+    this.avgMs,
+    required this.errors,
+  });
+
+  factory DbQueryDetailCallersItem.fromJson(
+    Object? json, [
+    String path = 'DbQueryDetailCallersItem',
+  ]) {
+    final m = _obj(json, path);
+    return DbQueryDetailCallersItem(
+      serviceName: _req(m, 'service_name', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      calls: _req(m, 'calls', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      errors: _req(m, 'errors', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'environment': environment,
+    'calls': calls,
+    'avg_ms': ?avgMs,
+    'errors': errors,
+  };
+
+  final String serviceName;
+  final String environment;
+  final double calls;
+  final double? avgMs;
+  final double errors;
 }
 
 /// `FieldKeysResponse` of the openlog API contract.
@@ -9197,6 +9516,178 @@ class KubernetesEvent {
   final String source;
   final String clusterUid;
   final String clusterName;
+}
+
+/// `DbWait` of the openlog API contract.
+class DbWait {
+  const DbWait({
+    required this.type,
+    required this.event,
+    required this.samples,
+    required this.share,
+  });
+
+  factory DbWait.fromJson(Object? json, [String path = 'DbWait']) {
+    final m = _obj(json, path);
+    return DbWait(
+      type: _req(m, 'type', path, _str),
+      event: _req(m, 'event', path, _str),
+      samples: _req(m, 'samples', path, _int),
+      share: _req(m, 'share', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'type': type,
+    'event': event,
+    'samples': samples,
+    'share': share,
+  };
+
+  final String type;
+  final String event;
+  final int samples;
+  final double share;
+}
+
+/// `DbQuery` of the openlog API contract.
+class DbQuery {
+  const DbQuery({
+    required this.fingerprint,
+    required this.queryId,
+    required this.text,
+    required this.dbNames,
+    required this.calls,
+    required this.throughput,
+    required this.totalTimeMs,
+    this.avgMs,
+    required this.timeShare,
+    required this.rows,
+    this.rowsPerCall,
+    required this.rowsExamined,
+    required this.errors,
+    required this.noIndexUsed,
+    required this.blocksHit,
+    required this.blocksRead,
+    this.cacheHitRatio,
+  });
+
+  factory DbQuery.fromJson(Object? json, [String path = 'DbQuery']) {
+    final m = _obj(json, path);
+    return DbQuery(
+      fingerprint: _req(m, 'fingerprint', path, _str),
+      queryId: _req(m, 'query_id', path, _str),
+      text: _req(m, 'text', path, _str),
+      dbNames: _req(m, 'db_names', path, (v, p) => _list<String>(v, p, _str)),
+      calls: _req(m, 'calls', path, _int),
+      throughput: _req(m, 'throughput', path, _num),
+      totalTimeMs: _req(m, 'total_time_ms', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      timeShare: _req(m, 'time_share', path, _num),
+      rows: _req(m, 'rows', path, _int),
+      rowsPerCall: _opt(m, 'rows_per_call', path, _num),
+      rowsExamined: _req(m, 'rows_examined', path, _int),
+      errors: _req(m, 'errors', path, _int),
+      noIndexUsed: _req(m, 'no_index_used', path, _int),
+      blocksHit: _req(m, 'blocks_hit', path, _int),
+      blocksRead: _req(m, 'blocks_read', path, _int),
+      cacheHitRatio: _opt(m, 'cache_hit_ratio', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'fingerprint': fingerprint,
+    'query_id': queryId,
+    'text': text,
+    'db_names': dbNames,
+    'calls': calls,
+    'throughput': throughput,
+    'total_time_ms': totalTimeMs,
+    'avg_ms': ?avgMs,
+    'time_share': timeShare,
+    'rows': rows,
+    'rows_per_call': ?rowsPerCall,
+    'rows_examined': rowsExamined,
+    'errors': errors,
+    'no_index_used': noIndexUsed,
+    'blocks_hit': blocksHit,
+    'blocks_read': blocksRead,
+    'cache_hit_ratio': ?cacheHitRatio,
+  };
+
+  final String fingerprint;
+  final String queryId;
+  final String text;
+  final List<String> dbNames;
+  final int calls;
+  final double throughput;
+  final double totalTimeMs;
+  final double? avgMs;
+  final double timeShare;
+  final int rows;
+  final double? rowsPerCall;
+  final int rowsExamined;
+  final int errors;
+  final int noIndexUsed;
+  final int blocksHit;
+  final int blocksRead;
+  final double? cacheHitRatio;
+}
+
+/// `DbPlan` of the openlog API contract.
+class DbPlan {
+  const DbPlan({
+    required this.planHash,
+    required this.format,
+    required this.plan,
+    required this.totalCost,
+    required this.dbName,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.captures,
+    required this.isCurrent,
+    required this.planChange,
+  });
+
+  factory DbPlan.fromJson(Object? json, [String path = 'DbPlan']) {
+    final m = _obj(json, path);
+    return DbPlan(
+      planHash: _req(m, 'plan_hash', path, _str),
+      format: _req(m, 'format', path, DbPlanFormat.fromJson),
+      plan: _req(m, 'plan', path, _str),
+      totalCost: _req(m, 'total_cost', path, _num),
+      dbName: _req(m, 'db_name', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      captures: _req(m, 'captures', path, _int),
+      isCurrent: _req(m, 'is_current', path, _bool),
+      planChange: _req(m, 'plan_change', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'plan_hash': planHash,
+    'format': format.wire,
+    'plan': plan,
+    'total_cost': totalCost,
+    'db_name': dbName,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'captures': captures,
+    'is_current': isCurrent,
+    'plan_change': planChange,
+  };
+
+  final String planHash;
+  final DbPlanFormat format;
+  final String plan;
+  final double totalCost;
+  final String dbName;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final int captures;
+  final bool isCurrent;
+  final bool planChange;
 }
 
 /// `FieldKey` of the openlog API contract.
@@ -14946,6 +15437,61 @@ class DbInstancePage {
   final List<DbInstance> instances;
 }
 
+/// `DbQueryPage` of the openlog API contract.
+class DbQueryPage {
+  const DbQueryPage({required this.queries, required this.totalTimeMs});
+
+  factory DbQueryPage.fromJson(Object? json, [String path = 'DbQueryPage']) {
+    final m = _obj(json, path);
+    return DbQueryPage(
+      queries: _req(
+        m,
+        'queries',
+        path,
+        (v, p) => _list<DbQuery>(v, p, (v, p) => DbQuery.fromJson(v, p)),
+      ),
+      totalTimeMs: _req(m, 'total_time_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'queries': [for (final e in queries) e.toJson()],
+    'total_time_ms': totalTimeMs,
+  };
+
+  final List<DbQuery> queries;
+  final double totalTimeMs;
+}
+
+/// `DbSessionPage` of the openlog API contract.
+class DbSessionPage {
+  const DbSessionPage({this.sampledAt, required this.sessions});
+
+  factory DbSessionPage.fromJson(
+    Object? json, [
+    String path = 'DbSessionPage',
+  ]) {
+    final m = _obj(json, path);
+    return DbSessionPage(
+      sampledAt: _opt(m, 'sampled_at', path, _time),
+      sessions: _req(
+        m,
+        'sessions',
+        path,
+        (v, p) => _list<DbSession>(v, p, (v, p) => DbSession.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    if (sampledAt != null) 'sampled_at': sampledAt!.toUtc().toIso8601String(),
+    'sessions': [for (final e in sessions) e.toJson()],
+  };
+
+  final DateTime? sampledAt;
+  final List<DbSession> sessions;
+}
+
 /// `AlertChannel` of the openlog API contract.
 class AlertChannel {
   const AlertChannel({
@@ -17798,6 +18344,79 @@ class DbInstance {
   final double? avgActiveSessions;
   final String topWait;
   final DateTime lastSeen;
+}
+
+/// `DbSession` of the openlog API contract.
+class DbSession {
+  const DbSession({
+    required this.sessionId,
+    required this.state,
+    required this.waitType,
+    required this.waitEvent,
+    required this.dbName,
+    required this.user,
+    required this.application,
+    required this.clientAddress,
+    required this.durationMs,
+    required this.fingerprint,
+    required this.text,
+    required this.blockingSessionIds,
+    required this.blocks,
+  });
+
+  factory DbSession.fromJson(Object? json, [String path = 'DbSession']) {
+    final m = _obj(json, path);
+    return DbSession(
+      sessionId: _req(m, 'session_id', path, _str),
+      state: _req(m, 'state', path, _str),
+      waitType: _req(m, 'wait_type', path, _str),
+      waitEvent: _req(m, 'wait_event', path, _str),
+      dbName: _req(m, 'db_name', path, _str),
+      user: _req(m, 'user', path, _str),
+      application: _req(m, 'application', path, _str),
+      clientAddress: _req(m, 'client_address', path, _str),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      fingerprint: _req(m, 'fingerprint', path, _str),
+      text: _req(m, 'text', path, _str),
+      blockingSessionIds: _req(
+        m,
+        'blocking_session_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      blocks: _req(m, 'blocks', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'session_id': sessionId,
+    'state': state,
+    'wait_type': waitType,
+    'wait_event': waitEvent,
+    'db_name': dbName,
+    'user': user,
+    'application': application,
+    'client_address': clientAddress,
+    'duration_ms': durationMs,
+    'fingerprint': fingerprint,
+    'text': text,
+    'blocking_session_ids': blockingSessionIds,
+    'blocks': blocks,
+  };
+
+  final String sessionId;
+  final String state;
+  final String waitType;
+  final String waitEvent;
+  final String dbName;
+  final String user;
+  final String application;
+  final String clientAddress;
+  final double durationMs;
+  final String fingerprint;
+  final String text;
+  final List<String> blockingSessionIds;
+  final int blocks;
 }
 
 /// Non-secret settings, one section per channel type. email: to (required), smtp (optional override); pagerduty: pagerduty; opsgenie: opsgenie (alerting.md §5.3).

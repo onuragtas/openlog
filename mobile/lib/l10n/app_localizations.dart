@@ -6030,6 +6030,252 @@ abstract class L {
   /// In en, this message translates to:
   /// **'CPU'**
   String get k8sCpuTrend;
+
+  /// No description provided for @dbTabActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get dbTabActivity;
+
+  /// No description provided for @dbTabQueries.
+  ///
+  /// In en, this message translates to:
+  /// **'Queries'**
+  String get dbTabQueries;
+
+  /// No description provided for @dbTabSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get dbTabSessions;
+
+  /// No description provided for @dbActivityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Average active sessions'**
+  String get dbActivityTitle;
+
+  /// No description provided for @dbActivityAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'By wait type: whether the database is busy on CPU, on locks or on disk.'**
+  String get dbActivityAbout;
+
+  /// No description provided for @dbNoSamples.
+  ///
+  /// In en, this message translates to:
+  /// **'No session samples in this range.'**
+  String get dbNoSamples;
+
+  /// No description provided for @dbWaits.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait events'**
+  String get dbWaits;
+
+  /// No description provided for @dbTopQueries.
+  ///
+  /// In en, this message translates to:
+  /// **'Most sampled statements'**
+  String get dbTopQueries;
+
+  /// No description provided for @dbAas.
+  ///
+  /// In en, this message translates to:
+  /// **'avg active sessions'**
+  String get dbAas;
+
+  /// No description provided for @dbNoQueries.
+  ///
+  /// In en, this message translates to:
+  /// **'No statements in this range.'**
+  String get dbNoQueries;
+
+  /// No description provided for @dbQuerySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search statements'**
+  String get dbQuerySearch;
+
+  /// No description provided for @dbSortTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get dbSortTime;
+
+  /// No description provided for @dbSortCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get dbSortCalls;
+
+  /// No description provided for @dbSortAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get dbSortAvg;
+
+  /// No description provided for @dbSortRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows'**
+  String get dbSortRows;
+
+  /// No description provided for @dbSortErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get dbSortErrors;
+
+  /// No description provided for @dbSortReads.
+  ///
+  /// In en, this message translates to:
+  /// **'Reads'**
+  String get dbSortReads;
+
+  /// No description provided for @dbShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get dbShare;
+
+  /// No description provided for @dbThroughput.
+  ///
+  /// In en, this message translates to:
+  /// **'Throughput'**
+  String get dbThroughput;
+
+  /// No description provided for @dbAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get dbAvg;
+
+  /// No description provided for @dbRowsPerCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows per call'**
+  String get dbRowsPerCall;
+
+  /// No description provided for @dbErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get dbErrors;
+
+  /// No description provided for @dbPerSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}/s'**
+  String dbPerSecond(String value);
+
+  /// No description provided for @dbNoSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'No open sessions right now.'**
+  String get dbNoSessions;
+
+  /// No description provided for @dbSampledAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Sampled {when}'**
+  String dbSampledAt(String when);
+
+  /// No description provided for @dbBlocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocking sessions'**
+  String get dbBlocking;
+
+  /// No description provided for @dbSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get dbSessions;
+
+  /// No description provided for @dbBlocks.
+  ///
+  /// In en, this message translates to:
+  /// **'blocks {count} sessions'**
+  String dbBlocks(int count);
+
+  /// No description provided for @dbQueryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Statement'**
+  String get dbQueryTitle;
+
+  /// No description provided for @dbQueryCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get dbQueryCost;
+
+  /// No description provided for @dbCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get dbCalls;
+
+  /// No description provided for @dbTotalTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Total time'**
+  String get dbTotalTime;
+
+  /// No description provided for @dbRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows'**
+  String get dbRows;
+
+  /// No description provided for @dbNoIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'No index'**
+  String get dbNoIndex;
+
+  /// No description provided for @dbCacheHit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache hit'**
+  String get dbCacheHit;
+
+  /// No description provided for @dbAvgTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'Average time'**
+  String get dbAvgTrend;
+
+  /// No description provided for @dbPlans.
+  ///
+  /// In en, this message translates to:
+  /// **'Plans'**
+  String get dbPlans;
+
+  /// No description provided for @dbCurrentPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'current'**
+  String get dbCurrentPlan;
+
+  /// No description provided for @dbPlanChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'plan changed'**
+  String get dbPlanChanged;
+
+  /// No description provided for @dbPlanCost.
+  ///
+  /// In en, this message translates to:
+  /// **'cost'**
+  String get dbPlanCost;
+
+  /// No description provided for @dbCallers.
+  ///
+  /// In en, this message translates to:
+  /// **'Calling services'**
+  String get dbCallers;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
