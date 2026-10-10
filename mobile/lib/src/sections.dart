@@ -82,6 +82,7 @@ class Sections {
     ServiceDatabasesController Function(String serviceName)? serviceDatabases,
     ServiceDeploymentsController Function(String serviceName)?
     serviceDeployments,
+    ServiceAboutController Function(String serviceName)? serviceAbout,
     TraceController Function(String traceId)? trace,
     MetricController Function(String name)? metric,
     RumOverviewController Function(String app)? rumOverview,
@@ -113,6 +114,8 @@ class Sections {
        serviceDeployments =
            serviceDeployments ??
            ((name) => ServiceDeploymentsController(client, name)),
+       serviceAbout =
+           serviceAbout ?? ((name) => ServiceAboutController(client, name)),
        trace = trace ?? ((id) => TraceController(client, id)),
        metric = metric ?? ((name) => MetricController(client, name)),
        rumOverview =
@@ -271,6 +274,7 @@ class Sections {
   serviceDatabases;
   final ServiceDeploymentsController Function(String serviceName)
   serviceDeployments;
+  final ServiceAboutController Function(String serviceName) serviceAbout;
   final TraceController Function(String traceId) trace;
   final MetricController Function(String name) metric;
   final RumOverviewController Function(String app) rumOverview;

@@ -424,7 +424,8 @@ Sahibin uyarısı (2026-10-10): mobilin menüsü webde olmayan girişler taşıy
 Mobilin `client.dart` dosyasındaki yolları sözleşmedeki `/api/v1/apm/*` listesiyle tek tek
 karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan bu bölüm bitmiş sayılmaz:
 
-- [ ] Servis ayrıntısı (`apm/services/{s}`) ve Apdex ayarı (`apm/services/{s}/settings`)
+- [x] Servis ayrıntısı (`apm/services/{s}`) ve Apdex ayarı (`apm/services/{s}/settings`):
+      genel bakışın başında dil, sürüm, ortam ve Apdex eşiği (dokununca değiştirilebiliyor).
 - [x] İşlemler (`apm/services/{s}/transactions`): servis ekranında webin sırasındaki ikinci
       sekme; sunucu sıralamasıyla (harcanan süre, hacim, en yavaş, hata). Tek işlem ayrıntısı
       (`.../transaction`) henüz yok.
@@ -434,8 +435,10 @@ karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan b
       dağıtımdan sonra ilk kez görülen hata grupları.
 - [x] Servisin veritabanları (`apm/services/{s}/databases`): dördüncü sekme; normalize edilmiş
       ifade, sistem/veritabanı/işlem ve aynı dört sayı, sunucu sıralamasıyla.
-- [ ] Servisin sunucuları, konteynerleri, pod'ları (`apm/services/{s}/hosts`, `.../containers`,
-      `.../kubernetes`) ve tersi (`apm/hosts/{host_id}/services`)
+- [x] Servisin sunucuları, konteynerleri, pod'ları (`apm/services/{s}` içindeki `hosts`,
+      `.../containers`, `.../kubernetes`): aynı panelde, her biri kendi ekranına açılıyor;
+      ajan verisi olmayan sunucu açılmıyor ve nedeni söyleniyor.
+- [ ] Bir sunucunun servisleri (`apm/hosts/{host_id}/services`) — sunucu ekranında
 - [x] Ajanlar (`apm/agents`): servisler listesinden; servis × ajan × sürüm başına bir satır,
       geride olanlar üstte, arama ve "yalnızca geride olanlar". Yükseltme komutları webde
       (`upgrade=true` sunucuya her servis için paket deposu sorgulatıyor).

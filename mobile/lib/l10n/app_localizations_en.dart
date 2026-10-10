@@ -2152,4 +2152,41 @@ class LEn extends L {
 
   @override
   String get serviceAllTransactions => 'All transactions';
+
+  @override
+  String get serviceHosts => 'Hosts';
+
+  @override
+  String get serviceContainers => 'Containers';
+
+  @override
+  String get servicePods => 'Pods';
+
+  @override
+  String get apdexTitle => 'Apdex threshold';
+
+  @override
+  String get apdexExplain =>
+      'Requests up to this duration count as satisfied; up to four times it, half satisfied.';
+
+  @override
+  String get apdexThreshold => 'Milliseconds';
+
+  @override
+  String apdexDefault(int ms) {
+    return 'Apdex $ms ms (default)';
+  }
+
+  @override
+  String apdexSet(int ms) {
+    return 'Apdex $ms ms';
+  }
+
+  @override
+  String get apdexUnavailable =>
+      'This installation cannot store service settings.';
+
+  @override
+  String get serviceUnknownHost =>
+      'No agent data for this one; there is no page to open.';
 }

@@ -11,6 +11,7 @@ import '../session.dart';
 import 'deployments_card.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'service_about.dart';
 import 'service_lists_tabs.dart';
 import 'service_map_tab.dart';
 import 'service_traces_tab.dart';
@@ -44,6 +45,7 @@ class _ServiceScreenState extends State<ServiceScreen>
   late final ServiceTracesController _traces;
   late final ServiceMapController _map;
   late final ServiceDeploymentsController _deployments;
+  late final ServiceAboutController _about;
   late final TabController _tabs;
 
   @override
@@ -56,6 +58,7 @@ class _ServiceScreenState extends State<ServiceScreen>
     _traces = widget.sections.serviceTraces(widget.serviceName);
     _map = widget.sections.serviceMap(widget.serviceName);
     _deployments = widget.sections.serviceDeployments(widget.serviceName);
+    _about = widget.sections.serviceAbout(widget.serviceName);
     _tabs = TabController(length: 6, vsync: this)..addListener(_loadTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _c.refresh();
@@ -65,6 +68,8 @@ class _ServiceScreenState extends State<ServiceScreen>
       // The top transactions are on the overview too, so the list the tab
       // uses is loaded with it rather than when the tab is opened.
       _transactions.refresh();
+      // Where the service runs, which the web shows above the tabs.
+      _about.load();
     });
   }
 
@@ -97,6 +102,7 @@ class _ServiceScreenState extends State<ServiceScreen>
   void dispose() {
     _tabs.removeListener(_loadTab);
     _tabs.dispose();
+    _about.dispose();
     _deployments.dispose();
     _map.dispose();
     _traces.dispose();
@@ -230,6 +236,11 @@ class _ServiceScreenState extends State<ServiceScreen>
     // zeroes the person has to interpret.
     if (t.requests == 0) {
       return [
+        ServiceAbout(
+          session: widget.session,
+          sections: widget.sections,
+          controller: _about,
+        ),
         const SizedBox(height: 48),
         Text(
           l.serviceNoData,
@@ -241,6 +252,11 @@ class _ServiceScreenState extends State<ServiceScreen>
 
     final errorPercent = t.errorRate * 100;
     return [
+      ServiceAbout(
+        session: widget.session,
+        sections: widget.sections,
+        controller: _about,
+      ),
       const SizedBox(height: 8),
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,

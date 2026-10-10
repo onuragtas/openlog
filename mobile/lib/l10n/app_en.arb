@@ -1426,5 +1426,29 @@
   "serviceLatencyChart": "Latency (p95)",
   "serviceApdexChart": "Apdex",
   "serviceTopTransactions": "Top transactions by time consumed",
-  "serviceAllTransactions": "All transactions"
+  "serviceAllTransactions": "All transactions",
+  "serviceHosts": "Hosts",
+  "serviceContainers": "Containers",
+  "servicePods": "Pods",
+  "apdexTitle": "Apdex threshold",
+  "apdexExplain": "Requests up to this duration count as satisfied; up to four times it, half satisfied.",
+  "apdexThreshold": "Milliseconds",
+  "apdexDefault": "Apdex {ms} ms (default)",
+  "@apdexDefault": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "apdexSet": "Apdex {ms} ms",
+  "@apdexSet": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "apdexUnavailable": "This installation cannot store service settings.",
+  "serviceUnknownHost": "No agent data for this one; there is no page to open."
 }

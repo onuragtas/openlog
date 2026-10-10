@@ -1,4 +1,6 @@
 // Service health: where to look once an alert says something is wrong.
+import 'package:flutter/foundation.dart';
+
 import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'list_controller.dart';
@@ -282,4 +284,78 @@ class ServiceDeploymentsController extends ListController<ApmDeployment> {
 double? deltaRatio(double? before, double? after) {
   if (before == null || after == null || before == 0) return null;
   return (after - before) / before;
+}
+
+/// Where one service runs, and what it is judged against.
+///
+/// Four questions the web's service header answers above the tabs: which
+/// language and version, which hosts, which containers, which pods -- and
+/// the Apdex threshold, which is the only one of them anybody can change.
+class ServiceAboutController extends ChangeNotifier {
+  ServiceAboutController(this.client, this.serviceName);
+
+  final OpenlogClient client;
+  final String serviceName;
+
+  ApmServiceDetail? detail;
+  ApmSettings? settings;
+  List<ApmServiceContainer> containers = const [];
+  List<KubernetesServicePod> pods = const [];
+
+  bool loading = false;
+  bool saving = false;
+  SessionFailure? failure;
+
+  Future<void> load() async {
+    loading = true;
+    failure = null;
+    notifyListeners();
+    try {
+      detail = await client.apmService(serviceName);
+      settings = await client.apmServiceSettings(serviceName);
+      containers = (await client.apmServiceContainers(serviceName)).containers;
+      pods = (await client.apmServicePods(serviceName)).pods;
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = _failureOf(e);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Changes the Apdex threshold, in milliseconds.
+  ///
+  /// Everything else on this panel is something the server observed; this is
+  /// the one judgement call, and it changes what every Apdex number on the
+  /// service means -- so it is saved explicitly, never as a side effect.
+  Future<bool> setApdex(int apdexTMs) async {
+    saving = true;
+    failure = null;
+    notifyListeners();
+    try {
+      settings = await client.putApmServiceSettings(
+        serviceName,
+        apdexTMs: apdexTMs,
+      );
+      return true;
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+      return false;
+    } on ApiException catch (e) {
+      failure = _failureOf(e);
+      return false;
+    } finally {
+      saving = false;
+      notifyListeners();
+    }
+  }
+
+  SessionFailure _failureOf(ApiException e) => switch (e.status) {
+    403 => const SessionFailure('servicesForbidden', ''),
+    // Static auth mode: there is no store to put settings in.
+    404 => const SessionFailure('apdexUnavailable', ''),
+    _ => SessionFailure('unexpected', e.message),
+  };
 }

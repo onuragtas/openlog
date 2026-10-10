@@ -2148,4 +2148,40 @@ class LTr extends L {
 
   @override
   String get serviceAllTransactions => 'Tüm işlemler';
+
+  @override
+  String get serviceHosts => 'Sunucular';
+
+  @override
+  String get serviceContainers => 'Konteynerler';
+
+  @override
+  String get servicePods => 'Pod\'lar';
+
+  @override
+  String get apdexTitle => 'Apdex eşiği';
+
+  @override
+  String get apdexExplain =>
+      'Bu süreye kadar süren istekler memnun sayılır; dört katına kadar olanlar yarı memnun.';
+
+  @override
+  String get apdexThreshold => 'Milisaniye';
+
+  @override
+  String apdexDefault(int ms) {
+    return 'Apdex $ms ms (varsayılan)';
+  }
+
+  @override
+  String apdexSet(int ms) {
+    return 'Apdex $ms ms';
+  }
+
+  @override
+  String get apdexUnavailable => 'Bu kurulumda servis ayarı saklanamıyor.';
+
+  @override
+  String get serviceUnknownHost =>
+      'Bunun ajan verisi yok; açılacak bir sayfası yok.';
 }

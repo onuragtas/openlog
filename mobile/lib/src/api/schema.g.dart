@@ -3566,6 +3566,107 @@ class ApmDeploymentCompareNewErrorGroupsItem {
   final double totalCount;
 }
 
+/// `ApmServiceDetail` of the openlog API contract.
+class ApmServiceDetail {
+  const ApmServiceDetail({
+    required this.serviceName,
+    required this.instances,
+    required this.hosts,
+    required this.apdexTMs,
+    required this.apdexTDefault,
+  });
+
+  factory ApmServiceDetail.fromJson(
+    Object? json, [
+    String path = 'ApmServiceDetail',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceDetail(
+      serviceName: _req(m, 'service_name', path, _str),
+      instances: _req(
+        m,
+        'instances',
+        path,
+        (v, p) => _list<ApmServiceInstance>(
+          v,
+          p,
+          (v, p) => ApmServiceInstance.fromJson(v, p),
+        ),
+      ),
+      hosts: _req(
+        m,
+        'hosts',
+        path,
+        (v, p) => _list<ApmServiceHost>(
+          v,
+          p,
+          (v, p) => ApmServiceHost.fromJson(v, p),
+        ),
+      ),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      apdexTDefault: _req(m, 'apdex_t_default', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'instances': [for (final e in instances) e.toJson()],
+    'hosts': [for (final e in hosts) e.toJson()],
+    'apdex_t_ms': apdexTMs,
+    'apdex_t_default': apdexTDefault,
+  };
+
+  final String serviceName;
+  final List<ApmServiceInstance> instances;
+  final List<ApmServiceHost> hosts;
+  final double apdexTMs;
+  final bool apdexTDefault;
+}
+
+/// `ApmSettings` of the openlog API contract.
+class ApmSettings {
+  const ApmSettings({
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.apdexTMs,
+    required this.isDefault,
+    this.updatedAt,
+    required this.updatedByEmail,
+  });
+
+  factory ApmSettings.fromJson(Object? json, [String path = 'ApmSettings']) {
+    final m = _obj(json, path);
+    return ApmSettings(
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      isDefault: _req(m, 'is_default', path, _bool),
+      updatedAt: _opt(m, 'updated_at', path, _time),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'apdex_t_ms': apdexTMs,
+    'is_default': isDefault,
+    if (updatedAt != null) 'updated_at': updatedAt!.toUtc().toIso8601String(),
+    'updated_by_email': updatedByEmail,
+  };
+
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final double apdexTMs;
+  final bool isDefault;
+  final DateTime? updatedAt;
+  final String updatedByEmail;
+}
+
 /// `ApmMap` of the openlog API contract.
 class ApmMap {
   const ApmMap({required this.nodes, required this.edges});
@@ -6895,6 +6996,101 @@ class ApmPeriod {
   final double? apdex;
 }
 
+/// `ApmServiceInstance` of the openlog API contract.
+class ApmServiceInstance {
+  const ApmServiceInstance({
+    required this.serviceNamespace,
+    required this.environment,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.version,
+    required this.language,
+    required this.sdkName,
+    required this.resourceAttributes,
+  });
+
+  factory ApmServiceInstance.fromJson(
+    Object? json, [
+    String path = 'ApmServiceInstance',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceInstance(
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      version: _req(m, 'version', path, _str),
+      language: _req(m, 'language', path, _str),
+      sdkName: _req(m, 'sdk_name', path, _str),
+      resourceAttributes: _req(
+        m,
+        'resource_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'version': version,
+    'language': language,
+    'sdk_name': sdkName,
+    'resource_attributes': resourceAttributes,
+  };
+
+  final String serviceNamespace;
+  final String environment;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final String version;
+  final String language;
+  final String sdkName;
+  final Map<String, String> resourceAttributes;
+}
+
+/// `ApmServiceHost` of the openlog API contract.
+class ApmServiceHost {
+  const ApmServiceHost({
+    required this.hostId,
+    required this.hostName,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.known,
+  });
+
+  factory ApmServiceHost.fromJson(
+    Object? json, [
+    String path = 'ApmServiceHost',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceHost(
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      known: _req(m, 'known', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'host_name': hostName,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'known': known,
+  };
+
+  final String hostId;
+  final String hostName;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool known;
+}
+
 /// `ApmMapNode` of the openlog API contract.
 class ApmMapNode {
   const ApmMapNode({
@@ -9436,6 +9632,66 @@ class ApmDeploymentPage {
   final List<ApmDeployment> deployments;
 }
 
+/// `ApmServiceContainerPage` of the openlog API contract.
+class ApmServiceContainerPage {
+  const ApmServiceContainerPage({required this.containers});
+
+  factory ApmServiceContainerPage.fromJson(
+    Object? json, [
+    String path = 'ApmServiceContainerPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceContainerPage(
+      containers: _req(
+        m,
+        'containers',
+        path,
+        (v, p) => _list<ApmServiceContainer>(
+          v,
+          p,
+          (v, p) => ApmServiceContainer.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'containers': [for (final e in containers) e.toJson()],
+  };
+
+  final List<ApmServiceContainer> containers;
+}
+
+/// `ApmServicePodPage` of the openlog API contract.
+class ApmServicePodPage {
+  const ApmServicePodPage({required this.pods});
+
+  factory ApmServicePodPage.fromJson(
+    Object? json, [
+    String path = 'ApmServicePodPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServicePodPage(
+      pods: _req(
+        m,
+        'pods',
+        path,
+        (v, p) => _list<KubernetesServicePod>(
+          v,
+          p,
+          (v, p) => KubernetesServicePod.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'pods': [for (final e in pods) e.toJson()],
+  };
+
+  final List<KubernetesServicePod> pods;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -10496,6 +10752,136 @@ class ApmDeployment {
   final String previousVersion;
   final bool initial;
   final bool rollback;
+}
+
+/// `ApmServiceContainer` of the openlog API contract.
+class ApmServiceContainer {
+  const ApmServiceContainer({
+    required this.containerId,
+    required this.name,
+    required this.hostId,
+    required this.hostName,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.known,
+    required this.state,
+    required this.reporting,
+    this.cpuUtilization,
+    this.memoryUsage,
+    this.memoryLimit,
+  });
+
+  factory ApmServiceContainer.fromJson(
+    Object? json, [
+    String path = 'ApmServiceContainer',
+  ]) {
+    final m = _obj(json, path);
+    return ApmServiceContainer(
+      containerId: _req(m, 'container_id', path, _str),
+      name: _req(m, 'name', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      known: _req(m, 'known', path, _bool),
+      state: _req(m, 'state', path, _str),
+      reporting: _req(m, 'reporting', path, _bool),
+      cpuUtilization: _opt(m, 'cpu_utilization', path, _num),
+      memoryUsage: _opt(m, 'memory_usage', path, _num),
+      memoryLimit: _opt(m, 'memory_limit', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'container_id': containerId,
+    'name': name,
+    'host_id': hostId,
+    'host_name': hostName,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'known': known,
+    'state': state,
+    'reporting': reporting,
+    'cpu_utilization': ?cpuUtilization,
+    'memory_usage': ?memoryUsage,
+    'memory_limit': ?memoryLimit,
+  };
+
+  final String containerId;
+  final String name;
+  final String hostId;
+  final String hostName;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool known;
+  final String state;
+  final bool reporting;
+  final double? cpuUtilization;
+  final double? memoryUsage;
+  final double? memoryLimit;
+}
+
+/// `KubernetesServicePod` of the openlog API contract.
+class KubernetesServicePod {
+  const KubernetesServicePod({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.namespace,
+    required this.podName,
+    required this.podUid,
+    required this.workloadKind,
+    required this.workloadName,
+    required this.nodeName,
+    required this.phase,
+    required this.ready,
+    required this.reporting,
+  });
+
+  factory KubernetesServicePod.fromJson(
+    Object? json, [
+    String path = 'KubernetesServicePod',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesServicePod(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      namespace: _req(m, 'namespace', path, _str),
+      podName: _req(m, 'pod_name', path, _str),
+      podUid: _req(m, 'pod_uid', path, _str),
+      workloadKind: _req(m, 'workload_kind', path, _str),
+      workloadName: _req(m, 'workload_name', path, _str),
+      nodeName: _req(m, 'node_name', path, _str),
+      phase: _req(m, 'phase', path, _str),
+      ready: _req(m, 'ready', path, _bool),
+      reporting: _req(m, 'reporting', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'namespace': namespace,
+    'pod_name': podName,
+    'pod_uid': podUid,
+    'workload_kind': workloadKind,
+    'workload_name': workloadName,
+    'node_name': nodeName,
+    'phase': phase,
+    'ready': ready,
+    'reporting': reporting,
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String namespace;
+  final String podName;
+  final String podUid;
+  final String workloadKind;
+  final String workloadName;
+  final String nodeName;
+  final String phase;
+  final bool ready;
+  final bool reporting;
 }
 
 /// `LogRecord` of the openlog API contract.

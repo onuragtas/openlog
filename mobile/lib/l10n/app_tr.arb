@@ -1329,5 +1329,29 @@
   "serviceLatencyChart": "Gecikme (p95)",
   "serviceApdexChart": "Apdex",
   "serviceTopTransactions": "Harcanan süreye göre en üst işlemler",
-  "serviceAllTransactions": "Tüm işlemler"
+  "serviceAllTransactions": "Tüm işlemler",
+  "serviceHosts": "Sunucular",
+  "serviceContainers": "Konteynerler",
+  "servicePods": "Pod'lar",
+  "apdexTitle": "Apdex eşiği",
+  "apdexExplain": "Bu süreye kadar süren istekler memnun sayılır; dört katına kadar olanlar yarı memnun.",
+  "apdexThreshold": "Milisaniye",
+  "apdexDefault": "Apdex {ms} ms (varsayılan)",
+  "@apdexDefault": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "apdexSet": "Apdex {ms} ms",
+  "@apdexSet": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "apdexUnavailable": "Bu kurulumda servis ayarı saklanamıyor.",
+  "serviceUnknownHost": "Bunun ajan verisi yok; açılacak bir sayfası yok."
 }

@@ -3852,6 +3852,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'All transactions'**
   String get serviceAllTransactions;
+
+  /// No description provided for @serviceHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get serviceHosts;
+
+  /// No description provided for @serviceContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get serviceContainers;
+
+  /// No description provided for @servicePods.
+  ///
+  /// In en, this message translates to:
+  /// **'Pods'**
+  String get servicePods;
+
+  /// No description provided for @apdexTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apdex threshold'**
+  String get apdexTitle;
+
+  /// No description provided for @apdexExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests up to this duration count as satisfied; up to four times it, half satisfied.'**
+  String get apdexExplain;
+
+  /// No description provided for @apdexThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Milliseconds'**
+  String get apdexThreshold;
+
+  /// No description provided for @apdexDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Apdex {ms} ms (default)'**
+  String apdexDefault(int ms);
+
+  /// No description provided for @apdexSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Apdex {ms} ms'**
+  String apdexSet(int ms);
+
+  /// No description provided for @apdexUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation cannot store service settings.'**
+  String get apdexUnavailable;
+
+  /// No description provided for @serviceUnknownHost.
+  ///
+  /// In en, this message translates to:
+  /// **'No agent data for this one; there is no page to open.'**
+  String get serviceUnknownHost;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -564,6 +564,55 @@ class OpenlogClient {
         ),
       );
 
+  /// Where the service runs: its instances, and the hosts that reported it.
+  Future<ApmServiceDetail> apmService(String service) async =>
+      ApmServiceDetail.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(service)}',
+        ),
+      );
+
+  /// Its Apdex threshold, and whether it is the organization's default.
+  Future<ApmSettings> apmServiceSettings(String service) async =>
+      ApmSettings.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(service)}/settings',
+        ),
+      );
+
+  /// Sets it. Admin or owner; 404 where there is nothing to store settings
+  /// in (static auth mode).
+  Future<ApmSettings> putApmServiceSettings(
+    String service, {
+    required int apdexTMs,
+  }) async => ApmSettings.fromJson(
+    await _send(
+      'PUT',
+      '/api/v1/apm/services/${Uri.encodeComponent(service)}/settings',
+      body: {'apdex_t_ms': apdexTMs},
+    ),
+  );
+
+  /// The containers the service's spans came from.
+  Future<ApmServiceContainerPage> apmServiceContainers(String service) async =>
+      ApmServiceContainerPage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(service)}/containers',
+        ),
+      );
+
+  /// And the pods those containers belong to.
+  Future<ApmServicePodPage> apmServicePods(String service) async =>
+      ApmServicePodPage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/services/${Uri.encodeComponent(service)}/kubernetes',
+        ),
+      );
+
   /// When each version of a service first appeared.
   Future<ApmDeploymentPage> apmDeployments({required String service}) async =>
       ApmDeploymentPage.fromJson(
