@@ -574,7 +574,16 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       saatlik oran 1.72 "2"ye yuvarlanmıyor.
       `costs/containers`, `costs/hosts/{id}` ve `costs/prices` dışarıda: webin maliyet
       sayfası da bu üçünü kullanmıyor (konteyner maliyeti ve fiyat tablosu ekranı yok).
-- [ ] Bulut bağlantıları (`cloud/providers`, `cloud/connections`, `.../test`)
+- [x] Bulut bağlantıları (`cloud/connections`, `.../runs`): webde olduğu gibi
+      entegrasyonlar sayfasından açılıyor — yönetilen servisin keşfedilecek ajanı yok,
+      yapılandırılıyor. Liste her bağlantının sağlayıcısını, kapsamlarını (AWS'de bölge,
+      Azure'da abonelik, GCP'de proje), durumunu ve son yoklamasını; bağlantı ekranı
+      kapsam başına son yoklamayı (toplanan, API çağrısı, sıradaki yoklama, üst üste
+      hata) ve son yoklamaların listesini gösteriyor.
+      Salt okunur: bağlantı kurmak bir erişim anahtarı ve bir gizli anahtar yazmak
+      demek, telefon klavyesinde yapılacak iş değil — ekran bunu söylüyor.
+      `cloud/providers` ve `cloud/connections/test` bu yüzden dışarıda: ikisi de o
+      formun parçası.
 - [ ] Filo politikası ve dağıtımlar (`fleet/policy`, `fleet/rollouts`, `fleet/rollback`)
 - [ ] Entegrasyon ayarlarını düzenleme (`integrations/settings` yazma)
 - [ ] Depolama (`storage/disk`, `.../settings`)

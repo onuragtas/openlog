@@ -2200,5 +2200,120 @@
               "type": "int"
           }
       }
-  }
+  },
+  "cloudTitle": "Bulut bağlantıları",
+  "cloudOpen": "Bulut bağlantıları",
+  "cloudOpenHint": "Yönetilen servislerin metrikleri: AWS, Azure, GCP.",
+  "cloudEmpty": "Henüz bulut bağlantısı yok.",
+  "cloudNoSecretsKey": "Bu kurulumda OPENLOG_SECRETS_KEY yok; kimlik bilgisi saklanamadığı için bağlantı da kurulamaz.",
+  "cloudManageOnWeb": "Bağlantı kurmak ve kimlik bilgisi girmek webde yapılır.",
+  "cloudNoCredentials": "Kimlik bilgisi yok",
+  "cloudStateOk": "Çalışıyor",
+  "cloudStatePartial": "Kısmi",
+  "cloudStateError": "Hata",
+  "cloudStatePaused": "Duraklatıldı",
+  "cloudStateUnknown": "Henüz yok",
+  "cloudNever": "hiç",
+  "cloudCollected": "Toplanan",
+  "cloudCollectedN": "{count} veri noktası",
+  "@cloudCollectedN": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudApiCalls": "{count} API çağrısı",
+  "@cloudApiCalls": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudThrottled": "{count} kez kısıtlandı",
+  "@cloudThrottled": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudNext": "sonraki {when}",
+  "@cloudNext": {
+      "placeholders": {
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "cloudConsecutiveErrors": "Üst üste {count} hata; bir sonraki yoklama ertelendi.",
+  "@cloudConsecutiveErrors": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudRegions": "{count} bölge",
+  "@cloudRegions": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudSubscriptions": "{count} abonelik",
+  "@cloudSubscriptions": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudProjects": "{count} proje",
+  "@cloudProjects": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudScopes": "{count} kapsam",
+  "@cloudScopes": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudServices": "{count} servis",
+  "@cloudServices": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudEvery": "{minutes} dakikada bir",
+  "@cloudEvery": {
+      "placeholders": {
+          "minutes": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudCaps": "yoklama başına en çok {metrics} metrik, {calls} çağrı",
+  "@cloudCaps": {
+      "placeholders": {
+          "metrics": {
+              "type": "int"
+          },
+          "calls": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudRuns": "Son yoklamalar",
+  "cloudNoRuns": "Henüz yoklama yok."
 }

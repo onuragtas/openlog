@@ -1297,6 +1297,24 @@ class OpenlogClient {
     ),
   );
 
+  /// The organization's cloud connections, each with the last poll per
+  /// scope, and whether this server can keep credentials at all.
+  Future<CloudConnectionList> cloudConnections() async =>
+      CloudConnectionList.fromJson(
+        await _send('GET', '/api/v1/cloud/connections'),
+      );
+
+  /// One connection's recent polls, newest first: what each one collected,
+  /// what it cost in provider requests and what failed.
+  Future<CloudRunList> cloudRuns(String id, {int limit = 50}) async =>
+      CloudRunList.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/cloud/connections/${Uri.encodeComponent(id)}/runs'
+              '?limit=$limit',
+        ),
+      );
+
   /// The clusters with data in the window, by name.
   Future<KubernetesClusterPage> k8sClusters() async =>
       KubernetesClusterPage.fromJson(

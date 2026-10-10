@@ -6432,6 +6432,174 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{count} containers'**
   String costsContainers(int count);
+
+  /// No description provided for @cloudTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud connections'**
+  String get cloudTitle;
+
+  /// No description provided for @cloudOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud connections'**
+  String get cloudOpen;
+
+  /// No description provided for @cloudOpenHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics of managed services: AWS, Azure, GCP.'**
+  String get cloudOpenHint;
+
+  /// No description provided for @cloudEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No cloud connections yet.'**
+  String get cloudEmpty;
+
+  /// No description provided for @cloudNoSecretsKey.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation has no OPENLOG_SECRETS_KEY, so credentials cannot be stored and no connection can exist.'**
+  String get cloudNoSecretsKey;
+
+  /// No description provided for @cloudManageOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Connections and credentials are set up on the web.'**
+  String get cloudManageOnWeb;
+
+  /// No description provided for @cloudNoCredentials.
+  ///
+  /// In en, this message translates to:
+  /// **'No credentials'**
+  String get cloudNoCredentials;
+
+  /// No description provided for @cloudStateOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get cloudStateOk;
+
+  /// No description provided for @cloudStatePartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial'**
+  String get cloudStatePartial;
+
+  /// No description provided for @cloudStateError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get cloudStateError;
+
+  /// No description provided for @cloudStatePaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get cloudStatePaused;
+
+  /// No description provided for @cloudStateUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not yet'**
+  String get cloudStateUnknown;
+
+  /// No description provided for @cloudNever.
+  ///
+  /// In en, this message translates to:
+  /// **'never'**
+  String get cloudNever;
+
+  /// No description provided for @cloudCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get cloudCollected;
+
+  /// No description provided for @cloudCollectedN.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} data points'**
+  String cloudCollectedN(int count);
+
+  /// No description provided for @cloudApiCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} API calls'**
+  String cloudApiCalls(int count);
+
+  /// No description provided for @cloudThrottled.
+  ///
+  /// In en, this message translates to:
+  /// **'throttled {count} times'**
+  String cloudThrottled(int count);
+
+  /// No description provided for @cloudNext.
+  ///
+  /// In en, this message translates to:
+  /// **'next {when}'**
+  String cloudNext(String when);
+
+  /// No description provided for @cloudConsecutiveErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} failures in a row; the next poll is backed off.'**
+  String cloudConsecutiveErrors(int count);
+
+  /// No description provided for @cloudRegions.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} regions'**
+  String cloudRegions(int count);
+
+  /// No description provided for @cloudSubscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} subscriptions'**
+  String cloudSubscriptions(int count);
+
+  /// No description provided for @cloudProjects.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} projects'**
+  String cloudProjects(int count);
+
+  /// No description provided for @cloudScopes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} scopes'**
+  String cloudScopes(int count);
+
+  /// No description provided for @cloudServices.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} services'**
+  String cloudServices(int count);
+
+  /// No description provided for @cloudEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'every {minutes} minutes'**
+  String cloudEvery(int minutes);
+
+  /// No description provided for @cloudCaps.
+  ///
+  /// In en, this message translates to:
+  /// **'at most {metrics} metrics and {calls} calls per poll'**
+  String cloudCaps(int metrics, int calls);
+
+  /// No description provided for @cloudRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent polls'**
+  String get cloudRuns;
+
+  /// No description provided for @cloudNoRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'No polls yet.'**
+  String get cloudNoRuns;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

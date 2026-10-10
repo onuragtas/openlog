@@ -10,6 +10,7 @@ import '../api/schema.g.dart';
 import '../discovery.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'cloud_screen.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
 
@@ -39,7 +40,11 @@ class IntegrationsBody extends StatelessWidget {
       header: ListenableBuilder(
         listenable: c,
         builder: (context, _) {
-          if (c.items.isEmpty) return const SizedBox.shrink();
+          // The cloud link is above the list and shows whether or not
+          // anything was discovered: a managed service has no agent to
+          // discover, which is why it is configured rather than found.
+          final cloudLink = _CloudLink(session: session, sections: sections);
+          if (c.items.isEmpty) return cloudLink;
           final l = L.of(context);
           final n = c.counts;
           final theme = Theme.of(context);
@@ -58,6 +63,7 @@ class IntegrationsBody extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                cloudLink,
               ],
             ),
           );
@@ -149,6 +155,46 @@ class _InstanceCard extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The way into the cloud connections, where the web keeps it: on the
+/// integrations page, because managed services are configured rather than
+/// discovered.
+class _CloudLink extends StatelessWidget {
+  const _CloudLink({required this.session, required this.sections});
+
+  final SessionController session;
+  final Sections sections;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          key: const Key('integrations-cloud'),
+          leading: const Icon(Icons.cloud_outlined),
+          title: Text(l.cloudOpen),
+          subtitle: Text(
+            l.cloudOpenHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CloudScreen(session: session, sections: sections),
+            ),
+          ),
         ),
       ),
     );

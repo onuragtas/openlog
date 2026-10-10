@@ -363,6 +363,57 @@ enum SavedViewVisibility {
   }
 }
 
+/// CloudProviderName of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum CloudProviderName {
+  aws('aws'),
+  azure('azure'),
+  gcp('gcp'),
+  unknown('');
+
+  const CloudProviderName(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static CloudProviderName fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// CloudConnectionIngestMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum CloudConnectionIngestMode {
+  poll('poll'),
+  push('push'),
+  unknown('');
+
+  const CloudConnectionIngestMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static CloudConnectionIngestMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FieldType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -1106,6 +1157,59 @@ enum MetricCorrelationDirection {
   final String wire;
 
   static MetricCorrelationDirection fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// CloudScopeStatusLastStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum CloudScopeStatusLastStatus {
+  empty(''),
+  ok('ok'),
+  partial('partial'),
+  error('error'),
+  unknown('');
+
+  const CloudScopeStatusLastStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static CloudScopeStatusLastStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// CloudRunStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum CloudRunStatus {
+  ok('ok'),
+  partial('partial'),
+  error('error'),
+  unknown('');
+
+  const CloudRunStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static CloudRunStatus fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -4217,6 +4321,178 @@ class KubernetesClusterDetailPods {
   final int succeeded;
   final int failed;
   final int unknown;
+}
+
+/// `CloudConnection` of the openlog API contract.
+class CloudConnection {
+  const CloudConnection({
+    required this.id,
+    required this.name,
+    required this.provider,
+    required this.ingestMode,
+    required this.enabled,
+    required this.scopes,
+    required this.services,
+    required this.pollIntervalSeconds,
+    required this.maxMetricsPerPoll,
+    required this.maxApiCallsPerPoll,
+    required this.credentialsSet,
+    required this.credentialsKeyId,
+    required this.createdByEmail,
+    required this.updatedByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.status,
+  });
+
+  factory CloudConnection.fromJson(
+    Object? json, [
+    String path = 'CloudConnection',
+  ]) {
+    final m = _obj(json, path);
+    return CloudConnection(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      provider: _req(m, 'provider', path, CloudProviderName.fromJson),
+      ingestMode: _req(
+        m,
+        'ingest_mode',
+        path,
+        CloudConnectionIngestMode.fromJson,
+      ),
+      enabled: _req(m, 'enabled', path, _bool),
+      scopes: _req(m, 'scopes', path, (v, p) => _list<String>(v, p, _str)),
+      services: _req(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+      pollIntervalSeconds: _req(m, 'poll_interval_seconds', path, _int),
+      maxMetricsPerPoll: _req(m, 'max_metrics_per_poll', path, _int),
+      maxApiCallsPerPoll: _req(m, 'max_api_calls_per_poll', path, _int),
+      credentialsSet: _req(m, 'credentials_set', path, _bool),
+      credentialsKeyId: _req(m, 'credentials_key_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      status: _req(
+        m,
+        'status',
+        path,
+        (v, p) => _list<CloudScopeStatus>(
+          v,
+          p,
+          (v, p) => CloudScopeStatus.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'provider': provider.wire,
+    'ingest_mode': ingestMode.wire,
+    'enabled': enabled,
+    'scopes': scopes,
+    'services': services,
+    'poll_interval_seconds': pollIntervalSeconds,
+    'max_metrics_per_poll': maxMetricsPerPoll,
+    'max_api_calls_per_poll': maxApiCallsPerPoll,
+    'credentials_set': credentialsSet,
+    'credentials_key_id': credentialsKeyId,
+    'created_by_email': createdByEmail,
+    'updated_by_email': updatedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'status': [for (final e in status) e.toJson()],
+  };
+
+  final String id;
+  final String name;
+  final CloudProviderName provider;
+  final CloudConnectionIngestMode ingestMode;
+  final bool enabled;
+  final List<String> scopes;
+  final List<String> services;
+  final int pollIntervalSeconds;
+  final int maxMetricsPerPoll;
+  final int maxApiCallsPerPoll;
+  final bool credentialsSet;
+  final String credentialsKeyId;
+  final String createdByEmail;
+  final String updatedByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<CloudScopeStatus> status;
+}
+
+/// `CloudConnectionList` of the openlog API contract.
+class CloudConnectionList {
+  const CloudConnectionList({
+    required this.connections,
+    required this.secretsConfigured,
+    required this.testSupported,
+  });
+
+  factory CloudConnectionList.fromJson(
+    Object? json, [
+    String path = 'CloudConnectionList',
+  ]) {
+    final m = _obj(json, path);
+    return CloudConnectionList(
+      connections: _req(
+        m,
+        'connections',
+        path,
+        (v, p) => _list<CloudConnection>(
+          v,
+          p,
+          (v, p) => CloudConnection.fromJson(v, p),
+        ),
+      ),
+      secretsConfigured: _req(m, 'secrets_configured', path, _bool),
+      testSupported: _req(m, 'test_supported', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'connections': [for (final e in connections) e.toJson()],
+    'secrets_configured': secretsConfigured,
+    'test_supported': testSupported,
+  };
+
+  final List<CloudConnection> connections;
+  final bool secretsConfigured;
+  final bool testSupported;
+}
+
+/// `CloudRunList` of the openlog API contract.
+class CloudRunList {
+  const CloudRunList({required this.connection, required this.runs});
+
+  factory CloudRunList.fromJson(Object? json, [String path = 'CloudRunList']) {
+    final m = _obj(json, path);
+    return CloudRunList(
+      connection: _req(
+        m,
+        'connection',
+        path,
+        (v, p) => CloudConnection.fromJson(v, p),
+      ),
+      runs: _req(
+        m,
+        'runs',
+        path,
+        (v, p) => _list<CloudRun>(v, p, (v, p) => CloudRun.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'connection': connection.toJson(),
+    'runs': [for (final e in runs) e.toJson()],
+  };
+
+  final CloudConnection connection;
+  final List<CloudRun> runs;
 }
 
 /// `DbActivity` of the openlog API contract.
@@ -9518,6 +9794,131 @@ class KubernetesEvent {
   final String clusterName;
 }
 
+/// The schedule row of one scope - the last poll and when the next one is due.
+class CloudScopeStatus {
+  const CloudScopeStatus({
+    required this.scope,
+    required this.nextRunAt,
+    this.lastRunAt,
+    required this.lastStatus,
+    required this.lastError,
+    required this.lastMetrics,
+    required this.lastApiCalls,
+    required this.lastDurationMs,
+    required this.consecutiveErrors,
+  });
+
+  factory CloudScopeStatus.fromJson(
+    Object? json, [
+    String path = 'CloudScopeStatus',
+  ]) {
+    final m = _obj(json, path);
+    return CloudScopeStatus(
+      scope: _req(m, 'scope', path, _str),
+      nextRunAt: _req(m, 'next_run_at', path, _time),
+      lastRunAt: _opt(m, 'last_run_at', path, _time),
+      lastStatus: _req(
+        m,
+        'last_status',
+        path,
+        CloudScopeStatusLastStatus.fromJson,
+      ),
+      lastError: _req(m, 'last_error', path, _str),
+      lastMetrics: _req(m, 'last_metrics', path, _int),
+      lastApiCalls: _req(m, 'last_api_calls', path, _int),
+      lastDurationMs: _req(m, 'last_duration_ms', path, _num),
+      consecutiveErrors: _req(m, 'consecutive_errors', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'scope': scope,
+    'next_run_at': nextRunAt.toUtc().toIso8601String(),
+    if (lastRunAt != null) 'last_run_at': lastRunAt!.toUtc().toIso8601String(),
+    'last_status': lastStatus.wire,
+    'last_error': lastError,
+    'last_metrics': lastMetrics,
+    'last_api_calls': lastApiCalls,
+    'last_duration_ms': lastDurationMs,
+    'consecutive_errors': consecutiveErrors,
+  };
+
+  final String scope;
+  final DateTime nextRunAt;
+  final DateTime? lastRunAt;
+  final CloudScopeStatusLastStatus lastStatus;
+  final String lastError;
+  final int lastMetrics;
+  final int lastApiCalls;
+  final double lastDurationMs;
+  final int consecutiveErrors;
+}
+
+/// One recorded poll of one scope.
+class CloudRun {
+  const CloudRun({
+    required this.id,
+    required this.scope,
+    required this.startedAt,
+    required this.durationMs,
+    required this.status,
+    required this.metrics,
+    required this.apiCalls,
+    required this.throttled,
+    required this.error,
+    required this.services,
+  });
+
+  factory CloudRun.fromJson(Object? json, [String path = 'CloudRun']) {
+    final m = _obj(json, path);
+    return CloudRun(
+      id: _req(m, 'id', path, _int),
+      scope: _req(m, 'scope', path, _str),
+      startedAt: _req(m, 'started_at', path, _time),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      status: _req(m, 'status', path, CloudRunStatus.fromJson),
+      metrics: _req(m, 'metrics', path, _int),
+      apiCalls: _req(m, 'api_calls', path, _int),
+      throttled: _req(m, 'throttled', path, _int),
+      error: _req(m, 'error', path, _str),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<CloudServiceRun>(
+          v,
+          p,
+          (v, p) => CloudServiceRun.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'scope': scope,
+    'started_at': startedAt.toUtc().toIso8601String(),
+    'duration_ms': durationMs,
+    'status': status.wire,
+    'metrics': metrics,
+    'api_calls': apiCalls,
+    'throttled': throttled,
+    'error': error,
+    'services': [for (final e in services) e.toJson()],
+  };
+
+  final int id;
+  final String scope;
+  final DateTime startedAt;
+  final double durationMs;
+  final CloudRunStatus status;
+  final int metrics;
+  final int apiCalls;
+  final int throttled;
+  final String error;
+  final List<CloudServiceRun> services;
+}
+
 /// `DbWait` of the openlog API contract.
 class DbWait {
   const DbWait({
@@ -13181,6 +13582,37 @@ class LogPatternSample {
   final String severityText;
   final int severityNumber;
   final String traceId;
+}
+
+/// `CloudServiceRun` of the openlog API contract.
+class CloudServiceRun {
+  const CloudServiceRun({
+    required this.service,
+    required this.metrics,
+    required this.error,
+  });
+
+  factory CloudServiceRun.fromJson(
+    Object? json, [
+    String path = 'CloudServiceRun',
+  ]) {
+    final m = _obj(json, path);
+    return CloudServiceRun(
+      service: _req(m, 'service', path, _str),
+      metrics: _req(m, 'metrics', path, _int),
+      error: _req(m, 'error', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service': service,
+    'metrics': metrics,
+    'error': error,
+  };
+
+  final String service;
+  final int metrics;
+  final String error;
 }
 
 /// Background refresh of the IdP documents (OIDC discovery/JWKS, SAML metadata) and certificate/metadata expiry.

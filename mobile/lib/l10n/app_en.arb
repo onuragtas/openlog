@@ -2297,5 +2297,120 @@
               "type": "int"
           }
       }
-  }
+  },
+  "cloudTitle": "Cloud connections",
+  "cloudOpen": "Cloud connections",
+  "cloudOpenHint": "Metrics of managed services: AWS, Azure, GCP.",
+  "cloudEmpty": "No cloud connections yet.",
+  "cloudNoSecretsKey": "This installation has no OPENLOG_SECRETS_KEY, so credentials cannot be stored and no connection can exist.",
+  "cloudManageOnWeb": "Connections and credentials are set up on the web.",
+  "cloudNoCredentials": "No credentials",
+  "cloudStateOk": "Running",
+  "cloudStatePartial": "Partial",
+  "cloudStateError": "Error",
+  "cloudStatePaused": "Paused",
+  "cloudStateUnknown": "Not yet",
+  "cloudNever": "never",
+  "cloudCollected": "Collected",
+  "cloudCollectedN": "{count} data points",
+  "@cloudCollectedN": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudApiCalls": "{count} API calls",
+  "@cloudApiCalls": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudThrottled": "throttled {count} times",
+  "@cloudThrottled": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudNext": "next {when}",
+  "@cloudNext": {
+      "placeholders": {
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "cloudConsecutiveErrors": "{count} failures in a row; the next poll is backed off.",
+  "@cloudConsecutiveErrors": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudRegions": "{count} regions",
+  "@cloudRegions": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudSubscriptions": "{count} subscriptions",
+  "@cloudSubscriptions": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudProjects": "{count} projects",
+  "@cloudProjects": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudScopes": "{count} scopes",
+  "@cloudScopes": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudServices": "{count} services",
+  "@cloudServices": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudEvery": "every {minutes} minutes",
+  "@cloudEvery": {
+      "placeholders": {
+          "minutes": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudCaps": "at most {metrics} metrics and {calls} calls per poll",
+  "@cloudCaps": {
+      "placeholders": {
+          "metrics": {
+              "type": "int"
+          },
+          "calls": {
+              "type": "int"
+          }
+      }
+  },
+  "cloudRuns": "Recent polls",
+  "cloudNoRuns": "No polls yet."
 }

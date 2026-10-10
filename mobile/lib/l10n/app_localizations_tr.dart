@@ -3591,4 +3591,115 @@ class LTr extends L {
   String costsContainers(int count) {
     return '$count konteyner';
   }
+
+  @override
+  String get cloudTitle => 'Bulut bağlantıları';
+
+  @override
+  String get cloudOpen => 'Bulut bağlantıları';
+
+  @override
+  String get cloudOpenHint =>
+      'Yönetilen servislerin metrikleri: AWS, Azure, GCP.';
+
+  @override
+  String get cloudEmpty => 'Henüz bulut bağlantısı yok.';
+
+  @override
+  String get cloudNoSecretsKey =>
+      'Bu kurulumda OPENLOG_SECRETS_KEY yok; kimlik bilgisi saklanamadığı için bağlantı da kurulamaz.';
+
+  @override
+  String get cloudManageOnWeb =>
+      'Bağlantı kurmak ve kimlik bilgisi girmek webde yapılır.';
+
+  @override
+  String get cloudNoCredentials => 'Kimlik bilgisi yok';
+
+  @override
+  String get cloudStateOk => 'Çalışıyor';
+
+  @override
+  String get cloudStatePartial => 'Kısmi';
+
+  @override
+  String get cloudStateError => 'Hata';
+
+  @override
+  String get cloudStatePaused => 'Duraklatıldı';
+
+  @override
+  String get cloudStateUnknown => 'Henüz yok';
+
+  @override
+  String get cloudNever => 'hiç';
+
+  @override
+  String get cloudCollected => 'Toplanan';
+
+  @override
+  String cloudCollectedN(int count) {
+    return '$count veri noktası';
+  }
+
+  @override
+  String cloudApiCalls(int count) {
+    return '$count API çağrısı';
+  }
+
+  @override
+  String cloudThrottled(int count) {
+    return '$count kez kısıtlandı';
+  }
+
+  @override
+  String cloudNext(String when) {
+    return 'sonraki $when';
+  }
+
+  @override
+  String cloudConsecutiveErrors(int count) {
+    return 'Üst üste $count hata; bir sonraki yoklama ertelendi.';
+  }
+
+  @override
+  String cloudRegions(int count) {
+    return '$count bölge';
+  }
+
+  @override
+  String cloudSubscriptions(int count) {
+    return '$count abonelik';
+  }
+
+  @override
+  String cloudProjects(int count) {
+    return '$count proje';
+  }
+
+  @override
+  String cloudScopes(int count) {
+    return '$count kapsam';
+  }
+
+  @override
+  String cloudServices(int count) {
+    return '$count servis';
+  }
+
+  @override
+  String cloudEvery(int minutes) {
+    return '$minutes dakikada bir';
+  }
+
+  @override
+  String cloudCaps(int metrics, int calls) {
+    return 'yoklama başına en çok $metrics metrik, $calls çağrı';
+  }
+
+  @override
+  String get cloudRuns => 'Son yoklamalar';
+
+  @override
+  String get cloudNoRuns => 'Henüz yoklama yok.';
 }

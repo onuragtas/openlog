@@ -3598,4 +3598,114 @@ class LEn extends L {
   String costsContainers(int count) {
     return '$count containers';
   }
+
+  @override
+  String get cloudTitle => 'Cloud connections';
+
+  @override
+  String get cloudOpen => 'Cloud connections';
+
+  @override
+  String get cloudOpenHint => 'Metrics of managed services: AWS, Azure, GCP.';
+
+  @override
+  String get cloudEmpty => 'No cloud connections yet.';
+
+  @override
+  String get cloudNoSecretsKey =>
+      'This installation has no OPENLOG_SECRETS_KEY, so credentials cannot be stored and no connection can exist.';
+
+  @override
+  String get cloudManageOnWeb =>
+      'Connections and credentials are set up on the web.';
+
+  @override
+  String get cloudNoCredentials => 'No credentials';
+
+  @override
+  String get cloudStateOk => 'Running';
+
+  @override
+  String get cloudStatePartial => 'Partial';
+
+  @override
+  String get cloudStateError => 'Error';
+
+  @override
+  String get cloudStatePaused => 'Paused';
+
+  @override
+  String get cloudStateUnknown => 'Not yet';
+
+  @override
+  String get cloudNever => 'never';
+
+  @override
+  String get cloudCollected => 'Collected';
+
+  @override
+  String cloudCollectedN(int count) {
+    return '$count data points';
+  }
+
+  @override
+  String cloudApiCalls(int count) {
+    return '$count API calls';
+  }
+
+  @override
+  String cloudThrottled(int count) {
+    return 'throttled $count times';
+  }
+
+  @override
+  String cloudNext(String when) {
+    return 'next $when';
+  }
+
+  @override
+  String cloudConsecutiveErrors(int count) {
+    return '$count failures in a row; the next poll is backed off.';
+  }
+
+  @override
+  String cloudRegions(int count) {
+    return '$count regions';
+  }
+
+  @override
+  String cloudSubscriptions(int count) {
+    return '$count subscriptions';
+  }
+
+  @override
+  String cloudProjects(int count) {
+    return '$count projects';
+  }
+
+  @override
+  String cloudScopes(int count) {
+    return '$count scopes';
+  }
+
+  @override
+  String cloudServices(int count) {
+    return '$count services';
+  }
+
+  @override
+  String cloudEvery(int minutes) {
+    return 'every $minutes minutes';
+  }
+
+  @override
+  String cloudCaps(int metrics, int calls) {
+    return 'at most $metrics metrics and $calls calls per poll';
+  }
+
+  @override
+  String get cloudRuns => 'Recent polls';
+
+  @override
+  String get cloudNoRuns => 'No polls yet.';
 }

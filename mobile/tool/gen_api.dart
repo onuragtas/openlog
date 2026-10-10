@@ -38,6 +38,9 @@ const schemaTargets = <String>[
   'MetricExemplarsResponse', // the traces behind a metric's points
   'SavedView', // an explorer view somebody kept
   'KubernetesClusterDetail', // one cluster, with its warnings and totals
+  'CloudConnection', // one cloud account openlog polls
+  'CloudConnectionList', // them, and whether this server can keep secrets
+  'CloudRunList', // a connection's recent polls
   'DbActivity', // what a database instance is busy with
   'DbQueryDetail', // one statement: its series, its plans, who runs it
   'FieldKeysResponse', // the keys a filter can be built from

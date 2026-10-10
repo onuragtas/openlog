@@ -10,6 +10,7 @@ import 'alerts.dart';
 import 'account.dart';
 import 'api/client.dart';
 import 'audit.dart';
+import 'cloud.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
 import 'databases.dart';
@@ -79,6 +80,8 @@ class Sections {
     InventoryController? inventory,
     FleetController? fleet,
     IntegrationsController? integrations,
+    CloudConnectionsController? cloud,
+    CloudRunsController Function(String id)? cloudRuns,
     ProfilesController? profiles,
     OnboardingController? onboarding,
     SessionsController? sessions,
@@ -244,6 +247,8 @@ class Sections {
        inventory = inventory ?? InventoryController(client),
        fleet = fleet ?? FleetController(client),
        integrations = integrations ?? IntegrationsController(client),
+       cloud = cloud ?? CloudConnectionsController(client),
+       cloudRuns = cloudRuns ?? ((id) => CloudRunsController(client, id)),
        profiles = profiles ?? ProfilesController(client),
        onboarding = onboarding ?? OnboardingController(client),
        sessions = sessions ?? SessionsController(client),
@@ -353,6 +358,11 @@ class Sections {
   final InventoryController inventory;
   final FleetController fleet;
   final IntegrationsController integrations;
+
+  /// The cloud accounts openlog polls, reached from the integrations
+  /// section as they are on the web, and one connection's polls.
+  final CloudConnectionsController cloud;
+  final CloudRunsController Function(String id) cloudRuns;
   final ProfilesController profiles;
   final OnboardingController onboarding;
   final SessionsController sessions;
@@ -507,6 +517,7 @@ class Sections {
     k8sWorkloads,
     k8sEvents,
     integrations,
+    cloud,
     services,
     agents,
     errors,
