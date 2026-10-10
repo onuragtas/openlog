@@ -1859,5 +1859,34 @@
     }
   },
   "filterEmptyValue": "(empty)",
-  "filterSampled": "Counted from a sample; the most frequent are listed."
+  "filterSampled": "Counted from a sample; the most frequent are listed.",
+  "logsTabRecords": "Records",
+  "logsTabPatterns": "Patterns",
+  "patternsEmpty": "No patterns with this filter.",
+  "patternsTotal": "{count} records",
+  "@patternsTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "patternsUnclassified": "{count} without a pattern",
+  "@patternsUnclassified": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "patternsRollup": "from the hourly rollup",
+  "patternsTruncated": "Not every pattern; narrow the filter.",
+  "patternsErrors": "{count} errors",
+  "@patternsErrors": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

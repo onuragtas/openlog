@@ -1762,5 +1762,34 @@
     }
   },
   "filterEmptyValue": "(boş)",
-  "filterSampled": "Örneklemden sayıldı; en sık görülenler listeleniyor."
+  "filterSampled": "Örneklemden sayıldı; en sık görülenler listeleniyor.",
+  "logsTabRecords": "Kayıtlar",
+  "logsTabPatterns": "Desenler",
+  "patternsEmpty": "Bu süzgeçle desen yok.",
+  "patternsTotal": "{count} kayıt",
+  "@patternsTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "patternsUnclassified": "{count} deseni olmayan",
+  "@patternsUnclassified": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "patternsRollup": "saatlik özetten",
+  "patternsTruncated": "Desenlerin tamamı değil; süzgeci daraltın.",
+  "patternsErrors": "{count} hata",
+  "@patternsErrors": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

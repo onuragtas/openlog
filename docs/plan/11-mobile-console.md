@@ -497,7 +497,9 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
 - [x] Filtre kurucusunun sözlüğü (`fields/keys`, `fields/values`): iki adımlı seçici (alan,
       sonra değer), her ikisinde sayımlarla; loglarda ve izlerde çip olarak duruyor. Seçerek,
       yazarak değil — hatırlanması gereken bir alan adı yanlış yazılan alan adıdır.
-- [ ] Log gelişmiş sorgu ve desenler (`logs/query`, `logs/aggregate`, `logs/patterns`)
+- [x] Log desenleri (`logs/patterns`): loglarda ikinci sekme, webdeki gibi; aynı arama ve
+      süzgeçlerle, bir desene dokununca `pattern_id` süzgeciyle kayıtlarına dönüyor.
+      `logs/aggregate` istemcide hazır, hacim grafiği sırada.
 - [ ] İz toplulaştırma (`traces/aggregate`)
 - [ ] Metrik adları, korelasyon, exemplar (`metrics/names`, `metrics/correlate`, `metrics/exemplars`)
 - [ ] Kayıtlı görünümler (`saved-views`)

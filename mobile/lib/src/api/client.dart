@@ -1221,6 +1221,45 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// The distinct messages behind the matching logs.
+  ///
+  /// The processor masks the variable parts of a body into a template, so
+  /// this answers "what is being said" rather than "what was said at
+  /// 10:04" -- the question a thousand lines a minute makes unanswerable
+  /// any other way.
+  Future<LogsPatternsResponse> logPatterns({
+    String q = '',
+    List<Map<String, Object?>> filters = const [],
+    int limit = 50,
+  }) async => LogsPatternsResponse.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/logs/patterns',
+      body: {
+        if (q.isNotEmpty) 'q': q,
+        if (filters.isNotEmpty) 'filters': filters,
+        'limit': limit,
+      },
+    ),
+  );
+
+  /// How many logs arrived when, for the same filters.
+  Future<LogsAggregateResponse> logVolume({
+    String q = '',
+    List<Map<String, Object?>> filters = const [],
+    String groupBy = '',
+  }) async => LogsAggregateResponse.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/logs/aggregate',
+      body: {
+        if (q.isNotEmpty) 'q': q,
+        if (filters.isNotEmpty) 'filters': filters,
+        if (groupBy.isNotEmpty) 'group_by': groupBy,
+      },
+    ),
+  );
+
   /// The attribute keys one signal has, most frequent first.
   ///
   /// The dictionary behind every filter builder: a key somebody can filter

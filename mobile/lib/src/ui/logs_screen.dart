@@ -1,4 +1,8 @@
-// Recent log records, newest first.
+// Recent log records, newest first -- and what they say, as patterns.
+//
+// Two tabs, as the web has: a thousand lines a minute is not something
+// anybody reads, and the templates behind them are. They share the search
+// box and the filters, because they are two views of one question.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -7,6 +11,7 @@ import '../logs.dart';
 import '../session.dart';
 import '../sections.dart';
 import 'filter_sheet.dart';
+import 'log_patterns_body.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
 
@@ -20,6 +25,7 @@ class LogsBody extends StatefulWidget {
     required this.session,
     required this.sections,
     required this.logs,
+    required this.patterns,
     this.scopeLabel,
   });
 
@@ -30,6 +36,9 @@ class LogsBody extends StatefulWidget {
   final Sections sections;
   final LogsController logs;
 
+  /// The same logs, grouped by what they say.
+  final LogPatternsController patterns;
+
   /// What this list is about, when it is about one thing. Set by the screen
   /// that pushed it -- a request, a pod, a container -- so the reader is not
   /// left wondering why the whole stream is missing.
@@ -39,25 +48,83 @@ class LogsBody extends StatefulWidget {
   State<LogsBody> createState() => _LogsBodyState();
 }
 
-class _LogsBodyState extends State<LogsBody> {
+class _LogsBodyState extends State<LogsBody>
+    with SingleTickerProviderStateMixin {
   final _search = TextEditingController();
   final _service = TextEditingController();
+  late final TabController _tabs;
 
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 2, vsync: this)
+      ..addListener(() {
+        if (_tabs.indexIsChanging) return;
+        final p = widget.patterns;
+        if (_tabs.index == 1 && !p.loaded && !p.loadingFirst) _reloadPatterns();
+      });
     WidgetsBinding.instance.addPostFrameCallback((_) => widget.logs.refresh());
   }
 
   @override
   void dispose() {
+    _tabs.dispose();
     _search.dispose();
     _service.dispose();
     super.dispose();
   }
 
+  /// The patterns answer the same question as the list, so they are asked
+  /// with the same search box and the same filters.
+  Future<void> _reloadPatterns() {
+    final p = widget.patterns
+      ..query = widget.logs.query
+      ..filters = widget.logs.filters;
+    return p.refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l = L.of(context);
+    // A scoped list is about one request, pod or container; patterns of
+    // six lines are not a view worth a tab.
+    if (widget.scopeLabel != null) return _records(context);
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabs,
+          tabs: [
+            Tab(key: const Key('logs-tab-records'), text: l.logsTabRecords),
+            Tab(key: const Key('logs-tab-patterns'), text: l.logsTabPatterns),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              _records(context),
+              LogPatternsBody(
+                session: widget.session,
+                controller: widget.patterns,
+                onOpenPattern: (pattern) {
+                  // One pattern's records are the same list with one more
+                  // condition: `pattern_id` is a filter key.
+                  widget.logs.filters = [
+                    ...widget.logs.filters,
+                    patternFilter(pattern),
+                  ];
+                  widget.logs.refresh();
+                  _tabs.animateTo(0);
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _records(BuildContext context) {
     final l = L.of(context);
     final c = widget.logs;
 
@@ -75,6 +142,7 @@ class _LogsBodyState extends State<LogsBody> {
               onSubmitted: (value) {
                 c.query = value;
                 c.refresh();
+                if (widget.patterns.loaded) _reloadPatterns();
               },
             ),
             // A scoped list already answers about one thing; a service box
@@ -127,6 +195,7 @@ class _LogsBodyState extends State<LogsBody> {
                   if (filter == null) return;
                   c.filters = [...c.filters, filter];
                   await c.refresh();
+                  if (widget.patterns.loaded) await _reloadPatterns();
                 },
               ),
               const SizedBox(height: 8),
@@ -264,6 +333,9 @@ class _LogsScreenState extends State<LogsScreen> {
       session: widget.session,
       sections: widget.sections,
       logs: widget.logs,
+      // A scoped list has no patterns tab, so this one is never read; it
+      // is here because the body asks for it.
+      patterns: widget.sections.logPatterns,
       scopeLabel: widget.scopeLabel,
     ),
   );

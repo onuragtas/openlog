@@ -47,6 +47,7 @@ class Sections {
     JobsController? jobs,
     VulnerabilitiesController? vulnerabilities,
     LogsController? logs,
+    LogPatternsController? logPatterns,
     FieldsController Function(String signal)? fields,
     TracesController? traces,
     MetricsController? metrics,
@@ -165,6 +166,7 @@ class Sections {
        jobs = jobs ?? JobsController(client),
        vulnerabilities = vulnerabilities ?? VulnerabilitiesController(client),
        logs = logs ?? LogsController(client),
+       logPatterns = logPatterns ?? LogPatternsController(client),
        fields =
            fields ?? ((signal) => FieldsController(client, signal: signal)),
        traces = traces ?? TracesController(client),
@@ -234,6 +236,9 @@ class Sections {
   final JobsController jobs;
   final VulnerabilitiesController vulnerabilities;
   final LogsController logs;
+
+  /// The same logs, grouped by what they say.
+  final LogPatternsController logPatterns;
 
   /// The dictionary a filter is built from, one per signal. Made per
   /// sheet, because it holds which key is being looked at.
@@ -392,6 +397,7 @@ class Sections {
     jobs,
     vulnerabilities,
     logs,
+    logPatterns,
     traces,
     metrics,
     query,

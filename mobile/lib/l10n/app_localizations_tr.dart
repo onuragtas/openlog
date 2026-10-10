@@ -2857,4 +2857,34 @@ class LTr extends L {
   @override
   String get filterSampled =>
       'Örneklemden sayıldı; en sık görülenler listeleniyor.';
+
+  @override
+  String get logsTabRecords => 'Kayıtlar';
+
+  @override
+  String get logsTabPatterns => 'Desenler';
+
+  @override
+  String get patternsEmpty => 'Bu süzgeçle desen yok.';
+
+  @override
+  String patternsTotal(int count) {
+    return '$count kayıt';
+  }
+
+  @override
+  String patternsUnclassified(int count) {
+    return '$count deseni olmayan';
+  }
+
+  @override
+  String get patternsRollup => 'saatlik özetten';
+
+  @override
+  String get patternsTruncated => 'Desenlerin tamamı değil; süzgeci daraltın.';
+
+  @override
+  String patternsErrors(int count) {
+    return '$count hata';
+  }
 }

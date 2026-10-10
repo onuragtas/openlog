@@ -2865,4 +2865,34 @@ class LEn extends L {
   @override
   String get filterSampled =>
       'Counted from a sample; the most frequent are listed.';
+
+  @override
+  String get logsTabRecords => 'Records';
+
+  @override
+  String get logsTabPatterns => 'Patterns';
+
+  @override
+  String get patternsEmpty => 'No patterns with this filter.';
+
+  @override
+  String patternsTotal(int count) {
+    return '$count records';
+  }
+
+  @override
+  String patternsUnclassified(int count) {
+    return '$count without a pattern';
+  }
+
+  @override
+  String get patternsRollup => 'from the hourly rollup';
+
+  @override
+  String get patternsTruncated => 'Not every pattern; narrow the filter.';
+
+  @override
+  String patternsErrors(int count) {
+    return '$count errors';
+  }
 }

@@ -1,7 +1,7 @@
 // Recent log records, newest first.
 import 'api/client.dart';
-import 'fields.dart';
 import 'api/schema.g.dart';
+import 'fields.dart';
 import 'list_controller.dart';
 
 class LogsController extends ListController<LogRecord> {
@@ -61,5 +61,49 @@ class LogsController extends ListController<LogRecord> {
       filters: encodeFilters(filters),
     );
     return page.logs;
+  }
+}
+
+/// What is being said in the logs, rather than what was said at 10:04.
+///
+/// The processor masks the variable parts of every body into a template, so
+/// a thousand lines a minute become a few dozen patterns. The pattern id is
+/// itself a filter key, which is how one pattern's records are listed.
+class LogPatternsController extends ListController<LogPattern> {
+  LogPatternsController(this.client);
+
+  final OpenlogClient client;
+
+  /// Shared with the log list: the same search box and the same filters,
+  /// because these are two views of one question.
+  String query = '';
+  List<Filter> filters = const [];
+
+  /// Matching records over every pattern, not only the ones returned.
+  int total = 0;
+
+  /// Records with no pattern at all: an empty body, or a record stored
+  /// before patterns existed. Saying it keeps the counts honest.
+  int unclassified = 0;
+
+  /// The answer came from the hourly rollup, so the counts cover whole
+  /// hours rather than the exact range.
+  bool rollup = false;
+  bool truncated = false;
+
+  @override
+  String get forbiddenKind => 'logsForbidden';
+
+  @override
+  Future<List<LogPattern>> fetch() async {
+    final page = await client.logPatterns(
+      q: query.trim(),
+      filters: [for (final f in filters) f.toJson()],
+    );
+    total = page.total;
+    unclassified = page.unclassified;
+    rollup = page.rollup;
+    truncated = page.truncated;
+    return page.patterns;
   }
 }

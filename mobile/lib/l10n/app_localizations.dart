@@ -5100,6 +5100,54 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Counted from a sample; the most frequent are listed.'**
   String get filterSampled;
+
+  /// No description provided for @logsTabRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Records'**
+  String get logsTabRecords;
+
+  /// No description provided for @logsTabPatterns.
+  ///
+  /// In en, this message translates to:
+  /// **'Patterns'**
+  String get logsTabPatterns;
+
+  /// No description provided for @patternsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No patterns with this filter.'**
+  String get patternsEmpty;
+
+  /// No description provided for @patternsTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} records'**
+  String patternsTotal(int count);
+
+  /// No description provided for @patternsUnclassified.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} without a pattern'**
+  String patternsUnclassified(int count);
+
+  /// No description provided for @patternsRollup.
+  ///
+  /// In en, this message translates to:
+  /// **'from the hourly rollup'**
+  String get patternsRollup;
+
+  /// No description provided for @patternsTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Not every pattern; narrow the filter.'**
+  String get patternsTruncated;
+
+  /// No description provided for @patternsErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} errors'**
+  String patternsErrors(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

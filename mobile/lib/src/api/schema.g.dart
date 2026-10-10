@@ -3466,6 +3466,90 @@ class AccountPrivacy {
   final List<OrgDeletion> orgDeletions;
 }
 
+/// `LogsPatternsResponse` of the openlog API contract.
+class LogsPatternsResponse {
+  const LogsPatternsResponse({
+    required this.patterns,
+    required this.total,
+    required this.unclassified,
+    required this.rollup,
+    required this.truncated,
+  });
+
+  factory LogsPatternsResponse.fromJson(
+    Object? json, [
+    String path = 'LogsPatternsResponse',
+  ]) {
+    final m = _obj(json, path);
+    return LogsPatternsResponse(
+      patterns: _req(
+        m,
+        'patterns',
+        path,
+        (v, p) => _list<LogPattern>(v, p, (v, p) => LogPattern.fromJson(v, p)),
+      ),
+      total: _req(m, 'total', path, _int),
+      unclassified: _req(m, 'unclassified', path, _int),
+      rollup: _req(m, 'rollup', path, _bool),
+      truncated: _req(m, 'truncated', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'patterns': [for (final e in patterns) e.toJson()],
+    'total': total,
+    'unclassified': unclassified,
+    'rollup': rollup,
+    'truncated': truncated,
+  };
+
+  final List<LogPattern> patterns;
+  final int total;
+  final int unclassified;
+  final bool rollup;
+  final bool truncated;
+}
+
+/// `LogsAggregateResponse` of the openlog API contract.
+class LogsAggregateResponse {
+  const LogsAggregateResponse({
+    required this.step,
+    required this.total,
+    required this.series,
+  });
+
+  factory LogsAggregateResponse.fromJson(
+    Object? json, [
+    String path = 'LogsAggregateResponse',
+  ]) {
+    final m = _obj(json, path);
+    return LogsAggregateResponse(
+      step: _req(m, 'step', path, _str),
+      total: _req(m, 'total', path, _int),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<LogsAggregateSeries>(
+          v,
+          p,
+          (v, p) => LogsAggregateSeries.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'total': total,
+    'series': [for (final e in series) e.toJson()],
+  };
+
+  final String step;
+  final int total;
+  final List<LogsAggregateSeries> series;
+}
+
 /// `FieldKeysResponse` of the openlog API contract.
 class FieldKeysResponse {
   const FieldKeysResponse({required this.keys, required this.sampled});
@@ -7867,6 +7951,109 @@ class OrgDeletion {
   final String? lastError;
 }
 
+/// `LogPattern` of the openlog API contract.
+class LogPattern {
+  const LogPattern({
+    required this.patternId,
+    required this.template,
+    required this.count,
+    required this.severity,
+    required this.maxSeverityNumber,
+    required this.services,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.sample,
+  });
+
+  factory LogPattern.fromJson(Object? json, [String path = 'LogPattern']) {
+    final m = _obj(json, path);
+    return LogPattern(
+      patternId: _req(m, 'pattern_id', path, _str),
+      template: _req(m, 'template', path, _str),
+      count: _req(m, 'count', path, _int),
+      severity: _req(
+        m,
+        'severity',
+        path,
+        (v, p) => LogPatternSeverityMix.fromJson(v, p),
+      ),
+      maxSeverityNumber: _req(m, 'max_severity_number', path, _int),
+      services: _req(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      sample: _req(
+        m,
+        'sample',
+        path,
+        (v, p) => LogPatternSample.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'pattern_id': patternId,
+    'template': template,
+    'count': count,
+    'severity': severity.toJson(),
+    'max_severity_number': maxSeverityNumber,
+    'services': services,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'sample': sample.toJson(),
+  };
+
+  final String patternId;
+  final String template;
+  final int count;
+  final LogPatternSeverityMix severity;
+  final int maxSeverityNumber;
+  final List<String> services;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final LogPatternSample sample;
+}
+
+/// `LogsAggregateSeries` of the openlog API contract.
+class LogsAggregateSeries {
+  const LogsAggregateSeries({
+    required this.group,
+    required this.other,
+    required this.total,
+    required this.points,
+  });
+
+  factory LogsAggregateSeries.fromJson(
+    Object? json, [
+    String path = 'LogsAggregateSeries',
+  ]) {
+    final m = _obj(json, path);
+    return LogsAggregateSeries(
+      group: _req(m, 'group', path, _str),
+      other: _req(m, 'other', path, _bool),
+      total: _req(m, 'total', path, _int),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'group': group,
+    'other': other,
+    'total': total,
+    'points': points,
+  };
+
+  final String group;
+  final bool other;
+  final int total;
+  final List<List<double>> points;
+}
+
 /// `FieldKey` of the openlog API contract.
 class FieldKey {
   const FieldKey({
@@ -11296,6 +11483,96 @@ class UsageQuery {
   final double readBytes;
   final double cpuSeconds;
   final double memoryBytes;
+}
+
+/// Records of the pattern per OpenTelemetry severity range
+class LogPatternSeverityMix {
+  const LogPatternSeverityMix({
+    required this.unspecified,
+    required this.trace,
+    required this.debug,
+    required this.info,
+    required this.warn,
+    required this.error,
+    required this.fatal,
+  });
+
+  factory LogPatternSeverityMix.fromJson(
+    Object? json, [
+    String path = 'LogPatternSeverityMix',
+  ]) {
+    final m = _obj(json, path);
+    return LogPatternSeverityMix(
+      unspecified: _req(m, 'unspecified', path, _int),
+      trace: _req(m, 'trace', path, _int),
+      debug: _req(m, 'debug', path, _int),
+      info: _req(m, 'info', path, _int),
+      warn: _req(m, 'warn', path, _int),
+      error: _req(m, 'error', path, _int),
+      fatal: _req(m, 'fatal', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'unspecified': unspecified,
+    'trace': trace,
+    'debug': debug,
+    'info': info,
+    'warn': warn,
+    'error': error,
+    'fatal': fatal,
+  };
+
+  final int unspecified;
+  final int trace;
+  final int debug;
+  final int info;
+  final int warn;
+  final int error;
+  final int fatal;
+}
+
+/// Newest record of the pattern in the range; a rollup response carries only body, service and time
+class LogPatternSample {
+  const LogPatternSample({
+    required this.timestamp,
+    required this.body,
+    required this.serviceName,
+    required this.severityText,
+    required this.severityNumber,
+    required this.traceId,
+  });
+
+  factory LogPatternSample.fromJson(
+    Object? json, [
+    String path = 'LogPatternSample',
+  ]) {
+    final m = _obj(json, path);
+    return LogPatternSample(
+      timestamp: _req(m, 'timestamp', path, _time),
+      body: _req(m, 'body', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      severityText: _req(m, 'severity_text', path, _str),
+      severityNumber: _req(m, 'severity_number', path, _int),
+      traceId: _req(m, 'trace_id', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'body': body,
+    'service_name': serviceName,
+    'severity_text': severityText,
+    'severity_number': severityNumber,
+    'trace_id': traceId,
+  };
+
+  final DateTime timestamp;
+  final String body;
+  final String serviceName;
+  final String severityText;
+  final int severityNumber;
+  final String traceId;
 }
 
 /// Background refresh of the IdP documents (OIDC discovery/JWKS, SAML metadata) and certificate/metadata expiry.
