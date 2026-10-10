@@ -2951,7 +2951,8 @@ class LEn extends L {
   String get savedViewsTitle => 'Saved views';
 
   @override
-  String get savedViewsEmpty => 'No saved views yet.';
+  String get savedViewsEmpty =>
+      'No saved views yet. Give the filters on screen a name below and keep them.';
 
   @override
   String get savedViewsAbout =>
@@ -3226,5 +3227,10 @@ class LEn extends L {
   @override
   String flameTooNarrow(int count) {
     return '$count frames are too narrow to draw at this width; tap the block above them to see them.';
+  }
+
+  @override
+  String savedViewKept(String name) {
+    return '“$name” saved';
   }
 }

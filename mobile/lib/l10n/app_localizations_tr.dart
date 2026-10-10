@@ -2943,7 +2943,8 @@ class LTr extends L {
   String get savedViewsTitle => 'Kayıtlı görünümler';
 
   @override
-  String get savedViewsEmpty => 'Henüz kayıtlı görünüm yok.';
+  String get savedViewsEmpty =>
+      'Henüz kayıtlı görünüm yok. Aşağıya bir ad yazıp ekrandaki filtreleri kaydedin.';
 
   @override
   String get savedViewsAbout =>
@@ -3218,5 +3219,10 @@ class LTr extends L {
   @override
   String flameTooNarrow(int count) {
     return '$count çerçeve bu genişlikte çizilemeyecek kadar dar; görmek için üstündeki bloğa dokunun.';
+  }
+
+  @override
+  String savedViewKept(String name) {
+    return '“$name” kaydedildi';
   }
 }

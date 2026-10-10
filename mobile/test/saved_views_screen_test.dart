@@ -232,7 +232,14 @@ void main() {
     await tester.tap(find.byKey(const Key('saved-views')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('views-empty')), findsOneWidget);
+    // Nothing to save until it has a name: a button that takes the tap and
+    // does nothing is indistinguishable from one that failed.
+    expect(
+      tester.widget<FilledButton>(find.byKey(const Key('view-save'))).onPressed,
+      isNull,
+    );
     await tester.enterText(find.byKey(const Key('view-name')), 'Gece nöbeti');
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Organizasyon'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('view-save')));
@@ -245,8 +252,12 @@ void main() {
     expect(state['filters'], [
       {'key': 'severity_number', 'op': '>=', 'value': '13'},
     ]);
-    // Saving closes the sheet and shows the new view, as the web does.
+    // Saving closes the sheet, says it was kept, and names it on the
+    // button -- the sheet closing on its own would look the same whether
+    // the server took it or not.
     expect(find.byKey(const Key('view-name')), findsNothing);
+    expect(find.byKey(const Key('view-saved')), findsOneWidget);
+    expect(find.text('“Gece nöbeti” kaydedildi'), findsOneWidget);
     expect(find.text('Gece nöbeti'), findsOneWidget);
   });
 

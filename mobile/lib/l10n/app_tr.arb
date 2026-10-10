@@ -1850,7 +1850,7 @@
   },
   "savedViewsButton": "Görünümler",
   "savedViewsTitle": "Kayıtlı görünümler",
-  "savedViewsEmpty": "Henüz kayıtlı görünüm yok.",
+  "savedViewsEmpty": "Henüz kayıtlı görünüm yok. Aşağıya bir ad yazıp ekrandaki filtreleri kaydedin.",
   "savedViewsAbout": "Filtreler bir adın altında saklanır; aynı görünüm tarayıcıda da açılır.",
   "savedViewPrivate": "Özel",
   "savedViewOrg": "Organizasyon",
@@ -1981,6 +1981,14 @@
       "placeholders": {
           "count": {
               "type": "int"
+          }
+      }
+  },
+  "savedViewKept": "“{name}” kaydedildi",
+  "@savedViewKept": {
+      "placeholders": {
+          "name": {
+              "type": "String"
           }
       }
   }

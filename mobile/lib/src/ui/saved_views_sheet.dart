@@ -152,7 +152,11 @@ class _SavedViewsSheetState extends State<_SavedViewsSheet> {
 
   Future<void> _create() async {
     final name = _name.text.trim();
+    // Nothing to save under no name. The button is disabled for this, but
+    // the keyboard's own action reaches here too.
     if (name.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final kept = L.of(context).savedViewKept(name);
     final view = await widget.controller.create(
       name: name,
       visibility: _visibility,
@@ -162,6 +166,12 @@ class _SavedViewsSheetState extends State<_SavedViewsSheet> {
     _name.clear();
     widget.onApply(view);
     Navigator.of(context).pop();
+    // The sheet closing is not an answer. A view that reached the server
+    // and came back says so; one that did not keeps the sheet open with
+    // the reason on it.
+    messenger.showSnackBar(
+      SnackBar(key: const Key('view-saved'), content: Text(kept)),
+    );
   }
 
   Future<void> _overwrite(SavedView view) async {
@@ -236,6 +246,9 @@ class _SavedViewsSheetState extends State<_SavedViewsSheet> {
               maxLength: 200,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _create(),
+              // The save button follows the name, so the sheet rebuilds as
+              // it is typed.
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: l.savedViewName,
                 hintText: l.savedViewNameHint,
@@ -269,7 +282,12 @@ class _SavedViewsSheetState extends State<_SavedViewsSheet> {
               alignment: Alignment.centerRight,
               child: FilledButton(
                 key: const Key('view-save'),
-                onPressed: c.saving ? null : _create,
+                // Empty name, no save -- and the button shows that rather
+                // than swallowing the tap, which is how a save that never
+                // happened looks exactly like one that failed.
+                onPressed: c.saving || _name.text.trim().isEmpty
+                    ? null
+                    : _create,
                 child: Text(l.savedViewSave),
               ),
             ),

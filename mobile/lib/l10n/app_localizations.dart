@@ -5236,7 +5236,7 @@ abstract class L {
   /// No description provided for @savedViewsEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No saved views yet.'**
+  /// **'No saved views yet. Give the filters on screen a name below and keep them.'**
   String get savedViewsEmpty;
 
   /// No description provided for @savedViewsAbout.
@@ -5748,6 +5748,12 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{count} frames are too narrow to draw at this width; tap the block above them to see them.'**
   String flameTooNarrow(int count);
+
+  /// No description provided for @savedViewKept.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” saved'**
+  String savedViewKept(String name);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

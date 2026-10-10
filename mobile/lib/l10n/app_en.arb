@@ -1947,7 +1947,7 @@
   },
   "savedViewsButton": "Views",
   "savedViewsTitle": "Saved views",
-  "savedViewsEmpty": "No saved views yet.",
+  "savedViewsEmpty": "No saved views yet. Give the filters on screen a name below and keep them.",
   "savedViewsAbout": "Filters kept under a name; the same view opens in a browser.",
   "savedViewPrivate": "Private",
   "savedViewOrg": "Organization",
@@ -2078,6 +2078,14 @@
       "placeholders": {
           "count": {
               "type": "int"
+          }
+      }
+  },
+  "savedViewKept": "“{name}” saved",
+  "@savedViewKept": {
+      "placeholders": {
+          "name": {
+              "type": "String"
           }
       }
   }
