@@ -85,3 +85,36 @@ String quotaValue(QuotaMetric m) {
       : formatCount(m.limit);
   return '$used / $limit';
 }
+
+/// How full the ClickHouse disks are.
+///
+/// The disks belong to the operator, not to a tenant: in a multi-tenant
+/// install their free space is nobody else's business, which is why this
+/// takes an admin to read.
+class StorageController extends ChangeNotifier {
+  StorageController(this.client);
+
+  final OpenlogClient client;
+
+  DiskSpace? space;
+  bool loading = false;
+  SessionFailure? failure;
+
+  Future<void> load() async {
+    loading = true;
+    failure = null;
+    notifyListeners();
+    try {
+      space = await client.diskSpace();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('storageForbidden', '')
+          : SessionFailure('unexpected', e.message);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+}

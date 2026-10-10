@@ -21,6 +21,7 @@ import 'list_controller.dart';
 import 'logs.dart';
 import 'members.dart';
 import 'session.dart';
+import 'sso.dart';
 import 'usage.dart';
 import 'query.dart';
 import 'sampling.dart';
@@ -64,6 +65,8 @@ class Sections {
     SourceMapsController? sourceMaps,
     AuditController? audit,
     UsageController? usage,
+    StorageController? storage,
+    SsoController? sso,
     LogsController Function({
       String traceId,
       String podUid,
@@ -178,6 +181,8 @@ class Sections {
        sourceMaps = sourceMaps ?? SourceMapsController(client),
        audit = audit ?? AuditController(client),
        usage = usage ?? UsageController(client),
+       storage = storage ?? StorageController(client),
+       sso = sso ?? SsoController(client),
        scopedLogs =
            scopedLogs ??
            (({
@@ -255,6 +260,12 @@ class Sections {
 
   /// What the organization used this period, against its plan.
   final UsageController usage;
+
+  /// How full the ClickHouse disks are.
+  final StorageController storage;
+
+  /// Single sign-on: connections, domains, enforcement, mappings, SCIM.
+  final SsoController sso;
 
   /// The logs of one request, pod or container. A controller per screen,
   /// disposed with it, because each one answers about a different thing.
@@ -349,6 +360,8 @@ class Sections {
     sourceMaps,
     audit,
     usage,
+    storage,
+    sso,
     hosts,
     containers,
     costs,

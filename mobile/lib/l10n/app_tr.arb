@@ -1620,5 +1620,75 @@
       }
     }
   },
-  "usageForbidden": "Rolünüz kullanımı görmeye yetmiyor."
+  "usageForbidden": "Rolünüz kullanımı görmeye yetmiyor.",
+  "settingsStorage": "Depolama",
+  "storageNotMeasured": "Diskler henüz ölçülmedi.",
+  "storageLevels": "Uyarı %{warn}, yüksek %{high}.",
+  "@storageLevels": {
+    "placeholders": {
+      "warn": {
+        "type": "int"
+      },
+      "high": {
+        "type": "int"
+      }
+    }
+  },
+  "storageFree": "{free} boş / {total}",
+  "@storageFree": {
+    "placeholders": {
+      "free": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "storageBroken": "Disk okunamıyor.",
+  "storageForbidden": "Rolünüz disk durumunu görmeye yetmiyor.",
+  "settingsSso": "SSO",
+  "ssoUnavailable": "SSO kullanılamıyor: sunucunun genel adresi (OPENLOG_PUBLIC_URL) ayarlı değil.",
+  "ssoSecretsPlain": "Sırlar şifrelenmeden saklanıyor; sunucuda bir anahtar tanımlayın.",
+  "ssoConnections": "Bağlantılar",
+  "ssoNoConnections": "Tanımlı SSO bağlantısı yok.",
+  "ssoEditOnWeb": "Bağlantı oluşturmak ve düzenlemek webde: metadata adresi, istemci sırrı ve sertifika yapıştırmak gerekiyor.",
+  "ssoTestOk": "Sunucu tarafı denetimler geçti.",
+  "ssoTestFailed": "Başarısız denetimler: {checks}",
+  "@ssoTestFailed": {
+    "placeholders": {
+      "checks": {
+        "type": "String"
+      }
+    }
+  },
+  "ssoEnforce": "SSO zorunlu",
+  "ssoEnforceHint": "Açıkken herkes kimlik sağlayıcısından giriş yapar.",
+  "ssoBreakGlass": "{count} kişi parolayla girebilir.",
+  "@ssoBreakGlass": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ssoNoBreakGlass": "Parolayla girebilecek kimse tanımlı değil.",
+  "ssoDomains": "Alan adları",
+  "ssoDomainsHint": "Bu alan adlarındaki e-postalar SSO ile giriş yapar.",
+  "ssoDomainAdd": "Alan adı ekle",
+  "ssoVerified": "doğrulandı",
+  "ssoUnverified": "doğrulanmadı",
+  "ssoVerifyDns": "DNS ile doğrula",
+  "ssoVerifyEmail": "E-posta ile doğrula",
+  "ssoRoleMappings": "Grup eşlemeleri",
+  "ssoRoleMappingsHint": "Kimlik sağlayıcısındaki grup, buradaki rol olur. Sahip rolü eşlemeyle verilmez.",
+  "ssoGroup": "Grup",
+  "ssoScimTokens": "SCIM anahtarları",
+  "ssoNoScimTokens": "SCIM anahtarı yok.",
+  "ssoForbidden": "Rolünüz SSO ayarlarını görmeye yetmiyor.",
+  "ssoTest": "Bağlantıyı dene",
+  "ssoHealthOk": "Sağlıklı",
+  "ssoHealthWarning": "Uyarı",
+  "ssoHealthError": "Hata",
+  "ssoHealthUnknown": "Henüz denetlenmedi"
 }

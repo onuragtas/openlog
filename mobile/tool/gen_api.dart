@@ -29,6 +29,10 @@ const schemaTargets = <String>[
   'Me', // who am I, which organizations, which role
   'Organization', // the organization itself: its name, its ids, its language
   'UsageOverview', // what the organization used this period, against its plan
+  'DiskSpace', // how full the ClickHouse disks are, and at what level
+  'SSOState', // the single sign-on connections and what the IdP has to be told
+  'SSODomain', // which e-mail domains sign in through them
+  'SSOTestResult', // and whether a connection actually works
   'Session', // the person's sessions, including other phones
   'AlertIncident', // what the app exists to show: what is firing right now
   'AlertIncidentDetail', // one incident with its timeline and what was delivered
@@ -116,6 +120,9 @@ const responseTargets = <String>[
   'post /api/v1/browser-keys 201 BrowserKeyCreated',
   'get /api/v1/source-maps 200 SourceMapPage',
   'get /api/v1/audit-log 200 AuditLogPage',
+  'get /api/v1/sso/domains 200 SSODomainPage',
+  'get /api/v1/sso/role-mappings 200 SSORoleMappingPage',
+  'get /api/v1/scim/tokens 200 ScimTokenPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',

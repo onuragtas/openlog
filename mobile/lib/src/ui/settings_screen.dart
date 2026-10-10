@@ -16,6 +16,7 @@ import '../keys.dart';
 import '../members.dart';
 import '../roles.dart';
 import '../sampling.dart';
+import '../sso.dart';
 import '../session.dart';
 import '../usage.dart';
 import 'failure_text.dart';
@@ -26,6 +27,8 @@ import 'members_tab.dart';
 import 'org_tab.dart';
 import 'sampling_screen.dart';
 import 'source_maps_tab.dart';
+import 'sso_tab.dart';
+import 'storage_tab.dart';
 import 'usage_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
@@ -45,6 +48,8 @@ class SettingsBody extends StatefulWidget {
     required this.audit,
     required this.sampling,
     required this.usage,
+    required this.storage,
+    required this.sso,
     required this.active,
   });
 
@@ -79,6 +84,12 @@ class SettingsBody extends StatefulWidget {
 
   /// What the organization used this period, against its plan.
   final UsageController usage;
+
+  /// How full the ClickHouse disks are.
+  final StorageController storage;
+
+  /// Single sign-on.
+  final SsoController sso;
   final bool active;
 
   @override
@@ -142,6 +153,12 @@ final _tabs = <_Tab>[
     ),
   ),
   _Tab(
+    'sso',
+    (l) => l.settingsSso,
+    'org.update',
+    (s) => SsoTab(session: s.widget.session, controller: s.widget.sso),
+  ),
+  _Tab(
     'audit-log',
     (l) => l.settingsAuditLog,
     'audit.read',
@@ -160,6 +177,12 @@ final _tabs = <_Tab>[
     (l) => l.settingsUsage,
     null,
     (s) => UsageTab(session: s.widget.session, controller: s.widget.usage),
+  ),
+  _Tab(
+    'storage',
+    (l) => l.settingsStorage,
+    'disk_space.read',
+    (s) => StorageTab(session: s.widget.session, controller: s.widget.storage),
   ),
 ];
 
@@ -254,6 +277,9 @@ class _SettingsBodyState extends State<SettingsBody>
       case 'source-maps':
         final c = widget.sourceMaps;
         if (!c.loading && c.items.isEmpty) later(c.load);
+      case 'sso':
+        final c = widget.sso;
+        if (!c.loading && c.state == null) later(c.load);
       case 'audit-log':
         final c = widget.audit;
         if (!c.loading && c.events.isEmpty) later(c.load);
@@ -263,6 +289,9 @@ class _SettingsBodyState extends State<SettingsBody>
       case 'usage':
         final c = widget.usage;
         if (!c.loading && c.overview == null) later(c.load);
+      case 'storage':
+        final c = widget.storage;
+        if (!c.loading && c.space == null) later(c.load);
     }
   }
 

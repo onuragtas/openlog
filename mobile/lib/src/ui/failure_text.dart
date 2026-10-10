@@ -34,6 +34,10 @@ String? failureText(
     // were not, and a member without the APM permission was told "something
     // went wrong:" with nothing after the colon, which reads like a bug in the
     // app rather than a permission they do not have.
+    case 'ssoForbidden':
+      return l.ssoForbidden;
+    case 'storageForbidden':
+      return l.storageForbidden;
     case 'usageForbidden':
       return l.usageForbidden;
     case 'orgForbidden':

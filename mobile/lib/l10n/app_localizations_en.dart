@@ -2633,4 +2633,127 @@ class LEn extends L {
 
   @override
   String get usageForbidden => 'Your role does not allow seeing usage.';
+
+  @override
+  String get settingsStorage => 'Storage';
+
+  @override
+  String get storageNotMeasured => 'The disks have not been measured yet.';
+
+  @override
+  String storageLevels(int warn, int high) {
+    return 'Warning at $warn%, high at $high%.';
+  }
+
+  @override
+  String storageFree(String free, String total) {
+    return '$free free of $total';
+  }
+
+  @override
+  String get storageBroken => 'The disk cannot be read.';
+
+  @override
+  String get storageForbidden => 'Your role does not allow seeing disk status.';
+
+  @override
+  String get settingsSso => 'SSO';
+
+  @override
+  String get ssoUnavailable =>
+      'SSO cannot be used: the server\'s public URL (OPENLOG_PUBLIC_URL) is not set.';
+
+  @override
+  String get ssoSecretsPlain =>
+      'Secrets are stored unencrypted; set a key on the server.';
+
+  @override
+  String get ssoConnections => 'Connections';
+
+  @override
+  String get ssoNoConnections => 'No SSO connections.';
+
+  @override
+  String get ssoEditOnWeb =>
+      'Creating and editing a connection is on the web: it means pasting a metadata URL, a client secret and a certificate.';
+
+  @override
+  String get ssoTestOk => 'The server-side checks passed.';
+
+  @override
+  String ssoTestFailed(String checks) {
+    return 'Checks that failed: $checks';
+  }
+
+  @override
+  String get ssoEnforce => 'SSO required';
+
+  @override
+  String get ssoEnforceHint =>
+      'On, everybody signs in through the identity provider.';
+
+  @override
+  String ssoBreakGlass(int count) {
+    return '$count people can still sign in with a password.';
+  }
+
+  @override
+  String get ssoNoBreakGlass => 'Nobody is allowed to sign in with a password.';
+
+  @override
+  String get ssoDomains => 'Domains';
+
+  @override
+  String get ssoDomainsHint =>
+      'E-mail addresses in these domains sign in through SSO.';
+
+  @override
+  String get ssoDomainAdd => 'Add a domain';
+
+  @override
+  String get ssoVerified => 'verified';
+
+  @override
+  String get ssoUnverified => 'unverified';
+
+  @override
+  String get ssoVerifyDns => 'Verify by DNS';
+
+  @override
+  String get ssoVerifyEmail => 'Verify by e-mail';
+
+  @override
+  String get ssoRoleMappings => 'Group mappings';
+
+  @override
+  String get ssoRoleMappingsHint =>
+      'A group at the identity provider becomes a role here. Owner is not given by a mapping.';
+
+  @override
+  String get ssoGroup => 'Group';
+
+  @override
+  String get ssoScimTokens => 'SCIM tokens';
+
+  @override
+  String get ssoNoScimTokens => 'No SCIM tokens.';
+
+  @override
+  String get ssoForbidden =>
+      'Your role does not allow seeing the SSO settings.';
+
+  @override
+  String get ssoTest => 'Test the connection';
+
+  @override
+  String get ssoHealthOk => 'Healthy';
+
+  @override
+  String get ssoHealthWarning => 'Warning';
+
+  @override
+  String get ssoHealthError => 'Error';
+
+  @override
+  String get ssoHealthUnknown => 'Not checked yet';
 }

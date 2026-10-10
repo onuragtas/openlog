@@ -312,6 +312,30 @@ enum QuotaLevel {
   }
 }
 
+/// SSODomainDnsRecordType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SSODomainDnsRecordType {
+  tXT('TXT'),
+  unknown('');
+
+  const SSODomainDnsRecordType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SSODomainDnsRecordType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SessionKind of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -847,6 +871,85 @@ enum QuotaMetricMetric {
   final String wire;
 
   static QuotaMetricMetric fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SSOConnectionProtocol of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SSOConnectionProtocol {
+  oidc('oidc'),
+  saml('saml'),
+  unknown('');
+
+  const SSOConnectionProtocol(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SSOConnectionProtocol fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SSOConnectionSamlPendingMetadataReason of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SSOConnectionSamlPendingMetadataReason {
+  changed('changed'),
+  signerChanged('signer_changed'),
+  unknown('');
+
+  const SSOConnectionSamlPendingMetadataReason(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SSOConnectionSamlPendingMetadataReason fromJson(
+    Object? v,
+    String path,
+  ) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SSOConnectionDefaultRole of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SSOConnectionDefaultRole {
+  admin('admin'),
+  member('member'),
+  viewer('viewer'),
+  unknown('');
+
+  const SSOConnectionDefaultRole(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SSOConnectionDefaultRole fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1759,6 +1862,33 @@ enum UsageSignalSignal {
   }
 }
 
+/// SSOHealthStatus of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SSOHealthStatus {
+  ok('ok'),
+  warning('warning'),
+  error('error'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const SSOHealthStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static SSOHealthStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
 /// AlertFilterOp of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2104,6 +2234,32 @@ enum BrowserKeyKind {
   final String wire;
 
   static BrowserKeyKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SSORoleMappingRole of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SSORoleMappingRole {
+  admin('admin'),
+  member('member'),
+  viewer('viewer'),
+  unknown('');
+
+  const SSORoleMappingRole(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SSORoleMappingRole fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -3000,6 +3156,444 @@ class UsageOverviewProjection {
 
   final double ingestBytes;
   final double? ingestPercent;
+}
+
+/// `DiskSpace` of the openlog API contract.
+class DiskSpace {
+  const DiskSpace({
+    required this.checkedAt,
+    required this.disks,
+    this.worst,
+    required this.defaults,
+    this.configured,
+    required this.effective,
+    required this.canManage,
+    required this.intervalSeconds,
+  });
+
+  factory DiskSpace.fromJson(Object? json, [String path = 'DiskSpace']) {
+    final m = _obj(json, path);
+    return DiskSpace(
+      checkedAt: _req(m, 'checked_at', path, _str),
+      disks: _req(
+        m,
+        'disks',
+        path,
+        (v, p) => _list<DiskStatus>(v, p, (v, p) => DiskStatus.fromJson(v, p)),
+      ),
+      worst: _opt(m, 'worst', path, (v, p) => DiskStatus.fromJson(v, p)),
+      defaults: _req(
+        m,
+        'defaults',
+        path,
+        (v, p) => DiskSpaceLevels.fromJson(v, p),
+      ),
+      configured: _opt(
+        m,
+        'configured',
+        path,
+        (v, p) => DiskSpaceConfigured.fromJson(v, p),
+      ),
+      effective: _req(
+        m,
+        'effective',
+        path,
+        (v, p) => DiskSpaceLevels.fromJson(v, p),
+      ),
+      canManage: _req(m, 'can_manage', path, _bool),
+      intervalSeconds: _req(m, 'interval_seconds', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'checked_at': checkedAt,
+    'disks': [for (final e in disks) e.toJson()],
+    if (worst != null) 'worst': worst!.toJson(),
+    'defaults': defaults.toJson(),
+    if (configured != null) 'configured': configured!.toJson(),
+    'effective': effective.toJson(),
+    'can_manage': canManage,
+    'interval_seconds': intervalSeconds,
+  };
+
+  final String checkedAt;
+  final List<DiskStatus> disks;
+  final DiskStatus? worst;
+  final DiskSpaceLevels defaults;
+  final DiskSpaceConfigured? configured;
+  final DiskSpaceLevels effective;
+  final bool canManage;
+  final int intervalSeconds;
+}
+
+/// `DiskSpaceConfigured` of the openlog API contract.
+class DiskSpaceConfigured {
+  const DiskSpaceConfigured({
+    this.warnPercent,
+    this.highPercent,
+    this.hysteresis,
+    this.shedEnabled,
+    this.shedStartPercent,
+    this.shedStopPercent,
+    this.shedMinPartitions,
+    this.shedMaxDropsPerRun,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  factory DiskSpaceConfigured.fromJson(
+    Object? json, [
+    String path = 'DiskSpaceConfigured',
+  ]) {
+    final m = _obj(json, path);
+    return DiskSpaceConfigured(
+      warnPercent: _opt(m, 'warn_percent', path, _int),
+      highPercent: _opt(m, 'high_percent', path, _int),
+      hysteresis: _opt(m, 'hysteresis', path, _int),
+      shedEnabled: _opt(m, 'shed_enabled', path, _bool),
+      shedStartPercent: _opt(m, 'shed_start_percent', path, _int),
+      shedStopPercent: _opt(m, 'shed_stop_percent', path, _int),
+      shedMinPartitions: _opt(m, 'shed_min_partitions', path, _int),
+      shedMaxDropsPerRun: _opt(m, 'shed_max_drops_per_run', path, _int),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      updatedBy: _req(m, 'updated_by', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'warn_percent': ?warnPercent,
+    'high_percent': ?highPercent,
+    'hysteresis': ?hysteresis,
+    'shed_enabled': ?shedEnabled,
+    'shed_start_percent': ?shedStartPercent,
+    'shed_stop_percent': ?shedStopPercent,
+    'shed_min_partitions': ?shedMinPartitions,
+    'shed_max_drops_per_run': ?shedMaxDropsPerRun,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'updated_by': updatedBy,
+  };
+
+  final int? warnPercent;
+  final int? highPercent;
+  final int? hysteresis;
+  final bool? shedEnabled;
+  final int? shedStartPercent;
+  final int? shedStopPercent;
+  final int? shedMinPartitions;
+  final int? shedMaxDropsPerRun;
+  final DateTime updatedAt;
+  final String updatedBy;
+}
+
+/// `SSOState` of the openlog API contract.
+class SSOState {
+  const SSOState({
+    required this.available,
+    required this.secretsEncrypted,
+    required this.scimEnabled,
+    required this.emailVerificationAvailable,
+    required this.domainEmailLocalParts,
+    required this.serviceProvider,
+    this.connection,
+    required this.connections,
+  });
+
+  factory SSOState.fromJson(Object? json, [String path = 'SSOState']) {
+    final m = _obj(json, path);
+    return SSOState(
+      available: _req(m, 'available', path, _bool),
+      secretsEncrypted: _req(m, 'secrets_encrypted', path, _bool),
+      scimEnabled: _req(m, 'scim_enabled', path, _bool),
+      emailVerificationAvailable: _req(
+        m,
+        'email_verification_available',
+        path,
+        _bool,
+      ),
+      domainEmailLocalParts: _req(
+        m,
+        'domain_email_local_parts',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      serviceProvider: _req(
+        m,
+        'service_provider',
+        path,
+        (v, p) => SSOStateServiceProvider.fromJson(v, p),
+      ),
+      connection: _opt(
+        m,
+        'connection',
+        path,
+        (v, p) => SSOConnection.fromJson(v, p),
+      ),
+      connections: _req(
+        m,
+        'connections',
+        path,
+        (v, p) =>
+            _list<SSOConnection>(v, p, (v, p) => SSOConnection.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'available': available,
+    'secrets_encrypted': secretsEncrypted,
+    'scim_enabled': scimEnabled,
+    'email_verification_available': emailVerificationAvailable,
+    'domain_email_local_parts': domainEmailLocalParts,
+    'service_provider': serviceProvider.toJson(),
+    if (connection != null) 'connection': connection!.toJson(),
+    'connections': [for (final e in connections) e.toJson()],
+  };
+
+  final bool available;
+  final bool secretsEncrypted;
+  final bool scimEnabled;
+  final bool emailVerificationAvailable;
+  final List<String> domainEmailLocalParts;
+  final SSOStateServiceProvider serviceProvider;
+  final SSOConnection? connection;
+  final List<SSOConnection> connections;
+}
+
+/// Values to register at the identity provider. SAML values are those of the addressed SAML connection.
+class SSOStateServiceProvider {
+  const SSOStateServiceProvider({
+    required this.oidcRedirectUri,
+    required this.oidcPostLogoutRedirectUri,
+    this.oidcBackchannelLogoutUri,
+    this.oidcFrontchannelLogoutUri,
+    this.samlSloSoapUrl,
+    required this.scimBaseUrl,
+    this.samlEntityId,
+    this.samlAcsUrl,
+    this.samlSloUrl,
+    this.samlMetadataUrl,
+    this.samlCertificatePem,
+  });
+
+  factory SSOStateServiceProvider.fromJson(
+    Object? json, [
+    String path = 'SSOStateServiceProvider',
+  ]) {
+    final m = _obj(json, path);
+    return SSOStateServiceProvider(
+      oidcRedirectUri: _req(m, 'oidc_redirect_uri', path, _str),
+      oidcPostLogoutRedirectUri: _req(
+        m,
+        'oidc_post_logout_redirect_uri',
+        path,
+        _str,
+      ),
+      oidcBackchannelLogoutUri: _opt(
+        m,
+        'oidc_backchannel_logout_uri',
+        path,
+        _str,
+      ),
+      oidcFrontchannelLogoutUri: _opt(
+        m,
+        'oidc_frontchannel_logout_uri',
+        path,
+        _str,
+      ),
+      samlSloSoapUrl: _opt(m, 'saml_slo_soap_url', path, _str),
+      scimBaseUrl: _req(m, 'scim_base_url', path, _str),
+      samlEntityId: _opt(m, 'saml_entity_id', path, _str),
+      samlAcsUrl: _opt(m, 'saml_acs_url', path, _str),
+      samlSloUrl: _opt(m, 'saml_slo_url', path, _str),
+      samlMetadataUrl: _opt(m, 'saml_metadata_url', path, _str),
+      samlCertificatePem: _opt(m, 'saml_certificate_pem', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'oidc_redirect_uri': oidcRedirectUri,
+    'oidc_post_logout_redirect_uri': oidcPostLogoutRedirectUri,
+    'oidc_backchannel_logout_uri': ?oidcBackchannelLogoutUri,
+    'oidc_frontchannel_logout_uri': ?oidcFrontchannelLogoutUri,
+    'saml_slo_soap_url': ?samlSloSoapUrl,
+    'scim_base_url': scimBaseUrl,
+    'saml_entity_id': ?samlEntityId,
+    'saml_acs_url': ?samlAcsUrl,
+    'saml_slo_url': ?samlSloUrl,
+    'saml_metadata_url': ?samlMetadataUrl,
+    'saml_certificate_pem': ?samlCertificatePem,
+  };
+
+  final String oidcRedirectUri;
+  final String oidcPostLogoutRedirectUri;
+  final String? oidcBackchannelLogoutUri;
+  final String? oidcFrontchannelLogoutUri;
+  final String? samlSloSoapUrl;
+  final String scimBaseUrl;
+  final String? samlEntityId;
+  final String? samlAcsUrl;
+  final String? samlSloUrl;
+  final String? samlMetadataUrl;
+  final String? samlCertificatePem;
+}
+
+/// `SSODomain` of the openlog API contract.
+class SSODomain {
+  const SSODomain({
+    required this.id,
+    required this.domain,
+    required this.verified,
+    this.verifiedAt,
+    this.verificationMethod,
+    required this.dnsRecord,
+    this.emailAddress,
+    this.emailExpiresAt,
+    this.lastCheckedAt,
+    this.connectionId,
+    required this.createdAt,
+  });
+
+  factory SSODomain.fromJson(Object? json, [String path = 'SSODomain']) {
+    final m = _obj(json, path);
+    return SSODomain(
+      id: _req(m, 'id', path, _str),
+      domain: _req(m, 'domain', path, _str),
+      verified: _req(m, 'verified', path, _bool),
+      verifiedAt: _opt(m, 'verified_at', path, _time),
+      verificationMethod: _opt(m, 'verification_method', path, _str),
+      dnsRecord: _req(
+        m,
+        'dns_record',
+        path,
+        (v, p) => SSODomainDnsRecord.fromJson(v, p),
+      ),
+      emailAddress: _opt(m, 'email_address', path, _str),
+      emailExpiresAt: _opt(m, 'email_expires_at', path, _time),
+      lastCheckedAt: _opt(m, 'last_checked_at', path, _time),
+      connectionId: _opt(m, 'connection_id', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'domain': domain,
+    'verified': verified,
+    if (verifiedAt != null)
+      'verified_at': verifiedAt!.toUtc().toIso8601String(),
+    'verification_method': ?verificationMethod,
+    'dns_record': dnsRecord.toJson(),
+    'email_address': ?emailAddress,
+    if (emailExpiresAt != null)
+      'email_expires_at': emailExpiresAt!.toUtc().toIso8601String(),
+    if (lastCheckedAt != null)
+      'last_checked_at': lastCheckedAt!.toUtc().toIso8601String(),
+    'connection_id': ?connectionId,
+    'created_at': createdAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String domain;
+  final bool verified;
+  final DateTime? verifiedAt;
+  final String? verificationMethod;
+  final SSODomainDnsRecord dnsRecord;
+  final String? emailAddress;
+  final DateTime? emailExpiresAt;
+  final DateTime? lastCheckedAt;
+  final String? connectionId;
+  final DateTime createdAt;
+}
+
+/// `SSODomainDnsRecord` of the openlog API contract.
+class SSODomainDnsRecord {
+  const SSODomainDnsRecord({
+    required this.type,
+    required this.name,
+    required this.value,
+  });
+
+  factory SSODomainDnsRecord.fromJson(
+    Object? json, [
+    String path = 'SSODomainDnsRecord',
+  ]) {
+    final m = _obj(json, path);
+    return SSODomainDnsRecord(
+      type: _req(m, 'type', path, SSODomainDnsRecordType.fromJson),
+      name: _req(m, 'name', path, _str),
+      value: _req(m, 'value', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'type': type.wire,
+    'name': name,
+    'value': value,
+  };
+
+  final SSODomainDnsRecordType type;
+  final String name;
+  final String value;
+}
+
+/// `SSOTestResult` of the openlog API contract.
+class SSOTestResult {
+  const SSOTestResult({required this.ok, required this.checks});
+
+  factory SSOTestResult.fromJson(
+    Object? json, [
+    String path = 'SSOTestResult',
+  ]) {
+    final m = _obj(json, path);
+    return SSOTestResult(
+      ok: _req(m, 'ok', path, _bool),
+      checks: _req(
+        m,
+        'checks',
+        path,
+        (v, p) => _list<SSOTestResultChecksItem>(
+          v,
+          p,
+          (v, p) => SSOTestResultChecksItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'ok': ok,
+    'checks': [for (final e in checks) e.toJson()],
+  };
+
+  final bool ok;
+  final List<SSOTestResultChecksItem> checks;
+}
+
+/// `SSOTestResultChecksItem` of the openlog API contract.
+class SSOTestResultChecksItem {
+  const SSOTestResultChecksItem({
+    required this.name,
+    required this.ok,
+    required this.message,
+  });
+
+  factory SSOTestResultChecksItem.fromJson(
+    Object? json, [
+    String path = 'SSOTestResultChecksItem',
+  ]) {
+    final m = _obj(json, path);
+    return SSOTestResultChecksItem(
+      name: _req(m, 'name', path, _str),
+      ok: _req(m, 'ok', path, _bool),
+      message: _req(m, 'message', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'name': name, 'ok': ok, 'message': message};
+
+  final String name;
+  final bool ok;
+  final String message;
 }
 
 /// `Session` of the openlog API contract.
@@ -6818,6 +7412,460 @@ class QuotaMetric {
   final QuotaLevel level;
 }
 
+/// One local ClickHouse disk of one replica. Object storage disks are not measured
+class DiskStatus {
+  const DiskStatus({
+    required this.host,
+    required this.disk,
+    required this.freeBytes,
+    required this.totalBytes,
+    required this.usedPercent,
+    required this.broken,
+    required this.level,
+  });
+
+  factory DiskStatus.fromJson(Object? json, [String path = 'DiskStatus']) {
+    final m = _obj(json, path);
+    return DiskStatus(
+      host: _req(m, 'host', path, _str),
+      disk: _req(m, 'disk', path, _str),
+      freeBytes: _req(m, 'free_bytes', path, _int),
+      totalBytes: _req(m, 'total_bytes', path, _int),
+      usedPercent: _req(m, 'used_percent', path, _num),
+      broken: _req(m, 'broken', path, _bool),
+      level: _req(m, 'level', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'host': host,
+    'disk': disk,
+    'free_bytes': freeBytes,
+    'total_bytes': totalBytes,
+    'used_percent': usedPercent,
+    'broken': broken,
+    'level': level,
+  };
+
+  final String host;
+  final String disk;
+  final int freeBytes;
+  final int totalBytes;
+  final double usedPercent;
+  final bool broken;
+  final int level;
+}
+
+/// The levels in force, after the built-in ones have filled in whatever the operator has not set. warn/high only decide when a disk is reported; the shed_* values decide when data is deleted.
+class DiskSpaceLevels {
+  const DiskSpaceLevels({
+    required this.warnPercent,
+    required this.highPercent,
+    required this.hysteresis,
+    required this.shedEnabled,
+    required this.shedStartPercent,
+    required this.shedStopPercent,
+    required this.shedMinPartitions,
+    required this.shedMaxDropsPerRun,
+  });
+
+  factory DiskSpaceLevels.fromJson(
+    Object? json, [
+    String path = 'DiskSpaceLevels',
+  ]) {
+    final m = _obj(json, path);
+    return DiskSpaceLevels(
+      warnPercent: _req(m, 'warn_percent', path, _int),
+      highPercent: _req(m, 'high_percent', path, _int),
+      hysteresis: _req(m, 'hysteresis', path, _int),
+      shedEnabled: _req(m, 'shed_enabled', path, _bool),
+      shedStartPercent: _req(m, 'shed_start_percent', path, _int),
+      shedStopPercent: _req(m, 'shed_stop_percent', path, _int),
+      shedMinPartitions: _req(m, 'shed_min_partitions', path, _int),
+      shedMaxDropsPerRun: _req(m, 'shed_max_drops_per_run', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'warn_percent': warnPercent,
+    'high_percent': highPercent,
+    'hysteresis': hysteresis,
+    'shed_enabled': shedEnabled,
+    'shed_start_percent': shedStartPercent,
+    'shed_stop_percent': shedStopPercent,
+    'shed_min_partitions': shedMinPartitions,
+    'shed_max_drops_per_run': shedMaxDropsPerRun,
+  };
+
+  final int warnPercent;
+  final int highPercent;
+  final int hysteresis;
+  final bool shedEnabled;
+  final int shedStartPercent;
+  final int shedStopPercent;
+  final int shedMinPartitions;
+  final int shedMaxDropsPerRun;
+}
+
+/// `SSOConnection` of the openlog API contract.
+class SSOConnection {
+  const SSOConnection({
+    required this.id,
+    required this.protocol,
+    required this.name,
+    required this.enabled,
+    required this.defaultValue,
+    this.oidc,
+    this.saml,
+    required this.emailAttribute,
+    required this.nameAttribute,
+    required this.groupsAttribute,
+    required this.jitEnabled,
+    required this.defaultRole,
+    required this.sessionMaxAgeSeconds,
+    required this.logoutRedirectAllowlist,
+    required this.allowExternalInvitations,
+    required this.enforce,
+    required this.breakGlassUserIds,
+    required this.configVersion,
+    required this.tested,
+    this.lastTest,
+    required this.health,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory SSOConnection.fromJson(
+    Object? json, [
+    String path = 'SSOConnection',
+  ]) {
+    final m = _obj(json, path);
+    return SSOConnection(
+      id: _req(m, 'id', path, _str),
+      protocol: _req(m, 'protocol', path, SSOConnectionProtocol.fromJson),
+      name: _req(m, 'name', path, _str),
+      enabled: _req(m, 'enabled', path, _bool),
+      defaultValue: _req(m, 'default', path, _bool),
+      oidc: _opt(m, 'oidc', path, (v, p) => SSOConnectionOidc.fromJson(v, p)),
+      saml: _opt(m, 'saml', path, (v, p) => SSOConnectionSaml.fromJson(v, p)),
+      emailAttribute: _req(m, 'email_attribute', path, _str),
+      nameAttribute: _req(m, 'name_attribute', path, _str),
+      groupsAttribute: _req(m, 'groups_attribute', path, _str),
+      jitEnabled: _req(m, 'jit_enabled', path, _bool),
+      defaultRole: _req(
+        m,
+        'default_role',
+        path,
+        SSOConnectionDefaultRole.fromJson,
+      ),
+      sessionMaxAgeSeconds: _req(m, 'session_max_age_seconds', path, _int),
+      logoutRedirectAllowlist: _req(
+        m,
+        'logout_redirect_allowlist',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      allowExternalInvitations: _req(
+        m,
+        'allow_external_invitations',
+        path,
+        _bool,
+      ),
+      enforce: _req(m, 'enforce', path, _bool),
+      breakGlassUserIds: _req(
+        m,
+        'break_glass_user_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      configVersion: _req(m, 'config_version', path, _int),
+      tested: _req(m, 'tested', path, _bool),
+      lastTest: _opt(
+        m,
+        'last_test',
+        path,
+        (v, p) => SSOConnectionLastTest.fromJson(v, p),
+      ),
+      health: _req(m, 'health', path, (v, p) => SSOHealth.fromJson(v, p)),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'protocol': protocol.wire,
+    'name': name,
+    'enabled': enabled,
+    'default': defaultValue,
+    if (oidc != null) 'oidc': oidc!.toJson(),
+    if (saml != null) 'saml': saml!.toJson(),
+    'email_attribute': emailAttribute,
+    'name_attribute': nameAttribute,
+    'groups_attribute': groupsAttribute,
+    'jit_enabled': jitEnabled,
+    'default_role': defaultRole.wire,
+    'session_max_age_seconds': sessionMaxAgeSeconds,
+    'logout_redirect_allowlist': logoutRedirectAllowlist,
+    'allow_external_invitations': allowExternalInvitations,
+    'enforce': enforce,
+    'break_glass_user_ids': breakGlassUserIds,
+    'config_version': configVersion,
+    'tested': tested,
+    if (lastTest != null) 'last_test': lastTest!.toJson(),
+    'health': health.toJson(),
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final SSOConnectionProtocol protocol;
+  final String name;
+  final bool enabled;
+  final bool defaultValue;
+  final SSOConnectionOidc? oidc;
+  final SSOConnectionSaml? saml;
+  final String emailAttribute;
+  final String nameAttribute;
+  final String groupsAttribute;
+  final bool jitEnabled;
+  final SSOConnectionDefaultRole defaultRole;
+  final int sessionMaxAgeSeconds;
+  final List<String> logoutRedirectAllowlist;
+  final bool allowExternalInvitations;
+  final bool enforce;
+  final List<String> breakGlassUserIds;
+  final int configVersion;
+  final bool tested;
+  final SSOConnectionLastTest? lastTest;
+  final SSOHealth health;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+/// `SSOConnectionOidc` of the openlog API contract.
+class SSOConnectionOidc {
+  const SSOConnectionOidc({
+    required this.issuer,
+    required this.clientId,
+    required this.scopes,
+    required this.requireEmailVerified,
+    required this.clientSecretSet,
+  });
+
+  factory SSOConnectionOidc.fromJson(
+    Object? json, [
+    String path = 'SSOConnectionOidc',
+  ]) {
+    final m = _obj(json, path);
+    return SSOConnectionOidc(
+      issuer: _req(m, 'issuer', path, _str),
+      clientId: _req(m, 'client_id', path, _str),
+      scopes: _req(m, 'scopes', path, (v, p) => _list<String>(v, p, _str)),
+      requireEmailVerified: _req(m, 'require_email_verified', path, _bool),
+      clientSecretSet: _req(m, 'client_secret_set', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'issuer': issuer,
+    'client_id': clientId,
+    'scopes': scopes,
+    'require_email_verified': requireEmailVerified,
+    'client_secret_set': clientSecretSet,
+  };
+
+  final String issuer;
+  final String clientId;
+  final List<String> scopes;
+  final bool requireEmailVerified;
+  final bool clientSecretSet;
+}
+
+/// `SSOConnectionSaml` of the openlog API contract.
+class SSOConnectionSaml {
+  const SSOConnectionSaml({
+    required this.idpMetadataUrl,
+    required this.idpEntityId,
+    required this.idpSsoUrl,
+    this.idpSloUrl,
+    required this.idpCertificates,
+    this.idpCertNotAfter,
+    required this.allowIdpInitiated,
+    required this.relayStateAllowlist,
+    required this.signAuthnRequests,
+    required this.metadataSigningCertificates,
+    required this.allowUnsignedMetadata,
+    this.pendingMetadata,
+  });
+
+  factory SSOConnectionSaml.fromJson(
+    Object? json, [
+    String path = 'SSOConnectionSaml',
+  ]) {
+    final m = _obj(json, path);
+    return SSOConnectionSaml(
+      idpMetadataUrl: _req(m, 'idp_metadata_url', path, _str),
+      idpEntityId: _req(m, 'idp_entity_id', path, _str),
+      idpSsoUrl: _req(m, 'idp_sso_url', path, _str),
+      idpSloUrl: _opt(m, 'idp_slo_url', path, _str),
+      idpCertificates: _req(
+        m,
+        'idp_certificates',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      idpCertNotAfter: _opt(m, 'idp_cert_not_after', path, _time),
+      allowIdpInitiated: _req(m, 'allow_idp_initiated', path, _bool),
+      relayStateAllowlist: _req(
+        m,
+        'relay_state_allowlist',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      signAuthnRequests: _req(m, 'sign_authn_requests', path, _bool),
+      metadataSigningCertificates: _req(
+        m,
+        'metadata_signing_certificates',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      allowUnsignedMetadata: _req(m, 'allow_unsigned_metadata', path, _bool),
+      pendingMetadata: _opt(
+        m,
+        'pending_metadata',
+        path,
+        (v, p) => SSOConnectionSamlPendingMetadata.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'idp_metadata_url': idpMetadataUrl,
+    'idp_entity_id': idpEntityId,
+    'idp_sso_url': idpSsoUrl,
+    'idp_slo_url': ?idpSloUrl,
+    'idp_certificates': idpCertificates,
+    if (idpCertNotAfter != null)
+      'idp_cert_not_after': idpCertNotAfter!.toUtc().toIso8601String(),
+    'allow_idp_initiated': allowIdpInitiated,
+    'relay_state_allowlist': relayStateAllowlist,
+    'sign_authn_requests': signAuthnRequests,
+    'metadata_signing_certificates': metadataSigningCertificates,
+    'allow_unsigned_metadata': allowUnsignedMetadata,
+    if (pendingMetadata != null) 'pending_metadata': pendingMetadata!.toJson(),
+  };
+
+  final String idpMetadataUrl;
+  final String idpEntityId;
+  final String idpSsoUrl;
+  final String? idpSloUrl;
+  final List<String> idpCertificates;
+  final DateTime? idpCertNotAfter;
+  final bool allowIdpInitiated;
+  final List<String> relayStateAllowlist;
+  final bool signAuthnRequests;
+  final List<String> metadataSigningCertificates;
+  final bool allowUnsignedMetadata;
+  final SSOConnectionSamlPendingMetadata? pendingMetadata;
+}
+
+/// `SSOConnectionSamlPendingMetadata` of the openlog API contract.
+class SSOConnectionSamlPendingMetadata {
+  const SSOConnectionSamlPendingMetadata({
+    required this.digest,
+    required this.reason,
+    required this.detectedAt,
+    required this.idpCertificates,
+    required this.idpSsoUrl,
+    this.idpSloUrl,
+    this.signerCertificate,
+  });
+
+  factory SSOConnectionSamlPendingMetadata.fromJson(
+    Object? json, [
+    String path = 'SSOConnectionSamlPendingMetadata',
+  ]) {
+    final m = _obj(json, path);
+    return SSOConnectionSamlPendingMetadata(
+      digest: _req(m, 'digest', path, _str),
+      reason: _req(
+        m,
+        'reason',
+        path,
+        SSOConnectionSamlPendingMetadataReason.fromJson,
+      ),
+      detectedAt: _req(m, 'detected_at', path, _time),
+      idpCertificates: _req(
+        m,
+        'idp_certificates',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      idpSsoUrl: _req(m, 'idp_sso_url', path, _str),
+      idpSloUrl: _opt(m, 'idp_slo_url', path, _str),
+      signerCertificate: _opt(m, 'signer_certificate', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'digest': digest,
+    'reason': reason.wire,
+    'detected_at': detectedAt.toUtc().toIso8601String(),
+    'idp_certificates': idpCertificates,
+    'idp_sso_url': idpSsoUrl,
+    'idp_slo_url': ?idpSloUrl,
+    'signer_certificate': ?signerCertificate,
+  };
+
+  final String digest;
+  final SSOConnectionSamlPendingMetadataReason reason;
+  final DateTime detectedAt;
+  final List<String> idpCertificates;
+  final String idpSsoUrl;
+  final String? idpSloUrl;
+  final String? signerCertificate;
+}
+
+/// `SSOConnectionLastTest` of the openlog API contract.
+class SSOConnectionLastTest {
+  const SSOConnectionLastTest({
+    required this.at,
+    required this.ok,
+    required this.current,
+    required this.error,
+    required this.details,
+  });
+
+  factory SSOConnectionLastTest.fromJson(
+    Object? json, [
+    String path = 'SSOConnectionLastTest',
+  ]) {
+    final m = _obj(json, path);
+    return SSOConnectionLastTest(
+      at: _req(m, 'at', path, _time),
+      ok: _req(m, 'ok', path, _bool),
+      current: _req(m, 'current', path, _bool),
+      error: _req(m, 'error', path, _str),
+      details: _req(m, 'details', path, (v, p) => _map<Object?>(v, p, _any)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'at': at.toUtc().toIso8601String(),
+    'ok': ok,
+    'current': current,
+    'error': error,
+    'details': details,
+  };
+
+  final DateTime at;
+  final bool ok;
+  final bool current;
+  final String error;
+  final Map<String, Object?> details;
+}
+
 /// `AlertIncidentEvent` of the openlog API contract.
 class AlertIncidentEvent {
   const AlertIncidentEvent({
@@ -9786,6 +10834,47 @@ class UsageQuery {
   final double memoryBytes;
 }
 
+/// Background refresh of the IdP documents (OIDC discovery/JWKS, SAML metadata) and certificate/metadata expiry.
+class SSOHealth {
+  const SSOHealth({
+    required this.status,
+    required this.message,
+    this.checkedAt,
+    this.nextAt,
+    required this.failures,
+    this.metadataValidUntil,
+  });
+
+  factory SSOHealth.fromJson(Object? json, [String path = 'SSOHealth']) {
+    final m = _obj(json, path);
+    return SSOHealth(
+      status: _req(m, 'status', path, SSOHealthStatus.fromJson),
+      message: _req(m, 'message', path, _str),
+      checkedAt: _opt(m, 'checked_at', path, _time),
+      nextAt: _opt(m, 'next_at', path, _time),
+      failures: _req(m, 'failures', path, _int),
+      metadataValidUntil: _opt(m, 'metadata_valid_until', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'status': status.wire,
+    'message': message,
+    if (checkedAt != null) 'checked_at': checkedAt!.toUtc().toIso8601String(),
+    if (nextAt != null) 'next_at': nextAt!.toUtc().toIso8601String(),
+    'failures': failures,
+    if (metadataValidUntil != null)
+      'metadata_valid_until': metadataValidUntil!.toUtc().toIso8601String(),
+  };
+
+  final SSOHealthStatus status;
+  final String message;
+  final DateTime? checkedAt;
+  final DateTime? nextAt;
+  final int failures;
+  final DateTime? metadataValidUntil;
+}
+
 /// `AlertDeliveryAttempt` of the openlog API contract.
 class AlertDeliveryAttempt {
   const AlertDeliveryAttempt({
@@ -11238,6 +12327,98 @@ class AuditLogPage {
 
   final List<AuditEvent> events;
   final String? nextCursor;
+}
+
+/// `SSODomainPage` of the openlog API contract.
+class SSODomainPage {
+  const SSODomainPage({required this.domains});
+
+  factory SSODomainPage.fromJson(
+    Object? json, [
+    String path = 'SSODomainPage',
+  ]) {
+    final m = _obj(json, path);
+    return SSODomainPage(
+      domains: _req(
+        m,
+        'domains',
+        path,
+        (v, p) => _list<SSODomain>(v, p, (v, p) => SSODomain.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'domains': [for (final e in domains) e.toJson()],
+  };
+
+  final List<SSODomain> domains;
+}
+
+/// `SSORoleMappingPage` of the openlog API contract.
+class SSORoleMappingPage {
+  const SSORoleMappingPage({required this.mappings});
+
+  factory SSORoleMappingPage.fromJson(
+    Object? json, [
+    String path = 'SSORoleMappingPage',
+  ]) {
+    final m = _obj(json, path);
+    return SSORoleMappingPage(
+      mappings: _req(
+        m,
+        'mappings',
+        path,
+        (v, p) => _list<SSORoleMapping>(
+          v,
+          p,
+          (v, p) => SSORoleMapping.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'mappings': [for (final e in mappings) e.toJson()],
+  };
+
+  final List<SSORoleMapping> mappings;
+}
+
+/// `ScimTokenPage` of the openlog API contract.
+class ScimTokenPage {
+  const ScimTokenPage({
+    required this.tokens,
+    required this.baseUrl,
+    required this.enabled,
+  });
+
+  factory ScimTokenPage.fromJson(
+    Object? json, [
+    String path = 'ScimTokenPage',
+  ]) {
+    final m = _obj(json, path);
+    return ScimTokenPage(
+      tokens: _req(
+        m,
+        'tokens',
+        path,
+        (v, p) => _list<SCIMToken>(v, p, (v, p) => SCIMToken.fromJson(v, p)),
+      ),
+      baseUrl: _req(m, 'base_url', path, _str),
+      enabled: _req(m, 'enabled', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'tokens': [for (final e in tokens) e.toJson()],
+    'base_url': baseUrl,
+    'enabled': enabled,
+  };
+
+  final List<SCIMToken> tokens;
+  final String baseUrl;
+  final bool enabled;
 }
 
 /// `ServicePage` of the openlog API contract.
@@ -12809,6 +13990,76 @@ class AuditEventActorApiKey {
 
   final String id;
   final String name;
+}
+
+/// `SSORoleMapping` of the openlog API contract.
+class SSORoleMapping {
+  const SSORoleMapping({required this.group, required this.role});
+
+  factory SSORoleMapping.fromJson(
+    Object? json, [
+    String path = 'SSORoleMapping',
+  ]) {
+    final m = _obj(json, path);
+    return SSORoleMapping(
+      group: _req(m, 'group', path, _str),
+      role: _req(m, 'role', path, SSORoleMappingRole.fromJson),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'group': group, 'role': role.wire};
+
+  final String group;
+  final SSORoleMappingRole role;
+}
+
+/// `SCIMToken` of the openlog API contract.
+class SCIMToken {
+  const SCIMToken({
+    required this.id,
+    required this.name,
+    required this.prefix,
+    required this.createdByEmail,
+    required this.createdAt,
+    this.lastUsedAt,
+    this.expiresAt,
+    this.revokedAt,
+  });
+
+  factory SCIMToken.fromJson(Object? json, [String path = 'SCIMToken']) {
+    final m = _obj(json, path);
+    return SCIMToken(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      prefix: _req(m, 'prefix', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      lastUsedAt: _opt(m, 'last_used_at', path, _time),
+      expiresAt: _opt(m, 'expires_at', path, _time),
+      revokedAt: _opt(m, 'revoked_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'prefix': prefix,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    if (lastUsedAt != null)
+      'last_used_at': lastUsedAt!.toUtc().toIso8601String(),
+    if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
+    if (revokedAt != null) 'revoked_at': revokedAt!.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final String prefix;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime? lastUsedAt;
+  final DateTime? expiresAt;
+  final DateTime? revokedAt;
 }
 
 /// `LogRecord` of the openlog API contract.

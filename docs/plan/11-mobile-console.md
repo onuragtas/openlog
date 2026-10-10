@@ -482,7 +482,12 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
 - [x] Organizasyon ayarları (`orgs/current`): ad değiştirme, kimlikler, rol, oluşturulma ve
       organizasyon dili. `saas` ve `support-access` operatör uçları (ayrı konsol, §9'un dışında);
       organizasyon silme (`.../deletion`) yeniden kimlik doğrulama istiyor, sırada.
-- [ ] SSO yönetimi (`sso/connection(s)`, `sso/domains`, `sso/enforcement`, `sso/role-mappings`, `scim/tokens`)
+- [x] SSO yönetimi (`sso/connections`, `sso/domains`, `sso/enforcement`, `sso/role-mappings`,
+      `scim/tokens`): bağlantılar (açma/kapama, sunucu tarafı test, sağlık), alan adları (ekleme,
+      DNS/e-posta doğrulama, silme), zorunlu SSO, grup→rol eşlemeleri ve SCIM anahtarları.
+      Bağlantı **oluşturmak** webde: metadata adresi, istemci sırrı ve sertifika yapıştırmak
+      gerekiyor — kullanım şekli farkı.
+- [x] Depolama (`storage/disk`): disk doluluğu, sunucunun bildirdiği seviyelerle.
 - [ ] Hesap: parola değiştirme (`auth/password`), e-posta doğrulama (`auth/verify-email`),
       veri dışa aktarma ve hesap silme (`account/*`, `data-exports`)
 

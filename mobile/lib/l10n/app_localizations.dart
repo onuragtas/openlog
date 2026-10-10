@@ -4698,6 +4698,222 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Your role does not allow seeing usage.'**
   String get usageForbidden;
+
+  /// No description provided for @settingsStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage'**
+  String get settingsStorage;
+
+  /// No description provided for @storageNotMeasured.
+  ///
+  /// In en, this message translates to:
+  /// **'The disks have not been measured yet.'**
+  String get storageNotMeasured;
+
+  /// No description provided for @storageLevels.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning at {warn}%, high at {high}%.'**
+  String storageLevels(int warn, int high);
+
+  /// No description provided for @storageFree.
+  ///
+  /// In en, this message translates to:
+  /// **'{free} free of {total}'**
+  String storageFree(String free, String total);
+
+  /// No description provided for @storageBroken.
+  ///
+  /// In en, this message translates to:
+  /// **'The disk cannot be read.'**
+  String get storageBroken;
+
+  /// No description provided for @storageForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow seeing disk status.'**
+  String get storageForbidden;
+
+  /// No description provided for @settingsSso.
+  ///
+  /// In en, this message translates to:
+  /// **'SSO'**
+  String get settingsSso;
+
+  /// No description provided for @ssoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'SSO cannot be used: the server\'s public URL (OPENLOG_PUBLIC_URL) is not set.'**
+  String get ssoUnavailable;
+
+  /// No description provided for @ssoSecretsPlain.
+  ///
+  /// In en, this message translates to:
+  /// **'Secrets are stored unencrypted; set a key on the server.'**
+  String get ssoSecretsPlain;
+
+  /// No description provided for @ssoConnections.
+  ///
+  /// In en, this message translates to:
+  /// **'Connections'**
+  String get ssoConnections;
+
+  /// No description provided for @ssoNoConnections.
+  ///
+  /// In en, this message translates to:
+  /// **'No SSO connections.'**
+  String get ssoNoConnections;
+
+  /// No description provided for @ssoEditOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating and editing a connection is on the web: it means pasting a metadata URL, a client secret and a certificate.'**
+  String get ssoEditOnWeb;
+
+  /// No description provided for @ssoTestOk.
+  ///
+  /// In en, this message translates to:
+  /// **'The server-side checks passed.'**
+  String get ssoTestOk;
+
+  /// No description provided for @ssoTestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks that failed: {checks}'**
+  String ssoTestFailed(String checks);
+
+  /// No description provided for @ssoEnforce.
+  ///
+  /// In en, this message translates to:
+  /// **'SSO required'**
+  String get ssoEnforce;
+
+  /// No description provided for @ssoEnforceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'On, everybody signs in through the identity provider.'**
+  String get ssoEnforceHint;
+
+  /// No description provided for @ssoBreakGlass.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} people can still sign in with a password.'**
+  String ssoBreakGlass(int count);
+
+  /// No description provided for @ssoNoBreakGlass.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is allowed to sign in with a password.'**
+  String get ssoNoBreakGlass;
+
+  /// No description provided for @ssoDomains.
+  ///
+  /// In en, this message translates to:
+  /// **'Domains'**
+  String get ssoDomains;
+
+  /// No description provided for @ssoDomainsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'E-mail addresses in these domains sign in through SSO.'**
+  String get ssoDomainsHint;
+
+  /// No description provided for @ssoDomainAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a domain'**
+  String get ssoDomainAdd;
+
+  /// No description provided for @ssoVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'verified'**
+  String get ssoVerified;
+
+  /// No description provided for @ssoUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'unverified'**
+  String get ssoUnverified;
+
+  /// No description provided for @ssoVerifyDns.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify by DNS'**
+  String get ssoVerifyDns;
+
+  /// No description provided for @ssoVerifyEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify by e-mail'**
+  String get ssoVerifyEmail;
+
+  /// No description provided for @ssoRoleMappings.
+  ///
+  /// In en, this message translates to:
+  /// **'Group mappings'**
+  String get ssoRoleMappings;
+
+  /// No description provided for @ssoRoleMappingsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A group at the identity provider becomes a role here. Owner is not given by a mapping.'**
+  String get ssoRoleMappingsHint;
+
+  /// No description provided for @ssoGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get ssoGroup;
+
+  /// No description provided for @ssoScimTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'SCIM tokens'**
+  String get ssoScimTokens;
+
+  /// No description provided for @ssoNoScimTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'No SCIM tokens.'**
+  String get ssoNoScimTokens;
+
+  /// No description provided for @ssoForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow seeing the SSO settings.'**
+  String get ssoForbidden;
+
+  /// No description provided for @ssoTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test the connection'**
+  String get ssoTest;
+
+  /// No description provided for @ssoHealthOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Healthy'**
+  String get ssoHealthOk;
+
+  /// No description provided for @ssoHealthWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get ssoHealthWarning;
+
+  /// No description provided for @ssoHealthError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get ssoHealthError;
+
+  /// No description provided for @ssoHealthUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet'**
+  String get ssoHealthUnknown;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

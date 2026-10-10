@@ -1717,5 +1717,75 @@
       }
     }
   },
-  "usageForbidden": "Your role does not allow seeing usage."
+  "usageForbidden": "Your role does not allow seeing usage.",
+  "settingsStorage": "Storage",
+  "storageNotMeasured": "The disks have not been measured yet.",
+  "storageLevels": "Warning at {warn}%, high at {high}%.",
+  "@storageLevels": {
+    "placeholders": {
+      "warn": {
+        "type": "int"
+      },
+      "high": {
+        "type": "int"
+      }
+    }
+  },
+  "storageFree": "{free} free of {total}",
+  "@storageFree": {
+    "placeholders": {
+      "free": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "storageBroken": "The disk cannot be read.",
+  "storageForbidden": "Your role does not allow seeing disk status.",
+  "settingsSso": "SSO",
+  "ssoUnavailable": "SSO cannot be used: the server's public URL (OPENLOG_PUBLIC_URL) is not set.",
+  "ssoSecretsPlain": "Secrets are stored unencrypted; set a key on the server.",
+  "ssoConnections": "Connections",
+  "ssoNoConnections": "No SSO connections.",
+  "ssoEditOnWeb": "Creating and editing a connection is on the web: it means pasting a metadata URL, a client secret and a certificate.",
+  "ssoTestOk": "The server-side checks passed.",
+  "ssoTestFailed": "Checks that failed: {checks}",
+  "@ssoTestFailed": {
+    "placeholders": {
+      "checks": {
+        "type": "String"
+      }
+    }
+  },
+  "ssoEnforce": "SSO required",
+  "ssoEnforceHint": "On, everybody signs in through the identity provider.",
+  "ssoBreakGlass": "{count} people can still sign in with a password.",
+  "@ssoBreakGlass": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ssoNoBreakGlass": "Nobody is allowed to sign in with a password.",
+  "ssoDomains": "Domains",
+  "ssoDomainsHint": "E-mail addresses in these domains sign in through SSO.",
+  "ssoDomainAdd": "Add a domain",
+  "ssoVerified": "verified",
+  "ssoUnverified": "unverified",
+  "ssoVerifyDns": "Verify by DNS",
+  "ssoVerifyEmail": "Verify by e-mail",
+  "ssoRoleMappings": "Group mappings",
+  "ssoRoleMappingsHint": "A group at the identity provider becomes a role here. Owner is not given by a mapping.",
+  "ssoGroup": "Group",
+  "ssoScimTokens": "SCIM tokens",
+  "ssoNoScimTokens": "No SCIM tokens.",
+  "ssoForbidden": "Your role does not allow seeing the SSO settings.",
+  "ssoTest": "Test the connection",
+  "ssoHealthOk": "Healthy",
+  "ssoHealthWarning": "Warning",
+  "ssoHealthError": "Error",
+  "ssoHealthUnknown": "Not checked yet"
 }

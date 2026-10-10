@@ -342,6 +342,8 @@ class _AppShellState extends State<AppShell> {
         audit: s.audit,
         sampling: s.sampling,
         usage: s.usage,
+        storage: s.storage,
+        sso: s.sso,
         active: active,
       ),
     );

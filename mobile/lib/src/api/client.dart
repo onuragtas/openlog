@@ -1215,6 +1215,100 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// Every single sign-on connection, and what the identity provider has
+  /// to be told about this installation.
+  Future<SSOState> ssoConnections() async =>
+      SSOState.fromJson(await _send('GET', '/api/v1/sso/connections'));
+
+  /// Turns one on or off. The whole connection is not sent back: this
+  /// endpoint takes the one field.
+  Future<void> setSsoConnectionEnabled(String id, {required bool enabled}) =>
+      _send(
+        'PATCH',
+        '/api/v1/sso/connections/${Uri.encodeComponent(id)}',
+        body: {'enabled': enabled},
+      );
+
+  /// What the server can check about a connection without anybody signing
+  /// in: the discovery document, the certificates, the clock.
+  Future<SSOTestResult> testSsoConnection(String id) async =>
+      SSOTestResult.fromJson(
+        await _send(
+          'POST',
+          '/api/v1/sso/connections/${Uri.encodeComponent(id)}/test',
+        ),
+      );
+
+  /// Which e-mail domains sign in through SSO.
+  Future<SSODomainPage> ssoDomains() async =>
+      SSODomainPage.fromJson(await _send('GET', '/api/v1/sso/domains'));
+
+  Future<void> addSsoDomain(String domain) =>
+      _send('POST', '/api/v1/sso/domains', body: {'domain': domain});
+
+  /// Asks the server to check a domain, by DNS or by e-mail.
+  Future<SSODomain> verifySsoDomain(
+    String id, {
+    required String method,
+    String emailLocalPart = '',
+  }) async => SSODomain.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/sso/domains/${Uri.encodeComponent(id)}/verify',
+      body: {
+        'method': method,
+        if (emailLocalPart.isNotEmpty) 'email_local_part': emailLocalPart,
+      },
+    ),
+  );
+
+  Future<void> deleteSsoDomain(String id) =>
+      _send('DELETE', '/api/v1/sso/domains/${Uri.encodeComponent(id)}');
+
+  /// Whether everyone has to sign in through SSO, and who may not.
+  Future<SSOState> setSsoEnforcement({
+    required bool enforce,
+    required List<String> breakGlassUserIds,
+  }) async => SSOState.fromJson(
+    await _send(
+      'PUT',
+      '/api/v1/sso/enforcement',
+      body: {
+        'enforce': enforce,
+        // Sent whole, because the endpoint replaces the list: leaving it
+        // out would empty it and lock everybody into the IdP.
+        'break_glass_user_ids': breakGlassUserIds,
+      },
+    ),
+  );
+
+  /// Which IdP group becomes which role.
+  Future<SSORoleMappingPage> ssoRoleMappings() async =>
+      SSORoleMappingPage.fromJson(
+        await _send('GET', '/api/v1/sso/role-mappings'),
+      );
+
+  /// Replaces the whole set, as the endpoint does.
+  Future<void> putSsoRoleMappings(List<SSORoleMapping> mappings) => _send(
+    'PUT',
+    '/api/v1/sso/role-mappings',
+    body: {
+      'mappings': [for (final m in mappings) m.toJson()],
+    },
+  );
+
+  /// The tokens an identity provider provisions users with.
+  Future<ScimTokenPage> scimTokens() async =>
+      ScimTokenPage.fromJson(await _send('GET', '/api/v1/scim/tokens'));
+
+  Future<void> revokeScimToken(String id) =>
+      _send('DELETE', '/api/v1/scim/tokens/${Uri.encodeComponent(id)}');
+
+  /// How full the ClickHouse disks are, and the levels they are reported
+  /// at. Admin and above; the disks belong to the operator.
+  Future<DiskSpace> diskSpace() async =>
+      DiskSpace.fromJson(await _send('GET', '/api/v1/storage/disk'));
+
   /// What the organization used this billing period, against its plan.
   ///
   /// [period] is `current`, `previous` or a `YYYY-MM` month, as the server

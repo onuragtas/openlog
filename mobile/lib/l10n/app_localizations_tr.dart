@@ -2627,4 +2627,126 @@ class LTr extends L {
 
   @override
   String get usageForbidden => 'Rolünüz kullanımı görmeye yetmiyor.';
+
+  @override
+  String get settingsStorage => 'Depolama';
+
+  @override
+  String get storageNotMeasured => 'Diskler henüz ölçülmedi.';
+
+  @override
+  String storageLevels(int warn, int high) {
+    return 'Uyarı %$warn, yüksek %$high.';
+  }
+
+  @override
+  String storageFree(String free, String total) {
+    return '$free boş / $total';
+  }
+
+  @override
+  String get storageBroken => 'Disk okunamıyor.';
+
+  @override
+  String get storageForbidden => 'Rolünüz disk durumunu görmeye yetmiyor.';
+
+  @override
+  String get settingsSso => 'SSO';
+
+  @override
+  String get ssoUnavailable =>
+      'SSO kullanılamıyor: sunucunun genel adresi (OPENLOG_PUBLIC_URL) ayarlı değil.';
+
+  @override
+  String get ssoSecretsPlain =>
+      'Sırlar şifrelenmeden saklanıyor; sunucuda bir anahtar tanımlayın.';
+
+  @override
+  String get ssoConnections => 'Bağlantılar';
+
+  @override
+  String get ssoNoConnections => 'Tanımlı SSO bağlantısı yok.';
+
+  @override
+  String get ssoEditOnWeb =>
+      'Bağlantı oluşturmak ve düzenlemek webde: metadata adresi, istemci sırrı ve sertifika yapıştırmak gerekiyor.';
+
+  @override
+  String get ssoTestOk => 'Sunucu tarafı denetimler geçti.';
+
+  @override
+  String ssoTestFailed(String checks) {
+    return 'Başarısız denetimler: $checks';
+  }
+
+  @override
+  String get ssoEnforce => 'SSO zorunlu';
+
+  @override
+  String get ssoEnforceHint =>
+      'Açıkken herkes kimlik sağlayıcısından giriş yapar.';
+
+  @override
+  String ssoBreakGlass(int count) {
+    return '$count kişi parolayla girebilir.';
+  }
+
+  @override
+  String get ssoNoBreakGlass => 'Parolayla girebilecek kimse tanımlı değil.';
+
+  @override
+  String get ssoDomains => 'Alan adları';
+
+  @override
+  String get ssoDomainsHint =>
+      'Bu alan adlarındaki e-postalar SSO ile giriş yapar.';
+
+  @override
+  String get ssoDomainAdd => 'Alan adı ekle';
+
+  @override
+  String get ssoVerified => 'doğrulandı';
+
+  @override
+  String get ssoUnverified => 'doğrulanmadı';
+
+  @override
+  String get ssoVerifyDns => 'DNS ile doğrula';
+
+  @override
+  String get ssoVerifyEmail => 'E-posta ile doğrula';
+
+  @override
+  String get ssoRoleMappings => 'Grup eşlemeleri';
+
+  @override
+  String get ssoRoleMappingsHint =>
+      'Kimlik sağlayıcısındaki grup, buradaki rol olur. Sahip rolü eşlemeyle verilmez.';
+
+  @override
+  String get ssoGroup => 'Grup';
+
+  @override
+  String get ssoScimTokens => 'SCIM anahtarları';
+
+  @override
+  String get ssoNoScimTokens => 'SCIM anahtarı yok.';
+
+  @override
+  String get ssoForbidden => 'Rolünüz SSO ayarlarını görmeye yetmiyor.';
+
+  @override
+  String get ssoTest => 'Bağlantıyı dene';
+
+  @override
+  String get ssoHealthOk => 'Sağlıklı';
+
+  @override
+  String get ssoHealthWarning => 'Uyarı';
+
+  @override
+  String get ssoHealthError => 'Hata';
+
+  @override
+  String get ssoHealthUnknown => 'Henüz denetlenmedi';
 }
