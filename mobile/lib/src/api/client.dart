@@ -1215,6 +1215,56 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// What this account may ask for: an export of its data, a deletion, and
+  /// whether either needs a password or a recent SSO sign-in.
+  Future<AccountPrivacy> accountPrivacy() async =>
+      AccountPrivacy.fromJson(await _send('GET', '/api/v1/account/privacy'));
+
+  /// The exports this account asked for, newest first.
+  Future<DataExportList> personalExports() async => DataExportList.fromJson(
+    await _send('GET', '/api/v1/account/data-exports'),
+  );
+
+  /// Queues one. The file is produced in the background and downloaded
+  /// from the web, which is where a file is useful.
+  Future<void> requestPersonalExport() =>
+      _send('POST', '/api/v1/account/data-exports');
+
+  /// Sends the verification link again, to the address being verified.
+  Future<void> resendVerificationEmail() =>
+      _send('POST', '/api/v1/auth/verify-email/resend');
+
+  /// Deletes this account. The e-mail is typed again because the server
+  /// asks for it, and because this cannot be undone.
+  Future<void> deleteAccount({
+    required String confirmEmail,
+    String password = '',
+  }) => _send(
+    'POST',
+    '/api/v1/account/delete',
+    body: {
+      'confirm_email': confirmEmail,
+      if (password.isNotEmpty) 'password': password,
+    },
+  );
+
+  /// Schedules the organization's deletion. It runs after a grace period,
+  /// and can be cancelled until then.
+  Future<void> scheduleOrgDeletion({
+    required String confirmName,
+    String password = '',
+  }) => _send(
+    'POST',
+    '/api/v1/orgs/current/deletion',
+    body: {
+      'confirm_name': confirmName,
+      if (password.isNotEmpty) 'password': password,
+    },
+  );
+
+  Future<void> cancelOrgDeletion(String id) =>
+      _send('POST', '/api/v1/org-deletions/${Uri.encodeComponent(id)}/cancel');
+
   /// Every single sign-on connection, and what the identity provider has
   /// to be told about this installation.
   Future<SSOState> ssoConnections() async =>

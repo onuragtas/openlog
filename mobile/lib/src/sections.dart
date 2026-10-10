@@ -58,6 +58,7 @@ class Sections {
     SessionsController? sessions,
     AccountController? account,
     OrgController? org,
+    PrivacyController? privacy,
     MembersController? members,
     LicenseKeysController? licenseKeys,
     ApiKeysController? apiKeys,
@@ -174,6 +175,7 @@ class Sections {
        sessions = sessions ?? SessionsController(client),
        account = account ?? AccountController(client),
        org = org ?? OrgController(client),
+       privacy = privacy ?? PrivacyController(client),
        members = members ?? MembersController(client),
        licenseKeys = licenseKeys ?? LicenseKeysController(client),
        apiKeys = apiKeys ?? ApiKeysController(client),
@@ -244,6 +246,9 @@ class Sections {
 
   /// The organization itself: its name, its ids, its language.
   final OrgController org;
+
+  /// What this account may ask for: an export, a deletion.
+  final PrivacyController privacy;
 
   /// Who is in the organization, and who has been asked to join.
   final MembersController members;
@@ -353,6 +358,7 @@ class Sections {
     sessions,
     account,
     org,
+    privacy,
     members,
     licenseKeys,
     apiKeys,

@@ -25,6 +25,7 @@ import 'audit_tab.dart';
 import 'keys_tabs.dart';
 import 'members_tab.dart';
 import 'org_tab.dart';
+import 'privacy_card.dart';
 import 'sampling_screen.dart';
 import 'source_maps_tab.dart';
 import 'sso_tab.dart';
@@ -40,6 +41,7 @@ class SettingsBody extends StatefulWidget {
     required this.sessions,
     required this.account,
     required this.org,
+    required this.privacy,
     required this.members,
     required this.licenseKeys,
     required this.apiKeys,
@@ -66,6 +68,9 @@ class SettingsBody extends StatefulWidget {
 
   /// The organization itself.
   final OrgController org;
+
+  /// What this account may ask for: an export, a deletion.
+  final PrivacyController privacy;
 
   /// Who is in the organization, and who has been asked to join.
   final MembersController members;
@@ -256,6 +261,9 @@ class _SettingsBodyState extends State<SettingsBody>
     void later(void Function() load) =>
         WidgetsBinding.instance.addPostFrameCallback((_) => load());
     switch (key) {
+      case 'profile':
+        final c = widget.privacy;
+        if (!c.loading && c.privacy == null) later(c.load);
       case 'organization':
         final c = widget.org;
         if (!c.loading && c.org == null) later(c.load);
@@ -402,6 +410,9 @@ class _SettingsBodyState extends State<SettingsBody>
           ],
           const SizedBox(height: 12),
           _Language(session: session, account: widget.account),
+          const SizedBox(height: 12),
+          // The web's personal data section, at the bottom of the same tab.
+          PrivacyCard(session: session, controller: widget.privacy),
           FailureBanner(
             failure: session.failure,
             baseUrl: session.baseUrl ?? '',

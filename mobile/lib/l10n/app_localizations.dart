@@ -4914,6 +4914,126 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Not checked yet'**
   String get ssoHealthUnknown;
+
+  /// No description provided for @privacySsoReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'This account has no password; the server wants a recent single sign-on instead.'**
+  String get privacySsoReauth;
+
+  /// No description provided for @privacyDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get privacyDelete;
+
+  /// No description provided for @privacyUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'{email} is not verified.'**
+  String privacyUnverified(String email);
+
+  /// No description provided for @privacyResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the verification e-mail again'**
+  String get privacyResend;
+
+  /// No description provided for @privacyVerificationSent.
+  ///
+  /// In en, this message translates to:
+  /// **'The verification e-mail went out.'**
+  String get privacyVerificationSent;
+
+  /// No description provided for @privacyExport.
+  ///
+  /// In en, this message translates to:
+  /// **'A copy of my data'**
+  String get privacyExport;
+
+  /// No description provided for @privacyExportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded from the web once it is ready; a phone is not where anybody opens an archive.'**
+  String get privacyExportHint;
+
+  /// No description provided for @privacyExportRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Request a copy'**
+  String get privacyExportRequest;
+
+  /// No description provided for @privacyExportQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Requested; an e-mail arrives when it is ready.'**
+  String get privacyExportQueued;
+
+  /// No description provided for @privacyOrgDeletion.
+  ///
+  /// In en, this message translates to:
+  /// **'{org} is scheduled for deletion: it goes permanently {when}.'**
+  String privacyOrgDeletion(String org, String when);
+
+  /// No description provided for @privacyCancelDeletion.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel the deletion'**
+  String get privacyCancelDeletion;
+
+  /// No description provided for @privacyDangerous.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot be undone'**
+  String get privacyDangerous;
+
+  /// No description provided for @privacyDeleteOrg.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the organization'**
+  String get privacyDeleteOrg;
+
+  /// No description provided for @privacyDeleteOrgTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the organization'**
+  String get privacyDeleteOrgTitle;
+
+  /// No description provided for @privacyDeleteOrgBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{org} and everything in it is deleted permanently after {days} days. You can cancel until then. Type its name to confirm.'**
+  String privacyDeleteOrgBody(String org, int days);
+
+  /// No description provided for @privacyDeleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get privacyDeleteAccount;
+
+  /// No description provided for @privacyDeleteAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the account'**
+  String get privacyDeleteAccountTitle;
+
+  /// No description provided for @privacyDeleteAccountBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account and your personal data are deleted. Type your e-mail address to confirm.'**
+  String get privacyDeleteAccountBody;
+
+  /// No description provided for @alreadyVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'This address is already verified.'**
+  String get alreadyVerified;
+
+  /// No description provided for @reauthNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Prove it is you: the password was wrong, or the single sign-on is too old.'**
+  String get reauthNeeded;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

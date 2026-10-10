@@ -879,6 +879,137 @@ enum QuotaMetricMetric {
   }
 }
 
+/// OrgDeletionStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OrgDeletionStatus {
+  scheduled('scheduled'),
+  cancelled('cancelled'),
+  deleting('deleting'),
+  completed('completed'),
+  unknown('');
+
+  const OrgDeletionStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OrgDeletionStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OrgDeletionInitiator of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OrgDeletionInitiator {
+  owner('owner'),
+  operator('operator'),
+  unknown('');
+
+  const OrgDeletionInitiator(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OrgDeletionInitiator fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DataExportKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DataExportKind {
+  organization('organization'),
+  user('user'),
+  unknown('');
+
+  const DataExportKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DataExportKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DataExportStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DataExportStatus {
+  pending('pending'),
+  running('running'),
+  completed('completed'),
+  failed('failed'),
+  expired('expired'),
+  unknown('');
+
+  const DataExportStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DataExportStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// DataExportSignalsItem of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum DataExportSignalsItem {
+  logs('logs'),
+  traces('traces'),
+  metrics('metrics'),
+  unknown('');
+
+  const DataExportSignalsItem(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static DataExportSignalsItem fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SSOConnectionProtocol of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3283,6 +3414,82 @@ class DiskSpaceConfigured {
   final int? shedMaxDropsPerRun;
   final DateTime updatedAt;
   final String updatedBy;
+}
+
+/// `AccountPrivacy` of the openlog API contract.
+class AccountPrivacy {
+  const AccountPrivacy({
+    required this.hasPassword,
+    required this.dataExportEnabled,
+    required this.orgDeletionGraceSeconds,
+    required this.reauthMaxAgeSeconds,
+    required this.orgDeletions,
+  });
+
+  factory AccountPrivacy.fromJson(
+    Object? json, [
+    String path = 'AccountPrivacy',
+  ]) {
+    final m = _obj(json, path);
+    return AccountPrivacy(
+      hasPassword: _req(m, 'has_password', path, _bool),
+      dataExportEnabled: _req(m, 'data_export_enabled', path, _bool),
+      orgDeletionGraceSeconds: _req(
+        m,
+        'org_deletion_grace_seconds',
+        path,
+        _int,
+      ),
+      reauthMaxAgeSeconds: _req(m, 'reauth_max_age_seconds', path, _int),
+      orgDeletions: _req(
+        m,
+        'org_deletions',
+        path,
+        (v, p) =>
+            _list<OrgDeletion>(v, p, (v, p) => OrgDeletion.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'has_password': hasPassword,
+    'data_export_enabled': dataExportEnabled,
+    'org_deletion_grace_seconds': orgDeletionGraceSeconds,
+    'reauth_max_age_seconds': reauthMaxAgeSeconds,
+    'org_deletions': [for (final e in orgDeletions) e.toJson()],
+  };
+
+  final bool hasPassword;
+  final bool dataExportEnabled;
+  final int orgDeletionGraceSeconds;
+  final int reauthMaxAgeSeconds;
+  final List<OrgDeletion> orgDeletions;
+}
+
+/// `DataExportList` of the openlog API contract.
+class DataExportList {
+  const DataExportList({required this.exports});
+
+  factory DataExportList.fromJson(
+    Object? json, [
+    String path = 'DataExportList',
+  ]) {
+    final m = _obj(json, path);
+    return DataExportList(
+      exports: _req(
+        m,
+        'exports',
+        path,
+        (v, p) => _list<DataExport>(v, p, (v, p) => DataExport.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'exports': [for (final e in exports) e.toJson()],
+  };
+
+  final List<DataExport> exports;
 }
 
 /// `SSOState` of the openlog API contract.
@@ -7505,6 +7712,172 @@ class DiskSpaceLevels {
   final int shedStopPercent;
   final int shedMinPartitions;
   final int shedMaxDropsPerRun;
+}
+
+/// `OrgDeletion` of the openlog API contract.
+class OrgDeletion {
+  const OrgDeletion({
+    required this.id,
+    this.organizationId,
+    required this.organizationName,
+    required this.tenantId,
+    required this.status,
+    required this.initiator,
+    this.reason,
+    this.requestedByEmail,
+    required this.requestedAt,
+    required this.purgeAfter,
+    this.cancelledAt,
+    this.startedAt,
+    this.completedAt,
+    required this.cancellable,
+    this.certificateId,
+    this.lastError,
+  });
+
+  factory OrgDeletion.fromJson(Object? json, [String path = 'OrgDeletion']) {
+    final m = _obj(json, path);
+    return OrgDeletion(
+      id: _req(m, 'id', path, _str),
+      organizationId: _opt(m, 'organization_id', path, _str),
+      organizationName: _req(m, 'organization_name', path, _str),
+      tenantId: _req(m, 'tenant_id', path, _str),
+      status: _req(m, 'status', path, OrgDeletionStatus.fromJson),
+      initiator: _req(m, 'initiator', path, OrgDeletionInitiator.fromJson),
+      reason: _opt(m, 'reason', path, _str),
+      requestedByEmail: _opt(m, 'requested_by_email', path, _str),
+      requestedAt: _req(m, 'requested_at', path, _str),
+      purgeAfter: _req(m, 'purge_after', path, _str),
+      cancelledAt: _opt(m, 'cancelled_at', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      completedAt: _opt(m, 'completed_at', path, _str),
+      cancellable: _req(m, 'cancellable', path, _bool),
+      certificateId: _opt(m, 'certificate_id', path, _str),
+      lastError: _opt(m, 'last_error', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'organization_id': ?organizationId,
+    'organization_name': organizationName,
+    'tenant_id': tenantId,
+    'status': status.wire,
+    'initiator': initiator.wire,
+    'reason': ?reason,
+    'requested_by_email': ?requestedByEmail,
+    'requested_at': requestedAt,
+    'purge_after': purgeAfter,
+    'cancelled_at': ?cancelledAt,
+    'started_at': ?startedAt,
+    'completed_at': ?completedAt,
+    'cancellable': cancellable,
+    'certificate_id': ?certificateId,
+    'last_error': ?lastError,
+  };
+
+  final String id;
+  final String? organizationId;
+  final String organizationName;
+  final String tenantId;
+  final OrgDeletionStatus status;
+  final OrgDeletionInitiator initiator;
+  final String? reason;
+  final String? requestedByEmail;
+  final String requestedAt;
+  final String purgeAfter;
+  final String? cancelledAt;
+  final String? startedAt;
+  final String? completedAt;
+  final bool cancellable;
+  final String? certificateId;
+  final String? lastError;
+}
+
+/// `DataExport` of the openlog API contract.
+class DataExport {
+  const DataExport({
+    required this.id,
+    required this.kind,
+    required this.status,
+    required this.signals,
+    this.from,
+    this.to,
+    required this.requestedBy,
+    required this.sizeBytes,
+    required this.telemetryRows,
+    required this.truncated,
+    required this.error,
+    required this.createdAt,
+    this.startedAt,
+    this.completedAt,
+    this.expiresAt,
+    required this.downloadAvailable,
+  });
+
+  factory DataExport.fromJson(Object? json, [String path = 'DataExport']) {
+    final m = _obj(json, path);
+    return DataExport(
+      id: _req(m, 'id', path, _str),
+      kind: _req(m, 'kind', path, DataExportKind.fromJson),
+      status: _req(m, 'status', path, DataExportStatus.fromJson),
+      signals: _req(
+        m,
+        'signals',
+        path,
+        (v, p) =>
+            _list<DataExportSignalsItem>(v, p, DataExportSignalsItem.fromJson),
+      ),
+      from: _opt(m, 'from', path, _str),
+      to: _opt(m, 'to', path, _str),
+      requestedBy: _req(m, 'requested_by', path, _str),
+      sizeBytes: _req(m, 'size_bytes', path, _int),
+      telemetryRows: _req(m, 'telemetry_rows', path, _int),
+      truncated: _req(m, 'truncated', path, _bool),
+      error: _req(m, 'error', path, _str),
+      createdAt: _req(m, 'created_at', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      completedAt: _opt(m, 'completed_at', path, _str),
+      expiresAt: _opt(m, 'expires_at', path, _str),
+      downloadAvailable: _req(m, 'download_available', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'kind': kind.wire,
+    'status': status.wire,
+    'signals': [for (final e in signals) e.wire],
+    'from': ?from,
+    'to': ?to,
+    'requested_by': requestedBy,
+    'size_bytes': sizeBytes,
+    'telemetry_rows': telemetryRows,
+    'truncated': truncated,
+    'error': error,
+    'created_at': createdAt,
+    'started_at': ?startedAt,
+    'completed_at': ?completedAt,
+    'expires_at': ?expiresAt,
+    'download_available': downloadAvailable,
+  };
+
+  final String id;
+  final DataExportKind kind;
+  final DataExportStatus status;
+  final List<DataExportSignalsItem> signals;
+  final String? from;
+  final String? to;
+  final String requestedBy;
+  final int sizeBytes;
+  final int telemetryRows;
+  final bool truncated;
+  final String error;
+  final String createdAt;
+  final String? startedAt;
+  final String? completedAt;
+  final String? expiresAt;
+  final bool downloadAvailable;
 }
 
 /// `SSOConnection` of the openlog API contract.

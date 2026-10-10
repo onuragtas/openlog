@@ -2756,4 +2756,75 @@ class LEn extends L {
 
   @override
   String get ssoHealthUnknown => 'Not checked yet';
+
+  @override
+  String get privacySsoReauth =>
+      'This account has no password; the server wants a recent single sign-on instead.';
+
+  @override
+  String get privacyDelete => 'Delete';
+
+  @override
+  String privacyUnverified(String email) {
+    return '$email is not verified.';
+  }
+
+  @override
+  String get privacyResend => 'Send the verification e-mail again';
+
+  @override
+  String get privacyVerificationSent => 'The verification e-mail went out.';
+
+  @override
+  String get privacyExport => 'A copy of my data';
+
+  @override
+  String get privacyExportHint =>
+      'Downloaded from the web once it is ready; a phone is not where anybody opens an archive.';
+
+  @override
+  String get privacyExportRequest => 'Request a copy';
+
+  @override
+  String get privacyExportQueued =>
+      'Requested; an e-mail arrives when it is ready.';
+
+  @override
+  String privacyOrgDeletion(String org, String when) {
+    return '$org is scheduled for deletion: it goes permanently $when.';
+  }
+
+  @override
+  String get privacyCancelDeletion => 'Cancel the deletion';
+
+  @override
+  String get privacyDangerous => 'Cannot be undone';
+
+  @override
+  String get privacyDeleteOrg => 'Delete the organization';
+
+  @override
+  String get privacyDeleteOrgTitle => 'Delete the organization';
+
+  @override
+  String privacyDeleteOrgBody(String org, int days) {
+    return '$org and everything in it is deleted permanently after $days days. You can cancel until then. Type its name to confirm.';
+  }
+
+  @override
+  String get privacyDeleteAccount => 'Delete my account';
+
+  @override
+  String get privacyDeleteAccountTitle => 'Delete the account';
+
+  @override
+  String get privacyDeleteAccountBody =>
+      'Your account and your personal data are deleted. Type your e-mail address to confirm.';
+
+  @override
+  String get alreadyVerified => 'This address is already verified.';
+
+  @override
+  String get reauthNeeded =>
+      'Prove it is you: the password was wrong, or the single sign-on is too old.';
 }

@@ -2749,4 +2749,74 @@ class LTr extends L {
 
   @override
   String get ssoHealthUnknown => 'Henüz denetlenmedi';
+
+  @override
+  String get privacySsoReauth =>
+      'Bu hesabın parolası yok; sunucu yakın zamanlı bir SSO girişi istiyor.';
+
+  @override
+  String get privacyDelete => 'Sil';
+
+  @override
+  String privacyUnverified(String email) {
+    return '$email adresi doğrulanmadı.';
+  }
+
+  @override
+  String get privacyResend => 'Doğrulama e-postasını yeniden gönder';
+
+  @override
+  String get privacyVerificationSent => 'Doğrulama e-postası gönderildi.';
+
+  @override
+  String get privacyExport => 'Verilerimin kopyası';
+
+  @override
+  String get privacyExportHint =>
+      'Hazırlanınca webden indirilir; arşiv açmak telefonun işi değil.';
+
+  @override
+  String get privacyExportRequest => 'Kopya iste';
+
+  @override
+  String get privacyExportQueued => 'İstek alındı; hazırlanınca e-posta gelir.';
+
+  @override
+  String privacyOrgDeletion(String org, String when) {
+    return '$org silinmek üzere: $when kalıcı olarak gidiyor.';
+  }
+
+  @override
+  String get privacyCancelDeletion => 'Silmeyi iptal et';
+
+  @override
+  String get privacyDangerous => 'Geri alınamaz';
+
+  @override
+  String get privacyDeleteOrg => 'Organizasyonu sil';
+
+  @override
+  String get privacyDeleteOrgTitle => 'Organizasyonu sil';
+
+  @override
+  String privacyDeleteOrgBody(String org, int days) {
+    return '$org ve içindeki her şey $days gün sonra kalıcı olarak silinir. O zamana kadar iptal edebilirsiniz. Onaylamak için adını yazın.';
+  }
+
+  @override
+  String get privacyDeleteAccount => 'Hesabımı sil';
+
+  @override
+  String get privacyDeleteAccountTitle => 'Hesabı sil';
+
+  @override
+  String get privacyDeleteAccountBody =>
+      'Hesabınız ve kişisel verileriniz silinir. Onaylamak için e-posta adresinizi yazın.';
+
+  @override
+  String get alreadyVerified => 'Bu adres zaten doğrulanmış.';
+
+  @override
+  String get reauthNeeded =>
+      'Kimliğinizi doğrulayın: parola yanlış ya da SSO oturumu çok eski.';
 }

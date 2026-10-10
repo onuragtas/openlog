@@ -1787,5 +1787,52 @@
   "ssoHealthOk": "Healthy",
   "ssoHealthWarning": "Warning",
   "ssoHealthError": "Error",
-  "ssoHealthUnknown": "Not checked yet"
+  "ssoHealthUnknown": "Not checked yet",
+  "privacySsoReauth": "This account has no password; the server wants a recent single sign-on instead.",
+  "privacyDelete": "Delete",
+  "privacyUnverified": "{email} is not verified.",
+  "@privacyUnverified": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "privacyResend": "Send the verification e-mail again",
+  "privacyVerificationSent": "The verification e-mail went out.",
+  "privacyExport": "A copy of my data",
+  "privacyExportHint": "Downloaded from the web once it is ready; a phone is not where anybody opens an archive.",
+  "privacyExportRequest": "Request a copy",
+  "privacyExportQueued": "Requested; an e-mail arrives when it is ready.",
+  "privacyOrgDeletion": "{org} is scheduled for deletion: it goes permanently {when}.",
+  "@privacyOrgDeletion": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "privacyCancelDeletion": "Cancel the deletion",
+  "privacyDangerous": "Cannot be undone",
+  "privacyDeleteOrg": "Delete the organization",
+  "privacyDeleteOrgTitle": "Delete the organization",
+  "privacyDeleteOrgBody": "{org} and everything in it is deleted permanently after {days} days. You can cancel until then. Type its name to confirm.",
+  "@privacyDeleteOrgBody": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "privacyDeleteAccount": "Delete my account",
+  "privacyDeleteAccountTitle": "Delete the account",
+  "privacyDeleteAccountBody": "Your account and your personal data are deleted. Type your e-mail address to confirm.",
+  "alreadyVerified": "This address is already verified.",
+  "reauthNeeded": "Prove it is you: the password was wrong, or the single sign-on is too old."
 }

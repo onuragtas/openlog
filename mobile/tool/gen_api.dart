@@ -30,6 +30,8 @@ const schemaTargets = <String>[
   'Organization', // the organization itself: its name, its ids, its language
   'UsageOverview', // what the organization used this period, against its plan
   'DiskSpace', // how full the ClickHouse disks are, and at what level
+  'AccountPrivacy', // what this account may ask for: an export, a deletion
+  'DataExportList', // the exports it asked for, which the web downloads
   'SSOState', // the single sign-on connections and what the IdP has to be told
   'SSODomain', // which e-mail domains sign in through them
   'SSOTestResult', // and whether a connection actually works

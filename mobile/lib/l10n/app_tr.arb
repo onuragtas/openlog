@@ -1690,5 +1690,52 @@
   "ssoHealthOk": "Sağlıklı",
   "ssoHealthWarning": "Uyarı",
   "ssoHealthError": "Hata",
-  "ssoHealthUnknown": "Henüz denetlenmedi"
+  "ssoHealthUnknown": "Henüz denetlenmedi",
+  "privacySsoReauth": "Bu hesabın parolası yok; sunucu yakın zamanlı bir SSO girişi istiyor.",
+  "privacyDelete": "Sil",
+  "privacyUnverified": "{email} adresi doğrulanmadı.",
+  "@privacyUnverified": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "privacyResend": "Doğrulama e-postasını yeniden gönder",
+  "privacyVerificationSent": "Doğrulama e-postası gönderildi.",
+  "privacyExport": "Verilerimin kopyası",
+  "privacyExportHint": "Hazırlanınca webden indirilir; arşiv açmak telefonun işi değil.",
+  "privacyExportRequest": "Kopya iste",
+  "privacyExportQueued": "İstek alındı; hazırlanınca e-posta gelir.",
+  "privacyOrgDeletion": "{org} silinmek üzere: {when} kalıcı olarak gidiyor.",
+  "@privacyOrgDeletion": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "privacyCancelDeletion": "Silmeyi iptal et",
+  "privacyDangerous": "Geri alınamaz",
+  "privacyDeleteOrg": "Organizasyonu sil",
+  "privacyDeleteOrgTitle": "Organizasyonu sil",
+  "privacyDeleteOrgBody": "{org} ve içindeki her şey {days} gün sonra kalıcı olarak silinir. O zamana kadar iptal edebilirsiniz. Onaylamak için adını yazın.",
+  "@privacyDeleteOrgBody": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "privacyDeleteAccount": "Hesabımı sil",
+  "privacyDeleteAccountTitle": "Hesabı sil",
+  "privacyDeleteAccountBody": "Hesabınız ve kişisel verileriniz silinir. Onaylamak için e-posta adresinizi yazın.",
+  "alreadyVerified": "Bu adres zaten doğrulanmış.",
+  "reauthNeeded": "Kimliğinizi doğrulayın: parola yanlış ya da SSO oturumu çok eski."
 }

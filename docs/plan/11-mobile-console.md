@@ -488,8 +488,10 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Bağlantı **oluşturmak** webde: metadata adresi, istemci sırrı ve sertifika yapıştırmak
       gerekiyor — kullanım şekli farkı.
 - [x] Depolama (`storage/disk`): disk doluluğu, sunucunun bildirdiği seviyelerle.
-- [ ] Hesap: parola değiştirme (`auth/password`), e-posta doğrulama (`auth/verify-email`),
-      veri dışa aktarma ve hesap silme (`account/*`, `data-exports`)
+- [x] Hesap: parola değiştirme (`auth/password`), e-posta doğrulama (`auth/verify-email/resend`),
+      veri dışa aktarma (`account/data-exports`), hesap silme (`account/delete`) ve organizasyon
+      silme/iptal (`orgs/current/deletion`, `org-deletions/{id}/cancel`). Doğrulama bağlantısına
+      tıklamak (`auth/verify-email`) e-postadaki akış, uygulamanın değil.
 
 ### 9.4 Keşif ekranlarının derinliği
 - [ ] Filtre kurucusunun sözlüğü (`fields/keys`, `fields/values`) — log, iz ve metrik filtrelerinin temeli
