@@ -1126,5 +1126,14 @@
       }
     }
   },
-  "servicesAgents": "Ajan sürümleri"
+  "servicesAgents": "Ajan sürümleri",
+  "tracesFilters": "Süzgeçler",
+  "tracesTransaction": "İşlem",
+  "tracesMinMs": "En az ms",
+  "tracesMaxMs": "En çok ms",
+  "tracesAttributes": "Öznitelikler",
+  "tracesAttributesHint": "anahtar=değer, boşlukla ayrılmış; en fazla 10 tane.",
+  "tracesErrorsOnly": "Yalnızca hatalılar",
+  "tracesSearch": "Ara",
+  "serviceTabTraces": "İzler"
 }

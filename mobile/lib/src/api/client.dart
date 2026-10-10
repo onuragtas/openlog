@@ -564,6 +564,41 @@ class OpenlogClient {
         ),
       );
 
+  /// Entry spans of one service, with the web's filters.
+  ///
+  /// `attr.<key>=<value>` pairs are passed through as the server names them;
+  /// at most ten, which is the server's limit too.
+  Future<ApmTracePage> apmTraces({
+    required String service,
+    String transaction = '',
+    String minDurationMs = '',
+    String maxDurationMs = '',
+    bool errorsOnly = false,
+    String sort = 'timestamp',
+    Map<String, String> attributes = const {},
+    int limit = 50,
+  }) async => ApmTracePage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/traces',
+        '',
+        extra: {
+          'service': service,
+          if (transaction.isNotEmpty) 'transaction': transaction,
+          if (minDurationMs.isNotEmpty) 'min_duration_ms': minDurationMs,
+          if (maxDurationMs.isNotEmpty) 'max_duration_ms': maxDurationMs,
+          // Only when it is on: `error=false` asks for the traces that did
+          // not fail, which is not what an unchecked box means.
+          if (errorsOnly) 'error': 'true',
+          'sort': sort,
+          'limit': '$limit',
+          for (final e in attributes.entries) 'attr.${e.key}': e.value,
+        },
+      ),
+    ),
+  );
+
   /// Which language agent each service runs, and how far behind it is.
   ///
   /// `upgrade=false`: the upgrade commands make the server check package

@@ -6,9 +6,11 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
 import '../sections.dart';
+import '../services.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'service_traces_tab.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 import 'theme.dart';
@@ -34,6 +36,7 @@ class _ServiceScreenState extends State<ServiceScreen>
     with SingleTickerProviderStateMixin {
   late final ServiceOverviewController _c;
   late final ServiceErrorsController _errors;
+  late final ServiceTracesController _traces;
   late final TabController _tabs;
 
   @override
@@ -41,23 +44,28 @@ class _ServiceScreenState extends State<ServiceScreen>
     super.initState();
     _c = widget.sections.serviceOverview(widget.serviceName);
     _errors = widget.sections.serviceErrors(widget.serviceName);
-    _tabs = TabController(length: 2, vsync: this)..addListener(_loadErrors);
+    _traces = widget.sections.serviceTraces(widget.serviceName);
+    _tabs = TabController(length: 3, vsync: this)..addListener(_loadTab);
     WidgetsBinding.instance.addPostFrameCallback((_) => _c.refresh());
   }
 
-  /// The inbox is asked for the first time the tab is looked at. Both tabs are
-  /// built at once by TabBarView, so building is not the signal -- the web does
-  /// not fetch the error inbox of a service nobody opened the tab of either.
-  void _loadErrors() {
+  /// A tab is asked for the first time it is looked at. Every tab is built at
+  /// once by TabBarView, so building is not the signal -- the web does not
+  /// fetch the error inbox of a service nobody opened the tab of either.
+  void _loadTab() {
     if (_tabs.index == 1 && !_errors.loaded && !_errors.loadingFirst) {
       _errors.refresh();
+    }
+    if (_tabs.index == 2 && !_traces.loaded && !_traces.loadingFirst) {
+      _traces.refresh();
     }
   }
 
   @override
   void dispose() {
-    _tabs.removeListener(_loadErrors);
+    _tabs.removeListener(_loadTab);
     _tabs.dispose();
+    _traces.dispose();
     _errors.dispose();
     _c.dispose();
     super.dispose();
@@ -76,6 +84,7 @@ class _ServiceScreenState extends State<ServiceScreen>
           tabs: [
             Tab(key: const Key('tab-overview'), text: l.serviceTabOverview),
             Tab(key: const Key('tab-errors'), text: l.serviceTabErrors),
+            Tab(key: const Key('tab-traces'), text: l.serviceTabTraces),
           ],
         ),
       ),
@@ -97,6 +106,11 @@ class _ServiceScreenState extends State<ServiceScreen>
               baseUrl: baseUrl,
               builder: (context, inbox) => _errorList(context, l, inbox),
             ),
+          ),
+          ServiceTracesTab(
+            session: widget.session,
+            sections: widget.sections,
+            controller: _traces,
           ),
         ],
       ),

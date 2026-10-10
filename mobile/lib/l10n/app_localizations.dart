@@ -3294,6 +3294,60 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Agent versions'**
   String get servicesAgents;
+
+  /// No description provided for @tracesFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get tracesFilters;
+
+  /// No description provided for @tracesTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction'**
+  String get tracesTransaction;
+
+  /// No description provided for @tracesMinMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Min ms'**
+  String get tracesMinMs;
+
+  /// No description provided for @tracesMaxMs.
+  ///
+  /// In en, this message translates to:
+  /// **'Max ms'**
+  String get tracesMaxMs;
+
+  /// No description provided for @tracesAttributes.
+  ///
+  /// In en, this message translates to:
+  /// **'Attributes'**
+  String get tracesAttributes;
+
+  /// No description provided for @tracesAttributesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'key=value, separated by spaces; at most 10.'**
+  String get tracesAttributesHint;
+
+  /// No description provided for @tracesErrorsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors only'**
+  String get tracesErrorsOnly;
+
+  /// No description provided for @tracesSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get tracesSearch;
+
+  /// No description provided for @serviceTabTraces.
+  ///
+  /// In en, this message translates to:
+  /// **'Traces'**
+  String get serviceTabTraces;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

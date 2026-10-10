@@ -1827,4 +1827,32 @@ class LTr extends L {
 
   @override
   String get servicesAgents => 'Ajan sürümleri';
+
+  @override
+  String get tracesFilters => 'Süzgeçler';
+
+  @override
+  String get tracesTransaction => 'İşlem';
+
+  @override
+  String get tracesMinMs => 'En az ms';
+
+  @override
+  String get tracesMaxMs => 'En çok ms';
+
+  @override
+  String get tracesAttributes => 'Öznitelikler';
+
+  @override
+  String get tracesAttributesHint =>
+      'anahtar=değer, boşlukla ayrılmış; en fazla 10 tane.';
+
+  @override
+  String get tracesErrorsOnly => 'Yalnızca hatalılar';
+
+  @override
+  String get tracesSearch => 'Ara';
+
+  @override
+  String get serviceTabTraces => 'İzler';
 }

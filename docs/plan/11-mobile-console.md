@@ -406,7 +406,8 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
       geride olanlar üstte, arama ve "yalnızca geride olanlar". Yükseltme komutları webde
       (`upgrade=true` sunucuya her servis için paket deposu sorgulatıyor).
 - [ ] Örnekleme ayarları (`apm/sampling`, `.../preview`)
-- [ ] Servis izleri (`apm/traces`)
+- [x] Servis izleri (`apm/traces`): servis ekranında üçüncü sekme; işlem, en az/en çok süre,
+      öznitelik (`attr.k=v`), yalnızca hatalılar ve sıralama süzgeçleriyle.
 
 ### 9.3 Organizasyon ve hesap
 - [ ] Üyeler (`members`), davetler (`invitations`, `.../accept`, `.../lookup`)

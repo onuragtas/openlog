@@ -1832,4 +1832,32 @@ class LEn extends L {
 
   @override
   String get servicesAgents => 'Agent versions';
+
+  @override
+  String get tracesFilters => 'Filters';
+
+  @override
+  String get tracesTransaction => 'Transaction';
+
+  @override
+  String get tracesMinMs => 'Min ms';
+
+  @override
+  String get tracesMaxMs => 'Max ms';
+
+  @override
+  String get tracesAttributes => 'Attributes';
+
+  @override
+  String get tracesAttributesHint =>
+      'key=value, separated by spaces; at most 10.';
+
+  @override
+  String get tracesErrorsOnly => 'Errors only';
+
+  @override
+  String get tracesSearch => 'Search';
+
+  @override
+  String get serviceTabTraces => 'Traces';
 }

@@ -1223,5 +1223,14 @@
       }
     }
   },
-  "servicesAgents": "Agent versions"
+  "servicesAgents": "Agent versions",
+  "tracesFilters": "Filters",
+  "tracesTransaction": "Transaction",
+  "tracesMinMs": "Min ms",
+  "tracesMaxMs": "Max ms",
+  "tracesAttributes": "Attributes",
+  "tracesAttributesHint": "key=value, separated by spaces; at most 10.",
+  "tracesErrorsOnly": "Errors only",
+  "tracesSearch": "Search",
+  "serviceTabTraces": "Traces"
 }

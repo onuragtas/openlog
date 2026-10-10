@@ -8664,6 +8664,33 @@ class ApmAgentsResponse {
   final List<ApmServiceAgents> services;
 }
 
+/// `ApmTracePage` of the openlog API contract.
+class ApmTracePage {
+  const ApmTracePage({required this.traces});
+
+  factory ApmTracePage.fromJson(Object? json, [String path = 'ApmTracePage']) {
+    final m = _obj(json, path);
+    return ApmTracePage(
+      traces: _req(
+        m,
+        'traces',
+        path,
+        (v, p) => _list<ApmTraceResult>(
+          v,
+          p,
+          (v, p) => ApmTraceResult.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'traces': [for (final e in traces) e.toJson()],
+  };
+
+  final List<ApmTraceResult> traces;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -9467,6 +9494,69 @@ class ApmServiceAgents {
   final String environment;
   final ApmAgentStatus status;
   final List<ApmServiceAgent> agents;
+}
+
+/// `ApmTraceResult` of the openlog API contract.
+class ApmTraceResult {
+  const ApmTraceResult({
+    required this.traceId,
+    required this.spanId,
+    required this.timestamp,
+    required this.durationMs,
+    required this.isError,
+    required this.httpStatusCode,
+    required this.serviceName,
+    required this.transactionName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.transactionType,
+  });
+
+  factory ApmTraceResult.fromJson(
+    Object? json, [
+    String path = 'ApmTraceResult',
+  ]) {
+    final m = _obj(json, path);
+    return ApmTraceResult(
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      timestamp: _req(m, 'timestamp', path, _time),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      isError: _req(m, 'is_error', path, _bool),
+      httpStatusCode: _req(m, 'http_status_code', path, _int),
+      serviceName: _req(m, 'service_name', path, _str),
+      transactionName: _req(m, 'transaction_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      transactionType: _req(m, 'transaction_type', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'trace_id': traceId,
+    'span_id': spanId,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'duration_ms': durationMs,
+    'is_error': isError,
+    'http_status_code': httpStatusCode,
+    'service_name': serviceName,
+    'transaction_name': transactionName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'transaction_type': transactionType,
+  };
+
+  final String traceId;
+  final String spanId;
+  final DateTime timestamp;
+  final double durationMs;
+  final bool isError;
+  final int httpStatusCode;
+  final String serviceName;
+  final String transactionName;
+  final String serviceNamespace;
+  final String environment;
+  final String transactionType;
 }
 
 /// `LogRecord` of the openlog API contract.
