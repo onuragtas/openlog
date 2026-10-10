@@ -559,6 +559,24 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Testler bu hatayı neden yakalamadı: sahte sunucu her yola aynı cevabı veriyor,
       yani testler "istemci ne gönderdi"yi doğruluyordu, "sunucu ne kabul eder"i değil.
       Artık log testleri yolu ve POST gövdesini birlikte tutuyor.
+- [x] Log kaydının ayrıntısı (webin yan paneli): satıra dokununca kayıt bir ekran
+      olarak açılıyor -- telefonun yanı yok. İçerik webin kendisi: üstte zaman, önem,
+      servis ve host; mesaj seçilebilir ve kopyalanabilir; iz varsa "İzi aç"; altında
+      **Alanlar** ve **JSON** sekmeleri. Alan listesi webin `recordFields`'i
+      (`log_fields.dart`): satır alanları, sonra öznitelikler ve kaynak öznitelikleri
+      ada göre, sonra gövde JSON ise onun anahtarları (`body.*`). Her alanın menüsünde
+      webdeki üç eylem: bu değere göre süz, bu değeri hariç tut, kopyala. Süzme
+      koşulu listeye ekleyip ekranı kapatıyor (webde panel listenin yanında açık
+      kalır; telefonda değiştirdiği listenin üstünü örterdi).
+      Sayısal anahtar sayı olarak gidiyor: `severity_number = "17"` ile `= 17`
+      ClickHouse'a aynı soru değil. Bu yüzden `Filter` artık değerin sayı olup
+      olmadığını da taşıyor ve bir görünümden okunan sayı geri yazılırken sayı
+      kalıyor.
+      1024 bayttan uzun bir değer süzgeçte kullanılamıyor (sunucunun sınırı) ve
+      bunu gönderip 400 almak yerine söylüyor.
+      Bu sırada düzeltilen: `fontFamily: 'monospace'` iOS'ta diye bir aile olmadığı
+      için sessizce varsayılan fonta düşüyordu; artık `mono()` ve `monoFamilies`
+      (theme.dart) -- takvim listesinin daha önce düştüğü tuzağın aynısı.
 - [x] OQL şema ve doğrulama (`query/schema`, `query/validate`): konsol artık webin
       konsolu — yazarken doğrulama (yazmayı bırakınca sorulur, hata ve uyarılar satır
       ve sütunuyla kutunun altında, kutunun çerçevesi kırmızı), webin altı örneği aynı

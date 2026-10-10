@@ -187,7 +187,9 @@ void main() {
     expect(state['filters'], [
       {'key': 'service.name', 'op': '=', 'value': 'checkout'},
       {'key': 'service.name', 'op': '=', 'value': 'api'},
-      {'key': 'severity_number', 'op': '>=', 'value': '13'},
+      // A number, as a browser writes it: `severity_number = "13"` and
+      // `= 13` are different questions to ClickHouse.
+      {'key': 'severity_number', 'op': '>=', 'value': 13},
     ]);
   });
 

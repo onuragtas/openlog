@@ -215,7 +215,7 @@
   },
   "serviceTabOverview": "Genel bakış",
   "serviceTabErrors": "Hatalar",
-  "errorsEmpty": "Bu aralıkta hiçbir şey hata vermedi.",
+  "errorsEmpty": "Bu süzgeçle hata yok.",
   "errorsOccurrences": "{count} kez",
   "@errorsOccurrences": {
     "placeholders": {
@@ -237,7 +237,7 @@
   "errorStatusIgnored": "Yoksayıldı",
   "errorStatusUnknown": "Bilinmeyen durum",
   "errorsNoTrace": "Bu hata için iz saklanmamış.",
-  "errorsTruncated": "Daha fazlası var; bu listenin başı.",
+  "errorsTruncated": "Eşleşen grupların tamamı değil; süzgeci daraltın.",
   "traceTitle": "İz",
   "traceSpans": "{count} span",
   "@traceSpans": {
@@ -1029,8 +1029,6 @@
   "errorsResolved": "Çözüldü",
   "errorsIgnored": "Yoksayıldı",
   "errorsRegressed": "Geri geldi",
-  "errorsEmpty": "Bu süzgeçle hata yok.",
-  "errorsTruncated": "Eşleşen grupların tamamı değil; süzgeci daraltın.",
   "errorsNoWorkflow": "Bu kurulumda hata iş akışı yok (PostgreSQL gerekir); her grup açık görünür.",
   "errorsCount": "{count} kez",
   "@errorsCount": {
@@ -1053,14 +1051,6 @@
   },
   "errorsFirstSeen": "ilk {when}",
   "@errorsFirstSeen": {
-    "placeholders": {
-      "when": {
-        "type": "String"
-      }
-    }
-  },
-  "errorsLastSeen": "son {when}",
-  "@errorsLastSeen": {
     "placeholders": {
       "when": {
         "type": "String"
@@ -1860,29 +1850,29 @@
   "savedViewOverwrite": "Üzerine yaz",
   "savedViewOverwriteHint": "Ekrandaki filtreleri {name} görünümüne kaydet",
   "@savedViewOverwriteHint": {
-      "placeholders": {
-          "name": {
-              "type": "String"
-          }
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
+    }
   },
   "savedViewDelete": "Sil",
   "savedViewDeleteConfirm": "Silinsin mi?",
   "savedViewApplied": "{name} uygulandı",
   "@savedViewApplied": {
-      "placeholders": {
-          "name": {
-              "type": "String"
-          }
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
+    }
   },
   "savedViewGroupsIgnored": "Bu görünümün {count} VEYA grubu telefonda gösterilemiyor; liste yalnızca VE koşullarıyla süzüldü.",
   "@savedViewGroupsIgnored": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "savedViewAllSpans": "Bu görünüm tüm span'leri istiyor; telefon her izin yalnızca kök span'ini listeler.",
   "viewsFull": "Organizasyonun kayıtlı görünüm sayısı sınırda (500). Kaydetmek için önce birini silin.",
@@ -1939,17 +1929,17 @@
   "queryProblems": "Sorgu sorunları",
   "queryProblem": "Satır {line}, sütun {column}: {message}",
   "@queryProblem": {
-      "placeholders": {
-          "line": {
-              "type": "int"
-          },
-          "column": {
-              "type": "int"
-          },
-          "message": {
-              "type": "String"
-          }
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "column": {
+        "type": "int"
+      },
+      "message": {
+        "type": "String"
       }
+    }
   },
   "queryError": "Hata",
   "queryWarning": "Uyarı",
@@ -1969,27 +1959,27 @@
   "flameZoom": "yakınlaş",
   "flameShareOfAll": "profilin %{share}'i",
   "@flameShareOfAll": {
-      "placeholders": {
-          "share": {
-              "type": "String"
-          }
+    "placeholders": {
+      "share": {
+        "type": "String"
       }
+    }
   },
   "flameTooNarrow": "{count} çerçeve bu genişlikte çizilemeyecek kadar dar; görmek için üstündeki bloğa dokunun.",
   "@flameTooNarrow": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "savedViewKept": "“{name}” kaydedildi",
   "@savedViewKept": {
-      "placeholders": {
-          "name": {
-              "type": "String"
-          }
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
+    }
   },
   "k8sTabOverview": "Genel bakış",
   "k8sTabWorkloads": "İş yükleri",
@@ -2014,52 +2004,52 @@
   "k8sWorkloadsUnhealthy": "Sorunlu iş yükü",
   "k8sOfTotal": "toplam {count} içinde",
   "@k8sOfTotal": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sRunning": "{count} çalışıyor",
   "@k8sRunning": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sCpu": "CPU",
   "k8sMemory": "Bellek",
   "k8sOfAllocatable": "{value} içinde %{ratio}",
   "@k8sOfAllocatable": {
-      "placeholders": {
-          "value": {
-              "type": "String"
-          },
-          "ratio": {
-              "type": "int"
-          }
+    "placeholders": {
+      "value": {
+        "type": "String"
+      },
+      "ratio": {
+        "type": "int"
       }
+    }
   },
   "k8sWorkloadsByKind": "Türüne göre iş yükleri",
   "k8sNoWorkloads": "Bu aralıkta iş yükü yok.",
   "k8sUnhealthyCount": "{count} sorunlu",
   "@k8sUnhealthyCount": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sWarningEvents": "Uyarı olayları",
   "k8sNoWarnings": "Bu aralıkta uyarı olayı yok.",
   "k8sEventCount": "×{count}",
   "@k8sEventCount": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sNodes": "Düğümler",
   "k8sAllNodes": "Tümü",
@@ -2075,14 +2065,14 @@
   "k8sNodeSearch": "Düğüm ara",
   "k8sShown": "{total} eşleşmenin {shown} tanesi",
   "@k8sShown": {
-      "placeholders": {
-          "shown": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          }
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
       }
+    }
   },
   "k8sCpuTrend": "CPU",
   "dbTabActivity": "Etkinlik",
@@ -2109,30 +2099,30 @@
   "dbErrors": "Hata",
   "dbPerSecond": "{value}/sn",
   "@dbPerSecond": {
-      "placeholders": {
-          "value": {
-              "type": "String"
-          }
+    "placeholders": {
+      "value": {
+        "type": "String"
       }
+    }
   },
   "dbNoSessions": "Şu anda açık oturum yok.",
   "dbSampledAt": "Örnek alındı: {when}",
   "@dbSampledAt": {
-      "placeholders": {
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "when": {
+        "type": "String"
       }
+    }
   },
   "dbBlocking": "Engelleyen oturumlar",
   "dbSessions": "Oturumlar",
   "dbBlocks": "{count} oturumu engelliyor",
   "@dbBlocks": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "dbQueryTitle": "İfade",
   "dbQueryCost": "Maliyet",
@@ -2158,25 +2148,25 @@
   "containersUngrouped": "Tek başına",
   "containersRunning": "{running}/{count} çalışıyor",
   "@containersRunning": {
-      "placeholders": {
-          "running": {
-              "type": "int"
-          },
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "running": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
       }
+    }
   },
   "containersShown": "{total} konteynerin {shown} tanesi",
   "@containersShown": {
-      "placeholders": {
-          "shown": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          }
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
       }
+    }
   },
   "costsServices": "Servisler",
   "costsBuckets": "Dağılım",
@@ -2194,11 +2184,11 @@
   "costsByService": "Servis bazında",
   "costsContainers": "{count} konteyner",
   "@costsContainers": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudTitle": "Bulut bağlantıları",
   "cloudOpen": "Bulut bağlantıları",
@@ -2216,102 +2206,102 @@
   "cloudCollected": "Toplanan",
   "cloudCollectedN": "{count} veri noktası",
   "@cloudCollectedN": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudApiCalls": "{count} API çağrısı",
   "@cloudApiCalls": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudThrottled": "{count} kez kısıtlandı",
   "@cloudThrottled": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudNext": "sonraki {when}",
   "@cloudNext": {
-      "placeholders": {
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "when": {
+        "type": "String"
       }
+    }
   },
   "cloudConsecutiveErrors": "Üst üste {count} hata; bir sonraki yoklama ertelendi.",
   "@cloudConsecutiveErrors": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudRegions": "{count} bölge",
   "@cloudRegions": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudSubscriptions": "{count} abonelik",
   "@cloudSubscriptions": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudProjects": "{count} proje",
   "@cloudProjects": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudScopes": "{count} kapsam",
   "@cloudScopes": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudServices": "{count} servis",
   "@cloudServices": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudEvery": "{minutes} dakikada bir",
   "@cloudEvery": {
-      "placeholders": {
-          "minutes": {
-              "type": "int"
-          }
+    "placeholders": {
+      "minutes": {
+        "type": "int"
       }
+    }
   },
   "cloudCaps": "yoklama başına en çok {metrics} metrik, {calls} çağrı",
   "@cloudCaps": {
-      "placeholders": {
-          "metrics": {
-              "type": "int"
-          },
-          "calls": {
-              "type": "int"
-          }
+    "placeholders": {
+      "metrics": {
+        "type": "int"
+      },
+      "calls": {
+        "type": "int"
       }
+    }
   },
   "cloudRuns": "Son yoklamalar",
   "cloudNoRuns": "Henüz yoklama yok.",
@@ -2325,30 +2315,30 @@
   "fleetConfirmDeployNow": "Son dalgaya geç",
   "fleetRollback": "{version} sürümüne dön",
   "@fleetRollback": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetConfirmRollback": "Geri al",
   "fleetHistory": "Önceki dağıtımlar",
   "fleetRolloutPatch": "Yama dağıtımı",
   "fleetRolloutUpgrade": "{version} sürümüne yükseltme",
   "@fleetRolloutUpgrade": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetRolloutRollback": "{version} sürümüne dönüş",
   "@fleetRolloutRollback": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetRolloutActive": "Sürüyor",
   "fleetRolloutPaused": "Duraklatıldı",
@@ -2357,49 +2347,49 @@
   "fleetRolloutSuperseded": "Yerine yenisi geçti",
   "fleetWave": "{wave}/{total}. dalga · filonun %{percent}'i",
   "@fleetWave": {
-      "placeholders": {
-          "wave": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          },
-          "percent": {
-              "type": "int"
-          }
+    "placeholders": {
+      "wave": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
       }
+    }
   },
   "fleetSucceeded": "{count} başarılı",
   "@fleetSucceeded": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetFailedCount": "{count} başarısız",
   "@fleetFailedCount": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetPending": "{count} bekliyor",
   "@fleetPending": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetNextWave": "sonraki dalga {when}",
   "@fleetNextWave": {
-      "placeholders": {
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "when": {
+        "type": "String"
       }
+    }
   },
   "fleetPolicy": "Güncelleme politikası",
   "fleetModeOff": "Kapalı",
@@ -2407,43 +2397,43 @@
   "fleetModeAuto": "Otomatik",
   "fleetPinned": "{version} sürümüne sabit",
   "@fleetPinned": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetWaves": "dalgalar: {waves}%",
   "@fleetWaves": {
-      "placeholders": {
-          "waves": {
-              "type": "String"
-          }
+    "placeholders": {
+      "waves": {
+        "type": "String"
       }
+    }
   },
   "fleetSoak": "{minutes} dk bekleme",
   "@fleetSoak": {
-      "placeholders": {
-          "minutes": {
-              "type": "int"
-          }
+    "placeholders": {
+      "minutes": {
+        "type": "int"
       }
+    }
   },
   "fleetHalt": "%{percent} hatada durur",
   "@fleetHalt": {
-      "placeholders": {
-          "percent": {
-              "type": "int"
-          }
+    "placeholders": {
+      "percent": {
+        "type": "int"
       }
+    }
   },
   "fleetWindows": "{count} bakım penceresi",
   "@fleetWindows": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetPolicyOnWeb": "Dalgalar, pencereler ve ajan sürümleri webde düzenlenir.",
   "fleetForbidden": "Filoyu yönetmek için yönetici olmanız gerekir.",
@@ -2461,34 +2451,34 @@
   "integRemoteOff": "Bu ajanda uzaktan yapılandırma kapalı; buradan kaydedilen ayar uygulanmaz.",
   "integrationConflict": "Bu kapsam için zaten bir ayar var: {message}",
   "@integrationConflict": {
-      "placeholders": {
-          "message": {
-              "type": "String"
-          }
+    "placeholders": {
+      "message": {
+        "type": "String"
       }
+    }
   },
   "storageShedOn": "Yer açmak için eski veri siliniyor: %{start} üstünde başlar, %{stop} altında durur.",
   "@storageShedOn": {
-      "placeholders": {
-          "start": {
-              "type": "int"
-          },
-          "stop": {
-              "type": "int"
-          }
+    "placeholders": {
+      "start": {
+        "type": "int"
+      },
+      "stop": {
+        "type": "int"
       }
+    }
   },
   "storageShedOff": "Yer açmak için veri silinmiyor.",
   "storageConfiguredBy": "Seviyeleri {who} ayarladı ({when}).",
   "@storageConfiguredBy": {
-      "placeholders": {
-          "who": {
-              "type": "String"
-          },
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
       }
+    }
   },
   "storageLevelsOnWeb": "Seviyeler webde değiştirilir.",
   "savedViewNothingToApply": "Bu görünümde bu ekranın uygulayabileceği bir koşul yok.",
@@ -2511,5 +2501,29 @@
   "refreshNow": "Şimdi yenile",
   "refreshAuto": "Otomatik yenileme",
   "refreshAutoFixedWindow": "Sabit aralıkta otomatik yenileme kapalı",
-  "refreshOff": "Kapalı"
+  "refreshOff": "Kapalı",
+  "logDetailTitle": "Log ayrıntıları",
+  "logDetailFields": "Alanlar",
+  "logDetailJson": "JSON",
+  "logDetailSearch": "Alanları filtrele…",
+  "logDetailNoFields": "Eşleşen alan yok",
+  "logDetailBody": "Mesaj",
+  "logDetailFilterIn": "Bu değere göre filtrele",
+  "logDetailFilterOut": "Bu değeri hariç tut",
+  "logDetailCopy": "Değeri kopyala",
+  "logDetailCopied": "Kopyalandı",
+  "logDetailCopyBody": "Mesajı kopyala",
+  "logDetailCopyJson": "Kaydı kopyala",
+  "logDetailFilterAdded": "Koşul eklendi: {label}",
+  "logDetailValueTooLong": "1024 bayttan uzun bir değer filtrede kullanılamaz.",
+  "logOpenTrace": "İzi aç",
+  "logOpenSpan": "Span'i aç",
+  "logsNoSeverity": "önem yok",
+  "@logDetailFilterAdded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -294,7 +294,7 @@ void main() {
     final state = views.created.single['state'] as Map<String, Object?>;
     expect(state['q'], 'timeout');
     expect(state['filters'], [
-      {'key': 'severity_number', 'op': '>=', 'value': '13'},
+      {'key': 'severity_number', 'op': '>=', 'value': 13},
     ]);
     // Saving closes the sheet, says it was kept, and names it on the
     // button -- the sheet closing on its own would look the same whether

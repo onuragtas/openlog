@@ -286,3 +286,17 @@ ThemeData openlogTheme(Brightness brightness) {
 /// The tokens of the theme in scope.
 AppColors colorsOf(BuildContext context) =>
     Theme.of(context).extension<AppColors>() ?? AppColors.light;
+
+/// The families to try for text that has to line up: a log body, a JSON
+/// document, an attribute value.
+///
+/// Not `fontFamily: 'monospace'`: there is no font by that name on iOS, so
+/// asking for one silently gets the default font on half the devices (the
+/// same trap the holiday calendar list fell into). `Menlo` is Apple's,
+/// `Roboto Mono` and `monospace` are Android's, and the list is tried in
+/// order.
+const monoFamilies = ['Menlo', 'Roboto Mono', 'monospace', 'Courier New'];
+
+/// A monospaced version of [style].
+TextStyle? mono(TextStyle? style) =>
+    style?.copyWith(fontFamilyFallback: monoFamilies);

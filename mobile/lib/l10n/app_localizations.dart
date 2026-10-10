@@ -7032,6 +7032,108 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Off'**
   String get refreshOff;
+
+  /// No description provided for @logDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log details'**
+  String get logDetailTitle;
+
+  /// No description provided for @logDetailFields.
+  ///
+  /// In en, this message translates to:
+  /// **'Fields'**
+  String get logDetailFields;
+
+  /// No description provided for @logDetailJson.
+  ///
+  /// In en, this message translates to:
+  /// **'JSON'**
+  String get logDetailJson;
+
+  /// No description provided for @logDetailSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter fields…'**
+  String get logDetailSearch;
+
+  /// No description provided for @logDetailNoFields.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching field'**
+  String get logDetailNoFields;
+
+  /// No description provided for @logDetailBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get logDetailBody;
+
+  /// No description provided for @logDetailFilterIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter for this value'**
+  String get logDetailFilterIn;
+
+  /// No description provided for @logDetailFilterOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude this value'**
+  String get logDetailFilterOut;
+
+  /// No description provided for @logDetailCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy value'**
+  String get logDetailCopy;
+
+  /// No description provided for @logDetailCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get logDetailCopied;
+
+  /// No description provided for @logDetailCopyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the message'**
+  String get logDetailCopyBody;
+
+  /// No description provided for @logDetailCopyJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy the record'**
+  String get logDetailCopyJson;
+
+  /// No description provided for @logDetailFilterAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition added: {label}'**
+  String logDetailFilterAdded(String label);
+
+  /// No description provided for @logDetailValueTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'A value longer than 1024 bytes cannot be used in a filter.'**
+  String get logDetailValueTooLong;
+
+  /// No description provided for @logOpenTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the trace'**
+  String get logOpenTrace;
+
+  /// No description provided for @logOpenSpan.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the span'**
+  String get logOpenSpan;
+
+  /// No description provided for @logsNoSeverity.
+  ///
+  /// In en, this message translates to:
+  /// **'no severity'**
+  String get logsNoSeverity;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

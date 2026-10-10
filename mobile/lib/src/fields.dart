@@ -46,7 +46,12 @@ const _multiValueOps = {'in', 'not_in'};
 
 /// One condition, in the shape the server's `filters` parameter takes.
 class Filter {
-  const Filter({required this.key, required this.op, this.values = const []});
+  const Filter({
+    required this.key,
+    required this.op,
+    this.values = const [],
+    this.numeric = false,
+  });
 
   /// Reads one out of a saved view's state, which is somebody else's JSON.
   ///
@@ -80,11 +85,15 @@ class Filter {
     final raw = json['values'] ?? json['value'];
     // Numbers and booleans come back as text, which is what the server does
     // with them too: it reads every scalar as its text before building SQL.
+    // Whether they arrived as numbers is remembered, so writing the view
+    // back produces the same JSON a browser would have written.
     final values = <String>[];
+    var numeric = raw is num;
     for (final v in raw is List ? raw : [raw]) {
       if (v is String) {
         values.add(v);
       } else if (v is num || v is bool) {
+        numeric = numeric || v is num;
         values.add('$v');
       } else {
         return null;
@@ -92,7 +101,7 @@ class Filter {
     }
     if (values.isEmpty || values.length > 100) return null;
     if (!_multiValueOps.contains(op) && values.length != 1) return null;
-    return Filter(key: key, op: op, values: values);
+    return Filter(key: key, op: op, values: values, numeric: numeric);
   }
 
   final String key;
@@ -103,14 +112,23 @@ class Filter {
   /// Empty for `exists` and `not_exists`, one for `=`, several for `in`.
   final List<String> values;
 
+  /// The values are numbers and go on the wire as numbers.
+  ///
+  /// `severity_number = "17"` and `severity_number = 17` are not the same
+  /// question to ClickHouse, and the first one is the one that answers
+  /// nothing. The web decides this from the key's type; so does this.
+  final bool numeric;
+
   Map<String, Object?> toJson() => {
     'key': key,
     'op': op,
     if (values.length == 1 && !_multiValueOps.contains(op))
-      'value': values.first
+      'value': _wire(values.first)
     else if (values.isNotEmpty)
-      'values': values,
+      'values': [for (final v in values) _wire(v)],
   };
+
+  Object _wire(String v) => numeric ? (num.tryParse(v) ?? v) : v;
 
   /// What the chip says.
   String get label => switch (op) {

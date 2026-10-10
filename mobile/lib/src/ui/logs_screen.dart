@@ -17,6 +17,7 @@ import 'log_patterns_body.dart';
 import 'saved_views_sheet.dart';
 import 'volume_chart.dart';
 import 'list_scaffold.dart';
+import 'log_detail_screen.dart';
 import 'severity.dart';
 
 /// The levels worth filtering by on a phone. Everything below WARN is noise at
@@ -278,16 +279,33 @@ class _LogsBodyState extends State<LogsBody>
           ],
         ),
         emptyTitle: c.scoped ? l.logsEmptyScoped : l.logsEmpty,
-        itemBuilder: (context, i) => _LogTile(record: c.items[i]),
+        itemBuilder: (context, i) => _LogTile(
+          record: c.items[i],
+          onOpen: () => openLogDetail(
+            context,
+            session: widget.session,
+            sections: widget.sections,
+            record: c.items[i],
+            onFilter: (filter) {
+              c.filters = [...c.filters, filter];
+              c.refresh();
+              if (widget.scopeLabel == null) _reloadVolume();
+              if (widget.patterns.loaded) _reloadPatterns();
+            },
+          ),
+        ),
       ),
     );
   }
 }
 
 class _LogTile extends StatelessWidget {
-  const _LogTile({required this.record});
+  const _LogTile({required this.record, required this.onOpen});
 
   final LogQueryRow record;
+
+  /// The whole record, with its attributes and what can be filtered by.
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -299,52 +317,56 @@ class _LogTile extends StatelessWidget {
       severityOfNumber(record.severityNumber),
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                record.severityText.isEmpty
-                    ? '${record.severityNumber}'
-                    : record.severityText,
-                style: text.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
+    return InkWell(
+      key: Key('log-${record.id}'),
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  record.severityText.isEmpty
+                      ? '${record.severityNumber}'
+                      : record.severityText,
+                  style: text.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  record.serviceName.isEmpty
-                      ? l.logsNoService
-                      : record.serviceName,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    record.serviceName.isEmpty
+                        ? l.logsNoService
+                        : record.serviceName,
+                    style: text.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Text(
+                  relativeTimeOf(l, record.timestamp),
                   style: text.labelSmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
-              ),
-              Text(
-                relativeTimeOf(l, record.timestamp),
-                style: text.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          // Four lines, then cut: a log body can be a whole stack trace, and
-          // one of them must not push the next nine records off the screen.
-          Text(
-            record.body,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: text.bodyMedium,
-          ),
-          const Divider(height: 16),
-        ],
+              ],
+            ),
+            const SizedBox(height: 2),
+            // Four lines, then cut: a log body can be a whole stack trace, and
+            // one of them must not push the next nine records off the screen.
+            Text(
+              record.body,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodyMedium,
+            ),
+            const Divider(height: 16),
+          ],
+        ),
       ),
     );
   }

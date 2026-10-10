@@ -312,7 +312,7 @@
   },
   "serviceTabOverview": "Overview",
   "serviceTabErrors": "Errors",
-  "errorsEmpty": "Nothing has thrown in the window.",
+  "errorsEmpty": "No errors with this filter.",
   "errorsOccurrences": "{count} times",
   "@errorsOccurrences": {
     "placeholders": {
@@ -334,7 +334,7 @@
   "errorStatusIgnored": "Ignored",
   "errorStatusUnknown": "Unknown state",
   "errorsNoTrace": "No trace was kept for this error.",
-  "errorsTruncated": "There are more; this is the top of the list.",
+  "errorsTruncated": "Not every matching group; narrow the filter.",
   "traceTitle": "Trace",
   "traceSpans": "{count} spans",
   "@traceSpans": {
@@ -1126,8 +1126,6 @@
   "errorsResolved": "Resolved",
   "errorsIgnored": "Ignored",
   "errorsRegressed": "Regressed",
-  "errorsEmpty": "No errors with this filter.",
-  "errorsTruncated": "Not every matching group; narrow the filter.",
   "errorsNoWorkflow": "This installation has no error workflow (it needs PostgreSQL); every group reads as unresolved.",
   "errorsCount": "{count} times",
   "@errorsCount": {
@@ -1150,14 +1148,6 @@
   },
   "errorsFirstSeen": "first {when}",
   "@errorsFirstSeen": {
-    "placeholders": {
-      "when": {
-        "type": "String"
-      }
-    }
-  },
-  "errorsLastSeen": "last {when}",
-  "@errorsLastSeen": {
     "placeholders": {
       "when": {
         "type": "String"
@@ -1957,29 +1947,29 @@
   "savedViewOverwrite": "Overwrite",
   "savedViewOverwriteHint": "Save what is on screen into {name}",
   "@savedViewOverwriteHint": {
-      "placeholders": {
-          "name": {
-              "type": "String"
-          }
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
+    }
   },
   "savedViewDelete": "Delete",
   "savedViewDeleteConfirm": "Delete it?",
   "savedViewApplied": "{name} applied",
   "@savedViewApplied": {
-      "placeholders": {
-          "name": {
-              "type": "String"
-          }
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
+    }
   },
   "savedViewGroupsIgnored": "This view has {count} OR groups the phone cannot show; the list was filtered by its AND conditions only.",
   "@savedViewGroupsIgnored": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "savedViewAllSpans": "This view asks for every span; the phone lists only the root span of each trace.",
   "viewsFull": "The organization is at its limit of saved views (500). Delete one before saving another.",
@@ -2036,17 +2026,17 @@
   "queryProblems": "Query problems",
   "queryProblem": "Line {line}, column {column}: {message}",
   "@queryProblem": {
-      "placeholders": {
-          "line": {
-              "type": "int"
-          },
-          "column": {
-              "type": "int"
-          },
-          "message": {
-              "type": "String"
-          }
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "column": {
+        "type": "int"
+      },
+      "message": {
+        "type": "String"
       }
+    }
   },
   "queryError": "Error",
   "queryWarning": "Warning",
@@ -2066,27 +2056,27 @@
   "flameZoom": "zoom in",
   "flameShareOfAll": "{share}% of the profile",
   "@flameShareOfAll": {
-      "placeholders": {
-          "share": {
-              "type": "String"
-          }
+    "placeholders": {
+      "share": {
+        "type": "String"
       }
+    }
   },
   "flameTooNarrow": "{count} frames are too narrow to draw at this width; tap the block above them to see them.",
   "@flameTooNarrow": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "savedViewKept": "“{name}” saved",
   "@savedViewKept": {
-      "placeholders": {
-          "name": {
-              "type": "String"
-          }
+    "placeholders": {
+      "name": {
+        "type": "String"
       }
+    }
   },
   "k8sTabOverview": "Overview",
   "k8sTabWorkloads": "Workloads",
@@ -2111,52 +2101,52 @@
   "k8sWorkloadsUnhealthy": "Unhealthy workloads",
   "k8sOfTotal": "of {count}",
   "@k8sOfTotal": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sRunning": "{count} running",
   "@k8sRunning": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sCpu": "CPU",
   "k8sMemory": "Memory",
   "k8sOfAllocatable": "{ratio}% of {value}",
   "@k8sOfAllocatable": {
-      "placeholders": {
-          "value": {
-              "type": "String"
-          },
-          "ratio": {
-              "type": "int"
-          }
+    "placeholders": {
+      "value": {
+        "type": "String"
+      },
+      "ratio": {
+        "type": "int"
       }
+    }
   },
   "k8sWorkloadsByKind": "Workloads by kind",
   "k8sNoWorkloads": "No workloads in this range.",
   "k8sUnhealthyCount": "{count} unhealthy",
   "@k8sUnhealthyCount": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sWarningEvents": "Warning events",
   "k8sNoWarnings": "No warning events in this range.",
   "k8sEventCount": "×{count}",
   "@k8sEventCount": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "k8sNodes": "Nodes",
   "k8sAllNodes": "All",
@@ -2172,14 +2162,14 @@
   "k8sNodeSearch": "Search nodes",
   "k8sShown": "{shown} of {total} matches",
   "@k8sShown": {
-      "placeholders": {
-          "shown": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          }
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
       }
+    }
   },
   "k8sCpuTrend": "CPU",
   "dbTabActivity": "Activity",
@@ -2206,30 +2196,30 @@
   "dbErrors": "Errors",
   "dbPerSecond": "{value}/s",
   "@dbPerSecond": {
-      "placeholders": {
-          "value": {
-              "type": "String"
-          }
+    "placeholders": {
+      "value": {
+        "type": "String"
       }
+    }
   },
   "dbNoSessions": "No open sessions right now.",
   "dbSampledAt": "Sampled {when}",
   "@dbSampledAt": {
-      "placeholders": {
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "when": {
+        "type": "String"
       }
+    }
   },
   "dbBlocking": "Blocking sessions",
   "dbSessions": "Sessions",
   "dbBlocks": "blocks {count} sessions",
   "@dbBlocks": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "dbQueryTitle": "Statement",
   "dbQueryCost": "Cost",
@@ -2255,25 +2245,25 @@
   "containersUngrouped": "Standalone",
   "containersRunning": "{running}/{count} running",
   "@containersRunning": {
-      "placeholders": {
-          "running": {
-              "type": "int"
-          },
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "running": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
       }
+    }
   },
   "containersShown": "{shown} of {total} containers",
   "@containersShown": {
-      "placeholders": {
-          "shown": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          }
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
       }
+    }
   },
   "costsServices": "Services",
   "costsBuckets": "Breakdown",
@@ -2291,11 +2281,11 @@
   "costsByService": "By service",
   "costsContainers": "{count} containers",
   "@costsContainers": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudTitle": "Cloud connections",
   "cloudOpen": "Cloud connections",
@@ -2313,102 +2303,102 @@
   "cloudCollected": "Collected",
   "cloudCollectedN": "{count} data points",
   "@cloudCollectedN": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudApiCalls": "{count} API calls",
   "@cloudApiCalls": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudThrottled": "throttled {count} times",
   "@cloudThrottled": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudNext": "next {when}",
   "@cloudNext": {
-      "placeholders": {
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "when": {
+        "type": "String"
       }
+    }
   },
   "cloudConsecutiveErrors": "{count} failures in a row; the next poll is backed off.",
   "@cloudConsecutiveErrors": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudRegions": "{count} regions",
   "@cloudRegions": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudSubscriptions": "{count} subscriptions",
   "@cloudSubscriptions": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudProjects": "{count} projects",
   "@cloudProjects": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudScopes": "{count} scopes",
   "@cloudScopes": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudServices": "{count} services",
   "@cloudServices": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "cloudEvery": "every {minutes} minutes",
   "@cloudEvery": {
-      "placeholders": {
-          "minutes": {
-              "type": "int"
-          }
+    "placeholders": {
+      "minutes": {
+        "type": "int"
       }
+    }
   },
   "cloudCaps": "at most {metrics} metrics and {calls} calls per poll",
   "@cloudCaps": {
-      "placeholders": {
-          "metrics": {
-              "type": "int"
-          },
-          "calls": {
-              "type": "int"
-          }
+    "placeholders": {
+      "metrics": {
+        "type": "int"
+      },
+      "calls": {
+        "type": "int"
       }
+    }
   },
   "cloudRuns": "Recent polls",
   "cloudNoRuns": "No polls yet.",
@@ -2422,30 +2412,30 @@
   "fleetConfirmDeployNow": "Go to the last wave",
   "fleetRollback": "Roll back to {version}",
   "@fleetRollback": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetConfirmRollback": "Roll back",
   "fleetHistory": "Earlier rollouts",
   "fleetRolloutPatch": "Patch rollout",
   "fleetRolloutUpgrade": "Upgrade to {version}",
   "@fleetRolloutUpgrade": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetRolloutRollback": "Rollback to {version}",
   "@fleetRolloutRollback": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetRolloutActive": "Running",
   "fleetRolloutPaused": "Paused",
@@ -2454,49 +2444,49 @@
   "fleetRolloutSuperseded": "Superseded",
   "fleetWave": "wave {wave} of {total} · {percent}% of the fleet",
   "@fleetWave": {
-      "placeholders": {
-          "wave": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          },
-          "percent": {
-              "type": "int"
-          }
+    "placeholders": {
+      "wave": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
       }
+    }
   },
   "fleetSucceeded": "{count} succeeded",
   "@fleetSucceeded": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetFailedCount": "{count} failed",
   "@fleetFailedCount": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetPending": "{count} pending",
   "@fleetPending": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetNextWave": "next wave {when}",
   "@fleetNextWave": {
-      "placeholders": {
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "when": {
+        "type": "String"
       }
+    }
   },
   "fleetPolicy": "Update policy",
   "fleetModeOff": "Off",
@@ -2504,43 +2494,43 @@
   "fleetModeAuto": "Automatic",
   "fleetPinned": "pinned to {version}",
   "@fleetPinned": {
-      "placeholders": {
-          "version": {
-              "type": "String"
-          }
+    "placeholders": {
+      "version": {
+        "type": "String"
       }
+    }
   },
   "fleetWaves": "waves: {waves}%",
   "@fleetWaves": {
-      "placeholders": {
-          "waves": {
-              "type": "String"
-          }
+    "placeholders": {
+      "waves": {
+        "type": "String"
       }
+    }
   },
   "fleetSoak": "{minutes} min soak",
   "@fleetSoak": {
-      "placeholders": {
-          "minutes": {
-              "type": "int"
-          }
+    "placeholders": {
+      "minutes": {
+        "type": "int"
       }
+    }
   },
   "fleetHalt": "halts at {percent}% failures",
   "@fleetHalt": {
-      "placeholders": {
-          "percent": {
-              "type": "int"
-          }
+    "placeholders": {
+      "percent": {
+        "type": "int"
       }
+    }
   },
   "fleetWindows": "{count} maintenance windows",
   "@fleetWindows": {
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "fleetPolicyOnWeb": "Waves, windows and agent versions are edited on the web.",
   "fleetForbidden": "Managing the fleet needs an admin.",
@@ -2558,34 +2548,34 @@
   "integRemoteOff": "Remote configuration is off on this agent, so a setting saved here is not applied.",
   "integrationConflict": "A setting for this scope already exists: {message}",
   "@integrationConflict": {
-      "placeholders": {
-          "message": {
-              "type": "String"
-          }
+    "placeholders": {
+      "message": {
+        "type": "String"
       }
+    }
   },
   "storageShedOn": "Old data is deleted to make room: starts above {start}%, stops below {stop}%.",
   "@storageShedOn": {
-      "placeholders": {
-          "start": {
-              "type": "int"
-          },
-          "stop": {
-              "type": "int"
-          }
+    "placeholders": {
+      "start": {
+        "type": "int"
+      },
+      "stop": {
+        "type": "int"
       }
+    }
   },
   "storageShedOff": "No data is deleted to make room.",
   "storageConfiguredBy": "{who} set these levels ({when}).",
   "@storageConfiguredBy": {
-      "placeholders": {
-          "who": {
-              "type": "String"
-          },
-          "when": {
-              "type": "String"
-          }
+    "placeholders": {
+      "who": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
       }
+    }
   },
   "storageLevelsOnWeb": "The levels are changed on the web.",
   "savedViewNothingToApply": "This view carries nothing this screen can apply.",
@@ -2608,5 +2598,29 @@
   "refreshNow": "Refresh now",
   "refreshAuto": "Auto refresh",
   "refreshAutoFixedWindow": "Auto refresh is off for a fixed window",
-  "refreshOff": "Off"
+  "refreshOff": "Off",
+  "logDetailTitle": "Log details",
+  "logDetailFields": "Fields",
+  "logDetailJson": "JSON",
+  "logDetailSearch": "Filter fields…",
+  "logDetailNoFields": "No matching field",
+  "logDetailBody": "Message",
+  "logDetailFilterIn": "Filter for this value",
+  "logDetailFilterOut": "Exclude this value",
+  "logDetailCopy": "Copy value",
+  "logDetailCopied": "Copied",
+  "logDetailCopyBody": "Copy the message",
+  "logDetailCopyJson": "Copy the record",
+  "logDetailFilterAdded": "Condition added: {label}",
+  "logDetailValueTooLong": "A value longer than 1024 bytes cannot be used in a filter.",
+  "logOpenTrace": "Open the trace",
+  "logOpenSpan": "Open the span",
+  "logsNoSeverity": "no severity",
+  "@logDetailFilterAdded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  }
 }

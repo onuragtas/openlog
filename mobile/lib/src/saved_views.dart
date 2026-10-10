@@ -284,6 +284,7 @@ Map<String, Object?> logsViewState({
         key: 'severity_number',
         op: '>=',
         values: ['${severityNumbers[severityMin]}'],
+        numeric: true,
       ).toJson(),
   ],
   // Written empty rather than left out: this screen has no OR groups, so a

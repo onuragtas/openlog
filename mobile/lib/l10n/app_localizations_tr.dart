@@ -3954,4 +3954,58 @@ class LTr extends L {
 
   @override
   String get refreshOff => 'Kapalı';
+
+  @override
+  String get logDetailTitle => 'Log ayrıntıları';
+
+  @override
+  String get logDetailFields => 'Alanlar';
+
+  @override
+  String get logDetailJson => 'JSON';
+
+  @override
+  String get logDetailSearch => 'Alanları filtrele…';
+
+  @override
+  String get logDetailNoFields => 'Eşleşen alan yok';
+
+  @override
+  String get logDetailBody => 'Mesaj';
+
+  @override
+  String get logDetailFilterIn => 'Bu değere göre filtrele';
+
+  @override
+  String get logDetailFilterOut => 'Bu değeri hariç tut';
+
+  @override
+  String get logDetailCopy => 'Değeri kopyala';
+
+  @override
+  String get logDetailCopied => 'Kopyalandı';
+
+  @override
+  String get logDetailCopyBody => 'Mesajı kopyala';
+
+  @override
+  String get logDetailCopyJson => 'Kaydı kopyala';
+
+  @override
+  String logDetailFilterAdded(String label) {
+    return 'Koşul eklendi: $label';
+  }
+
+  @override
+  String get logDetailValueTooLong =>
+      '1024 bayttan uzun bir değer filtrede kullanılamaz.';
+
+  @override
+  String get logOpenTrace => 'İzi aç';
+
+  @override
+  String get logOpenSpan => 'Span\'i aç';
+
+  @override
+  String get logsNoSeverity => 'önem yok';
 }

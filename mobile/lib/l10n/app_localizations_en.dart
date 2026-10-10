@@ -3958,4 +3958,58 @@ class LEn extends L {
 
   @override
   String get refreshOff => 'Off';
+
+  @override
+  String get logDetailTitle => 'Log details';
+
+  @override
+  String get logDetailFields => 'Fields';
+
+  @override
+  String get logDetailJson => 'JSON';
+
+  @override
+  String get logDetailSearch => 'Filter fields…';
+
+  @override
+  String get logDetailNoFields => 'No matching field';
+
+  @override
+  String get logDetailBody => 'Message';
+
+  @override
+  String get logDetailFilterIn => 'Filter for this value';
+
+  @override
+  String get logDetailFilterOut => 'Exclude this value';
+
+  @override
+  String get logDetailCopy => 'Copy value';
+
+  @override
+  String get logDetailCopied => 'Copied';
+
+  @override
+  String get logDetailCopyBody => 'Copy the message';
+
+  @override
+  String get logDetailCopyJson => 'Copy the record';
+
+  @override
+  String logDetailFilterAdded(String label) {
+    return 'Condition added: $label';
+  }
+
+  @override
+  String get logDetailValueTooLong =>
+      'A value longer than 1024 bytes cannot be used in a filter.';
+
+  @override
+  String get logOpenTrace => 'Open the trace';
+
+  @override
+  String get logOpenSpan => 'Open the span';
+
+  @override
+  String get logsNoSeverity => 'no severity';
 }

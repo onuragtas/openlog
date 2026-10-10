@@ -1394,6 +1394,25 @@ void main() {
     },
   );
 
+  testWidgets('a log row opens the record, with its attributes', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final logs = ScriptedLogs(logs: [logLine('connection refused')]);
+    await tester.pumpWidget(signedInApp(session, logs: logs));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Logs');
+
+    await tester.tap(find.text('connection refused'));
+    await tester.pumpAndSettle();
+
+    // The web opens a side panel on the row; a phone has no side, so the
+    // record is a screen -- with the same fields on it.
+    expect(find.text('Log details'), findsOneWidget);
+    expect(find.text('service.name'), findsOneWidget);
+    expect(find.text('checkout'), findsWidgets);
+  });
+
   testWidgets('the log severity filter is a query, not a client-side sieve', (
     tester,
   ) async {
