@@ -2507,5 +2507,9 @@
   "range1hShort": "1 sa",
   "range6hShort": "6 sa",
   "range24hShort": "24 sa",
-  "range7dShort": "7 g"
+  "range7dShort": "7 g",
+  "refreshNow": "Şimdi yenile",
+  "refreshAuto": "Otomatik yenileme",
+  "refreshAutoFixedWindow": "Sabit aralıkta otomatik yenileme kapalı",
+  "refreshOff": "Kapalı"
 }

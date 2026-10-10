@@ -409,7 +409,15 @@ göndermiyordu, yani her ekran sunucunun varsayılanını (son 1 saat) gösteriy
       dokunulmadan bırakılıyor.
       Aralık değişince yüklenmiş her bölüm bayatlıyor, görünen bölüm hemen yeniden
       soruyor; diğerleri açıldıklarında. Hepsini birden yenilemek on üç istek olurdu.
-- [ ] Otomatik yenileme (webin 5s/10s/30s/1m/5m/15m denetimi)
+- [x] Otomatik yenileme: webin altı aralığı (`5s/10s/30s/1m/5m/15m`), çubukta tek bir
+      menüde "Şimdi yenile" ile birlikte — telefonun çubuğunda ayrıca bir düğmeye yer yok,
+      listeyi aşağı çekmek de yeniliyor. Açıkken simge dönüyor ve seçili aralığı yazıyor.
+      Dört "tıklama" kuralı: önceki istek sürerken atlanıyor (5 sn, yavaş bir şebekede
+      cevaptan kısa), uygulama arkadayken duruyor, mutlak pencerede kapalı (iki ucu sabit
+      bir pencereyi yeniden sormak aynı soru), yalnızca görünen bölümü yeniliyor.
+      Seçilen aralık bu cihazda hatırlanıyor (`shared_preferences`, Keychain değil: bu bir
+      kimlik bilgisi değil); pencere bilerek hatırlanmıyor — uygulamanın sessizce geçen
+      haftaya açılması, hep son saate açılmasından kötü.
 
 ### 9.1 Alarmlar
 - [x] Susturmalar (`alerts/mutes`): liste, süreli oluşturma, bitirme. Tekrarlayan takvim

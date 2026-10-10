@@ -3946,4 +3946,16 @@ class LEn extends L {
 
   @override
   String get range7dShort => '7d';
+
+  @override
+  String get refreshNow => 'Refresh now';
+
+  @override
+  String get refreshAuto => 'Auto refresh';
+
+  @override
+  String get refreshAutoFixedWindow => 'Auto refresh is off for a fixed window';
+
+  @override
+  String get refreshOff => 'Off';
 }

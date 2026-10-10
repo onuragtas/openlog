@@ -7008,6 +7008,30 @@ abstract class L {
   /// In en, this message translates to:
   /// **'7d'**
   String get range7dShort;
+
+  /// No description provided for @refreshNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh now'**
+  String get refreshNow;
+
+  /// No description provided for @refreshAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto refresh'**
+  String get refreshAuto;
+
+  /// No description provided for @refreshAutoFixedWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto refresh is off for a fixed window'**
+  String get refreshAutoFixedWindow;
+
+  /// No description provided for @refreshOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get refreshOff;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

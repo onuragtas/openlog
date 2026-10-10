@@ -37,6 +37,10 @@ dependencies:
   # Keychain on iOS, EncryptedSharedPreferences on Android. A device session
   # token is a long-lived credential and does not belong in plain preferences.
   flutter_secure_storage: ^9.2.2
+  # Plain preferences, for the settings that are not credentials: the
+  # auto-refresh interval is one, and the web keeps the same choice in
+  # localStorage.
+  shared_preferences: ^2.3.2
   # Required by the generated localizations.
   intl: any
 
@@ -49,6 +53,10 @@ dev_dependencies:
   yaml: ^3.1.2
   flutter_test:
     sdk: flutter
+
+  # The clock the auto-refresh timer is tested against. It comes in with
+  # flutter_test anyway; named here because a test imports it directly.
+  fake_async: ^1.3.3
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

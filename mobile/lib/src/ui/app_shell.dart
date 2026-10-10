@@ -3,8 +3,10 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../auto_refresh.dart';
 import '../sections.dart';
 import '../session.dart';
+import '../storage/prefs.dart';
 import 'alerts_section.dart';
 import 'dashboards_screen.dart';
 import 'database_screen.dart';
@@ -13,6 +15,7 @@ import 'nav_drawer.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
 import 'range_picker.dart';
+import 'refresh_control.dart';
 import 'add_data_screen.dart';
 import 'containers_screen.dart';
 import 'costs_screen.dart';
@@ -29,16 +32,25 @@ import 'services_screen.dart';
 import 'settings_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.session, required this.sections});
+  const AppShell({
+    super.key,
+    required this.session,
+    required this.sections,
+    this.autoRefresh,
+  });
 
   final SessionController session;
   final Sections sections;
+
+  /// Injectable so a test does not need a platform channel to decide how
+  /// often the shell asks again.
+  final AutoRefreshController? autoRefresh;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// Alerts, which is the last-but-one entry. The order of the list is the
   /// web's; where the app opens is this app's own answer, and an on-call app
   /// opens on what is firing.
@@ -52,7 +64,70 @@ class _AppShellState extends State<AppShell> {
   /// button reloads that one rather than all six.
   int _alertsTab = 0;
 
-  VoidCallback _alertsRefresher(Sections s) => switch (_alertsTab) {
+  late final AutoRefreshController _auto;
+  late final AutoRefreshTimer _timer;
+
+  /// True while a refresh this shell started is still running, so a tick
+  /// does not pile a second request on the first. On a phone network the
+  /// 5s interval is shorter than a slow answer often enough to matter.
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _auto = widget.autoRefresh ?? AutoRefreshController(prefs: SharedPrefs());
+    _timer = AutoRefreshTimer(
+      refresh: _refreshVisible,
+      busy: () => _refreshing,
+    );
+    WidgetsBinding.instance.addObserver(this);
+    _auto.addListener(_retime);
+    widget.sections.range.addListener(_retime);
+    // What this device chose last time. The window is deliberately not
+    // remembered; the interval is, as the web remembers it too.
+    _auto.load();
+  }
+
+  @override
+  void dispose() {
+    _timer.stop();
+    WidgetsBinding.instance.removeObserver(this);
+    _auto.removeListener(_retime);
+    widget.sections.range.removeListener(_retime);
+    if (widget.autoRefresh == null) _auto.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _timer.setForeground(state == AppLifecycleState.resumed);
+  }
+
+  /// The interval or the window changed: start, stop or re-space the timer.
+  void _retime() {
+    final every = widget.sections.range.value.absolute ? null : _auto.everyMs;
+    if (every == null) {
+      _timer.stop();
+    } else {
+      _timer.start(every);
+    }
+  }
+
+  /// Reloads the section on view, which is what the web's refresh does: the
+  /// other twenty-two are marked stale when the window changes and ask
+  /// again when they are looked at.
+  Future<void> _refreshVisible() async {
+    final refresh = _refreshers(widget.sections)[_tab];
+    if (refresh == null || _refreshing) return;
+    _refreshing = true;
+    try {
+      await refresh();
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  Future<void> Function() _alertsRefresher(Sections s) => switch (_alertsTab) {
     1 => s.rules.refresh,
     2 => s.templates.refresh,
     3 => s.channels.refresh,
@@ -61,11 +136,39 @@ class _AppShellState extends State<AppShell> {
     _ => s.alerts.refresh,
   };
 
+  /// What the app bar's refresh reloads, in the drawer's order.
+  List<Future<void> Function()?> _refreshers(Sections s) => [
+    s.onboarding.refresh,
+    s.hosts.refresh,
+    s.containers.refresh,
+    s.costs.refresh,
+    () => refreshKubernetes(s),
+    s.integrations.refresh,
+    s.services.refresh,
+    s.rum.refresh,
+    s.profiles.refresh,
+    s.databases.refresh,
+    s.slos.refresh,
+    s.synthetics.refresh,
+    s.jobs.refresh,
+    s.vulnerabilities.refresh,
+    s.logs.refresh,
+    s.traces.refresh,
+    s.metrics.refresh,
+    null, // The console has nothing to refresh until a query is run.
+    s.dashboards.refresh,
+    s.inventory.refresh,
+    s.fleet.refresh,
+    _alertsRefresher(s),
+    null, // Settings reads what the session already knows.
+  ];
+
   @override
   Widget build(BuildContext context) {
     final l = L.of(context);
     final s = widget.sections;
     final session = widget.session;
+    final refreshers = _refreshers(s);
 
     final titles = [
       l.navAddData,
@@ -92,31 +195,6 @@ class _AppShellState extends State<AppShell> {
       l.alertsTitle,
       l.navSettings,
     ];
-    final refreshers = <VoidCallback?>[
-      s.onboarding.refresh,
-      s.hosts.refresh,
-      s.containers.refresh,
-      s.costs.refresh,
-      () => refreshKubernetes(s),
-      s.integrations.refresh,
-      s.services.refresh,
-      s.rum.refresh,
-      s.profiles.refresh,
-      s.databases.refresh,
-      s.slos.refresh,
-      s.synthetics.refresh,
-      s.jobs.refresh,
-      s.vulnerabilities.refresh,
-      s.logs.refresh,
-      s.traces.refresh,
-      s.metrics.refresh,
-      null, // The console has nothing to refresh until a query is run.
-      s.dashboards.refresh,
-      s.inventory.refresh,
-      s.fleet.refresh,
-      _alertsRefresher(s),
-      null, // Settings reads what the session already knows.
-    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -130,15 +208,15 @@ class _AppShellState extends State<AppShell> {
             controller: s.range,
             onPick: () {
               s.markRangeStale();
-              refreshers[_tab]?.call();
+              _refreshVisible();
             },
           ),
           if (refreshers[_tab] != null)
-            IconButton(
-              key: const Key('refresh'),
-              tooltip: l.refresh,
-              onPressed: refreshers[_tab],
-              icon: const Icon(Icons.refresh),
+            RefreshControl(
+              auto: _auto,
+              range: s.range,
+              onRefreshNow: _refreshVisible,
+              onInterval: _auto.choose,
             ),
         ],
       ),

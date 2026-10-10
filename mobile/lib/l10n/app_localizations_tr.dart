@@ -3941,4 +3941,17 @@ class LTr extends L {
 
   @override
   String get range7dShort => '7 g';
+
+  @override
+  String get refreshNow => 'Şimdi yenile';
+
+  @override
+  String get refreshAuto => 'Otomatik yenileme';
+
+  @override
+  String get refreshAutoFixedWindow =>
+      'Sabit aralıkta otomatik yenileme kapalı';
+
+  @override
+  String get refreshOff => 'Kapalı';
 }

@@ -2604,5 +2604,9 @@
   "range1hShort": "1h",
   "range6hShort": "6h",
   "range24hShort": "24h",
-  "range7dShort": "7d"
+  "range7dShort": "7d",
+  "refreshNow": "Refresh now",
+  "refreshAuto": "Auto refresh",
+  "refreshAutoFixedWindow": "Auto refresh is off for a fixed window",
+  "refreshOff": "Off"
 }
