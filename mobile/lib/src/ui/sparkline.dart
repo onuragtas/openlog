@@ -6,33 +6,49 @@
 import 'package:flutter/material.dart';
 
 class Sparkline extends StatelessWidget {
-  const Sparkline({super.key, required this.values, required this.color});
+  const Sparkline({
+    super.key,
+    required this.values,
+    required this.color,
+    this.minimum,
+    this.maximum,
+  });
 
   final List<double> values;
   final Color color;
 
+  /// A scale given from outside, for two lines that have to be read
+  /// against each other: the idle part of a bill drawn to its own maximum
+  /// would look the size of the whole bill.
+  final double? minimum;
+  final double? maximum;
+
   @override
   Widget build(BuildContext context) => CustomPaint(
-    painter: _SparklinePainter(values, color),
+    painter: _SparklinePainter(values, color, minimum, maximum),
     size: Size.infinite,
   );
 }
 
 class _SparklinePainter extends CustomPainter {
-  _SparklinePainter(this.values, this.color);
+  _SparklinePainter(this.values, this.color, this.minimum, this.maximum);
 
   final List<double> values;
   final Color color;
+  final double? minimum;
+  final double? maximum;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.length < 2 || size.width <= 0 || size.height <= 0) return;
 
-    var min = values.first;
-    var max = values.first;
-    for (final v in values) {
-      if (v < min) min = v;
-      if (v > max) max = v;
+    var min = minimum ?? values.first;
+    var max = maximum ?? values.first;
+    if (minimum == null || maximum == null) {
+      for (final v in values) {
+        if (minimum == null && v < min) min = v;
+        if (maximum == null && v > max) max = v;
+      }
     }
     // A flat line is drawn through the middle rather than at the bottom: a
     // constant series is not the same as a series at zero.
@@ -58,5 +74,8 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_SparklinePainter old) =>
-      old.color != color || !identical(old.values, values);
+      old.color != color ||
+      !identical(old.values, values) ||
+      old.minimum != minimum ||
+      old.maximum != maximum;
 }

@@ -2178,5 +2178,27 @@
               "type": "int"
           }
       }
+  },
+  "costsServices": "Servisler",
+  "costsBuckets": "Dağılım",
+  "costsBucketServices": "Servisler",
+  "costsBucketServicesHelp": "Bir APM servisine bağlı konteynerler.",
+  "costsBucketUnallocated": "Atanmamış",
+  "costsBucketUnallocatedHelp": "Servise bağlanmamış konteynerler.",
+  "costsBucketUnattributed": "Konteyner dışı",
+  "costsBucketUnattributedHelp": "Hiçbir konteynerin açıklamadığı sunucu kullanımı.",
+  "costsBucketIdle": "Boşta",
+  "costsBucketIdleHelp": "Kimsenin kullanmadığı kapasite; servislere dağıtılmaz.",
+  "costsTrend": "Eğilim",
+  "costsTrendTotal": "toplam",
+  "costsTrendIdle": "boşta",
+  "costsByService": "Servis bazında",
+  "costsContainers": "{count} konteyner",
+  "@costsContainers": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
   }
 }

@@ -3542,4 +3542,53 @@ class LTr extends L {
   String containersShown(int shown, int total) {
     return '$total konteynerin $shown tanesi';
   }
+
+  @override
+  String get costsServices => 'Servisler';
+
+  @override
+  String get costsBuckets => 'Dağılım';
+
+  @override
+  String get costsBucketServices => 'Servisler';
+
+  @override
+  String get costsBucketServicesHelp => 'Bir APM servisine bağlı konteynerler.';
+
+  @override
+  String get costsBucketUnallocated => 'Atanmamış';
+
+  @override
+  String get costsBucketUnallocatedHelp => 'Servise bağlanmamış konteynerler.';
+
+  @override
+  String get costsBucketUnattributed => 'Konteyner dışı';
+
+  @override
+  String get costsBucketUnattributedHelp =>
+      'Hiçbir konteynerin açıklamadığı sunucu kullanımı.';
+
+  @override
+  String get costsBucketIdle => 'Boşta';
+
+  @override
+  String get costsBucketIdleHelp =>
+      'Kimsenin kullanmadığı kapasite; servislere dağıtılmaz.';
+
+  @override
+  String get costsTrend => 'Eğilim';
+
+  @override
+  String get costsTrendTotal => 'toplam';
+
+  @override
+  String get costsTrendIdle => 'boşta';
+
+  @override
+  String get costsByService => 'Servis bazında';
+
+  @override
+  String costsContainers(int count) {
+    return '$count konteyner';
+  }
 }

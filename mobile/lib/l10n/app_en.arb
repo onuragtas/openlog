@@ -2275,5 +2275,27 @@
               "type": "int"
           }
       }
+  },
+  "costsServices": "Services",
+  "costsBuckets": "Breakdown",
+  "costsBucketServices": "Services",
+  "costsBucketServicesHelp": "Containers linked to an APM service.",
+  "costsBucketUnallocated": "Unallocated",
+  "costsBucketUnallocatedHelp": "Containers with no linked service.",
+  "costsBucketUnattributed": "Outside containers",
+  "costsBucketUnattributedHelp": "Host usage no container explains.",
+  "costsBucketIdle": "Idle",
+  "costsBucketIdleHelp": "Capacity nobody used; never spread over the services.",
+  "costsTrend": "Trend",
+  "costsTrendTotal": "total",
+  "costsTrendIdle": "idle",
+  "costsByService": "By service",
+  "costsContainers": "{count} containers",
+  "@costsContainers": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
   }
 }

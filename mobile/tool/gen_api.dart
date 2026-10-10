@@ -143,6 +143,8 @@ const responseTargets = <String>[
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',
   'get /api/v1/costs/hosts 200 CostHostPage',
+  'get /api/v1/costs/services 200 CostServicePage',
+  'get /api/v1/costs/trend 200 CostTrend',
   'get /api/v1/inventory/search 200 InventoryPage',
   'get /api/v1/fleet/hosts 200 FleetHostPage',
   'get /api/v1/profiles/services 200 ProfileServicePage',

@@ -439,8 +439,23 @@ class CostsController extends DetailController<CostHostPage> {
       ? const SessionFailure('costsOff', '')
       : null;
 
+  /// What each service costs and how the bill moved, which the web shows
+  /// beside the hosts. Fetched together so the three never describe three
+  /// different windows.
+  List<CostService> services = const [];
+  CostTrend? trend;
+
   @override
-  Future<CostHostPage> fetch() => _client.costHosts();
+  Future<CostHostPage> fetch() async {
+    final answers = await Future.wait([
+      _client.costHosts(),
+      _client.costServices(),
+      _client.costTrend(),
+    ]);
+    services = (answers[1] as CostServicePage).services;
+    trend = answers[2] as CostTrend;
+    return answers[0] as CostHostPage;
+  }
 }
 
 /// The functions of one profile, ranked by self time.

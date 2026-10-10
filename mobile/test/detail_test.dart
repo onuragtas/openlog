@@ -543,9 +543,62 @@ void main() {
     expect(c.failure?.kind, 'costsOff');
   });
 
+  const summary = {
+    'currency': 'USD',
+    'total': 41.2,
+    'services': 20.0,
+    'unallocated': 4.0,
+    'unattributed': 5.2,
+    'idle': 12.0,
+    'idle_share': 0.29,
+    'per_hour': 1.7,
+    'hosts': 12,
+    'priced_hosts': 11,
+    'unpriced_hosts': 1,
+    'host_hours': 288,
+  };
+  const pricing = {
+    'version': 3,
+    'updated': '2026-09-17',
+    'currency': 'USD',
+    'note': 'discounts, taxes, storage and egress are not included',
+    'estimated': true,
+  };
+
   test('the fleet summary and its hosts arrive together', () async {
-    final server = await FakeServer.start(
-      (req, _) => writeJson(req, 200, {
+    final server = await FakeServer.start((req, seen) {
+      if (seen.path.endsWith('/services')) {
+        writeJson(req, 200, {
+          'services': [
+            {
+              'service_name': 'checkout',
+              'service_namespace': '',
+              'environment': 'prod',
+              'total': 18.0,
+              'hosts': ['h1'],
+              'containers': 3,
+            },
+          ],
+          'total': 1,
+          'summary': summary,
+          'pricing': pricing,
+        });
+        return;
+      }
+      if (seen.path.endsWith('/trend')) {
+        writeJson(req, 200, {
+          'step': '1h',
+          'points': [
+            {'t': 1760000000000, 'total': 1.2, 'idle': 0.4},
+            {'t': 1760003600000, 'total': 1.6, 'idle': 0.5},
+          ],
+          'pricing': pricing,
+          'from': 1760000000000,
+          'to': 1760003600000,
+        });
+        return;
+      }
+      writeJson(req, 200, {
         'hosts': [
           {
             'host_id': 'h1',
@@ -575,29 +628,10 @@ void main() {
           },
         ],
         'total': 12,
-        'summary': {
-          'currency': 'USD',
-          'total': 41.2,
-          'services': 20.0,
-          'unallocated': 4.0,
-          'unattributed': 5.2,
-          'idle': 12.0,
-          'idle_share': 0.29,
-          'per_hour': 1.7,
-          'hosts': 12,
-          'priced_hosts': 11,
-          'unpriced_hosts': 1,
-          'host_hours': 288,
-        },
-        'pricing': {
-          'version': 3,
-          'updated': '2026-09-17',
-          'currency': 'USD',
-          'note': 'discounts, taxes, storage and egress are not included',
-          'estimated': true,
-        },
-      }),
-    );
+        'summary': summary,
+        'pricing': pricing,
+      });
+    });
     addTearDown(server.stop);
     final c = CostsController(client(server.baseUrl));
 
@@ -605,7 +639,14 @@ void main() {
 
     // One request answers all three: a summary without the hosts behind it is
     // a number nobody can act on.
-    expect(server.requests.single.path, '/api/v1/costs/hosts');
+    // Three requests, one window: the hosts, what each service costs and
+    // how the bill moved are one screen and must describe one moment.
+    expect(
+      {for (final r in server.requests) r.path},
+      {'/api/v1/costs/hosts', '/api/v1/costs/services', '/api/v1/costs/trend'},
+    );
+    expect(c.services.single.serviceName, 'checkout');
+    expect(c.trend!.points.length, 2);
     expect(c.value!.summary.total, 41.2);
     expect(c.value!.hosts.single.hostName, 'web-1');
     // The list is capped; the screen has to be able to say how many were left.

@@ -14908,6 +14908,92 @@ class CostHostPage {
   final CostPricing pricing;
 }
 
+/// `CostServicePage` of the openlog API contract.
+class CostServicePage {
+  const CostServicePage({
+    required this.services,
+    required this.total,
+    required this.summary,
+    required this.pricing,
+  });
+
+  factory CostServicePage.fromJson(
+    Object? json, [
+    String path = 'CostServicePage',
+  ]) {
+    final m = _obj(json, path);
+    return CostServicePage(
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) =>
+            _list<CostService>(v, p, (v, p) => CostService.fromJson(v, p)),
+      ),
+      total: _req(m, 'total', path, _int),
+      summary: _req(m, 'summary', path, (v, p) => CostSummary.fromJson(v, p)),
+      pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'services': [for (final e in services) e.toJson()],
+    'total': total,
+    'summary': summary.toJson(),
+    'pricing': pricing.toJson(),
+  };
+
+  final List<CostService> services;
+  final int total;
+  final CostSummary summary;
+  final CostPricing pricing;
+}
+
+/// `CostTrend` of the openlog API contract.
+class CostTrend {
+  const CostTrend({
+    required this.step,
+    required this.points,
+    required this.pricing,
+    required this.from,
+    required this.to,
+  });
+
+  factory CostTrend.fromJson(Object? json, [String path = 'CostTrend']) {
+    final m = _obj(json, path);
+    return CostTrend(
+      step: _req(m, 'step', path, _str),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<CostTrendPoint>(
+          v,
+          p,
+          (v, p) => CostTrendPoint.fromJson(v, p),
+        ),
+      ),
+      pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
+      from: _req(m, 'from', path, _int),
+      to: _req(m, 'to', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'points': [for (final e in points) e.toJson()],
+    'pricing': pricing.toJson(),
+    'from': from,
+    'to': to,
+  };
+
+  final String step;
+  final List<CostTrendPoint> points;
+  final CostPricing pricing;
+  final int from;
+  final int to;
+}
+
 /// `InventoryPage` of the openlog API contract.
 class InventoryPage {
   const InventoryPage({required this.items});
@@ -16957,6 +17043,73 @@ class CostPricing {
   final String note;
   final bool estimated;
   final String? overrideFile;
+}
+
+/// `CostService` of the openlog API contract.
+class CostService {
+  const CostService({
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.total,
+    required this.hosts,
+    required this.containers,
+  });
+
+  factory CostService.fromJson(Object? json, [String path = 'CostService']) {
+    final m = _obj(json, path);
+    return CostService(
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      total: _req(m, 'total', path, _num),
+      hosts: _req(m, 'hosts', path, (v, p) => _list<String>(v, p, _str)),
+      containers: _req(m, 'containers', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'total': total,
+    'hosts': hosts,
+    'containers': containers,
+  };
+
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final double total;
+  final List<String> hosts;
+  final int containers;
+}
+
+/// `CostTrendPoint` of the openlog API contract.
+class CostTrendPoint {
+  const CostTrendPoint({
+    required this.t,
+    required this.total,
+    required this.idle,
+  });
+
+  factory CostTrendPoint.fromJson(
+    Object? json, [
+    String path = 'CostTrendPoint',
+  ]) {
+    final m = _obj(json, path);
+    return CostTrendPoint(
+      t: _req(m, 't', path, _int),
+      total: _req(m, 'total', path, _num),
+      idle: _req(m, 'idle', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'t': t, 'total': total, 'idle': idle};
+
+  final int t;
+  final double total;
+  final double idle;
 }
 
 /// `InventorySearchItem` of the openlog API contract.

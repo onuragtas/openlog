@@ -565,7 +565,15 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       bildiren konteynerler sayıya giriyor, projesizler en sonda. Projelerin listesi
       `containers/groups`'tan geliyor — webde de o uç sadece bunun için kullanılıyor.
       Kesilen liste "şu kadarın şu kadarı" diyor.
-- [ ] Maliyet: özet, servisler, konteynerler, eğilim, fiyatlar (`costs/*`)
+- [x] Maliyet: özet, servisler, eğilim (`costs/summary|services|trend`): maliyet ekranı
+      webin kalan üç parçasını da aldı — faturanın dağılımı (servisler, atanmamış,
+      konteyner dışı, boşta; dördü toplamı tam verir, bu yüzden çubuk bir ayrıştırma),
+      zaman içindeki eğilim (toplam ve boşta, tek ölçekte) ve servis bazında maliyet.
+      Üç uç tek seferde isteniyor: aynı ekranın üç parçası üç farklı pencereyi
+      anlatmamalı. Bir listenin ondalıkları kendi en büyük satırından kararlaştırılıyor;
+      saatlik oran 1.72 "2"ye yuvarlanmıyor.
+      `costs/containers`, `costs/hosts/{id}` ve `costs/prices` dışarıda: webin maliyet
+      sayfası da bu üçünü kullanmıyor (konteyner maliyeti ve fiyat tablosu ekranı yok).
 - [ ] Bulut bağlantıları (`cloud/providers`, `cloud/connections`, `.../test`)
 - [ ] Filo politikası ve dağıtımlar (`fleet/policy`, `fleet/rollouts`, `fleet/rollback`)
 - [ ] Entegrasyon ayarlarını düzenleme (`integrations/settings` yazma)

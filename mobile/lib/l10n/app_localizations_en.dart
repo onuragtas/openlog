@@ -3550,4 +3550,52 @@ class LEn extends L {
   String containersShown(int shown, int total) {
     return '$shown of $total containers';
   }
+
+  @override
+  String get costsServices => 'Services';
+
+  @override
+  String get costsBuckets => 'Breakdown';
+
+  @override
+  String get costsBucketServices => 'Services';
+
+  @override
+  String get costsBucketServicesHelp => 'Containers linked to an APM service.';
+
+  @override
+  String get costsBucketUnallocated => 'Unallocated';
+
+  @override
+  String get costsBucketUnallocatedHelp => 'Containers with no linked service.';
+
+  @override
+  String get costsBucketUnattributed => 'Outside containers';
+
+  @override
+  String get costsBucketUnattributedHelp => 'Host usage no container explains.';
+
+  @override
+  String get costsBucketIdle => 'Idle';
+
+  @override
+  String get costsBucketIdleHelp =>
+      'Capacity nobody used; never spread over the services.';
+
+  @override
+  String get costsTrend => 'Trend';
+
+  @override
+  String get costsTrendTotal => 'total';
+
+  @override
+  String get costsTrendIdle => 'idle';
+
+  @override
+  String get costsByService => 'By service';
+
+  @override
+  String costsContainers(int count) {
+    return '$count containers';
+  }
 }

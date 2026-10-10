@@ -6342,6 +6342,96 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{shown} of {total} containers'**
   String containersShown(int shown, int total);
+
+  /// No description provided for @costsServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get costsServices;
+
+  /// No description provided for @costsBuckets.
+  ///
+  /// In en, this message translates to:
+  /// **'Breakdown'**
+  String get costsBuckets;
+
+  /// No description provided for @costsBucketServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get costsBucketServices;
+
+  /// No description provided for @costsBucketServicesHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers linked to an APM service.'**
+  String get costsBucketServicesHelp;
+
+  /// No description provided for @costsBucketUnallocated.
+  ///
+  /// In en, this message translates to:
+  /// **'Unallocated'**
+  String get costsBucketUnallocated;
+
+  /// No description provided for @costsBucketUnallocatedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers with no linked service.'**
+  String get costsBucketUnallocatedHelp;
+
+  /// No description provided for @costsBucketUnattributed.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside containers'**
+  String get costsBucketUnattributed;
+
+  /// No description provided for @costsBucketUnattributedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Host usage no container explains.'**
+  String get costsBucketUnattributedHelp;
+
+  /// No description provided for @costsBucketIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get costsBucketIdle;
+
+  /// No description provided for @costsBucketIdleHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Capacity nobody used; never spread over the services.'**
+  String get costsBucketIdleHelp;
+
+  /// No description provided for @costsTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'Trend'**
+  String get costsTrend;
+
+  /// No description provided for @costsTrendTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'total'**
+  String get costsTrendTotal;
+
+  /// No description provided for @costsTrendIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'idle'**
+  String get costsTrendIdle;
+
+  /// No description provided for @costsByService.
+  ///
+  /// In en, this message translates to:
+  /// **'By service'**
+  String get costsByService;
+
+  /// No description provided for @costsContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} containers'**
+  String costsContainers(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

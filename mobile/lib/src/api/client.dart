@@ -1061,6 +1061,17 @@ class OpenlogClient {
         await _send('GET', '/api/v1/costs/hosts?limit=$limit'),
       );
 
+  /// What each service costs: the containers linked to it, on the hosts
+  /// that ran them.
+  Future<CostServicePage> costServices({int limit = 50}) async =>
+      CostServicePage.fromJson(
+        await _send('GET', '/api/v1/costs/services?limit=$limit'),
+      );
+
+  /// The fleet's cost over time, with the idle part of it.
+  Future<CostTrend> costTrend() async =>
+      CostTrend.fromJson(await _send('GET', '/api/v1/costs/trend'));
+
   /// Browser applications that reported in the range.
   Future<RumAppPage> rumApps() async =>
       RumAppPage.fromJson(await _send('GET', '/api/v1/rum/apps'));
