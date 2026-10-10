@@ -271,6 +271,44 @@ void main() {
       expect(c.items.single.body, 'first');
     });
 
+    test('the chosen columns and order are what is asked for', () async {
+      final server = await FakeServer.start(
+        (req, _) => writeJson(req, 200, noRows),
+      );
+      addTearDown(server.stop);
+      final client = OpenlogClient(baseUrl: server.baseUrl);
+      addTearDown(client.close);
+      final c = LogsController(client)
+        ..severityMin = ''
+        ..columns = const ['timestamp', 'body', 'resource.container.name']
+        ..oldestFirst = true;
+
+      await c.refresh();
+
+      final body = jsonDecode(server.requests.single.body) as Map;
+      // Only the key the row does not already carry: `timestamp` and
+      // `body` are in every row anyway.
+      expect(body['columns'], ['resource.container.name']);
+      expect(body['order'], 'asc');
+    });
+
+    test('the default table asks for no columns at all', () async {
+      final server = await FakeServer.start(
+        (req, _) => writeJson(req, 200, noRows),
+      );
+      addTearDown(server.stop);
+      final client = OpenlogClient(baseUrl: server.baseUrl);
+      addTearDown(client.close);
+
+      await LogsController(client).refresh();
+
+      final body = jsonDecode(server.requests.single.body) as Map;
+      expect(body, isNot(contains('columns')));
+      // Newest first is the server's own default; saying it again is
+      // noise on the wire.
+      expect(body, isNot(contains('order')));
+    });
+
     test('403 says it is a permission, not an empty log stream', () async {
       final server = await FakeServer.start(
         (req, _) => writeJson(req, 403, {

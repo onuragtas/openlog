@@ -577,6 +577,20 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Bu sırada düzeltilen: `fontFamily: 'monospace'` iOS'ta diye bir aile olmadığı
       için sessizce varsayılan fonta düşüyordu; artık `mono()` ve `monoFamilies`
       (theme.dart) -- takvim listesinin daha önce düştüğü tuzağın aynısı.
+- [x] Dinamik sütunlar ve sıralama (webin tablo seçenekleri): "Sütunlar" düğmesi
+      sözlükten anahtar seçtiriyor (`timestamp` sabit, en çok 50, "Sıfırla" webin
+      dört varsayılanına döner) ve "Önce en yeni / en eski" sıralamayı çeviriyor.
+      Seçilen sütunlardan satırın kendinde olmayanlar istekte `columns` olarak
+      gidiyor ve satırın `fields`'inden okunuyor; kartta `anahtar=değer` olarak
+      webin dar ekranda yaptığının aynısı. Telefonda yatay kaydıran bir tablo
+      yok -- web de `CARD_BELOW` altında kartlara düşüyor, yani bu webin kendi
+      mobil görünümü.
+      Sütunlar ve sıralama artık kayıtlı görünümün parçası: eskiden "telefonun
+      anlamadığı anahtar" diye saklanıyordu, yani tarayıcıda altı sütunla
+      kaydedilen görünüm burada dört sütunla açılıyordu -- adı aynı, tablosu
+      başka bir görünüm. Bu yüzden `_kept` artık sinyale göre ayrı anahtar
+      kümeleri kullanıyor: `order` logların, izlerin `sort`/`root_only`'si
+      onların.
 - [x] OQL şema ve doğrulama (`query/schema`, `query/validate`): konsol artık webin
       konsolu — yazarken doğrulama (yazmayı bırakınca sorulur, hata ve uyarılar satır
       ve sütunuyla kutunun altında, kutunun çerçevesi kırmızı), webin altı örneği aynı

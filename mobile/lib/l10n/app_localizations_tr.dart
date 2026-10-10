@@ -4008,4 +4008,22 @@ class LTr extends L {
 
   @override
   String get logsNoSeverity => 'önem yok';
+
+  @override
+  String get logColumns => 'Sütunlar';
+
+  @override
+  String get logColumnsPick => 'Sütun ekle veya kaldır';
+
+  @override
+  String get logColumnsReset => 'Sıfırla';
+
+  @override
+  String get logColumnsApply => 'Uygula';
+
+  @override
+  String get logOrderNewest => 'Önce en yeni';
+
+  @override
+  String get logOrderOldest => 'Önce en eski';
 }

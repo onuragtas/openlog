@@ -161,6 +161,71 @@ void main() {
     });
   });
 
+  group('columns', () {
+    test('timestamp is pinned, duplicates and junk are dropped', () {
+      expect(normalizeColumns(null), defaultLogColumns);
+      expect(normalizeColumns(const <Object?>[]), defaultLogColumns);
+      expect(normalizeColumns(const ['body', 'body', 'timestamp']), [
+        'timestamp',
+        'body',
+      ]);
+      // Somebody else's JSON: a number, an empty string, a key longer
+      // than the server takes.
+      expect(normalizeColumns(const [1, '', 'body']), ['timestamp', 'body']);
+      expect(normalizeColumns(['a' * 257, 'body']), ['timestamp', 'body']);
+      // A comma-separated string is what a URL carries.
+      expect(normalizeColumns('body,host.name'), [
+        'timestamp',
+        'body',
+        'host.name',
+      ]);
+      expect(normalizeColumns(List.filled(60, 'c')).length, 2);
+    });
+
+    test('toggling adds at the end and never removes the time', () {
+      expect(toggleColumn(defaultLogColumns, 'host.name'), [
+        ...defaultLogColumns,
+        'host.name',
+      ]);
+      expect(
+        toggleColumn([...defaultLogColumns, 'host.name'], 'host.name'),
+        defaultLogColumns,
+      );
+      // A log line without its time is not a log line.
+      expect(toggleColumn(defaultLogColumns, 'timestamp'), defaultLogColumns);
+      expect(isDefaultColumns(defaultLogColumns), isTrue);
+      expect(isDefaultColumns(const ['timestamp', 'body']), isFalse);
+    });
+
+    test('only the keys a row does not already carry are asked for', () {
+      // `service.name` is in every row whether it is asked for or not;
+      // asking for it would be asking the server for what it already
+      // sends.
+      expect(
+        requestColumns(const [
+          'timestamp',
+          'service.name',
+          'resource.container.name',
+          'attributes.http.method',
+        ]),
+        ['resource.container.name', 'attributes.http.method'],
+      );
+      expect(requestColumns(defaultLogColumns), isEmpty);
+    });
+
+    test('a card spells out only the columns it does not already show', () {
+      expect(extraColumns(defaultLogColumns), isEmpty);
+      expect(
+        extraColumns(const [
+          'timestamp',
+          'trace_id',
+          'resource.container.name',
+        ]),
+        ['resource.container.name'],
+      );
+    });
+  });
+
   test('the JSON tab is the record, with the body opened up', () {
     final text = recordJson(row(body: '{"level":"error"}'));
     final m = jsonDecode(text) as Map<String, Object?>;

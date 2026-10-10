@@ -7134,6 +7134,42 @@ abstract class L {
   /// In en, this message translates to:
   /// **'no severity'**
   String get logsNoSeverity;
+
+  /// No description provided for @logColumns.
+  ///
+  /// In en, this message translates to:
+  /// **'Columns'**
+  String get logColumns;
+
+  /// No description provided for @logColumnsPick.
+  ///
+  /// In en, this message translates to:
+  /// **'Add or remove a column'**
+  String get logColumnsPick;
+
+  /// No description provided for @logColumnsReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get logColumnsReset;
+
+  /// No description provided for @logColumnsApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get logColumnsApply;
+
+  /// No description provided for @logOrderNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get logOrderNewest;
+
+  /// No description provided for @logOrderOldest.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest first'**
+  String get logOrderOldest;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

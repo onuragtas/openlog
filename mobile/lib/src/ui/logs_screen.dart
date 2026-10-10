@@ -7,11 +7,13 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../log_fields.dart';
 import '../logs.dart';
 import '../saved_views.dart';
 import '../session.dart';
 import '../volume.dart';
 import '../sections.dart';
+import 'columns_sheet.dart';
 import 'filter_sheet.dart';
 import 'log_patterns_body.dart';
 import 'saved_views_sheet.dart';
@@ -19,6 +21,7 @@ import 'volume_chart.dart';
 import 'list_scaffold.dart';
 import 'log_detail_screen.dart';
 import 'severity.dart';
+import 'theme.dart';
 
 /// The levels worth filtering by on a phone. Everything below WARN is noise at
 /// ten lines a screen, which is why WARN is where the controller starts.
@@ -100,6 +103,10 @@ class _LogsBodyState extends State<LogsBody>
     c.filters = state.filters;
     c.query = state.query;
     c.severityMin = state.severityMin;
+    // The table is part of the view too: a view saved with six columns
+    // that opened here with four was a different view wearing its name.
+    c.columns = state.columns.isEmpty ? [...defaultLogColumns] : state.columns;
+    c.oldestFirst = state.oldestFirst;
     // The service box is saved as a `service.name` condition, so a view's
     // service arrives as a chip and the box has nothing left to say.
     c.service = '';
@@ -227,6 +234,8 @@ class _LogsBodyState extends State<LogsBody>
                   query: c.query,
                   severityMin: c.severityMin,
                   service: c.service,
+                  columns: c.columns,
+                  oldestFirst: c.oldestFirst,
                   keep: keep,
                 ),
                 onApply: _apply,
@@ -256,6 +265,56 @@ class _LogsBodyState extends State<LogsBody>
               ),
               VolumeChart(session: widget.session, controller: widget.volume),
               const SizedBox(height: 8),
+              // The web's table options, minus the ones a phone has no
+              // room to mean: wrapping and density decide themselves on a
+              // list of cards.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const Key('logs-order'),
+                      onPressed: () {
+                        c.oldestFirst = !c.oldestFirst;
+                        c.refresh();
+                      },
+                      icon: Icon(
+                        c.oldestFirst
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
+                        size: 18,
+                      ),
+                      label: Text(
+                        c.oldestFirst ? l.logOrderOldest : l.logOrderNewest,
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('logs-columns'),
+                      onPressed: () async {
+                        final picked = await pickColumns(
+                          context,
+                          session: widget.session,
+                          fields: widget.sections.fields('logs'),
+                          columns: c.columns,
+                        );
+                        if (picked == null) return;
+                        c.columns = picked;
+                        // A column is a key the server has to be asked
+                        // for, so this is a new request, not a redraw.
+                        await c.refresh();
+                      },
+                      icon: const Icon(Icons.view_column_outlined, size: 18),
+                      label: Text(
+                        isDefaultColumns(c.columns)
+                            ? l.logColumns
+                            : '${l.logColumns} · ${c.columns.length}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: SegmentedButton<String>(
@@ -281,6 +340,7 @@ class _LogsBodyState extends State<LogsBody>
         emptyTitle: c.scoped ? l.logsEmptyScoped : l.logsEmpty,
         itemBuilder: (context, i) => _LogTile(
           record: c.items[i],
+          extras: extraColumns(c.columns),
           onOpen: () => openLogDetail(
             context,
             session: widget.session,
@@ -300,9 +360,17 @@ class _LogsBodyState extends State<LogsBody>
 }
 
 class _LogTile extends StatelessWidget {
-  const _LogTile({required this.record, required this.onOpen});
+  const _LogTile({
+    required this.record,
+    required this.extras,
+    required this.onOpen,
+  });
 
   final LogQueryRow record;
+
+  /// The chosen columns that the card does not already show, in the order
+  /// they were chosen -- the web puts the same ones under its card.
+  final List<String> extras;
 
   /// The whole record, with its attributes and what can be filtered by.
   final VoidCallback onOpen;
@@ -364,6 +432,23 @@ class _LogTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: text.bodyMedium,
             ),
+            if (extras.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 2,
+                  children: [
+                    for (final key in extras)
+                      Text(
+                        '$key=${cellValue(record, key) ?? '–'}',
+                        style: mono(
+                          text.labelSmall,
+                        )?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                  ],
+                ),
+              ),
             const Divider(height: 16),
           ],
         ),

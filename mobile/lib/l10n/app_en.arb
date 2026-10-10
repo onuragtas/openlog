@@ -2622,5 +2622,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "logColumns": "Columns",
+  "logColumnsPick": "Add or remove a column",
+  "logColumnsReset": "Reset",
+  "logColumnsApply": "Apply",
+  "logOrderNewest": "Newest first",
+  "logOrderOldest": "Oldest first"
 }

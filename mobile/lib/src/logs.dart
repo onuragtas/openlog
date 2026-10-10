@@ -3,6 +3,7 @@ import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'fields.dart';
 import 'list_controller.dart';
+import 'log_fields.dart';
 
 class LogsController extends ListController<LogQueryRow> {
   LogsController(
@@ -25,6 +26,17 @@ class LogsController extends ListController<LogQueryRow> {
   /// What the filter builder added. Sent as the server's `filters`
   /// parameter, which is a JSON array of conditions.
   List<Filter> filters = const [];
+
+  /// Which columns the rows are shown with, as the web keeps them: the
+  /// first four are its defaults, anything else is picked from the
+  /// dictionary and comes back in each row's `fields`.
+  List<String> columns = [...defaultLogColumns];
+
+  /// Oldest first instead of newest first, which is the web's other
+  /// order. It is a question about a window, not a sort of the page:
+  /// "the first errors after the deploy" is the top of the ascending
+  /// list, not the bottom of the descending one.
+  bool oldestFirst = false;
 
   /// Narrow to one service. Typed, because the screen cannot know the names
   /// without asking for them and this is a filter, not a picker.
@@ -49,7 +61,12 @@ class LogsController extends ListController<LogQueryRow> {
 
   @override
   Future<List<LogQueryRow>> fetch() async {
-    final page = await _client.logs(q: query.trim(), filters: _conditions());
+    final page = await _client.logs(
+      q: query.trim(),
+      filters: _conditions(),
+      columns: requestColumns(columns),
+      oldestFirst: oldestFirst,
+    );
     return page.rows;
   }
 

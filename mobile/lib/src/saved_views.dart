@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'fields.dart';
+import 'log_fields.dart';
 import 'session.dart';
 
 /// The views of one signal: the organization's, and this account's own.
@@ -179,6 +180,8 @@ class ViewState {
     this.filters = const [],
     this.query = '',
     this.severityMin = '',
+    this.columns = const [],
+    this.oldestFirst = false,
     this.slowest = false,
     this.hiddenGroups = 0,
     this.allSpans = false,
@@ -210,6 +213,11 @@ class ViewState {
       filters: severity.rest,
       query: q is String ? q : '',
       severityMin: severity.min,
+      // The table the view was saved with. This used to be kept but not
+      // read, so a view made in a browser opened here with the four
+      // default columns and looked like a different view.
+      columns: normalizeColumns(state['columns']),
+      oldestFirst: state['order'] == 'asc',
       hiddenGroups: groups is List ? groups.length : 0,
     );
   }
@@ -223,6 +231,13 @@ class ViewState {
 
   /// `INFO`, `WARN`, `ERROR` or empty for every severity (logs).
   final String severityMin;
+
+  /// The columns of the logs table, already normalized -- never empty for
+  /// a logs view, because a view with no columns is the default four.
+  final List<String> columns;
+
+  /// The logs view asked for the oldest records first.
+  final bool oldestFirst;
 
   /// Slowest instead of newest (traces).
   final bool slowest;
@@ -243,7 +258,12 @@ class ViewState {
   /// conditions, no search, no severity, no sort. Applying it is a
   /// no-op, and a screen that looks unchanged has to say why.
   bool get empty =>
-      filters.isEmpty && query.isEmpty && severityMin.isEmpty && !slowest;
+      filters.isEmpty &&
+      query.isEmpty &&
+      severityMin.isEmpty &&
+      !slowest &&
+      !oldestFirst &&
+      (columns.isEmpty || isDefaultColumns(columns));
 }
 
 ({String min, List<Filter> rest}) _severityOf(List<Filter> filters) {
@@ -269,9 +289,13 @@ Map<String, Object?> logsViewState({
   required String query,
   required String severityMin,
   String service = '',
+  List<String>? columns,
+  bool oldestFirst = false,
   Map<String, Object?> keep = const {},
 }) => {
-  ..._kept(keep),
+  ..._kept(keep, _logsOwnKeys),
+  'columns': columns ?? [...defaultLogColumns],
+  'order': oldestFirst ? 'asc' : 'desc',
   'filters': [
     for (final f in filters) f.toJson(),
     // The service box and the severity button are this app's own controls,
@@ -301,7 +325,7 @@ Map<String, Object?> tracesViewState({
   required bool slowest,
   Map<String, Object?> keep = const {},
 }) => {
-  ..._kept(keep),
+  ..._kept(keep, _tracesOwnKeys),
   'filters': [
     for (final f in filters) f.toJson(),
     // The traces search box is a contains over the service name, which is
@@ -322,9 +346,15 @@ Map<String, Object?> tracesViewState({
 
 /// The parts of a view's state this app does not understand, kept as they
 /// were found. The parts it does understand are written fresh.
-Map<String, Object?> _kept(Map<String, Object?> state) => {
+///
+/// Which keys those are differs by signal: `order` is the logs table's own
+/// and a traces view's is not this app's to rewrite, which is why the two
+/// lists are separate rather than one union that quietly drops a key from
+/// the other screen.
+Map<String, Object?> _kept(Map<String, Object?> state, Set<String> own) => {
   for (final e in state.entries)
-    if (!_ownKeys.contains(e.key)) e.key: e.value,
+    if (!own.contains(e.key)) e.key: e.value,
 };
 
-const _ownKeys = {'filters', 'groups', 'q', 'sort', 'root_only'};
+const _logsOwnKeys = {'filters', 'groups', 'q', 'columns', 'order'};
+const _tracesOwnKeys = {'filters', 'groups', 'sort', 'root_only'};

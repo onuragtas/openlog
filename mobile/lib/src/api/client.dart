@@ -1278,10 +1278,16 @@ class OpenlogClient {
   Future<LogsQueryResponse> logs({
     String q = '',
     List<Map<String, Object?>> filters = const [],
+    List<String> columns = const [],
+    bool oldestFirst = false,
     int limit = 50,
   }) async {
     final body = <String, Object?>{
       'limit': limit,
+      // The extra keys to return in `fields`. The row's own fields come
+      // back whether they are asked for or not.
+      if (columns.isNotEmpty) 'columns': columns,
+      if (oldestFirst) 'order': 'asc',
       // No `include_record`: this list shows a severity, a service, a time
       // and a body, and asking for every attribute map of every row would
       // be a few hundred kilobytes a page that nothing reads.

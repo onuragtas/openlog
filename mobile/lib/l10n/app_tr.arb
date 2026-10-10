@@ -2525,5 +2525,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "logColumns": "Sütunlar",
+  "logColumnsPick": "Sütun ekle veya kaldır",
+  "logColumnsReset": "Sıfırla",
+  "logColumnsApply": "Uygula",
+  "logOrderNewest": "Önce en yeni",
+  "logOrderOldest": "Önce en eski"
 }

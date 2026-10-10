@@ -4012,4 +4012,22 @@ class LEn extends L {
 
   @override
   String get logsNoSeverity => 'no severity';
+
+  @override
+  String get logColumns => 'Columns';
+
+  @override
+  String get logColumnsPick => 'Add or remove a column';
+
+  @override
+  String get logColumnsReset => 'Reset';
+
+  @override
+  String get logColumnsApply => 'Apply';
+
+  @override
+  String get logOrderNewest => 'Newest first';
+
+  @override
+  String get logOrderOldest => 'Oldest first';
 }

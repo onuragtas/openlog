@@ -150,6 +150,7 @@ LogQueryRow logLine(
   String body, {
   int severity = 17,
   String service = 'checkout',
+  Map<String, String> fields = const {},
 }) {
   final at = DateTime.now().toUtc().subtract(const Duration(minutes: 2));
   return LogQueryRow(
@@ -164,7 +165,7 @@ LogQueryRow logLine(
     serviceName: service,
     traceId: '',
     spanId: '',
-    fields: const {},
+    fields: fields,
   );
 }
 
@@ -1411,6 +1412,33 @@ void main() {
     expect(find.text('Log details'), findsOneWidget);
     expect(find.text('service.name'), findsOneWidget);
     expect(find.text('checkout'), findsWidgets);
+  });
+
+  testWidgets('a chosen column is shown under the body of every row', (
+    tester,
+  ) async {
+    final session = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    final logs = ScriptedLogs(
+      logs: [
+        logLine(
+          'connection refused',
+          fields: const {'resource.container.name': 'api-green'},
+        ),
+      ],
+    );
+    await tester.pumpWidget(signedInApp(session, logs: logs));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Logs');
+
+    expect(find.textContaining('resource.container.name='), findsNothing);
+    logs.columns = [...logs.columns, 'resource.container.name'];
+    await tester.pumpWidget(signedInApp(session, logs: logs));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Logs');
+
+    // What the web puts under its card: the chosen columns the card does
+    // not already show, as `key=value`.
+    expect(find.text('resource.container.name=api-green'), findsOneWidget);
   });
 
   testWidgets('the log severity filter is a query, not a client-side sieve', (

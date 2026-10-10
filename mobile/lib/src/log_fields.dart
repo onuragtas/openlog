@@ -172,3 +172,80 @@ Filter valueFilter(
       value.trim().isNotEmpty &&
       num.tryParse(value.trim()) != null,
 );
+
+// ---- columns ---------------------------------------------------------------
+
+/// The columns the web starts with, in its order.
+const defaultLogColumns = [
+  'timestamp',
+  'severity_text',
+  'service.name',
+  'body',
+];
+
+/// The server's limit on a column list.
+const maxLogColumns = 50;
+
+/// A column list that can be trusted: unique, non-empty keys, `timestamp`
+/// pinned first, at most [maxLogColumns]. Anything unusable falls back to
+/// the defaults, because a saved view's `columns` is somebody else's JSON.
+List<String> normalizeColumns(Object? raw) {
+  final list = switch (raw) {
+    final List<Object?> l => l,
+    final String s => s.split(','),
+    _ => const <Object?>[],
+  };
+  final seen = <String>{};
+  for (final k in list) {
+    if (k is! String) continue;
+    final key = k.trim();
+    if (key.isEmpty || key.length > 256 || key == 'timestamp') continue;
+    seen.add(key);
+  }
+  if (seen.isEmpty) return [...defaultLogColumns];
+  return ['timestamp', ...seen].take(maxLogColumns).toList();
+}
+
+bool isDefaultColumns(List<String> columns) =>
+    columns.length == defaultLogColumns.length &&
+    [
+      for (var i = 0; i < columns.length; i++)
+        columns[i] == defaultLogColumns[i],
+    ].every((ok) => ok);
+
+/// Adds the key as the last column, or removes it. `timestamp` cannot be
+/// removed: a log line without its time is not a log line.
+List<String> toggleColumn(List<String> columns, String key) {
+  if (key == 'timestamp') return [...columns];
+  if (columns.contains(key)) {
+    return normalizeColumns([
+      for (final c in columns)
+        if (c != key) c,
+    ]);
+  }
+  return normalizeColumns([...columns, key]);
+}
+
+/// What the request asks for: the keys the row does not already carry.
+/// Asking for `service.name` as a column would be asking for something
+/// every row has anyway.
+List<String> requestColumns(List<String> columns) => [
+  for (final c in columns)
+    if (!isRowField(c)) c,
+];
+
+/// The fields a log card already shows by itself, so a column naming one
+/// of them is not repeated underneath it.
+const _cardFields = {
+  'timestamp',
+  'severity_text',
+  'service.name',
+  'body',
+  'trace_id',
+};
+
+/// The chosen columns a card has to spell out as `key=value`.
+List<String> extraColumns(List<String> columns) => [
+  for (final c in columns)
+    if (!_cardFields.contains(c)) c,
+];

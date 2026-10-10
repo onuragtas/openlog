@@ -66,6 +66,9 @@ void main() {
     // Numbers arrive as their text, which is what the server makes of them
     // as well.
     expect(state.filters.last.values, ['500', '503']);
+    // The table the view was saved with, not this app's defaults.
+    expect(state.columns, ['timestamp', 'body']);
+    expect(state.oldestFirst, isFalse);
     expect(state.partial, isFalse);
   });
 
@@ -100,9 +103,19 @@ void main() {
 
   test('a view with nothing in it says so rather than looking applied', () {
     expect(ViewState.of(const {}, signal: 'logs').empty, isTrue);
+    // A view that only sets the table is not empty any more: applying it
+    // changes which columns are shown, and saying "nothing to apply"
+    // would be a lie about a visible change.
     expect(
       ViewState.of(const {
         'columns': ['body'],
+      }, signal: 'logs').empty,
+      isFalse,
+    );
+    // The default four, though, are what the screen already shows.
+    expect(
+      ViewState.of(const {
+        'columns': ['timestamp', 'severity_text', 'service.name', 'body'],
       }, signal: 'logs').empty,
       isTrue,
     );
@@ -162,6 +175,8 @@ void main() {
       severityMin: 'WARN',
       service: 'api',
       keep: const {
+        // Not kept: the table is the screen's own now, and it is written
+        // from what the screen shows rather than from the old view.
         'columns': ['timestamp', 'body'],
         'order': 'asc',
         'group_by': 'service.name',
@@ -176,8 +191,15 @@ void main() {
       },
     );
 
-    expect(state['columns'], ['timestamp', 'body']);
-    expect(state['order'], 'asc');
+    expect(state['columns'], [
+      'timestamp',
+      'severity_text',
+      'service.name',
+      'body',
+    ]);
+    expect(state['order'], 'desc');
+    // Still kept, because the phone has neither: the volume chart's
+    // grouping and the window a browser saved.
     expect(state['group_by'], 'service.name');
     expect(state['range'], '24h');
     expect(state['groups'], isEmpty);
@@ -221,11 +243,15 @@ void main() {
       ],
       query: 'timeout',
       severityMin: 'ERROR',
+      columns: const ['timestamp', 'body', 'resource.container.name'],
+      oldestFirst: true,
     );
     final read = ViewState.of(saved, signal: 'logs');
 
     expect(read.query, 'timeout');
     expect(read.severityMin, 'ERROR');
+    expect(read.columns, ['timestamp', 'body', 'resource.container.name']);
+    expect(read.oldestFirst, isTrue);
     expect(read.filters.single.values, ['500', '503']);
     expect(read.partial, isFalse);
   });
