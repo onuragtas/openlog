@@ -571,9 +571,98 @@ class HostsController extends SectionController<Host> {
 class ContainersController extends SectionController<ApiContainer> {
   ContainersController(super.client);
 
+  /// The web's filters. [composeProject] is null for every project and ""
+  /// for the containers that belong to none, which is a filter the web
+  /// offers as its own option.
+  String hostId = '';
+  String? composeProject;
+  String state = '';
+
+  /// Grouped by compose service, as the web's toggle does. The grouping
+  /// itself happens where the rows are drawn; this is only the switch.
+  bool grouped = false;
+
+  int total = 0;
+
+  /// The projects to choose from, from `containers/groups`.
+  List<ComposeProject> projects = const [];
+
+  /// Which host the projects were asked for, so changing the host asks
+  /// again rather than offering projects of a host nobody is looking at.
+  String _projectsOf = '-';
+
   @override
-  Future<List<ApiContainer>> fetch() async =>
-      (await client.containers(q: query)).containers;
+  Future<List<ApiContainer>> fetch() async {
+    if (_projectsOf != hostId) {
+      projects = (await client.containerGroups(hostId: hostId)).projects;
+      _projectsOf = hostId;
+    }
+    final page = await client.containers(
+      q: query,
+      hostId: hostId,
+      composeProject: composeProject,
+      state: state,
+    );
+    total = page.total;
+    return page.containers;
+  }
+}
+
+/// The container states the server filters by, in the contract's order.
+const containerStates = [
+  'running',
+  'paused',
+  'restarting',
+  'exited',
+  'created',
+  'dead',
+  'removing',
+  'unknown',
+];
+
+/// One compose service's containers, as the web groups them.
+class ContainerGroup {
+  ContainerGroup(this.project, this.service);
+
+  final String project;
+  final String service;
+  final containers = <ApiContainer>[];
+  int running = 0;
+  double? cpu;
+  double? memory;
+
+  /// True for the containers that belong to no compose project, which the
+  /// web puts last and labels "tek başına".
+  bool get standalone => project.isEmpty && service.isEmpty;
+}
+
+/// Groups containers by compose project and service, the web's own way:
+/// only reporting containers count towards the numbers, and the ones in no
+/// project come last.
+List<ContainerGroup> groupByComposeService(List<ApiContainer> containers) {
+  final index = <String, ContainerGroup>{};
+  final order = <ContainerGroup>[];
+  for (final c in containers) {
+    final key = c.composeProject.isNotEmpty || c.composeService.isNotEmpty
+        ? '${c.composeProject}/${c.composeService}'
+        : '';
+    final g = index.putIfAbsent(key, () {
+      final made = ContainerGroup(c.composeProject, c.composeService);
+      order.add(made);
+      return made;
+    });
+    g.containers.add(c);
+    if (!c.reporting) continue;
+    if (c.state == 'running') g.running++;
+    if (c.cpuUtilization != null) g.cpu = (g.cpu ?? 0) + c.cpuUtilization!;
+    if (c.memoryUsage != null) g.memory = (g.memory ?? 0) + c.memoryUsage!;
+  }
+  return [
+    for (final g in order)
+      if (!g.standalone) g,
+    for (final g in order)
+      if (g.standalone) g,
+  ];
 }
 
 class PodsController extends SectionController<KubernetesPod> {

@@ -152,6 +152,7 @@ const responseTargets = <String>[
   'get /api/v1/hosts 200 HostPage',
   'get /api/v1/containers 200 ContainerPage',
   'get /api/v1/kubernetes/pods 200 PodPage',
+  'get /api/v1/containers/groups 200 ComposeProjectPage',
   'get /api/v1/kubernetes/clusters 200 KubernetesClusterPage',
   'get /api/v1/kubernetes/nodes 200 KubernetesNodePage',
   'get /api/v1/kubernetes/workloads 200 KubernetesWorkloadPage',

@@ -2147,5 +2147,36 @@
   "dbCurrentPlan": "güncel",
   "dbPlanChanged": "plan değişti",
   "dbPlanCost": "maliyet",
-  "dbCallers": "Çağıran servisler"
+  "dbCallers": "Çağıran servisler",
+  "containersHost": "Sunucu",
+  "containersAllHosts": "Tüm sunucular",
+  "containersProject": "Proje",
+  "containersAllProjects": "Tüm projeler",
+  "containersNoProject": "Projesiz",
+  "containersState": "Durum",
+  "containersAllStates": "Tüm durumlar",
+  "containersGroup": "Grupla",
+  "containersUngrouped": "Tek başına",
+  "containersRunning": "{running}/{count} çalışıyor",
+  "@containersRunning": {
+      "placeholders": {
+          "running": {
+              "type": "int"
+          },
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "containersShown": "{total} konteynerin {shown} tanesi",
+  "@containersShown": {
+      "placeholders": {
+          "shown": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          }
+      }
+  }
 }

@@ -15186,6 +15186,36 @@ class PodPage {
   final int total;
 }
 
+/// `ComposeProjectPage` of the openlog API contract.
+class ComposeProjectPage {
+  const ComposeProjectPage({required this.projects});
+
+  factory ComposeProjectPage.fromJson(
+    Object? json, [
+    String path = 'ComposeProjectPage',
+  ]) {
+    final m = _obj(json, path);
+    return ComposeProjectPage(
+      projects: _req(
+        m,
+        'projects',
+        path,
+        (v, p) => _list<ComposeProject>(
+          v,
+          p,
+          (v, p) => ComposeProject.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'projects': [for (final e in projects) e.toJson()],
+  };
+
+  final List<ComposeProject> projects;
+}
+
 /// `KubernetesClusterPage` of the openlog API contract.
 class KubernetesClusterPage {
   const KubernetesClusterPage({required this.clusters});
@@ -17546,6 +17576,54 @@ class KubernetesPod {
   final bool reporting;
 }
 
+/// `ComposeProject` of the openlog API contract.
+class ComposeProject {
+  const ComposeProject({
+    required this.composeProject,
+    required this.hostIds,
+    required this.containers,
+    required this.running,
+    required this.services,
+  });
+
+  factory ComposeProject.fromJson(
+    Object? json, [
+    String path = 'ComposeProject',
+  ]) {
+    final m = _obj(json, path);
+    return ComposeProject(
+      composeProject: _req(m, 'compose_project', path, _str),
+      hostIds: _req(m, 'host_ids', path, (v, p) => _list<String>(v, p, _str)),
+      containers: _req(m, 'containers', path, _int),
+      running: _req(m, 'running', path, _int),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<ComposeService>(
+          v,
+          p,
+          (v, p) => ComposeService.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'compose_project': composeProject,
+    'host_ids': hostIds,
+    'containers': containers,
+    'running': running,
+    'services': [for (final e in services) e.toJson()],
+  };
+
+  final String composeProject;
+  final List<String> hostIds;
+  final int containers;
+  final int running;
+  final List<ComposeService> services;
+}
+
 /// `KubernetesCluster` of the openlog API contract.
 class KubernetesCluster {
   const KubernetesCluster({
@@ -19047,6 +19125,45 @@ class HostUsage {
   final double? disk;
   final double? load1;
   final double? loadPerCpu;
+}
+
+/// `ComposeService` of the openlog API contract.
+class ComposeService {
+  const ComposeService({
+    required this.composeService,
+    required this.containers,
+    required this.running,
+    this.cpuUtilization,
+    this.memoryUsage,
+  });
+
+  factory ComposeService.fromJson(
+    Object? json, [
+    String path = 'ComposeService',
+  ]) {
+    final m = _obj(json, path);
+    return ComposeService(
+      composeService: _req(m, 'compose_service', path, _str),
+      containers: _req(m, 'containers', path, _int),
+      running: _req(m, 'running', path, _int),
+      cpuUtilization: _opt(m, 'cpu_utilization', path, _num),
+      memoryUsage: _opt(m, 'memory_usage', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'compose_service': composeService,
+    'containers': containers,
+    'running': running,
+    'cpu_utilization': ?cpuUtilization,
+    'memory_usage': ?memoryUsage,
+  };
+
+  final String composeService;
+  final int containers;
+  final int running;
+  final double? cpuUtilization;
+  final double? memoryUsage;
 }
 
 /// `KubernetesNodeCondition` of the openlog API contract.

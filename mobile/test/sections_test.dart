@@ -813,6 +813,9 @@ void main() {
           'total': 0,
           'step': '60s',
         },
+        // The containers list asks for the compose projects too: the
+        // project filter's options come from there.
+        '/api/v1/containers/groups' => {'projects': <Object>[]},
         '/api/v1/kubernetes/pods' => {'pods': <Object>[], 'total': 0},
         '/api/v1/synthetics/checks' => {
           'checks': <Object>[],

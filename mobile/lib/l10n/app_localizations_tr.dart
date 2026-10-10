@@ -3505,4 +3505,41 @@ class LTr extends L {
 
   @override
   String get dbCallers => 'Çağıran servisler';
+
+  @override
+  String get containersHost => 'Sunucu';
+
+  @override
+  String get containersAllHosts => 'Tüm sunucular';
+
+  @override
+  String get containersProject => 'Proje';
+
+  @override
+  String get containersAllProjects => 'Tüm projeler';
+
+  @override
+  String get containersNoProject => 'Projesiz';
+
+  @override
+  String get containersState => 'Durum';
+
+  @override
+  String get containersAllStates => 'Tüm durumlar';
+
+  @override
+  String get containersGroup => 'Grupla';
+
+  @override
+  String get containersUngrouped => 'Tek başına';
+
+  @override
+  String containersRunning(int running, int count) {
+    return '$running/$count çalışıyor';
+  }
+
+  @override
+  String containersShown(int shown, int total) {
+    return '$total konteynerin $shown tanesi';
+  }
 }

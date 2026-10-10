@@ -15,6 +15,7 @@ class ListScreen<T> extends StatelessWidget {
     required this.itemBuilder,
     this.search,
     this.header,
+    this.itemCount,
   });
 
   final ListController<T> controller;
@@ -23,6 +24,11 @@ class ListScreen<T> extends StatelessWidget {
   final Widget? search;
   final Widget? header;
   final Widget Function(BuildContext, int) itemBuilder;
+
+  /// How many rows to draw, when a row is not one item: the containers
+  /// list draws one row per compose service when it is grouped. Null means
+  /// one row per item, which is every other list.
+  final int? itemCount;
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +54,14 @@ class ListScreen<T> extends StatelessWidget {
                     // person wants to check again.
                     itemCount: controller.items.isEmpty
                         ? 2
-                        : controller.items.length + 2,
+                        : (itemCount ?? controller.items.length) + 2,
                     itemBuilder: (context, i) {
                       if (i == 0) return header ?? const SizedBox.shrink();
                       if (controller.items.isEmpty) {
                         return _Empty(title: emptyTitle, banner: banner);
                       }
-                      if (i == controller.items.length + 1) return banner;
+                      final rows = itemCount ?? controller.items.length;
+                      if (i == rows + 1) return banner;
                       return itemBuilder(context, i - 1);
                     },
                   ),

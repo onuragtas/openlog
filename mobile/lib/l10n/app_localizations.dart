@@ -6276,6 +6276,72 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Calling services'**
   String get dbCallers;
+
+  /// No description provided for @containersHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get containersHost;
+
+  /// No description provided for @containersAllHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'All hosts'**
+  String get containersAllHosts;
+
+  /// No description provided for @containersProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Project'**
+  String get containersProject;
+
+  /// No description provided for @containersAllProjects.
+  ///
+  /// In en, this message translates to:
+  /// **'All projects'**
+  String get containersAllProjects;
+
+  /// No description provided for @containersNoProject.
+  ///
+  /// In en, this message translates to:
+  /// **'No project'**
+  String get containersNoProject;
+
+  /// No description provided for @containersState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get containersState;
+
+  /// No description provided for @containersAllStates.
+  ///
+  /// In en, this message translates to:
+  /// **'All states'**
+  String get containersAllStates;
+
+  /// No description provided for @containersGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get containersGroup;
+
+  /// No description provided for @containersUngrouped.
+  ///
+  /// In en, this message translates to:
+  /// **'Standalone'**
+  String get containersUngrouped;
+
+  /// No description provided for @containersRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'{running}/{count} running'**
+  String containersRunning(int running, int count);
+
+  /// No description provided for @containersShown.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} of {total} containers'**
+  String containersShown(int shown, int total);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

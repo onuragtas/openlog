@@ -294,6 +294,10 @@ Widget containerCard(
   BuildContext context,
   ApiContainer x, {
   VoidCallback? onOpen,
+
+  /// False under a compose group's heading, which already says it -- the
+  /// web drops the same column there.
+  bool showCompose = true,
 }) {
   final l = L.of(context);
   final memory =
@@ -309,7 +313,8 @@ Widget containerCard(
     tags: [
       if (!x.reporting)
         Tag(label: l.stateNotReporting, level: SeverityLevel.warning),
-      if (x.composeService.isNotEmpty) Tag(label: x.composeService),
+      if (showCompose && x.composeService.isNotEmpty)
+        Tag(label: x.composeService),
       if (x.k8sNamespaceName.isNotEmpty) Tag(label: x.k8sNamespaceName),
     ],
     stats: [

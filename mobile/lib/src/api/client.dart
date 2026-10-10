@@ -1219,9 +1219,43 @@ class OpenlogClient {
   Future<HostPage> hosts({String q = ''}) async =>
       HostPage.fromJson(await _send('GET', _listPath('/api/v1/hosts', q)));
 
-  Future<ContainerPage> containers({String q = ''}) async =>
-      ContainerPage.fromJson(
-        await _send('GET', _listPath('/api/v1/containers', q)),
+  /// The containers of the window, with the web's filters: one host, one
+  /// compose project, one state.
+  Future<ContainerPage> containers({
+    String q = '',
+    String hostId = '',
+    String? composeProject,
+    String state = '',
+  }) async => ContainerPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/containers',
+        q,
+        extra: {
+          if (hostId.isNotEmpty) 'host_id': hostId,
+          // An empty project is a filter of its own -- the containers that
+          // belong to no compose project -- so null means "every one" and
+          // "" means "those without".
+          'compose_project': ?composeProject,
+          if (state.isNotEmpty) 'state': state,
+        },
+      ),
+    ),
+  );
+
+  /// The same containers grouped by compose project, which is where the
+  /// project filter's list of projects comes from.
+  Future<ComposeProjectPage> containerGroups({String hostId = ''}) async =>
+      ComposeProjectPage.fromJson(
+        await _send(
+          'GET',
+          _listPath(
+            '/api/v1/containers/groups',
+            '',
+            extra: {if (hostId.isNotEmpty) 'host_id': hostId},
+          ),
+        ),
       );
 
   /// The pods of the window, with the web's own filters: a cluster, a

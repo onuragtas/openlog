@@ -2244,5 +2244,36 @@
   "dbCurrentPlan": "current",
   "dbPlanChanged": "plan changed",
   "dbPlanCost": "cost",
-  "dbCallers": "Calling services"
+  "dbCallers": "Calling services",
+  "containersHost": "Host",
+  "containersAllHosts": "All hosts",
+  "containersProject": "Project",
+  "containersAllProjects": "All projects",
+  "containersNoProject": "No project",
+  "containersState": "State",
+  "containersAllStates": "All states",
+  "containersGroup": "Group",
+  "containersUngrouped": "Standalone",
+  "containersRunning": "{running}/{count} running",
+  "@containersRunning": {
+      "placeholders": {
+          "running": {
+              "type": "int"
+          },
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "containersShown": "{shown} of {total} containers",
+  "@containersShown": {
+      "placeholders": {
+          "shown": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          }
+      }
+  }
 }

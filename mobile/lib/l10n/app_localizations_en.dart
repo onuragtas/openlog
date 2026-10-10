@@ -3513,4 +3513,41 @@ class LEn extends L {
 
   @override
   String get dbCallers => 'Calling services';
+
+  @override
+  String get containersHost => 'Host';
+
+  @override
+  String get containersAllHosts => 'All hosts';
+
+  @override
+  String get containersProject => 'Project';
+
+  @override
+  String get containersAllProjects => 'All projects';
+
+  @override
+  String get containersNoProject => 'No project';
+
+  @override
+  String get containersState => 'State';
+
+  @override
+  String get containersAllStates => 'All states';
+
+  @override
+  String get containersGroup => 'Group';
+
+  @override
+  String get containersUngrouped => 'Standalone';
+
+  @override
+  String containersRunning(int running, int count) {
+    return '$running/$count running';
+  }
+
+  @override
+  String containersShown(int shown, int total) {
+    return '$shown of $total containers';
+  }
 }

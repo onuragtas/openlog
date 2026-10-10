@@ -559,7 +559,12 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       çizgi ve bir ortalama — 360 puanda on iki yığılmış seri lekeden ibaret.
       `db/lookup` dışarıda: APM'in veritabanı sekmesinden gelen bağlantı için var,
       mobilde o yol henüz yok (9.2'de de yoktu).
-- [ ] Konteyner grupları (`containers/groups`)
+- [x] Konteyner grupları (`containers/groups`): konteyner listesi artık webin dört
+      denetimini taşıyor — sunucu, proje ("projesiz" dahil) ve durum süzgeçleri ile
+      "Grupla" düğmesi. Gruplama webin kendi mantığı (`groupByComposeService`): yalnızca
+      bildiren konteynerler sayıya giriyor, projesizler en sonda. Projelerin listesi
+      `containers/groups`'tan geliyor — webde de o uç sadece bunun için kullanılıyor.
+      Kesilen liste "şu kadarın şu kadarı" diyor.
 - [ ] Maliyet: özet, servisler, konteynerler, eğilim, fiyatlar (`costs/*`)
 - [ ] Bulut bağlantıları (`cloud/providers`, `cloud/connections`, `.../test`)
 - [ ] Filo politikası ve dağıtımlar (`fleet/policy`, `fleet/rollouts`, `fleet/rollback`)
