@@ -476,6 +476,9 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       API anahtarıyla yapılan değişiklikte anahtarın adı yazıyor.
 - [x] Source map'ler (`source-maps`): liste ve silme. Yükleme webde kalıyor — .map dosyası
       derleme çıktısı ve derleme makinesinde; bu bir kullanım şekli farkı.
+- [x] APM örnekleme Ayarlar'a taşındı — webde de orada duruyor, APM sayfasında değil.
+- [x] Kullanım ve plan (`usage`): dönem seçimi, plan, kota ölçerleri, sayımlar ve sinyale göre
+      alınan/saklanan veri. Sınırı 0 olan kota "sınırsız", "hiç" değil.
 - [x] Organizasyon ayarları (`orgs/current`): ad değiştirme, kimlikler, rol, oluşturulma ve
       organizasyon dili. `saas` ve `support-access` operatör uçları (ayrı konsol, §9'un dışında);
       organizasyon silme (`.../deletion`) yeniden kimlik doğrulama istiyor, sırada.

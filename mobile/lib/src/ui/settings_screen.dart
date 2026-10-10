@@ -15,14 +15,18 @@ import '../audit.dart';
 import '../keys.dart';
 import '../members.dart';
 import '../roles.dart';
+import '../sampling.dart';
 import '../session.dart';
+import '../usage.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
 import 'audit_tab.dart';
 import 'keys_tabs.dart';
 import 'members_tab.dart';
 import 'org_tab.dart';
+import 'sampling_screen.dart';
 import 'source_maps_tab.dart';
+import 'usage_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
 
@@ -39,6 +43,8 @@ class SettingsBody extends StatefulWidget {
     required this.browserKeys,
     required this.sourceMaps,
     required this.audit,
+    required this.sampling,
+    required this.usage,
     required this.active,
   });
 
@@ -67,6 +73,12 @@ class SettingsBody extends StatefulWidget {
   /// The stored source maps, and the organization's own record of change.
   final SourceMapsController sourceMaps;
   final AuditController audit;
+
+  /// The tail sampling policy, made per visit because it holds a draft.
+  final SamplingController Function() sampling;
+
+  /// What the organization used this period, against its plan.
+  final UsageController usage;
   final bool active;
 
   @override
@@ -135,6 +147,20 @@ final _tabs = <_Tab>[
     'audit.read',
     (s) => AuditTab(session: s.widget.session, controller: s.widget.audit),
   ),
+  // The web keeps the tail sampling policy here, not on the APM page.
+  _Tab(
+    'apm-sampling',
+    (l) => l.settingsSampling,
+    null,
+    (s) =>
+        SamplingBody(session: s.widget.session, sampling: s.samplingController),
+  ),
+  _Tab(
+    'usage',
+    (l) => l.settingsUsage,
+    null,
+    (s) => UsageTab(session: s.widget.session, controller: s.widget.usage),
+  ),
 ];
 
 class _SettingsBodyState extends State<SettingsBody>
@@ -178,6 +204,11 @@ class _SettingsBodyState extends State<SettingsBody>
     _loadIfVisible();
   }
 
+  /// One per visit to the settings section, like the screen it used to be:
+  /// it holds a draft somebody is editing.
+  SamplingController? _sampling;
+  SamplingController get samplingController => _sampling ??= widget.sampling();
+
   List<_Tab> _allowed() {
     final role = widget.session.me?.role;
     return [
@@ -188,6 +219,7 @@ class _SettingsBodyState extends State<SettingsBody>
 
   @override
   void dispose() {
+    _sampling?.dispose();
     _tabsController.dispose();
     super.dispose();
   }
@@ -225,6 +257,12 @@ class _SettingsBodyState extends State<SettingsBody>
       case 'audit-log':
         final c = widget.audit;
         if (!c.loading && c.events.isEmpty) later(c.load);
+      case 'apm-sampling':
+        final c = samplingController;
+        if (!c.loading && c.state == null) later(c.load);
+      case 'usage':
+        final c = widget.usage;
+        if (!c.loading && c.overview == null) later(c.load);
     }
   }
 

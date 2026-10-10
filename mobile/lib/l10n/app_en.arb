@@ -1328,7 +1328,6 @@
   "samplingNoRateLimit": "The rate limit is not part of this estimate.",
   "samplingConflict": "Somebody else saved while you were editing; reload and try again.",
   "samplingUnavailable": "This installation cannot store a sampling policy.",
-  "servicesSampling": "Sampling",
   "serviceTabMap": "Map",
   "mapEmpty": "No calls into or out of this service in this range.",
   "mapIncoming": "Callers",
@@ -1672,5 +1671,51 @@
   "orgLanguage": "Organization language",
   "orgLanguageHint": "The language the server writes in for people who have not chosen one.",
   "orgLanguageNone": "Not chosen",
-  "orgForbidden": "Your role does not allow changing the organization."
+  "orgForbidden": "Your role does not allow changing the organization.",
+  "settingsSampling": "APM sampling",
+  "settingsUsage": "Usage and plan",
+  "usageCurrent": "This period",
+  "usagePrevious": "Previous period",
+  "usageSaas": "SaaS",
+  "usageSelfHosted": "Self-hosted",
+  "usagePlanDefault": "No plan assigned; the catalog default applies.",
+  "usageBlocked": "Ingest is blocked: the plan limit was exceeded.",
+  "usageIngest": "Ingest",
+  "usageHosts": "Hosts",
+  "usageUsers": "Users",
+  "usageContainers": "Containers",
+  "usageServices": "Services",
+  "usageQueries": "Queries",
+  "usageStored": "Stored (compressed)",
+  "usageUnlimited": "Unlimited",
+  "usageProjected": "Projected at period end: {value}",
+  "@usageProjected": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "usageProjectedPercent": "Projected at period end: {value} ({percent}% of the limit)",
+  "@usageProjectedPercent": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "usageBySignal": "By signal",
+  "usageRetention": "Retention",
+  "usageDays": "{count} days",
+  "@usageDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageForbidden": "Your role does not allow seeing usage."
 }

@@ -2012,9 +2012,6 @@ class LTr extends L {
       'Bu kurulumda örnekleme ilkesi saklanamıyor.';
 
   @override
-  String get servicesSampling => 'Örnekleme';
-
-  @override
   String get serviceTabMap => 'Harita';
 
   @override
@@ -2558,4 +2555,76 @@ class LTr extends L {
 
   @override
   String get orgForbidden => 'Rolünüz organizasyonu değiştirmeye yetmiyor.';
+
+  @override
+  String get settingsSampling => 'APM örnekleme';
+
+  @override
+  String get settingsUsage => 'Kullanım ve plan';
+
+  @override
+  String get usageCurrent => 'Bu dönem';
+
+  @override
+  String get usagePrevious => 'Önceki dönem';
+
+  @override
+  String get usageSaas => 'SaaS';
+
+  @override
+  String get usageSelfHosted => 'Kendi sunucunuzda';
+
+  @override
+  String get usagePlanDefault => 'Plan atanmadı; katalog varsayılanı geçerli.';
+
+  @override
+  String get usageBlocked => 'Veri alımı durduruldu: plan sınırı aşıldı.';
+
+  @override
+  String get usageIngest => 'Alınan veri';
+
+  @override
+  String get usageHosts => 'Sunucular';
+
+  @override
+  String get usageUsers => 'Kullanıcılar';
+
+  @override
+  String get usageContainers => 'Konteynerler';
+
+  @override
+  String get usageServices => 'Servisler';
+
+  @override
+  String get usageQueries => 'Sorgular';
+
+  @override
+  String get usageStored => 'Saklanan (sıkıştırılmış)';
+
+  @override
+  String get usageUnlimited => 'Sınırsız';
+
+  @override
+  String usageProjected(String value) {
+    return 'Dönem sonu tahmini: $value';
+  }
+
+  @override
+  String usageProjectedPercent(String value, int percent) {
+    return 'Dönem sonu tahmini: $value (sınırın %$percent\'i)';
+  }
+
+  @override
+  String get usageBySignal => 'Sinyale göre';
+
+  @override
+  String get usageRetention => 'Saklama';
+
+  @override
+  String usageDays(int count) {
+    return '$count gün';
+  }
+
+  @override
+  String get usageForbidden => 'Rolünüz kullanımı görmeye yetmiyor.';
 }

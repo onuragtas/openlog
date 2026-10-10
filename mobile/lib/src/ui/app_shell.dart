@@ -340,6 +340,8 @@ class _AppShellState extends State<AppShell> {
         browserKeys: s.browserKeys,
         sourceMaps: s.sourceMaps,
         audit: s.audit,
+        sampling: s.sampling,
+        usage: s.usage,
         active: active,
       ),
     );

@@ -3613,12 +3613,6 @@ abstract class L {
   /// **'This installation cannot store a sampling policy.'**
   String get samplingUnavailable;
 
-  /// No description provided for @servicesSampling.
-  ///
-  /// In en, this message translates to:
-  /// **'Sampling'**
-  String get servicesSampling;
-
   /// No description provided for @serviceTabMap.
   ///
   /// In en, this message translates to:
@@ -4572,6 +4566,138 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Your role does not allow changing the organization.'**
   String get orgForbidden;
+
+  /// No description provided for @settingsSampling.
+  ///
+  /// In en, this message translates to:
+  /// **'APM sampling'**
+  String get settingsSampling;
+
+  /// No description provided for @settingsUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage and plan'**
+  String get settingsUsage;
+
+  /// No description provided for @usageCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'This period'**
+  String get usageCurrent;
+
+  /// No description provided for @usagePrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous period'**
+  String get usagePrevious;
+
+  /// No description provided for @usageSaas.
+  ///
+  /// In en, this message translates to:
+  /// **'SaaS'**
+  String get usageSaas;
+
+  /// No description provided for @usageSelfHosted.
+  ///
+  /// In en, this message translates to:
+  /// **'Self-hosted'**
+  String get usageSelfHosted;
+
+  /// No description provided for @usagePlanDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'No plan assigned; the catalog default applies.'**
+  String get usagePlanDefault;
+
+  /// No description provided for @usageBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Ingest is blocked: the plan limit was exceeded.'**
+  String get usageBlocked;
+
+  /// No description provided for @usageIngest.
+  ///
+  /// In en, this message translates to:
+  /// **'Ingest'**
+  String get usageIngest;
+
+  /// No description provided for @usageHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get usageHosts;
+
+  /// No description provided for @usageUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get usageUsers;
+
+  /// No description provided for @usageContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get usageContainers;
+
+  /// No description provided for @usageServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get usageServices;
+
+  /// No description provided for @usageQueries.
+  ///
+  /// In en, this message translates to:
+  /// **'Queries'**
+  String get usageQueries;
+
+  /// No description provided for @usageStored.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored (compressed)'**
+  String get usageStored;
+
+  /// No description provided for @usageUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited'**
+  String get usageUnlimited;
+
+  /// No description provided for @usageProjected.
+  ///
+  /// In en, this message translates to:
+  /// **'Projected at period end: {value}'**
+  String usageProjected(String value);
+
+  /// No description provided for @usageProjectedPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Projected at period end: {value} ({percent}% of the limit)'**
+  String usageProjectedPercent(String value, int percent);
+
+  /// No description provided for @usageBySignal.
+  ///
+  /// In en, this message translates to:
+  /// **'By signal'**
+  String get usageBySignal;
+
+  /// No description provided for @usageRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention'**
+  String get usageRetention;
+
+  /// No description provided for @usageDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days'**
+  String usageDays(int count);
+
+  /// No description provided for @usageForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow seeing usage.'**
+  String get usageForbidden;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

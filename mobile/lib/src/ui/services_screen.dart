@@ -8,7 +8,6 @@ import '../services.dart';
 import '../session.dart';
 import 'agents_screen.dart';
 import 'errors_screen.dart';
-import 'sampling_screen.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
 import 'theme.dart';
@@ -82,19 +81,6 @@ class _ServicesBodyState extends State<ServicesBody> {
               ),
               icon: const Icon(Icons.bug_report_outlined),
               label: Text(l.navErrors),
-            ),
-            TextButton.icon(
-              key: const Key('services-sampling'),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => SamplingScreen(
-                    session: widget.session,
-                    sampling: widget.sections.sampling(),
-                  ),
-                ),
-              ),
-              icon: const Icon(Icons.filter_alt_outlined),
-              label: Text(l.servicesSampling),
             ),
             TextButton.icon(
               key: const Key('services-agents'),

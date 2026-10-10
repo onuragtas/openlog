@@ -2017,9 +2017,6 @@ class LEn extends L {
       'This installation cannot store a sampling policy.';
 
   @override
-  String get servicesSampling => 'Sampling';
-
-  @override
   String get serviceTabMap => 'Map';
 
   @override
@@ -2563,4 +2560,77 @@ class LEn extends L {
   @override
   String get orgForbidden =>
       'Your role does not allow changing the organization.';
+
+  @override
+  String get settingsSampling => 'APM sampling';
+
+  @override
+  String get settingsUsage => 'Usage and plan';
+
+  @override
+  String get usageCurrent => 'This period';
+
+  @override
+  String get usagePrevious => 'Previous period';
+
+  @override
+  String get usageSaas => 'SaaS';
+
+  @override
+  String get usageSelfHosted => 'Self-hosted';
+
+  @override
+  String get usagePlanDefault =>
+      'No plan assigned; the catalog default applies.';
+
+  @override
+  String get usageBlocked => 'Ingest is blocked: the plan limit was exceeded.';
+
+  @override
+  String get usageIngest => 'Ingest';
+
+  @override
+  String get usageHosts => 'Hosts';
+
+  @override
+  String get usageUsers => 'Users';
+
+  @override
+  String get usageContainers => 'Containers';
+
+  @override
+  String get usageServices => 'Services';
+
+  @override
+  String get usageQueries => 'Queries';
+
+  @override
+  String get usageStored => 'Stored (compressed)';
+
+  @override
+  String get usageUnlimited => 'Unlimited';
+
+  @override
+  String usageProjected(String value) {
+    return 'Projected at period end: $value';
+  }
+
+  @override
+  String usageProjectedPercent(String value, int percent) {
+    return 'Projected at period end: $value ($percent% of the limit)';
+  }
+
+  @override
+  String get usageBySignal => 'By signal';
+
+  @override
+  String get usageRetention => 'Retention';
+
+  @override
+  String usageDays(int count) {
+    return '$count days';
+  }
+
+  @override
+  String get usageForbidden => 'Your role does not allow seeing usage.';
 }

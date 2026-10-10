@@ -286,6 +286,32 @@ enum OrgLanguage {
   }
 }
 
+/// QuotaLevel of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum QuotaLevel {
+  ok('ok'),
+  warning('warning'),
+  exceeded('exceeded'),
+  unknown('');
+
+  const QuotaLevel(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static QuotaLevel fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SessionKind of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -769,6 +795,58 @@ enum UserLanguage {
   final String wire;
 
   static UserLanguage fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UsageStoredSignal of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UsageStoredSignal {
+  traces('traces'),
+  logs('logs'),
+  metrics('metrics'),
+  unknown('');
+
+  const UsageStoredSignal(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UsageStoredSignal fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// QuotaMetricMetric of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum QuotaMetricMetric {
+  ingestBytes('ingest_bytes'),
+  hosts('hosts'),
+  users('users'),
+  unknown('');
+
+  const QuotaMetricMetric(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static QuotaMetricMetric fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1647,6 +1725,32 @@ enum OqlColumnType {
   final String wire;
 
   static OqlColumnType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UsageSignalSignal of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UsageSignalSignal {
+  traces('traces'),
+  logs('logs'),
+  metrics('metrics'),
+  unknown('');
+
+  const UsageSignalSignal(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UsageSignalSignal fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -2745,6 +2849,157 @@ class Organization {
   final Role role;
   final DateTime createdAt;
   final OrgLanguage language;
+}
+
+/// `UsageOverview` of the openlog API contract.
+class UsageOverview {
+  const UsageOverview({
+    required this.organization,
+    required this.period,
+    required this.saasMode,
+    required this.plan,
+    required this.planAssigned,
+    required this.usage,
+    required this.stored,
+    required this.limits,
+    required this.level,
+    required this.ingestBlocked,
+    required this.projection,
+    required this.canManagePlan,
+    required this.billingEnabled,
+  });
+
+  factory UsageOverview.fromJson(
+    Object? json, [
+    String path = 'UsageOverview',
+  ]) {
+    final m = _obj(json, path);
+    return UsageOverview(
+      organization: _req(
+        m,
+        'organization',
+        path,
+        (v, p) => UsageOverviewOrganization.fromJson(v, p),
+      ),
+      period: _req(m, 'period', path, (v, p) => UsagePeriod.fromJson(v, p)),
+      saasMode: _req(m, 'saas_mode', path, _bool),
+      plan: _req(m, 'plan', path, (v, p) => Plan.fromJson(v, p)),
+      planAssigned: _req(m, 'plan_assigned', path, _bool),
+      usage: _req(m, 'usage', path, (v, p) => UsageTotals.fromJson(v, p)),
+      stored: _req(
+        m,
+        'stored',
+        path,
+        (v, p) =>
+            _list<UsageStored>(v, p, (v, p) => UsageStored.fromJson(v, p)),
+      ),
+      limits: _req(
+        m,
+        'limits',
+        path,
+        (v, p) =>
+            _list<QuotaMetric>(v, p, (v, p) => QuotaMetric.fromJson(v, p)),
+      ),
+      level: _req(m, 'level', path, QuotaLevel.fromJson),
+      ingestBlocked: _req(m, 'ingest_blocked', path, _bool),
+      projection: _req(
+        m,
+        'projection',
+        path,
+        (v, p) => UsageOverviewProjection.fromJson(v, p),
+      ),
+      canManagePlan: _req(m, 'can_manage_plan', path, _bool),
+      billingEnabled: _req(m, 'billing_enabled', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'organization': organization.toJson(),
+    'period': period.toJson(),
+    'saas_mode': saasMode,
+    'plan': plan.toJson(),
+    'plan_assigned': planAssigned,
+    'usage': usage.toJson(),
+    'stored': [for (final e in stored) e.toJson()],
+    'limits': [for (final e in limits) e.toJson()],
+    'level': level.wire,
+    'ingest_blocked': ingestBlocked,
+    'projection': projection.toJson(),
+    'can_manage_plan': canManagePlan,
+    'billing_enabled': billingEnabled,
+  };
+
+  final UsageOverviewOrganization organization;
+  final UsagePeriod period;
+  final bool saasMode;
+  final Plan plan;
+  final bool planAssigned;
+  final UsageTotals usage;
+  final List<UsageStored> stored;
+  final List<QuotaMetric> limits;
+  final QuotaLevel level;
+  final bool ingestBlocked;
+  final UsageOverviewProjection projection;
+  final bool canManagePlan;
+  final bool billingEnabled;
+}
+
+/// `UsageOverviewOrganization` of the openlog API contract.
+class UsageOverviewOrganization {
+  const UsageOverviewOrganization({
+    required this.id,
+    required this.name,
+    required this.tenantId,
+  });
+
+  factory UsageOverviewOrganization.fromJson(
+    Object? json, [
+    String path = 'UsageOverviewOrganization',
+  ]) {
+    final m = _obj(json, path);
+    return UsageOverviewOrganization(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      tenantId: _req(m, 'tenant_id', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'tenant_id': tenantId,
+  };
+
+  final String id;
+  final String name;
+  final String tenantId;
+}
+
+/// `UsageOverviewProjection` of the openlog API contract.
+class UsageOverviewProjection {
+  const UsageOverviewProjection({
+    required this.ingestBytes,
+    this.ingestPercent,
+  });
+
+  factory UsageOverviewProjection.fromJson(
+    Object? json, [
+    String path = 'UsageOverviewProjection',
+  ]) {
+    final m = _obj(json, path);
+    return UsageOverviewProjection(
+      ingestBytes: _req(m, 'ingest_bytes', path, _num),
+      ingestPercent: _opt(m, 'ingest_percent', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'ingest_bytes': ingestBytes,
+    'ingest_percent': ?ingestPercent,
+  };
+
+  final double ingestBytes;
+  final double? ingestPercent;
 }
 
 /// `Session` of the openlog API contract.
@@ -6364,6 +6619,205 @@ class OrgRef {
   final Role? role;
 }
 
+/// `UsagePeriod` of the openlog API contract.
+class UsagePeriod {
+  const UsagePeriod({
+    required this.id,
+    required this.start,
+    required this.end,
+    required this.dataUntil,
+  });
+
+  factory UsagePeriod.fromJson(Object? json, [String path = 'UsagePeriod']) {
+    final m = _obj(json, path);
+    return UsagePeriod(
+      id: _req(m, 'id', path, _str),
+      start: _req(m, 'start', path, _time),
+      end: _req(m, 'end', path, _time),
+      dataUntil: _req(m, 'data_until', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'start': start.toUtc().toIso8601String(),
+    'end': end.toUtc().toIso8601String(),
+    'data_until': dataUntil.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final DateTime start;
+  final DateTime end;
+  final DateTime dataUntil;
+}
+
+/// `Plan` of the openlog API contract.
+class Plan {
+  const Plan({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.limits,
+    required this.enforcement,
+    required this.trialDays,
+    required this.trialFallbackPlan,
+  });
+
+  factory Plan.fromJson(Object? json, [String path = 'Plan']) {
+    final m = _obj(json, path);
+    return Plan(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      limits: _req(m, 'limits', path, (v, p) => PlanLimits.fromJson(v, p)),
+      enforcement: _req(
+        m,
+        'enforcement',
+        path,
+        (v, p) => PlanEnforcement.fromJson(v, p),
+      ),
+      trialDays: _req(m, 'trial_days', path, _int),
+      trialFallbackPlan: _req(m, 'trial_fallback_plan', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'limits': limits.toJson(),
+    'enforcement': enforcement.toJson(),
+    'trial_days': trialDays,
+    'trial_fallback_plan': trialFallbackPlan,
+  };
+
+  final String id;
+  final String name;
+  final String description;
+  final PlanLimits limits;
+  final PlanEnforcement enforcement;
+  final int trialDays;
+  final String trialFallbackPlan;
+}
+
+/// `UsageTotals` of the openlog API contract.
+class UsageTotals {
+  const UsageTotals({
+    required this.signals,
+    required this.ingestBytes,
+    required this.hosts,
+    required this.containers,
+    required this.services,
+    required this.activeHosts,
+    required this.query,
+  });
+
+  factory UsageTotals.fromJson(Object? json, [String path = 'UsageTotals']) {
+    final m = _obj(json, path);
+    return UsageTotals(
+      signals: _req(
+        m,
+        'signals',
+        path,
+        (v, p) =>
+            _list<UsageSignal>(v, p, (v, p) => UsageSignal.fromJson(v, p)),
+      ),
+      ingestBytes: _req(m, 'ingest_bytes', path, _num),
+      hosts: _req(m, 'hosts', path, _num),
+      containers: _req(m, 'containers', path, _num),
+      services: _req(m, 'services', path, _num),
+      activeHosts: _req(m, 'active_hosts', path, _num),
+      query: _req(m, 'query', path, (v, p) => UsageQuery.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'signals': [for (final e in signals) e.toJson()],
+    'ingest_bytes': ingestBytes,
+    'hosts': hosts,
+    'containers': containers,
+    'services': services,
+    'active_hosts': activeHosts,
+    'query': query.toJson(),
+  };
+
+  final List<UsageSignal> signals;
+  final double ingestBytes;
+  final double hosts;
+  final double containers;
+  final double services;
+  final double activeHosts;
+  final UsageQuery query;
+}
+
+/// `UsageStored` of the openlog API contract.
+class UsageStored {
+  const UsageStored({
+    required this.signal,
+    required this.retentionDays,
+    required this.bytes,
+    required this.compressedBytes,
+  });
+
+  factory UsageStored.fromJson(Object? json, [String path = 'UsageStored']) {
+    final m = _obj(json, path);
+    return UsageStored(
+      signal: _req(m, 'signal', path, UsageStoredSignal.fromJson),
+      retentionDays: _req(m, 'retention_days', path, _int),
+      bytes: _req(m, 'bytes', path, _num),
+      compressedBytes: _req(m, 'compressed_bytes', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'signal': signal.wire,
+    'retention_days': retentionDays,
+    'bytes': bytes,
+    'compressed_bytes': compressedBytes,
+  };
+
+  final UsageStoredSignal signal;
+  final int retentionDays;
+  final double bytes;
+  final double compressedBytes;
+}
+
+/// `QuotaMetric` of the openlog API contract.
+class QuotaMetric {
+  const QuotaMetric({
+    required this.metric,
+    required this.used,
+    required this.limit,
+    required this.percent,
+    required this.level,
+  });
+
+  factory QuotaMetric.fromJson(Object? json, [String path = 'QuotaMetric']) {
+    final m = _obj(json, path);
+    return QuotaMetric(
+      metric: _req(m, 'metric', path, QuotaMetricMetric.fromJson),
+      used: _req(m, 'used', path, _num),
+      limit: _req(m, 'limit', path, _num),
+      percent: _req(m, 'percent', path, _num),
+      level: _req(m, 'level', path, QuotaLevel.fromJson),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'metric': metric.wire,
+    'used': used,
+    'limit': limit,
+    'percent': percent,
+    'level': level.wire,
+  };
+
+  final QuotaMetricMetric metric;
+  final double used;
+  final double limit;
+  final double percent;
+  final QuotaLevel level;
+}
+
 /// `AlertIncidentEvent` of the openlog API contract.
 class AlertIncidentEvent {
   const AlertIncidentEvent({
@@ -9183,6 +9637,155 @@ class OqlMetadata {
   final List<String>? ignoredFilters;
 }
 
+/// 0 or absent = unlimited (retention_days absent = table default)
+class PlanLimits {
+  const PlanLimits({
+    this.ingestGbMonth,
+    this.hosts,
+    this.users,
+    required this.retentionDays,
+    required this.query,
+    this.ingestBytesPerSecond,
+    this.ingestBurstBytes,
+  });
+
+  factory PlanLimits.fromJson(Object? json, [String path = 'PlanLimits']) {
+    final m = _obj(json, path);
+    return PlanLimits(
+      ingestGbMonth: _opt(m, 'ingest_gb_month', path, _num),
+      hosts: _opt(m, 'hosts', path, _int),
+      users: _opt(m, 'users', path, _int),
+      retentionDays: _req(
+        m,
+        'retention_days',
+        path,
+        (v, p) => _map<int>(v, p, _int),
+      ),
+      query: _req(m, 'query', path, (v, p) => PlanQueryLimits.fromJson(v, p)),
+      ingestBytesPerSecond: _opt(m, 'ingest_bytes_per_second', path, _int),
+      ingestBurstBytes: _opt(m, 'ingest_burst_bytes', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'ingest_gb_month': ?ingestGbMonth,
+    'hosts': ?hosts,
+    'users': ?users,
+    'retention_days': {for (final e in retentionDays.entries) e.key: e.value},
+    'query': query.toJson(),
+    'ingest_bytes_per_second': ?ingestBytesPerSecond,
+    'ingest_burst_bytes': ?ingestBurstBytes,
+  };
+
+  final double? ingestGbMonth;
+  final int? hosts;
+  final int? users;
+  final Map<String, int> retentionDays;
+  final PlanQueryLimits query;
+  final int? ingestBytesPerSecond;
+  final int? ingestBurstBytes;
+}
+
+/// `PlanEnforcement` of the openlog API contract.
+class PlanEnforcement {
+  const PlanEnforcement({this.hardIngestLimit, this.gracePercent});
+
+  factory PlanEnforcement.fromJson(
+    Object? json, [
+    String path = 'PlanEnforcement',
+  ]) {
+    final m = _obj(json, path);
+    return PlanEnforcement(
+      hardIngestLimit: _opt(m, 'hard_ingest_limit', path, _bool),
+      gracePercent: _opt(m, 'grace_percent', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'hard_ingest_limit': ?hardIngestLimit,
+    'grace_percent': ?gracePercent,
+  };
+
+  final bool? hardIngestLimit;
+  final double? gracePercent;
+}
+
+/// `UsageSignal` of the openlog API contract.
+class UsageSignal {
+  const UsageSignal({
+    required this.signal,
+    required this.items,
+    required this.bytes,
+    required this.ingestBytes,
+    required this.ingestRequests,
+  });
+
+  factory UsageSignal.fromJson(Object? json, [String path = 'UsageSignal']) {
+    final m = _obj(json, path);
+    return UsageSignal(
+      signal: _req(m, 'signal', path, UsageSignalSignal.fromJson),
+      items: _req(m, 'items', path, _num),
+      bytes: _req(m, 'bytes', path, _num),
+      ingestBytes: _req(m, 'ingest_bytes', path, _num),
+      ingestRequests: _req(m, 'ingest_requests', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'signal': signal.wire,
+    'items': items,
+    'bytes': bytes,
+    'ingest_bytes': ingestBytes,
+    'ingest_requests': ingestRequests,
+  };
+
+  final UsageSignalSignal signal;
+  final double items;
+  final double bytes;
+  final double ingestBytes;
+  final double ingestRequests;
+}
+
+/// `UsageQuery` of the openlog API contract.
+class UsageQuery {
+  const UsageQuery({
+    required this.queries,
+    required this.failed,
+    required this.readRows,
+    required this.readBytes,
+    required this.cpuSeconds,
+    required this.memoryBytes,
+  });
+
+  factory UsageQuery.fromJson(Object? json, [String path = 'UsageQuery']) {
+    final m = _obj(json, path);
+    return UsageQuery(
+      queries: _req(m, 'queries', path, _num),
+      failed: _req(m, 'failed', path, _num),
+      readRows: _req(m, 'read_rows', path, _num),
+      readBytes: _req(m, 'read_bytes', path, _num),
+      cpuSeconds: _req(m, 'cpu_seconds', path, _num),
+      memoryBytes: _req(m, 'memory_bytes', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'queries': queries,
+    'failed': failed,
+    'read_rows': readRows,
+    'read_bytes': readBytes,
+    'cpu_seconds': cpuSeconds,
+    'memory_bytes': memoryBytes,
+  };
+
+  final double queries;
+  final double failed;
+  final double readRows;
+  final double readBytes;
+  final double cpuSeconds;
+  final double memoryBytes;
+}
+
 /// `AlertDeliveryAttempt` of the openlog API contract.
 class AlertDeliveryAttempt {
   const AlertDeliveryAttempt({
@@ -9604,6 +10207,37 @@ class DashboardWidget {
   final DashboardUnit unit;
   final List<DashboardThreshold> thresholds;
   final DashboardWidgetOptions options;
+}
+
+/// `PlanQueryLimits` of the openlog API contract.
+class PlanQueryLimits {
+  const PlanQueryLimits({
+    this.maxMemoryUsage,
+    this.maxRowsToRead,
+    this.maxBytesToRead,
+  });
+
+  factory PlanQueryLimits.fromJson(
+    Object? json, [
+    String path = 'PlanQueryLimits',
+  ]) {
+    final m = _obj(json, path);
+    return PlanQueryLimits(
+      maxMemoryUsage: _opt(m, 'max_memory_usage', path, _int),
+      maxRowsToRead: _opt(m, 'max_rows_to_read', path, _int),
+      maxBytesToRead: _opt(m, 'max_bytes_to_read', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'max_memory_usage': ?maxMemoryUsage,
+    'max_rows_to_read': ?maxRowsToRead,
+    'max_bytes_to_read': ?maxBytesToRead,
+  };
+
+  final int? maxMemoryUsage;
+  final int? maxRowsToRead;
+  final int? maxBytesToRead;
 }
 
 /// `DashboardWidgetLayout` of the openlog API contract.

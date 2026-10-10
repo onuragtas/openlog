@@ -21,6 +21,7 @@ import 'list_controller.dart';
 import 'logs.dart';
 import 'members.dart';
 import 'session.dart';
+import 'usage.dart';
 import 'query.dart';
 import 'sampling.dart';
 import 'templates.dart';
@@ -62,6 +63,7 @@ class Sections {
     BrowserKeysController? browserKeys,
     SourceMapsController? sourceMaps,
     AuditController? audit,
+    UsageController? usage,
     LogsController Function({
       String traceId,
       String podUid,
@@ -175,6 +177,7 @@ class Sections {
        browserKeys = browserKeys ?? BrowserKeysController(client),
        sourceMaps = sourceMaps ?? SourceMapsController(client),
        audit = audit ?? AuditController(client),
+       usage = usage ?? UsageController(client),
        scopedLogs =
            scopedLogs ??
            (({
@@ -249,6 +252,9 @@ class Sections {
   /// own record of what changed.
   final SourceMapsController sourceMaps;
   final AuditController audit;
+
+  /// What the organization used this period, against its plan.
+  final UsageController usage;
 
   /// The logs of one request, pod or container. A controller per screen,
   /// disposed with it, because each one answers about a different thing.
@@ -342,6 +348,7 @@ class Sections {
     browserKeys,
     sourceMaps,
     audit,
+    usage,
     hosts,
     containers,
     costs,

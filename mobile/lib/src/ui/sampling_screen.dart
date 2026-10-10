@@ -1,5 +1,7 @@
 // Which traces are kept, and which are thrown away.
 //
+// A settings tab, where the web keeps it -- not an APM page.
+//
 // Rules are tried in order and the first match decides, so the list is shown
 // in that order and dragged to change it -- the same shape as alert routing,
 // for the same reason.
@@ -17,8 +19,8 @@ import 'failure_text.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
 
-class SamplingScreen extends StatefulWidget {
-  const SamplingScreen({
+class SamplingBody extends StatefulWidget {
+  const SamplingBody({
     super.key,
     required this.session,
     required this.sampling,
@@ -28,10 +30,10 @@ class SamplingScreen extends StatefulWidget {
   final SamplingController sampling;
 
   @override
-  State<SamplingScreen> createState() => _SamplingScreenState();
+  State<SamplingBody> createState() => _SamplingBodyState();
 }
 
-class _SamplingScreenState extends State<SamplingScreen> {
+class _SamplingBodyState extends State<SamplingBody> {
   @override
   void initState() {
     super.initState();
@@ -74,202 +76,197 @@ class _SamplingScreenState extends State<SamplingScreen> {
     final theme = Theme.of(context);
     final c = widget.sampling;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l.samplingTitle)),
-      body: ListenableBuilder(
-        listenable: c,
-        builder: (context, _) {
-          if (c.loading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final draft = c.draft;
-          final state = c.state;
-          if (draft == null || state == null) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: FailureBanner(
-                failure: c.failure,
-                baseUrl: widget.session.baseUrl ?? '',
-              ),
-            );
-          }
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-            children: [
-              // Two different switches, and conflating them would be a lie:
-              // this api may have the sampler turned off entirely, in which
-              // case the stored policy is kept but nothing acts on it.
-              if (!state.enabled)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    l.samplingOffHere,
-                    key: const Key('sampling-off-here'),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: severityTextColor(context, SeverityLevel.warning),
-                    ),
-                  ),
-                ),
-              if (state.isDefault)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    l.samplingDefault,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else if (state.updatedAt != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    l.samplingUpdated(
-                      relativeTimeOf(l, state.updatedAt!),
-                      state.updatedByEmail,
-                    ),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              FailureBanner(
-                failure: c.failure,
-                baseUrl: widget.session.baseUrl ?? '',
-              ),
-              SwitchListTile(
-                key: const Key('sampling-enabled'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(l.samplingEnabled),
-                subtitle: Text(
-                  l.samplingEnabledHint,
-                  style: theme.textTheme.bodySmall,
-                ),
-                value: draft.enabled,
-                onChanged: (v) => c.edit(
-                  TailSamplingPolicy(
-                    enabled: v,
-                    baselineRatio: draft.baselineRatio,
-                    maxSpansPerSecond: draft.maxSpansPerSecond,
-                    rules: draft.rules,
-                  ),
-                ),
-              ),
-              _PercentField(
-                fieldKey: const Key('sampling-baseline'),
-                label: l.samplingBaseline,
-                hint: l.samplingBaselineHint,
-                value: draft.baselineRatio,
-                onChanged: (v) => c.edit(
-                  TailSamplingPolicy(
-                    enabled: draft.enabled,
-                    baselineRatio: v,
-                    maxSpansPerSecond: draft.maxSpansPerSecond,
-                    rules: draft.rules,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _NumberField(
-                fieldKey: const Key('sampling-max-spans'),
-                label: l.samplingMaxSpans,
-                hint: l.samplingMaxSpansHint,
-                value: draft.maxSpansPerSecond,
-                onChanged: (v) => c.edit(
-                  TailSamplingPolicy(
-                    enabled: draft.enabled,
-                    baselineRatio: draft.baselineRatio,
-                    maxSpansPerSecond: v,
-                    rules: draft.rules,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l.samplingRules,
-                      style: theme.textTheme.titleSmall,
-                    ),
-                  ),
-                  TextButton.icon(
-                    key: const Key('sampling-add-rule'),
-                    onPressed: () => _editRule(null),
-                    icon: const Icon(Icons.add),
-                    label: Text(l.samplingAddRule),
-                  ),
-                ],
-              ),
-              Text(
-                l.samplingOrder,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (draft.rules.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Text(
-                    l.samplingNoRules,
-                    key: const Key('sampling-no-rules'),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else
-                ReorderableListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: draft.rules.length,
-                  onReorder: (from, to) => c.edit(
-                    withRules(draft, movedRules(draft.rules, from, to)),
-                  ),
-                  itemBuilder: (context, i) {
-                    final rule = draft.rules[i];
-                    return _RuleCard(
-                      key: ValueKey('${rule.name}-$i'),
-                      rule: rule,
-                      index: i,
-                      matched: _matchedOf(c.preview, rule.name),
-                      onEdit: () => _editRule(i),
-                      onDelete: () => c.edit(
-                        withRules(draft, [...draft.rules]..removeAt(i)),
-                      ),
-                    );
-                  },
-                ),
-              const SizedBox(height: 14),
-              if (c.preview != null) _Preview(preview: c.preview!),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const Key('sampling-estimate'),
-                      onPressed: c.busy ? null : () => c.estimate(),
-                      icon: const Icon(Icons.calculate_outlined),
-                      label: Text(l.samplingEstimate),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      key: const Key('sampling-save'),
-                      // Nothing to save is not the same as nothing to do:
-                      // the button stays, disabled, so the screen does not
-                      // rearrange itself while somebody edits.
-                      onPressed: c.busy || !c.dirty ? null : c.save,
-                      child: Text(l.samplingSave),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+    return ListenableBuilder(
+      listenable: c,
+      builder: (context, _) {
+        if (c.loading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final draft = c.draft;
+        final state = c.state;
+        if (draft == null || state == null) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: FailureBanner(
+              failure: c.failure,
+              baseUrl: widget.session.baseUrl ?? '',
+            ),
           );
-        },
-      ),
+        }
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          children: [
+            // Two different switches, and conflating them would be a lie:
+            // this api may have the sampler turned off entirely, in which
+            // case the stored policy is kept but nothing acts on it.
+            if (!state.enabled)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  l.samplingOffHere,
+                  key: const Key('sampling-off-here'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: severityTextColor(context, SeverityLevel.warning),
+                  ),
+                ),
+              ),
+            if (state.isDefault)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  l.samplingDefault,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else if (state.updatedAt != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  l.samplingUpdated(
+                    relativeTimeOf(l, state.updatedAt!),
+                    state.updatedByEmail,
+                  ),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            FailureBanner(
+              failure: c.failure,
+              baseUrl: widget.session.baseUrl ?? '',
+            ),
+            SwitchListTile(
+              key: const Key('sampling-enabled'),
+              contentPadding: EdgeInsets.zero,
+              title: Text(l.samplingEnabled),
+              subtitle: Text(
+                l.samplingEnabledHint,
+                style: theme.textTheme.bodySmall,
+              ),
+              value: draft.enabled,
+              onChanged: (v) => c.edit(
+                TailSamplingPolicy(
+                  enabled: v,
+                  baselineRatio: draft.baselineRatio,
+                  maxSpansPerSecond: draft.maxSpansPerSecond,
+                  rules: draft.rules,
+                ),
+              ),
+            ),
+            _PercentField(
+              fieldKey: const Key('sampling-baseline'),
+              label: l.samplingBaseline,
+              hint: l.samplingBaselineHint,
+              value: draft.baselineRatio,
+              onChanged: (v) => c.edit(
+                TailSamplingPolicy(
+                  enabled: draft.enabled,
+                  baselineRatio: v,
+                  maxSpansPerSecond: draft.maxSpansPerSecond,
+                  rules: draft.rules,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _NumberField(
+              fieldKey: const Key('sampling-max-spans'),
+              label: l.samplingMaxSpans,
+              hint: l.samplingMaxSpansHint,
+              value: draft.maxSpansPerSecond,
+              onChanged: (v) => c.edit(
+                TailSamplingPolicy(
+                  enabled: draft.enabled,
+                  baselineRatio: draft.baselineRatio,
+                  maxSpansPerSecond: v,
+                  rules: draft.rules,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l.samplingRules,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                TextButton.icon(
+                  key: const Key('sampling-add-rule'),
+                  onPressed: () => _editRule(null),
+                  icon: const Icon(Icons.add),
+                  label: Text(l.samplingAddRule),
+                ),
+              ],
+            ),
+            Text(
+              l.samplingOrder,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (draft.rules.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Text(
+                  l.samplingNoRules,
+                  key: const Key('sampling-no-rules'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: draft.rules.length,
+                onReorder: (from, to) =>
+                    c.edit(withRules(draft, movedRules(draft.rules, from, to))),
+                itemBuilder: (context, i) {
+                  final rule = draft.rules[i];
+                  return _RuleCard(
+                    key: ValueKey('${rule.name}-$i'),
+                    rule: rule,
+                    index: i,
+                    matched: _matchedOf(c.preview, rule.name),
+                    onEdit: () => _editRule(i),
+                    onDelete: () =>
+                        c.edit(withRules(draft, [...draft.rules]..removeAt(i))),
+                  );
+                },
+              ),
+            const SizedBox(height: 14),
+            if (c.preview != null) _Preview(preview: c.preview!),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const Key('sampling-estimate'),
+                    onPressed: c.busy ? null : () => c.estimate(),
+                    icon: const Icon(Icons.calculate_outlined),
+                    label: Text(l.samplingEstimate),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    key: const Key('sampling-save'),
+                    // Nothing to save is not the same as nothing to do:
+                    // the button stays, disabled, so the screen does not
+                    // rearrange itself while somebody edits.
+                    onPressed: c.busy || !c.dirty ? null : c.save,
+                    child: Text(l.samplingSave),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 

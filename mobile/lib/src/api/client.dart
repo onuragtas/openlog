@@ -1215,6 +1215,22 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// What the organization used this billing period, against its plan.
+  ///
+  /// [period] is `current`, `previous` or a `YYYY-MM` month, as the server
+  /// names them.
+  Future<UsageOverview> usage({String period = ''}) async =>
+      UsageOverview.fromJson(
+        await _send(
+          'GET',
+          _listPath(
+            '/api/v1/usage',
+            '',
+            extra: {if (period.isNotEmpty) 'period': period},
+          ),
+        ),
+      );
+
   /// The organization itself: its name, its ids and the language the
   /// server writes in for everyone in it.
   Future<Organization> currentOrg() async =>
