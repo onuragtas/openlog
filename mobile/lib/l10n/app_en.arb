@@ -1328,5 +1328,60 @@
   "samplingNoRateLimit": "The rate limit is not part of this estimate.",
   "samplingConflict": "Somebody else saved while you were editing; reload and try again.",
   "samplingUnavailable": "This installation cannot store a sampling policy.",
-  "servicesSampling": "Sampling"
+  "servicesSampling": "Sampling",
+  "serviceTabMap": "Dependencies",
+  "mapEmpty": "No calls into or out of this service in this range.",
+  "mapIncoming": "Callers",
+  "mapIncomingHint": "Services that send requests to this one.",
+  "mapOutgoing": "Dependencies",
+  "mapOutgoingHint": "Services, databases and external addresses this one depends on.",
+  "mapKindDb": "database",
+  "mapKindExternal": "external",
+  "mapKindMessaging": "queue",
+  "mapCalls": "{count} calls",
+  "@mapCalls": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mapErrorRate": "{percent}% errors",
+  "@mapErrorRate": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "mapP95": "p95 {ms} ms",
+  "@mapP95": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "mapAvg": "avg {ms} ms",
+  "@mapAvg": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "mapOnPath": "on this path",
+  "mapPathOf": "The dependencies {count} traces of {transaction} go through are marked.",
+  "@mapPathOf": {
+    "placeholders": {
+      "transaction": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mapPathClear": "Clear the transaction",
+  "mapShowPath": "Show this transaction's path"
 }

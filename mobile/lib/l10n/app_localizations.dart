@@ -3618,6 +3618,108 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Sampling'**
   String get servicesSampling;
+
+  /// No description provided for @serviceTabMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Dependencies'**
+  String get serviceTabMap;
+
+  /// No description provided for @mapEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No calls into or out of this service in this range.'**
+  String get mapEmpty;
+
+  /// No description provided for @mapIncoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Callers'**
+  String get mapIncoming;
+
+  /// No description provided for @mapIncomingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Services that send requests to this one.'**
+  String get mapIncomingHint;
+
+  /// No description provided for @mapOutgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Dependencies'**
+  String get mapOutgoing;
+
+  /// No description provided for @mapOutgoingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Services, databases and external addresses this one depends on.'**
+  String get mapOutgoingHint;
+
+  /// No description provided for @mapKindDb.
+  ///
+  /// In en, this message translates to:
+  /// **'database'**
+  String get mapKindDb;
+
+  /// No description provided for @mapKindExternal.
+  ///
+  /// In en, this message translates to:
+  /// **'external'**
+  String get mapKindExternal;
+
+  /// No description provided for @mapKindMessaging.
+  ///
+  /// In en, this message translates to:
+  /// **'queue'**
+  String get mapKindMessaging;
+
+  /// No description provided for @mapCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} calls'**
+  String mapCalls(int count);
+
+  /// No description provided for @mapErrorRate.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% errors'**
+  String mapErrorRate(String percent);
+
+  /// No description provided for @mapP95.
+  ///
+  /// In en, this message translates to:
+  /// **'p95 {ms} ms'**
+  String mapP95(String ms);
+
+  /// No description provided for @mapAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'avg {ms} ms'**
+  String mapAvg(String ms);
+
+  /// No description provided for @mapOnPath.
+  ///
+  /// In en, this message translates to:
+  /// **'on this path'**
+  String get mapOnPath;
+
+  /// No description provided for @mapPathOf.
+  ///
+  /// In en, this message translates to:
+  /// **'The dependencies {count} traces of {transaction} go through are marked.'**
+  String mapPathOf(String transaction, int count);
+
+  /// No description provided for @mapPathClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the transaction'**
+  String get mapPathClear;
+
+  /// No description provided for @mapShowPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this transaction\'s path'**
+  String get mapShowPath;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -1231,5 +1231,60 @@
   "samplingNoRateLimit": "Hız sınırı bu tahmine dahil değil.",
   "samplingConflict": "Siz düzenlerken başkası kaydetti; yeniden yükleyip tekrar deneyin.",
   "samplingUnavailable": "Bu kurulumda örnekleme ilkesi saklanamıyor.",
-  "servicesSampling": "Örnekleme"
+  "servicesSampling": "Örnekleme",
+  "serviceTabMap": "Bağımlılıklar",
+  "mapEmpty": "Bu aralıkta bu servise giden ya da bu servisten çıkan çağrı yok.",
+  "mapIncoming": "Bunu çağıranlar",
+  "mapIncomingHint": "Bu servise istek gönderen servisler.",
+  "mapOutgoing": "Bunun çağırdıkları",
+  "mapOutgoingHint": "Bu servisin bağımlı olduğu servisler, veritabanları ve dış adresler.",
+  "mapKindDb": "veritabanı",
+  "mapKindExternal": "dış",
+  "mapKindMessaging": "kuyruk",
+  "mapCalls": "{count} çağrı",
+  "@mapCalls": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mapErrorRate": "%{percent} hata",
+  "@mapErrorRate": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "mapP95": "p95 {ms} ms",
+  "@mapP95": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "mapAvg": "ort {ms} ms",
+  "@mapAvg": {
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "mapOnPath": "bu yolda",
+  "mapPathOf": "{transaction} işleminin {count} izinden geçtiği bağımlılıklar işaretli.",
+  "@mapPathOf": {
+    "placeholders": {
+      "transaction": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mapPathClear": "İşlem işaretini kaldır",
+  "mapShowPath": "Bu işlemin yolunu göster"
 }

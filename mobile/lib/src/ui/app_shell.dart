@@ -18,7 +18,6 @@ import 'add_data_screen.dart';
 import 'channels_screen.dart';
 import 'container_screen.dart';
 import 'costs_screen.dart';
-import 'errors_screen.dart';
 import 'fleet_screen.dart';
 import 'host_screen.dart';
 import 'integrations_screen.dart';
@@ -65,7 +64,6 @@ class _AppShellState extends State<AppShell> {
       l.navKubernetes,
       l.navIntegrations,
       l.navApm,
-      l.navErrors,
       l.navRum,
       l.navProfiles,
       l.navDatabases,
@@ -95,7 +93,6 @@ class _AppShellState extends State<AppShell> {
       s.pods.refresh,
       s.integrations.refresh,
       s.services.refresh,
-      s.errors.refresh,
       s.rum.refresh,
       s.profiles.refresh,
       s.databases.refresh,
@@ -252,7 +249,6 @@ class _AppShellState extends State<AppShell> {
     add(
       (_) => ServicesBody(session: session, sections: s, services: s.services),
     );
-    add((active) => ErrorsBody(session: session, sections: s, active: active));
     add(
       (active) => RumBody(
         key: const Key('rum-body'),

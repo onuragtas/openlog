@@ -1204,6 +1204,60 @@ enum AlertSeriesStateName {
   }
 }
 
+/// ApmMapNodeType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmMapNodeType {
+  service('service'),
+  db('db'),
+  external('external'),
+  messaging('messaging'),
+  unknown('');
+
+  const ApmMapNodeType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmMapNodeType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// ApmMapEdgeTargetType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum ApmMapEdgeTargetType {
+  service('service'),
+  db('db'),
+  external('external'),
+  messaging('messaging'),
+  unknown('');
+
+  const ApmMapEdgeTargetType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static ApmMapEdgeTargetType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// ApmErrorStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3419,6 +3473,65 @@ class AlertRulePreview {
   final List<AlertPreviewSeries> series;
   final bool truncated;
   final bool approximate;
+}
+
+/// `ApmMap` of the openlog API contract.
+class ApmMap {
+  const ApmMap({required this.nodes, required this.edges});
+
+  factory ApmMap.fromJson(Object? json, [String path = 'ApmMap']) {
+    final m = _obj(json, path);
+    return ApmMap(
+      nodes: _req(
+        m,
+        'nodes',
+        path,
+        (v, p) => _list<ApmMapNode>(v, p, (v, p) => ApmMapNode.fromJson(v, p)),
+      ),
+      edges: _req(
+        m,
+        'edges',
+        path,
+        (v, p) => _list<ApmMapEdge>(v, p, (v, p) => ApmMapEdge.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'nodes': [for (final e in nodes) e.toJson()],
+    'edges': [for (final e in edges) e.toJson()],
+  };
+
+  final List<ApmMapNode> nodes;
+  final List<ApmMapEdge> edges;
+}
+
+/// `ApmMapPath` of the openlog API contract.
+class ApmMapPath {
+  const ApmMapPath({
+    required this.traceCount,
+    required this.nodes,
+    required this.edges,
+  });
+
+  factory ApmMapPath.fromJson(Object? json, [String path = 'ApmMapPath']) {
+    final m = _obj(json, path);
+    return ApmMapPath(
+      traceCount: _req(m, 'trace_count', path, _int),
+      nodes: _req(m, 'nodes', path, (v, p) => _list<String>(v, p, _str)),
+      edges: _req(m, 'edges', path, (v, p) => _list<String>(v, p, _str)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'trace_count': traceCount,
+    'nodes': nodes,
+    'edges': edges,
+  };
+
+  final int traceCount;
+  final List<String> nodes;
+  final List<String> edges;
 }
 
 /// `TailSamplingPolicyState` of the openlog API contract.
@@ -6629,6 +6742,130 @@ class AlertPreviewSeriesIncidentsItem {
   final DateTime openedAt;
   final DateTime? resolvedAt;
   final double? peak;
+}
+
+/// `ApmMapNode` of the openlog API contract.
+class ApmMapNode {
+  const ApmMapNode({
+    required this.id,
+    required this.type,
+    required this.name,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.requests,
+    required this.throughput,
+    required this.errorRate,
+    this.avgMs,
+    this.p95Ms,
+    this.apdex,
+    required this.hostCount,
+    required this.containerCount,
+  });
+
+  factory ApmMapNode.fromJson(Object? json, [String path = 'ApmMapNode']) {
+    final m = _obj(json, path);
+    return ApmMapNode(
+      id: _req(m, 'id', path, _str),
+      type: _req(m, 'type', path, ApmMapNodeType.fromJson),
+      name: _req(m, 'name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+      hostCount: _req(m, 'host_count', path, _int),
+      containerCount: _req(m, 'container_count', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'type': type.wire,
+    'name': name,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'requests': requests,
+    'throughput': throughput,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p95_ms': ?p95Ms,
+    'apdex': ?apdex,
+    'host_count': hostCount,
+    'container_count': containerCount,
+  };
+
+  final String id;
+  final ApmMapNodeType type;
+  final String name;
+  final String serviceNamespace;
+  final String environment;
+  final double requests;
+  final double throughput;
+  final double errorRate;
+  final double? avgMs;
+  final double? p95Ms;
+  final double? apdex;
+  final int hostCount;
+  final int containerCount;
+}
+
+/// `ApmMapEdge` of the openlog API contract.
+class ApmMapEdge {
+  const ApmMapEdge({
+    required this.id,
+    required this.source,
+    required this.target,
+    required this.targetType,
+    required this.calls,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p95Ms,
+  });
+
+  factory ApmMapEdge.fromJson(Object? json, [String path = 'ApmMapEdge']) {
+    final m = _obj(json, path);
+    return ApmMapEdge(
+      id: _req(m, 'id', path, _str),
+      source: _req(m, 'source', path, _str),
+      target: _req(m, 'target', path, _str),
+      targetType: _req(m, 'target_type', path, ApmMapEdgeTargetType.fromJson),
+      calls: _req(m, 'calls', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'source': source,
+    'target': target,
+    'target_type': targetType.wire,
+    'calls': calls,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p95_ms': ?p95Ms,
+  };
+
+  final String id;
+  final String source;
+  final String target;
+  final ApmMapEdgeTargetType targetType;
+  final double calls;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p95Ms;
 }
 
 /// `TailSamplingPolicy` of the openlog API contract.

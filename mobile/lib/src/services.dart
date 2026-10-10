@@ -2,6 +2,7 @@
 import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'list_controller.dart';
+import 'session.dart';
 
 class ServicesController extends ListController<ApmService> {
   ServicesController(this._client);
@@ -80,4 +81,89 @@ Map<String, String> parseAttributeFilter(String text) {
     if (out.length == 10) break;
   }
   return out;
+}
+
+/// What calls this service, and what it calls.
+///
+/// The web draws a graph; a phone draws two lists. The same edges, the same
+/// numbers -- a node-link picture of forty services on a 390-point screen is
+/// a picture of nothing.
+class ServiceMapController extends ListController<ApmMapEdge> {
+  ServiceMapController(this.client, this.serviceName);
+
+  final OpenlogClient client;
+  final String serviceName;
+
+  /// The nodes by id, so an edge can be shown with the name of the thing at
+  /// its other end rather than with its id.
+  Map<String, ApmMapNode> nodes = const {};
+
+  /// Which edge ids one transaction's traces use, once somebody asked.
+  /// Empty when nobody did.
+  Set<String> pathEdges = const {};
+  String pathTransaction = '';
+  int pathTraces = 0;
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  /// The id of this service's own node, which both lists are relative to.
+  String? get selfId {
+    for (final n in nodes.values) {
+      if (n.type == ApmMapNodeType.service && n.name == serviceName) {
+        return n.id;
+      }
+    }
+    return null;
+  }
+
+  List<ApmMapEdge> get incoming => [
+    for (final e in items)
+      if (e.target == selfId) e,
+  ];
+
+  List<ApmMapEdge> get outgoing => [
+    for (final e in items)
+      if (e.source == selfId) e,
+  ];
+
+  @override
+  Future<List<ApmMapEdge>> fetch() async {
+    final map = await client.apmMap(service: serviceName);
+    nodes = {for (final n in map.nodes) n.id: n};
+    // Busiest first: the dependency carrying the most calls is the one an
+    // incident is most likely about.
+    return [...map.edges]..sort((a, b) => b.calls.compareTo(a.calls));
+  }
+
+  /// Marks the edges one transaction's traces go through.
+  Future<void> loadPath(String transaction) async {
+    pathTransaction = transaction;
+    failure = null;
+    notifyListeners();
+    try {
+      final path = await client.apmMapPath(
+        service: serviceName,
+        transaction: transaction,
+      );
+      pathEdges = path.edges.toSet();
+      pathTraces = path.traceCount;
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('servicesForbidden', '')
+          : SessionFailure('unexpected', e.message);
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Forgets the transaction, which puts every edge back to plain.
+  void clearPath() {
+    pathTransaction = '';
+    pathEdges = const {};
+    pathTraces = 0;
+    notifyListeners();
+  }
 }

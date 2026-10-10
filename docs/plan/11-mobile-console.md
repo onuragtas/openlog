@@ -399,9 +399,14 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
 
 ### 9.2 APM
 - [x] Hata gelen kutusu kendi bölümü olarak (`apm/errors`, `apm/errors/groups`,
-      `.../comments`): durum sekmeleri ve sayıları, arama, sıralama; grup ekranında çözüldü,
-      sürümde çözüldü, yoksay, yeniden aç ve yorumlar. Başkasına atama webde (üye listesi gerekir).
-- [ ] Servis haritası (`apm/map`, `apm/map/path`)
+      `.../comments`): **servisler ekranından** açılıyor — webde de kenar menüde değil, APM
+      sayfasından bir bağlantıyla. Durum sekmeleri ve sayıları, arama, sıralama; grup ekranında
+      çözüldü, sürümde çözüldü, yoksay, yeniden aç ve yorumlar. Başkasına atama webde (üye
+      listesi gerekir).
+- [x] Servis haritası (`apm/map`, `apm/map/path`): servis ekranında dördüncü sekme. Webin
+      çizdiği grafik yerine iki liste — çağıranlar ve bağımlılıklar — aynı kenarlar ve aynı
+      sayılarla; 390 puanlık ekranda kırk düğümlü bir resim hiçbir şeyin resmidir. İzler
+      sekmesindeki bir işlemden o işlemin yolu işaretlenebiliyor.
 
 **Ölçüm düzeltmesi (2026-10-10):** §9'un ilk sayımı APM'in servis başına uçlarını atlamış.
 Mobilin `client.dart` dosyasındaki yolları sözleşmedeki `/api/v1/apm/*` listesiyle tek tek

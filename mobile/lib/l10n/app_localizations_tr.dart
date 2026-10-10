@@ -2013,4 +2013,67 @@ class LTr extends L {
 
   @override
   String get servicesSampling => 'Örnekleme';
+
+  @override
+  String get serviceTabMap => 'Bağımlılıklar';
+
+  @override
+  String get mapEmpty =>
+      'Bu aralıkta bu servise giden ya da bu servisten çıkan çağrı yok.';
+
+  @override
+  String get mapIncoming => 'Bunu çağıranlar';
+
+  @override
+  String get mapIncomingHint => 'Bu servise istek gönderen servisler.';
+
+  @override
+  String get mapOutgoing => 'Bunun çağırdıkları';
+
+  @override
+  String get mapOutgoingHint =>
+      'Bu servisin bağımlı olduğu servisler, veritabanları ve dış adresler.';
+
+  @override
+  String get mapKindDb => 'veritabanı';
+
+  @override
+  String get mapKindExternal => 'dış';
+
+  @override
+  String get mapKindMessaging => 'kuyruk';
+
+  @override
+  String mapCalls(int count) {
+    return '$count çağrı';
+  }
+
+  @override
+  String mapErrorRate(String percent) {
+    return '%$percent hata';
+  }
+
+  @override
+  String mapP95(String ms) {
+    return 'p95 $ms ms';
+  }
+
+  @override
+  String mapAvg(String ms) {
+    return 'ort $ms ms';
+  }
+
+  @override
+  String get mapOnPath => 'bu yolda';
+
+  @override
+  String mapPathOf(String transaction, int count) {
+    return '$transaction işleminin $count izinden geçtiği bağımlılıklar işaretli.';
+  }
+
+  @override
+  String get mapPathClear => 'İşlem işaretini kaldır';
+
+  @override
+  String get mapShowPath => 'Bu işlemin yolunu göster';
 }

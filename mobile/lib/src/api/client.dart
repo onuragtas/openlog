@@ -564,6 +564,37 @@ class OpenlogClient {
         ),
       );
 
+  /// What calls what.
+  ///
+  /// With [service], only the edges touching it -- which is the only shape
+  /// worth asking for on a phone: a whole map is a picture, and a picture of
+  /// forty services does not fit.
+  Future<ApmMap> apmMap({String service = ''}) async => ApmMap.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/map',
+        '',
+        extra: {if (service.isNotEmpty) 'service': service},
+      ),
+    ),
+  );
+
+  /// Which nodes and edges of that map one transaction's traces use.
+  Future<ApmMapPath> apmMapPath({
+    required String service,
+    required String transaction,
+  }) async => ApmMapPath.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/map/path',
+        '',
+        extra: {'service': service, 'transaction': transaction},
+      ),
+    ),
+  );
+
   /// Entry spans of one service, with the web's filters.
   ///
   /// `attr.<key>=<value>` pairs are passed through as the server names them;

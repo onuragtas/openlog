@@ -2018,4 +2018,66 @@ class LEn extends L {
 
   @override
   String get servicesSampling => 'Sampling';
+
+  @override
+  String get serviceTabMap => 'Dependencies';
+
+  @override
+  String get mapEmpty => 'No calls into or out of this service in this range.';
+
+  @override
+  String get mapIncoming => 'Callers';
+
+  @override
+  String get mapIncomingHint => 'Services that send requests to this one.';
+
+  @override
+  String get mapOutgoing => 'Dependencies';
+
+  @override
+  String get mapOutgoingHint =>
+      'Services, databases and external addresses this one depends on.';
+
+  @override
+  String get mapKindDb => 'database';
+
+  @override
+  String get mapKindExternal => 'external';
+
+  @override
+  String get mapKindMessaging => 'queue';
+
+  @override
+  String mapCalls(int count) {
+    return '$count calls';
+  }
+
+  @override
+  String mapErrorRate(String percent) {
+    return '$percent% errors';
+  }
+
+  @override
+  String mapP95(String ms) {
+    return 'p95 $ms ms';
+  }
+
+  @override
+  String mapAvg(String ms) {
+    return 'avg $ms ms';
+  }
+
+  @override
+  String get mapOnPath => 'on this path';
+
+  @override
+  String mapPathOf(String transaction, int count) {
+    return 'The dependencies $count traces of $transaction go through are marked.';
+  }
+
+  @override
+  String get mapPathClear => 'Clear the transaction';
+
+  @override
+  String get mapShowPath => 'Show this transaction\'s path';
 }

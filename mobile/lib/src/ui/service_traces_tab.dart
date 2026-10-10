@@ -22,11 +22,15 @@ class ServiceTracesTab extends StatefulWidget {
     required this.session,
     required this.sections,
     required this.controller,
+    this.onShowPath,
   });
 
   final SessionController session;
   final Sections sections;
   final ServiceTracesController controller;
+
+  /// Asks the dependencies tab which of the map a transaction goes through.
+  final void Function(String transaction)? onShowPath;
 
   @override
   State<ServiceTracesTab> createState() => _ServiceTracesTabState();
@@ -206,6 +210,11 @@ class _ServiceTracesTabState extends State<ServiceTracesTab> {
                       itemCount: c.items.length,
                       itemBuilder: (context, i) => _ApmTraceCard(
                         trace: c.items[i],
+                        onShowPath: widget.onShowPath == null
+                            ? null
+                            : () => widget.onShowPath!(
+                                c.items[i].transactionName,
+                              ),
                         onOpen: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => TraceScreen(
@@ -226,10 +235,15 @@ class _ServiceTracesTabState extends State<ServiceTracesTab> {
 }
 
 class _ApmTraceCard extends StatelessWidget {
-  const _ApmTraceCard({required this.trace, required this.onOpen});
+  const _ApmTraceCard({
+    required this.trace,
+    required this.onOpen,
+    this.onShowPath,
+  });
 
   final ApmTraceResult trace;
   final VoidCallback onOpen;
+  final VoidCallback? onShowPath;
 
   @override
   Widget build(BuildContext context) {
@@ -269,6 +283,14 @@ class _ApmTraceCard extends StatelessWidget {
                     '${trace.durationMs.toStringAsFixed(trace.durationMs >= 100 ? 0 : 1)} ms',
                     style: theme.textTheme.bodyMedium,
                   ),
+                  if (onShowPath != null)
+                    IconButton(
+                      key: Key('trace-path-${trace.traceId}'),
+                      tooltip: l.mapShowPath,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onShowPath,
+                      icon: const Icon(Icons.account_tree_outlined, size: 18),
+                    ),
                 ],
               ),
               const SizedBox(height: 6),

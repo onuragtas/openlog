@@ -7,6 +7,7 @@ import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
 import 'agents_screen.dart';
+import 'errors_screen.dart';
 import 'sampling_screen.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
@@ -69,6 +70,19 @@ class _ServicesBodyState extends State<ServicesBody> {
         header: Wrap(
           spacing: 4,
           children: [
+            TextButton.icon(
+              key: const Key('services-errors'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ErrorsScreen(
+                    session: widget.session,
+                    sections: widget.sections,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.bug_report_outlined),
+              label: Text(l.navErrors),
+            ),
             TextButton.icon(
               key: const Key('services-sampling'),
               onPressed: () => Navigator.of(context).push(

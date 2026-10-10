@@ -10,6 +10,7 @@ import '../services.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'service_map_tab.dart';
 import 'service_traces_tab.dart';
 import 'severity.dart';
 import 'sparkline.dart';
@@ -37,6 +38,7 @@ class _ServiceScreenState extends State<ServiceScreen>
   late final ServiceOverviewController _c;
   late final ServiceErrorsController _errors;
   late final ServiceTracesController _traces;
+  late final ServiceMapController _map;
   late final TabController _tabs;
 
   @override
@@ -45,7 +47,8 @@ class _ServiceScreenState extends State<ServiceScreen>
     _c = widget.sections.serviceOverview(widget.serviceName);
     _errors = widget.sections.serviceErrors(widget.serviceName);
     _traces = widget.sections.serviceTraces(widget.serviceName);
-    _tabs = TabController(length: 3, vsync: this)..addListener(_loadTab);
+    _map = widget.sections.serviceMap(widget.serviceName);
+    _tabs = TabController(length: 4, vsync: this)..addListener(_loadTab);
     WidgetsBinding.instance.addPostFrameCallback((_) => _c.refresh());
   }
 
@@ -59,12 +62,16 @@ class _ServiceScreenState extends State<ServiceScreen>
     if (_tabs.index == 2 && !_traces.loaded && !_traces.loadingFirst) {
       _traces.refresh();
     }
+    if (_tabs.index == 3 && !_map.loaded && !_map.loadingFirst) {
+      _map.refresh();
+    }
   }
 
   @override
   void dispose() {
     _tabs.removeListener(_loadTab);
     _tabs.dispose();
+    _map.dispose();
     _traces.dispose();
     _errors.dispose();
     _c.dispose();
@@ -81,10 +88,13 @@ class _ServiceScreenState extends State<ServiceScreen>
         title: Text(widget.serviceName, overflow: TextOverflow.ellipsis),
         bottom: TabBar(
           controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: [
             Tab(key: const Key('tab-overview'), text: l.serviceTabOverview),
             Tab(key: const Key('tab-errors'), text: l.serviceTabErrors),
             Tab(key: const Key('tab-traces'), text: l.serviceTabTraces),
+            Tab(key: const Key('tab-map'), text: l.serviceTabMap),
           ],
         ),
       ),
@@ -111,6 +121,18 @@ class _ServiceScreenState extends State<ServiceScreen>
             session: widget.session,
             sections: widget.sections,
             controller: _traces,
+            // The map answers "where does this transaction go"; the traces
+            // tab is where a transaction name is in front of somebody.
+            onShowPath: (transaction) {
+              _map.loadPath(transaction);
+              if (!_map.loaded && !_map.loadingFirst) _map.refresh();
+              _tabs.animateTo(3);
+            },
+          ),
+          ServiceMapTab(
+            session: widget.session,
+            sections: widget.sections,
+            controller: _map,
           ),
         ],
       ),

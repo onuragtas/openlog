@@ -76,6 +76,7 @@ class Sections {
     ServiceOverviewController Function(String serviceName)? serviceOverview,
     ServiceErrorsController Function(String serviceName)? serviceErrors,
     ServiceTracesController Function(String serviceName)? serviceTraces,
+    ServiceMapController Function(String serviceName)? serviceMap,
     TraceController Function(String traceId)? trace,
     MetricController Function(String name)? metric,
     RumOverviewController Function(String app)? rumOverview,
@@ -96,6 +97,8 @@ class Sections {
            serviceErrors ?? ((name) => ServiceErrorsController(client, name)),
        serviceTraces =
            serviceTraces ?? ((name) => ServiceTracesController(client, name)),
+       serviceMap =
+           serviceMap ?? ((name) => ServiceMapController(client, name)),
        trace = trace ?? ((id) => TraceController(client, id)),
        metric = metric ?? ((name) => MetricController(client, name)),
        rumOverview =
@@ -247,6 +250,7 @@ class Sections {
   final ServiceOverviewController Function(String serviceName) serviceOverview;
   final ServiceErrorsController Function(String serviceName) serviceErrors;
   final ServiceTracesController Function(String serviceName) serviceTraces;
+  final ServiceMapController Function(String serviceName) serviceMap;
   final TraceController Function(String traceId) trace;
   final MetricController Function(String name) metric;
   final RumOverviewController Function(String app) rumOverview;

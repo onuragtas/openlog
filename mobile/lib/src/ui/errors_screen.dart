@@ -1,9 +1,11 @@
 // The error inbox of every service.
 //
+// Reached from the services list, which is where the web keeps it too: it is
+// not a section of its own there, and a drawer entry the web does not have
+// would be a different app wearing the same words.
+//
 // The service pages have their own inbox; this is the one that answers "what
-// is broken right now" without knowing which service to look at first. The
-// row is the group, the number is how often it happened, and the tap goes to
-// what can be done about it.
+// is broken right now" without knowing which service to look at first.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -17,47 +19,36 @@ import 'list_scaffold.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 
-class ErrorsBody extends StatefulWidget {
-  const ErrorsBody({
+class ErrorsScreen extends StatefulWidget {
+  const ErrorsScreen({
     super.key,
     required this.session,
     required this.sections,
-    required this.active,
   });
 
   final SessionController session;
   final Sections sections;
-  final bool active;
 
   @override
-  State<ErrorsBody> createState() => _ErrorsBodyState();
+  State<ErrorsScreen> createState() => _ErrorsScreenState();
 }
 
-class _ErrorsBodyState extends State<ErrorsBody> {
+class _ErrorsScreenState extends State<ErrorsScreen> {
   final _search = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadIfVisible();
-  }
-
-  @override
-  void didUpdateWidget(ErrorsBody old) {
-    super.didUpdateWidget(old);
-    _loadIfVisible();
+    final c = widget.sections.errors;
+    if (!c.loaded && !c.loadingFirst) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
+    }
   }
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
-  }
-
-  void _loadIfVisible() {
-    final c = widget.sections.errors;
-    if (!widget.active || c.loaded || c.loadingFirst) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
   }
 
   String _statusLabel(L l, String s) => switch (s) {
@@ -90,151 +81,164 @@ class _ErrorsBodyState extends State<ErrorsBody> {
     final theme = Theme.of(context);
     final c = widget.sections.errors;
 
-    return ListenableBuilder(
-      listenable: c,
-      builder: (context, _) => Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('errors-search'),
-                    controller: _search,
-                    textInputAction: TextInputAction.search,
-                    decoration: InputDecoration(
-                      hintText: l.errorsSearch,
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
-                      isDense: true,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l.navErrors),
+        actions: [
+          IconButton(
+            key: const Key('errors-refresh'),
+            tooltip: l.refresh,
+            onPressed: c.refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: ListenableBuilder(
+        listenable: c,
+        builder: (context, _) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('errors-search'),
+                      controller: _search,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: l.errorsSearch,
+                        prefixIcon: const Icon(Icons.search),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onSubmitted: (v) {
+                        c.query = v.trim();
+                        c.refresh();
+                      },
                     ),
-                    onSubmitted: (v) {
-                      c.query = v.trim();
+                  ),
+                  PopupMenuButton<String>(
+                    key: const Key('errors-sort'),
+                    tooltip: l.errorsSort,
+                    icon: const Icon(Icons.swap_vert),
+                    onSelected: (s) {
+                      if (c.sort == s) return;
+                      c.sort = s;
                       c.refresh();
                     },
+                    itemBuilder: (context) => [
+                      for (final s in errorSorts)
+                        PopupMenuItem(
+                          value: s,
+                          child: Text(
+                            _sortLabel(l, s),
+                            style: s == c.sort
+                                ? TextStyle(color: theme.colorScheme.primary)
+                                : null,
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-                PopupMenuButton<String>(
-                  key: const Key('errors-sort'),
-                  tooltip: l.errorsSort,
-                  icon: const Icon(Icons.swap_vert),
-                  onSelected: (s) {
-                    if (c.sort == s) return;
-                    c.sort = s;
-                    c.refresh();
-                  },
-                  itemBuilder: (context) => [
-                    for (final s in errorSorts)
-                      PopupMenuItem(
-                        value: s,
-                        child: Text(
-                          _sortLabel(l, s),
-                          style: s == c.sort
-                              ? TextStyle(color: theme.colorScheme.primary)
-                              : null,
+                ],
+              ),
+            ),
+            if (c.workflow)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+                child: Row(
+                  children: [
+                    for (final s in errorStatuses)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          key: Key('errors-status-$s'),
+                          label: Text(switch (_count(c, s)) {
+                            final n? => '${_statusLabel(l, s)} $n',
+                            _ => _statusLabel(l, s),
+                          }),
+                          selected: c.status == s,
+                          onSelected: (_) {
+                            if (c.status == s) return;
+                            c.status = s;
+                            c.refresh();
+                          },
                         ),
                       ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          if (c.workflow)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-              child: Row(
-                children: [
-                  for (final s in errorStatuses)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        key: Key('errors-status-$s'),
-                        label: Text(switch (_count(c, s)) {
-                          final n? => '${_statusLabel(l, s)} $n',
-                          _ => _statusLabel(l, s),
-                        }),
-                        selected: c.status == s,
-                        onSelected: (_) {
-                          if (c.status == s) return;
-                          c.status = s;
-                          c.refresh();
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(
-                // No PostgreSQL: there is no workflow at all and every group
-                // reads as unresolved. Saying so beats four tabs that do
-                // nothing.
-                l.errorsNoWorkflow,
-                key: const Key('errors-no-workflow'),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(
+                  // No PostgreSQL: there is no workflow at all and every group
+                  // reads as unresolved. Saying so beats four tabs that do
+                  // nothing.
+                  l.errorsNoWorkflow,
+                  key: const Key('errors-no-workflow'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FailureBanner(
+                failure: c.failure,
+                baseUrl: widget.session.baseUrl ?? '',
+              ),
             ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FailureBanner(
-              failure: c.failure,
-              baseUrl: widget.session.baseUrl ?? '',
-            ),
-          ),
-          Expanded(
-            child: c.loadingFirst
-                ? const Center(child: CircularProgressIndicator())
-                : c.items.isEmpty
-                ? Center(
-                    child: Text(
-                      l.errorsEmpty,
-                      key: const Key('errors-empty'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+            Expanded(
+              child: c.loadingFirst
+                  ? const Center(child: CircularProgressIndicator())
+                  : c.items.isEmpty
+                  ? Center(
+                      child: Text(
+                        l.errorsEmpty,
+                        key: const Key('errors-empty'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: c.refresh,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 28),
-                      itemCount: c.items.length + (c.truncated ? 1 : 0),
-                      itemBuilder: (context, i) {
-                        if (i == c.items.length) {
-                          return Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              l.errorsTruncated,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                    )
+                  : RefreshIndicator(
+                      onRefresh: c.refresh,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 28),
+                        itemCount: c.items.length + (c.truncated ? 1 : 0),
+                        itemBuilder: (context, i) {
+                          if (i == c.items.length) {
+                            return Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                l.errorsTruncated,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            );
+                          }
+                          final g = c.items[i];
+                          return ErrorGroupCard(
+                            group: g,
+                            onOpen: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ErrorGroupScreen(
+                                  session: widget.session,
+                                  sections: widget.sections,
+                                  group: g,
+                                ),
                               ),
                             ),
                           );
-                        }
-                        final g = c.items[i];
-                        return ErrorGroupCard(
-                          group: g,
-                          onOpen: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => ErrorGroupScreen(
-                                session: widget.session,
-                                sections: widget.sections,
-                                group: g,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
