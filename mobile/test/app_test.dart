@@ -663,6 +663,24 @@ Future<void> goTo(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+/// Taps a tab of the service screen, scrolling the tab bar to it first.
+///
+/// Six tabs do not fit on a phone, so the bar scrolls -- as the web's does.
+/// A tap on a tab that is off to the right lands on nothing.
+Future<void> openTab(WidgetTester tester, String key) async {
+  final finder = find.byKey(Key(key));
+  await tester.scrollUntilVisible(
+    finder,
+    120,
+    scrollable: find.descendant(
+      of: find.byType(TabBar),
+      matching: find.byType(Scrollable),
+    ),
+  );
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 /// Records calls instead of making them.
 class ScriptedSession extends SessionController {
   ScriptedSession({
@@ -1213,8 +1231,7 @@ void main() {
     // TabBarView builds both pages; building is not looking.
     expect(errors.calls, isEmpty);
 
-    await tester.tap(find.byKey(const Key('tab-errors')));
-    await tester.pumpAndSettle();
+    await openTab(tester, 'tab-errors');
     expect(errors.calls, ['refresh']);
     expect(find.byKey(const Key('error-g1')), findsOneWidget);
   });
@@ -1239,8 +1256,7 @@ void main() {
     await goTo(tester, 'APM');
     await tester.tap(find.byKey(const Key('service-checkout')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('tab-errors')));
-    await tester.pumpAndSettle();
+    await openTab(tester, 'tab-errors');
 
     await tester.tap(find.byKey(const Key('error-g1')));
     await tester.pumpAndSettle();
@@ -1269,8 +1285,7 @@ void main() {
       await goTo(tester, 'APM');
       await tester.tap(find.byKey(const Key('service-checkout')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('tab-errors')));
-      await tester.pumpAndSettle();
+      await openTab(tester, 'tab-errors');
 
       expect(find.text('No trace was kept for this error.'), findsOneWidget);
       await tester.tap(find.byKey(const Key('error-g1')));

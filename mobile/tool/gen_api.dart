@@ -92,6 +92,8 @@ const responseTargets = <String>[
   'get /api/v1/apm/errors/groups/{group_id}/comments 200 ApmErrorCommentPage',
   'get /api/v1/apm/agents 200 ApmAgentsResponse',
   'get /api/v1/apm/traces 200 ApmTracePage',
+  'get /api/v1/apm/services/{service_name}/transactions 200 ApmTransactionPage',
+  'get /api/v1/apm/services/{service_name}/databases 200 ApmDbQueryPage',
   'get /api/v1/sessions 200 SessionPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',

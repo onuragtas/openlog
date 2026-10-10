@@ -417,17 +417,21 @@ Sahibin uyarısı (2026-10-10): mobilin menüsü webde olmayan girişler taşıy
 - [x] Servis haritası (`apm/map`, `apm/map/path`): servis ekranında dördüncü sekme. Webin
       çizdiği grafik yerine iki liste — çağıranlar ve bağımlılıklar — aynı kenarlar ve aynı
       sayılarla; 390 puanlık ekranda kırk düğümlü bir resim hiçbir şeyin resmidir. İzler
-      sekmesindeki bir işlemden o işlemin yolu işaretlenebiliyor.
+      sekmesindeki bir işlemden o işlemin yolu işaretlenebiliyor. Sekmenin adı webdeki gibi
+      "Harita"; servis ekranındaki altı sekme artık webin altı sekmesi, aynı sırada.
 
 **Ölçüm düzeltmesi (2026-10-10):** §9'un ilk sayımı APM'in servis başına uçlarını atlamış.
 Mobilin `client.dart` dosyasındaki yolları sözleşmedeki `/api/v1/apm/*` listesiyle tek tek
 karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan bu bölüm bitmiş sayılmaz:
 
 - [ ] Servis ayrıntısı (`apm/services/{s}`) ve Apdex ayarı (`apm/services/{s}/settings`)
-- [ ] İşlemler (`apm/services/{s}/transactions`, `.../transaction`)
+- [x] İşlemler (`apm/services/{s}/transactions`): servis ekranında webin sırasındaki ikinci
+      sekme; sunucu sıralamasıyla (harcanan süre, hacim, en yavaş, hata). Tek işlem ayrıntısı
+      (`.../transaction`) henüz yok.
 - [ ] Servis içi hata grubu (`apm/services/{s}/errors/{group_id}`)
 - [ ] Dağıtımlar ve karşılaştırma (`apm/services/{s}/deployments`, `.../compare`)
-- [ ] Servisin veritabanları (`apm/services/{s}/databases`)
+- [x] Servisin veritabanları (`apm/services/{s}/databases`): dördüncü sekme; normalize edilmiş
+      ifade, sistem/veritabanı/işlem ve aynı dört sayı, sunucu sıralamasıyla.
 - [ ] Servisin sunucuları, konteynerleri, pod'ları (`apm/services/{s}/hosts`, `.../containers`,
       `.../kubernetes`) ve tersi (`apm/hosts/{host_id}/services`)
 - [x] Ajanlar (`apm/agents`): servisler listesinden; servis × ajan × sürüm başına bir satır,

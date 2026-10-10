@@ -1329,7 +1329,7 @@
   "samplingConflict": "Somebody else saved while you were editing; reload and try again.",
   "samplingUnavailable": "This installation cannot store a sampling policy.",
   "servicesSampling": "Sampling",
-  "serviceTabMap": "Dependencies",
+  "serviceTabMap": "Map",
   "mapEmpty": "No calls into or out of this service in this range.",
   "mapIncoming": "Callers",
   "mapIncomingHint": "Services that send requests to this one.",
@@ -1385,5 +1385,22 @@
   "mapPathClear": "Clear the transaction",
   "mapShowPath": "Show this transaction's path",
   "navTemplates": "Templates",
-  "navIncidents": "Incidents"
+  "navIncidents": "Incidents",
+  "serviceTabTransactions": "Transactions",
+  "serviceTabDatabases": "Databases",
+  "transactionsEmpty": "No transactions in this range.",
+  "serviceDatabasesEmpty": "No database queries in this range.",
+  "transactionsShare": "{percent}% of the time",
+  "@transactionsShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "sortTimeConsumed": "Time consumed",
+  "sortThroughput": "Throughput",
+  "sortCalls": "Calls",
+  "sortSlowest": "Slowest",
+  "sortErrors": "Errors"
 }

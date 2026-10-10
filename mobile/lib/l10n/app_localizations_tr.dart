@@ -2015,7 +2015,7 @@ class LTr extends L {
   String get servicesSampling => 'Örnekleme';
 
   @override
-  String get serviceTabMap => 'Bağımlılıklar';
+  String get serviceTabMap => 'Harita';
 
   @override
   String get mapEmpty =>
@@ -2082,4 +2082,36 @@ class LTr extends L {
 
   @override
   String get navIncidents => 'Olaylar';
+
+  @override
+  String get serviceTabTransactions => 'İşlemler';
+
+  @override
+  String get serviceTabDatabases => 'Veritabanları';
+
+  @override
+  String get transactionsEmpty => 'Bu aralıkta işlem yok.';
+
+  @override
+  String get serviceDatabasesEmpty => 'Bu aralıkta veritabanı sorgusu yok.';
+
+  @override
+  String transactionsShare(String percent) {
+    return 'sürenin %$percent\'i';
+  }
+
+  @override
+  String get sortTimeConsumed => 'Harcanan süre';
+
+  @override
+  String get sortThroughput => 'Hacim';
+
+  @override
+  String get sortCalls => 'Çağrı';
+
+  @override
+  String get sortSlowest => 'En yavaş';
+
+  @override
+  String get sortErrors => 'Hata';
 }

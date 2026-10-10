@@ -1232,7 +1232,7 @@
   "samplingConflict": "Siz düzenlerken başkası kaydetti; yeniden yükleyip tekrar deneyin.",
   "samplingUnavailable": "Bu kurulumda örnekleme ilkesi saklanamıyor.",
   "servicesSampling": "Örnekleme",
-  "serviceTabMap": "Bağımlılıklar",
+  "serviceTabMap": "Harita",
   "mapEmpty": "Bu aralıkta bu servise giden ya da bu servisten çıkan çağrı yok.",
   "mapIncoming": "Bunu çağıranlar",
   "mapIncomingHint": "Bu servise istek gönderen servisler.",
@@ -1288,5 +1288,22 @@
   "mapPathClear": "İşlem işaretini kaldır",
   "mapShowPath": "Bu işlemin yolunu göster",
   "navTemplates": "Şablonlar",
-  "navIncidents": "Olaylar"
+  "navIncidents": "Olaylar",
+  "serviceTabTransactions": "İşlemler",
+  "serviceTabDatabases": "Veritabanları",
+  "transactionsEmpty": "Bu aralıkta işlem yok.",
+  "serviceDatabasesEmpty": "Bu aralıkta veritabanı sorgusu yok.",
+  "transactionsShare": "sürenin %{percent}'i",
+  "@transactionsShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "sortTimeConsumed": "Harcanan süre",
+  "sortThroughput": "Hacim",
+  "sortCalls": "Çağrı",
+  "sortSlowest": "En yavaş",
+  "sortErrors": "Hata"
 }

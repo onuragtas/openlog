@@ -564,6 +564,39 @@ class OpenlogClient {
         ),
       );
 
+  /// The transactions of one service: what it spends its time on.
+  ///
+  /// `time` is the server's default sort and means "by time consumed",
+  /// which is the one that answers "where does the service's time go".
+  Future<ApmTransactionPage> apmTransactions({
+    required String service,
+    String sort = 'time',
+  }) async => ApmTransactionPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/services/${Uri.encodeComponent(service)}/transactions',
+        '',
+        extra: {'sort': sort},
+      ),
+    ),
+  );
+
+  /// The database statements one service runs, normalized by the server.
+  Future<ApmDbQueryPage> apmServiceDatabases({
+    required String service,
+    String sort = 'time',
+  }) async => ApmDbQueryPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/services/${Uri.encodeComponent(service)}/databases',
+        '',
+        extra: {'sort': sort},
+      ),
+    ),
+  );
+
   /// What calls what.
   ///
   /// With [service], only the edges touching it -- which is the only shape

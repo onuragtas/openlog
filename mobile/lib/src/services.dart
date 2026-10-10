@@ -167,3 +167,51 @@ class ServiceMapController extends ListController<ApmMapEdge> {
     notifyListeners();
   }
 }
+
+/// What one service spends its time on.
+///
+/// Sorted by the server, because "by time consumed" is a product of the
+/// calls and their durations over the whole range -- not something the
+/// hundred rows on this page could be re-sorted into.
+class ServiceTransactionsController extends ListController<ApmTransaction> {
+  ServiceTransactionsController(this.client, this.serviceName);
+
+  final OpenlogClient client;
+  final String serviceName;
+
+  /// 'time', 'throughput', 'slowest' or 'errors'.
+  String sort = 'time';
+
+  /// The Apdex threshold the server used, which the rows are judged against.
+  double apdexTMs = 0;
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  @override
+  Future<List<ApmTransaction>> fetch() async {
+    final page = await client.apmTransactions(service: serviceName, sort: sort);
+    apdexTMs = page.apdexTMs;
+    return page.transactions;
+  }
+}
+
+/// The database statements one service runs.
+class ServiceDatabasesController extends ListController<ApmDbQuery> {
+  ServiceDatabasesController(this.client, this.serviceName);
+
+  final OpenlogClient client;
+  final String serviceName;
+
+  /// 'time', 'calls', 'slowest' or 'errors'.
+  String sort = 'time';
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  @override
+  Future<List<ApmDbQuery>> fetch() async => (await client.apmServiceDatabases(
+    service: serviceName,
+    sort: sort,
+  )).queries;
+}

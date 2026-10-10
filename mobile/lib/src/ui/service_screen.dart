@@ -10,6 +10,7 @@ import '../services.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
+import 'service_lists_tabs.dart';
 import 'service_map_tab.dart';
 import 'service_traces_tab.dart';
 import 'severity.dart';
@@ -36,7 +37,9 @@ class ServiceScreen extends StatefulWidget {
 class _ServiceScreenState extends State<ServiceScreen>
     with SingleTickerProviderStateMixin {
   late final ServiceOverviewController _c;
+  late final ServiceTransactionsController _transactions;
   late final ServiceErrorsController _errors;
+  late final ServiceDatabasesController _databases;
   late final ServiceTracesController _traces;
   late final ServiceMapController _map;
   late final TabController _tabs;
@@ -45,10 +48,12 @@ class _ServiceScreenState extends State<ServiceScreen>
   void initState() {
     super.initState();
     _c = widget.sections.serviceOverview(widget.serviceName);
+    _transactions = widget.sections.serviceTransactions(widget.serviceName);
     _errors = widget.sections.serviceErrors(widget.serviceName);
+    _databases = widget.sections.serviceDatabases(widget.serviceName);
     _traces = widget.sections.serviceTraces(widget.serviceName);
     _map = widget.sections.serviceMap(widget.serviceName);
-    _tabs = TabController(length: 4, vsync: this)..addListener(_loadTab);
+    _tabs = TabController(length: 6, vsync: this)..addListener(_loadTab);
     WidgetsBinding.instance.addPostFrameCallback((_) => _c.refresh());
   }
 
@@ -56,14 +61,25 @@ class _ServiceScreenState extends State<ServiceScreen>
   /// once by TabBarView, so building is not the signal -- the web does not
   /// fetch the error inbox of a service nobody opened the tab of either.
   void _loadTab() {
-    if (_tabs.index == 1 && !_errors.loaded && !_errors.loadingFirst) {
-      _errors.refresh();
-    }
-    if (_tabs.index == 2 && !_traces.loaded && !_traces.loadingFirst) {
-      _traces.refresh();
-    }
-    if (_tabs.index == 3 && !_map.loaded && !_map.loadingFirst) {
-      _map.refresh();
+    // The web's order: overview, transactions, errors, databases, map,
+    // traces. Each one is asked for the first time somebody looks at it.
+    // Written out rather than switched over a common type, because these
+    // controllers have no supertype that carries `refresh` with it.
+    switch (_tabs.index) {
+      case 1:
+        if (!_transactions.loaded && !_transactions.loadingFirst) {
+          _transactions.refresh();
+        }
+      case 2:
+        if (!_errors.loaded && !_errors.loadingFirst) _errors.refresh();
+      case 3:
+        if (!_databases.loaded && !_databases.loadingFirst) {
+          _databases.refresh();
+        }
+      case 4:
+        if (!_map.loaded && !_map.loadingFirst) _map.refresh();
+      case 5:
+        if (!_traces.loaded && !_traces.loadingFirst) _traces.refresh();
     }
   }
 
@@ -73,7 +89,9 @@ class _ServiceScreenState extends State<ServiceScreen>
     _tabs.dispose();
     _map.dispose();
     _traces.dispose();
+    _databases.dispose();
     _errors.dispose();
+    _transactions.dispose();
     _c.dispose();
     super.dispose();
   }
@@ -92,9 +110,14 @@ class _ServiceScreenState extends State<ServiceScreen>
           tabAlignment: TabAlignment.start,
           tabs: [
             Tab(key: const Key('tab-overview'), text: l.serviceTabOverview),
+            Tab(
+              key: const Key('tab-transactions'),
+              text: l.serviceTabTransactions,
+            ),
             Tab(key: const Key('tab-errors'), text: l.serviceTabErrors),
-            Tab(key: const Key('tab-traces'), text: l.serviceTabTraces),
+            Tab(key: const Key('tab-databases'), text: l.serviceTabDatabases),
             Tab(key: const Key('tab-map'), text: l.serviceTabMap),
+            Tab(key: const Key('tab-traces'), text: l.serviceTabTraces),
           ],
         ),
       ),
@@ -109,6 +132,10 @@ class _ServiceScreenState extends State<ServiceScreen>
               builder: (context, overview) => _body(context, l, overview),
             ),
           ),
+          ServiceTransactionsTab(
+            session: widget.session,
+            controller: _transactions,
+          ),
           ListenableBuilder(
             listenable: _errors,
             builder: (context, _) => DetailBody<ApmErrorInbox>(
@@ -116,6 +143,12 @@ class _ServiceScreenState extends State<ServiceScreen>
               baseUrl: baseUrl,
               builder: (context, inbox) => _errorList(context, l, inbox),
             ),
+          ),
+          ServiceDatabasesTab(session: widget.session, controller: _databases),
+          ServiceMapTab(
+            session: widget.session,
+            sections: widget.sections,
+            controller: _map,
           ),
           ServiceTracesTab(
             session: widget.session,
@@ -126,13 +159,8 @@ class _ServiceScreenState extends State<ServiceScreen>
             onShowPath: (transaction) {
               _map.loadPath(transaction);
               if (!_map.loaded && !_map.loadingFirst) _map.refresh();
-              _tabs.animateTo(3);
+              _tabs.animateTo(4);
             },
-          ),
-          ServiceMapTab(
-            session: widget.session,
-            sections: widget.sections,
-            controller: _map,
           ),
         ],
       ),

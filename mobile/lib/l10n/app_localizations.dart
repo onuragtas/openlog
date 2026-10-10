@@ -3622,7 +3622,7 @@ abstract class L {
   /// No description provided for @serviceTabMap.
   ///
   /// In en, this message translates to:
-  /// **'Dependencies'**
+  /// **'Map'**
   String get serviceTabMap;
 
   /// No description provided for @mapEmpty.
@@ -3732,6 +3732,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Incidents'**
   String get navIncidents;
+
+  /// No description provided for @serviceTabTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Transactions'**
+  String get serviceTabTransactions;
+
+  /// No description provided for @serviceTabDatabases.
+  ///
+  /// In en, this message translates to:
+  /// **'Databases'**
+  String get serviceTabDatabases;
+
+  /// No description provided for @transactionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No transactions in this range.'**
+  String get transactionsEmpty;
+
+  /// No description provided for @serviceDatabasesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No database queries in this range.'**
+  String get serviceDatabasesEmpty;
+
+  /// No description provided for @transactionsShare.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of the time'**
+  String transactionsShare(String percent);
+
+  /// No description provided for @sortTimeConsumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Time consumed'**
+  String get sortTimeConsumed;
+
+  /// No description provided for @sortThroughput.
+  ///
+  /// In en, this message translates to:
+  /// **'Throughput'**
+  String get sortThroughput;
+
+  /// No description provided for @sortCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get sortCalls;
+
+  /// No description provided for @sortSlowest.
+  ///
+  /// In en, this message translates to:
+  /// **'Slowest'**
+  String get sortSlowest;
+
+  /// No description provided for @sortErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get sortErrors;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

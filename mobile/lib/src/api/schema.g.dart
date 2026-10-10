@@ -9190,6 +9190,68 @@ class ApmTracePage {
   final List<ApmTraceResult> traces;
 }
 
+/// `ApmTransactionPage` of the openlog API contract.
+class ApmTransactionPage {
+  const ApmTransactionPage({
+    required this.apdexTMs,
+    required this.transactions,
+  });
+
+  factory ApmTransactionPage.fromJson(
+    Object? json, [
+    String path = 'ApmTransactionPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmTransactionPage(
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      transactions: _req(
+        m,
+        'transactions',
+        path,
+        (v, p) => _list<ApmTransaction>(
+          v,
+          p,
+          (v, p) => ApmTransaction.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'apdex_t_ms': apdexTMs,
+    'transactions': [for (final e in transactions) e.toJson()],
+  };
+
+  final double apdexTMs;
+  final List<ApmTransaction> transactions;
+}
+
+/// `ApmDbQueryPage` of the openlog API contract.
+class ApmDbQueryPage {
+  const ApmDbQueryPage({required this.queries});
+
+  factory ApmDbQueryPage.fromJson(
+    Object? json, [
+    String path = 'ApmDbQueryPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDbQueryPage(
+      queries: _req(
+        m,
+        'queries',
+        path,
+        (v, p) => _list<ApmDbQuery>(v, p, (v, p) => ApmDbQuery.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'queries': [for (final e in queries) e.toJson()],
+  };
+
+  final List<ApmDbQuery> queries;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -10056,6 +10118,149 @@ class ApmTraceResult {
   final String serviceNamespace;
   final String environment;
   final String transactionType;
+}
+
+/// `ApmTransaction` of the openlog API contract.
+class ApmTransaction {
+  const ApmTransaction({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+    required this.transactionType,
+    required this.transactionName,
+    required this.timeConsumedMs,
+    required this.timeShare,
+    required this.maxMs,
+  });
+
+  factory ApmTransaction.fromJson(
+    Object? json, [
+    String path = 'ApmTransaction',
+  ]) {
+    final m = _obj(json, path);
+    return ApmTransaction(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+      transactionType: _req(m, 'transaction_type', path, _str),
+      transactionName: _req(m, 'transaction_name', path, _str),
+      timeConsumedMs: _req(m, 'time_consumed_ms', path, _num),
+      timeShare: _req(m, 'time_share', path, _num),
+      maxMs: _req(m, 'max_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+    'transaction_type': transactionType,
+    'transaction_name': transactionName,
+    'time_consumed_ms': timeConsumedMs,
+    'time_share': timeShare,
+    'max_ms': maxMs,
+  };
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+  final String transactionType;
+  final String transactionName;
+  final double timeConsumedMs;
+  final double timeShare;
+  final double maxMs;
+}
+
+/// `ApmDbQuery` of the openlog API contract.
+class ApmDbQuery {
+  const ApmDbQuery({
+    required this.dbSystem,
+    required this.dbName,
+    required this.dbOperation,
+    required this.statement,
+    required this.calls,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p95Ms,
+    required this.maxMs,
+    required this.timeConsumedMs,
+    required this.timeShare,
+  });
+
+  factory ApmDbQuery.fromJson(Object? json, [String path = 'ApmDbQuery']) {
+    final m = _obj(json, path);
+    return ApmDbQuery(
+      dbSystem: _req(m, 'db_system', path, _str),
+      dbName: _req(m, 'db_name', path, _str),
+      dbOperation: _req(m, 'db_operation', path, _str),
+      statement: _req(m, 'statement', path, _str),
+      calls: _req(m, 'calls', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      maxMs: _req(m, 'max_ms', path, _num),
+      timeConsumedMs: _req(m, 'time_consumed_ms', path, _num),
+      timeShare: _req(m, 'time_share', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'db_system': dbSystem,
+    'db_name': dbName,
+    'db_operation': dbOperation,
+    'statement': statement,
+    'calls': calls,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p95_ms': ?p95Ms,
+    'max_ms': maxMs,
+    'time_consumed_ms': timeConsumedMs,
+    'time_share': timeShare,
+  };
+
+  final String dbSystem;
+  final String dbName;
+  final String dbOperation;
+  final String statement;
+  final double calls;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p95Ms;
+  final double maxMs;
+  final double timeConsumedMs;
+  final double timeShare;
 }
 
 /// `LogRecord` of the openlog API contract.

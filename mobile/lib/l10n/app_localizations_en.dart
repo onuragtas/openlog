@@ -2020,7 +2020,7 @@ class LEn extends L {
   String get servicesSampling => 'Sampling';
 
   @override
-  String get serviceTabMap => 'Dependencies';
+  String get serviceTabMap => 'Map';
 
   @override
   String get mapEmpty => 'No calls into or out of this service in this range.';
@@ -2086,4 +2086,36 @@ class LEn extends L {
 
   @override
   String get navIncidents => 'Incidents';
+
+  @override
+  String get serviceTabTransactions => 'Transactions';
+
+  @override
+  String get serviceTabDatabases => 'Databases';
+
+  @override
+  String get transactionsEmpty => 'No transactions in this range.';
+
+  @override
+  String get serviceDatabasesEmpty => 'No database queries in this range.';
+
+  @override
+  String transactionsShare(String percent) {
+    return '$percent% of the time';
+  }
+
+  @override
+  String get sortTimeConsumed => 'Time consumed';
+
+  @override
+  String get sortThroughput => 'Throughput';
+
+  @override
+  String get sortCalls => 'Calls';
+
+  @override
+  String get sortSlowest => 'Slowest';
+
+  @override
+  String get sortErrors => 'Errors';
 }
