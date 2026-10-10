@@ -7,8 +7,10 @@ import '../detail.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
+import 'list_scaffold.dart';
 import 'oql_view.dart';
 import 'sections_screen.dart';
+import 'trace_screen.dart';
 import 'sparkline.dart';
 import 'theme.dart';
 
@@ -282,6 +284,91 @@ class _MetricScreenState extends State<MetricScreen> {
             ),
           ],
         ),
+
+      // The traces behind the points: a spike in the chart above, opened
+      // as the request that made it. Asked for on demand, because they
+      // follow the trace retention and an old window simply has none.
+      DetailSection(
+        title: l.metricExemplars,
+        children: [
+          if (_c.exemplarsError != null)
+            Text(
+              l.metricExemplarsFailed(_c.exemplarsError!),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            )
+          else if (_c.exemplars.isEmpty && !_c.exemplarsLoading)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('metric-exemplars'),
+                onPressed: _c.loadExemplars,
+                child: Text(l.metricExemplarsLoad),
+              ),
+            )
+          else if (_c.exemplarsLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else ...[
+            for (final e in _c.exemplars)
+              ListTile(
+                key: Key('exemplar-${e.spanId}-${e.traceId}'),
+                contentPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                title: Text(
+                  // The exemplar's own measurement, not the point's
+                  // aggregate: that is the whole reason it was kept.
+                  '${_number(e.value)} · ${e.serviceName}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                subtitle: Text(
+                  relativeTimeOf(l, e.timestamp),
+                  style: theme.textTheme.bodySmall,
+                ),
+                trailing: const Icon(Icons.chevron_right, size: 18),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => TraceScreen(
+                      session: widget.session,
+                      sections: widget.sections,
+                      traceId: e.traceId,
+                    ),
+                  ),
+                ),
+              ),
+            if (_c.exemplarsTruncated)
+              Text(
+                l.metricExemplarsTruncated,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ],
+      ),
     ];
   }
+}
+
+/// Enough digits to be useful and not enough to be noise.
+String _number(double v) {
+  final abs = v.abs();
+  final fixed = abs >= 100
+      ? v.toStringAsFixed(0)
+      : abs >= 1
+      ? v.toStringAsFixed(2)
+      : v.toStringAsFixed(4);
+  if (!fixed.contains('.')) return fixed;
+  return fixed
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
 }

@@ -1221,6 +1221,50 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// Which series behaved differently in a window than before it.
+  ///
+  /// The window is required and at most six hours; the baseline defaults to
+  /// four window-lengths before it, which is the server's own choice and
+  /// not something this app should second-guess.
+  Future<MetricCorrelations> correlateMetrics({
+    required DateTime from,
+    required DateTime to,
+    String metric = '',
+    String hostId = '',
+  }) async => MetricCorrelations.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/metrics/correlate',
+        '',
+        extra: {
+          'from': from.toUtc().toIso8601String(),
+          'to': to.toUtc().toIso8601String(),
+          if (metric.isNotEmpty) 'metric': metric,
+          if (hostId.isNotEmpty) 'host_id': hostId,
+        },
+      ),
+    ),
+  );
+
+  /// The traces behind one metric's data points, so a spike can be opened
+  /// as a request.
+  Future<MetricExemplarsResponse> metricExemplars({
+    required String metric,
+    List<Map<String, Object?>> filters = const [],
+    int limit = 20,
+  }) async => MetricExemplarsResponse.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/metrics/exemplars',
+      body: {
+        'metric': metric,
+        if (filters.isNotEmpty) 'filters': filters,
+        'limit': limit,
+      },
+    ),
+  );
+
   /// Spans per bucket for the traces list's conditions, with the p50, p95
   /// and p99 of their duration.
   Future<TracesAggregateResponse> traceVolume({

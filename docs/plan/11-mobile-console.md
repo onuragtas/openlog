@@ -502,7 +502,10 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Hacim grafiği (`logs/aggregate`) listenin üstünde, aynı koşullarla.
 - [x] İz toplulaştırma (`traces/aggregate`): izler listesinin üstünde hacim ve p95 çizgisi,
       listenin koşullarıyla — kova sayısı tek başına isteklerin yavaş olup olmadığını söylemez.
-- [ ] Metrik adları, korelasyon, exemplar (`metrics/names`, `metrics/correlate`, `metrics/exemplars`)
+- [x] Metrik korelasyonu ve exemplar (`metrics/correlate`, `metrics/exemplars`): korelasyon
+      olay ekranında (webde de orada), olayın penceresiyle ve istekle; exemplar metrik
+      ekranında, dokununca ize gidiyor. `metrics/names` metrik listesinin kendisi — zaten
+      `metrics` ucuyla karşılanıyor.
 - [ ] Kayıtlı görünümler (`saved-views`)
 - [ ] OQL şema ve doğrulama (`query/schema`, `query/validate`)
 - [ ] Alev grafiği (`profiles/flame`)

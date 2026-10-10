@@ -2905,4 +2905,42 @@ class LEn extends L {
   String volumeP95(String ms) {
     return 'p95 $ms ms';
   }
+
+  @override
+  String get metricExemplars => 'Sample traces';
+
+  @override
+  String get metricExemplarsLoad => 'Fetch the traces behind this metric';
+
+  @override
+  String metricExemplarsFailed(String message) {
+    return 'The sample traces could not be read: $message';
+  }
+
+  @override
+  String get metricExemplarsTruncated =>
+      'Not all of them; the range holds more.';
+
+  @override
+  String get correlationsTitle => 'What else changed';
+
+  @override
+  String get correlationsAbout =>
+      'Series that behaved differently during the incident\'s window than before it.';
+
+  @override
+  String get correlationsLoad => 'Compute';
+
+  @override
+  String correlationsFailed(String message) {
+    return 'Could not be computed: $message';
+  }
+
+  @override
+  String get correlationsNoRatio => 'no ratio';
+
+  @override
+  String correlationsMeans(String baseline, String window, String score) {
+    return 'before $baseline → after $window · score $score';
+  }
 }

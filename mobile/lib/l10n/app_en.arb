@@ -1907,5 +1907,42 @@
         "type": "String"
       }
     }
+  },
+  "metricExemplars": "Sample traces",
+  "metricExemplarsLoad": "Fetch the traces behind this metric",
+  "metricExemplarsFailed": "The sample traces could not be read: {message}",
+  "@metricExemplarsFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "metricExemplarsTruncated": "Not all of them; the range holds more.",
+  "correlationsTitle": "What else changed",
+  "correlationsAbout": "Series that behaved differently during the incident's window than before it.",
+  "correlationsLoad": "Compute",
+  "correlationsFailed": "Could not be computed: {message}",
+  "@correlationsFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "correlationsNoRatio": "no ratio",
+  "correlationsMeans": "before {baseline} → after {window} · score {score}",
+  "@correlationsMeans": {
+    "placeholders": {
+      "baseline": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      },
+      "score": {
+        "type": "String"
+      }
+    }
   }
 }

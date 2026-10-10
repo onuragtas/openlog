@@ -1810,5 +1810,42 @@
         "type": "String"
       }
     }
+  },
+  "metricExemplars": "Örnek izler",
+  "metricExemplarsLoad": "Bu metriğin arkasındaki izleri getir",
+  "metricExemplarsFailed": "Örnek izler alınamadı: {message}",
+  "@metricExemplarsFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "metricExemplarsTruncated": "Hepsi değil; aralıkta daha fazlası var.",
+  "correlationsTitle": "Bu sırada değişenler",
+  "correlationsAbout": "Olayın penceresinde, öncesine göre farklı davranan seriler.",
+  "correlationsLoad": "Hesapla",
+  "correlationsFailed": "Hesaplanamadı: {message}",
+  "@correlationsFailed": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "correlationsNoRatio": "oran yok",
+  "correlationsMeans": "önce {baseline} → sonra {window} · skor {score}",
+  "@correlationsMeans": {
+    "placeholders": {
+      "baseline": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      },
+      "score": {
+        "type": "String"
+      }
+    }
   }
 }

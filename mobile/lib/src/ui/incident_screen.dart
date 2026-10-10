@@ -212,6 +212,47 @@ class _IncidentScreenState extends State<IncidentScreen> {
                   DeliveryTile(delivery: d, key: Key('delivery-${d.id}')),
               ],
       ),
+
+      // What else changed while this was firing. Asked for on demand: it
+      // is a question somebody has after reading the rest, and the server
+      // reads a lot of series to answer it.
+      DetailSection(
+        title: l.correlationsTitle,
+        children: [
+          Text(
+            l.correlationsAbout,
+            style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          if (_c.correlationsError != null)
+            Text(
+              l.correlationsFailed(_c.correlationsError!),
+              style: text.bodySmall?.copyWith(color: scheme.error),
+            )
+          else if (_c.correlationsLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (_c.correlations.isEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('incident-correlations'),
+                onPressed: _c.loadCorrelations,
+                child: Text(l.correlationsLoad),
+              ),
+            )
+          else
+            for (final c in _c.correlations.take(10))
+              _Correlation(correlation: c),
+        ],
+      ),
     ];
   }
 
@@ -382,4 +423,86 @@ String _number(double v) {
   return fixed
       .replaceFirst(RegExp(r'0+$'), '')
       .replaceFirst(RegExp(r'\.$'), '');
+}
+
+/// One series that behaved differently, with both means so the score can
+/// be checked rather than taken on faith.
+class _Correlation extends StatelessWidget {
+  const _Correlation({required this.correlation});
+
+  final MetricCorrelation correlation;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final up = correlation.direction == MetricCorrelationDirection.up;
+
+    return Padding(
+      key: Key('correlation-${correlation.seriesId}'),
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  correlation.metricName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+              Text(
+                // The change as a ratio, or nothing when the baseline was
+                // zero: a ratio against zero is not a number.
+                correlation.changeRatio == null
+                    ? l.correlationsNoRatio
+                    : _signed(correlation.changeRatio!),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: severityTextColor(
+                    context,
+                    up ? SeverityLevel.critical : SeverityLevel.info,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            // Both means, because the score is a claim and these are the
+            // evidence for it.
+            l.correlationsMeans(
+              _number(correlation.baselineMean),
+              _number(correlation.windowMean),
+              _number(correlation.score),
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (correlation.attributes.isNotEmpty)
+            Text(
+              [
+                for (final e in correlation.attributes.entries.take(3))
+                  '${e.key}=${e.value}',
+              ].join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+String _signed(double ratio) {
+  final percent = ratio * 100;
+  final shown = percent.abs() >= 10
+      ? percent.toStringAsFixed(0)
+      : percent.toStringAsFixed(1);
+  return percent > 0 ? '+$shown%' : '$shown%';
 }

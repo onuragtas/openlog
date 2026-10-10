@@ -69,11 +69,53 @@ class IncidentController extends DetailController<AlertIncidentDetail> {
   /// Which action is in flight, so the screen disables only that button.
   String? busy;
 
+  /// Which other series behaved differently during this incident, once
+  /// somebody asks. The window is the incident's own; the server picks the
+  /// baseline.
+  List<MetricCorrelation> correlations = const [];
+  bool correlationsLoading = false;
+  String? correlationsError;
+
+  /// Pinned the first time it is asked for, so the window does not slide
+  /// under the reader while they are looking at it.
+  DateTime? _correlationNow;
+
   @override
   String get forbiddenKind => 'alertsForbidden';
 
   @override
   Future<AlertIncidentDetail> fetch() => _client.incident(id);
+
+  /// Asks what else changed while this was firing.
+  Future<void> loadCorrelations() async {
+    final incident = value;
+    if (incident == null) return;
+    correlationsLoading = true;
+    correlationsError = null;
+    notifyListeners();
+    try {
+      _correlationNow ??= DateTime.now().toUtc();
+      final (from, to) = correlationWindow(
+        openedAt: incident.openedAt,
+        resolvedAt: incident.resolvedAt,
+        now: _correlationNow!,
+      );
+      correlations = (await _client.correlateMetrics(
+        from: from,
+        to: to,
+        // The host the incident is about, when it is about one: the web
+        // narrows the same way, and everything else is noise next to it.
+        hostId: incident.labels['host.id'] ?? '',
+      )).correlations;
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      correlationsError = e.message;
+    } finally {
+      correlationsLoading = false;
+      notifyListeners();
+    }
+  }
 
   /// The service this incident is about, when the rule was about a service.
   ///
@@ -285,6 +327,20 @@ class MetricController extends DetailController<MetricDetail> {
 
   MetricQueryResponse? series;
 
+  /// The traces behind the points, once somebody asks: a spike in a chart
+  /// opened as the request that caused it.
+  List<MetricExemplar> exemplars = const [];
+  bool exemplarsLoading = false;
+
+  /// More exist than came back, which the screen says rather than letting
+  /// twenty look like all of them.
+  bool exemplarsTruncated = false;
+
+  /// Why there are none, when the server could not say. Exemplars follow
+  /// the trace retention rather than the metric's, so an old window has
+  /// none and that is not an error.
+  String? exemplarsError;
+
   /// Why the chart is missing while the metadata is on screen. A metric can
   /// describe itself and still have nothing to draw, and an empty space where
   /// a chart should be says nothing about which happened.
@@ -311,6 +367,26 @@ class MetricController extends DetailController<MetricDetail> {
       seriesError = e.message;
     }
     return detail;
+  }
+
+  /// Asks for the traces behind this metric's points.
+  Future<void> loadExemplars() async {
+    exemplarsLoading = true;
+    exemplarsError = null;
+    notifyListeners();
+    try {
+      final page = await _client.metricExemplars(metric: name);
+      exemplars = page.exemplars;
+      exemplarsTruncated = page.truncated;
+    } on ApiUnreachable {
+      exemplarsError = null;
+      rethrow;
+    } on ApiException catch (e) {
+      exemplarsError = e.message;
+    } finally {
+      exemplarsLoading = false;
+      notifyListeners();
+    }
   }
 
   /// The first series' values, for the sparkline. One line: a metric can have
@@ -650,4 +726,24 @@ class SessionsController extends DetailController<SessionPage> {
       notifyListeners();
     }
   }
+}
+
+/// The window a correlation is asked for: the incident's own, five minutes
+/// at the shortest and an hour at the longest.
+///
+/// Short, because the question is "what changed when this started" -- an
+/// incident open for three days correlates everything that happened in
+/// three days, which is everything.
+(DateTime, DateTime) correlationWindow({
+  required DateTime openedAt,
+  DateTime? resolvedAt,
+  required DateTime now,
+}) {
+  const min = Duration(minutes: 5);
+  const max = Duration(hours: 1);
+  final end = resolvedAt ?? now;
+  var span = end.difference(openedAt);
+  if (span < min) span = min;
+  if (span > max) span = max;
+  return (openedAt, openedAt.add(span));
 }

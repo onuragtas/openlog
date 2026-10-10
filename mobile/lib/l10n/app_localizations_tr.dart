@@ -2897,4 +2897,42 @@ class LTr extends L {
   String volumeP95(String ms) {
     return 'p95 $ms ms';
   }
+
+  @override
+  String get metricExemplars => 'Örnek izler';
+
+  @override
+  String get metricExemplarsLoad => 'Bu metriğin arkasındaki izleri getir';
+
+  @override
+  String metricExemplarsFailed(String message) {
+    return 'Örnek izler alınamadı: $message';
+  }
+
+  @override
+  String get metricExemplarsTruncated =>
+      'Hepsi değil; aralıkta daha fazlası var.';
+
+  @override
+  String get correlationsTitle => 'Bu sırada değişenler';
+
+  @override
+  String get correlationsAbout =>
+      'Olayın penceresinde, öncesine göre farklı davranan seriler.';
+
+  @override
+  String get correlationsLoad => 'Hesapla';
+
+  @override
+  String correlationsFailed(String message) {
+    return 'Hesaplanamadı: $message';
+  }
+
+  @override
+  String get correlationsNoRatio => 'oran yok';
+
+  @override
+  String correlationsMeans(String baseline, String window, String score) {
+    return 'önce $baseline → sonra $window · skor $score';
+  }
 }

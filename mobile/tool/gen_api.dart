@@ -34,6 +34,8 @@ const schemaTargets = <String>[
   'LogsPatternsResponse', // the distinct messages behind the matching logs
   'LogsAggregateResponse', // and how many of them arrived when
   'TracesAggregateResponse', // spans per bucket, with their percentiles
+  'MetricCorrelations', // which series behaved differently in a window
+  'MetricExemplarsResponse', // the traces behind a metric's points
   'FieldKeysResponse', // the keys a filter can be built from
   'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads

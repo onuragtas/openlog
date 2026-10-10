@@ -957,6 +957,31 @@ enum OrgDeletionInitiator {
   }
 }
 
+/// MetricCorrelationDirection of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum MetricCorrelationDirection {
+  up('up'),
+  down('down'),
+  unknown('');
+
+  const MetricCorrelationDirection(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static MetricCorrelationDirection fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FieldSource of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3642,6 +3667,98 @@ class TracesAggregateResponseLatency {
   final List<List<double>> p50;
   final List<List<double>> p95;
   final List<List<double>> p99;
+}
+
+/// `MetricCorrelations` of the openlog API contract.
+class MetricCorrelations {
+  const MetricCorrelations({
+    required this.from,
+    required this.to,
+    required this.baselineFrom,
+    required this.baselineTo,
+    required this.seriesCompared,
+    required this.correlations,
+  });
+
+  factory MetricCorrelations.fromJson(
+    Object? json, [
+    String path = 'MetricCorrelations',
+  ]) {
+    final m = _obj(json, path);
+    return MetricCorrelations(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      baselineFrom: _req(m, 'baseline_from', path, _time),
+      baselineTo: _req(m, 'baseline_to', path, _time),
+      seriesCompared: _req(m, 'series_compared', path, _int),
+      correlations: _req(
+        m,
+        'correlations',
+        path,
+        (v, p) => _list<MetricCorrelation>(
+          v,
+          p,
+          (v, p) => MetricCorrelation.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'baseline_from': baselineFrom.toUtc().toIso8601String(),
+    'baseline_to': baselineTo.toUtc().toIso8601String(),
+    'series_compared': seriesCompared,
+    'correlations': [for (final e in correlations) e.toJson()],
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final DateTime baselineFrom;
+  final DateTime baselineTo;
+  final int seriesCompared;
+  final List<MetricCorrelation> correlations;
+}
+
+/// `MetricExemplarsResponse` of the openlog API contract.
+class MetricExemplarsResponse {
+  const MetricExemplarsResponse({
+    required this.exemplars,
+    required this.total,
+    required this.truncated,
+  });
+
+  factory MetricExemplarsResponse.fromJson(
+    Object? json, [
+    String path = 'MetricExemplarsResponse',
+  ]) {
+    final m = _obj(json, path);
+    return MetricExemplarsResponse(
+      exemplars: _req(
+        m,
+        'exemplars',
+        path,
+        (v, p) => _list<MetricExemplar>(
+          v,
+          p,
+          (v, p) => MetricExemplar.fromJson(v, p),
+        ),
+      ),
+      total: _req(m, 'total', path, _int),
+      truncated: _req(m, 'truncated', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'exemplars': [for (final e in exemplars) e.toJson()],
+    'total': total,
+    'truncated': truncated,
+  };
+
+  final List<MetricExemplar> exemplars;
+  final int total;
+  final bool truncated;
 }
 
 /// `FieldKeysResponse` of the openlog API contract.
@@ -8146,6 +8263,136 @@ class LogsAggregateSeries {
   final bool other;
   final int total;
   final List<List<double>> points;
+}
+
+/// `MetricCorrelation` of the openlog API contract.
+class MetricCorrelation {
+  const MetricCorrelation({
+    required this.metricName,
+    required this.seriesId,
+    required this.hostId,
+    required this.attributes,
+    required this.unit,
+    required this.baselineMean,
+    required this.windowMean,
+    this.changeRatio,
+    required this.score,
+    required this.direction,
+    required this.points,
+  });
+
+  factory MetricCorrelation.fromJson(
+    Object? json, [
+    String path = 'MetricCorrelation',
+  ]) {
+    final m = _obj(json, path);
+    return MetricCorrelation(
+      metricName: _req(m, 'metric_name', path, _str),
+      seriesId: _req(m, 'series_id', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      unit: _req(m, 'unit', path, _str),
+      baselineMean: _req(m, 'baseline_mean', path, _num),
+      windowMean: _req(m, 'window_mean', path, _num),
+      changeRatio: _opt(m, 'change_ratio', path, _num),
+      score: _req(m, 'score', path, _num),
+      direction: _req(
+        m,
+        'direction',
+        path,
+        MetricCorrelationDirection.fromJson,
+      ),
+      points: _req(m, 'points', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'metric_name': metricName,
+    'series_id': seriesId,
+    'host_id': hostId,
+    'attributes': attributes,
+    'unit': unit,
+    'baseline_mean': baselineMean,
+    'window_mean': windowMean,
+    'change_ratio': ?changeRatio,
+    'score': score,
+    'direction': direction.wire,
+    'points': points,
+  };
+
+  final String metricName;
+  final String seriesId;
+  final String hostId;
+  final Map<String, String> attributes;
+  final String unit;
+  final double baselineMean;
+  final double windowMean;
+  final double? changeRatio;
+  final double score;
+  final MetricCorrelationDirection direction;
+  final int points;
+}
+
+/// `MetricExemplar` of the openlog API contract.
+class MetricExemplar {
+  const MetricExemplar({
+    required this.timestamp,
+    required this.value,
+    required this.traceId,
+    required this.spanId,
+    required this.serviceName,
+    required this.attributes,
+    required this.filteredAttributes,
+  });
+
+  factory MetricExemplar.fromJson(
+    Object? json, [
+    String path = 'MetricExemplar',
+  ]) {
+    final m = _obj(json, path);
+    return MetricExemplar(
+      timestamp: _req(m, 'timestamp', path, _time),
+      value: _req(m, 'value', path, _num),
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      filteredAttributes: _req(
+        m,
+        'filtered_attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'value': value,
+    'trace_id': traceId,
+    'span_id': spanId,
+    'service_name': serviceName,
+    'attributes': attributes,
+    'filtered_attributes': filteredAttributes,
+  };
+
+  final DateTime timestamp;
+  final double value;
+  final String traceId;
+  final String spanId;
+  final String serviceName;
+  final Map<String, String> attributes;
+  final Map<String, String> filteredAttributes;
 }
 
 /// `FieldKey` of the openlog API contract.

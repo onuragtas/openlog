@@ -5160,6 +5160,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'p95 {ms} ms'**
   String volumeP95(String ms);
+
+  /// No description provided for @metricExemplars.
+  ///
+  /// In en, this message translates to:
+  /// **'Sample traces'**
+  String get metricExemplars;
+
+  /// No description provided for @metricExemplarsLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch the traces behind this metric'**
+  String get metricExemplarsLoad;
+
+  /// No description provided for @metricExemplarsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The sample traces could not be read: {message}'**
+  String metricExemplarsFailed(String message);
+
+  /// No description provided for @metricExemplarsTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Not all of them; the range holds more.'**
+  String get metricExemplarsTruncated;
+
+  /// No description provided for @correlationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What else changed'**
+  String get correlationsTitle;
+
+  /// No description provided for @correlationsAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Series that behaved differently during the incident\'s window than before it.'**
+  String get correlationsAbout;
+
+  /// No description provided for @correlationsLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Compute'**
+  String get correlationsLoad;
+
+  /// No description provided for @correlationsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not be computed: {message}'**
+  String correlationsFailed(String message);
+
+  /// No description provided for @correlationsNoRatio.
+  ///
+  /// In en, this message translates to:
+  /// **'no ratio'**
+  String get correlationsNoRatio;
+
+  /// No description provided for @correlationsMeans.
+  ///
+  /// In en, this message translates to:
+  /// **'before {baseline} → after {window} · score {score}'**
+  String correlationsMeans(String baseline, String window, String score);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {
