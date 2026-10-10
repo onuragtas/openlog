@@ -1944,5 +1944,45 @@
         "type": "String"
       }
     }
-  }
+  },
+  "savedViewsButton": "Views",
+  "savedViewsTitle": "Saved views",
+  "savedViewsEmpty": "No saved views yet.",
+  "savedViewsAbout": "Filters kept under a name; the same view opens in a browser.",
+  "savedViewPrivate": "Private",
+  "savedViewOrg": "Organization",
+  "savedViewVisibility": "Who can see it",
+  "savedViewName": "Name",
+  "savedViewNameHint": "e.g. Checkout errors",
+  "savedViewSave": "Save view",
+  "savedViewOverwrite": "Overwrite",
+  "savedViewOverwriteHint": "Save what is on screen into {name}",
+  "@savedViewOverwriteHint": {
+      "placeholders": {
+          "name": {
+              "type": "String"
+          }
+      }
+  },
+  "savedViewDelete": "Delete",
+  "savedViewDeleteConfirm": "Delete it?",
+  "savedViewApplied": "{name} applied",
+  "@savedViewApplied": {
+      "placeholders": {
+          "name": {
+              "type": "String"
+          }
+      }
+  },
+  "savedViewGroupsIgnored": "This view has {count} OR groups the phone cannot show; the list was filtered by its AND conditions only.",
+  "@savedViewGroupsIgnored": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "savedViewAllSpans": "This view asks for every span; the phone lists only the root span of each trace.",
+  "viewsFull": "The organization is at its limit of saved views (500). Delete one before saving another.",
+  "viewGone": "That view is gone; reload the list."
 }

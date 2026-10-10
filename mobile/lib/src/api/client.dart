@@ -1221,6 +1221,82 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// The explorer views somebody kept: their own private ones and the
+  /// organization's.
+  ///
+  /// PostgreSQL only; a 404 means this installation cannot keep views,
+  /// which is a different thing from having none.
+  Future<SavedViewPage> savedViews(String signal) async =>
+      SavedViewPage.fromJson(
+        await _send(
+          'GET',
+          _listPath('/api/v1/saved-views', '', extra: {'signal': signal}),
+        ),
+      );
+
+  /// Keeps one. `state` is the web's own shape, so a view saved here opens
+  /// there and the other way round.
+  Future<SavedView> createSavedView({
+    required String signal,
+    required String name,
+    required String visibility,
+    required Map<String, Object?> state,
+    String description = '',
+  }) async => SavedView.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/saved-views',
+      body: _savedViewBody(
+        signal: signal,
+        name: name,
+        visibility: visibility,
+        state: state,
+        description: description,
+      ),
+    ),
+  );
+
+  /// Writes over one. The whole view goes back, so the name, the visibility
+  /// and the description are sent as they were unless the caller changed
+  /// them -- a PUT that left them out would quietly empty them.
+  Future<SavedView> updateSavedView(
+    String id, {
+    required String signal,
+    required String name,
+    required String visibility,
+    required Map<String, Object?> state,
+    String description = '',
+  }) async => SavedView.fromJson(
+    await _send(
+      'PUT',
+      '/api/v1/saved-views/${Uri.encodeComponent(id)}',
+      body: _savedViewBody(
+        signal: signal,
+        name: name,
+        visibility: visibility,
+        state: state,
+        description: description,
+      ),
+    ),
+  );
+
+  Future<void> deleteSavedView(String id) =>
+      _send('DELETE', '/api/v1/saved-views/${Uri.encodeComponent(id)}');
+
+  Map<String, Object?> _savedViewBody({
+    required String signal,
+    required String name,
+    required String visibility,
+    required Map<String, Object?> state,
+    required String description,
+  }) => {
+    'signal': signal,
+    'name': name,
+    'visibility': visibility,
+    'state': state,
+    if (description.isNotEmpty) 'description': description,
+  };
+
   /// Which series behaved differently in a window than before it.
   ///
   /// The window is required and at most six hours; the baseline defaults to

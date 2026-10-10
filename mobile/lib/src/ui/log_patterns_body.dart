@@ -179,4 +179,4 @@ class _PatternCard extends StatelessWidget {
 
 /// The filter that lists one pattern's records.
 Filter patternFilter(LogPattern pattern) =>
-    Filter(key: 'pattern_id', op: 'eq', values: [pattern.patternId]);
+    Filter(key: 'pattern_id', op: '=', values: [pattern.patternId]);

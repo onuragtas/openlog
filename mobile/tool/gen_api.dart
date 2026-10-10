@@ -36,6 +36,7 @@ const schemaTargets = <String>[
   'TracesAggregateResponse', // spans per bucket, with their percentiles
   'MetricCorrelations', // which series behaved differently in a window
   'MetricExemplarsResponse', // the traces behind a metric's points
+  'SavedView', // an explorer view somebody kept
   'FieldKeysResponse', // the keys a filter can be built from
   'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads
@@ -132,6 +133,7 @@ const responseTargets = <String>[
   'get /api/v1/sso/domains 200 SSODomainPage',
   'get /api/v1/sso/role-mappings 200 SSORoleMappingPage',
   'get /api/v1/scim/tokens 200 ScimTokenPage',
+  'get /api/v1/saved-views 200 SavedViewPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',

@@ -57,7 +57,7 @@ void main() {
           )
           ..query = 'timeout'
           ..filters = const [
-            Filter(key: 'service.name', op: 'eq', values: ['checkout']),
+            Filter(key: 'service.name', op: '=', values: ['checkout']),
           ];
     addTearDown(c.dispose);
 
@@ -66,7 +66,7 @@ void main() {
     expect(body?['q'], 'timeout');
     expect((body?['filters']! as List).single, {
       'key': 'service.name',
-      'op': 'eq',
+      'op': '=',
       'value': 'checkout',
     });
     // The counts the screen prints beside the list: records with no
@@ -80,6 +80,6 @@ void main() {
     final p = LogPattern.fromJson(pattern('774411', 5));
     final f = patternFilter(p);
 
-    expect(f.toJson(), {'key': 'pattern_id', 'op': 'eq', 'value': '774411'});
+    expect(f.toJson(), {'key': 'pattern_id', 'op': '=', 'value': '774411'});
   });
 }

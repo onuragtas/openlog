@@ -2943,4 +2943,70 @@ class LEn extends L {
   String correlationsMeans(String baseline, String window, String score) {
     return 'before $baseline → after $window · score $score';
   }
+
+  @override
+  String get savedViewsButton => 'Views';
+
+  @override
+  String get savedViewsTitle => 'Saved views';
+
+  @override
+  String get savedViewsEmpty => 'No saved views yet.';
+
+  @override
+  String get savedViewsAbout =>
+      'Filters kept under a name; the same view opens in a browser.';
+
+  @override
+  String get savedViewPrivate => 'Private';
+
+  @override
+  String get savedViewOrg => 'Organization';
+
+  @override
+  String get savedViewVisibility => 'Who can see it';
+
+  @override
+  String get savedViewName => 'Name';
+
+  @override
+  String get savedViewNameHint => 'e.g. Checkout errors';
+
+  @override
+  String get savedViewSave => 'Save view';
+
+  @override
+  String get savedViewOverwrite => 'Overwrite';
+
+  @override
+  String savedViewOverwriteHint(String name) {
+    return 'Save what is on screen into $name';
+  }
+
+  @override
+  String get savedViewDelete => 'Delete';
+
+  @override
+  String get savedViewDeleteConfirm => 'Delete it?';
+
+  @override
+  String savedViewApplied(String name) {
+    return '$name applied';
+  }
+
+  @override
+  String savedViewGroupsIgnored(int count) {
+    return 'This view has $count OR groups the phone cannot show; the list was filtered by its AND conditions only.';
+  }
+
+  @override
+  String get savedViewAllSpans =>
+      'This view asks for every span; the phone lists only the root span of each trace.';
+
+  @override
+  String get viewsFull =>
+      'The organization is at its limit of saved views (500). Delete one before saving another.';
+
+  @override
+  String get viewGone => 'That view is gone; reload the list.';
 }

@@ -312,6 +312,57 @@ enum QuotaLevel {
   }
 }
 
+/// SavedViewSignal of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SavedViewSignal {
+  logs('logs'),
+  metrics('metrics'),
+  traces('traces'),
+  unknown('');
+
+  const SavedViewSignal(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SavedViewSignal fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SavedViewVisibility of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SavedViewVisibility {
+  private('private'),
+  org('org'),
+  unknown('');
+
+  const SavedViewVisibility(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SavedViewVisibility fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FieldType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3759,6 +3810,66 @@ class MetricExemplarsResponse {
   final List<MetricExemplar> exemplars;
   final int total;
   final bool truncated;
+}
+
+/// `SavedView` of the openlog API contract.
+class SavedView {
+  const SavedView({
+    required this.id,
+    required this.signal,
+    required this.name,
+    required this.description,
+    required this.visibility,
+    required this.state,
+    this.createdByUserId,
+    required this.createdByEmail,
+    required this.canEdit,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory SavedView.fromJson(Object? json, [String path = 'SavedView']) {
+    final m = _obj(json, path);
+    return SavedView(
+      id: _req(m, 'id', path, _str),
+      signal: _req(m, 'signal', path, SavedViewSignal.fromJson),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      visibility: _req(m, 'visibility', path, SavedViewVisibility.fromJson),
+      state: _req(m, 'state', path, (v, p) => _map<Object?>(v, p, _any)),
+      createdByUserId: _opt(m, 'created_by_user_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      canEdit: _req(m, 'can_edit', path, _bool),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'signal': signal.wire,
+    'name': name,
+    'description': description,
+    'visibility': visibility.wire,
+    'state': state,
+    'created_by_user_id': ?createdByUserId,
+    'created_by_email': createdByEmail,
+    'can_edit': canEdit,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final SavedViewSignal signal;
+  final String name;
+  final String description;
+  final SavedViewVisibility visibility;
+  final Map<String, Object?> state;
+  final String? createdByUserId;
+  final String createdByEmail;
+  final bool canEdit;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 }
 
 /// `FieldKeysResponse` of the openlog API contract.
@@ -13501,6 +13612,32 @@ class ScimTokenPage {
   final List<SCIMToken> tokens;
   final String baseUrl;
   final bool enabled;
+}
+
+/// `SavedViewPage` of the openlog API contract.
+class SavedViewPage {
+  const SavedViewPage({required this.views});
+
+  factory SavedViewPage.fromJson(
+    Object? json, [
+    String path = 'SavedViewPage',
+  ]) {
+    final m = _obj(json, path);
+    return SavedViewPage(
+      views: _req(
+        m,
+        'views',
+        path,
+        (v, p) => _list<SavedView>(v, p, (v, p) => SavedView.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'views': [for (final e in views) e.toJson()],
+  };
+
+  final List<SavedView> views;
 }
 
 /// `ServicePage` of the openlog API contract.

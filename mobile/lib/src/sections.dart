@@ -27,6 +27,7 @@ import 'sso.dart';
 import 'usage.dart';
 import 'query.dart';
 import 'sampling.dart';
+import 'saved_views.dart';
 import 'templates.dart';
 import 'services.dart';
 
@@ -51,6 +52,8 @@ class Sections {
     LogPatternsController? logPatterns,
     VolumeController? logVolume,
     VolumeController? traceVolume,
+    SavedViewsController? logViews,
+    SavedViewsController? traceViews,
     FieldsController Function(String signal)? fields,
     TracesController? traces,
     MetricsController? metrics,
@@ -172,6 +175,9 @@ class Sections {
        logPatterns = logPatterns ?? LogPatternsController(client),
        logVolume = logVolume ?? VolumeController(client, signal: 'logs'),
        traceVolume = traceVolume ?? VolumeController(client, signal: 'traces'),
+       logViews = logViews ?? SavedViewsController(client, signal: 'logs'),
+       traceViews =
+           traceViews ?? SavedViewsController(client, signal: 'traces'),
        fields =
            fields ?? ((signal) => FieldsController(client, signal: signal)),
        traces = traces ?? TracesController(client),
@@ -248,6 +254,11 @@ class Sections {
   /// How much arrived and when, above each explorer.
   final VolumeController logVolume;
   final VolumeController traceVolume;
+
+  /// The explorer views somebody kept, per signal. Shared with the web:
+  /// one saved here opens in a browser and the other way round.
+  final SavedViewsController logViews;
+  final SavedViewsController traceViews;
 
   /// The dictionary a filter is built from, one per signal. Made per
   /// sheet, because it holds which key is being looked at.
@@ -409,6 +420,8 @@ class Sections {
     logPatterns,
     logVolume,
     traceVolume,
+    logViews,
+    traceViews,
     traces,
     metrics,
     query,

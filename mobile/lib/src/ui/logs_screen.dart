@@ -8,11 +8,13 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../logs.dart';
+import '../saved_views.dart';
 import '../session.dart';
 import '../volume.dart';
 import '../sections.dart';
 import 'filter_sheet.dart';
 import 'log_patterns_body.dart';
+import 'saved_views_sheet.dart';
 import 'volume_chart.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
@@ -86,6 +88,26 @@ class _LogsBodyState extends State<LogsBody>
     _search.dispose();
     _service.dispose();
     super.dispose();
+  }
+
+  /// Shows what a saved view says. Everything the view does not mention is
+  /// reset rather than left as it was: a view is a whole question, and half
+  /// of it under somebody else's name is not that question.
+  void _apply(SavedView view) {
+    final state = ViewState.of(view.state, signal: 'logs');
+    final c = widget.logs;
+    c.filters = state.filters;
+    c.query = state.query;
+    c.severityMin = state.severityMin;
+    // The service box is saved as a `service.name` condition, so a view's
+    // service arrives as a chip and the box has nothing left to say.
+    c.service = '';
+    _search.text = state.query;
+    _service.clear();
+    c.refresh();
+    _reloadVolume();
+    if (widget.patterns.loaded) _reloadPatterns();
+    reportPartialView(context, state);
   }
 
   /// The patterns answer the same question as the list, so they are asked
@@ -192,6 +214,22 @@ class _LogsBodyState extends State<LogsBody>
                 },
               ),
               const SizedBox(height: 8),
+              // The views the organization kept, in the web's own shape:
+              // this is the same list a browser shows, and applying one
+              // here puts the browser's filters in the chips below.
+              SavedViewsBar(
+                session: widget.session,
+                controller: widget.sections.logViews,
+                active: true,
+                state: ({keep = const {}}) => logsViewState(
+                  filters: c.filters,
+                  query: c.query,
+                  severityMin: c.severityMin,
+                  service: c.service,
+                  keep: keep,
+                ),
+                onApply: _apply,
+              ),
               // Picked, not typed: a key somebody has to remember is a key
               // they will get wrong, and the dictionary knows which ones
               // the range actually has.

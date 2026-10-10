@@ -70,13 +70,32 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_showQuery);
     _loadIfVisible();
   }
 
   @override
   void didUpdateWidget(SectionBody<T> old) {
     super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_showQuery);
+      widget.controller.addListener(_showQuery);
+    }
     _loadIfVisible();
+  }
+
+  /// Keeps the box showing what the list is actually filtered by.
+  ///
+  /// The box is usually where the query comes from, but not always: applying
+  /// a saved view sets it from outside, and a box still showing the old word
+  /// over a list that no longer uses it is a lie about what is on screen.
+  void _showQuery() {
+    final q = widget.controller.query;
+    if (_search.text == q) return;
+    _search.value = TextEditingValue(
+      text: q,
+      selection: TextSelection.collapsed(offset: q.length),
+    );
   }
 
   /// Loads once, the first time this section is looked at.
@@ -91,6 +110,7 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_showQuery);
     _search.dispose();
     super.dispose();
   }

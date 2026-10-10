@@ -506,7 +506,18 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       olay ekranında (webde de orada), olayın penceresiyle ve istekle; exemplar metrik
       ekranında, dokununca ize gidiyor. `metrics/names` metrik listesinin kendisi — zaten
       `metrics` ucuyla karşılanıyor.
-- [ ] Kayıtlı görünümler (`saved-views`)
+- [x] Kayıtlı görünümler (`saved-views`): loglarda ve izlerde, webin kenar düğmesinin
+      yerine bir alt sayfa — listesi, üzerine yazma, silme ve adıyla kaydetme. Durum
+      webin kendi JSON'u, yani telefonda kaydedilen görünüm tarayıcıda açılıyor:
+      servis kutusu ve önem düğmesi `service.name` / `severity_number` koşulu olarak
+      yazılıyor, telefonun bilmediği anahtarlar (sütunlar, sıralama, zaman aralığı)
+      olduğu gibi korunuyor. Telefonun gösteremediği ama listeyi değiştiren parçalar
+      (VEYA grupları, kök olmayan span'ler) uygulanırken söyleniyor. PostgreSQL
+      dışındaki kurulumda uç 404 verir, düğme de webdeki gibi hiç görünmez.
+      Metrik görünümleri dışarıda: webde bir görünüm sorgu kümesi + formül, mobilde
+      ise metrik ekranı henüz bir liste — kaydedilecek bir durum yok (9.7).
+      Bu sırada bulunan hata: filtre çipleri `eq` gönderiyordu, sözleşmede operatör
+      `=` — sunucu her tek değerli çipi 400 ile reddediyormuş.
 - [ ] OQL şema ve doğrulama (`query/schema`, `query/validate`)
 - [ ] Alev grafiği (`profiles/flame`)
 

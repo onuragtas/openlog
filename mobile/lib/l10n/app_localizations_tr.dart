@@ -2935,4 +2935,70 @@ class LTr extends L {
   String correlationsMeans(String baseline, String window, String score) {
     return 'önce $baseline → sonra $window · skor $score';
   }
+
+  @override
+  String get savedViewsButton => 'Görünümler';
+
+  @override
+  String get savedViewsTitle => 'Kayıtlı görünümler';
+
+  @override
+  String get savedViewsEmpty => 'Henüz kayıtlı görünüm yok.';
+
+  @override
+  String get savedViewsAbout =>
+      'Filtreler bir adın altında saklanır; aynı görünüm tarayıcıda da açılır.';
+
+  @override
+  String get savedViewPrivate => 'Özel';
+
+  @override
+  String get savedViewOrg => 'Organizasyon';
+
+  @override
+  String get savedViewVisibility => 'Kimler görebilir';
+
+  @override
+  String get savedViewName => 'Ad';
+
+  @override
+  String get savedViewNameHint => 'ör. Ödeme hataları';
+
+  @override
+  String get savedViewSave => 'Görünümü kaydet';
+
+  @override
+  String get savedViewOverwrite => 'Üzerine yaz';
+
+  @override
+  String savedViewOverwriteHint(String name) {
+    return 'Ekrandaki filtreleri $name görünümüne kaydet';
+  }
+
+  @override
+  String get savedViewDelete => 'Sil';
+
+  @override
+  String get savedViewDeleteConfirm => 'Silinsin mi?';
+
+  @override
+  String savedViewApplied(String name) {
+    return '$name uygulandı';
+  }
+
+  @override
+  String savedViewGroupsIgnored(int count) {
+    return 'Bu görünümün $count VEYA grubu telefonda gösterilemiyor; liste yalnızca VE koşullarıyla süzüldü.';
+  }
+
+  @override
+  String get savedViewAllSpans =>
+      'Bu görünüm tüm span\'leri istiyor; telefon her izin yalnızca kök span\'ini listeler.';
+
+  @override
+  String get viewsFull =>
+      'Organizasyonun kayıtlı görünüm sayısı sınırda (500). Kaydetmek için önce birini silin.';
+
+  @override
+  String get viewGone => 'Bu görünüm artık yok; listeyi yenileyin.';
 }

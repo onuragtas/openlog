@@ -93,7 +93,7 @@ void main() {
     await c.load(
       q: 'checkout',
       filters: const [
-        Filter(key: 'http.status_code', op: 'eq', values: ['500']),
+        Filter(key: 'http.status_code', op: '=', values: ['500']),
       ],
     );
 

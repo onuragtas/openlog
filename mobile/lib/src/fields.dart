@@ -12,22 +12,80 @@ import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'session.dart';
 
+/// Every operator the contract has, in the contract's own spelling.
+///
+/// `=` and not `eq`: the server checks the operator against this exact list
+/// and answers 400 for anything else. This app sent `eq` for a while, which
+/// made every single-value chip a bad request.
+const filterOps = [
+  '=',
+  '!=',
+  'in',
+  'not_in',
+  'contains',
+  'not_contains',
+  'like',
+  'not_like',
+  'regex',
+  'not_regex',
+  'exists',
+  'not_exists',
+  '>',
+  '>=',
+  '<',
+  '<=',
+];
+
+const _noValueOps = {'exists', 'not_exists'};
+const _multiValueOps = {'in', 'not_in'};
+
 /// One condition, in the shape the server's `filters` parameter takes.
 class Filter {
   const Filter({required this.key, required this.op, this.values = const []});
 
+  /// Reads one out of a saved view's state, which is somebody else's JSON.
+  ///
+  /// Null for anything this app would not be able to send: an unknown
+  /// operator, a missing value, a value that is not a scalar. A view made in
+  /// a browser version this app does not know must drop the condition it
+  /// cannot show rather than send it back as something else.
+  static Filter? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final key = json['key'];
+    final op = json['op'];
+    if (key is! String || key.isEmpty || key.length > 256) return null;
+    if (op is! String || !filterOps.contains(op)) return null;
+    if (_noValueOps.contains(op)) return Filter(key: key, op: op);
+    final raw = json['values'] ?? json['value'];
+    // Numbers and booleans come back as text, which is what the server does
+    // with them too: it reads every scalar as its text before building SQL.
+    final values = <String>[];
+    for (final v in raw is List ? raw : [raw]) {
+      if (v is String) {
+        values.add(v);
+      } else if (v is num || v is bool) {
+        values.add('$v');
+      } else {
+        return null;
+      }
+    }
+    if (values.isEmpty || values.length > 100) return null;
+    if (!_multiValueOps.contains(op) && values.length != 1) return null;
+    return Filter(key: key, op: op, values: values);
+  }
+
   final String key;
 
-  /// `eq`, `in`, `exists`… as the contract spells them.
+  /// `=`, `in`, `exists`… as [filterOps] spells them.
   final String op;
 
-  /// Empty for `exists` and `not_exists`, one for `eq`, several for `in`.
+  /// Empty for `exists` and `not_exists`, one for `=`, several for `in`.
   final List<String> values;
 
   Map<String, Object?> toJson() => {
     'key': key,
     'op': op,
-    if (values.length == 1 && op != 'in' && op != 'not_in')
+    if (values.length == 1 && !_multiValueOps.contains(op))
       'value': values.first
     else if (values.isNotEmpty)
       'values': values,
@@ -37,9 +95,25 @@ class Filter {
   String get label => switch (op) {
     'exists' => '$key ✓',
     'not_exists' => '$key ✗',
-    'not_in' || 'neq' => '$key ≠ ${values.join(', ')}',
-    _ => '$key = ${values.join(', ')}',
+    'not_in' || '!=' => '$key ≠ ${values.join(', ')}',
+    '=' || 'in' => '$key = ${values.join(', ')}',
+    // contains, like, regex, >, >=, <, <=: the operator itself is the
+    // clearest label there is, and it is one somebody chose in a browser.
+    _ => '$key $op ${values.join(', ')}',
   };
+}
+
+/// The conditions of a saved view's `filters`, dropping what cannot be shown.
+List<Filter> filtersFromJson(Object? json) {
+  if (json is! List) return const [];
+  final out = <Filter>[];
+  for (final e in json) {
+    final f = Filter.fromJson(e);
+    // Fifty conditions is the server's limit; a longer list is somebody
+    // else's bug and the server would refuse the lot.
+    if (f != null && out.length < 50) out.add(f);
+  }
+  return out;
 }
 
 /// The `filters` query parameter: a JSON array, or empty when there is

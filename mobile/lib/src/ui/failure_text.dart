@@ -78,6 +78,10 @@ String? failureText(
       return l.channelsNoSecrets;
     case 'costsOff':
       return l.costsOff;
+    case 'viewsFull':
+      return l.viewsFull;
+    case 'viewGone':
+      return l.viewGone;
     case 'queryForbidden':
       return l.queryForbidden;
     case 'queryRejected':

@@ -5220,6 +5220,120 @@ abstract class L {
   /// In en, this message translates to:
   /// **'before {baseline} → after {window} · score {score}'**
   String correlationsMeans(String baseline, String window, String score);
+
+  /// No description provided for @savedViewsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Views'**
+  String get savedViewsButton;
+
+  /// No description provided for @savedViewsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved views'**
+  String get savedViewsTitle;
+
+  /// No description provided for @savedViewsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved views yet.'**
+  String get savedViewsEmpty;
+
+  /// No description provided for @savedViewsAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters kept under a name; the same view opens in a browser.'**
+  String get savedViewsAbout;
+
+  /// No description provided for @savedViewPrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get savedViewPrivate;
+
+  /// No description provided for @savedViewOrg.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get savedViewOrg;
+
+  /// No description provided for @savedViewVisibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Who can see it'**
+  String get savedViewVisibility;
+
+  /// No description provided for @savedViewName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get savedViewName;
+
+  /// No description provided for @savedViewNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Checkout errors'**
+  String get savedViewNameHint;
+
+  /// No description provided for @savedViewSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save view'**
+  String get savedViewSave;
+
+  /// No description provided for @savedViewOverwrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Overwrite'**
+  String get savedViewOverwrite;
+
+  /// No description provided for @savedViewOverwriteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Save what is on screen into {name}'**
+  String savedViewOverwriteHint(String name);
+
+  /// No description provided for @savedViewDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get savedViewDelete;
+
+  /// No description provided for @savedViewDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete it?'**
+  String get savedViewDeleteConfirm;
+
+  /// No description provided for @savedViewApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} applied'**
+  String savedViewApplied(String name);
+
+  /// No description provided for @savedViewGroupsIgnored.
+  ///
+  /// In en, this message translates to:
+  /// **'This view has {count} OR groups the phone cannot show; the list was filtered by its AND conditions only.'**
+  String savedViewGroupsIgnored(int count);
+
+  /// No description provided for @savedViewAllSpans.
+  ///
+  /// In en, this message translates to:
+  /// **'This view asks for every span; the phone lists only the root span of each trace.'**
+  String get savedViewAllSpans;
+
+  /// No description provided for @viewsFull.
+  ///
+  /// In en, this message translates to:
+  /// **'The organization is at its limit of saved views (500). Delete one before saving another.'**
+  String get viewsFull;
+
+  /// No description provided for @viewGone.
+  ///
+  /// In en, this message translates to:
+  /// **'That view is gone; reload the list.'**
+  String get viewGone;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

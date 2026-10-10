@@ -8,17 +8,19 @@ import 'package:openlog_mobile/src/fields.dart';
 import 'fake_server.dart';
 
 void main() {
-  test('one value is eq, several are one in', () {
-    const one = Filter(key: 'service.name', op: 'eq', values: ['checkout']);
+  test('one value is =, several are one in', () {
+    const one = Filter(key: 'service.name', op: '=', values: ['checkout']);
     const many = Filter(
       key: 'service.name',
       op: 'in',
       values: ['checkout', 'cart'],
     );
 
+    // `=`, not `eq`: the server checks the operator against the contract's
+    // list and answers 400 for anything else.
     expect(one.toJson(), {
       'key': 'service.name',
-      'op': 'eq',
+      'op': '=',
       'value': 'checkout',
     });
     // One condition rather than two the server has to OR back together.
@@ -39,11 +41,11 @@ void main() {
     expect(
       jsonDecode(
         encodeFilters(const [
-          Filter(key: 'k', op: 'eq', values: ['v']),
+          Filter(key: 'k', op: '=', values: ['v']),
         ]),
       ),
       [
-        {'key': 'k', 'op': 'eq', 'value': 'v'},
+        {'key': 'k', 'op': '=', 'value': 'v'},
       ],
     );
   });

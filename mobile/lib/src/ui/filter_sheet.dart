@@ -209,7 +209,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                                 // One value is `eq`; several are one `in`
                                 // rather than conditions the server has to
                                 // OR back together.
-                                op: _picked.length == 1 ? 'eq' : 'in',
+                                op: _picked.length == 1 ? '=' : 'in',
                                 values: _picked.toList(),
                               ),
                             ),
@@ -242,25 +242,33 @@ class FilterChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = L.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          for (var i = 0; i < filters.length; i++)
-            InputChip(
-              key: Key('filter-chip-$i'),
-              label: Text(filters[i].label),
-              onDeleted: () => onRemove(i),
+      // No left inset: the chips line up with the search boxes and the
+      // views button above them, which sit at the list's own edge.
+      padding: const EdgeInsets.fromLTRB(0, 4, 12, 0),
+      // Left, like the search boxes and the severity switch above it. The
+      // column centres whatever does not fill it, which left one lonely
+      // chip in the middle of the screen between two left-aligned rows.
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (var i = 0; i < filters.length; i++)
+              InputChip(
+                key: Key('filter-chip-$i'),
+                label: Text(filters[i].label),
+                onDeleted: () => onRemove(i),
+              ),
+            ActionChip(
+              key: const Key('filter-add'),
+              avatar: const Icon(Icons.filter_alt_outlined, size: 16),
+              label: Text(l.filterAdd),
+              onPressed: onAdd,
             ),
-          ActionChip(
-            key: const Key('filter-add'),
-            avatar: const Icon(Icons.filter_alt_outlined, size: 16),
-            label: Text(l.filterAdd),
-            onPressed: onAdd,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

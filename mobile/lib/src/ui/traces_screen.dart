@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../saved_views.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'filter_sheet.dart';
+import 'saved_views_sheet.dart';
 import 'volume_chart.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
@@ -33,6 +35,20 @@ class TracesBody extends StatelessWidget {
     filters: sections.traces.filters,
   );
 
+  /// Shows what a saved view says. The search box is a condition like any
+  /// other here -- the list sends it as a contains over the service name --
+  /// so a view's own search arrives as a chip and the box is cleared.
+  void _apply(BuildContext context, SavedView view) {
+    final state = ViewState.of(view.state, signal: 'traces');
+    final c = sections.traces;
+    c.filters = state.filters;
+    c.query = '';
+    c.slowest = state.slowest;
+    c.refresh();
+    _loadVolume();
+    reportPartialView(context, state);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = sections.traces;
@@ -49,6 +65,18 @@ class TracesBody extends StatelessWidget {
         builder: (context, _) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            SavedViewsBar(
+              session: session,
+              controller: sections.traceViews,
+              active: active,
+              state: ({keep = const {}}) => tracesViewState(
+                filters: c.filters,
+                query: c.query,
+                slowest: c.slowest,
+                keep: keep,
+              ),
+              onApply: (view) => _apply(context, view),
+            ),
             _SortToggle(
               slowest: c.slowest,
               onChanged: (v) {

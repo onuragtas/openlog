@@ -1847,5 +1847,45 @@
         "type": "String"
       }
     }
-  }
+  },
+  "savedViewsButton": "Görünümler",
+  "savedViewsTitle": "Kayıtlı görünümler",
+  "savedViewsEmpty": "Henüz kayıtlı görünüm yok.",
+  "savedViewsAbout": "Filtreler bir adın altında saklanır; aynı görünüm tarayıcıda da açılır.",
+  "savedViewPrivate": "Özel",
+  "savedViewOrg": "Organizasyon",
+  "savedViewVisibility": "Kimler görebilir",
+  "savedViewName": "Ad",
+  "savedViewNameHint": "ör. Ödeme hataları",
+  "savedViewSave": "Görünümü kaydet",
+  "savedViewOverwrite": "Üzerine yaz",
+  "savedViewOverwriteHint": "Ekrandaki filtreleri {name} görünümüne kaydet",
+  "@savedViewOverwriteHint": {
+      "placeholders": {
+          "name": {
+              "type": "String"
+          }
+      }
+  },
+  "savedViewDelete": "Sil",
+  "savedViewDeleteConfirm": "Silinsin mi?",
+  "savedViewApplied": "{name} uygulandı",
+  "@savedViewApplied": {
+      "placeholders": {
+          "name": {
+              "type": "String"
+          }
+      }
+  },
+  "savedViewGroupsIgnored": "Bu görünümün {count} VEYA grubu telefonda gösterilemiyor; liste yalnızca VE koşullarıyla süzüldü.",
+  "@savedViewGroupsIgnored": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "savedViewAllSpans": "Bu görünüm tüm span'leri istiyor; telefon her izin yalnızca kök span'ini listeler.",
+  "viewsFull": "Organizasyonun kayıtlı görünüm sayısı sınırda (500). Kaydetmek için önce birini silin.",
+  "viewGone": "Bu görünüm artık yok; listeyi yenileyin."
 }
