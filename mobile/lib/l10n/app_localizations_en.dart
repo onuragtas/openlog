@@ -3198,4 +3198,33 @@ class LEn extends L {
   @override
   String get queryExampleTrafficVsYesterday =>
       'Traffic compared with yesterday';
+
+  @override
+  String get profileTabFlame => 'Flame graph';
+
+  @override
+  String get profileTabFunctions => 'Functions';
+
+  @override
+  String get flameEmpty => 'No samples in this range.';
+
+  @override
+  String get flameZoomHint =>
+      'Tap a frame to zoom in; press and hold for its name.';
+
+  @override
+  String get flameBack => 'Back up one';
+
+  @override
+  String get flameZoom => 'zoom in';
+
+  @override
+  String flameShareOfAll(String share) {
+    return '$share% of the profile';
+  }
+
+  @override
+  String flameTooNarrow(int count) {
+    return '$count frames are too narrow to draw at this width; tap the block above them to see them.';
+  }
 }

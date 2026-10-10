@@ -3190,4 +3190,33 @@ class LTr extends L {
 
   @override
   String get queryExampleTrafficVsYesterday => 'Trafiğin dünle karşılaştırması';
+
+  @override
+  String get profileTabFlame => 'Alev grafiği';
+
+  @override
+  String get profileTabFunctions => 'Fonksiyonlar';
+
+  @override
+  String get flameEmpty => 'Bu aralıkta örnek yok.';
+
+  @override
+  String get flameZoomHint =>
+      'Yakınlaşmak için bir çerçeveye dokunun; adı için basılı tutun.';
+
+  @override
+  String get flameBack => 'Bir üste dön';
+
+  @override
+  String get flameZoom => 'yakınlaş';
+
+  @override
+  String flameShareOfAll(String share) {
+    return 'profilin %$share\'i';
+  }
+
+  @override
+  String flameTooNarrow(int count) {
+    return '$count çerçeve bu genişlikte çizilemeyecek kadar dar; görmek için üstündeki bloğa dokunun.';
+  }
 }

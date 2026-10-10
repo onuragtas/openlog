@@ -144,6 +144,7 @@ const responseTargets = <String>[
   'get /api/v1/fleet/hosts 200 FleetHostPage',
   'get /api/v1/profiles/services 200 ProfileServicePage',
   'get /api/v1/profiles/functions 200 ProfileFunctionPage',
+  'get /api/v1/profiles/flame 200 ProfileFlame',
   'get /api/v1/dashboards 200 DashboardPageList',
   'get /api/v1/hosts 200 HostPage',
   'get /api/v1/containers 200 ContainerPage',

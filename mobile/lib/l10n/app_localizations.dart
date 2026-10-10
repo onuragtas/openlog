@@ -5700,6 +5700,54 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Traffic compared with yesterday'**
   String get queryExampleTrafficVsYesterday;
+
+  /// No description provided for @profileTabFlame.
+  ///
+  /// In en, this message translates to:
+  /// **'Flame graph'**
+  String get profileTabFlame;
+
+  /// No description provided for @profileTabFunctions.
+  ///
+  /// In en, this message translates to:
+  /// **'Functions'**
+  String get profileTabFunctions;
+
+  /// No description provided for @flameEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No samples in this range.'**
+  String get flameEmpty;
+
+  /// No description provided for @flameZoomHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a frame to zoom in; press and hold for its name.'**
+  String get flameZoomHint;
+
+  /// No description provided for @flameBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up one'**
+  String get flameBack;
+
+  /// No description provided for @flameZoom.
+  ///
+  /// In en, this message translates to:
+  /// **'zoom in'**
+  String get flameZoom;
+
+  /// No description provided for @flameShareOfAll.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}% of the profile'**
+  String flameShareOfAll(String share);
+
+  /// No description provided for @flameTooNarrow.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} frames are too narrow to draw at this width; tap the block above them to see them.'**
+  String flameTooNarrow(int count);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

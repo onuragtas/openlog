@@ -1961,5 +1961,27 @@
   "queryExampleSlowTransactions": "En yavaş transaction'lar (p50, p95)",
   "queryExampleCpuByHost": "Sunucu bazında CPU kullanımı",
   "queryExampleDurationHistogram": "İstek sürelerinin dağılımı",
-  "queryExampleTrafficVsYesterday": "Trafiğin dünle karşılaştırması"
+  "queryExampleTrafficVsYesterday": "Trafiğin dünle karşılaştırması",
+  "profileTabFlame": "Alev grafiği",
+  "profileTabFunctions": "Fonksiyonlar",
+  "flameEmpty": "Bu aralıkta örnek yok.",
+  "flameZoomHint": "Yakınlaşmak için bir çerçeveye dokunun; adı için basılı tutun.",
+  "flameBack": "Bir üste dön",
+  "flameZoom": "yakınlaş",
+  "flameShareOfAll": "profilin %{share}'i",
+  "@flameShareOfAll": {
+      "placeholders": {
+          "share": {
+              "type": "String"
+          }
+      }
+  },
+  "flameTooNarrow": "{count} çerçeve bu genişlikte çizilemeyecek kadar dar; görmek için üstündeki bloğa dokunun.",
+  "@flameTooNarrow": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  }
 }

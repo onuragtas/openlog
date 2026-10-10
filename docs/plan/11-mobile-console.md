@@ -529,7 +529,13 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       yerini sihirbaz tutuyor.
       Bu sırada üretici düzeltildi: `[string, "null"]` tipli bir enum'un listesindeki
       `null`'a takılıyordu (`OqlValidation.kind`).
-- [ ] Alev grafiği (`profiles/flame`)
+- [x] Alev grafiği (`profiles/flame`): profil ekranı artık webin iki sekmesi — önce
+      alev grafiği, sonra fonksiyonlar. Yerleşim webin kendisi (her satır bir yığın
+      derinliği, her blok değerin payı kadar geniş); telefonda fark, dar bloğu okumanın
+      tek yolunun ona dokunup grafiği oraya köklemek olması. Çizilemeyecek kadar dar
+      kalan çerçeveler sayılıp söyleniyor, sessizce atılmıyor.
+      Bu sırada düzeltilen: `formatProfileValue` 1 µs altını "0 µs" diye yazıyordu,
+      artık webdeki gibi ns.
 
 ### 9.5 Altyapı
 - [ ] Kubernetes: kümeler, düğümler, iş yükleri, olaylar (`kubernetes/clusters|nodes|workloads|events`)

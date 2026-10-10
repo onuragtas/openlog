@@ -476,6 +476,31 @@ class ProfileFunctionsController extends DetailController<ProfileFunctionPage> {
   }
 }
 
+/// The flame graph of one profile: the whole tree in one request.
+class ProfileFlameController extends DetailController<ProfileFlame> {
+  ProfileFlameController(
+    this._client, {
+    required this.service,
+    required this.type,
+    required this.environment,
+  });
+
+  final OpenlogClient _client;
+  final String service;
+  final String type;
+  final String environment;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ProfileFlame> fetch() => _client.profileFlame(
+    service: service,
+    type: type,
+    environment: environment,
+  );
+}
+
 /// Where to send data: the endpoints, the pinned release and what this
 /// installation supports.
 class OnboardingController extends DetailController<Onboarding> {

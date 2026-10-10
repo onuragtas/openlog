@@ -14266,6 +14266,34 @@ class ProfileFunctionPage {
   final List<ProfileFunction> functions;
 }
 
+/// `ProfileFlame` of the openlog API contract.
+class ProfileFlame {
+  const ProfileFlame({
+    required this.unit,
+    required this.type,
+    required this.flame,
+  });
+
+  factory ProfileFlame.fromJson(Object? json, [String path = 'ProfileFlame']) {
+    final m = _obj(json, path);
+    return ProfileFlame(
+      unit: _req(m, 'unit', path, _str),
+      type: _req(m, 'type', path, _str),
+      flame: _req(m, 'flame', path, (v, p) => FlameNode.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'unit': unit,
+    'type': type,
+    'flame': flame.toJson(),
+  };
+
+  final String unit;
+  final String type;
+  final FlameNode flame;
+}
+
 /// `DashboardPageList` of the openlog API contract.
 class DashboardPageList {
   const DashboardPageList({required this.dashboards});
@@ -16265,6 +16293,35 @@ class ProfileFunction {
   final String function;
   final int self;
   final int samples;
+}
+
+/// One block of a flame graph — a frame, the total value below it, and the frames it called. The root is named "all" and holds the total of every stack returned.
+class FlameNode {
+  const FlameNode({required this.name, required this.value, this.children});
+
+  factory FlameNode.fromJson(Object? json, [String path = 'FlameNode']) {
+    final m = _obj(json, path);
+    return FlameNode(
+      name: _req(m, 'name', path, _str),
+      value: _req(m, 'value', path, _int),
+      children: _opt(
+        m,
+        'children',
+        path,
+        (v, p) => _list<FlameNode>(v, p, (v, p) => FlameNode.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'value': value,
+    if (children != null) 'children': [for (final e in children!) e.toJson()],
+  };
+
+  final String name;
+  final int value;
+  final List<FlameNode>? children;
 }
 
 /// `Host` of the openlog API contract.

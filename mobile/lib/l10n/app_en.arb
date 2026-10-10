@@ -2058,5 +2058,27 @@
   "queryExampleSlowTransactions": "Slowest transactions (p50, p95)",
   "queryExampleCpuByHost": "CPU usage per host",
   "queryExampleDurationHistogram": "Distribution of request durations",
-  "queryExampleTrafficVsYesterday": "Traffic compared with yesterday"
+  "queryExampleTrafficVsYesterday": "Traffic compared with yesterday",
+  "profileTabFlame": "Flame graph",
+  "profileTabFunctions": "Functions",
+  "flameEmpty": "No samples in this range.",
+  "flameZoomHint": "Tap a frame to zoom in; press and hold for its name.",
+  "flameBack": "Back up one",
+  "flameZoom": "zoom in",
+  "flameShareOfAll": "{share}% of the profile",
+  "@flameShareOfAll": {
+      "placeholders": {
+          "share": {
+              "type": "String"
+          }
+      }
+  },
+  "flameTooNarrow": "{count} frames are too narrow to draw at this width; tap the block above them to see them.",
+  "@flameTooNarrow": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  }
 }

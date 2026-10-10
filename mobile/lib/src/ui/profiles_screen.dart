@@ -1,7 +1,9 @@
 // Profiling: what has been profiled, and where the time (or the memory) went.
 //
-// No flame graph. It wants width this screen does not have, and the ranked
-// function list is the part of the answer a phone can show honestly.
+// One profile has the web's two tabs: the flame graph and the ranked
+// functions. The flame graph was left out once, on the grounds that it wants
+// width a phone does not have -- but the web's own answer to a frame too
+// narrow to read is to zoom into it, and that works on a phone too.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -10,6 +12,7 @@ import '../detail.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
+import 'flame_view.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
 import 'theme.dart';
@@ -126,8 +129,11 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
   late final ProfileFunctionsController _c;
+  late final ProfileFlameController _flame;
+  late final TabController _tabs;
 
   @override
   void initState() {
@@ -137,11 +143,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       type: widget.profile.type,
       environment: widget.profile.environment,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _c.refresh());
+    _flame = widget.sections.profileFlame(
+      service: widget.profile.service,
+      type: widget.profile.type,
+      environment: widget.profile.environment,
+    );
+    _tabs = TabController(length: 2, vsync: this)
+      ..addListener(() {
+        if (_tabs.indexIsChanging) return;
+        // The functions are a second request about the same window, so
+        // they are asked for when that tab is looked at rather than
+        // alongside the graph.
+        if (_tabs.index == 1 && !_c.loaded && !_c.loadingFirst) _c.refresh();
+      });
+    // The flame graph is the tab that opens, as it is on the web.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _flame.refresh());
   }
 
   @override
   void dispose() {
+    _tabs.dispose();
+    _flame.dispose();
     _c.dispose();
     super.dispose();
   }
@@ -149,15 +171,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final l = L.of(context);
+    final theme = Theme.of(context);
 
-    return ListenableBuilder(
-      listenable: _c,
-      builder: (context, _) => DetailScreen<ProfileFunctionPage>(
-        controller: _c,
-        baseUrl: widget.session.baseUrl ?? '',
-        title: widget.profile.service,
-        subtitle: widget.profile.type,
-        builder: (context, page) => _body(context, l, page),
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(widget.profile.service, overflow: TextOverflow.ellipsis),
+            Text(
+              widget.profile.type,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: [
+            Tab(key: const Key('profile-tab-flame'), text: l.profileTabFlame),
+            Tab(
+              key: const Key('profile-tab-functions'),
+              text: l.profileTabFunctions,
+            ),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          ListenableBuilder(
+            listenable: _flame,
+            builder: (context, _) => DetailBody<ProfileFlame>(
+              controller: _flame,
+              baseUrl: widget.session.baseUrl ?? '',
+              builder: (context, flame) => [
+                FlameView(
+                  key: const Key('flame'),
+                  flame: flame.flame,
+                  unit: flame.unit,
+                ),
+              ],
+            ),
+          ),
+          ListenableBuilder(
+            listenable: _c,
+            builder: (context, _) => DetailBody<ProfileFunctionPage>(
+              controller: _c,
+              baseUrl: widget.session.baseUrl ?? '',
+              builder: (context, page) => _body(context, l, page),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -254,7 +320,13 @@ String formatProfileValue(int value, String unit) {
       if (value >= 1000000) {
         return '${(value / 1000000).toStringAsFixed(0)} ms';
       }
-      return '${(value / 1000).toStringAsFixed(0)} µs';
+      // Under a microsecond it is nanoseconds, as the web prints them:
+      // rounding 100 ns to "0 µs" reads as nothing at all, and in a flame
+      // graph the small frames are half the picture.
+      if (value >= 1000) {
+        return '${(value / 1000).toStringAsFixed(0)} µs';
+      }
+      return '$value ns';
     case 'bytes':
       if (value >= 1 << 30) {
         return '${(value / (1 << 30)).toStringAsFixed(2)} GiB';

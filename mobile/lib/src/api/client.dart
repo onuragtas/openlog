@@ -998,6 +998,26 @@ class OpenlogClient {
     );
   }
 
+  /// The flame graph of one profile: a tree of frames, each with the total
+  /// below it.
+  ///
+  /// Identical stacks are folded by the server, which is why this is one
+  /// request and not a page of them.
+  Future<ProfileFlame> profileFlame({
+    required String service,
+    required String type,
+    String environment = '',
+  }) async {
+    final query = <String, String>{'service': service, 'type': type};
+    if (environment.isNotEmpty) query['environment'] = environment;
+    return ProfileFlame.fromJson(
+      await _send(
+        'GET',
+        '/api/v1/profiles/flame?${Uri(queryParameters: query).query}',
+      ),
+    );
+  }
+
   /// How far behind the agents are, fleet-wide.
   Future<FleetSummary> fleetSummary() async =>
       FleetSummary.fromJson(await _send('GET', '/api/v1/fleet/summary'));

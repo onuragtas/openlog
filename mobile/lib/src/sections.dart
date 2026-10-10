@@ -125,6 +125,12 @@ class Sections {
       required String environment,
     })?
     profileFunctions,
+    ProfileFlameController Function({
+      required String service,
+      required String type,
+      required String environment,
+    })?
+    profileFlame,
   }) : incident = incident ?? ((id) => IncidentController(client, id)),
        serviceOverview =
            serviceOverview ??
@@ -160,6 +166,18 @@ class Sections {
              required String type,
              required String environment,
            }) => ProfileFunctionsController(
+             client,
+             service: service,
+             type: type,
+             environment: environment,
+           )),
+       profileFlame =
+           profileFlame ??
+           (({
+             required String service,
+             required String type,
+             required String environment,
+           }) => ProfileFlameController(
              client,
              service: service,
              type: type,
@@ -391,6 +409,14 @@ class Sections {
     required String environment,
   })
   profileFunctions;
+
+  /// The same profile as a tree of frames, which is the other tab.
+  final ProfileFlameController Function({
+    required String service,
+    required String type,
+    required String environment,
+  })
+  profileFlame;
 
   /// Everything that has to be disposed, in the order the drawer lists them,
   /// which is the web's order. Calendars are in here too although the drawer
