@@ -125,6 +125,9 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
   const rows = useMemo(() => query.data?.pages.flatMap((p) => p.rows), [query.data]);
   const keys = useQuery(fieldKeysQuery({ signal: "logs", range, limit: 200 }));
   const keyTypes = useMemo(() => new Map((keys.data?.keys ?? []).map((k) => [k.key, k.type])), [keys.data]);
+  // Where the open record sits among the loaded ones, so the panel can step to its neighbours. By id rather than
+  // by a held index: a refresh or a "load more" rebuilds the array under it.
+  const selectedIndex = useMemo(() => (selected && rows ? rows.findIndex((r) => r.id === selected.id) : -1), [rows, selected]);
   const filtered = !isFilterStateEmpty(filter) || !!transaction;
   const cellActions = { onFilter: (key: string, value: string, exclude: boolean) => addFilter(valueFilter(key, value, exclude, keyTypes.get(key))), onToggleColumn: (k: string) => setColumns(toggleColumn(columns, k)), canFilter };
 
@@ -267,6 +270,11 @@ export function LogsExplorerView({ range, params, legacy, onParams, onZoom, lock
       <LogDetailPanel
         row={selected ?? undefined}
         onClose={() => setSelected(null)}
+        position={selectedIndex < 0 ? undefined : { index: selectedIndex + 1, total: rows?.length ?? 0 }}
+        onStep={(delta) => {
+          const next = rows?.[selectedIndex + delta];
+          if (next) setSelected(next);
+        }}
         columns={columns}
         onToggleColumn={(k) => setColumns(toggleColumn(columns, k))}
         onFilter={addFilter}

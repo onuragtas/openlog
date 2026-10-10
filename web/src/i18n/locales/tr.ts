@@ -2341,6 +2341,9 @@ export const tr: Messages = {
       resize: "{{name}} sütununu yeniden boyutlandır",
     },
     detail: {
+      prev: "Önceki kayıt",
+      next: "Sonraki kayıt",
+      position: "{{index}} / {{total}}",
       title: "Log ayrıntıları",
       fields: "Alanlar",
       json: "JSON",

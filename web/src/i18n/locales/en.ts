@@ -2340,6 +2340,9 @@ export const en = {
       resize: "Resize column {{name}}",
     },
     detail: {
+      prev: "Previous record",
+      next: "Next record",
+      position: "{{index}} / {{total}}",
       title: "Log details",
       fields: "Fields",
       json: "JSON",

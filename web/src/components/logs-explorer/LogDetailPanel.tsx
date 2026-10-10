@@ -1,7 +1,11 @@
 // Detail side panel of one log record: every field (row fields, attributes, resource attributes, JSON body keys) with
 // filter in / filter out, add or remove as column and copy; the whole record as JSON; trace and span links.
+//
+// Reading logs is reading a sequence, so the panel also steps: the records around this one are one click (or one
+// ArrowUp/ArrowDown) away, as they are on the phone, instead of close-pick-open.
 import { Link } from "@tanstack/react-router";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { FieldType, LogQueryRow, QueryFilter } from "@/api/explorer";
 import { FieldRow } from "@/components/explorer/FieldRow";
@@ -19,6 +23,10 @@ import { parseTimeParam } from "@/lib/time";
 export interface LogDetailPanelProps {
   row: LogQueryRow | undefined;
   onClose: () => void;
+  /** Where this record sits in the list, 1-based, and how many are loaded. */
+  position?: { index: number; total: number };
+  /** Moves by one record; absent when there is none in that direction. */
+  onStep?: (delta: -1 | 1) => void;
   columns: readonly string[];
   onToggleColumn: (key: string) => void;
   onFilter: (filter: QueryFilter) => void;
@@ -27,18 +35,54 @@ export interface LogDetailPanelProps {
   canFilter: boolean;
 }
 
-export function LogDetailPanel({ row, onClose, ...props }: LogDetailPanelProps) {
+export function LogDetailPanel({ row, onClose, position, onStep, ...props }: LogDetailPanelProps) {
   const { t } = useTranslation();
+  const atFirst = !position || position.index <= 1;
+  const atLast = !position || position.index >= position.total;
+
+  // ArrowUp/ArrowDown walk the list while the panel has the page's attention. Ignored while something is being
+  // typed into, or the field search would jump records instead of moving the caret.
+  useEffect(() => {
+    if (!row || !onStep) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      if (e.key === "ArrowUp" && !atFirst) onStep(-1);
+      if (e.key === "ArrowDown" && !atLast) onStep(1);
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [row, onStep, atFirst, atLast]);
+
   return (
     <Sheet open={!!row} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" title={t("logsExplorer.detail.title")} closeLabel={t("common.close")} className="w-full max-w-full sm:w-[40rem] sm:max-w-[92vw]">
-        {row && <DetailBody key={row.id} row={row} {...props} />}
+        {row && (
+          <>
+            {position && onStep && (
+              <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-xs text-muted-foreground">
+                <span aria-live="polite">{t("logsExplorer.detail.position", { index: position.index, total: position.total })}</span>
+                <div className="ml-auto flex gap-1">
+                  <Button type="button" variant="outline" size="icon" aria-label={t("logsExplorer.detail.prev")} disabled={atFirst} onClick={() => onStep(-1)}>
+                    <ChevronUp aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="outline" size="icon" aria-label={t("logsExplorer.detail.next")} disabled={atLast} onClick={() => onStep(1)}>
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            <DetailBody key={row.id} row={row} {...props} />
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );
 }
 
-function DetailBody({ row, columns, onToggleColumn, onFilter, keyTypes, canFilter }: Omit<LogDetailPanelProps, "row" | "onClose"> & { row: LogQueryRow }) {
+function DetailBody({ row, columns, onToggleColumn, onFilter, keyTypes, canFilter }: Omit<LogDetailPanelProps, "row" | "onClose" | "position" | "onStep"> & { row: LogQueryRow }) {
   const { t, i18n } = useTranslation();
   const id = useId();
   const [search, setSearch] = useState("");
