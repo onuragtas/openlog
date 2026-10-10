@@ -2481,4 +2481,54 @@ class LEn extends L {
   @override
   String get browserKeysRevokeBody =>
       'Pages and apps sending data with this key stop.';
+
+  @override
+  String get settingsSourceMaps => 'Source maps';
+
+  @override
+  String get settingsAuditLog => 'Audit log';
+
+  @override
+  String get sourceMapsEmpty => 'No source maps stored.';
+
+  @override
+  String get sourceMapsUploadElsewhere =>
+      'Uploading happens where the file is: the build machine or CI.';
+
+  @override
+  String sourceMapsSize(String kb) {
+    return '$kb KB';
+  }
+
+  @override
+  String get sourceMapsDeleteBody =>
+      'Browser stacks of the build this file belongs to stop being un-minified.';
+
+  @override
+  String get auditActor => 'Who';
+
+  @override
+  String get auditAction => 'Action';
+
+  @override
+  String get auditActionHint => 'A prefix: member. or member.remove';
+
+  @override
+  String get auditEmpty => 'No entries with this filter.';
+
+  @override
+  String get auditMore => 'Older';
+
+  @override
+  String get auditEnd => 'End of the log.';
+
+  @override
+  String get auditUnknownActor => 'unknown';
+
+  @override
+  String get auditWithKey => 'with an API key';
+
+  @override
+  String get auditForbidden =>
+      'Your role does not allow reading the audit log.';
 }

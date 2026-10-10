@@ -4422,6 +4422,96 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Pages and apps sending data with this key stop.'**
   String get browserKeysRevokeBody;
+
+  /// No description provided for @settingsSourceMaps.
+  ///
+  /// In en, this message translates to:
+  /// **'Source maps'**
+  String get settingsSourceMaps;
+
+  /// No description provided for @settingsAuditLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit log'**
+  String get settingsAuditLog;
+
+  /// No description provided for @sourceMapsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No source maps stored.'**
+  String get sourceMapsEmpty;
+
+  /// No description provided for @sourceMapsUploadElsewhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading happens where the file is: the build machine or CI.'**
+  String get sourceMapsUploadElsewhere;
+
+  /// No description provided for @sourceMapsSize.
+  ///
+  /// In en, this message translates to:
+  /// **'{kb} KB'**
+  String sourceMapsSize(String kb);
+
+  /// No description provided for @sourceMapsDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser stacks of the build this file belongs to stop being un-minified.'**
+  String get sourceMapsDeleteBody;
+
+  /// No description provided for @auditActor.
+  ///
+  /// In en, this message translates to:
+  /// **'Who'**
+  String get auditActor;
+
+  /// No description provided for @auditAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get auditAction;
+
+  /// No description provided for @auditActionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A prefix: member. or member.remove'**
+  String get auditActionHint;
+
+  /// No description provided for @auditEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries with this filter.'**
+  String get auditEmpty;
+
+  /// No description provided for @auditMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Older'**
+  String get auditMore;
+
+  /// No description provided for @auditEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End of the log.'**
+  String get auditEnd;
+
+  /// No description provided for @auditUnknownActor.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get auditUnknownActor;
+
+  /// No description provided for @auditWithKey.
+  ///
+  /// In en, this message translates to:
+  /// **'with an API key'**
+  String get auditWithKey;
+
+  /// No description provided for @auditForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow reading the audit log.'**
+  String get auditForbidden;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

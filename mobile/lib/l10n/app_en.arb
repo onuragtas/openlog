@@ -1640,5 +1640,27 @@
       }
     }
   },
-  "browserKeysRevokeBody": "Pages and apps sending data with this key stop."
+  "browserKeysRevokeBody": "Pages and apps sending data with this key stop.",
+  "settingsSourceMaps": "Source maps",
+  "settingsAuditLog": "Audit log",
+  "sourceMapsEmpty": "No source maps stored.",
+  "sourceMapsUploadElsewhere": "Uploading happens where the file is: the build machine or CI.",
+  "sourceMapsSize": "{kb} KB",
+  "@sourceMapsSize": {
+    "placeholders": {
+      "kb": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceMapsDeleteBody": "Browser stacks of the build this file belongs to stop being un-minified.",
+  "auditActor": "Who",
+  "auditAction": "Action",
+  "auditActionHint": "A prefix: member. or member.remove",
+  "auditEmpty": "No entries with this filter.",
+  "auditMore": "Older",
+  "auditEnd": "End of the log.",
+  "auditUnknownActor": "unknown",
+  "auditWithKey": "with an API key",
+  "auditForbidden": "Your role does not allow reading the audit log."
 }

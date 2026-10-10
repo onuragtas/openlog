@@ -1215,6 +1215,39 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// The stored source maps, newest first. The documents themselves are
+  /// never served back -- they are read only to un-minify a stack.
+  Future<SourceMapPage> sourceMaps() async =>
+      SourceMapPage.fromJson(await _send('GET', '/api/v1/source-maps'));
+
+  Future<void> deleteSourceMap(String id) =>
+      _send('DELETE', '/api/v1/source-maps/${Uri.encodeComponent(id)}');
+
+  /// What changed in the organization, newest first.
+  ///
+  /// [cursor] continues the previous page and must be used with the same
+  /// filters: the server builds it from them.
+  Future<AuditLogPage> auditLog({
+    String actor = '',
+    String action = '',
+    String cursor = '',
+    int limit = 50,
+  }) async => AuditLogPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/audit-log',
+        '',
+        extra: {
+          if (actor.isNotEmpty) 'actor': actor,
+          if (action.isNotEmpty) 'action': action,
+          if (cursor.isNotEmpty) 'cursor': cursor,
+          'limit': '$limit',
+        },
+      ),
+    ),
+  );
+
   /// The ingest license keys, including revoked ones.
   Future<LicenseKeyPage> licenseKeys() async =>
       LicenseKeyPage.fromJson(await _send('GET', '/api/v1/license-keys'));

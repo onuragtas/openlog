@@ -2478,4 +2478,53 @@ class LTr extends L {
   @override
   String get browserKeysRevokeBody =>
       'Bu anahtarla veri gönderen sayfalar ve uygulamalar durur.';
+
+  @override
+  String get settingsSourceMaps => 'Source map\'ler';
+
+  @override
+  String get settingsAuditLog => 'Denetim kaydı';
+
+  @override
+  String get sourceMapsEmpty => 'Kayıtlı source map yok.';
+
+  @override
+  String get sourceMapsUploadElsewhere =>
+      'Yükleme, dosyanın bulunduğu yerden yapılır: derleme makinesi ya da CI.';
+
+  @override
+  String sourceMapsSize(String kb) {
+    return '$kb KB';
+  }
+
+  @override
+  String get sourceMapsDeleteBody =>
+      'Bu dosyanın ait olduğu sürümün tarayıcı yığınları bir daha çözülmez.';
+
+  @override
+  String get auditActor => 'Kim';
+
+  @override
+  String get auditAction => 'İşlem';
+
+  @override
+  String get auditActionHint => 'Önek: member. ya da member.remove';
+
+  @override
+  String get auditEmpty => 'Bu süzgeçle kayıt yok.';
+
+  @override
+  String get auditMore => 'Daha eskiler';
+
+  @override
+  String get auditEnd => 'Kaydın sonu.';
+
+  @override
+  String get auditUnknownActor => 'bilinmiyor';
+
+  @override
+  String get auditWithKey => 'API anahtarıyla';
+
+  @override
+  String get auditForbidden => 'Rolünüz denetim kaydını okumaya yetmiyor.';
 }

@@ -10488,6 +10488,58 @@ class BrowserKeyCreated {
   final String key;
 }
 
+/// `SourceMapPage` of the openlog API contract.
+class SourceMapPage {
+  const SourceMapPage({required this.sourceMaps});
+
+  factory SourceMapPage.fromJson(
+    Object? json, [
+    String path = 'SourceMapPage',
+  ]) {
+    final m = _obj(json, path);
+    return SourceMapPage(
+      sourceMaps: _req(
+        m,
+        'source_maps',
+        path,
+        (v, p) => _list<SourceMap>(v, p, (v, p) => SourceMap.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'source_maps': [for (final e in sourceMaps) e.toJson()],
+  };
+
+  final List<SourceMap> sourceMaps;
+}
+
+/// `AuditLogPage` of the openlog API contract.
+class AuditLogPage {
+  const AuditLogPage({required this.events, this.nextCursor});
+
+  factory AuditLogPage.fromJson(Object? json, [String path = 'AuditLogPage']) {
+    final m = _obj(json, path);
+    return AuditLogPage(
+      events: _req(
+        m,
+        'events',
+        path,
+        (v, p) => _list<AuditEvent>(v, p, (v, p) => AuditEvent.fromJson(v, p)),
+      ),
+      nextCursor: _opt(m, 'next_cursor', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'events': [for (final e in events) e.toJson()],
+    'next_cursor': ?nextCursor,
+  };
+
+  final List<AuditEvent> events;
+  final String? nextCursor;
+}
+
 /// `ServicePage` of the openlog API contract.
 class ServicePage {
   const ServicePage({required this.step, required this.services});
@@ -11931,6 +11983,132 @@ class BrowserKey {
   final DateTime updatedAt;
   final DateTime? lastUsedAt;
   final DateTime? revokedAt;
+}
+
+/// A stored source map (rum.md §8). Keyed by the generated file name, because a RUM span carries no build identifier and the content hash inside that name identifies one build exactly.
+class SourceMap {
+  const SourceMap({
+    required this.id,
+    required this.app,
+    required this.script,
+    required this.sizeBytes,
+    required this.sha256,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory SourceMap.fromJson(Object? json, [String path = 'SourceMap']) {
+    final m = _obj(json, path);
+    return SourceMap(
+      id: _req(m, 'id', path, _str),
+      app: _req(m, 'app', path, _str),
+      script: _req(m, 'script', path, _str),
+      sizeBytes: _req(m, 'size_bytes', path, _int),
+      sha256: _req(m, 'sha256', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'app': app,
+    'script': script,
+    'size_bytes': sizeBytes,
+    'sha256': sha256,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String app;
+  final String script;
+  final int sizeBytes;
+  final String sha256;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+/// `AuditEvent` of the openlog API contract.
+class AuditEvent {
+  const AuditEvent({
+    required this.id,
+    required this.actorEmail,
+    this.actorApiKey,
+    required this.action,
+    required this.targetType,
+    required this.targetId,
+    required this.details,
+    required this.ip,
+    required this.createdAt,
+  });
+
+  factory AuditEvent.fromJson(Object? json, [String path = 'AuditEvent']) {
+    final m = _obj(json, path);
+    return AuditEvent(
+      id: _req(m, 'id', path, _int),
+      actorEmail: _req(m, 'actor_email', path, _str),
+      actorApiKey: _opt(
+        m,
+        'actor_api_key',
+        path,
+        (v, p) => AuditEventActorApiKey.fromJson(v, p),
+      ),
+      action: _req(m, 'action', path, _str),
+      targetType: _req(m, 'target_type', path, _str),
+      targetId: _req(m, 'target_id', path, _str),
+      details: _req(m, 'details', path, (v, p) => _map<Object?>(v, p, _any)),
+      ip: _req(m, 'ip', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'actor_email': actorEmail,
+    if (actorApiKey != null) 'actor_api_key': actorApiKey!.toJson(),
+    'action': action,
+    'target_type': targetType,
+    'target_id': targetId,
+    'details': details,
+    'ip': ip,
+    'created_at': createdAt.toUtc().toIso8601String(),
+  };
+
+  final int id;
+  final String actorEmail;
+  final AuditEventActorApiKey? actorApiKey;
+  final String action;
+  final String targetType;
+  final String targetId;
+  final Map<String, Object?> details;
+  final String ip;
+  final DateTime createdAt;
+}
+
+/// `AuditEventActorApiKey` of the openlog API contract.
+class AuditEventActorApiKey {
+  const AuditEventActorApiKey({required this.id, required this.name});
+
+  factory AuditEventActorApiKey.fromJson(
+    Object? json, [
+    String path = 'AuditEventActorApiKey',
+  ]) {
+    final m = _obj(json, path);
+    return AuditEventActorApiKey(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'id': id, 'name': name};
+
+  final String id;
+  final String name;
 }
 
 /// `LogRecord` of the openlog API contract.

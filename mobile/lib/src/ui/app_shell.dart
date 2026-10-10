@@ -337,6 +337,8 @@ class _AppShellState extends State<AppShell> {
         licenseKeys: s.licenseKeys,
         apiKeys: s.apiKeys,
         browserKeys: s.browserKeys,
+        sourceMaps: s.sourceMaps,
+        audit: s.audit,
         active: active,
       ),
     );

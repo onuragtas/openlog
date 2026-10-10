@@ -160,3 +160,17 @@ List<String> parseAllowlist(String text) => [
   for (final part in text.split(RegExp(r'[\n,]+')))
     if (part.trim().isNotEmpty) part.trim(),
 ];
+
+/// The source maps the server keeps to un-minify browser stacks.
+///
+/// The same shape as the key tabs minus the form: a phone has no build
+/// output to upload, so this lists what is stored and removes one.
+class SourceMapsController extends KeysController<SourceMap> {
+  SourceMapsController(super.client);
+
+  @override
+  Future<List<SourceMap>> fetch() async =>
+      (await client.sourceMaps()).sourceMaps;
+
+  Future<void> remove(String id) => act(id, () => client.deleteSourceMap(id));
+}

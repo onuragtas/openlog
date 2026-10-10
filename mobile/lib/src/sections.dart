@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'alerts.dart';
 import 'account.dart';
 import 'api/client.dart';
+import 'audit.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
 import 'detail.dart';
@@ -58,6 +59,8 @@ class Sections {
     LicenseKeysController? licenseKeys,
     ApiKeysController? apiKeys,
     BrowserKeysController? browserKeys,
+    SourceMapsController? sourceMaps,
+    AuditController? audit,
     LogsController Function({
       String traceId,
       String podUid,
@@ -168,6 +171,8 @@ class Sections {
        licenseKeys = licenseKeys ?? LicenseKeysController(client),
        apiKeys = apiKeys ?? ApiKeysController(client),
        browserKeys = browserKeys ?? BrowserKeysController(client),
+       sourceMaps = sourceMaps ?? SourceMapsController(client),
+       audit = audit ?? AuditController(client),
        scopedLogs =
            scopedLogs ??
            (({
@@ -234,6 +239,11 @@ class Sections {
   final LicenseKeysController licenseKeys;
   final ApiKeysController apiKeys;
   final BrowserKeysController browserKeys;
+
+  /// The source maps that un-minify browser stacks, and the organization's
+  /// own record of what changed.
+  final SourceMapsController sourceMaps;
+  final AuditController audit;
 
   /// The logs of one request, pod or container. A controller per screen,
   /// disposed with it, because each one answers about a different thing.
@@ -324,6 +334,8 @@ class Sections {
     licenseKeys,
     apiKeys,
     browserKeys,
+    sourceMaps,
+    audit,
     hosts,
     containers,
     costs,

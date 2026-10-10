@@ -112,6 +112,8 @@ const responseTargets = <String>[
   'post /api/v1/api-keys 201 ApiKeyCreated',
   'get /api/v1/browser-keys 200 BrowserKeyPage',
   'post /api/v1/browser-keys 201 BrowserKeyCreated',
+  'get /api/v1/source-maps 200 SourceMapPage',
+  'get /api/v1/audit-log 200 AuditLogPage',
   'get /api/v1/apm/services 200 ServicePage',
   'get /api/v1/logs 200 LogPage',
   'get /api/v1/rum/apps 200 RumAppPage',

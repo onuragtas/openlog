@@ -11,14 +11,17 @@ import '../../l10n/app_localizations.dart';
 import '../account.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
+import '../audit.dart';
 import '../keys.dart';
 import '../members.dart';
 import '../roles.dart';
 import '../session.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
+import 'audit_tab.dart';
 import 'keys_tabs.dart';
 import 'members_tab.dart';
+import 'source_maps_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
 
@@ -32,6 +35,8 @@ class SettingsBody extends StatefulWidget {
     required this.licenseKeys,
     required this.apiKeys,
     required this.browserKeys,
+    required this.sourceMaps,
+    required this.audit,
     required this.active,
   });
 
@@ -53,6 +58,10 @@ class SettingsBody extends StatefulWidget {
   final LicenseKeysController licenseKeys;
   final ApiKeysController apiKeys;
   final BrowserKeysController browserKeys;
+
+  /// The stored source maps, and the organization's own record of change.
+  final SourceMapsController sourceMaps;
+  final AuditController audit;
   final bool active;
 
   @override
@@ -99,6 +108,21 @@ final _tabs = <_Tab>[
       session: s.widget.session,
       controller: s.widget.browserKeys,
     ),
+  ),
+  _Tab(
+    'source-maps',
+    (l) => l.settingsSourceMaps,
+    'source_maps.list',
+    (s) => SourceMapsTab(
+      session: s.widget.session,
+      controller: s.widget.sourceMaps,
+    ),
+  ),
+  _Tab(
+    'audit-log',
+    (l) => l.settingsAuditLog,
+    'audit.read',
+    (s) => AuditTab(session: s.widget.session, controller: s.widget.audit),
   ),
 ];
 
@@ -181,6 +205,12 @@ class _SettingsBodyState extends State<SettingsBody>
       case 'browser-keys':
         final c = widget.browserKeys;
         if (!c.loading && c.items.isEmpty) later(c.load);
+      case 'source-maps':
+        final c = widget.sourceMaps;
+        if (!c.loading && c.items.isEmpty) later(c.load);
+      case 'audit-log':
+        final c = widget.audit;
+        if (!c.loading && c.events.isEmpty) later(c.load);
     }
   }
 

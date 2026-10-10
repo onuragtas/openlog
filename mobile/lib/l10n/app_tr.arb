@@ -1543,5 +1543,27 @@
       }
     }
   },
-  "browserKeysRevokeBody": "Bu anahtarla veri gönderen sayfalar ve uygulamalar durur."
+  "browserKeysRevokeBody": "Bu anahtarla veri gönderen sayfalar ve uygulamalar durur.",
+  "settingsSourceMaps": "Source map'ler",
+  "settingsAuditLog": "Denetim kaydı",
+  "sourceMapsEmpty": "Kayıtlı source map yok.",
+  "sourceMapsUploadElsewhere": "Yükleme, dosyanın bulunduğu yerden yapılır: derleme makinesi ya da CI.",
+  "sourceMapsSize": "{kb} KB",
+  "@sourceMapsSize": {
+    "placeholders": {
+      "kb": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceMapsDeleteBody": "Bu dosyanın ait olduğu sürümün tarayıcı yığınları bir daha çözülmez.",
+  "auditActor": "Kim",
+  "auditAction": "İşlem",
+  "auditActionHint": "Önek: member. ya da member.remove",
+  "auditEmpty": "Bu süzgeçle kayıt yok.",
+  "auditMore": "Daha eskiler",
+  "auditEnd": "Kaydın sonu.",
+  "auditUnknownActor": "bilinmiyor",
+  "auditWithKey": "API anahtarıyla",
+  "auditForbidden": "Rolünüz denetim kaydını okumaya yetmiyor."
 }

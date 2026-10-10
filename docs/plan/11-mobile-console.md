@@ -472,7 +472,10 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Bu iş sözleşmede bir hata ortaya çıkardı: `BrowserKey.last_used_at` ve `revoked_at`
       zorunlu `Timestamp` yazıyordu ama sunucu `*string` gönderiyor; `NullableTimestamp`
       olarak düzeltildi (webin kendi kodu da zaten null bekliyordu).
-- [ ] Denetim günlüğü (`audit-log`)
+- [x] Denetim günlüğü (`audit-log`): kim/işlem süzgeçleri sunucuda, imleçle sayfalama;
+      API anahtarıyla yapılan değişiklikte anahtarın adı yazıyor.
+- [x] Source map'ler (`source-maps`): liste ve silme. Yükleme webde kalıyor — .map dosyası
+      derleme çıktısı ve derleme makinesinde; bu bir kullanım şekli farkı.
 - [ ] Organizasyon ayarları (`orgs/current`, `.../saas`, `.../support-access`, `.../deletion`)
 - [ ] SSO yönetimi (`sso/connection(s)`, `sso/domains`, `sso/enforcement`, `sso/role-mappings`, `scim/tokens`)
 - [ ] Hesap: parola değiştirme (`auth/password`), e-posta doğrulama (`auth/verify-email`),
