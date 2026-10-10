@@ -5754,6 +5754,282 @@ abstract class L {
   /// In en, this message translates to:
   /// **'“{name}” saved'**
   String savedViewKept(String name);
+
+  /// No description provided for @k8sTabOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get k8sTabOverview;
+
+  /// No description provided for @k8sTabWorkloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Workloads'**
+  String get k8sTabWorkloads;
+
+  /// No description provided for @k8sTabPods.
+  ///
+  /// In en, this message translates to:
+  /// **'Pods'**
+  String get k8sTabPods;
+
+  /// No description provided for @k8sTabNodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Nodes'**
+  String get k8sTabNodes;
+
+  /// No description provided for @k8sCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'Cluster'**
+  String get k8sCluster;
+
+  /// No description provided for @k8sAllClusters.
+  ///
+  /// In en, this message translates to:
+  /// **'All clusters'**
+  String get k8sAllClusters;
+
+  /// No description provided for @k8sAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get k8sAll;
+
+  /// No description provided for @k8sEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No cluster has sent anything yet.'**
+  String get k8sEmpty;
+
+  /// No description provided for @k8sNotReporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Not reporting'**
+  String get k8sNotReporting;
+
+  /// No description provided for @k8sNotReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Not ready'**
+  String get k8sNotReady;
+
+  /// No description provided for @k8sReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get k8sReady;
+
+  /// No description provided for @k8sUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get k8sUnknown;
+
+  /// No description provided for @k8sUnschedulable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unschedulable'**
+  String get k8sUnschedulable;
+
+  /// No description provided for @k8sHealthy.
+  ///
+  /// In en, this message translates to:
+  /// **'Healthy'**
+  String get k8sHealthy;
+
+  /// No description provided for @k8sDegraded.
+  ///
+  /// In en, this message translates to:
+  /// **'Degraded'**
+  String get k8sDegraded;
+
+  /// No description provided for @k8sUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get k8sUnavailable;
+
+  /// No description provided for @k8sNodesReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Nodes ready'**
+  String get k8sNodesReady;
+
+  /// No description provided for @k8sPods.
+  ///
+  /// In en, this message translates to:
+  /// **'Pods'**
+  String get k8sPods;
+
+  /// No description provided for @k8sPodsNotReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Pods not ready'**
+  String get k8sPodsNotReady;
+
+  /// No description provided for @k8sPodsNotReadyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Running but not ready'**
+  String get k8sPodsNotReadyHint;
+
+  /// No description provided for @k8sWorkloadsUnhealthy.
+  ///
+  /// In en, this message translates to:
+  /// **'Unhealthy workloads'**
+  String get k8sWorkloadsUnhealthy;
+
+  /// No description provided for @k8sOfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'of {count}'**
+  String k8sOfTotal(int count);
+
+  /// No description provided for @k8sRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} running'**
+  String k8sRunning(int count);
+
+  /// No description provided for @k8sCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get k8sCpu;
+
+  /// No description provided for @k8sMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get k8sMemory;
+
+  /// No description provided for @k8sOfAllocatable.
+  ///
+  /// In en, this message translates to:
+  /// **'{ratio}% of {value}'**
+  String k8sOfAllocatable(String value, int ratio);
+
+  /// No description provided for @k8sWorkloadsByKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Workloads by kind'**
+  String get k8sWorkloadsByKind;
+
+  /// No description provided for @k8sNoWorkloads.
+  ///
+  /// In en, this message translates to:
+  /// **'No workloads in this range.'**
+  String get k8sNoWorkloads;
+
+  /// No description provided for @k8sUnhealthyCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unhealthy'**
+  String k8sUnhealthyCount(int count);
+
+  /// No description provided for @k8sWarningEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning events'**
+  String get k8sWarningEvents;
+
+  /// No description provided for @k8sNoWarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'No warning events in this range.'**
+  String get k8sNoWarnings;
+
+  /// No description provided for @k8sEventCount.
+  ///
+  /// In en, this message translates to:
+  /// **'×{count}'**
+  String k8sEventCount(int count);
+
+  /// No description provided for @k8sNodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Nodes'**
+  String get k8sNodes;
+
+  /// No description provided for @k8sAllNodes.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get k8sAllNodes;
+
+  /// No description provided for @k8sNoNodes.
+  ///
+  /// In en, this message translates to:
+  /// **'No nodes in this range.'**
+  String get k8sNoNodes;
+
+  /// No description provided for @k8sNamespace.
+  ///
+  /// In en, this message translates to:
+  /// **'Namespace'**
+  String get k8sNamespace;
+
+  /// No description provided for @k8sKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get k8sKind;
+
+  /// No description provided for @k8sHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get k8sHealth;
+
+  /// No description provided for @k8sPhase.
+  ///
+  /// In en, this message translates to:
+  /// **'Phase'**
+  String get k8sPhase;
+
+  /// No description provided for @k8sReplicas.
+  ///
+  /// In en, this message translates to:
+  /// **'Replicas'**
+  String get k8sReplicas;
+
+  /// No description provided for @k8sRestarts.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get k8sRestarts;
+
+  /// No description provided for @k8sWorkloadSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search workloads'**
+  String get k8sWorkloadSearch;
+
+  /// No description provided for @k8sPodSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search pods'**
+  String get k8sPodSearch;
+
+  /// No description provided for @k8sNodeSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search nodes'**
+  String get k8sNodeSearch;
+
+  /// No description provided for @k8sShown.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} of {total} matches'**
+  String k8sShown(int shown, int total);
+
+  /// No description provided for @k8sCpuTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get k8sCpuTrend;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

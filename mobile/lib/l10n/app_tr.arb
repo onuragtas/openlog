@@ -1991,5 +1991,99 @@
               "type": "String"
           }
       }
-  }
+  },
+  "k8sTabOverview": "Genel bakış",
+  "k8sTabWorkloads": "İş yükleri",
+  "k8sTabPods": "Pod'lar",
+  "k8sTabNodes": "Düğümler",
+  "k8sCluster": "Küme",
+  "k8sAllClusters": "Tüm kümeler",
+  "k8sAll": "Hepsi",
+  "k8sEmpty": "Henüz hiçbir küme veri göndermedi.",
+  "k8sNotReporting": "Bildirmiyor",
+  "k8sNotReady": "Hazır değil",
+  "k8sReady": "Hazır",
+  "k8sUnknown": "Bilinmiyor",
+  "k8sUnschedulable": "Zamanlamaya kapalı",
+  "k8sHealthy": "Sağlıklı",
+  "k8sDegraded": "Bozulmuş",
+  "k8sUnavailable": "Erişilemiyor",
+  "k8sNodesReady": "Hazır düğüm",
+  "k8sPods": "Pod",
+  "k8sPodsNotReady": "Hazır olmayan pod",
+  "k8sPodsNotReadyHint": "Çalışıyor ama hazır değil",
+  "k8sWorkloadsUnhealthy": "Sorunlu iş yükü",
+  "k8sOfTotal": "toplam {count} içinde",
+  "@k8sOfTotal": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sRunning": "{count} çalışıyor",
+  "@k8sRunning": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sCpu": "CPU",
+  "k8sMemory": "Bellek",
+  "k8sOfAllocatable": "{value} içinde %{ratio}",
+  "@k8sOfAllocatable": {
+      "placeholders": {
+          "value": {
+              "type": "String"
+          },
+          "ratio": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sWorkloadsByKind": "Türüne göre iş yükleri",
+  "k8sNoWorkloads": "Bu aralıkta iş yükü yok.",
+  "k8sUnhealthyCount": "{count} sorunlu",
+  "@k8sUnhealthyCount": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sWarningEvents": "Uyarı olayları",
+  "k8sNoWarnings": "Bu aralıkta uyarı olayı yok.",
+  "k8sEventCount": "×{count}",
+  "@k8sEventCount": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sNodes": "Düğümler",
+  "k8sAllNodes": "Tümü",
+  "k8sNoNodes": "Bu aralıkta düğüm yok.",
+  "k8sNamespace": "Ad alanı",
+  "k8sKind": "Tür",
+  "k8sHealth": "Sağlık",
+  "k8sPhase": "Durum",
+  "k8sReplicas": "Kopya",
+  "k8sRestarts": "Yeniden başlatma",
+  "k8sWorkloadSearch": "İş yükü ara",
+  "k8sPodSearch": "Pod ara",
+  "k8sNodeSearch": "Düğüm ara",
+  "k8sShown": "{total} eşleşmenin {shown} tanesi",
+  "@k8sShown": {
+      "placeholders": {
+          "shown": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sCpuTrend": "CPU"
 }

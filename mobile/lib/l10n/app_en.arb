@@ -2088,5 +2088,99 @@
               "type": "String"
           }
       }
-  }
+  },
+  "k8sTabOverview": "Overview",
+  "k8sTabWorkloads": "Workloads",
+  "k8sTabPods": "Pods",
+  "k8sTabNodes": "Nodes",
+  "k8sCluster": "Cluster",
+  "k8sAllClusters": "All clusters",
+  "k8sAll": "All",
+  "k8sEmpty": "No cluster has sent anything yet.",
+  "k8sNotReporting": "Not reporting",
+  "k8sNotReady": "Not ready",
+  "k8sReady": "Ready",
+  "k8sUnknown": "Unknown",
+  "k8sUnschedulable": "Unschedulable",
+  "k8sHealthy": "Healthy",
+  "k8sDegraded": "Degraded",
+  "k8sUnavailable": "Unavailable",
+  "k8sNodesReady": "Nodes ready",
+  "k8sPods": "Pods",
+  "k8sPodsNotReady": "Pods not ready",
+  "k8sPodsNotReadyHint": "Running but not ready",
+  "k8sWorkloadsUnhealthy": "Unhealthy workloads",
+  "k8sOfTotal": "of {count}",
+  "@k8sOfTotal": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sRunning": "{count} running",
+  "@k8sRunning": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sCpu": "CPU",
+  "k8sMemory": "Memory",
+  "k8sOfAllocatable": "{ratio}% of {value}",
+  "@k8sOfAllocatable": {
+      "placeholders": {
+          "value": {
+              "type": "String"
+          },
+          "ratio": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sWorkloadsByKind": "Workloads by kind",
+  "k8sNoWorkloads": "No workloads in this range.",
+  "k8sUnhealthyCount": "{count} unhealthy",
+  "@k8sUnhealthyCount": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sWarningEvents": "Warning events",
+  "k8sNoWarnings": "No warning events in this range.",
+  "k8sEventCount": "×{count}",
+  "@k8sEventCount": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sNodes": "Nodes",
+  "k8sAllNodes": "All",
+  "k8sNoNodes": "No nodes in this range.",
+  "k8sNamespace": "Namespace",
+  "k8sKind": "Kind",
+  "k8sHealth": "Health",
+  "k8sPhase": "Phase",
+  "k8sReplicas": "Replicas",
+  "k8sRestarts": "Restarts",
+  "k8sWorkloadSearch": "Search workloads",
+  "k8sPodSearch": "Search pods",
+  "k8sNodeSearch": "Search nodes",
+  "k8sShown": "{shown} of {total} matches",
+  "@k8sShown": {
+      "placeholders": {
+          "shown": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          }
+      }
+  },
+  "k8sCpuTrend": "CPU"
 }

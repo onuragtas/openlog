@@ -2598,6 +2598,59 @@ enum FleetHostStatus {
   }
 }
 
+/// KubernetesNodeReady of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum KubernetesNodeReady {
+  trueValue('true'),
+  falseValue('false'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const KubernetesNodeReady(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static KubernetesNodeReady fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
+/// KubernetesWorkloadHealth of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum KubernetesWorkloadHealth {
+  healthy('healthy'),
+  degraded('degraded'),
+  unavailable('unavailable'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const KubernetesWorkloadHealth(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static KubernetesWorkloadHealth fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
 /// SloSliType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3046,6 +3099,32 @@ enum FleetHostJavaAgentStatus {
       if (e.wire == s) return e;
     }
     return unknown;
+  }
+}
+
+/// KubernetesNodeConditionStatus of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum KubernetesNodeConditionStatus {
+  trueValue('true'),
+  falseValue('false'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const KubernetesNodeConditionStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static KubernetesNodeConditionStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
   }
 }
 
@@ -3951,6 +4030,168 @@ class SavedView {
   final bool canEdit;
   final DateTime createdAt;
   final DateTime updatedAt;
+}
+
+/// `KubernetesClusterDetail` of the openlog API contract.
+class KubernetesClusterDetail {
+  const KubernetesClusterDetail({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.version,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    required this.nodes,
+    required this.nodesReady,
+    required this.pods,
+    required this.podsNotReady,
+    required this.workloads,
+    required this.workloadsUnhealthy,
+    required this.namespaces,
+    required this.workloadsByKind,
+    required this.warningEvents,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    this.allocatableCpu,
+    this.allocatableMemory,
+  });
+
+  factory KubernetesClusterDetail.fromJson(
+    Object? json, [
+    String path = 'KubernetesClusterDetail',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesClusterDetail(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      version: _req(m, 'version', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      nodes: _req(m, 'nodes', path, _int),
+      nodesReady: _req(m, 'nodes_ready', path, _int),
+      pods: _req(
+        m,
+        'pods',
+        path,
+        (v, p) => KubernetesClusterDetailPods.fromJson(v, p),
+      ),
+      podsNotReady: _req(m, 'pods_not_ready', path, _int),
+      workloads: _req(m, 'workloads', path, _int),
+      workloadsUnhealthy: _req(m, 'workloads_unhealthy', path, _int),
+      namespaces: _req(
+        m,
+        'namespaces',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      workloadsByKind: _req(
+        m,
+        'workloads_by_kind',
+        path,
+        (v, p) => _list<KubernetesWorkloadKindCount>(
+          v,
+          p,
+          (v, p) => KubernetesWorkloadKindCount.fromJson(v, p),
+        ),
+      ),
+      warningEvents: _req(
+        m,
+        'warning_events',
+        path,
+        (v, p) => _list<KubernetesEvent>(
+          v,
+          p,
+          (v, p) => KubernetesEvent.fromJson(v, p),
+        ),
+      ),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      allocatableCpu: _opt(m, 'allocatable_cpu', path, _num),
+      allocatableMemory: _opt(m, 'allocatable_memory', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'version': version,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'nodes': nodes,
+    'nodes_ready': nodesReady,
+    'pods': pods.toJson(),
+    'pods_not_ready': podsNotReady,
+    'workloads': workloads,
+    'workloads_unhealthy': workloadsUnhealthy,
+    'namespaces': namespaces,
+    'workloads_by_kind': [for (final e in workloadsByKind) e.toJson()],
+    'warning_events': [for (final e in warningEvents) e.toJson()],
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'allocatable_cpu': ?allocatableCpu,
+    'allocatable_memory': ?allocatableMemory,
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String version;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final int nodes;
+  final int nodesReady;
+  final KubernetesClusterDetailPods pods;
+  final int podsNotReady;
+  final int workloads;
+  final int workloadsUnhealthy;
+  final List<String> namespaces;
+  final List<KubernetesWorkloadKindCount> workloadsByKind;
+  final List<KubernetesEvent> warningEvents;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final double? allocatableCpu;
+  final double? allocatableMemory;
+}
+
+/// Current pods by phase
+class KubernetesClusterDetailPods {
+  const KubernetesClusterDetailPods({
+    required this.pending,
+    required this.running,
+    required this.succeeded,
+    required this.failed,
+    required this.unknown,
+  });
+
+  factory KubernetesClusterDetailPods.fromJson(
+    Object? json, [
+    String path = 'KubernetesClusterDetailPods',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesClusterDetailPods(
+      pending: _req(m, 'Pending', path, _int),
+      running: _req(m, 'Running', path, _int),
+      succeeded: _req(m, 'Succeeded', path, _int),
+      failed: _req(m, 'Failed', path, _int),
+      unknown: _req(m, 'Unknown', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'Pending': pending,
+    'Running': running,
+    'Succeeded': succeeded,
+    'Failed': failed,
+    'Unknown': unknown,
+  };
+
+  final int pending;
+  final int running;
+  final int succeeded;
+  final int failed;
+  final int unknown;
 }
 
 /// `FieldKeysResponse` of the openlog API contract.
@@ -8848,6 +9089,116 @@ class MetricExemplar {
   final Map<String, String> filteredAttributes;
 }
 
+/// `KubernetesWorkloadKindCount` of the openlog API contract.
+class KubernetesWorkloadKindCount {
+  const KubernetesWorkloadKindCount({
+    required this.kind,
+    required this.total,
+    required this.healthy,
+    required this.degraded,
+    required this.unavailable,
+    required this.unknown,
+  });
+
+  factory KubernetesWorkloadKindCount.fromJson(
+    Object? json, [
+    String path = 'KubernetesWorkloadKindCount',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesWorkloadKindCount(
+      kind: _req(m, 'kind', path, _str),
+      total: _req(m, 'total', path, _int),
+      healthy: _req(m, 'healthy', path, _int),
+      degraded: _req(m, 'degraded', path, _int),
+      unavailable: _req(m, 'unavailable', path, _int),
+      unknown: _req(m, 'unknown', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'total': total,
+    'healthy': healthy,
+    'degraded': degraded,
+    'unavailable': unavailable,
+    'unknown': unknown,
+  };
+
+  final String kind;
+  final int total;
+  final int healthy;
+  final int degraded;
+  final int unavailable;
+  final int unknown;
+}
+
+/// `KubernetesEvent` of the openlog API contract.
+class KubernetesEvent {
+  const KubernetesEvent({
+    required this.timestamp,
+    required this.type,
+    required this.reason,
+    required this.message,
+    required this.count,
+    required this.namespace,
+    required this.objectKind,
+    required this.objectName,
+    required this.objectUid,
+    required this.source,
+    required this.clusterUid,
+    required this.clusterName,
+  });
+
+  factory KubernetesEvent.fromJson(
+    Object? json, [
+    String path = 'KubernetesEvent',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesEvent(
+      timestamp: _req(m, 'timestamp', path, _time),
+      type: _req(m, 'type', path, _str),
+      reason: _req(m, 'reason', path, _str),
+      message: _req(m, 'message', path, _str),
+      count: _req(m, 'count', path, _int),
+      namespace: _req(m, 'namespace', path, _str),
+      objectKind: _req(m, 'object_kind', path, _str),
+      objectName: _req(m, 'object_name', path, _str),
+      objectUid: _req(m, 'object_uid', path, _str),
+      source: _req(m, 'source', path, _str),
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'type': type,
+    'reason': reason,
+    'message': message,
+    'count': count,
+    'namespace': namespace,
+    'object_kind': objectKind,
+    'object_name': objectName,
+    'object_uid': objectUid,
+    'source': source,
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+  };
+
+  final DateTime timestamp;
+  final String type;
+  final String reason;
+  final String message;
+  final int count;
+  final String namespace;
+  final String objectKind;
+  final String objectName;
+  final String objectUid;
+  final String source;
+  final String clusterUid;
+  final String clusterName;
+}
+
 /// `FieldKey` of the openlog API contract.
 class FieldKey {
   const FieldKey({
@@ -11733,73 +12084,6 @@ class KubernetesPodContainer {
   final double? memoryLimit;
 }
 
-/// `KubernetesEvent` of the openlog API contract.
-class KubernetesEvent {
-  const KubernetesEvent({
-    required this.timestamp,
-    required this.type,
-    required this.reason,
-    required this.message,
-    required this.count,
-    required this.namespace,
-    required this.objectKind,
-    required this.objectName,
-    required this.objectUid,
-    required this.source,
-    required this.clusterUid,
-    required this.clusterName,
-  });
-
-  factory KubernetesEvent.fromJson(
-    Object? json, [
-    String path = 'KubernetesEvent',
-  ]) {
-    final m = _obj(json, path);
-    return KubernetesEvent(
-      timestamp: _req(m, 'timestamp', path, _time),
-      type: _req(m, 'type', path, _str),
-      reason: _req(m, 'reason', path, _str),
-      message: _req(m, 'message', path, _str),
-      count: _req(m, 'count', path, _int),
-      namespace: _req(m, 'namespace', path, _str),
-      objectKind: _req(m, 'object_kind', path, _str),
-      objectName: _req(m, 'object_name', path, _str),
-      objectUid: _req(m, 'object_uid', path, _str),
-      source: _req(m, 'source', path, _str),
-      clusterUid: _req(m, 'cluster_uid', path, _str),
-      clusterName: _req(m, 'cluster_name', path, _str),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'timestamp': timestamp.toUtc().toIso8601String(),
-    'type': type,
-    'reason': reason,
-    'message': message,
-    'count': count,
-    'namespace': namespace,
-    'object_kind': objectKind,
-    'object_name': objectName,
-    'object_uid': objectUid,
-    'source': source,
-    'cluster_uid': clusterUid,
-    'cluster_name': clusterName,
-  };
-
-  final DateTime timestamp;
-  final String type;
-  final String reason;
-  final String message;
-  final int count;
-  final String namespace;
-  final String objectKind;
-  final String objectName;
-  final String objectUid;
-  final String source;
-  final String clusterUid;
-  final String clusterName;
-}
-
 /// `DashboardVariable` of the openlog API contract.
 class DashboardVariable {
   const DashboardVariable({
@@ -14411,6 +14695,109 @@ class PodPage {
   final int total;
 }
 
+/// `KubernetesClusterPage` of the openlog API contract.
+class KubernetesClusterPage {
+  const KubernetesClusterPage({required this.clusters});
+
+  factory KubernetesClusterPage.fromJson(
+    Object? json, [
+    String path = 'KubernetesClusterPage',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesClusterPage(
+      clusters: _req(
+        m,
+        'clusters',
+        path,
+        (v, p) => _list<KubernetesCluster>(
+          v,
+          p,
+          (v, p) => KubernetesCluster.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'clusters': [for (final e in clusters) e.toJson()],
+  };
+
+  final List<KubernetesCluster> clusters;
+}
+
+/// `KubernetesNodePage` of the openlog API contract.
+class KubernetesNodePage {
+  const KubernetesNodePage({required this.nodes, required this.total});
+
+  factory KubernetesNodePage.fromJson(
+    Object? json, [
+    String path = 'KubernetesNodePage',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesNodePage(
+      nodes: _req(
+        m,
+        'nodes',
+        path,
+        (v, p) => _list<KubernetesNode>(
+          v,
+          p,
+          (v, p) => KubernetesNode.fromJson(v, p),
+        ),
+      ),
+      total: _req(m, 'total', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'nodes': [for (final e in nodes) e.toJson()],
+    'total': total,
+  };
+
+  final List<KubernetesNode> nodes;
+  final int total;
+}
+
+/// `KubernetesWorkloadPage` of the openlog API contract.
+class KubernetesWorkloadPage {
+  const KubernetesWorkloadPage({
+    required this.workloads,
+    required this.total,
+    required this.step,
+  });
+
+  factory KubernetesWorkloadPage.fromJson(
+    Object? json, [
+    String path = 'KubernetesWorkloadPage',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesWorkloadPage(
+      workloads: _req(
+        m,
+        'workloads',
+        path,
+        (v, p) => _list<KubernetesWorkload>(
+          v,
+          p,
+          (v, p) => KubernetesWorkload.fromJson(v, p),
+        ),
+      ),
+      total: _req(m, 'total', path, _int),
+      step: _req(m, 'step', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'workloads': [for (final e in workloads) e.toJson()],
+    'total': total,
+    'step': step,
+  };
+
+  final List<KubernetesWorkload> workloads;
+  final int total;
+  final String step;
+}
+
 /// `SloPage` of the openlog API contract.
 class SloPage {
   const SloPage({required this.slos, required this.statusTruncated});
@@ -16613,6 +17000,365 @@ class KubernetesPod {
   final bool reporting;
 }
 
+/// `KubernetesCluster` of the openlog API contract.
+class KubernetesCluster {
+  const KubernetesCluster({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.version,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    required this.nodes,
+    required this.nodesReady,
+    required this.pods,
+    required this.podsNotReady,
+    required this.workloads,
+    required this.workloadsUnhealthy,
+    required this.namespaces,
+  });
+
+  factory KubernetesCluster.fromJson(
+    Object? json, [
+    String path = 'KubernetesCluster',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesCluster(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      version: _req(m, 'version', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      nodes: _req(m, 'nodes', path, _int),
+      nodesReady: _req(m, 'nodes_ready', path, _int),
+      pods: _req(
+        m,
+        'pods',
+        path,
+        (v, p) => KubernetesClusterPods.fromJson(v, p),
+      ),
+      podsNotReady: _req(m, 'pods_not_ready', path, _int),
+      workloads: _req(m, 'workloads', path, _int),
+      workloadsUnhealthy: _req(m, 'workloads_unhealthy', path, _int),
+      namespaces: _req(
+        m,
+        'namespaces',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'version': version,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'nodes': nodes,
+    'nodes_ready': nodesReady,
+    'pods': pods.toJson(),
+    'pods_not_ready': podsNotReady,
+    'workloads': workloads,
+    'workloads_unhealthy': workloadsUnhealthy,
+    'namespaces': namespaces,
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String version;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final int nodes;
+  final int nodesReady;
+  final KubernetesClusterPods pods;
+  final int podsNotReady;
+  final int workloads;
+  final int workloadsUnhealthy;
+  final List<String> namespaces;
+}
+
+/// Current pods by phase
+class KubernetesClusterPods {
+  const KubernetesClusterPods({
+    required this.pending,
+    required this.running,
+    required this.succeeded,
+    required this.failed,
+    required this.unknown,
+  });
+
+  factory KubernetesClusterPods.fromJson(
+    Object? json, [
+    String path = 'KubernetesClusterPods',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesClusterPods(
+      pending: _req(m, 'Pending', path, _int),
+      running: _req(m, 'Running', path, _int),
+      succeeded: _req(m, 'Succeeded', path, _int),
+      failed: _req(m, 'Failed', path, _int),
+      unknown: _req(m, 'Unknown', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'Pending': pending,
+    'Running': running,
+    'Succeeded': succeeded,
+    'Failed': failed,
+    'Unknown': unknown,
+  };
+
+  final int pending;
+  final int running;
+  final int succeeded;
+  final int failed;
+  final int unknown;
+}
+
+/// `KubernetesNode` of the openlog API contract.
+class KubernetesNode {
+  const KubernetesNode({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.nodeName,
+    required this.nodeUid,
+    required this.ready,
+    required this.unschedulable,
+    required this.roles,
+    required this.kubeletVersion,
+    required this.osImage,
+    required this.containerRuntime,
+    required this.internalIp,
+    this.createdAt,
+    this.allocatableCpu,
+    this.allocatableMemory,
+    this.allocatablePods,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    required this.pods,
+    this.hostId,
+    this.hostName,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    required this.conditions,
+  });
+
+  factory KubernetesNode.fromJson(
+    Object? json, [
+    String path = 'KubernetesNode',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesNode(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      nodeName: _req(m, 'node_name', path, _str),
+      nodeUid: _req(m, 'node_uid', path, _str),
+      ready: _req(m, 'ready', path, KubernetesNodeReady.fromJson),
+      unschedulable: _req(m, 'unschedulable', path, _bool),
+      roles: _req(m, 'roles', path, (v, p) => _list<String>(v, p, _str)),
+      kubeletVersion: _req(m, 'kubelet_version', path, _str),
+      osImage: _req(m, 'os_image', path, _str),
+      containerRuntime: _req(m, 'container_runtime', path, _str),
+      internalIp: _req(m, 'internal_ip', path, _str),
+      createdAt: _opt(m, 'created_at', path, _str),
+      allocatableCpu: _opt(m, 'allocatable_cpu', path, _num),
+      allocatableMemory: _opt(m, 'allocatable_memory', path, _num),
+      allocatablePods: _opt(m, 'allocatable_pods', path, _num),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      pods: _req(m, 'pods', path, _int),
+      hostId: _opt(m, 'host_id', path, _str),
+      hostName: _opt(m, 'host_name', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      conditions: _req(
+        m,
+        'conditions',
+        path,
+        (v, p) => _list<KubernetesNodeCondition>(
+          v,
+          p,
+          (v, p) => KubernetesNodeCondition.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'node_name': nodeName,
+    'node_uid': nodeUid,
+    'ready': ready.wire,
+    'unschedulable': unschedulable,
+    'roles': roles,
+    'kubelet_version': kubeletVersion,
+    'os_image': osImage,
+    'container_runtime': containerRuntime,
+    'internal_ip': internalIp,
+    'created_at': ?createdAt,
+    'allocatable_cpu': ?allocatableCpu,
+    'allocatable_memory': ?allocatableMemory,
+    'allocatable_pods': ?allocatablePods,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'pods': pods,
+    'host_id': ?hostId,
+    'host_name': ?hostName,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'conditions': [for (final e in conditions) e.toJson()],
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String nodeName;
+  final String nodeUid;
+  final KubernetesNodeReady ready;
+  final bool unschedulable;
+  final List<String> roles;
+  final String kubeletVersion;
+  final String osImage;
+  final String containerRuntime;
+  final String internalIp;
+  final String? createdAt;
+  final double? allocatableCpu;
+  final double? allocatableMemory;
+  final double? allocatablePods;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final int pods;
+  final String? hostId;
+  final String? hostName;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final List<KubernetesNodeCondition> conditions;
+}
+
+/// `KubernetesWorkload` of the openlog API contract.
+class KubernetesWorkload {
+  const KubernetesWorkload({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.namespace,
+    required this.kind,
+    required this.name,
+    required this.uid,
+    required this.desired,
+    required this.ready,
+    required this.available,
+    required this.updated,
+    required this.health,
+    required this.pods,
+    required this.restarts,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    required this.cpuSparkline,
+    required this.memorySparkline,
+    this.createdAt,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+  });
+
+  factory KubernetesWorkload.fromJson(
+    Object? json, [
+    String path = 'KubernetesWorkload',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesWorkload(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      namespace: _req(m, 'namespace', path, _str),
+      kind: _req(m, 'kind', path, _str),
+      name: _req(m, 'name', path, _str),
+      uid: _req(m, 'uid', path, _str),
+      desired: _req(m, 'desired', path, _int),
+      ready: _req(m, 'ready', path, _int),
+      available: _req(m, 'available', path, _int),
+      updated: _req(m, 'updated', path, _int),
+      health: _req(m, 'health', path, KubernetesWorkloadHealth.fromJson),
+      pods: _req(m, 'pods', path, _int),
+      restarts: _req(m, 'restarts', path, _int),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      cpuSparkline: _req(
+        m,
+        'cpu_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memorySparkline: _req(
+        m,
+        'memory_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      createdAt: _opt(m, 'created_at', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'namespace': namespace,
+    'kind': kind,
+    'name': name,
+    'uid': uid,
+    'desired': desired,
+    'ready': ready,
+    'available': available,
+    'updated': updated,
+    'health': health.wire,
+    'pods': pods,
+    'restarts': restarts,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'cpu_sparkline': cpuSparkline,
+    'memory_sparkline': memorySparkline,
+    'created_at': ?createdAt,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String namespace;
+  final String kind;
+  final String name;
+  final String uid;
+  final int desired;
+  final int ready;
+  final int available;
+  final int updated;
+  final KubernetesWorkloadHealth health;
+  final int pods;
+  final int restarts;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final List<List<double>> cpuSparkline;
+  final List<List<double>> memorySparkline;
+  final String? createdAt;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+}
+
 /// `SloListItem` of the openlog API contract.
 class SloListItem {
   const SloListItem({
@@ -17682,6 +18428,33 @@ class HostUsage {
   final double? disk;
   final double? load1;
   final double? loadPerCpu;
+}
+
+/// `KubernetesNodeCondition` of the openlog API contract.
+class KubernetesNodeCondition {
+  const KubernetesNodeCondition({
+    required this.condition,
+    required this.status,
+  });
+
+  factory KubernetesNodeCondition.fromJson(
+    Object? json, [
+    String path = 'KubernetesNodeCondition',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesNodeCondition(
+      condition: _req(m, 'condition', path, _str),
+      status: _req(m, 'status', path, KubernetesNodeConditionStatus.fromJson),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'condition': condition,
+    'status': status.wire,
+  };
+
+  final String condition;
+  final KubernetesNodeConditionStatus status;
 }
 
 /// `SloStatus` of the openlog API contract.

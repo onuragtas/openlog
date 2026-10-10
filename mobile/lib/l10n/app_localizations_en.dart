@@ -3233,4 +3233,154 @@ class LEn extends L {
   String savedViewKept(String name) {
     return '“$name” saved';
   }
+
+  @override
+  String get k8sTabOverview => 'Overview';
+
+  @override
+  String get k8sTabWorkloads => 'Workloads';
+
+  @override
+  String get k8sTabPods => 'Pods';
+
+  @override
+  String get k8sTabNodes => 'Nodes';
+
+  @override
+  String get k8sCluster => 'Cluster';
+
+  @override
+  String get k8sAllClusters => 'All clusters';
+
+  @override
+  String get k8sAll => 'All';
+
+  @override
+  String get k8sEmpty => 'No cluster has sent anything yet.';
+
+  @override
+  String get k8sNotReporting => 'Not reporting';
+
+  @override
+  String get k8sNotReady => 'Not ready';
+
+  @override
+  String get k8sReady => 'Ready';
+
+  @override
+  String get k8sUnknown => 'Unknown';
+
+  @override
+  String get k8sUnschedulable => 'Unschedulable';
+
+  @override
+  String get k8sHealthy => 'Healthy';
+
+  @override
+  String get k8sDegraded => 'Degraded';
+
+  @override
+  String get k8sUnavailable => 'Unavailable';
+
+  @override
+  String get k8sNodesReady => 'Nodes ready';
+
+  @override
+  String get k8sPods => 'Pods';
+
+  @override
+  String get k8sPodsNotReady => 'Pods not ready';
+
+  @override
+  String get k8sPodsNotReadyHint => 'Running but not ready';
+
+  @override
+  String get k8sWorkloadsUnhealthy => 'Unhealthy workloads';
+
+  @override
+  String k8sOfTotal(int count) {
+    return 'of $count';
+  }
+
+  @override
+  String k8sRunning(int count) {
+    return '$count running';
+  }
+
+  @override
+  String get k8sCpu => 'CPU';
+
+  @override
+  String get k8sMemory => 'Memory';
+
+  @override
+  String k8sOfAllocatable(String value, int ratio) {
+    return '$ratio% of $value';
+  }
+
+  @override
+  String get k8sWorkloadsByKind => 'Workloads by kind';
+
+  @override
+  String get k8sNoWorkloads => 'No workloads in this range.';
+
+  @override
+  String k8sUnhealthyCount(int count) {
+    return '$count unhealthy';
+  }
+
+  @override
+  String get k8sWarningEvents => 'Warning events';
+
+  @override
+  String get k8sNoWarnings => 'No warning events in this range.';
+
+  @override
+  String k8sEventCount(int count) {
+    return '×$count';
+  }
+
+  @override
+  String get k8sNodes => 'Nodes';
+
+  @override
+  String get k8sAllNodes => 'All';
+
+  @override
+  String get k8sNoNodes => 'No nodes in this range.';
+
+  @override
+  String get k8sNamespace => 'Namespace';
+
+  @override
+  String get k8sKind => 'Kind';
+
+  @override
+  String get k8sHealth => 'Health';
+
+  @override
+  String get k8sPhase => 'Phase';
+
+  @override
+  String get k8sReplicas => 'Replicas';
+
+  @override
+  String get k8sRestarts => 'Restarts';
+
+  @override
+  String get k8sWorkloadSearch => 'Search workloads';
+
+  @override
+  String get k8sPodSearch => 'Search pods';
+
+  @override
+  String get k8sNodeSearch => 'Search nodes';
+
+  @override
+  String k8sShown(int shown, int total) {
+    return '$shown of $total matches';
+  }
+
+  @override
+  String get k8sCpuTrend => 'CPU';
 }

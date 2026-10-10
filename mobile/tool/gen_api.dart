@@ -37,6 +37,7 @@ const schemaTargets = <String>[
   'MetricCorrelations', // which series behaved differently in a window
   'MetricExemplarsResponse', // the traces behind a metric's points
   'SavedView', // an explorer view somebody kept
+  'KubernetesClusterDetail', // one cluster, with its warnings and totals
   'FieldKeysResponse', // the keys a filter can be built from
   'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads
@@ -149,6 +150,9 @@ const responseTargets = <String>[
   'get /api/v1/hosts 200 HostPage',
   'get /api/v1/containers 200 ContainerPage',
   'get /api/v1/kubernetes/pods 200 PodPage',
+  'get /api/v1/kubernetes/clusters 200 KubernetesClusterPage',
+  'get /api/v1/kubernetes/nodes 200 KubernetesNodePage',
+  'get /api/v1/kubernetes/workloads 200 KubernetesWorkloadPage',
   'get /api/v1/slos 200 SloPage',
   'get /api/v1/synthetics/checks 200 SyntheticPage',
   'get /api/v1/jobs/monitors 200 JobMonitorPage',

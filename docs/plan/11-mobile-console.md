@@ -538,7 +538,16 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       artık webdeki gibi ns.
 
 ### 9.5 Altyapı
-- [ ] Kubernetes: kümeler, düğümler, iş yükleri, olaylar (`kubernetes/clusters|nodes|workloads|events`)
+- [x] Kubernetes: kümeler, düğümler, iş yükleri, olaylar
+      (`kubernetes/clusters|nodes|workloads|events`): bölüm artık webin dört sayfası —
+      Genel bakış, İş yükleri, Pod'lar, Düğümler — tek küme seçicisinin altında, webdeki
+      gibi seçim sekmeler arasında taşınıyor. Genel bakış kümenin sayaçları, türüne göre
+      iş yükleri, uyarı olayları ve düğümler; listelerde webin süzgeçleri (ad alanı, tür,
+      sağlık, durum) telefonda aranabilir bir alt sayfa olarak. Sunucu limitiyle kesilen
+      liste "şu kadarın şu kadarı" diyor. Bir düğüme ya da iş yüküne dokunmak onun
+      pod'larını kendi ekranında açıyor.
+      Eksik kalan ve not edilen: iş yükü ayrıntı sayfası (zaman serileri, HPA, durum
+      öznitelikleri) ile olay listesi ekranı — veri uçları bağlandı, ekranları yok.
 - [ ] Veritabanı: etkinlik, sorgular, oturumlar, arama (`db/activity|queries|sessions|lookup`)
 - [ ] Konteyner grupları (`containers/groups`)
 - [ ] Maliyet: özet, servisler, konteynerler, eğilim, fiyatlar (`costs/*`)

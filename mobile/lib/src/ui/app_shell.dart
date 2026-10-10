@@ -9,7 +9,6 @@ import 'alerts_section.dart';
 import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
-import 'pod_screen.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
 import 'add_data_screen.dart';
@@ -18,6 +17,7 @@ import 'costs_screen.dart';
 import 'fleet_screen.dart';
 import 'host_screen.dart';
 import 'integrations_screen.dart';
+import 'kubernetes_screen.dart';
 import 'inventory_screen.dart';
 import 'metrics_screen.dart';
 import 'rum_screen.dart';
@@ -95,7 +95,7 @@ class _AppShellState extends State<AppShell> {
       s.hosts.refresh,
       s.containers.refresh,
       s.costs.refresh,
-      s.pods.refresh,
+      () => refreshKubernetes(s),
       s.integrations.refresh,
       s.services.refresh,
       s.rum.refresh,
@@ -221,26 +221,11 @@ class _AppShellState extends State<AppShell> {
       ),
     );
     add(
-      (active) => SectionBody(
+      (active) => KubernetesBody(
+        key: const Key('k8s-body'),
         session: session,
-        controller: s.pods,
-        searchKey: 'pods-search',
+        sections: s,
         active: active,
-        emptyTitle: (l) => l.podsEmpty,
-        card: (context, p) => podCard(
-          context,
-          p,
-          onOpen: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => PodScreen(
-                session: session,
-                sections: s,
-                podUid: p.podUid,
-                podName: p.podName,
-              ),
-            ),
-          ),
-        ),
       ),
     );
     add(

@@ -1224,8 +1224,107 @@ class OpenlogClient {
         await _send('GET', _listPath('/api/v1/containers', q)),
       );
 
-  Future<PodPage> pods({String q = ''}) async => PodPage.fromJson(
-    await _send('GET', _listPath('/api/v1/kubernetes/pods', q)),
+  /// The pods of the window, with the web's own filters: a cluster, a
+  /// namespace, a phase, one node or one workload's pods.
+  Future<PodPage> pods({
+    String q = '',
+    String clusterUid = '',
+    String namespace = '',
+    String node = '',
+    String phase = '',
+    String workloadKind = '',
+    String workloadName = '',
+  }) async => PodPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/kubernetes/pods',
+        q,
+        extra: {
+          if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
+          if (namespace.isNotEmpty) 'namespace': namespace,
+          if (node.isNotEmpty) 'node': node,
+          if (phase.isNotEmpty) 'phase': phase,
+          if (workloadKind.isNotEmpty) 'workload_kind': workloadKind,
+          if (workloadName.isNotEmpty) 'workload_name': workloadName,
+        },
+      ),
+    ),
+  );
+
+  /// The clusters with data in the window, by name.
+  Future<KubernetesClusterPage> k8sClusters() async =>
+      KubernetesClusterPage.fromJson(
+        await _send('GET', '/api/v1/kubernetes/clusters'),
+      );
+
+  /// One cluster: its totals, its workload health by kind and the latest
+  /// Warning events.
+  Future<KubernetesClusterDetail> k8sCluster(String uid) async =>
+      KubernetesClusterDetail.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/kubernetes/clusters/${Uri.encodeComponent(uid)}',
+        ),
+      );
+
+  Future<KubernetesNodePage> k8sNodes({
+    String clusterUid = '',
+    String q = '',
+  }) async => KubernetesNodePage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/kubernetes/nodes',
+        q,
+        extra: {if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid},
+      ),
+    ),
+  );
+
+  Future<KubernetesWorkloadPage> k8sWorkloads({
+    String clusterUid = '',
+    String namespace = '',
+    String kind = '',
+    String health = '',
+    String q = '',
+  }) async => KubernetesWorkloadPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/kubernetes/workloads',
+        q,
+        extra: {
+          if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
+          if (namespace.isNotEmpty) 'namespace': namespace,
+          if (kind.isNotEmpty) 'kind': kind,
+          if (health.isNotEmpty) 'health': health,
+        },
+      ),
+    ),
+  );
+
+  /// The cluster's events, newest first. Warnings are what anybody opens
+  /// this for, so the type is a filter rather than a thing to scroll past.
+  Future<KubernetesEventList> k8sEvents({
+    String clusterUid = '',
+    String namespace = '',
+    String type = '',
+    int limit = 100,
+  }) async => KubernetesEventList.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/kubernetes/events',
+        '',
+        extra: {
+          'limit': '$limit',
+          if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
+          if (namespace.isNotEmpty) 'namespace': namespace,
+          if (type.isNotEmpty) 'type': type,
+        },
+      ),
+    ),
   );
 
   /// `status=true` asks the server to compute each SLO's budget, which is the

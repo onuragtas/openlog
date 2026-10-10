@@ -155,6 +155,7 @@ class SectionCard extends StatelessWidget {
     this.trailing,
     this.tags = const [],
     this.stats = const [],
+    this.extra,
     this.onOpen,
   });
 
@@ -164,6 +165,10 @@ class SectionCard extends StatelessWidget {
   final String? trailing;
   final List<Widget> tags;
   final List<({String label, String value, Color? emphasis})> stats;
+
+  /// Anything a card needs under its numbers -- a workload's CPU trend, for
+  /// one. Most cards have none and pass nothing.
+  final Widget? extra;
 
   /// What the card opens, when there is something behind it. Sections whose
   /// rows have no detail yet pass nothing and stay untappable, rather than
@@ -204,6 +209,7 @@ class SectionCard extends StatelessWidget {
             const SizedBox(height: 8),
             Wrap(spacing: 6, runSpacing: 4, children: tags),
           ],
+          if (extra != null) ...[const SizedBox(height: 8), extra!],
           if (stats.isNotEmpty) ...[
             const SizedBox(height: 10),
             Wrap(

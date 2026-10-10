@@ -18,6 +18,7 @@ import 'discovery.dart';
 import 'fields.dart';
 import 'errors.dart';
 import 'keys.dart';
+import 'kubernetes.dart';
 import 'list_controller.dart';
 import 'logs.dart';
 import 'members.dart';
@@ -43,6 +44,12 @@ class Sections {
     HostsController? hosts,
     ContainersController? containers,
     PodsController? pods,
+    PodsController Function()? scopedPods,
+    KubernetesScope? k8s,
+    KubernetesClusterController? k8sCluster,
+    KubernetesNodesController? k8sNodes,
+    KubernetesWorkloadsController? k8sWorkloads,
+    KubernetesEventsController? k8sEvents,
     ServicesController? services,
     DatabasesController? databases,
     SlosController? slos,
@@ -186,6 +193,12 @@ class Sections {
        hosts = hosts ?? HostsController(client),
        containers = containers ?? ContainersController(client),
        pods = pods ?? PodsController(client),
+       scopedPods = scopedPods ?? (() => PodsController(client)),
+       k8s = k8s ?? KubernetesScope(client),
+       k8sCluster = k8sCluster ?? KubernetesClusterController(client),
+       k8sNodes = k8sNodes ?? KubernetesNodesController(client),
+       k8sWorkloads = k8sWorkloads ?? KubernetesWorkloadsController(client),
+       k8sEvents = k8sEvents ?? KubernetesEventsController(client),
        services = services ?? ServicesController(client),
        databases = databases ?? DatabasesController(client),
        slos = slos ?? SlosController(client),
@@ -263,6 +276,19 @@ class Sections {
   final HostsController hosts;
   final ContainersController containers;
   final PodsController pods;
+
+  /// One node's or one workload's pods, on a screen of its own: a list made
+  /// for that screen rather than the tab's, which is still about the
+  /// cluster the person left behind.
+  final PodsController Function() scopedPods;
+
+  /// The Kubernetes screen: the chosen cluster, and the three lists that
+  /// follow it.
+  final KubernetesScope k8s;
+  final KubernetesClusterController k8sCluster;
+  final KubernetesNodesController k8sNodes;
+  final KubernetesWorkloadsController k8sWorkloads;
+  final KubernetesEventsController k8sEvents;
   final ServicesController services;
   final DatabasesController databases;
   final SlosController slos;
@@ -441,6 +467,11 @@ class Sections {
     containers,
     costs,
     pods,
+    k8s,
+    k8sCluster,
+    k8sNodes,
+    k8sWorkloads,
+    k8sEvents,
     integrations,
     services,
     agents,
@@ -514,9 +545,35 @@ class ContainersController extends SectionController<ApiContainer> {
 class PodsController extends SectionController<KubernetesPod> {
   PodsController(super.client);
 
+  /// The web's own filters. Empty means "every one of them", which is what
+  /// the server does with a missing parameter.
+  String clusterUid = '';
+  String namespace = '';
+  String phase = '';
+
+  /// Set when this list was opened from somewhere -- a node's pods, a
+  /// workload's pods -- rather than chosen here.
+  String node = '';
+  String workloadKind = '';
+  String workloadName = '';
+
+  /// How many matched before the server's limit.
+  int total = 0;
+
   @override
-  Future<List<KubernetesPod>> fetch() async =>
-      (await client.pods(q: query)).pods;
+  Future<List<KubernetesPod>> fetch() async {
+    final page = await client.pods(
+      q: query,
+      clusterUid: clusterUid,
+      namespace: namespace,
+      phase: phase,
+      node: node,
+      workloadKind: workloadKind,
+      workloadName: workloadName,
+    );
+    total = page.total;
+    return page.pods;
+  }
 }
 
 class SlosController extends SectionController<SloListItem> {

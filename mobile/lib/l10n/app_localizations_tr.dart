@@ -3225,4 +3225,154 @@ class LTr extends L {
   String savedViewKept(String name) {
     return '“$name” kaydedildi';
   }
+
+  @override
+  String get k8sTabOverview => 'Genel bakış';
+
+  @override
+  String get k8sTabWorkloads => 'İş yükleri';
+
+  @override
+  String get k8sTabPods => 'Pod\'lar';
+
+  @override
+  String get k8sTabNodes => 'Düğümler';
+
+  @override
+  String get k8sCluster => 'Küme';
+
+  @override
+  String get k8sAllClusters => 'Tüm kümeler';
+
+  @override
+  String get k8sAll => 'Hepsi';
+
+  @override
+  String get k8sEmpty => 'Henüz hiçbir küme veri göndermedi.';
+
+  @override
+  String get k8sNotReporting => 'Bildirmiyor';
+
+  @override
+  String get k8sNotReady => 'Hazır değil';
+
+  @override
+  String get k8sReady => 'Hazır';
+
+  @override
+  String get k8sUnknown => 'Bilinmiyor';
+
+  @override
+  String get k8sUnschedulable => 'Zamanlamaya kapalı';
+
+  @override
+  String get k8sHealthy => 'Sağlıklı';
+
+  @override
+  String get k8sDegraded => 'Bozulmuş';
+
+  @override
+  String get k8sUnavailable => 'Erişilemiyor';
+
+  @override
+  String get k8sNodesReady => 'Hazır düğüm';
+
+  @override
+  String get k8sPods => 'Pod';
+
+  @override
+  String get k8sPodsNotReady => 'Hazır olmayan pod';
+
+  @override
+  String get k8sPodsNotReadyHint => 'Çalışıyor ama hazır değil';
+
+  @override
+  String get k8sWorkloadsUnhealthy => 'Sorunlu iş yükü';
+
+  @override
+  String k8sOfTotal(int count) {
+    return 'toplam $count içinde';
+  }
+
+  @override
+  String k8sRunning(int count) {
+    return '$count çalışıyor';
+  }
+
+  @override
+  String get k8sCpu => 'CPU';
+
+  @override
+  String get k8sMemory => 'Bellek';
+
+  @override
+  String k8sOfAllocatable(String value, int ratio) {
+    return '$value içinde %$ratio';
+  }
+
+  @override
+  String get k8sWorkloadsByKind => 'Türüne göre iş yükleri';
+
+  @override
+  String get k8sNoWorkloads => 'Bu aralıkta iş yükü yok.';
+
+  @override
+  String k8sUnhealthyCount(int count) {
+    return '$count sorunlu';
+  }
+
+  @override
+  String get k8sWarningEvents => 'Uyarı olayları';
+
+  @override
+  String get k8sNoWarnings => 'Bu aralıkta uyarı olayı yok.';
+
+  @override
+  String k8sEventCount(int count) {
+    return '×$count';
+  }
+
+  @override
+  String get k8sNodes => 'Düğümler';
+
+  @override
+  String get k8sAllNodes => 'Tümü';
+
+  @override
+  String get k8sNoNodes => 'Bu aralıkta düğüm yok.';
+
+  @override
+  String get k8sNamespace => 'Ad alanı';
+
+  @override
+  String get k8sKind => 'Tür';
+
+  @override
+  String get k8sHealth => 'Sağlık';
+
+  @override
+  String get k8sPhase => 'Durum';
+
+  @override
+  String get k8sReplicas => 'Kopya';
+
+  @override
+  String get k8sRestarts => 'Yeniden başlatma';
+
+  @override
+  String get k8sWorkloadSearch => 'İş yükü ara';
+
+  @override
+  String get k8sPodSearch => 'Pod ara';
+
+  @override
+  String get k8sNodeSearch => 'Düğüm ara';
+
+  @override
+  String k8sShown(int shown, int total) {
+    return '$total eşleşmenin $shown tanesi';
+  }
+
+  @override
+  String get k8sCpuTrend => 'CPU';
 }

@@ -1616,7 +1616,9 @@ void main() {
       'Hosts': Key('hosts-search'),
       'Containers': Key('containers-search'),
       'Costs': Key('costs-body'),
-      'Kubernetes': Key('pods-search'),
+      // The section is four tabs now, as the web's is; the pod list is
+      // the third of them and is not built until it is looked at.
+      'Kubernetes': Key('k8s-tab-overview'),
       'Integrations': Key('integrations-search'),
       'APM': Key('services-search'),
       'Browser': Key('rum-body'),
