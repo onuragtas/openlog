@@ -19,6 +19,7 @@ import 'agents.dart';
 import 'discovery.dart';
 import 'fields.dart';
 import 'errors.dart';
+import 'integration_settings.dart';
 import 'keys.dart';
 import 'kubernetes.dart';
 import 'list_controller.dart';
@@ -80,6 +81,7 @@ class Sections {
     InventoryController? inventory,
     FleetController? fleet,
     IntegrationsController? integrations,
+    IntegrationSettingsController Function(String hostId)? integrationSettings,
     CloudConnectionsController? cloud,
     CloudRunsController Function(String id)? cloudRuns,
     ProfilesController? profiles,
@@ -247,6 +249,9 @@ class Sections {
        inventory = inventory ?? InventoryController(client),
        fleet = fleet ?? FleetController(client),
        integrations = integrations ?? IntegrationsController(client),
+       integrationSettings =
+           integrationSettings ??
+           ((hostId) => IntegrationSettingsController(client, hostId: hostId)),
        cloud = cloud ?? CloudConnectionsController(client),
        cloudRuns = cloudRuns ?? ((id) => CloudRunsController(client, id)),
        profiles = profiles ?? ProfilesController(client),
@@ -358,6 +363,11 @@ class Sections {
   final InventoryController inventory;
   final FleetController fleet;
   final IntegrationsController integrations;
+
+  /// What one host's integrations were told: made per host, because a
+  /// setting is about the host whose instance is being configured.
+  final IntegrationSettingsController Function(String hostId)
+  integrationSettings;
 
   /// The cloud accounts openlog polls, reached from the integrations
   /// section as they are on the web, and one connection's polls.

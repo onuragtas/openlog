@@ -595,7 +595,15 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       politikanın tamamını geri gönderiyor; dalgalar, pencereler ve ajan sürümleri
       okunur hâlde, düzenlemesi webde.
       Not: ekranın "burada salt okunur" satırı artık yanlış olduğu için kaldırıldı.
-- [ ] Entegrasyon ayarlarını düzenleme (`integrations/settings` yazma)
+- [x] Entegrasyon ayarlarını düzenleme (`integrations/settings` yazma): keşfedilen bir
+      örneğe "Yapılandır" dokunuşu webin satır içi formunu bir alt sayfa olarak açıyor —
+      uç nokta, kullanıcı, parola ve veritabanı, entegrasyonun kullandığı kadarıyla
+      (`web/src/lib/integration-settings.ts`'in alan tablosu birebir taşındı). Parola
+      yazma amaçlı: boş kutu saklananı korur, silmek ayrı bir seçim. Kaydedilen ayarın
+      uygulanması ajanın bir sonraki eşleşmesine kalıyor, ekran bunu söylüyor; ajanda
+      uzaktan yapılandırma kapalıysa kaydetmeden önce söylüyor.
+      Yalnızca yapılandırılabilen entegrasyonlarda ve yalnızca yöneticide görünüyor —
+      docker ve IIS'i ajan kendi yapılandırır, üyenin dokunuşu 403 alırdı.
 - [ ] Depolama (`storage/disk`, `.../settings`)
 
 ### 9.6 RUM

@@ -2543,5 +2543,25 @@
       }
   },
   "fleetPolicyOnWeb": "Waves, windows and agent versions are edited on the web.",
-  "fleetForbidden": "Managing the fleet needs an admin."
+  "fleetForbidden": "Managing the fleet needs an admin.",
+  "integConfigure": "Configure",
+  "integCollect": "Collect from this instance",
+  "integEndpoint": "Endpoint",
+  "integUsername": "User",
+  "integPassword": "Password",
+  "integPasswordKeep": "Leave empty to keep the stored password.",
+  "integPasswordClear": "Clear the stored password",
+  "integDatabase": "Database",
+  "integSave": "Save",
+  "integApplySent": "Sent; the agent picks it up at its next sync.",
+  "integApplyAwaiting": "The agent has it; waiting for the result.",
+  "integRemoteOff": "Remote configuration is off on this agent, so a setting saved here is not applied.",
+  "integrationConflict": "A setting for this scope already exists: {message}",
+  "@integrationConflict": {
+      "placeholders": {
+          "message": {
+              "type": "String"
+          }
+      }
+  }
 }

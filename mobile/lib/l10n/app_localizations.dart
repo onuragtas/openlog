@@ -6804,6 +6804,84 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Managing the fleet needs an admin.'**
   String get fleetForbidden;
+
+  /// No description provided for @integConfigure.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure'**
+  String get integConfigure;
+
+  /// No description provided for @integCollect.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect from this instance'**
+  String get integCollect;
+
+  /// No description provided for @integEndpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint'**
+  String get integEndpoint;
+
+  /// No description provided for @integUsername.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get integUsername;
+
+  /// No description provided for @integPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get integPassword;
+
+  /// No description provided for @integPasswordKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to keep the stored password.'**
+  String get integPasswordKeep;
+
+  /// No description provided for @integPasswordClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the stored password'**
+  String get integPasswordClear;
+
+  /// No description provided for @integDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Database'**
+  String get integDatabase;
+
+  /// No description provided for @integSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get integSave;
+
+  /// No description provided for @integApplySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent; the agent picks it up at its next sync.'**
+  String get integApplySent;
+
+  /// No description provided for @integApplyAwaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent has it; waiting for the result.'**
+  String get integApplyAwaiting;
+
+  /// No description provided for @integRemoteOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote configuration is off on this agent, so a setting saved here is not applied.'**
+  String get integRemoteOff;
+
+  /// No description provided for @integrationConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'A setting for this scope already exists: {message}'**
+  String integrationConflict(String message);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

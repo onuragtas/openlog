@@ -3836,4 +3836,46 @@ class LEn extends L {
 
   @override
   String get fleetForbidden => 'Managing the fleet needs an admin.';
+
+  @override
+  String get integConfigure => 'Configure';
+
+  @override
+  String get integCollect => 'Collect from this instance';
+
+  @override
+  String get integEndpoint => 'Endpoint';
+
+  @override
+  String get integUsername => 'User';
+
+  @override
+  String get integPassword => 'Password';
+
+  @override
+  String get integPasswordKeep => 'Leave empty to keep the stored password.';
+
+  @override
+  String get integPasswordClear => 'Clear the stored password';
+
+  @override
+  String get integDatabase => 'Database';
+
+  @override
+  String get integSave => 'Save';
+
+  @override
+  String get integApplySent => 'Sent; the agent picks it up at its next sync.';
+
+  @override
+  String get integApplyAwaiting => 'The agent has it; waiting for the result.';
+
+  @override
+  String get integRemoteOff =>
+      'Remote configuration is off on this agent, so a setting saved here is not applied.';
+
+  @override
+  String integrationConflict(String message) {
+    return 'A setting for this scope already exists: $message';
+  }
 }

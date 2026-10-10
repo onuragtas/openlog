@@ -2446,5 +2446,25 @@
       }
   },
   "fleetPolicyOnWeb": "Dalgalar, pencereler ve ajan sürümleri webde düzenlenir.",
-  "fleetForbidden": "Filoyu yönetmek için yönetici olmanız gerekir."
+  "fleetForbidden": "Filoyu yönetmek için yönetici olmanız gerekir.",
+  "integConfigure": "Yapılandır",
+  "integCollect": "Bu örnekten topla",
+  "integEndpoint": "Uç nokta",
+  "integUsername": "Kullanıcı",
+  "integPassword": "Parola",
+  "integPasswordKeep": "Boş bırakırsanız saklanan parola korunur.",
+  "integPasswordClear": "Saklanan parolayı sil",
+  "integDatabase": "Veritabanı",
+  "integSave": "Kaydet",
+  "integApplySent": "Değişiklik gönderildi; ajan bir sonraki eşleşmede alacak.",
+  "integApplyAwaiting": "Ajan ayarı aldı, sonucu bekleniyor.",
+  "integRemoteOff": "Bu ajanda uzaktan yapılandırma kapalı; buradan kaydedilen ayar uygulanmaz.",
+  "integrationConflict": "Bu kapsam için zaten bir ayar var: {message}",
+  "@integrationConflict": {
+      "placeholders": {
+          "message": {
+              "type": "String"
+          }
+      }
+  }
 }

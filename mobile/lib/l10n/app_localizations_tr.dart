@@ -3830,4 +3830,47 @@ class LTr extends L {
 
   @override
   String get fleetForbidden => 'Filoyu yönetmek için yönetici olmanız gerekir.';
+
+  @override
+  String get integConfigure => 'Yapılandır';
+
+  @override
+  String get integCollect => 'Bu örnekten topla';
+
+  @override
+  String get integEndpoint => 'Uç nokta';
+
+  @override
+  String get integUsername => 'Kullanıcı';
+
+  @override
+  String get integPassword => 'Parola';
+
+  @override
+  String get integPasswordKeep => 'Boş bırakırsanız saklanan parola korunur.';
+
+  @override
+  String get integPasswordClear => 'Saklanan parolayı sil';
+
+  @override
+  String get integDatabase => 'Veritabanı';
+
+  @override
+  String get integSave => 'Kaydet';
+
+  @override
+  String get integApplySent =>
+      'Değişiklik gönderildi; ajan bir sonraki eşleşmede alacak.';
+
+  @override
+  String get integApplyAwaiting => 'Ajan ayarı aldı, sonucu bekleniyor.';
+
+  @override
+  String get integRemoteOff =>
+      'Bu ajanda uzaktan yapılandırma kapalı; buradan kaydedilen ayar uygulanmaz.';
+
+  @override
+  String integrationConflict(String message) {
+    return 'Bu kapsam için zaten bir ayar var: $message';
+  }
 }

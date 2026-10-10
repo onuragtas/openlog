@@ -1429,6 +1429,45 @@ enum FleetJavaAgentMode {
   }
 }
 
+/// IntegrationName of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum IntegrationName {
+  nginx('nginx'),
+  apache('apache'),
+  redis('redis'),
+  memcached('memcached'),
+  mysql('mysql'),
+  postgresql('postgresql'),
+  mongodb('mongodb'),
+  docker('docker'),
+  mssql('mssql'),
+  iis('iis'),
+  haproxy('haproxy'),
+  rabbitmq('rabbitmq'),
+  elasticsearch('elasticsearch'),
+  jvm('jvm'),
+  kafka('kafka'),
+  phpFpm('php-fpm'),
+  unknown('');
+
+  const IntegrationName(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static IntegrationName fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DbPlanFormat of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -4661,6 +4700,44 @@ class FleetPolicy {
   final bool isDefault;
   final DateTime? updatedAt;
   final String updatedByEmail;
+}
+
+/// `IntegrationSettingsList` of the openlog API contract.
+class IntegrationSettingsList {
+  const IntegrationSettingsList({required this.items, this.host});
+
+  factory IntegrationSettingsList.fromJson(
+    Object? json, [
+    String path = 'IntegrationSettingsList',
+  ]) {
+    final m = _obj(json, path);
+    return IntegrationSettingsList(
+      items: _req(
+        m,
+        'items',
+        path,
+        (v, p) => _list<IntegrationSetting>(
+          v,
+          p,
+          (v, p) => IntegrationSetting.fromJson(v, p),
+        ),
+      ),
+      host: _opt(
+        m,
+        'host',
+        path,
+        (v, p) => IntegrationSettingsHost.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'items': [for (final e in items) e.toJson()],
+    if (host != null) 'host': host!.toJson(),
+  };
+
+  final List<IntegrationSetting> items;
+  final IntegrationSettingsHost? host;
 }
 
 /// `FleetRollout` of the openlog API contract.
@@ -10300,6 +10377,121 @@ class FleetJavaAgentPolicy {
   final DateTime? changedAt;
 }
 
+/// `IntegrationSetting` of the openlog API contract.
+class IntegrationSetting {
+  const IntegrationSetting({
+    required this.id,
+    this.hostId,
+    required this.integration,
+    required this.match,
+    required this.enabled,
+    required this.endpoint,
+    required this.username,
+    required this.passwordSet,
+    required this.database,
+    required this.databases,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.updatedByEmail,
+  });
+
+  factory IntegrationSetting.fromJson(
+    Object? json, [
+    String path = 'IntegrationSetting',
+  ]) {
+    final m = _obj(json, path);
+    return IntegrationSetting(
+      id: _req(m, 'id', path, _str),
+      hostId: _opt(m, 'host_id', path, _str),
+      integration: _req(m, 'integration', path, IntegrationName.fromJson),
+      match: _req(m, 'match', path, (v, p) => IntegrationMatch.fromJson(v, p)),
+      enabled: _req(m, 'enabled', path, _bool),
+      endpoint: _req(m, 'endpoint', path, _str),
+      username: _req(m, 'username', path, _str),
+      passwordSet: _req(m, 'password_set', path, _bool),
+      database: _req(m, 'database', path, _str),
+      databases: _req(
+        m,
+        'databases',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'host_id': ?hostId,
+    'integration': integration.wire,
+    'match': match.toJson(),
+    'enabled': enabled,
+    'endpoint': endpoint,
+    'username': username,
+    'password_set': passwordSet,
+    'database': database,
+    'databases': databases,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'updated_by_email': updatedByEmail,
+  };
+
+  final String id;
+  final String? hostId;
+  final IntegrationName integration;
+  final IntegrationMatch match;
+  final bool enabled;
+  final String endpoint;
+  final String username;
+  final bool passwordSet;
+  final String database;
+  final List<String> databases;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String updatedByEmail;
+}
+
+/// `IntegrationSettingsHost` of the openlog API contract.
+class IntegrationSettingsHost {
+  const IntegrationSettingsHost({
+    required this.hostId,
+    required this.revision,
+    required this.appliedRevision,
+    this.appliedAt,
+    required this.remoteConfigDisabled,
+  });
+
+  factory IntegrationSettingsHost.fromJson(
+    Object? json, [
+    String path = 'IntegrationSettingsHost',
+  ]) {
+    final m = _obj(json, path);
+    return IntegrationSettingsHost(
+      hostId: _req(m, 'host_id', path, _str),
+      revision: _req(m, 'revision', path, _str),
+      appliedRevision: _req(m, 'applied_revision', path, _str),
+      appliedAt: _opt(m, 'applied_at', path, _time),
+      remoteConfigDisabled: _req(m, 'remote_config_disabled', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'revision': revision,
+    'applied_revision': appliedRevision,
+    if (appliedAt != null) 'applied_at': appliedAt!.toUtc().toIso8601String(),
+    'remote_config_disabled': remoteConfigDisabled,
+  };
+
+  final String hostId;
+  final String revision;
+  final String appliedRevision;
+  final DateTime? appliedAt;
+  final bool remoteConfigDisabled;
+}
+
 /// `FleetRolloutCounters` of the openlog API contract.
 class FleetRolloutCounters {
   const FleetRolloutCounters({
@@ -13935,6 +14127,41 @@ class CloudServiceRun {
   final String service;
   final int metrics;
   final String error;
+}
+
+/// `IntegrationMatch` of the openlog API contract.
+class IntegrationMatch {
+  const IntegrationMatch({
+    this.port,
+    required this.container,
+    required this.endpoint,
+    required this.instance,
+  });
+
+  factory IntegrationMatch.fromJson(
+    Object? json, [
+    String path = 'IntegrationMatch',
+  ]) {
+    final m = _obj(json, path);
+    return IntegrationMatch(
+      port: _opt(m, 'port', path, _int),
+      container: _req(m, 'container', path, _str),
+      endpoint: _req(m, 'endpoint', path, _str),
+      instance: _req(m, 'instance', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'port': ?port,
+    'container': container,
+    'endpoint': endpoint,
+    'instance': instance,
+  };
+
+  final int? port;
+  final String container;
+  final String endpoint;
+  final String instance;
 }
 
 /// Background refresh of the IdP documents (OIDC discovery/JWKS, SAML metadata) and certificate/metadata expiry.

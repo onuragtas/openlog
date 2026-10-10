@@ -1022,6 +1022,42 @@ class OpenlogClient {
   Future<FleetSummary> fleetSummary() async =>
       FleetSummary.fromJson(await _send('GET', '/api/v1/fleet/summary'));
 
+  /// The integration settings that apply to one host, in the order they
+  /// are applied, with the revisions the host has and has applied.
+  Future<IntegrationSettingsList> integrationSettings({
+    required String hostId,
+  }) async => IntegrationSettingsList.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/integrations/settings',
+        '',
+        extra: {'host_id': hostId},
+      ),
+    ),
+  );
+
+  /// Stores a new setting.
+  Future<IntegrationSetting> createIntegrationSetting(
+    Map<String, Object?> body,
+  ) async => IntegrationSetting.fromJson(
+    await _send('POST', '/api/v1/integrations/settings', body: body),
+  );
+
+  /// Replaces one. Every non-secret field is replaced, so the whole
+  /// setting goes back; a password left out keeps the stored one and an
+  /// empty one clears it, as the contract says.
+  Future<IntegrationSetting> updateIntegrationSetting(
+    String id,
+    Map<String, Object?> body,
+  ) async => IntegrationSetting.fromJson(
+    await _send(
+      'PUT',
+      '/api/v1/integrations/settings/${Uri.encodeComponent(id)}',
+      body: body,
+    ),
+  );
+
   /// How the fleet updates itself: the mode, the channel, the waves and
   /// the windows.
   Future<FleetPolicy> fleetPolicy() async =>

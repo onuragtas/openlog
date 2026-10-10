@@ -8,9 +8,12 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../discovery.dart';
+import '../integration_settings.dart';
+import '../roles.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'cloud_screen.dart';
+import 'integration_config_sheet.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
 
@@ -69,18 +72,60 @@ class IntegrationsBody extends StatelessWidget {
           );
         },
       ),
-      card: (context, i) => _InstanceCard(instance: i),
+      card: (context, i) =>
+          _InstanceCard(instance: i, session: session, sections: sections),
     );
   }
 }
 
-class _InstanceCard extends StatelessWidget {
-  const _InstanceCard({required this.instance});
+class _InstanceCard extends StatefulWidget {
+  const _InstanceCard({
+    required this.instance,
+    required this.session,
+    required this.sections,
+  });
 
   final IntegrationInstance instance;
+  final SessionController session;
+  final Sections sections;
+
+  @override
+  State<_InstanceCard> createState() => _InstanceCardState();
+}
+
+class _InstanceCardState extends State<_InstanceCard> {
+  IntegrationSettingsController? _settings;
+
+  @override
+  void dispose() {
+    _settings?.dispose();
+    super.dispose();
+  }
+
+  /// Made the first time somebody configures this host's integration,
+  /// not before: a list of forty instances must not ask the server forty
+  /// times for settings nobody is editing.
+  IntegrationSettingsController _settingsOf() =>
+      _settings ??= widget.sections.integrationSettings(widget.instance.hostId);
+
+  Future<void> _configure() async {
+    final saved = await editIntegration(
+      context,
+      session: widget.session,
+      controller: _settingsOf(),
+      integration: widget.instance.name,
+      instance: widget.instance.service.instance ?? widget.instance.key,
+      hostName: widget.instance.hostName,
+    );
+    if (saved && mounted) {
+      // Reload the list so the status follows once the agent applies it.
+      await widget.sections.integrations.refresh();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final instance = widget.instance;
     final l = L.of(context);
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall?.copyWith(
@@ -153,6 +198,33 @@ class _InstanceCard extends StatelessWidget {
                     color: theme.colorScheme.error,
                   ),
                 ),
+              ),
+            // Only where there is something to set and only for the role
+            // the server would accept: docker and IIS are configured by
+            // the agent, and a member's tap would answer 403.
+            if (isConfigurable(instance.name) &&
+                can(widget.session.me?.role, 'fleet.manage'))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: Key('integration-configure-${instance.key}'),
+                  onPressed: _configure,
+                  child: Text(l.integConfigure),
+                ),
+              ),
+            if (_settings != null)
+              ListenableBuilder(
+                listenable: _settings!,
+                builder: (context, _) {
+                  final text = applyPhaseText(l, _settings!.phase);
+                  if (text == null) return const SizedBox.shrink();
+                  return Text(
+                    // Saved is not applied: the agent has to fetch it.
+                    text,
+                    key: const Key('integration-apply'),
+                    style: muted,
+                  );
+                },
               ),
           ],
         ),
