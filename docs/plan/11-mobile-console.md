@@ -402,6 +402,18 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
       `.../comments`): durum sekmeleri ve sayıları, arama, sıralama; grup ekranında çözüldü,
       sürümde çözüldü, yoksay, yeniden aç ve yorumlar. Başkasına atama webde (üye listesi gerekir).
 - [ ] Servis haritası (`apm/map`, `apm/map/path`)
+
+**Ölçüm düzeltmesi (2026-10-10):** §9'un ilk sayımı APM'in servis başına uçlarını atlamış.
+Mobilin `client.dart` dosyasındaki yolları sözleşmedeki `/api/v1/apm/*` listesiyle tek tek
+karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan bu bölüm bitmiş sayılmaz:
+
+- [ ] Servis ayrıntısı (`apm/services/{s}`) ve Apdex ayarı (`apm/services/{s}/settings`)
+- [ ] İşlemler (`apm/services/{s}/transactions`, `.../transaction`)
+- [ ] Servis içi hata grubu (`apm/services/{s}/errors/{group_id}`)
+- [ ] Dağıtımlar ve karşılaştırma (`apm/services/{s}/deployments`, `.../compare`)
+- [ ] Servisin veritabanları (`apm/services/{s}/databases`)
+- [ ] Servisin sunucuları, konteynerleri, pod'ları (`apm/services/{s}/hosts`, `.../containers`,
+      `.../kubernetes`) ve tersi (`apm/hosts/{host_id}/services`)
 - [x] Ajanlar (`apm/agents`): servisler listesinden; servis × ajan × sürüm başına bir satır,
       geride olanlar üstte, arama ve "yalnızca geride olanlar". Yükseltme komutları webde
       (`upgrade=true` sunucuya her servis için paket deposu sorgulatıyor).
