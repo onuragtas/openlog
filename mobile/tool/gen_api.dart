@@ -41,6 +41,8 @@ const schemaTargets = <String>[
   'CloudConnection', // one cloud account openlog polls
   'CloudConnectionList', // them, and whether this server can keep secrets
   'CloudRunList', // a connection's recent polls
+  'FleetPolicy', // how the fleet updates itself
+  'FleetRollout', // one upgrade or rollback, wave by wave
   'DbActivity', // what a database instance is busy with
   'DbQueryDetail', // one statement: its series, its plans, who runs it
   'FieldKeysResponse', // the keys a filter can be built from
@@ -150,6 +152,7 @@ const responseTargets = <String>[
   'get /api/v1/costs/trend 200 CostTrend',
   'get /api/v1/inventory/search 200 InventoryPage',
   'get /api/v1/fleet/hosts 200 FleetHostPage',
+  'get /api/v1/fleet/rollouts 200 FleetRolloutPage',
   'get /api/v1/profiles/services 200 ProfileServicePage',
   'get /api/v1/profiles/functions 200 ProfileFunctionPage',
   'get /api/v1/profiles/flame 200 ProfileFlame',

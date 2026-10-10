@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
+import 'package:openlog_mobile/src/api/schema.g.dart';
 import 'package:openlog_mobile/src/list_controller.dart';
 import 'package:openlog_mobile/src/sections.dart';
 
@@ -481,7 +482,32 @@ void main() {
 
   test('the fleet summary and the agents come from one fetch', () async {
     final server = await FakeServer.start((req, seen) {
-      if (seen.path.endsWith('/summary')) {
+      if (seen.path.endsWith('/policy')) {
+        // The screen reads the policy and the rollouts beside the hosts.
+        writeJson(req, 200, {
+          'mode': 'notify',
+          'channel': 'stable',
+          'target': 'latest',
+          'pinned_version': null,
+          'waves': [10, 50, 100],
+          'wave_soak_minutes': 30,
+          'halt_failure_rate': 0.1,
+          'maintenance_windows': <Object>[],
+          'php_agent': {
+            'mode': 'off',
+            'version': '',
+            'reload': 'none',
+            'exclude_bins': <String>[],
+            'changed_at': null,
+          },
+          'java_agent': {'mode': 'off', 'version': '', 'changed_at': null},
+          'is_default': true,
+          'updated_at': null,
+          'updated_by_email': '',
+        });
+      } else if (seen.path.endsWith('/rollouts')) {
+        writeJson(req, 200, {'rollouts': <Object>[]});
+      } else if (seen.path.endsWith('/summary')) {
         writeJson(req, 200, {
           'total_hosts': 12,
           'active_hosts': 11,
@@ -602,12 +628,20 @@ void main() {
 
     await c.refresh();
 
-    // Both in one fetch, so the header and the list describe one moment.
-    expect(server.requests.map((r) => r.path), [
-      '/api/v1/fleet/summary',
-      '/api/v1/fleet/hosts',
-    ]);
+    // One fetch for all four, so the header, the rollout, the policy and
+    // the list describe one moment.
+    expect(
+      {for (final r in server.requests) r.path},
+      {
+        '/api/v1/fleet/summary',
+        '/api/v1/fleet/hosts',
+        '/api/v1/fleet/policy',
+        '/api/v1/fleet/rollouts',
+      },
+    );
     expect(c.summary!.outdated, 3);
+    expect(c.policy!.mode, FleetMode.notify);
+    expect(c.rollouts, isEmpty);
     expect(c.items.single.agent.version, '0.1.110');
     expect(c.items.single.update.error, 'checksum mismatch');
   });

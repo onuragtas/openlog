@@ -1741,12 +1741,6 @@ abstract class L {
   /// **'No release catalogue; the server cannot tell what is latest.'**
   String get fleetNoCatalog;
 
-  /// No description provided for @fleetReadOnly.
-  ///
-  /// In en, this message translates to:
-  /// **'Read-only here. Rollouts and policy are changed on the web.'**
-  String get fleetReadOnly;
-
   /// No description provided for @fleetUnsupported.
   ///
   /// In en, this message translates to:
@@ -6600,6 +6594,216 @@ abstract class L {
   /// In en, this message translates to:
   /// **'No polls yet.'**
   String get cloudNoRuns;
+
+  /// No description provided for @fleetRollout.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollout'**
+  String get fleetRollout;
+
+  /// No description provided for @fleetNoRollout.
+  ///
+  /// In en, this message translates to:
+  /// **'No rollout is running.'**
+  String get fleetNoRollout;
+
+  /// No description provided for @fleetPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get fleetPause;
+
+  /// No description provided for @fleetConfirmPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get fleetConfirmPause;
+
+  /// No description provided for @fleetResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get fleetResume;
+
+  /// No description provided for @fleetConfirmResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get fleetConfirmResume;
+
+  /// No description provided for @fleetDeployNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Deploy to all'**
+  String get fleetDeployNow;
+
+  /// No description provided for @fleetConfirmDeployNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to the last wave'**
+  String get fleetConfirmDeployNow;
+
+  /// No description provided for @fleetRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'Roll back to {version}'**
+  String fleetRollback(String version);
+
+  /// No description provided for @fleetConfirmRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'Roll back'**
+  String get fleetConfirmRollback;
+
+  /// No description provided for @fleetHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier rollouts'**
+  String get fleetHistory;
+
+  /// No description provided for @fleetRolloutPatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Patch rollout'**
+  String get fleetRolloutPatch;
+
+  /// No description provided for @fleetRolloutUpgrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Upgrade to {version}'**
+  String fleetRolloutUpgrade(String version);
+
+  /// No description provided for @fleetRolloutRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollback to {version}'**
+  String fleetRolloutRollback(String version);
+
+  /// No description provided for @fleetRolloutActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get fleetRolloutActive;
+
+  /// No description provided for @fleetRolloutPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get fleetRolloutPaused;
+
+  /// No description provided for @fleetRolloutHalted.
+  ///
+  /// In en, this message translates to:
+  /// **'Halted'**
+  String get fleetRolloutHalted;
+
+  /// No description provided for @fleetRolloutCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get fleetRolloutCompleted;
+
+  /// No description provided for @fleetRolloutSuperseded.
+  ///
+  /// In en, this message translates to:
+  /// **'Superseded'**
+  String get fleetRolloutSuperseded;
+
+  /// No description provided for @fleetWave.
+  ///
+  /// In en, this message translates to:
+  /// **'wave {wave} of {total} · {percent}% of the fleet'**
+  String fleetWave(int wave, int total, int percent);
+
+  /// No description provided for @fleetSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} succeeded'**
+  String fleetSucceeded(int count);
+
+  /// No description provided for @fleetFailedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} failed'**
+  String fleetFailedCount(int count);
+
+  /// No description provided for @fleetPending.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pending'**
+  String fleetPending(int count);
+
+  /// No description provided for @fleetNextWave.
+  ///
+  /// In en, this message translates to:
+  /// **'next wave {when}'**
+  String fleetNextWave(String when);
+
+  /// No description provided for @fleetPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Update policy'**
+  String get fleetPolicy;
+
+  /// No description provided for @fleetModeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get fleetModeOff;
+
+  /// No description provided for @fleetModeNotify.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify'**
+  String get fleetModeNotify;
+
+  /// No description provided for @fleetModeAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get fleetModeAuto;
+
+  /// No description provided for @fleetPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'pinned to {version}'**
+  String fleetPinned(String version);
+
+  /// No description provided for @fleetWaves.
+  ///
+  /// In en, this message translates to:
+  /// **'waves: {waves}%'**
+  String fleetWaves(String waves);
+
+  /// No description provided for @fleetSoak.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min soak'**
+  String fleetSoak(int minutes);
+
+  /// No description provided for @fleetHalt.
+  ///
+  /// In en, this message translates to:
+  /// **'halts at {percent}% failures'**
+  String fleetHalt(int percent);
+
+  /// No description provided for @fleetWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} maintenance windows'**
+  String fleetWindows(int count);
+
+  /// No description provided for @fleetPolicyOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Waves, windows and agent versions are edited on the web.'**
+  String get fleetPolicyOnWeb;
+
+  /// No description provided for @fleetForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Managing the fleet needs an admin.'**
+  String get fleetForbidden;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -829,11 +829,109 @@ class FleetController extends SectionController<FleetHost> {
 
   FleetSummary? summary;
 
+  /// How the fleet updates itself, and the rollouts it has run. One fetch
+  /// for the three, because the screen shows them together and three
+  /// windows of the same fleet would contradict each other.
+  FleetPolicy? policy;
+  List<FleetRollout> rollouts = const [];
+
+  /// True while a rollout action is in flight, so the buttons can say so
+  /// rather than let two pauses race.
+  bool acting = false;
+
   @override
   Future<List<FleetHost>> fetch() async {
-    summary = await client.fleetSummary();
-    return (await client.fleetHosts(q: query.trim())).hosts;
+    final answers = await Future.wait([
+      client.fleetSummary(),
+      client.fleetHosts(q: query.trim()),
+      client.fleetPolicy(),
+      client.fleetRollouts(),
+    ]);
+    summary = answers[0] as FleetSummary;
+    policy = answers[2] as FleetPolicy;
+    rollouts = (answers[3] as FleetRolloutPage).rollouts;
+    return (answers[1] as FleetHostPage).hosts;
   }
+
+  /// Runs one rollout action and reloads: pausing a rollout changes the
+  /// summary, the host list and the rollout itself.
+  Future<bool> act(Future<void> Function() action) async {
+    if (acting) return false;
+    acting = true;
+    failure = null;
+    notifyListeners();
+    try {
+      await action();
+      return true;
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+      return false;
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('fleetForbidden', '')
+          : SessionFailure('unexpected', e.message);
+      return false;
+    } finally {
+      acting = false;
+      notifyListeners();
+      if (failure == null) await refresh();
+    }
+  }
+
+  /// Changes one field of the policy and sends the rest back as it came:
+  /// the contract takes the whole policy, and a PUT that left the waves
+  /// out would quietly reset them.
+  Future<bool> setMode(String mode) {
+    final p = policy;
+    if (p == null) return Future.value(false);
+    return act(
+      () => client.putFleetPolicy({
+        'mode': mode,
+        'channel': p.channel.wire,
+        'target': p.target.wire,
+        'pinned_version': p.pinnedVersion,
+        'waves': p.waves,
+        'wave_soak_minutes': p.waveSoakMinutes,
+        'halt_failure_rate': p.haltFailureRate,
+        'maintenance_windows': [
+          for (final w in p.maintenanceWindows) w.toJson(),
+        ],
+      }),
+    );
+  }
+}
+
+/// The versions the fleet may be rolled back to: the versions it is
+/// running that are older than the one it is rolling towards, newest
+/// first. The web's own rule.
+List<String> rollbackCandidates(List<String> running, String? from) {
+  final seen = <String>{};
+  final out = [
+    for (final v in running)
+      if (_isVersion(v) &&
+          (from == null || _compareVersions(v, from) < 0) &&
+          seen.add(v))
+        v,
+  ];
+  out.sort((a, b) => _compareVersions(b, a));
+  return out;
+}
+
+bool _isVersion(String v) =>
+    RegExp(r'^\d+\.\d+\.\d+').hasMatch(v.startsWith('v') ? v.substring(1) : v);
+
+int _compareVersions(String a, String b) {
+  List<int> parts(String v) => [
+    for (final p in (v.startsWith('v') ? v.substring(1) : v).split('.'))
+      int.tryParse(RegExp(r'^\d+').stringMatch(p) ?? '') ?? 0,
+  ];
+  final x = parts(a);
+  final y = parts(b);
+  for (var i = 0; i < 3; i++) {
+    final d = (i < x.length ? x[i] : 0) - (i < y.length ? y[i] : 0);
+    if (d != 0) return d;
+  }
+  return 0;
 }
 
 /// Integrations, read from the agents' own discovery.

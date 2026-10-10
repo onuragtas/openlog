@@ -503,7 +503,6 @@
     }
   },
   "fleetNoCatalog": "No release catalogue; the server cannot tell what is latest.",
-  "fleetReadOnly": "Read-only here. Rollouts and policy are changed on the web.",
   "fleetUnsupported": "unsupported",
   "fleetStatePrefix": "update {state}",
   "@fleetStatePrefix": {
@@ -2412,5 +2411,137 @@
       }
   },
   "cloudRuns": "Recent polls",
-  "cloudNoRuns": "No polls yet."
+  "cloudNoRuns": "No polls yet.",
+  "fleetRollout": "Rollout",
+  "fleetNoRollout": "No rollout is running.",
+  "fleetPause": "Pause",
+  "fleetConfirmPause": "Pause",
+  "fleetResume": "Resume",
+  "fleetConfirmResume": "Resume",
+  "fleetDeployNow": "Deploy to all",
+  "fleetConfirmDeployNow": "Go to the last wave",
+  "fleetRollback": "Roll back to {version}",
+  "@fleetRollback": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetConfirmRollback": "Roll back",
+  "fleetHistory": "Earlier rollouts",
+  "fleetRolloutPatch": "Patch rollout",
+  "fleetRolloutUpgrade": "Upgrade to {version}",
+  "@fleetRolloutUpgrade": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetRolloutRollback": "Rollback to {version}",
+  "@fleetRolloutRollback": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetRolloutActive": "Running",
+  "fleetRolloutPaused": "Paused",
+  "fleetRolloutHalted": "Halted",
+  "fleetRolloutCompleted": "Completed",
+  "fleetRolloutSuperseded": "Superseded",
+  "fleetWave": "wave {wave} of {total} · {percent}% of the fleet",
+  "@fleetWave": {
+      "placeholders": {
+          "wave": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          },
+          "percent": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetSucceeded": "{count} succeeded",
+  "@fleetSucceeded": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetFailedCount": "{count} failed",
+  "@fleetFailedCount": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetPending": "{count} pending",
+  "@fleetPending": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetNextWave": "next wave {when}",
+  "@fleetNextWave": {
+      "placeholders": {
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetPolicy": "Update policy",
+  "fleetModeOff": "Off",
+  "fleetModeNotify": "Notify",
+  "fleetModeAuto": "Automatic",
+  "fleetPinned": "pinned to {version}",
+  "@fleetPinned": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetWaves": "waves: {waves}%",
+  "@fleetWaves": {
+      "placeholders": {
+          "waves": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetSoak": "{minutes} min soak",
+  "@fleetSoak": {
+      "placeholders": {
+          "minutes": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetHalt": "halts at {percent}% failures",
+  "@fleetHalt": {
+      "placeholders": {
+          "percent": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetWindows": "{count} maintenance windows",
+  "@fleetWindows": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetPolicyOnWeb": "Waves, windows and agent versions are edited on the web.",
+  "fleetForbidden": "Managing the fleet needs an admin."
 }

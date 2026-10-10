@@ -406,7 +406,6 @@
     }
   },
   "fleetNoCatalog": "Sürüm kataloğu yok; sunucu en yenisinin hangisi olduğunu bilemiyor.",
-  "fleetReadOnly": "Burada salt okunur. Dağıtım ve politika webden değiştirilir.",
   "fleetUnsupported": "desteklenmiyor",
   "fleetStatePrefix": "güncelleme {state}",
   "@fleetStatePrefix": {
@@ -2315,5 +2314,137 @@
       }
   },
   "cloudRuns": "Son yoklamalar",
-  "cloudNoRuns": "Henüz yoklama yok."
+  "cloudNoRuns": "Henüz yoklama yok.",
+  "fleetRollout": "Dağıtım",
+  "fleetNoRollout": "Şu anda süren bir dağıtım yok.",
+  "fleetPause": "Duraklat",
+  "fleetConfirmPause": "Duraklat",
+  "fleetResume": "Sürdür",
+  "fleetConfirmResume": "Sürdür",
+  "fleetDeployNow": "Hepsine şimdi",
+  "fleetConfirmDeployNow": "Son dalgaya geç",
+  "fleetRollback": "{version} sürümüne dön",
+  "@fleetRollback": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetConfirmRollback": "Geri al",
+  "fleetHistory": "Önceki dağıtımlar",
+  "fleetRolloutPatch": "Yama dağıtımı",
+  "fleetRolloutUpgrade": "{version} sürümüne yükseltme",
+  "@fleetRolloutUpgrade": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetRolloutRollback": "{version} sürümüne dönüş",
+  "@fleetRolloutRollback": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetRolloutActive": "Sürüyor",
+  "fleetRolloutPaused": "Duraklatıldı",
+  "fleetRolloutHalted": "Durduruldu",
+  "fleetRolloutCompleted": "Tamamlandı",
+  "fleetRolloutSuperseded": "Yerine yenisi geçti",
+  "fleetWave": "{wave}/{total}. dalga · filonun %{percent}'i",
+  "@fleetWave": {
+      "placeholders": {
+          "wave": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          },
+          "percent": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetSucceeded": "{count} başarılı",
+  "@fleetSucceeded": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetFailedCount": "{count} başarısız",
+  "@fleetFailedCount": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetPending": "{count} bekliyor",
+  "@fleetPending": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetNextWave": "sonraki dalga {when}",
+  "@fleetNextWave": {
+      "placeholders": {
+          "when": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetPolicy": "Güncelleme politikası",
+  "fleetModeOff": "Kapalı",
+  "fleetModeNotify": "Haber ver",
+  "fleetModeAuto": "Otomatik",
+  "fleetPinned": "{version} sürümüne sabit",
+  "@fleetPinned": {
+      "placeholders": {
+          "version": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetWaves": "dalgalar: {waves}%",
+  "@fleetWaves": {
+      "placeholders": {
+          "waves": {
+              "type": "String"
+          }
+      }
+  },
+  "fleetSoak": "{minutes} dk bekleme",
+  "@fleetSoak": {
+      "placeholders": {
+          "minutes": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetHalt": "%{percent} hatada durur",
+  "@fleetHalt": {
+      "placeholders": {
+          "percent": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetWindows": "{count} bakım penceresi",
+  "@fleetWindows": {
+      "placeholders": {
+          "count": {
+              "type": "int"
+          }
+      }
+  },
+  "fleetPolicyOnWeb": "Dalgalar, pencereler ve ajan sürümleri webde düzenlenir.",
+  "fleetForbidden": "Filoyu yönetmek için yönetici olmanız gerekir."
 }

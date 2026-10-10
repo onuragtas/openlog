@@ -414,6 +414,136 @@ enum CloudConnectionIngestMode {
   }
 }
 
+/// FleetMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetMode {
+  off('off'),
+  notify('notify'),
+  auto('auto'),
+  unknown('');
+
+  const FleetMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetChannel of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetChannel {
+  stable('stable'),
+  beta('beta'),
+  unknown('');
+
+  const FleetChannel(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetChannel fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetTarget of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetTarget {
+  latest('latest'),
+  patch('patch'),
+  pinned('pinned'),
+  unknown('');
+
+  const FleetTarget(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetTarget fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetRolloutAction of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetRolloutAction {
+  upgrade('upgrade'),
+  rollback('rollback'),
+  unknown('');
+
+  const FleetRolloutAction(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetRolloutAction fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetRolloutState of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetRolloutState {
+  active('active'),
+  paused('paused'),
+  halted('halted'),
+  completed('completed'),
+  superseded('superseded'),
+  unknown('');
+
+  const FleetRolloutState(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetRolloutState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FieldType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -741,32 +871,6 @@ enum MetricAggregation {
   final String wire;
 
   static MetricAggregation fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// FleetMode of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FleetMode {
-  off('off'),
-  notify('notify'),
-  auto('auto'),
-  unknown('');
-
-  const FleetMode(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FleetMode fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1210,6 +1314,113 @@ enum CloudRunStatus {
   final String wire;
 
   static CloudRunStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// MaintenanceWindowDaysItem of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum MaintenanceWindowDaysItem {
+  mon('mon'),
+  tue('tue'),
+  wed('wed'),
+  thu('thu'),
+  fri('fri'),
+  sat('sat'),
+  sun('sun'),
+  unknown('');
+
+  const MaintenanceWindowDaysItem(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static MaintenanceWindowDaysItem fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetPHPAgentMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetPHPAgentMode {
+  off('off'),
+  manual('manual'),
+  auto('auto'),
+  unknown('');
+
+  const FleetPHPAgentMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetPHPAgentMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetPHPAgentPolicyReload of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetPHPAgentPolicyReload {
+  none('none'),
+  graceful('graceful'),
+  unknown('');
+
+  const FleetPHPAgentPolicyReload(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetPHPAgentPolicyReload fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FleetJavaAgentMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FleetJavaAgentMode {
+  off('off'),
+  manual('manual'),
+  auto('auto'),
+  unknown('');
+
+  const FleetJavaAgentMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FleetJavaAgentMode fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -2044,31 +2255,6 @@ enum RumVitalName {
   }
 }
 
-/// FleetChannel of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FleetChannel {
-  stable('stable'),
-  beta('beta'),
-  unknown('');
-
-  const FleetChannel(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FleetChannel fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
 /// FleetCatalogStatusStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2088,59 +2274,6 @@ enum FleetCatalogStatusStatus {
   final String wire;
 
   static FleetCatalogStatusStatus fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// FleetRolloutAction of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FleetRolloutAction {
-  upgrade('upgrade'),
-  rollback('rollback'),
-  unknown('');
-
-  const FleetRolloutAction(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FleetRolloutAction fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// FleetRolloutState of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FleetRolloutState {
-  active('active'),
-  paused('paused'),
-  halted('halted'),
-  completed('completed'),
-  superseded('superseded'),
-  unknown('');
-
-  const FleetRolloutState(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FleetRolloutState fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -3078,32 +3211,6 @@ enum FleetOverrideAction {
   }
 }
 
-/// FleetPHPAgentMode of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FleetPHPAgentMode {
-  off('off'),
-  manual('manual'),
-  auto('auto'),
-  unknown('');
-
-  const FleetPHPAgentMode(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FleetPHPAgentMode fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
 /// FleetHostPHPAgentManagedBy of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3161,32 +3268,6 @@ enum FleetHostPHPAgentStatus {
   final String wire;
 
   static FleetHostPHPAgentStatus fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// FleetJavaAgentMode of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FleetJavaAgentMode {
-  off('off'),
-  manual('manual'),
-  auto('auto'),
-  unknown('');
-
-  const FleetJavaAgentMode(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FleetJavaAgentMode fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -4493,6 +4574,191 @@ class CloudRunList {
 
   final CloudConnection connection;
   final List<CloudRun> runs;
+}
+
+/// `FleetPolicy` of the openlog API contract.
+class FleetPolicy {
+  const FleetPolicy({
+    required this.mode,
+    required this.channel,
+    required this.target,
+    this.pinnedVersion,
+    required this.waves,
+    required this.waveSoakMinutes,
+    required this.haltFailureRate,
+    required this.maintenanceWindows,
+    required this.phpAgent,
+    required this.javaAgent,
+    required this.isDefault,
+    this.updatedAt,
+    required this.updatedByEmail,
+  });
+
+  factory FleetPolicy.fromJson(Object? json, [String path = 'FleetPolicy']) {
+    final m = _obj(json, path);
+    return FleetPolicy(
+      mode: _req(m, 'mode', path, FleetMode.fromJson),
+      channel: _req(m, 'channel', path, FleetChannel.fromJson),
+      target: _req(m, 'target', path, FleetTarget.fromJson),
+      pinnedVersion: _opt(m, 'pinned_version', path, _str),
+      waves: _req(m, 'waves', path, (v, p) => _list<int>(v, p, _int)),
+      waveSoakMinutes: _req(m, 'wave_soak_minutes', path, _int),
+      haltFailureRate: _req(m, 'halt_failure_rate', path, _num),
+      maintenanceWindows: _req(
+        m,
+        'maintenance_windows',
+        path,
+        (v, p) => _list<MaintenanceWindow>(
+          v,
+          p,
+          (v, p) => MaintenanceWindow.fromJson(v, p),
+        ),
+      ),
+      phpAgent: _req(
+        m,
+        'php_agent',
+        path,
+        (v, p) => FleetPHPAgentPolicy.fromJson(v, p),
+      ),
+      javaAgent: _req(
+        m,
+        'java_agent',
+        path,
+        (v, p) => FleetJavaAgentPolicy.fromJson(v, p),
+      ),
+      isDefault: _req(m, 'is_default', path, _bool),
+      updatedAt: _opt(m, 'updated_at', path, _time),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'mode': mode.wire,
+    'channel': channel.wire,
+    'target': target.wire,
+    'pinned_version': ?pinnedVersion,
+    'waves': waves,
+    'wave_soak_minutes': waveSoakMinutes,
+    'halt_failure_rate': haltFailureRate,
+    'maintenance_windows': [for (final e in maintenanceWindows) e.toJson()],
+    'php_agent': phpAgent.toJson(),
+    'java_agent': javaAgent.toJson(),
+    'is_default': isDefault,
+    if (updatedAt != null) 'updated_at': updatedAt!.toUtc().toIso8601String(),
+    'updated_by_email': updatedByEmail,
+  };
+
+  final FleetMode mode;
+  final FleetChannel channel;
+  final FleetTarget target;
+  final String? pinnedVersion;
+  final List<int> waves;
+  final int waveSoakMinutes;
+  final double haltFailureRate;
+  final List<MaintenanceWindow> maintenanceWindows;
+  final FleetPHPAgentPolicy phpAgent;
+  final FleetJavaAgentPolicy javaAgent;
+  final bool isDefault;
+  final DateTime? updatedAt;
+  final String updatedByEmail;
+}
+
+/// `FleetRollout` of the openlog API contract.
+class FleetRollout {
+  const FleetRollout({
+    required this.id,
+    required this.action,
+    this.fromVersion,
+    this.toVersion,
+    required this.targets,
+    required this.waves,
+    required this.currentWave,
+    required this.wavePercent,
+    required this.waveStartedAt,
+    this.nextWaveAt,
+    required this.waveSoakMinutes,
+    required this.haltFailureRate,
+    required this.state,
+    required this.stateReason,
+    required this.counters,
+    this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    this.endedAt,
+  });
+
+  factory FleetRollout.fromJson(Object? json, [String path = 'FleetRollout']) {
+    final m = _obj(json, path);
+    return FleetRollout(
+      id: _req(m, 'id', path, _str),
+      action: _req(m, 'action', path, FleetRolloutAction.fromJson),
+      fromVersion: _opt(m, 'from_version', path, _str),
+      toVersion: _opt(m, 'to_version', path, _str),
+      targets: _req(m, 'targets', path, (v, p) => _map<String>(v, p, _str)),
+      waves: _req(m, 'waves', path, (v, p) => _list<int>(v, p, _int)),
+      currentWave: _req(m, 'current_wave', path, _int),
+      wavePercent: _req(m, 'wave_percent', path, _int),
+      waveStartedAt: _req(m, 'wave_started_at', path, _time),
+      nextWaveAt: _opt(m, 'next_wave_at', path, _time),
+      waveSoakMinutes: _req(m, 'wave_soak_minutes', path, _int),
+      haltFailureRate: _req(m, 'halt_failure_rate', path, _num),
+      state: _req(m, 'state', path, FleetRolloutState.fromJson),
+      stateReason: _req(m, 'state_reason', path, _str),
+      counters: _req(
+        m,
+        'counters',
+        path,
+        (v, p) => FleetRolloutCounters.fromJson(v, p),
+      ),
+      createdByEmail: _opt(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      endedAt: _opt(m, 'ended_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'action': action.wire,
+    'from_version': ?fromVersion,
+    'to_version': ?toVersion,
+    'targets': targets,
+    'waves': waves,
+    'current_wave': currentWave,
+    'wave_percent': wavePercent,
+    'wave_started_at': waveStartedAt.toUtc().toIso8601String(),
+    if (nextWaveAt != null)
+      'next_wave_at': nextWaveAt!.toUtc().toIso8601String(),
+    'wave_soak_minutes': waveSoakMinutes,
+    'halt_failure_rate': haltFailureRate,
+    'state': state.wire,
+    'state_reason': stateReason,
+    'counters': counters.toJson(),
+    'created_by_email': ?createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    if (endedAt != null) 'ended_at': endedAt!.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final FleetRolloutAction action;
+  final String? fromVersion;
+  final String? toVersion;
+  final Map<String, String> targets;
+  final List<int> waves;
+  final int currentWave;
+  final int wavePercent;
+  final DateTime waveStartedAt;
+  final DateTime? nextWaveAt;
+  final int waveSoakMinutes;
+  final double haltFailureRate;
+  final FleetRolloutState state;
+  final String stateReason;
+  final FleetRolloutCounters counters;
+  final String? createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? endedAt;
 }
 
 /// `DbActivity` of the openlog API contract.
@@ -9919,6 +10185,160 @@ class CloudRun {
   final List<CloudServiceRun> services;
 }
 
+/// `MaintenanceWindow` of the openlog API contract.
+class MaintenanceWindow {
+  const MaintenanceWindow({
+    required this.days,
+    required this.start,
+    required this.end,
+  });
+
+  factory MaintenanceWindow.fromJson(
+    Object? json, [
+    String path = 'MaintenanceWindow',
+  ]) {
+    final m = _obj(json, path);
+    return MaintenanceWindow(
+      days: _req(
+        m,
+        'days',
+        path,
+        (v, p) => _list<MaintenanceWindowDaysItem>(
+          v,
+          p,
+          MaintenanceWindowDaysItem.fromJson,
+        ),
+      ),
+      start: _req(m, 'start', path, _str),
+      end: _req(m, 'end', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'days': [for (final e in days) e.wire],
+    'start': start,
+    'end': end,
+  };
+
+  final List<MaintenanceWindowDaysItem> days;
+  final String start;
+  final String end;
+}
+
+/// `FleetPHPAgentPolicy` of the openlog API contract.
+class FleetPHPAgentPolicy {
+  const FleetPHPAgentPolicy({
+    required this.mode,
+    required this.version,
+    required this.reload,
+    required this.excludeBins,
+    this.changedAt,
+  });
+
+  factory FleetPHPAgentPolicy.fromJson(
+    Object? json, [
+    String path = 'FleetPHPAgentPolicy',
+  ]) {
+    final m = _obj(json, path);
+    return FleetPHPAgentPolicy(
+      mode: _req(m, 'mode', path, FleetPHPAgentMode.fromJson),
+      version: _req(m, 'version', path, _str),
+      reload: _req(m, 'reload', path, FleetPHPAgentPolicyReload.fromJson),
+      excludeBins: _req(
+        m,
+        'exclude_bins',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      changedAt: _opt(m, 'changed_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'mode': mode.wire,
+    'version': version,
+    'reload': reload.wire,
+    'exclude_bins': excludeBins,
+    if (changedAt != null) 'changed_at': changedAt!.toUtc().toIso8601String(),
+  };
+
+  final FleetPHPAgentMode mode;
+  final String version;
+  final FleetPHPAgentPolicyReload reload;
+  final List<String> excludeBins;
+  final DateTime? changedAt;
+}
+
+/// `FleetJavaAgentPolicy` of the openlog API contract.
+class FleetJavaAgentPolicy {
+  const FleetJavaAgentPolicy({
+    required this.mode,
+    required this.version,
+    this.changedAt,
+  });
+
+  factory FleetJavaAgentPolicy.fromJson(
+    Object? json, [
+    String path = 'FleetJavaAgentPolicy',
+  ]) {
+    final m = _obj(json, path);
+    return FleetJavaAgentPolicy(
+      mode: _req(m, 'mode', path, FleetJavaAgentMode.fromJson),
+      version: _req(m, 'version', path, _str),
+      changedAt: _opt(m, 'changed_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'mode': mode.wire,
+    'version': version,
+    if (changedAt != null) 'changed_at': changedAt!.toUtc().toIso8601String(),
+  };
+
+  final FleetJavaAgentMode mode;
+  final String version;
+  final DateTime? changedAt;
+}
+
+/// `FleetRolloutCounters` of the openlog API contract.
+class FleetRolloutCounters {
+  const FleetRolloutCounters({
+    required this.pending,
+    required this.attempted,
+    required this.succeeded,
+    required this.failed,
+    required this.rolledBack,
+  });
+
+  factory FleetRolloutCounters.fromJson(
+    Object? json, [
+    String path = 'FleetRolloutCounters',
+  ]) {
+    final m = _obj(json, path);
+    return FleetRolloutCounters(
+      pending: _req(m, 'pending', path, _int),
+      attempted: _req(m, 'attempted', path, _int),
+      succeeded: _req(m, 'succeeded', path, _int),
+      failed: _req(m, 'failed', path, _int),
+      rolledBack: _req(m, 'rolled_back', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'pending': pending,
+    'attempted': attempted,
+    'succeeded': succeeded,
+    'failed': failed,
+    'rolled_back': rolledBack,
+  };
+
+  final int pending;
+  final int attempted;
+  final int succeeded;
+  final int failed;
+  final int rolledBack;
+}
+
 /// `DbWait` of the openlog API contract.
 class DbWait {
   const DbWait({
@@ -12703,104 +13123,6 @@ class FleetCatalogStatus {
   final List<String> warnings;
 }
 
-/// `FleetRollout` of the openlog API contract.
-class FleetRollout {
-  const FleetRollout({
-    required this.id,
-    required this.action,
-    this.fromVersion,
-    this.toVersion,
-    required this.targets,
-    required this.waves,
-    required this.currentWave,
-    required this.wavePercent,
-    required this.waveStartedAt,
-    this.nextWaveAt,
-    required this.waveSoakMinutes,
-    required this.haltFailureRate,
-    required this.state,
-    required this.stateReason,
-    required this.counters,
-    this.createdByEmail,
-    required this.createdAt,
-    required this.updatedAt,
-    this.endedAt,
-  });
-
-  factory FleetRollout.fromJson(Object? json, [String path = 'FleetRollout']) {
-    final m = _obj(json, path);
-    return FleetRollout(
-      id: _req(m, 'id', path, _str),
-      action: _req(m, 'action', path, FleetRolloutAction.fromJson),
-      fromVersion: _opt(m, 'from_version', path, _str),
-      toVersion: _opt(m, 'to_version', path, _str),
-      targets: _req(m, 'targets', path, (v, p) => _map<String>(v, p, _str)),
-      waves: _req(m, 'waves', path, (v, p) => _list<int>(v, p, _int)),
-      currentWave: _req(m, 'current_wave', path, _int),
-      wavePercent: _req(m, 'wave_percent', path, _int),
-      waveStartedAt: _req(m, 'wave_started_at', path, _time),
-      nextWaveAt: _opt(m, 'next_wave_at', path, _time),
-      waveSoakMinutes: _req(m, 'wave_soak_minutes', path, _int),
-      haltFailureRate: _req(m, 'halt_failure_rate', path, _num),
-      state: _req(m, 'state', path, FleetRolloutState.fromJson),
-      stateReason: _req(m, 'state_reason', path, _str),
-      counters: _req(
-        m,
-        'counters',
-        path,
-        (v, p) => FleetRolloutCounters.fromJson(v, p),
-      ),
-      createdByEmail: _opt(m, 'created_by_email', path, _str),
-      createdAt: _req(m, 'created_at', path, _time),
-      updatedAt: _req(m, 'updated_at', path, _time),
-      endedAt: _opt(m, 'ended_at', path, _time),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'action': action.wire,
-    'from_version': ?fromVersion,
-    'to_version': ?toVersion,
-    'targets': targets,
-    'waves': waves,
-    'current_wave': currentWave,
-    'wave_percent': wavePercent,
-    'wave_started_at': waveStartedAt.toUtc().toIso8601String(),
-    if (nextWaveAt != null)
-      'next_wave_at': nextWaveAt!.toUtc().toIso8601String(),
-    'wave_soak_minutes': waveSoakMinutes,
-    'halt_failure_rate': haltFailureRate,
-    'state': state.wire,
-    'state_reason': stateReason,
-    'counters': counters.toJson(),
-    'created_by_email': ?createdByEmail,
-    'created_at': createdAt.toUtc().toIso8601String(),
-    'updated_at': updatedAt.toUtc().toIso8601String(),
-    if (endedAt != null) 'ended_at': endedAt!.toUtc().toIso8601String(),
-  };
-
-  final String id;
-  final FleetRolloutAction action;
-  final String? fromVersion;
-  final String? toVersion;
-  final Map<String, String> targets;
-  final List<int> waves;
-  final int currentWave;
-  final int wavePercent;
-  final DateTime waveStartedAt;
-  final DateTime? nextWaveAt;
-  final int waveSoakMinutes;
-  final double haltFailureRate;
-  final FleetRolloutState state;
-  final String stateReason;
-  final FleetRolloutCounters counters;
-  final String? createdByEmail;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final DateTime? endedAt;
-}
-
 /// `OnboardingEndpoint` of the openlog API contract.
 class OnboardingEndpoint {
   const OnboardingEndpoint({required this.url, required this.source});
@@ -13959,45 +14281,6 @@ class SpanEvent {
   final String timestamp;
   final String name;
   final Map<String, String> attributes;
-}
-
-/// `FleetRolloutCounters` of the openlog API contract.
-class FleetRolloutCounters {
-  const FleetRolloutCounters({
-    required this.pending,
-    required this.attempted,
-    required this.succeeded,
-    required this.failed,
-    required this.rolledBack,
-  });
-
-  factory FleetRolloutCounters.fromJson(
-    Object? json, [
-    String path = 'FleetRolloutCounters',
-  ]) {
-    final m = _obj(json, path);
-    return FleetRolloutCounters(
-      pending: _req(m, 'pending', path, _int),
-      attempted: _req(m, 'attempted', path, _int),
-      succeeded: _req(m, 'succeeded', path, _int),
-      failed: _req(m, 'failed', path, _int),
-      rolledBack: _req(m, 'rolled_back', path, _int),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'pending': pending,
-    'attempted': attempted,
-    'succeeded': succeeded,
-    'failed': failed,
-    'rolled_back': rolledBack,
-  };
-
-  final int pending;
-  final int attempted;
-  final int succeeded;
-  final int failed;
-  final int rolledBack;
 }
 
 /// `DashboardWidget` of the openlog API contract.
@@ -15483,6 +15766,33 @@ class FleetHostPage {
 
   final List<FleetHost> hosts;
   final String? nextCursor;
+}
+
+/// `FleetRolloutPage` of the openlog API contract.
+class FleetRolloutPage {
+  const FleetRolloutPage({required this.rollouts});
+
+  factory FleetRolloutPage.fromJson(
+    Object? json, [
+    String path = 'FleetRolloutPage',
+  ]) {
+    final m = _obj(json, path);
+    return FleetRolloutPage(
+      rollouts: _req(
+        m,
+        'rollouts',
+        path,
+        (v, p) =>
+            _list<FleetRollout>(v, p, (v, p) => FleetRollout.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'rollouts': [for (final e in rollouts) e.toJson()],
+  };
+
+  final List<FleetRollout> rollouts;
 }
 
 /// `ProfileServicePage` of the openlog API contract.

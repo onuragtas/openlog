@@ -584,7 +584,17 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       demek, telefon klavyesinde yapılacak iş değil — ekran bunu söylüyor.
       `cloud/providers` ve `cloud/connections/test` bu yüzden dışarıda: ikisi de o
       formun parçası.
-- [ ] Filo politikası ve dağıtımlar (`fleet/policy`, `fleet/rollouts`, `fleet/rollback`)
+- [x] Filo politikası ve dağıtımlar (`fleet/policy`, `fleet/rollouts`, `.../pause`,
+      `.../resume`, `.../deploy-now`, `fleet/rollback`): filo ekranına webin dağıtım
+      paneli ve politikası geldi. Süren dağıtım hangi dalgada olduğunu, başarılı/
+      başarısız/bekleyen paylarını (üç parçalı çubuk — yedi başarılıyken kızaran tek
+      çubuk dağıtım battı demek olurdu) ve sıradaki dalgayı söylüyor; yönetici için
+      duraklat, sürdür, hepsine şimdi ve geri al düğmeleri, hepsi önce soruyor.
+      Politika: mod (kapalı/haber ver/otomatik) telefondan değiştirilebiliyor — acil
+      durumda her şeyi durduran anahtar budur — ve PUT sözleşmenin istediği gibi
+      politikanın tamamını geri gönderiyor; dalgalar, pencereler ve ajan sürümleri
+      okunur hâlde, düzenlemesi webde.
+      Not: ekranın "burada salt okunur" satırı artık yanlış olduğu için kaldırıldı.
 - [ ] Entegrasyon ayarlarını düzenleme (`integrations/settings` yazma)
 - [ ] Depolama (`storage/disk`, `.../settings`)
 

@@ -1022,6 +1022,61 @@ class OpenlogClient {
   Future<FleetSummary> fleetSummary() async =>
       FleetSummary.fromJson(await _send('GET', '/api/v1/fleet/summary'));
 
+  /// How the fleet updates itself: the mode, the channel, the waves and
+  /// the windows.
+  Future<FleetPolicy> fleetPolicy() async =>
+      FleetPolicy.fromJson(await _send('GET', '/api/v1/fleet/policy'));
+
+  /// Stores the policy. The whole policy goes back, as the contract takes
+  /// it, so a screen that changes one field sends the rest unchanged
+  /// rather than emptying it.
+  Future<FleetPolicy> putFleetPolicy(Map<String, Object?> policy) async =>
+      FleetPolicy.fromJson(
+        await _send('PUT', '/api/v1/fleet/policy', body: policy),
+      );
+
+  /// The rollouts, newest first.
+  Future<FleetRolloutPage> fleetRollouts({int limit = 20}) async =>
+      FleetRolloutPage.fromJson(
+        await _send('GET', '/api/v1/fleet/rollouts?limit=$limit'),
+      );
+
+  /// Stops a rollout where it is. The agents already updated stay as they
+  /// are; the waves that have not started do not.
+  Future<FleetRollout> pauseRollout(String id) async => FleetRollout.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/fleet/rollouts/${Uri.encodeComponent(id)}/pause',
+    ),
+  );
+
+  /// Starts a paused or halted rollout again, which restarts its soak.
+  Future<FleetRollout> resumeRollout(String id) async => FleetRollout.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/fleet/rollouts/${Uri.encodeComponent(id)}/resume',
+    ),
+  );
+
+  /// Jumps a rollout to its last wave: the rest of the fleet, now.
+  Future<FleetRollout> deployRolloutNow(String id) async =>
+      FleetRollout.fromJson(
+        await _send(
+          'POST',
+          '/api/v1/fleet/rollouts/${Uri.encodeComponent(id)}/deploy-now',
+        ),
+      );
+
+  /// Rolls the fleet back to a version it was running.
+  Future<FleetRollout> rollbackFleet(String toVersion) async =>
+      FleetRollout.fromJson(
+        await _send(
+          'POST',
+          '/api/v1/fleet/rollback',
+          body: {'to_version': toVersion},
+        ),
+      );
+
   /// The agents themselves, ordered by host name.
   Future<FleetHostPage> fleetHosts({String q = '', int limit = 100}) async {
     final query = <String, String>{'limit': '$limit'};

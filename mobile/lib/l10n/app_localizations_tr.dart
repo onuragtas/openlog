@@ -909,10 +909,6 @@ class LTr extends L {
       'Sürüm kataloğu yok; sunucu en yenisinin hangisi olduğunu bilemiyor.';
 
   @override
-  String get fleetReadOnly =>
-      'Burada salt okunur. Dağıtım ve politika webden değiştirilir.';
-
-  @override
   String get fleetUnsupported => 'desteklenmiyor';
 
   @override
@@ -3702,4 +3698,136 @@ class LTr extends L {
 
   @override
   String get cloudNoRuns => 'Henüz yoklama yok.';
+
+  @override
+  String get fleetRollout => 'Dağıtım';
+
+  @override
+  String get fleetNoRollout => 'Şu anda süren bir dağıtım yok.';
+
+  @override
+  String get fleetPause => 'Duraklat';
+
+  @override
+  String get fleetConfirmPause => 'Duraklat';
+
+  @override
+  String get fleetResume => 'Sürdür';
+
+  @override
+  String get fleetConfirmResume => 'Sürdür';
+
+  @override
+  String get fleetDeployNow => 'Hepsine şimdi';
+
+  @override
+  String get fleetConfirmDeployNow => 'Son dalgaya geç';
+
+  @override
+  String fleetRollback(String version) {
+    return '$version sürümüne dön';
+  }
+
+  @override
+  String get fleetConfirmRollback => 'Geri al';
+
+  @override
+  String get fleetHistory => 'Önceki dağıtımlar';
+
+  @override
+  String get fleetRolloutPatch => 'Yama dağıtımı';
+
+  @override
+  String fleetRolloutUpgrade(String version) {
+    return '$version sürümüne yükseltme';
+  }
+
+  @override
+  String fleetRolloutRollback(String version) {
+    return '$version sürümüne dönüş';
+  }
+
+  @override
+  String get fleetRolloutActive => 'Sürüyor';
+
+  @override
+  String get fleetRolloutPaused => 'Duraklatıldı';
+
+  @override
+  String get fleetRolloutHalted => 'Durduruldu';
+
+  @override
+  String get fleetRolloutCompleted => 'Tamamlandı';
+
+  @override
+  String get fleetRolloutSuperseded => 'Yerine yenisi geçti';
+
+  @override
+  String fleetWave(int wave, int total, int percent) {
+    return '$wave/$total. dalga · filonun %$percent\'i';
+  }
+
+  @override
+  String fleetSucceeded(int count) {
+    return '$count başarılı';
+  }
+
+  @override
+  String fleetFailedCount(int count) {
+    return '$count başarısız';
+  }
+
+  @override
+  String fleetPending(int count) {
+    return '$count bekliyor';
+  }
+
+  @override
+  String fleetNextWave(String when) {
+    return 'sonraki dalga $when';
+  }
+
+  @override
+  String get fleetPolicy => 'Güncelleme politikası';
+
+  @override
+  String get fleetModeOff => 'Kapalı';
+
+  @override
+  String get fleetModeNotify => 'Haber ver';
+
+  @override
+  String get fleetModeAuto => 'Otomatik';
+
+  @override
+  String fleetPinned(String version) {
+    return '$version sürümüne sabit';
+  }
+
+  @override
+  String fleetWaves(String waves) {
+    return 'dalgalar: $waves%';
+  }
+
+  @override
+  String fleetSoak(int minutes) {
+    return '$minutes dk bekleme';
+  }
+
+  @override
+  String fleetHalt(int percent) {
+    return '%$percent hatada durur';
+  }
+
+  @override
+  String fleetWindows(int count) {
+    return '$count bakım penceresi';
+  }
+
+  @override
+  String get fleetPolicyOnWeb =>
+      'Dalgalar, pencereler ve ajan sürümleri webde düzenlenir.';
+
+  @override
+  String get fleetForbidden => 'Filoyu yönetmek için yönetici olmanız gerekir.';
 }

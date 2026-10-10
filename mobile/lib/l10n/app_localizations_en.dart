@@ -913,10 +913,6 @@ class LEn extends L {
       'No release catalogue; the server cannot tell what is latest.';
 
   @override
-  String get fleetReadOnly =>
-      'Read-only here. Rollouts and policy are changed on the web.';
-
-  @override
   String get fleetUnsupported => 'unsupported';
 
   @override
@@ -3708,4 +3704,136 @@ class LEn extends L {
 
   @override
   String get cloudNoRuns => 'No polls yet.';
+
+  @override
+  String get fleetRollout => 'Rollout';
+
+  @override
+  String get fleetNoRollout => 'No rollout is running.';
+
+  @override
+  String get fleetPause => 'Pause';
+
+  @override
+  String get fleetConfirmPause => 'Pause';
+
+  @override
+  String get fleetResume => 'Resume';
+
+  @override
+  String get fleetConfirmResume => 'Resume';
+
+  @override
+  String get fleetDeployNow => 'Deploy to all';
+
+  @override
+  String get fleetConfirmDeployNow => 'Go to the last wave';
+
+  @override
+  String fleetRollback(String version) {
+    return 'Roll back to $version';
+  }
+
+  @override
+  String get fleetConfirmRollback => 'Roll back';
+
+  @override
+  String get fleetHistory => 'Earlier rollouts';
+
+  @override
+  String get fleetRolloutPatch => 'Patch rollout';
+
+  @override
+  String fleetRolloutUpgrade(String version) {
+    return 'Upgrade to $version';
+  }
+
+  @override
+  String fleetRolloutRollback(String version) {
+    return 'Rollback to $version';
+  }
+
+  @override
+  String get fleetRolloutActive => 'Running';
+
+  @override
+  String get fleetRolloutPaused => 'Paused';
+
+  @override
+  String get fleetRolloutHalted => 'Halted';
+
+  @override
+  String get fleetRolloutCompleted => 'Completed';
+
+  @override
+  String get fleetRolloutSuperseded => 'Superseded';
+
+  @override
+  String fleetWave(int wave, int total, int percent) {
+    return 'wave $wave of $total · $percent% of the fleet';
+  }
+
+  @override
+  String fleetSucceeded(int count) {
+    return '$count succeeded';
+  }
+
+  @override
+  String fleetFailedCount(int count) {
+    return '$count failed';
+  }
+
+  @override
+  String fleetPending(int count) {
+    return '$count pending';
+  }
+
+  @override
+  String fleetNextWave(String when) {
+    return 'next wave $when';
+  }
+
+  @override
+  String get fleetPolicy => 'Update policy';
+
+  @override
+  String get fleetModeOff => 'Off';
+
+  @override
+  String get fleetModeNotify => 'Notify';
+
+  @override
+  String get fleetModeAuto => 'Automatic';
+
+  @override
+  String fleetPinned(String version) {
+    return 'pinned to $version';
+  }
+
+  @override
+  String fleetWaves(String waves) {
+    return 'waves: $waves%';
+  }
+
+  @override
+  String fleetSoak(int minutes) {
+    return '$minutes min soak';
+  }
+
+  @override
+  String fleetHalt(int percent) {
+    return 'halts at $percent% failures';
+  }
+
+  @override
+  String fleetWindows(int count) {
+    return '$count maintenance windows';
+  }
+
+  @override
+  String get fleetPolicyOnWeb =>
+      'Waves, windows and agent versions are edited on the web.';
+
+  @override
+  String get fleetForbidden => 'Managing the fleet needs an admin.';
 }
