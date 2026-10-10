@@ -689,7 +689,7 @@
   },
   "podCpu": "CPU",
   "podMemory": "Working set",
-  "navRules": "Alert rules",
+  "navRules": "Rules",
   "rulesEmpty": "No alert rule.",
   "rulesSearch": "Search rules",
   "ruleFiring": "firing",
@@ -1383,5 +1383,7 @@
     }
   },
   "mapPathClear": "Clear the transaction",
-  "mapShowPath": "Show this transaction's path"
+  "mapShowPath": "Show this transaction's path",
+  "navTemplates": "Templates",
+  "navIncidents": "Incidents"
 }

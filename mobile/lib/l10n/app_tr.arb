@@ -592,7 +592,7 @@
   },
   "podCpu": "İşlemci",
   "podMemory": "Çalışma kümesi",
-  "navRules": "Alarm kuralları",
+  "navRules": "Kurallar",
   "rulesEmpty": "Alarm kuralı yok.",
   "rulesSearch": "Kural ara",
   "ruleFiring": "tetikte",
@@ -1286,5 +1286,7 @@
     }
   },
   "mapPathClear": "İşlem işaretini kaldır",
-  "mapShowPath": "Bu işlemin yolunu göster"
+  "mapShowPath": "Bu işlemin yolunu göster",
+  "navTemplates": "Şablonlar",
+  "navIncidents": "Olaylar"
 }

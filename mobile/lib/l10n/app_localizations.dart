@@ -2218,7 +2218,7 @@ abstract class L {
   /// No description provided for @navRules.
   ///
   /// In en, this message translates to:
-  /// **'Alert rules'**
+  /// **'Rules'**
   String get navRules;
 
   /// No description provided for @rulesEmpty.
@@ -3720,6 +3720,18 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Show this transaction\'s path'**
   String get mapShowPath;
+
+  /// No description provided for @navTemplates.
+  ///
+  /// In en, this message translates to:
+  /// **'Templates'**
+  String get navTemplates;
+
+  /// No description provided for @navIncidents.
+  ///
+  /// In en, this message translates to:
+  /// **'Incidents'**
+  String get navIncidents;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

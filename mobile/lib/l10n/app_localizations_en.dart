@@ -1188,7 +1188,7 @@ class LEn extends L {
   String get podMemory => 'Working set';
 
   @override
-  String get navRules => 'Alert rules';
+  String get navRules => 'Rules';
 
   @override
   String get rulesEmpty => 'No alert rule.';
@@ -2080,4 +2080,10 @@ class LEn extends L {
 
   @override
   String get mapShowPath => 'Show this transaction\'s path';
+
+  @override
+  String get navTemplates => 'Templates';
+
+  @override
+  String get navIncidents => 'Incidents';
 }

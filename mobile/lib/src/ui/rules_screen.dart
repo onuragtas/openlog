@@ -1,10 +1,10 @@
-// The alert rules, and the two writes worth making from a phone: turning a
-// noisy rule off, and adding one from a template.
+// The alert rules, and the one write worth making from a phone: turning a
+// noisy rule off.
 //
-// Editing an existing rule is still on the web: that form is a metric, an
+// Making one is the Şablonlar tab next door, as on the web; editing an
+// existing rule is still on the web, because that form is a metric, an
 // aggregation, a window and two thresholds, and three in the morning on a
-// phone is the worst place to fill it in. A template is the same rule with
-// those choices already made, which is a form a thumb can finish.
+// phone is the worst place to fill it in.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -12,7 +12,6 @@ import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'sections_screen.dart';
-import 'templates_screen.dart';
 import 'severity.dart';
 
 class RulesBody extends StatelessWidget {
@@ -47,20 +46,6 @@ class RulesBody extends StatelessWidget {
               L.of(context).ruleEditOnWeb,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('rules-new'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        TemplatesScreen(session: session, sections: sections),
-                  ),
-                ),
-                icon: const Icon(Icons.add),
-                label: Text(L.of(context).rulesNew),
               ),
             ),
           ],

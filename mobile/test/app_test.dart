@@ -1606,10 +1606,6 @@ void main() {
       'Dashboards': Key('dashboards-search'),
       'Inventory search': Key('inventory-category'),
       'Fleet': Key('fleet-search'),
-      'Alert rules': Key('rules-search'),
-      'Channels': Key('channels-search'),
-      'Mutes': Key('mutes-search'),
-      'Routing': Key('routes-order-note'),
       'Alerts': Key('alerts-body'),
       'Settings': Key('signed-in-as'),
     };
@@ -1653,6 +1649,30 @@ void main() {
     expect(find.byKey(const Key('incident-i1')), findsOneWidget);
   });
 
+  testWidgets('the alerts section has the web\'s tabs, in the web\'s order', (
+    tester,
+  ) async {
+    final s = ScriptedSession(stage: SessionStage.signedIn)..me = me();
+    await tester.pumpWidget(signedInApp(s));
+    await tester.pumpAndSettle();
+    await goTo(tester, 'Alerts');
+
+    // The web keeps all of this on one /alerts page. Four of these were
+    // drawer sections of their own here, which made the same product read
+    // as a different one.
+    final tabs = [
+      for (final w in tester.widgetList<Tab>(find.byType(Tab))) (w.text ?? ''),
+    ];
+    expect(tabs, [
+      'Incidents',
+      'Rules',
+      'Templates',
+      'Channels',
+      'Routing',
+      'Mutes',
+    ]);
+  });
+
   testWidgets('turning a rule off asks first, and says what else happens', (
     tester,
   ) async {
@@ -1660,7 +1680,10 @@ void main() {
     final r = ScriptedRules([rule('r1', openIncidents: 3)]);
     await tester.pumpWidget(signedInApp(s, rules: r));
     await tester.pumpAndSettle();
-    await goTo(tester, 'Alert rules');
+    await goTo(tester, 'Alerts');
+    // Rules are a tab of the alerts section, as on the web.
+    await tester.tap(find.byKey(const Key('alerts-tab-rules')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('rule-switch-r1')));
     await tester.pumpAndSettle();
@@ -1683,7 +1706,10 @@ void main() {
     final r = ScriptedRules([rule('r1')]);
     await tester.pumpWidget(signedInApp(s, rules: r));
     await tester.pumpAndSettle();
-    await goTo(tester, 'Alert rules');
+    await goTo(tester, 'Alerts');
+    // Rules are a tab of the alerts section, as on the web.
+    await tester.tap(find.byKey(const Key('alerts-tab-rules')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('rule-switch-r1')));
     await tester.pumpAndSettle();
@@ -1829,10 +1855,6 @@ void main() {
       'Dashboards',
       'Inventory search',
       'Fleet',
-      'Alert rules',
-      'Channels',
-      'Mutes',
-      'Routing',
       'Alerts',
       'Settings',
     ]);

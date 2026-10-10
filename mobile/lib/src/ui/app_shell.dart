@@ -5,17 +5,14 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../sections.dart';
 import '../session.dart';
-import 'alerts_screen.dart';
+import 'alerts_section.dart';
 import 'dashboards_screen.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'pod_screen.dart';
 import 'profiles_screen.dart';
 import 'query_screen.dart';
-import 'routes_screen.dart';
-import 'rules_screen.dart';
 import 'add_data_screen.dart';
-import 'channels_screen.dart';
 import 'container_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
@@ -23,7 +20,6 @@ import 'host_screen.dart';
 import 'integrations_screen.dart';
 import 'inventory_screen.dart';
 import 'metrics_screen.dart';
-import 'mutes_screen.dart';
 import 'rum_screen.dart';
 import 'traces_screen.dart';
 import 'sections_screen.dart';
@@ -49,6 +45,19 @@ class _AppShellState extends State<AppShell> {
   /// 12, 13, 14 as sections were added in the middle, and each time it was one
   /// more chance to open the app on the wrong screen.
   int _tab = navItems.length - 2;
+
+  /// Which tab of the alerts section is open, so the app bar's refresh
+  /// button reloads that one rather than all six.
+  int _alertsTab = 0;
+
+  VoidCallback _alertsRefresher(Sections s) => switch (_alertsTab) {
+    1 => s.rules.refresh,
+    2 => s.templates.refresh,
+    3 => s.channels.refresh,
+    4 => s.routes.refresh,
+    5 => s.mutes.refresh,
+    _ => s.alerts.refresh,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -78,10 +87,6 @@ class _AppShellState extends State<AppShell> {
       l.navDashboards,
       l.navInventory,
       l.navFleet,
-      l.navRules,
-      l.navChannels,
-      l.navMutes,
-      l.navRoutes,
       l.alertsTitle,
       l.navSettings,
     ];
@@ -107,11 +112,7 @@ class _AppShellState extends State<AppShell> {
       s.dashboards.refresh,
       s.inventory.refresh,
       s.fleet.refresh,
-      s.rules.refresh,
-      s.channels.refresh,
-      s.mutes.refresh,
-      s.routes.refresh,
-      s.alerts.refresh,
+      _alertsRefresher(s),
       null, // Settings reads what the session already knows.
     ];
 
@@ -319,18 +320,12 @@ class _AppShellState extends State<AppShell> {
       (active) => InventoryBody(session: session, sections: s, active: active),
     );
     add((active) => FleetBody(session: session, sections: s, active: active));
-    add((active) => RulesBody(session: session, sections: s, active: active));
     add(
-      (active) => ChannelsBody(session: session, sections: s, active: active),
-    );
-    add((active) => MutesBody(session: session, sections: s, active: active));
-    add((active) => RoutesBody(session: session, sections: s, active: active));
-    add(
-      (_) => AlertsBody(
-        key: const Key('alerts-body'),
+      (active) => AlertsSection(
         session: session,
         sections: s,
-        alerts: s.alerts,
+        active: active,
+        onTab: (i) => setState(() => _alertsTab = i),
       ),
     );
     add(

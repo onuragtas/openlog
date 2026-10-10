@@ -1184,7 +1184,7 @@ class LTr extends L {
   String get podMemory => 'Çalışma kümesi';
 
   @override
-  String get navRules => 'Alarm kuralları';
+  String get navRules => 'Kurallar';
 
   @override
   String get rulesEmpty => 'Alarm kuralı yok.';
@@ -2076,4 +2076,10 @@ class LTr extends L {
 
   @override
   String get mapShowPath => 'Bu işlemin yolunu göster';
+
+  @override
+  String get navTemplates => 'Şablonlar';
+
+  @override
+  String get navIncidents => 'Olaylar';
 }

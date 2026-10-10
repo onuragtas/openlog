@@ -382,6 +382,17 @@ parçası değil ve listede değil: `operator/*` (ayrı süper-yönetici konsolu
 
 Kalanlar, konu konu. Her satır bitince işaretlenir.
 
+### 9.0 Gezinme: webin kenar çubuğu ne ise o
+
+Sahibin uyarısı (2026-10-10): mobilin menüsü webde olmayan girişler taşıyordu. Menü insanların
+öğrendiği harita; fazladan odası olan bir harita başka bir bina demek. Düzeltildi:
+
+- [x] Kenar çubuğu webin 23 girişinin aynısı, aynı sırada (`web/src/components/AppShell.tsx`).
+- [x] Hatalar menüden çıktı; webdeki gibi APM (Servisler) ekranından açılıyor.
+- [x] Alarmlar tek giriş, içinde webin altı sekmesi: Olaylar, Kurallar, Şablonlar, Kanallar,
+      Yönlendirme, Susturmalar. Önce dördü ayrı menü girişiydi.
+- Bir test sekmelerin adını ve sırasını tutuyor; sırayı bozup kırmızıya döndüğünü gördüm.
+
 ### 9.1 Alarmlar
 - [x] Susturmalar (`alerts/mutes`): liste, süreli oluşturma, bitirme. Tekrarlayan takvim
       düzenleyicisi (`mutes/preview`, `AlertMuteScheduleInput`) hâlâ webde; okunuyor, yazılmıyor.

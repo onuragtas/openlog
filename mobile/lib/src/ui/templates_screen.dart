@@ -19,28 +19,42 @@ import 'failure_text.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 
-class TemplatesScreen extends StatefulWidget {
-  const TemplatesScreen({
+class TemplatesBody extends StatefulWidget {
+  const TemplatesBody({
     super.key,
     required this.session,
     required this.sections,
+    required this.active,
   });
 
   final SessionController session;
   final Sections sections;
 
+  /// Whether this is the tab being looked at. The catalog is asked for the
+  /// first time somebody looks, not when the alerts screen is built.
+  final bool active;
+
   @override
-  State<TemplatesScreen> createState() => _TemplatesScreenState();
+  State<TemplatesBody> createState() => _TemplatesBodyState();
 }
 
-class _TemplatesScreenState extends State<TemplatesScreen> {
+class _TemplatesBodyState extends State<TemplatesBody> {
   @override
   void initState() {
     super.initState();
+    _loadIfVisible();
+  }
+
+  @override
+  void didUpdateWidget(TemplatesBody old) {
+    super.didUpdateWidget(old);
+    _loadIfVisible();
+  }
+
+  void _loadIfVisible() {
     final c = widget.sections.templates;
-    if (!c.loaded && !c.loadingFirst) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
-    }
+    if (!widget.active || c.loaded || c.loadingFirst) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
   }
 
   String _categoryLabel(L l, String key) => switch (key) {
@@ -58,109 +72,96 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     final c = widget.sections.templates;
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l.templatesTitle),
-        actions: [
-          IconButton(
-            key: const Key('templates-refresh'),
-            tooltip: l.refresh,
-            onPressed: c.refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: ListenableBuilder(
-        listenable: c,
-        builder: (context, _) => Column(
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-              child: Row(
-                children: [
-                  for (final key in ['', ...templateCategories])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        key: Key(
-                          'templates-category-${key.isEmpty ? 'all' : key}',
-                        ),
-                        label: Text(_categoryLabel(l, key)),
-                        selected: c.category == key,
-                        onSelected: (_) {
-                          if (c.category == key) return;
-                          c.category = key;
-                          c.refresh();
-                        },
+    return ListenableBuilder(
+      listenable: c,
+      builder: (context, _) => Column(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+            child: Row(
+              children: [
+                for (final key in ['', ...templateCategories])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      key: Key(
+                        'templates-category-${key.isEmpty ? 'all' : key}',
                       ),
+                      label: Text(_categoryLabel(l, key)),
+                      selected: c.category == key,
+                      onSelected: (_) {
+                        if (c.category == key) return;
+                        c.category = key;
+                        c.refresh();
+                      },
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: FailureBanner(
+              failure: c.failure,
+              baseUrl: widget.session.baseUrl ?? '',
+            ),
+          ),
+          if (c.unavailable.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FailureBanner(
-                failure: c.failure,
-                baseUrl: widget.session.baseUrl ?? '',
-              ),
-            ),
-            if (c.unavailable.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Text(
-                  // Named with the server's reason: "no rule of that type"
-                  // is a thing to know before setting one up, and the reason
-                  // is the server's to give.
-                  l.templatesUnavailable(
-                    [
-                      for (final t in c.unavailable)
-                        t.reason.isEmpty
-                            ? t.type.wire
-                            : '${t.type.wire} (${t.reason})',
-                    ].join(', '),
-                  ),
-                  key: const Key('templates-unavailable'),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Text(
+                // Named with the server's reason: "no rule of that type"
+                // is a thing to know before setting one up, and the reason
+                // is the server's to give.
+                l.templatesUnavailable(
+                  [
+                    for (final t in c.unavailable)
+                      t.reason.isEmpty
+                          ? t.type.wire
+                          : '${t.type.wire} (${t.reason})',
+                  ].join(', '),
+                ),
+                key: const Key('templates-unavailable'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            Expanded(
-              child: c.loadingFirst
-                  ? const Center(child: CircularProgressIndicator())
-                  : c.items.isEmpty
-                  ? Center(
-                      child: Text(
-                        l.templatesEmpty,
-                        key: const Key('templates-empty'),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+            ),
+          Expanded(
+            child: c.loadingFirst
+                ? const Center(child: CircularProgressIndicator())
+                : c.items.isEmpty
+                ? Center(
+                    child: Text(
+                      l.templatesEmpty,
+                      key: const Key('templates-empty'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: c.refresh,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 28),
-                        itemCount: c.items.length,
-                        itemBuilder: (context, i) => _TemplateCard(
-                          template: c.items[i],
-                          onOpen: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => TemplateSetupScreen(
-                                session: widget.session,
-                                sections: widget.sections,
-                                template: c.items[i],
-                              ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: c.refresh,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 28),
+                      itemCount: c.items.length,
+                      itemBuilder: (context, i) => _TemplateCard(
+                        template: c.items[i],
+                        onOpen: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => TemplateSetupScreen(
+                              session: widget.session,
+                              sections: widget.sections,
+                              template: c.items[i],
                             ),
                           ),
                         ),
                       ),
                     ),
-            ),
-          ],
-        ),
+                  ),
+          ),
+        ],
       ),
     );
   }
