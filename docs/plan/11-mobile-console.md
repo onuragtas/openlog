@@ -405,7 +405,9 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
 - [x] Ajanlar (`apm/agents`): servisler listesinden; servis × ajan × sürüm başına bir satır,
       geride olanlar üstte, arama ve "yalnızca geride olanlar". Yükseltme komutları webde
       (`upgrade=true` sunucuya her servis için paket deposu sorgulatıyor).
-- [ ] Örnekleme ayarları (`apm/sampling`, `.../preview`)
+- [x] Örnekleme ayarları (`apm/sampling`, `.../preview`): servisler listesinden; taban oran,
+      span hızı, beş türün hepsiyle kural ekleme/düzenleme/sıralama, tahmin ve sürümlü kayıt
+      (409'da taslak korunuyor).
 - [x] Servis izleri (`apm/traces`): servis ekranında üçüncü sekme; işlem, en az/en çok süre,
       öznitelik (`attr.k=v`), yalnızca hatalılar ve sıralama süzgeçleriyle.
 

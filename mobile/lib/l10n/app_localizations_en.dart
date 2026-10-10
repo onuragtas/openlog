@@ -1860,4 +1860,162 @@ class LEn extends L {
 
   @override
   String get serviceTabTraces => 'Traces';
+
+  @override
+  String get samplingTitle => 'Sampling';
+
+  @override
+  String get samplingOffHere =>
+      'Tail sampling is off on this server; the policy is stored but not applied.';
+
+  @override
+  String get samplingDefault =>
+      'No policy is stored; the server\'s default is shown.';
+
+  @override
+  String samplingUpdated(String when, String email) {
+    return 'updated $when by $email';
+  }
+
+  @override
+  String get samplingEnabled => 'Policy active';
+
+  @override
+  String get samplingEnabledHint =>
+      'Off keeps every trace; the policy stays but drops nothing.';
+
+  @override
+  String get samplingBaseline => 'Baseline ratio';
+
+  @override
+  String get samplingBaselineHint =>
+      'The share kept of traces that match no rule.';
+
+  @override
+  String get samplingMaxSpans => 'Max spans per second';
+
+  @override
+  String get samplingMaxSpansHint => 'Per sampler instance; 0 means unlimited.';
+
+  @override
+  String get samplingPercentRange => 'Enter a percentage between 0 and 100.';
+
+  @override
+  String get samplingRules => 'Rules';
+
+  @override
+  String get samplingOrder =>
+      'Tried in order; the first matching rule decides the ratio. Drag to reorder.';
+
+  @override
+  String get samplingNoRules => 'No rules; every trace falls to the baseline.';
+
+  @override
+  String get samplingAddRule => 'Add rule';
+
+  @override
+  String get samplingEditRule => 'Edit rule';
+
+  @override
+  String get samplingRuleName => 'Name';
+
+  @override
+  String get samplingRuleType => 'Type';
+
+  @override
+  String get samplingRuleRatio => 'Keep ratio';
+
+  @override
+  String get samplingRuleThreshold => 'Threshold (ms)';
+
+  @override
+  String get samplingRuleServices => 'Services';
+
+  @override
+  String get samplingRuleServicesHint => 'Comma separated.';
+
+  @override
+  String get samplingRuleService => 'Service (optional)';
+
+  @override
+  String get samplingRuleServiceHint =>
+      'Filled in, the rule looks only at this service\'s spans.';
+
+  @override
+  String get samplingRuleRoute => 'Route';
+
+  @override
+  String get samplingRuleRouteHint =>
+      'Glob on http.route; a trailing * is a prefix match.';
+
+  @override
+  String get samplingRuleKey => 'Attribute key';
+
+  @override
+  String get samplingRuleValue => 'Value (optional)';
+
+  @override
+  String get samplingRuleValueHint =>
+      'Left empty, the key only has to be present.';
+
+  @override
+  String get samplingTypeError => 'failed traces';
+
+  @override
+  String get samplingTypeLatency => 'slow traces';
+
+  @override
+  String get samplingTypeService => 'by service';
+
+  @override
+  String get samplingTypeRoute => 'by route';
+
+  @override
+  String get samplingTypeAttribute => 'by attribute';
+
+  @override
+  String samplingOverMs(int ms) {
+    return 'over $ms ms';
+  }
+
+  @override
+  String samplingKeepRatio(String percent) {
+    return 'keeps $percent%';
+  }
+
+  @override
+  String samplingMatched(String percent) {
+    return 'matched $percent% of traces in the last estimate';
+  }
+
+  @override
+  String get samplingEstimate => 'Estimate';
+
+  @override
+  String get samplingSave => 'Save';
+
+  @override
+  String samplingKeeps(String traces, String spans) {
+    return '$traces% of traces and $spans% of spans would be kept.';
+  }
+
+  @override
+  String samplingExamined(int count, int minutes) {
+    return '$count traces in the last $minutes minutes were examined.';
+  }
+
+  @override
+  String get samplingNoRateLimit =>
+      'The rate limit is not part of this estimate.';
+
+  @override
+  String get samplingConflict =>
+      'Somebody else saved while you were editing; reload and try again.';
+
+  @override
+  String get samplingUnavailable =>
+      'This installation cannot store a sampling policy.';
+
+  @override
+  String get servicesSampling => 'Sampling';
 }

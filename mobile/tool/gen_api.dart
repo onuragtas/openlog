@@ -38,6 +38,8 @@ const schemaTargets = <String>[
   'AlertTemplate', // the recommended rules, which is how a rule gets made on a phone
   'AlertTemplateRender', // a template plus its values, as a rule nobody has stored yet
   'AlertRulePreview', // what that rule would have done over the last few hours
+  'TailSamplingPolicyState', // which traces are kept, and which are thrown away
+  'TailSamplingPreview', // what a policy nobody saved yet would keep
   'ApmService', // where to look after an alert: which service, how healthy
   'ApmOverview', // that service's golden signals, so the alert gets a shape
   'ApmErrorInbox', // what is actually breaking in that service

@@ -1232,5 +1232,101 @@
   "tracesAttributesHint": "key=value, separated by spaces; at most 10.",
   "tracesErrorsOnly": "Errors only",
   "tracesSearch": "Search",
-  "serviceTabTraces": "Traces"
+  "serviceTabTraces": "Traces",
+  "samplingTitle": "Sampling",
+  "samplingOffHere": "Tail sampling is off on this server; the policy is stored but not applied.",
+  "samplingDefault": "No policy is stored; the server's default is shown.",
+  "samplingUpdated": "updated {when} by {email}",
+  "@samplingUpdated": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingEnabled": "Policy active",
+  "samplingEnabledHint": "Off keeps every trace; the policy stays but drops nothing.",
+  "samplingBaseline": "Baseline ratio",
+  "samplingBaselineHint": "The share kept of traces that match no rule.",
+  "samplingMaxSpans": "Max spans per second",
+  "samplingMaxSpansHint": "Per sampler instance; 0 means unlimited.",
+  "samplingPercentRange": "Enter a percentage between 0 and 100.",
+  "samplingRules": "Rules",
+  "samplingOrder": "Tried in order; the first matching rule decides the ratio. Drag to reorder.",
+  "samplingNoRules": "No rules; every trace falls to the baseline.",
+  "samplingAddRule": "Add rule",
+  "samplingEditRule": "Edit rule",
+  "samplingRuleName": "Name",
+  "samplingRuleType": "Type",
+  "samplingRuleRatio": "Keep ratio",
+  "samplingRuleThreshold": "Threshold (ms)",
+  "samplingRuleServices": "Services",
+  "samplingRuleServicesHint": "Comma separated.",
+  "samplingRuleService": "Service (optional)",
+  "samplingRuleServiceHint": "Filled in, the rule looks only at this service's spans.",
+  "samplingRuleRoute": "Route",
+  "samplingRuleRouteHint": "Glob on http.route; a trailing * is a prefix match.",
+  "samplingRuleKey": "Attribute key",
+  "samplingRuleValue": "Value (optional)",
+  "samplingRuleValueHint": "Left empty, the key only has to be present.",
+  "samplingTypeError": "failed traces",
+  "samplingTypeLatency": "slow traces",
+  "samplingTypeService": "by service",
+  "samplingTypeRoute": "by route",
+  "samplingTypeAttribute": "by attribute",
+  "samplingOverMs": "over {ms} ms",
+  "@samplingOverMs": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "samplingKeepRatio": "keeps {percent}%",
+  "@samplingKeepRatio": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingMatched": "matched {percent}% of traces in the last estimate",
+  "@samplingMatched": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingEstimate": "Estimate",
+  "samplingSave": "Save",
+  "samplingKeeps": "{traces}% of traces and {spans}% of spans would be kept.",
+  "@samplingKeeps": {
+    "placeholders": {
+      "traces": {
+        "type": "String"
+      },
+      "spans": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingExamined": "{count} traces in the last {minutes} minutes were examined.",
+  "@samplingExamined": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "samplingNoRateLimit": "The rate limit is not part of this estimate.",
+  "samplingConflict": "Somebody else saved while you were editing; reload and try again.",
+  "samplingUnavailable": "This installation cannot store a sampling policy.",
+  "servicesSampling": "Sampling"
 }

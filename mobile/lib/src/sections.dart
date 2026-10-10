@@ -18,6 +18,7 @@ import 'list_controller.dart';
 import 'logs.dart';
 import 'session.dart';
 import 'query.dart';
+import 'sampling.dart';
 import 'templates.dart';
 import 'services.dart';
 
@@ -64,6 +65,7 @@ class Sections {
     AlertCalendarsController? calendars,
     AlertDeliveriesController Function(String channelId)? deliveries,
     ApmAgentsController? agents,
+    SamplingController Function()? sampling,
     ErrorInboxController? errors,
     ErrorGroupController Function(ApmErrorGroup group)? errorGroup,
     TemplatesController? templates,
@@ -157,6 +159,7 @@ class Sections {
            ((channelId) =>
                AlertDeliveriesController(client, channelId: channelId)),
        agents = agents ?? ApmAgentsController(client),
+       sampling = sampling ?? (() => SamplingController(client)),
        errors = errors ?? ErrorInboxController(client),
        errorGroup =
            errorGroup ?? ((group) => ErrorGroupController(client, group)),
@@ -214,6 +217,10 @@ class Sections {
   /// Which language agent each service runs, reached from the services
   /// list as on the web.
   final ApmAgentsController agents;
+
+  /// The tail sampling policy. A controller per screen: it holds a draft
+  /// somebody is editing, which has no business outliving the screen.
+  final SamplingController Function() sampling;
 
   /// The error inbox of every service, and one group's comments and
   /// actions. The group controller is per screen: it holds the comments of

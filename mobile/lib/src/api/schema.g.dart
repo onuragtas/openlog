@@ -1659,6 +1659,34 @@ enum AlertRouteWindowDaysItem {
   }
 }
 
+/// TailSamplingRuleType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum TailSamplingRuleType {
+  error('error'),
+  latency('latency'),
+  service('service'),
+  route('route'),
+  attribute('attribute'),
+  unknown('');
+
+  const TailSamplingRuleType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static TailSamplingRuleType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// DashboardVisualization of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -3391,6 +3419,141 @@ class AlertRulePreview {
   final List<AlertPreviewSeries> series;
   final bool truncated;
   final bool approximate;
+}
+
+/// `TailSamplingPolicyState` of the openlog API contract.
+class TailSamplingPolicyState {
+  const TailSamplingPolicyState({
+    required this.enabled,
+    required this.policy,
+    required this.isDefault,
+    required this.version,
+    this.updatedAt,
+    required this.updatedByEmail,
+  });
+
+  factory TailSamplingPolicyState.fromJson(
+    Object? json, [
+    String path = 'TailSamplingPolicyState',
+  ]) {
+    final m = _obj(json, path);
+    return TailSamplingPolicyState(
+      enabled: _req(m, 'enabled', path, _bool),
+      policy: _req(
+        m,
+        'policy',
+        path,
+        (v, p) => TailSamplingPolicy.fromJson(v, p),
+      ),
+      isDefault: _req(m, 'is_default', path, _bool),
+      version: _req(m, 'version', path, _int),
+      updatedAt: _opt(m, 'updated_at', path, _time),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'enabled': enabled,
+    'policy': policy.toJson(),
+    'is_default': isDefault,
+    'version': version,
+    if (updatedAt != null) 'updated_at': updatedAt!.toUtc().toIso8601String(),
+    'updated_by_email': updatedByEmail,
+  };
+
+  final bool enabled;
+  final TailSamplingPolicy policy;
+  final bool isDefault;
+  final int version;
+  final DateTime? updatedAt;
+  final String updatedByEmail;
+}
+
+/// `TailSamplingPreview` of the openlog API contract.
+class TailSamplingPreview {
+  const TailSamplingPreview({
+    required this.windowMinutes,
+    required this.tracesExamined,
+    required this.sampledFraction,
+    required this.estimatedTraces,
+    required this.keptTraceRatio,
+    required this.keptSpanRatio,
+    required this.rules,
+  });
+
+  factory TailSamplingPreview.fromJson(
+    Object? json, [
+    String path = 'TailSamplingPreview',
+  ]) {
+    final m = _obj(json, path);
+    return TailSamplingPreview(
+      windowMinutes: _req(m, 'window_minutes', path, _int),
+      tracesExamined: _req(m, 'traces_examined', path, _int),
+      sampledFraction: _req(m, 'sampled_fraction', path, _num),
+      estimatedTraces: _req(m, 'estimated_traces', path, _num),
+      keptTraceRatio: _req(m, 'kept_trace_ratio', path, _num),
+      keptSpanRatio: _req(m, 'kept_span_ratio', path, _num),
+      rules: _req(
+        m,
+        'rules',
+        path,
+        (v, p) => _list<TailSamplingPreviewRulesItem>(
+          v,
+          p,
+          (v, p) => TailSamplingPreviewRulesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'window_minutes': windowMinutes,
+    'traces_examined': tracesExamined,
+    'sampled_fraction': sampledFraction,
+    'estimated_traces': estimatedTraces,
+    'kept_trace_ratio': keptTraceRatio,
+    'kept_span_ratio': keptSpanRatio,
+    'rules': [for (final e in rules) e.toJson()],
+  };
+
+  final int windowMinutes;
+  final int tracesExamined;
+  final double sampledFraction;
+  final double estimatedTraces;
+  final double keptTraceRatio;
+  final double keptSpanRatio;
+  final List<TailSamplingPreviewRulesItem> rules;
+}
+
+/// `TailSamplingPreviewRulesItem` of the openlog API contract.
+class TailSamplingPreviewRulesItem {
+  const TailSamplingPreviewRulesItem({
+    required this.name,
+    required this.matchedTraceRatio,
+    required this.keptTraceRatio,
+  });
+
+  factory TailSamplingPreviewRulesItem.fromJson(
+    Object? json, [
+    String path = 'TailSamplingPreviewRulesItem',
+  ]) {
+    final m = _obj(json, path);
+    return TailSamplingPreviewRulesItem(
+      name: _req(m, 'name', path, _str),
+      matchedTraceRatio: _req(m, 'matched_trace_ratio', path, _num),
+      keptTraceRatio: _req(m, 'kept_trace_ratio', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'matched_trace_ratio': matchedTraceRatio,
+    'kept_trace_ratio': keptTraceRatio,
+  };
+
+  final String name;
+  final double matchedTraceRatio;
+  final double keptTraceRatio;
 }
 
 /// `ApmService` of the openlog API contract.
@@ -6468,6 +6631,50 @@ class AlertPreviewSeriesIncidentsItem {
   final double? peak;
 }
 
+/// `TailSamplingPolicy` of the openlog API contract.
+class TailSamplingPolicy {
+  const TailSamplingPolicy({
+    required this.enabled,
+    required this.baselineRatio,
+    required this.maxSpansPerSecond,
+    required this.rules,
+  });
+
+  factory TailSamplingPolicy.fromJson(
+    Object? json, [
+    String path = 'TailSamplingPolicy',
+  ]) {
+    final m = _obj(json, path);
+    return TailSamplingPolicy(
+      enabled: _req(m, 'enabled', path, _bool),
+      baselineRatio: _req(m, 'baseline_ratio', path, _num),
+      maxSpansPerSecond: _req(m, 'max_spans_per_second', path, _num),
+      rules: _req(
+        m,
+        'rules',
+        path,
+        (v, p) => _list<TailSamplingRule>(
+          v,
+          p,
+          (v, p) => TailSamplingRule.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'enabled': enabled,
+    'baseline_ratio': baselineRatio,
+    'max_spans_per_second': maxSpansPerSecond,
+    'rules': [for (final e in rules) e.toJson()],
+  };
+
+  final bool enabled;
+  final double baselineRatio;
+  final double maxSpansPerSecond;
+  final List<TailSamplingRule> rules;
+}
+
 /// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
 class ApmRed {
   const ApmRed({
@@ -8006,6 +8213,61 @@ class AlertRouteWindow {
   final List<AlertRouteWindowDaysItem>? days;
   final String startTime;
   final String endTime;
+}
+
+/// One rule of a tail sampling policy; the first matching rule gives the keep ratio (apm.md §4.2).
+class TailSamplingRule {
+  const TailSamplingRule({
+    required this.name,
+    required this.type,
+    this.ratio,
+    this.thresholdMs,
+    this.service,
+    this.services,
+    this.route,
+    this.key,
+    this.value,
+  });
+
+  factory TailSamplingRule.fromJson(
+    Object? json, [
+    String path = 'TailSamplingRule',
+  ]) {
+    final m = _obj(json, path);
+    return TailSamplingRule(
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, TailSamplingRuleType.fromJson),
+      ratio: _opt(m, 'ratio', path, _num),
+      thresholdMs: _opt(m, 'threshold_ms', path, _int),
+      service: _opt(m, 'service', path, _str),
+      services: _opt(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
+      route: _opt(m, 'route', path, _str),
+      key: _opt(m, 'key', path, _str),
+      value: _opt(m, 'value', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.wire,
+    'ratio': ?ratio,
+    'threshold_ms': ?thresholdMs,
+    'service': ?service,
+    'services': ?services,
+    'route': ?route,
+    'key': ?key,
+    'value': ?value,
+  };
+
+  final String name;
+  final TailSamplingRuleType type;
+  final double? ratio;
+  final int? thresholdMs;
+  final String? service;
+  final List<String>? services;
+  final String? route;
+  final String? key;
+  final String? value;
 }
 
 /// `ApmErrorAssignee` of the openlog API contract.

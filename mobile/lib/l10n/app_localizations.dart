@@ -3348,6 +3348,276 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Traces'**
   String get serviceTabTraces;
+
+  /// No description provided for @samplingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sampling'**
+  String get samplingTitle;
+
+  /// No description provided for @samplingOffHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Tail sampling is off on this server; the policy is stored but not applied.'**
+  String get samplingOffHere;
+
+  /// No description provided for @samplingDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'No policy is stored; the server\'s default is shown.'**
+  String get samplingDefault;
+
+  /// No description provided for @samplingUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'updated {when} by {email}'**
+  String samplingUpdated(String when, String email);
+
+  /// No description provided for @samplingEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Policy active'**
+  String get samplingEnabled;
+
+  /// No description provided for @samplingEnabledHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Off keeps every trace; the policy stays but drops nothing.'**
+  String get samplingEnabledHint;
+
+  /// No description provided for @samplingBaseline.
+  ///
+  /// In en, this message translates to:
+  /// **'Baseline ratio'**
+  String get samplingBaseline;
+
+  /// No description provided for @samplingBaselineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The share kept of traces that match no rule.'**
+  String get samplingBaselineHint;
+
+  /// No description provided for @samplingMaxSpans.
+  ///
+  /// In en, this message translates to:
+  /// **'Max spans per second'**
+  String get samplingMaxSpans;
+
+  /// No description provided for @samplingMaxSpansHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Per sampler instance; 0 means unlimited.'**
+  String get samplingMaxSpansHint;
+
+  /// No description provided for @samplingPercentRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a percentage between 0 and 100.'**
+  String get samplingPercentRange;
+
+  /// No description provided for @samplingRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get samplingRules;
+
+  /// No description provided for @samplingOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Tried in order; the first matching rule decides the ratio. Drag to reorder.'**
+  String get samplingOrder;
+
+  /// No description provided for @samplingNoRules.
+  ///
+  /// In en, this message translates to:
+  /// **'No rules; every trace falls to the baseline.'**
+  String get samplingNoRules;
+
+  /// No description provided for @samplingAddRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Add rule'**
+  String get samplingAddRule;
+
+  /// No description provided for @samplingEditRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit rule'**
+  String get samplingEditRule;
+
+  /// No description provided for @samplingRuleName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get samplingRuleName;
+
+  /// No description provided for @samplingRuleType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get samplingRuleType;
+
+  /// No description provided for @samplingRuleRatio.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep ratio'**
+  String get samplingRuleRatio;
+
+  /// No description provided for @samplingRuleThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Threshold (ms)'**
+  String get samplingRuleThreshold;
+
+  /// No description provided for @samplingRuleServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get samplingRuleServices;
+
+  /// No description provided for @samplingRuleServicesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma separated.'**
+  String get samplingRuleServicesHint;
+
+  /// No description provided for @samplingRuleService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service (optional)'**
+  String get samplingRuleService;
+
+  /// No description provided for @samplingRuleServiceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in, the rule looks only at this service\'s spans.'**
+  String get samplingRuleServiceHint;
+
+  /// No description provided for @samplingRuleRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get samplingRuleRoute;
+
+  /// No description provided for @samplingRuleRouteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Glob on http.route; a trailing * is a prefix match.'**
+  String get samplingRuleRouteHint;
+
+  /// No description provided for @samplingRuleKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Attribute key'**
+  String get samplingRuleKey;
+
+  /// No description provided for @samplingRuleValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Value (optional)'**
+  String get samplingRuleValue;
+
+  /// No description provided for @samplingRuleValueHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Left empty, the key only has to be present.'**
+  String get samplingRuleValueHint;
+
+  /// No description provided for @samplingTypeError.
+  ///
+  /// In en, this message translates to:
+  /// **'failed traces'**
+  String get samplingTypeError;
+
+  /// No description provided for @samplingTypeLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'slow traces'**
+  String get samplingTypeLatency;
+
+  /// No description provided for @samplingTypeService.
+  ///
+  /// In en, this message translates to:
+  /// **'by service'**
+  String get samplingTypeService;
+
+  /// No description provided for @samplingTypeRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'by route'**
+  String get samplingTypeRoute;
+
+  /// No description provided for @samplingTypeAttribute.
+  ///
+  /// In en, this message translates to:
+  /// **'by attribute'**
+  String get samplingTypeAttribute;
+
+  /// No description provided for @samplingOverMs.
+  ///
+  /// In en, this message translates to:
+  /// **'over {ms} ms'**
+  String samplingOverMs(int ms);
+
+  /// No description provided for @samplingKeepRatio.
+  ///
+  /// In en, this message translates to:
+  /// **'keeps {percent}%'**
+  String samplingKeepRatio(String percent);
+
+  /// No description provided for @samplingMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'matched {percent}% of traces in the last estimate'**
+  String samplingMatched(String percent);
+
+  /// No description provided for @samplingEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate'**
+  String get samplingEstimate;
+
+  /// No description provided for @samplingSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get samplingSave;
+
+  /// No description provided for @samplingKeeps.
+  ///
+  /// In en, this message translates to:
+  /// **'{traces}% of traces and {spans}% of spans would be kept.'**
+  String samplingKeeps(String traces, String spans);
+
+  /// No description provided for @samplingExamined.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} traces in the last {minutes} minutes were examined.'**
+  String samplingExamined(int count, int minutes);
+
+  /// No description provided for @samplingNoRateLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'The rate limit is not part of this estimate.'**
+  String get samplingNoRateLimit;
+
+  /// No description provided for @samplingConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Somebody else saved while you were editing; reload and try again.'**
+  String get samplingConflict;
+
+  /// No description provided for @samplingUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation cannot store a sampling policy.'**
+  String get samplingUnavailable;
+
+  /// No description provided for @servicesSampling.
+  ///
+  /// In en, this message translates to:
+  /// **'Sampling'**
+  String get servicesSampling;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

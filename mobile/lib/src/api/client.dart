@@ -599,6 +599,42 @@ class OpenlogClient {
     ),
   );
 
+  /// Which traces are kept and which are thrown away.
+  Future<TailSamplingPolicyState> tailSampling() async =>
+      TailSamplingPolicyState.fromJson(
+        await _send('GET', '/api/v1/apm/sampling'),
+      );
+
+  /// Stores a policy.
+  ///
+  /// [version] is the version that was edited (0 when nothing is stored);
+  /// the server answers 409 when somebody else saved in the meantime, which
+  /// is the point of sending it.
+  Future<TailSamplingPolicyState> putTailSampling(
+    TailSamplingPolicy policy, {
+    required int version,
+  }) async => TailSamplingPolicyState.fromJson(
+    await _send(
+      'PUT',
+      '/api/v1/apm/sampling',
+      body: {'policy': policy.toJson(), 'version': version},
+    ),
+  );
+
+  /// What a policy nobody saved yet would keep, from the traces already
+  /// stored. Rate limits are not simulated, so `max_spans_per_second` does
+  /// not show up in the answer.
+  Future<TailSamplingPreview> previewTailSampling(
+    TailSamplingPolicy policy, {
+    int windowMinutes = 60,
+  }) async => TailSamplingPreview.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/apm/sampling/preview',
+      body: {'policy': policy.toJson(), 'window_minutes': windowMinutes},
+    ),
+  );
+
   /// Which language agent each service runs, and how far behind it is.
   ///
   /// `upgrade=false`: the upgrade commands make the server check package

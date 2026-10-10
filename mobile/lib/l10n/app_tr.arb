@@ -1135,5 +1135,101 @@
   "tracesAttributesHint": "anahtar=değer, boşlukla ayrılmış; en fazla 10 tane.",
   "tracesErrorsOnly": "Yalnızca hatalılar",
   "tracesSearch": "Ara",
-  "serviceTabTraces": "İzler"
+  "serviceTabTraces": "İzler",
+  "samplingTitle": "Örnekleme",
+  "samplingOffHere": "Bu sunucuda kuyruk örnekleme kapalı; ilke saklanır ama uygulanmaz.",
+  "samplingDefault": "Kayıtlı ilke yok; sunucunun varsayılanı gösteriliyor.",
+  "samplingUpdated": "{when}, {email} tarafından güncellendi",
+  "@samplingUpdated": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      },
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingEnabled": "İlke etkin",
+  "samplingEnabledHint": "Kapalıyken her iz saklanır; ilke durur ama hiçbir şeyi elemez.",
+  "samplingBaseline": "Taban oran",
+  "samplingBaselineHint": "Hiçbir kurala uymayan izlerden saklanan oran.",
+  "samplingMaxSpans": "Saniyede en çok span",
+  "samplingMaxSpansHint": "Örnekleyici örneği başına; 0 sınırsız demek.",
+  "samplingPercentRange": "0 ile 100 arasında bir yüzde girin.",
+  "samplingRules": "Kurallar",
+  "samplingOrder": "Sırayla denenir; ilk uyan kuralın oranı geçerli olur. Sıralamak için sürükleyin.",
+  "samplingNoRules": "Kural yok; her iz taban orana tabi.",
+  "samplingAddRule": "Kural ekle",
+  "samplingEditRule": "Kuralı düzenle",
+  "samplingRuleName": "Ad",
+  "samplingRuleType": "Tür",
+  "samplingRuleRatio": "Saklama oranı",
+  "samplingRuleThreshold": "Eşik (ms)",
+  "samplingRuleServices": "Servisler",
+  "samplingRuleServicesHint": "Virgülle ayrılmış.",
+  "samplingRuleService": "Servis (isteğe bağlı)",
+  "samplingRuleServiceHint": "Doldurulursa kural yalnızca bu servisin span'lerine bakar.",
+  "samplingRuleRoute": "Rota",
+  "samplingRuleRouteHint": "http.route üzerinde glob; sonda * önek eşleşmesi.",
+  "samplingRuleKey": "Öznitelik anahtarı",
+  "samplingRuleValue": "Değer (isteğe bağlı)",
+  "samplingRuleValueHint": "Boş bırakılırsa anahtarın var olması yeter.",
+  "samplingTypeError": "hatalı izler",
+  "samplingTypeLatency": "yavaş izler",
+  "samplingTypeService": "servise göre",
+  "samplingTypeRoute": "rotaya göre",
+  "samplingTypeAttribute": "özniteliğe göre",
+  "samplingOverMs": "{ms} ms üstü",
+  "@samplingOverMs": {
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "samplingKeepRatio": "%{percent} saklanır",
+  "@samplingKeepRatio": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingMatched": "son tahminde izlerin %{percent}'i uydu",
+  "@samplingMatched": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingEstimate": "Tahmin et",
+  "samplingSave": "Kaydet",
+  "samplingKeeps": "İzlerin %{traces}'i, span'lerin %{spans}'i saklanırdı.",
+  "@samplingKeeps": {
+    "placeholders": {
+      "traces": {
+        "type": "String"
+      },
+      "spans": {
+        "type": "String"
+      }
+    }
+  },
+  "samplingExamined": "Son {minutes} dakikadaki {count} iz incelendi.",
+  "@samplingExamined": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "samplingNoRateLimit": "Hız sınırı bu tahmine dahil değil.",
+  "samplingConflict": "Siz düzenlerken başkası kaydetti; yeniden yükleyip tekrar deneyin.",
+  "samplingUnavailable": "Bu kurulumda örnekleme ilkesi saklanamıyor.",
+  "servicesSampling": "Örnekleme"
 }

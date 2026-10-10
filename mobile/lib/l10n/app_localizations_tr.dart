@@ -1855,4 +1855,162 @@ class LTr extends L {
 
   @override
   String get serviceTabTraces => 'İzler';
+
+  @override
+  String get samplingTitle => 'Örnekleme';
+
+  @override
+  String get samplingOffHere =>
+      'Bu sunucuda kuyruk örnekleme kapalı; ilke saklanır ama uygulanmaz.';
+
+  @override
+  String get samplingDefault =>
+      'Kayıtlı ilke yok; sunucunun varsayılanı gösteriliyor.';
+
+  @override
+  String samplingUpdated(String when, String email) {
+    return '$when, $email tarafından güncellendi';
+  }
+
+  @override
+  String get samplingEnabled => 'İlke etkin';
+
+  @override
+  String get samplingEnabledHint =>
+      'Kapalıyken her iz saklanır; ilke durur ama hiçbir şeyi elemez.';
+
+  @override
+  String get samplingBaseline => 'Taban oran';
+
+  @override
+  String get samplingBaselineHint =>
+      'Hiçbir kurala uymayan izlerden saklanan oran.';
+
+  @override
+  String get samplingMaxSpans => 'Saniyede en çok span';
+
+  @override
+  String get samplingMaxSpansHint =>
+      'Örnekleyici örneği başına; 0 sınırsız demek.';
+
+  @override
+  String get samplingPercentRange => '0 ile 100 arasında bir yüzde girin.';
+
+  @override
+  String get samplingRules => 'Kurallar';
+
+  @override
+  String get samplingOrder =>
+      'Sırayla denenir; ilk uyan kuralın oranı geçerli olur. Sıralamak için sürükleyin.';
+
+  @override
+  String get samplingNoRules => 'Kural yok; her iz taban orana tabi.';
+
+  @override
+  String get samplingAddRule => 'Kural ekle';
+
+  @override
+  String get samplingEditRule => 'Kuralı düzenle';
+
+  @override
+  String get samplingRuleName => 'Ad';
+
+  @override
+  String get samplingRuleType => 'Tür';
+
+  @override
+  String get samplingRuleRatio => 'Saklama oranı';
+
+  @override
+  String get samplingRuleThreshold => 'Eşik (ms)';
+
+  @override
+  String get samplingRuleServices => 'Servisler';
+
+  @override
+  String get samplingRuleServicesHint => 'Virgülle ayrılmış.';
+
+  @override
+  String get samplingRuleService => 'Servis (isteğe bağlı)';
+
+  @override
+  String get samplingRuleServiceHint =>
+      'Doldurulursa kural yalnızca bu servisin span\'lerine bakar.';
+
+  @override
+  String get samplingRuleRoute => 'Rota';
+
+  @override
+  String get samplingRuleRouteHint =>
+      'http.route üzerinde glob; sonda * önek eşleşmesi.';
+
+  @override
+  String get samplingRuleKey => 'Öznitelik anahtarı';
+
+  @override
+  String get samplingRuleValue => 'Değer (isteğe bağlı)';
+
+  @override
+  String get samplingRuleValueHint =>
+      'Boş bırakılırsa anahtarın var olması yeter.';
+
+  @override
+  String get samplingTypeError => 'hatalı izler';
+
+  @override
+  String get samplingTypeLatency => 'yavaş izler';
+
+  @override
+  String get samplingTypeService => 'servise göre';
+
+  @override
+  String get samplingTypeRoute => 'rotaya göre';
+
+  @override
+  String get samplingTypeAttribute => 'özniteliğe göre';
+
+  @override
+  String samplingOverMs(int ms) {
+    return '$ms ms üstü';
+  }
+
+  @override
+  String samplingKeepRatio(String percent) {
+    return '%$percent saklanır';
+  }
+
+  @override
+  String samplingMatched(String percent) {
+    return 'son tahminde izlerin %$percent\'i uydu';
+  }
+
+  @override
+  String get samplingEstimate => 'Tahmin et';
+
+  @override
+  String get samplingSave => 'Kaydet';
+
+  @override
+  String samplingKeeps(String traces, String spans) {
+    return 'İzlerin %$traces\'i, span\'lerin %$spans\'i saklanırdı.';
+  }
+
+  @override
+  String samplingExamined(int count, int minutes) {
+    return 'Son $minutes dakikadaki $count iz incelendi.';
+  }
+
+  @override
+  String get samplingNoRateLimit => 'Hız sınırı bu tahmine dahil değil.';
+
+  @override
+  String get samplingConflict =>
+      'Siz düzenlerken başkası kaydetti; yeniden yükleyip tekrar deneyin.';
+
+  @override
+  String get samplingUnavailable =>
+      'Bu kurulumda örnekleme ilkesi saklanamıyor.';
+
+  @override
+  String get servicesSampling => 'Örnekleme';
 }

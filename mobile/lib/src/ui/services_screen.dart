@@ -7,6 +7,7 @@ import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
 import 'agents_screen.dart';
+import 'sampling_screen.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
 import 'theme.dart';
@@ -65,21 +66,36 @@ class _ServicesBodyState extends State<ServicesBody> {
             c.refresh();
           },
         ),
-        header: Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            key: const Key('services-agents'),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => AgentsScreen(
-                  session: widget.session,
-                  agents: widget.sections.agents,
+        header: Wrap(
+          spacing: 4,
+          children: [
+            TextButton.icon(
+              key: const Key('services-sampling'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SamplingScreen(
+                    session: widget.session,
+                    sampling: widget.sections.sampling(),
+                  ),
                 ),
               ),
+              icon: const Icon(Icons.filter_alt_outlined),
+              label: Text(l.servicesSampling),
             ),
-            icon: const Icon(Icons.extension_outlined),
-            label: Text(l.servicesAgents),
-          ),
+            TextButton.icon(
+              key: const Key('services-agents'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => AgentsScreen(
+                    session: widget.session,
+                    agents: widget.sections.agents,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.extension_outlined),
+              label: Text(l.servicesAgents),
+            ),
+          ],
         ),
         emptyTitle: l.servicesEmpty,
         itemBuilder: (context, i) => _ServiceCard(
