@@ -1477,6 +1477,10 @@ void main() {
     await tester.pumpWidget(signedInApp(s, query: q));
     await tester.pumpAndSettle();
     await goTo(tester, 'Query');
+    // The console opens in the guided builder, as the web's does; this test
+    // is about writing OQL by hand, so it puts the builder away first.
+    await tester.tap(find.byKey(const Key('query-wizard-toggle')));
+    await tester.pumpAndSettle();
 
     // Nothing is asked until the person asks: a console with no query has no
     // question to put to the server.
@@ -1504,6 +1508,10 @@ void main() {
     await tester.pumpWidget(signedInApp(s, query: q));
     await tester.pumpAndSettle();
     await goTo(tester, 'Query');
+    // The builder is open first, as on the web; this test writes OQL by
+    // hand, so it puts the builder away.
+    await tester.tap(find.byKey(const Key('query-wizard-toggle')));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('query-text')), 'bad');
     await tester.tap(find.byKey(const Key('query-run')));
@@ -1525,6 +1533,10 @@ void main() {
     await tester.pumpWidget(signedInApp(s, query: q));
     await tester.pumpAndSettle();
     await goTo(tester, 'Query');
+    // The builder is open first, as on the web; this test writes OQL by
+    // hand, so it puts the builder away.
+    await tester.tap(find.byKey(const Key('query-wizard-toggle')));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('query-text')), 'SELECT 1');
     await tester.tap(find.byKey(const Key('query-run')));
@@ -1617,7 +1629,9 @@ void main() {
       'Logs': Key('logs-search'),
       'Traces': Key('traces-search'),
       'Metrics': Key('metrics-search'),
-      'Query': Key('query-text'),
+      // The toggle rather than the box: the console opens in the guided
+      // builder and the box is below it, off a phone screen.
+      'Query': Key('query-wizard-toggle'),
       'Dashboards': Key('dashboards-search'),
       'Inventory search': Key('inventory-category'),
       'Fleet': Key('fleet-search'),

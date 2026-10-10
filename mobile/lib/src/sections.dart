@@ -25,6 +25,7 @@ import 'session.dart';
 import 'volume.dart';
 import 'sso.dart';
 import 'usage.dart';
+import 'oql.dart';
 import 'query.dart';
 import 'sampling.dart';
 import 'saved_views.dart';
@@ -99,6 +100,8 @@ class Sections {
     TemplateSetupController Function(AlertTemplate template, String language)?
     templateSetup,
     QueryController? query,
+    OqlSchemaController? oqlSchema,
+    OqlValidationController? oqlValidation,
     IncidentController Function(String id)? incident,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
     ServiceErrorsController Function(String serviceName)? serviceErrors,
@@ -216,6 +219,8 @@ class Sections {
            )),
        dashboards = dashboards ?? DashboardsController(client),
        query = query ?? QueryController(client),
+       oqlSchema = oqlSchema ?? OqlSchemaController(client),
+       oqlValidation = oqlValidation ?? OqlValidationController(client),
        rules = rules ?? AlertRulesController(client),
        channels = channels ?? AlertChannelsController(client),
        mutes = mutes ?? AlertMutesController(client),
@@ -315,6 +320,11 @@ class Sections {
   scopedLogs;
   final DashboardsController dashboards;
   final QueryController query;
+
+  /// What OQL offers and what is wrong with what was typed. Both belong to
+  /// the console, and both are asked for only once it is opened.
+  final OqlSchemaController oqlSchema;
+  final OqlValidationController oqlValidation;
   final AlertRulesController rules;
   final AlertChannelsController channels;
   final AlertMutesController mutes;
@@ -425,6 +435,8 @@ class Sections {
     traces,
     metrics,
     query,
+    oqlSchema,
+    oqlValidation,
     dashboards,
     inventory,
     fleet,

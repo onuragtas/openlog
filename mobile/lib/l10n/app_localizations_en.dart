@@ -3009,4 +3009,193 @@ class LEn extends L {
 
   @override
   String get viewGone => 'That view is gone; reload the list.';
+
+  @override
+  String get wizardTitle => 'Build a query';
+
+  @override
+  String get wizardSubtitle =>
+      'Pick what you want to look at; the OQL is written for you.';
+
+  @override
+  String get wizardDataType => 'Look at';
+
+  @override
+  String get wizardTypeLog => 'Logs';
+
+  @override
+  String get wizardTypeSpan => 'Spans (every trace step)';
+
+  @override
+  String get wizardTypeTransaction => 'Transactions (requests)';
+
+  @override
+  String get wizardTypeMetric => 'Metrics';
+
+  @override
+  String get wizardTypeHost => 'Hosts';
+
+  @override
+  String get wizardTypeContainer => 'Containers';
+
+  @override
+  String get wizardMeasure => 'Show';
+
+  @override
+  String get wizardMeasureCount => 'How many';
+
+  @override
+  String get wizardMeasureAverage => 'Average of';
+
+  @override
+  String get wizardMeasureSum => 'Sum of';
+
+  @override
+  String get wizardMeasureMin => 'Smallest';
+
+  @override
+  String get wizardMeasureMax => 'Largest';
+
+  @override
+  String get wizardMeasureUnique => 'Distinct values';
+
+  @override
+  String get wizardMeasureMedian => 'Median of';
+
+  @override
+  String get wizardMeasurePercentile => 'Percentiles (50, 95, 99)';
+
+  @override
+  String get wizardMeasureLatest => 'Latest value';
+
+  @override
+  String get wizardAttribute => 'Field';
+
+  @override
+  String get wizardChooseAttribute => 'Choose a field';
+
+  @override
+  String get wizardMetric => 'Metric';
+
+  @override
+  String get wizardChooseMetric => 'Choose a metric';
+
+  @override
+  String get wizardFilters => 'Only when';
+
+  @override
+  String get wizardAddFilter => 'Add a condition';
+
+  @override
+  String get wizardRemoveFilter => 'Remove the condition';
+
+  @override
+  String get wizardFilterKey => 'Field';
+
+  @override
+  String get wizardFilterOp => 'Condition';
+
+  @override
+  String get wizardFilterValue => 'Value';
+
+  @override
+  String get wizardOpEq => 'equals';
+
+  @override
+  String get wizardOpNeq => 'does not equal';
+
+  @override
+  String get wizardOpContains => 'contains';
+
+  @override
+  String get wizardOpLike => 'matches (% wildcard)';
+
+  @override
+  String get wizardOpGt => 'greater than';
+
+  @override
+  String get wizardOpGte => 'at least';
+
+  @override
+  String get wizardOpLt => 'less than';
+
+  @override
+  String get wizardOpLte => 'at most';
+
+  @override
+  String get wizardOpNull => 'is empty';
+
+  @override
+  String get wizardOpNotNull => 'is not empty';
+
+  @override
+  String get wizardGroupBy => 'Split by';
+
+  @override
+  String get wizardAddGroupBy => 'Add a split';
+
+  @override
+  String get wizardGroupByHint => 'One row per value, for example per service.';
+
+  @override
+  String get wizardLimit => 'Top';
+
+  @override
+  String get wizardTimeseries => 'Show over time';
+
+  @override
+  String get wizardRun => 'Run the query';
+
+  @override
+  String get wizardReset => 'Start over';
+
+  @override
+  String get wizardMissingAttribute => 'Choose the field to measure.';
+
+  @override
+  String get wizardMissingMetric => 'Choose a metric.';
+
+  @override
+  String get wizardNoOptions => 'Nothing to show for this range.';
+
+  @override
+  String get queryProblems => 'Query problems';
+
+  @override
+  String queryProblem(int line, int column, String message) {
+    return 'Line $line, column $column: $message';
+  }
+
+  @override
+  String get queryError => 'Error';
+
+  @override
+  String get queryWarning => 'Warning';
+
+  @override
+  String get queryExamples => 'Examples';
+
+  @override
+  String get queryExamplesHint =>
+      'Tap one to run it; you can edit it afterwards.';
+
+  @override
+  String get queryExampleLogsBySeverity => 'Log count by severity';
+
+  @override
+  String get queryExampleErrorsByService => 'Error logs per service';
+
+  @override
+  String get queryExampleSlowTransactions => 'Slowest transactions (p50, p95)';
+
+  @override
+  String get queryExampleCpuByHost => 'CPU usage per host';
+
+  @override
+  String get queryExampleDurationHistogram =>
+      'Distribution of request durations';
+
+  @override
+  String get queryExampleTrafficVsYesterday =>
+      'Traffic compared with yesterday';
 }

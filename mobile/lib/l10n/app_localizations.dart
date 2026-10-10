@@ -5334,6 +5334,372 @@ abstract class L {
   /// In en, this message translates to:
   /// **'That view is gone; reload the list.'**
   String get viewGone;
+
+  /// No description provided for @wizardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Build a query'**
+  String get wizardTitle;
+
+  /// No description provided for @wizardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick what you want to look at; the OQL is written for you.'**
+  String get wizardSubtitle;
+
+  /// No description provided for @wizardDataType.
+  ///
+  /// In en, this message translates to:
+  /// **'Look at'**
+  String get wizardDataType;
+
+  /// No description provided for @wizardTypeLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get wizardTypeLog;
+
+  /// No description provided for @wizardTypeSpan.
+  ///
+  /// In en, this message translates to:
+  /// **'Spans (every trace step)'**
+  String get wizardTypeSpan;
+
+  /// No description provided for @wizardTypeTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Transactions (requests)'**
+  String get wizardTypeTransaction;
+
+  /// No description provided for @wizardTypeMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics'**
+  String get wizardTypeMetric;
+
+  /// No description provided for @wizardTypeHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get wizardTypeHost;
+
+  /// No description provided for @wizardTypeContainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get wizardTypeContainer;
+
+  /// No description provided for @wizardMeasure.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get wizardMeasure;
+
+  /// No description provided for @wizardMeasureCount.
+  ///
+  /// In en, this message translates to:
+  /// **'How many'**
+  String get wizardMeasureCount;
+
+  /// No description provided for @wizardMeasureAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Average of'**
+  String get wizardMeasureAverage;
+
+  /// No description provided for @wizardMeasureSum.
+  ///
+  /// In en, this message translates to:
+  /// **'Sum of'**
+  String get wizardMeasureSum;
+
+  /// No description provided for @wizardMeasureMin.
+  ///
+  /// In en, this message translates to:
+  /// **'Smallest'**
+  String get wizardMeasureMin;
+
+  /// No description provided for @wizardMeasureMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Largest'**
+  String get wizardMeasureMax;
+
+  /// No description provided for @wizardMeasureUnique.
+  ///
+  /// In en, this message translates to:
+  /// **'Distinct values'**
+  String get wizardMeasureUnique;
+
+  /// No description provided for @wizardMeasureMedian.
+  ///
+  /// In en, this message translates to:
+  /// **'Median of'**
+  String get wizardMeasureMedian;
+
+  /// No description provided for @wizardMeasurePercentile.
+  ///
+  /// In en, this message translates to:
+  /// **'Percentiles (50, 95, 99)'**
+  String get wizardMeasurePercentile;
+
+  /// No description provided for @wizardMeasureLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest value'**
+  String get wizardMeasureLatest;
+
+  /// No description provided for @wizardAttribute.
+  ///
+  /// In en, this message translates to:
+  /// **'Field'**
+  String get wizardAttribute;
+
+  /// No description provided for @wizardChooseAttribute.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a field'**
+  String get wizardChooseAttribute;
+
+  /// No description provided for @wizardMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get wizardMetric;
+
+  /// No description provided for @wizardChooseMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a metric'**
+  String get wizardChooseMetric;
+
+  /// No description provided for @wizardFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Only when'**
+  String get wizardFilters;
+
+  /// No description provided for @wizardAddFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a condition'**
+  String get wizardAddFilter;
+
+  /// No description provided for @wizardRemoveFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the condition'**
+  String get wizardRemoveFilter;
+
+  /// No description provided for @wizardFilterKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Field'**
+  String get wizardFilterKey;
+
+  /// No description provided for @wizardFilterOp.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition'**
+  String get wizardFilterOp;
+
+  /// No description provided for @wizardFilterValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Value'**
+  String get wizardFilterValue;
+
+  /// No description provided for @wizardOpEq.
+  ///
+  /// In en, this message translates to:
+  /// **'equals'**
+  String get wizardOpEq;
+
+  /// No description provided for @wizardOpNeq.
+  ///
+  /// In en, this message translates to:
+  /// **'does not equal'**
+  String get wizardOpNeq;
+
+  /// No description provided for @wizardOpContains.
+  ///
+  /// In en, this message translates to:
+  /// **'contains'**
+  String get wizardOpContains;
+
+  /// No description provided for @wizardOpLike.
+  ///
+  /// In en, this message translates to:
+  /// **'matches (% wildcard)'**
+  String get wizardOpLike;
+
+  /// No description provided for @wizardOpGt.
+  ///
+  /// In en, this message translates to:
+  /// **'greater than'**
+  String get wizardOpGt;
+
+  /// No description provided for @wizardOpGte.
+  ///
+  /// In en, this message translates to:
+  /// **'at least'**
+  String get wizardOpGte;
+
+  /// No description provided for @wizardOpLt.
+  ///
+  /// In en, this message translates to:
+  /// **'less than'**
+  String get wizardOpLt;
+
+  /// No description provided for @wizardOpLte.
+  ///
+  /// In en, this message translates to:
+  /// **'at most'**
+  String get wizardOpLte;
+
+  /// No description provided for @wizardOpNull.
+  ///
+  /// In en, this message translates to:
+  /// **'is empty'**
+  String get wizardOpNull;
+
+  /// No description provided for @wizardOpNotNull.
+  ///
+  /// In en, this message translates to:
+  /// **'is not empty'**
+  String get wizardOpNotNull;
+
+  /// No description provided for @wizardGroupBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Split by'**
+  String get wizardGroupBy;
+
+  /// No description provided for @wizardAddGroupBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a split'**
+  String get wizardAddGroupBy;
+
+  /// No description provided for @wizardGroupByHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One row per value, for example per service.'**
+  String get wizardGroupByHint;
+
+  /// No description provided for @wizardLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get wizardLimit;
+
+  /// No description provided for @wizardTimeseries.
+  ///
+  /// In en, this message translates to:
+  /// **'Show over time'**
+  String get wizardTimeseries;
+
+  /// No description provided for @wizardRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Run the query'**
+  String get wizardRun;
+
+  /// No description provided for @wizardReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Start over'**
+  String get wizardReset;
+
+  /// No description provided for @wizardMissingAttribute.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the field to measure.'**
+  String get wizardMissingAttribute;
+
+  /// No description provided for @wizardMissingMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a metric.'**
+  String get wizardMissingMetric;
+
+  /// No description provided for @wizardNoOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to show for this range.'**
+  String get wizardNoOptions;
+
+  /// No description provided for @queryProblems.
+  ///
+  /// In en, this message translates to:
+  /// **'Query problems'**
+  String get queryProblems;
+
+  /// No description provided for @queryProblem.
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}, column {column}: {message}'**
+  String queryProblem(int line, int column, String message);
+
+  /// No description provided for @queryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get queryError;
+
+  /// No description provided for @queryWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get queryWarning;
+
+  /// No description provided for @queryExamples.
+  ///
+  /// In en, this message translates to:
+  /// **'Examples'**
+  String get queryExamples;
+
+  /// No description provided for @queryExamplesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap one to run it; you can edit it afterwards.'**
+  String get queryExamplesHint;
+
+  /// No description provided for @queryExampleLogsBySeverity.
+  ///
+  /// In en, this message translates to:
+  /// **'Log count by severity'**
+  String get queryExampleLogsBySeverity;
+
+  /// No description provided for @queryExampleErrorsByService.
+  ///
+  /// In en, this message translates to:
+  /// **'Error logs per service'**
+  String get queryExampleErrorsByService;
+
+  /// No description provided for @queryExampleSlowTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Slowest transactions (p50, p95)'**
+  String get queryExampleSlowTransactions;
+
+  /// No description provided for @queryExampleCpuByHost.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU usage per host'**
+  String get queryExampleCpuByHost;
+
+  /// No description provided for @queryExampleDurationHistogram.
+  ///
+  /// In en, this message translates to:
+  /// **'Distribution of request durations'**
+  String get queryExampleDurationHistogram;
+
+  /// No description provided for @queryExampleTrafficVsYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic compared with yesterday'**
+  String get queryExampleTrafficVsYesterday;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -878,6 +878,87 @@ enum OqlResultKind {
   }
 }
 
+/// OqlValidationKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OqlValidationKind {
+  single('single'),
+  facets('facets'),
+  timeseries('timeseries'),
+  histogram('histogram'),
+  unknown('');
+
+  const OqlValidationKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OqlValidationKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OqlSchemaEventTypesItemMapsItem of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OqlSchemaEventTypesItemMapsItem {
+  attributes('attributes'),
+  resource('resource'),
+  unknown('');
+
+  const OqlSchemaEventTypesItemMapsItem(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OqlSchemaEventTypesItemMapsItem fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// OqlSchemaEventTypesItemAttributesItemType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OqlSchemaEventTypesItemAttributesItemType {
+  string('string'),
+  number('number'),
+  bool('bool'),
+  unknown('');
+
+  const OqlSchemaEventTypesItemAttributesItemType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OqlSchemaEventTypesItemAttributesItemType fromJson(
+    Object? v,
+    String path,
+  ) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// UserLanguage of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -7831,6 +7912,267 @@ class OqlResult {
   final OqlMetadata metadata;
 }
 
+/// `OqlValidation` of the openlog API contract.
+class OqlValidation {
+  const OqlValidation({
+    required this.valid,
+    this.eventType,
+    this.kind,
+    required this.variables,
+    required this.errors,
+    required this.warnings,
+  });
+
+  factory OqlValidation.fromJson(
+    Object? json, [
+    String path = 'OqlValidation',
+  ]) {
+    final m = _obj(json, path);
+    return OqlValidation(
+      valid: _req(m, 'valid', path, _bool),
+      eventType: _opt(m, 'event_type', path, _str),
+      kind: _opt(m, 'kind', path, OqlValidationKind.fromJson),
+      variables: _req(
+        m,
+        'variables',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      errors: _req(
+        m,
+        'errors',
+        path,
+        (v, p) =>
+            _list<OqlDiagnostic>(v, p, (v, p) => OqlDiagnostic.fromJson(v, p)),
+      ),
+      warnings: _req(
+        m,
+        'warnings',
+        path,
+        (v, p) =>
+            _list<OqlDiagnostic>(v, p, (v, p) => OqlDiagnostic.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'valid': valid,
+    'event_type': ?eventType,
+    if (kind != null) 'kind': kind!.wire,
+    'variables': variables,
+    'errors': [for (final e in errors) e.toJson()],
+    'warnings': [for (final e in warnings) e.toJson()],
+  };
+
+  final bool valid;
+  final String? eventType;
+  final OqlValidationKind? kind;
+  final List<String> variables;
+  final List<OqlDiagnostic> errors;
+  final List<OqlDiagnostic> warnings;
+}
+
+/// `OqlSchema` of the openlog API contract.
+class OqlSchema {
+  const OqlSchema({
+    required this.eventTypes,
+    required this.functions,
+    required this.keywords,
+    required this.attributeKeys,
+    required this.resourceKeys,
+    required this.metricNames,
+  });
+
+  factory OqlSchema.fromJson(Object? json, [String path = 'OqlSchema']) {
+    final m = _obj(json, path);
+    return OqlSchema(
+      eventTypes: _req(
+        m,
+        'event_types',
+        path,
+        (v, p) => _list<OqlSchemaEventTypesItem>(
+          v,
+          p,
+          (v, p) => OqlSchemaEventTypesItem.fromJson(v, p),
+        ),
+      ),
+      functions: _req(
+        m,
+        'functions',
+        path,
+        (v, p) => _list<OqlSchemaFunctionsItem>(
+          v,
+          p,
+          (v, p) => OqlSchemaFunctionsItem.fromJson(v, p),
+        ),
+      ),
+      keywords: _req(m, 'keywords', path, (v, p) => _list<String>(v, p, _str)),
+      attributeKeys: _req(
+        m,
+        'attribute_keys',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      resourceKeys: _req(
+        m,
+        'resource_keys',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      metricNames: _req(
+        m,
+        'metric_names',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'event_types': [for (final e in eventTypes) e.toJson()],
+    'functions': [for (final e in functions) e.toJson()],
+    'keywords': keywords,
+    'attribute_keys': attributeKeys,
+    'resource_keys': resourceKeys,
+    'metric_names': metricNames,
+  };
+
+  final List<OqlSchemaEventTypesItem> eventTypes;
+  final List<OqlSchemaFunctionsItem> functions;
+  final List<String> keywords;
+  final List<String> attributeKeys;
+  final List<String> resourceKeys;
+  final List<String> metricNames;
+}
+
+/// `OqlSchemaEventTypesItem` of the openlog API contract.
+class OqlSchemaEventTypesItem {
+  const OqlSchemaEventTypesItem({
+    required this.name,
+    required this.description,
+    required this.maps,
+    required this.maxRangeSeconds,
+    required this.attributes,
+  });
+
+  factory OqlSchemaEventTypesItem.fromJson(
+    Object? json, [
+    String path = 'OqlSchemaEventTypesItem',
+  ]) {
+    final m = _obj(json, path);
+    return OqlSchemaEventTypesItem(
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      maps: _req(
+        m,
+        'maps',
+        path,
+        (v, p) => _list<OqlSchemaEventTypesItemMapsItem>(
+          v,
+          p,
+          OqlSchemaEventTypesItemMapsItem.fromJson,
+        ),
+      ),
+      maxRangeSeconds: _req(m, 'max_range_seconds', path, _int),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _list<OqlSchemaEventTypesItemAttributesItem>(
+          v,
+          p,
+          (v, p) => OqlSchemaEventTypesItemAttributesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'description': description,
+    'maps': [for (final e in maps) e.wire],
+    'max_range_seconds': maxRangeSeconds,
+    'attributes': [for (final e in attributes) e.toJson()],
+  };
+
+  final String name;
+  final String description;
+  final List<OqlSchemaEventTypesItemMapsItem> maps;
+  final int maxRangeSeconds;
+  final List<OqlSchemaEventTypesItemAttributesItem> attributes;
+}
+
+/// `OqlSchemaEventTypesItemAttributesItem` of the openlog API contract.
+class OqlSchemaEventTypesItemAttributesItem {
+  const OqlSchemaEventTypesItemAttributesItem({
+    required this.name,
+    required this.type,
+    required this.aliases,
+    required this.rollup,
+  });
+
+  factory OqlSchemaEventTypesItemAttributesItem.fromJson(
+    Object? json, [
+    String path = 'OqlSchemaEventTypesItemAttributesItem',
+  ]) {
+    final m = _obj(json, path);
+    return OqlSchemaEventTypesItemAttributesItem(
+      name: _req(m, 'name', path, _str),
+      type: _req(
+        m,
+        'type',
+        path,
+        OqlSchemaEventTypesItemAttributesItemType.fromJson,
+      ),
+      aliases: _req(m, 'aliases', path, (v, p) => _list<String>(v, p, _str)),
+      rollup: _req(m, 'rollup', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.wire,
+    'aliases': aliases,
+    'rollup': rollup,
+  };
+
+  final String name;
+  final OqlSchemaEventTypesItemAttributesItemType type;
+  final List<String> aliases;
+  final bool rollup;
+}
+
+/// `OqlSchemaFunctionsItem` of the openlog API contract.
+class OqlSchemaFunctionsItem {
+  const OqlSchemaFunctionsItem({
+    required this.name,
+    required this.signature,
+    required this.description,
+  });
+
+  factory OqlSchemaFunctionsItem.fromJson(
+    Object? json, [
+    String path = 'OqlSchemaFunctionsItem',
+  ]) {
+    final m = _obj(json, path);
+    return OqlSchemaFunctionsItem(
+      name: _req(m, 'name', path, _str),
+      signature: _req(m, 'signature', path, _str),
+      description: _req(m, 'description', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'signature': signature,
+    'description': description,
+  };
+
+  final String name;
+  final String signature;
+  final String description;
+}
+
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -11786,6 +12128,45 @@ class OqlMetadata {
   final bool truncated;
   final List<String> warnings;
   final List<String>? ignoredFilters;
+}
+
+/// `OqlDiagnostic` of the openlog API contract.
+class OqlDiagnostic {
+  const OqlDiagnostic({
+    required this.message,
+    required this.offset,
+    required this.length,
+    required this.line,
+    required this.column,
+  });
+
+  factory OqlDiagnostic.fromJson(
+    Object? json, [
+    String path = 'OqlDiagnostic',
+  ]) {
+    final m = _obj(json, path);
+    return OqlDiagnostic(
+      message: _req(m, 'message', path, _str),
+      offset: _req(m, 'offset', path, _int),
+      length: _req(m, 'length', path, _int),
+      line: _req(m, 'line', path, _int),
+      column: _req(m, 'column', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'message': message,
+    'offset': offset,
+    'length': length,
+    'line': line,
+    'column': column,
+  };
+
+  final String message;
+  final int offset;
+  final int length;
+  final int line;
+  final int column;
 }
 
 /// 0 or absent = unlimited (retention_days absent = table default)

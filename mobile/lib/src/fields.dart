@@ -164,13 +164,25 @@ class FieldsController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadValues(String forKey, {String q = ''}) async {
+  /// [metric] narrows a metric's attribute values to that metric: every
+  /// metric shares the attribute table, so without it `host.name` would
+  /// list the hosts of all of them.
+  Future<void> loadValues(
+    String forKey, {
+    String q = '',
+    String metric = '',
+  }) async {
     loading = true;
     failure = null;
     key = forKey;
     notifyListeners();
     try {
-      final page = await client.fieldValues(signal: signal, key: forKey, q: q);
+      final page = await client.fieldValues(
+        signal: signal,
+        key: forKey,
+        q: q,
+        metric: metric,
+      );
       values = page.values;
       valuesSampled = page.sampled;
     } on ApiUnreachable {

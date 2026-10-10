@@ -84,6 +84,8 @@ const schemaTargets = <String>[
   'DashboardSummary', // the dashboard list
   'Dashboard', // one dashboard with its pages and widgets
   'OqlResult', // what a widget's query answers
+  'OqlValidation', // what is wrong with a query, before it is run
+  'OqlSchema', // the event types, attributes and functions of the language
 ];
 
 /// Schema names that would collide with something Flutter already owns.
@@ -516,6 +518,30 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     }
   }
 
+  /// The names of an `enum`, dropping the `null` a nullable enum lists.
+  ///
+  /// `kind: { type: [string, "null"], enum: [single, ..., null] }` says the
+  /// same thing twice; the union already made the Dart type nullable, so the
+  /// null in the list is not a name. A null without a nullable type would be,
+  /// and that stops here rather than becoming a member called `null`.
+  List<String> _enumValues(YamlList list, String context, bool nullable) {
+    final out = <String>[];
+    var sawNull = false;
+    for (final v in list) {
+      if (v == null) {
+        sawNull = true;
+        continue;
+      }
+      if (v is! String) _fail('enum at $context has a non-string value $v');
+      out.add(v);
+    }
+    if (sawNull && !nullable) {
+      _fail('enum at $context lists null but the type is not nullable');
+    }
+    if (out.isEmpty) _fail('enum at $context has no names');
+    return out;
+  }
+
   DartType _type(YamlMap raw, String context) {
     final (node, nullable) = _unwrapNullable(raw);
 
@@ -541,7 +567,11 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       if (inner['type'] == 'string' && inner['enum'] != null) {
         _emitEnum(
           dartName(name),
-          (inner['enum'] as YamlList).cast<String>().toList(),
+          _enumValues(
+            inner['enum'] as YamlList,
+            name,
+            nullable || innerNullable,
+          ),
         );
         return DartType(dartName(name), nullable: nullable || innerNullable);
       }
@@ -554,7 +584,10 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
       case 'string':
         if (node['enum'] != null) {
           final name = _enumName(context);
-          _emitEnum(name, (node['enum'] as YamlList).cast<String>().toList());
+          _emitEnum(
+            name,
+            _enumValues(node['enum'] as YamlList, context, nullable),
+          );
           return DartType(name, nullable: nullable);
         }
         if (node['format'] == 'date-time') {

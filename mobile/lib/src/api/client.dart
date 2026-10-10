@@ -1165,6 +1165,31 @@ class OpenlogClient {
     await _send('POST', '/api/v1/query', body: {'query': query}),
   );
 
+  /// Parses and plans a query without reading any telemetry.
+  ///
+  /// A query the server will not run answers 200 here with the reasons in
+  /// it: this is how the console can say what is wrong before somebody
+  /// spends a minute of ClickHouse on it.
+  Future<OqlValidation> validateQuery(String query) async =>
+      OqlValidation.fromJson(
+        await _send('POST', '/api/v1/query/validate', body: {'query': query}),
+      );
+
+  /// The language itself: event types with their attributes, the functions
+  /// and the keywords. With [eventType] also that type's frequent map keys
+  /// and, for Metric, the metric names.
+  Future<OqlSchema> oqlSchema({String eventType = ''}) async =>
+      OqlSchema.fromJson(
+        await _send(
+          'GET',
+          _listPath(
+            '/api/v1/query/schema',
+            '',
+            extra: {if (eventType.isNotEmpty) 'event_type': eventType},
+          ),
+        ),
+      );
+
   // ---- the sections that are a list and nothing more ----
   //
   // Each is one GET with an optional search. They are grouped here rather than

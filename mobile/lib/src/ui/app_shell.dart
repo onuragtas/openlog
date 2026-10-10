@@ -322,7 +322,7 @@ class _AppShellState extends State<AppShell> {
     );
     add((active) => TracesBody(session: session, sections: s, active: active));
     add((active) => MetricsBody(session: session, sections: s, active: active));
-    add((_) => QueryBody(session: session, query: s.query));
+    add((_) => QueryBody(session: session, sections: s, query: s.query));
     add((_) => DashboardsBody(session: session, dashboards: s.dashboards));
     add(
       (active) => InventoryBody(session: session, sections: s, active: active),

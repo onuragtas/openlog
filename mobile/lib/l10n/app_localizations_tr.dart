@@ -3001,4 +3001,193 @@ class LTr extends L {
 
   @override
   String get viewGone => 'Bu görünüm artık yok; listeyi yenileyin.';
+
+  @override
+  String get wizardTitle => 'Sorgu oluştur';
+
+  @override
+  String get wizardSubtitle =>
+      'Neye bakmak istediğinizi seçin; OQL sizin için yazılır.';
+
+  @override
+  String get wizardDataType => 'Şuna bak';
+
+  @override
+  String get wizardTypeLog => 'Loglar';
+
+  @override
+  String get wizardTypeSpan => 'Span\'ler (tüm trace adımları)';
+
+  @override
+  String get wizardTypeTransaction => 'Transaction\'lar (istekler)';
+
+  @override
+  String get wizardTypeMetric => 'Metrikler';
+
+  @override
+  String get wizardTypeHost => 'Sunucular';
+
+  @override
+  String get wizardTypeContainer => 'Konteynerler';
+
+  @override
+  String get wizardMeasure => 'Göster';
+
+  @override
+  String get wizardMeasureCount => 'Kaç tane';
+
+  @override
+  String get wizardMeasureAverage => 'Ortalaması';
+
+  @override
+  String get wizardMeasureSum => 'Toplamı';
+
+  @override
+  String get wizardMeasureMin => 'En küçüğü';
+
+  @override
+  String get wizardMeasureMax => 'En büyüğü';
+
+  @override
+  String get wizardMeasureUnique => 'Farklı değer sayısı';
+
+  @override
+  String get wizardMeasureMedian => 'Ortanca değeri';
+
+  @override
+  String get wizardMeasurePercentile => 'Yüzdelikleri (50, 95, 99)';
+
+  @override
+  String get wizardMeasureLatest => 'En son değeri';
+
+  @override
+  String get wizardAttribute => 'Alan';
+
+  @override
+  String get wizardChooseAttribute => 'Bir alan seçin';
+
+  @override
+  String get wizardMetric => 'Metrik';
+
+  @override
+  String get wizardChooseMetric => 'Bir metrik seçin';
+
+  @override
+  String get wizardFilters => 'Yalnızca şu durumda';
+
+  @override
+  String get wizardAddFilter => 'Koşul ekle';
+
+  @override
+  String get wizardRemoveFilter => 'Koşulu kaldır';
+
+  @override
+  String get wizardFilterKey => 'Alan';
+
+  @override
+  String get wizardFilterOp => 'Koşul';
+
+  @override
+  String get wizardFilterValue => 'Değer';
+
+  @override
+  String get wizardOpEq => 'eşittir';
+
+  @override
+  String get wizardOpNeq => 'eşit değildir';
+
+  @override
+  String get wizardOpContains => 'içerir';
+
+  @override
+  String get wizardOpLike => 'kalıba uyar (% joker)';
+
+  @override
+  String get wizardOpGt => 'büyüktür';
+
+  @override
+  String get wizardOpGte => 'en az';
+
+  @override
+  String get wizardOpLt => 'küçüktür';
+
+  @override
+  String get wizardOpLte => 'en fazla';
+
+  @override
+  String get wizardOpNull => 'boştur';
+
+  @override
+  String get wizardOpNotNull => 'boş değildir';
+
+  @override
+  String get wizardGroupBy => 'Şuna göre ayır';
+
+  @override
+  String get wizardAddGroupBy => 'Ayırma ekle';
+
+  @override
+  String get wizardGroupByHint =>
+      'Her değer için ayrı bir satır, örneğin her servis için.';
+
+  @override
+  String get wizardLimit => 'İlk';
+
+  @override
+  String get wizardTimeseries => 'Zamana göre göster';
+
+  @override
+  String get wizardRun => 'Sorguyu çalıştır';
+
+  @override
+  String get wizardReset => 'Baştan başla';
+
+  @override
+  String get wizardMissingAttribute => 'Ölçülecek alanı seçin.';
+
+  @override
+  String get wizardMissingMetric => 'Bir metrik seçin.';
+
+  @override
+  String get wizardNoOptions => 'Bu aralıkta gösterilecek bir şey yok.';
+
+  @override
+  String get queryProblems => 'Sorgu sorunları';
+
+  @override
+  String queryProblem(int line, int column, String message) {
+    return 'Satır $line, sütun $column: $message';
+  }
+
+  @override
+  String get queryError => 'Hata';
+
+  @override
+  String get queryWarning => 'Uyarı';
+
+  @override
+  String get queryExamples => 'Örnekler';
+
+  @override
+  String get queryExamplesHint =>
+      'Birine dokununca çalışır; sonra düzenleyebilirsiniz.';
+
+  @override
+  String get queryExampleLogsBySeverity => 'Önem düzeyine göre log sayısı';
+
+  @override
+  String get queryExampleErrorsByService => 'Servis bazında hata logları';
+
+  @override
+  String get queryExampleSlowTransactions =>
+      'En yavaş transaction\'lar (p50, p95)';
+
+  @override
+  String get queryExampleCpuByHost => 'Sunucu bazında CPU kullanımı';
+
+  @override
+  String get queryExampleDurationHistogram => 'İstek sürelerinin dağılımı';
+
+  @override
+  String get queryExampleTrafficVsYesterday => 'Trafiğin dünle karşılaştırması';
 }

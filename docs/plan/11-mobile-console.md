@@ -518,7 +518,17 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       ise metrik ekranı henüz bir liste — kaydedilecek bir durum yok (9.7).
       Bu sırada bulunan hata: filtre çipleri `eq` gönderiyordu, sözleşmede operatör
       `=` — sunucu her tek değerli çipi 400 ile reddediyormuş.
-- [ ] OQL şema ve doğrulama (`query/schema`, `query/validate`)
+- [x] OQL şema ve doğrulama (`query/schema`, `query/validate`): konsol artık webin
+      konsolu — yazarken doğrulama (yazmayı bırakınca sorulur, hata ve uyarılar satır
+      ve sütunuyla kutunun altında, kutunun çerçevesi kırmızı), webin altı örneği aynı
+      başlıklarla ve **sorgu sihirbazı**. Sihirbaz `web/src/lib/oql-builder.ts`'in
+      birebir Dart kopyası (`oql_builder.dart`), yani aynı seçimler iki tarafta da aynı
+      metni yazıyor; alan, metrik ve ayırma listeleri `query/schema`'dan, koşul değerleri
+      `fields/values`'tan geliyor. Uzun listeler açılır kutu değil aranabilir bir alt
+      sayfa — telefonda tek fark bu. Webin CodeMirror tamamlaması mobilde yok: onun
+      yerini sihirbaz tutuyor.
+      Bu sırada üretici düzeltildi: `[string, "null"]` tipli bir enum'un listesindeki
+      `null`'a takılıyordu (`OqlValidation.kind`).
 - [ ] Alev grafiği (`profiles/flame`)
 
 ### 9.5 Altyapı
