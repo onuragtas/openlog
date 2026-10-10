@@ -3990,6 +3990,78 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Services sending traces'**
   String get hostApmServices;
+
+  /// No description provided for @settingsProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get settingsProfile;
+
+  /// No description provided for @settingsSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get settingsSecurity;
+
+  /// No description provided for @profileLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get profileLanguage;
+
+  /// No description provided for @profileLanguageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The language the server writes in: alert e-mails and generated rule names. The app\'s own language follows the phone.'**
+  String get profileLanguageHint;
+
+  /// No description provided for @profileLanguageAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get profileLanguageAuto;
+
+  /// No description provided for @securityPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get securityPassword;
+
+  /// No description provided for @securityPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing the password ends your other sessions; this device stays signed in.'**
+  String get securityPasswordHint;
+
+  /// No description provided for @securityCurrentPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Current password'**
+  String get securityCurrentPassword;
+
+  /// No description provided for @securityNewPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get securityNewPassword;
+
+  /// No description provided for @securityMinLength.
+  ///
+  /// In en, this message translates to:
+  /// **'At least {count} characters.'**
+  String securityMinLength(int count);
+
+  /// No description provided for @securityChangePassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get securityChangePassword;
+
+  /// No description provided for @securityPasswordChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The password changed; the other sessions were ended.'**
+  String get securityPasswordChanged;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -1746,6 +1746,10 @@ void main() {
     await tester.pumpWidget(signedInApp(s, sessions: sessions));
     await tester.pumpAndSettle();
     await goTo(tester, 'Settings');
+    // The sessions are on the Güvenlik tab, as on the web: the password
+    // change above them is what ends the others.
+    await tester.tap(find.byKey(const Key('settings-tab-security')));
+    await tester.pumpAndSettle();
 
     expect(find.text('this device'), findsOneWidget);
     // Ending the current session is signing out, which has its own button;
@@ -1765,6 +1769,8 @@ void main() {
     await tester.pumpWidget(signedInApp(s, sessions: sessions));
     await tester.pumpAndSettle();
     await goTo(tester, 'Settings');
+    await tester.tap(find.byKey(const Key('settings-tab-security')));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('session-end-s2')));
     await tester.pumpAndSettle();

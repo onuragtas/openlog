@@ -71,6 +71,14 @@ class SessionController extends ChangeNotifier {
   /// one. Null until [stage] is [SessionStage.signedIn].
   Me? me;
 
+  /// Replaces it after the account changed something about itself -- the
+  /// language, for one. Here rather than written from outside so the
+  /// screens listening to the session hear about it.
+  void updateMe(Me next) {
+    me = next;
+    notifyListeners();
+  }
+
   /// The selected organization, for a person who belongs to several.
   OrgRef? get organization => me?.organization;
 

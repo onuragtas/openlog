@@ -7,6 +7,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'alerts.dart';
+import 'account.dart';
 import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'dashboards.dart';
@@ -50,6 +51,7 @@ class Sections {
     ProfilesController? profiles,
     OnboardingController? onboarding,
     SessionsController? sessions,
+    AccountController? account,
     LogsController Function({
       String traceId,
       String podUid,
@@ -155,6 +157,7 @@ class Sections {
        profiles = profiles ?? ProfilesController(client),
        onboarding = onboarding ?? OnboardingController(client),
        sessions = sessions ?? SessionsController(client),
+       account = account ?? AccountController(client),
        scopedLogs =
            scopedLogs ??
            (({
@@ -210,6 +213,9 @@ class Sections {
   final ProfilesController profiles;
   final OnboardingController onboarding;
   final SessionsController sessions;
+
+  /// The account behind the token: its password and its language.
+  final AccountController account;
 
   /// The logs of one request, pod or container. A controller per screen,
   /// disposed with it, because each one answers about a different thing.
@@ -295,6 +301,7 @@ class Sections {
   List<ChangeNotifier> get all => [
     onboarding,
     sessions,
+    account,
     hosts,
     containers,
     costs,

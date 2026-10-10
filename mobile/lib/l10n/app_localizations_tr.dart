@@ -2225,4 +2225,45 @@ class LTr extends L {
 
   @override
   String get hostApmServices => 'İz gönderen servisler';
+
+  @override
+  String get settingsProfile => 'Profil';
+
+  @override
+  String get settingsSecurity => 'Güvenlik';
+
+  @override
+  String get profileLanguage => 'Dil';
+
+  @override
+  String get profileLanguageHint =>
+      'Sunucunun yazdığı dil: alarm e-postaları ve üretilen kural adları. Uygulamanın dili telefonu izler.';
+
+  @override
+  String get profileLanguageAuto => 'Otomatik';
+
+  @override
+  String get securityPassword => 'Parola';
+
+  @override
+  String get securityPasswordHint =>
+      'Parolayı değiştirmek diğer oturumlarınızı kapatır; bu cihaz açık kalır.';
+
+  @override
+  String get securityCurrentPassword => 'Şimdiki parola';
+
+  @override
+  String get securityNewPassword => 'Yeni parola';
+
+  @override
+  String securityMinLength(int count) {
+    return 'En az $count karakter.';
+  }
+
+  @override
+  String get securityChangePassword => 'Parolayı değiştir';
+
+  @override
+  String get securityPasswordChanged =>
+      'Parola değişti; diğer oturumlar kapatıldı.';
 }

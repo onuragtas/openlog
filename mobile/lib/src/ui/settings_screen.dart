@@ -1,11 +1,14 @@
-// Who is signed in, where, and as what.
+// Settings, with the web's tabs.
 //
-// A section of its own rather than a drawer, because that is where the web
-// keeps it: `nav.settings` sits in the same list as the signals, and signing
-// out is at the bottom of the sidebar.
+// The web's /settings is one page with a tab per subject -- Profil,
+// Organizasyon, Üyeler, the keys, Güvenlik, SSO, Denetim kaydı, APM
+// örnekleme, Kullanım, Depolama -- each gated by the role that may see it.
+// This is the same list, filled in as each one is built; a tab appears when
+// it has something in it, never as an empty promise.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../account.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
 import '../session.dart';
@@ -19,6 +22,7 @@ class SettingsBody extends StatefulWidget {
     super.key,
     required this.session,
     required this.sessions,
+    required this.account,
     required this.active,
   });
 
@@ -28,16 +32,27 @@ class SettingsBody extends StatefulWidget {
   /// is where the web keeps them, and because they are about this account
   /// rather than about anything being monitored.
   final SessionsController sessions;
+
+  /// The password and the language: the account behind the token, which is
+  /// what the web's Profil and Güvenlik tabs change.
+  final AccountController account;
   final bool active;
 
   @override
   State<SettingsBody> createState() => _SettingsBodyState();
 }
 
-class _SettingsBodyState extends State<SettingsBody> {
+class _SettingsBodyState extends State<SettingsBody>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 2, vsync: this)
+      ..addListener(() {
+        if (!_tabs.indexIsChanging) _loadIfVisible();
+      });
     _loadIfVisible();
   }
 
@@ -47,14 +62,60 @@ class _SettingsBodyState extends State<SettingsBody> {
     _loadIfVisible();
   }
 
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  /// The sessions belong to the Güvenlik tab, so they are asked for when
+  /// that tab is looked at rather than when settings is opened.
   void _loadIfVisible() {
     final c = widget.sessions;
-    if (!widget.active || c.loaded || c.loadingFirst) return;
+    if (!widget.active || _tabs.index != 1 || c.loaded || c.loadingFirst) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = L.of(context);
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            Tab(
+              key: const Key('settings-tab-profile'),
+              text: l.settingsProfile,
+            ),
+            Tab(
+              key: const Key('settings-tab-security'),
+              text: l.settingsSecurity,
+            ),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              _profile(context),
+              SecurityTab(
+                session: widget.session,
+                sessions: widget.sessions,
+                account: widget.account,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _profile(BuildContext context) {
     final session = widget.session;
     final l = L.of(context);
     final text = Theme.of(context).textTheme;
@@ -125,13 +186,7 @@ class _SettingsBodyState extends State<SettingsBody> {
             ),
           ],
           const SizedBox(height: 12),
-          ListenableBuilder(
-            listenable: widget.sessions,
-            builder: (context, _) => _Sessions(
-              controller: widget.sessions,
-              baseUrl: session.baseUrl ?? '',
-            ),
-          ),
+          _Language(session: session, account: widget.account),
           FailureBanner(
             failure: session.failure,
             baseUrl: session.baseUrl ?? '',
@@ -184,8 +239,12 @@ class _SettingsBodyState extends State<SettingsBody> {
 
 /// Where this account is signed in, and the one write that belongs on a
 /// phone: ending a session somewhere else.
-class _Sessions extends StatelessWidget {
-  const _Sessions({required this.controller, required this.baseUrl});
+class SessionsCard extends StatelessWidget {
+  const SessionsCard({
+    super.key,
+    required this.controller,
+    required this.baseUrl,
+  });
 
   final SessionsController controller;
   final String baseUrl;
@@ -339,6 +398,219 @@ class _SessionRow extends StatelessWidget {
                     child: Text(l.sessionsEnd),
                   ),
         ],
+      ),
+    );
+  }
+}
+
+/// The Güvenlik tab: the password, and where this account is signed in.
+///
+/// The two belong together because changing the password ends the other
+/// sessions -- the list underneath is what that sentence is about.
+class SecurityTab extends StatefulWidget {
+  const SecurityTab({
+    super.key,
+    required this.session,
+    required this.sessions,
+    required this.account,
+  });
+
+  final SessionController session;
+  final SessionsController sessions;
+  final AccountController account;
+
+  @override
+  State<SecurityTab> createState() => _SecurityTabState();
+}
+
+class _SecurityTabState extends State<SecurityTab> {
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final a = widget.account;
+    final minLength = widget.session.authConfig?.passwordMinLength ?? 8;
+    final tooShort = _next.text.isNotEmpty && _next.text.length < minLength;
+
+    return ListenableBuilder(
+      listenable: a,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l.securityPassword, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(
+                    // The part that is not obvious, said before the button
+                    // rather than after it.
+                    l.securityPasswordHint,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const Key('password-current'),
+                    controller: _current,
+                    obscureText: true,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: l.securityCurrentPassword,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    key: const Key('password-new'),
+                    controller: _next,
+                    obscureText: true,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: l.securityNewPassword,
+                      helperText: l.securityMinLength(minLength),
+                      errorText: tooShort
+                          ? l.securityMinLength(minLength)
+                          : null,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                  FailureBanner(
+                    failure: a.failure,
+                    baseUrl: widget.session.baseUrl ?? '',
+                  ),
+                  if (a.passwordChanged)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        l.securityPasswordChanged,
+                        key: const Key('password-changed'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: severityTextColor(context, SeverityLevel.good),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      key: const Key('password-save'),
+                      onPressed:
+                          a.busy ||
+                              _current.text.isEmpty ||
+                              _next.text.length < minLength
+                          ? null
+                          : () async {
+                              final ok = await a.changePassword(
+                                currentPassword: _current.text,
+                                newPassword: _next.text,
+                              );
+                              if (ok) {
+                                _current.clear();
+                                _next.clear();
+                                // The other sessions are gone, so the list
+                                // below is now wrong until it is reloaded.
+                                await widget.sessions.refresh();
+                                if (context.mounted) setState(() {});
+                              }
+                            },
+                      child: Text(l.securityChangePassword),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ListenableBuilder(
+            listenable: widget.sessions,
+            builder: (context, _) => SessionsCard(
+              controller: widget.sessions,
+              baseUrl: widget.session.baseUrl ?? '',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The language the server writes in.
+///
+/// Not the app's language, which follows the phone: this is what alert
+/// e-mails and generated rule names come back in, and it belongs to the
+/// account rather than to this device.
+class _Language extends StatelessWidget {
+  const _Language({required this.session, required this.account});
+
+  final SessionController session;
+  final AccountController account;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final current = session.me?.user?.language;
+
+    return ListenableBuilder(
+      listenable: account,
+      builder: (context, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.profileLanguage, style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                l.profileLanguageHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<UserLanguage>(
+                key: const Key('profile-language'),
+                initialValue: current == UserLanguage.unknown ? null : current,
+                items: [
+                  DropdownMenuItem(
+                    value: UserLanguage.auto,
+                    child: Text(l.profileLanguageAuto),
+                  ),
+                  const DropdownMenuItem(
+                    value: UserLanguage.en,
+                    child: Text('English'),
+                  ),
+                  const DropdownMenuItem(
+                    value: UserLanguage.tr,
+                    child: Text('Türkçe'),
+                  ),
+                ],
+                onChanged: account.busy
+                    ? null
+                    : (v) {
+                        if (v != null) account.setLanguage(v.wire);
+                      },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

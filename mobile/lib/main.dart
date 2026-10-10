@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'l10n/app_localizations.dart';
 import 'src/api/client.dart';
+import 'src/account.dart';
 import 'src/sections.dart';
 import 'src/session.dart';
 import 'src/storage/token_store.dart';
@@ -62,7 +63,12 @@ class _OpenlogAppState extends State<OpenlogApp> {
     if (client == null) return null;
     if (!identical(_sectionsClient, client)) {
       _sections?.dispose();
-      _sections = Sections(client: client);
+      _sections = Sections(
+        client: client,
+        // The language belongs to the account, so the session has to hear
+        // about it: it is what every screen reads `me` from.
+        account: AccountController(client, onMe: _session.updateMe),
+      );
       _sectionsClient = client;
     }
     return _sections;

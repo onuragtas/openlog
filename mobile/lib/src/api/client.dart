@@ -1215,6 +1215,23 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// Changes the password. The server revokes the person's other sessions,
+  /// which is why this screen says so before asking.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) => _send(
+    'POST',
+    '/api/v1/auth/password',
+    body: {'current_password': currentPassword, 'new_password': newPassword},
+  );
+
+  /// Sets the language the server writes in: alert e-mails, generated rule
+  /// names. Not the app's own language, which follows the phone.
+  Future<Me> setMyLanguage(String language) async => Me.fromJson(
+    await _send('PATCH', '/api/v1/auth/me', body: {'language': language}),
+  );
+
   /// Ends this device's session on the server and forgets the token here.
   ///
   /// The token is dropped even when the request fails: the person asked to be

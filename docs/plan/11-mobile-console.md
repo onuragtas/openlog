@@ -452,6 +452,15 @@ karşılaştırınca şunların da eksik olduğu çıktı; liste tamamlanmadan b
       öznitelik (`attr.k=v`), yalnızca hatalılar ve sıralama süzgeçleriyle.
 
 ### 9.3 Organizasyon ve hesap
+
+Webin `/settings` sayfası 13 sekme (`web/src/components/settings/SettingsLayout.tsx`), her biri
+rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği hazır olunca görünüyor.
+
+- [x] Ayarlar sekmeli oldu, rol tablosu webden birebir (`lib/src/roles.dart`).
+- [x] Profil: hesap, organizasyon, rol, organizasyon değiştirme ve sunucunun yazdığı dil
+      (`PATCH auth/me`).
+- [x] Güvenlik: parola değiştirme (`auth/password`) ve açık oturumlar — ikisi bir arada, çünkü
+      parola değişince diğer oturumlar kapanıyor.
 - [ ] Üyeler (`members`), davetler (`invitations`, `.../accept`, `.../lookup`)
 - [ ] API anahtarları (`api-keys`), lisans anahtarları (`license-keys`), tarayıcı anahtarları (`browser-keys`)
 - [ ] Denetim günlüğü (`audit-log`)

@@ -2230,4 +2230,45 @@ class LEn extends L {
 
   @override
   String get hostApmServices => 'Services sending traces';
+
+  @override
+  String get settingsProfile => 'Profile';
+
+  @override
+  String get settingsSecurity => 'Security';
+
+  @override
+  String get profileLanguage => 'Language';
+
+  @override
+  String get profileLanguageHint =>
+      'The language the server writes in: alert e-mails and generated rule names. The app\'s own language follows the phone.';
+
+  @override
+  String get profileLanguageAuto => 'Automatic';
+
+  @override
+  String get securityPassword => 'Password';
+
+  @override
+  String get securityPasswordHint =>
+      'Changing the password ends your other sessions; this device stays signed in.';
+
+  @override
+  String get securityCurrentPassword => 'Current password';
+
+  @override
+  String get securityNewPassword => 'New password';
+
+  @override
+  String securityMinLength(int count) {
+    return 'At least $count characters.';
+  }
+
+  @override
+  String get securityChangePassword => 'Change password';
+
+  @override
+  String get securityPasswordChanged =>
+      'The password changed; the other sessions were ended.';
 }

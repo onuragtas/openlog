@@ -1470,5 +1470,24 @@
   "errorsSamples": "Sample requests",
   "errorsNoSamples": "No sample requests were kept.",
   "errorsActivity": "History",
-  "hostApmServices": "Services sending traces"
+  "hostApmServices": "Services sending traces",
+  "settingsProfile": "Profile",
+  "settingsSecurity": "Security",
+  "profileLanguage": "Language",
+  "profileLanguageHint": "The language the server writes in: alert e-mails and generated rule names. The app's own language follows the phone.",
+  "profileLanguageAuto": "Automatic",
+  "securityPassword": "Password",
+  "securityPasswordHint": "Changing the password ends your other sessions; this device stays signed in.",
+  "securityCurrentPassword": "Current password",
+  "securityNewPassword": "New password",
+  "securityMinLength": "At least {count} characters.",
+  "@securityMinLength": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "securityChangePassword": "Change password",
+  "securityPasswordChanged": "The password changed; the other sessions were ended."
 }

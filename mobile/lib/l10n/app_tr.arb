@@ -1373,5 +1373,24 @@
   "errorsSamples": "Örnek istekler",
   "errorsNoSamples": "Saklanmış örnek istek yok.",
   "errorsActivity": "Geçmiş",
-  "hostApmServices": "İz gönderen servisler"
+  "hostApmServices": "İz gönderen servisler",
+  "settingsProfile": "Profil",
+  "settingsSecurity": "Güvenlik",
+  "profileLanguage": "Dil",
+  "profileLanguageHint": "Sunucunun yazdığı dil: alarm e-postaları ve üretilen kural adları. Uygulamanın dili telefonu izler.",
+  "profileLanguageAuto": "Otomatik",
+  "securityPassword": "Parola",
+  "securityPasswordHint": "Parolayı değiştirmek diğer oturumlarınızı kapatır; bu cihaz açık kalır.",
+  "securityCurrentPassword": "Şimdiki parola",
+  "securityNewPassword": "Yeni parola",
+  "securityMinLength": "En az {count} karakter.",
+  "@securityMinLength": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "securityChangePassword": "Parolayı değiştir",
+  "securityPasswordChanged": "Parola değişti; diğer oturumlar kapatıldı."
 }
