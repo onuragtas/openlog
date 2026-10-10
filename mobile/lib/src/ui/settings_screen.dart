@@ -11,9 +11,11 @@ import '../../l10n/app_localizations.dart';
 import '../account.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
+import '../members.dart';
 import '../session.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
+import 'members_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
 
@@ -23,6 +25,7 @@ class SettingsBody extends StatefulWidget {
     required this.session,
     required this.sessions,
     required this.account,
+    required this.members,
     required this.active,
   });
 
@@ -36,6 +39,9 @@ class SettingsBody extends StatefulWidget {
   /// The password and the language: the account behind the token, which is
   /// what the web's Profil and Güvenlik tabs change.
   final AccountController account;
+
+  /// Who is in the organization, and who has been asked to join.
+  final MembersController members;
   final bool active;
 
   @override
@@ -49,7 +55,7 @@ class _SettingsBodyState extends State<SettingsBody>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this)
+    _tabs = TabController(length: 3, vsync: this)
       ..addListener(() {
         if (!_tabs.indexIsChanging) _loadIfVisible();
       });
@@ -68,14 +74,20 @@ class _SettingsBodyState extends State<SettingsBody>
     super.dispose();
   }
 
-  /// The sessions belong to the Güvenlik tab, so they are asked for when
-  /// that tab is looked at rather than when settings is opened.
+  /// Each tab asks for its own when it is looked at, not when settings is
+  /// opened: the web does not read the member list of a tab nobody chose.
   void _loadIfVisible() {
-    final c = widget.sessions;
-    if (!widget.active || _tabs.index != 1 || c.loaded || c.loadingFirst) {
-      return;
+    if (!widget.active) return;
+    if (_tabs.index == 1) {
+      final c = widget.sessions;
+      if (c.loaded || c.loadingFirst) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
+    if (_tabs.index == 2) {
+      final c = widget.members;
+      if (c.loading || c.members.isNotEmpty) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) => c.load());
+    }
   }
 
   @override
@@ -96,6 +108,10 @@ class _SettingsBodyState extends State<SettingsBody>
               key: const Key('settings-tab-security'),
               text: l.settingsSecurity,
             ),
+            Tab(
+              key: const Key('settings-tab-members'),
+              text: l.settingsMembers,
+            ),
           ],
         ),
         Expanded(
@@ -108,6 +124,7 @@ class _SettingsBodyState extends State<SettingsBody>
                 sessions: widget.sessions,
                 account: widget.account,
               ),
+              MembersTab(session: widget.session, members: widget.members),
             ],
           ),
         ),

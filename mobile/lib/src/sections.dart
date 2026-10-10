@@ -17,6 +17,7 @@ import 'discovery.dart';
 import 'errors.dart';
 import 'list_controller.dart';
 import 'logs.dart';
+import 'members.dart';
 import 'session.dart';
 import 'query.dart';
 import 'sampling.dart';
@@ -52,6 +53,7 @@ class Sections {
     OnboardingController? onboarding,
     SessionsController? sessions,
     AccountController? account,
+    MembersController? members,
     LogsController Function({
       String traceId,
       String podUid,
@@ -158,6 +160,7 @@ class Sections {
        onboarding = onboarding ?? OnboardingController(client),
        sessions = sessions ?? SessionsController(client),
        account = account ?? AccountController(client),
+       members = members ?? MembersController(client),
        scopedLogs =
            scopedLogs ??
            (({
@@ -216,6 +219,9 @@ class Sections {
 
   /// The account behind the token: its password and its language.
   final AccountController account;
+
+  /// Who is in the organization, and who has been asked to join.
+  final MembersController members;
 
   /// The logs of one request, pod or container. A controller per screen,
   /// disposed with it, because each one answers about a different thing.
@@ -302,6 +308,7 @@ class Sections {
     onboarding,
     sessions,
     account,
+    members,
     hosts,
     containers,
     costs,

@@ -10173,6 +10173,91 @@ class SessionPage {
   final List<Session> sessions;
 }
 
+/// `MemberPage` of the openlog API contract.
+class MemberPage {
+  const MemberPage({required this.members});
+
+  factory MemberPage.fromJson(Object? json, [String path = 'MemberPage']) {
+    final m = _obj(json, path);
+    return MemberPage(
+      members: _req(
+        m,
+        'members',
+        path,
+        (v, p) => _list<Member>(v, p, (v, p) => Member.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'members': [for (final e in members) e.toJson()],
+  };
+
+  final List<Member> members;
+}
+
+/// `InvitationPage` of the openlog API contract.
+class InvitationPage {
+  const InvitationPage({required this.invitations});
+
+  factory InvitationPage.fromJson(
+    Object? json, [
+    String path = 'InvitationPage',
+  ]) {
+    final m = _obj(json, path);
+    return InvitationPage(
+      invitations: _req(
+        m,
+        'invitations',
+        path,
+        (v, p) => _list<Invitation>(v, p, (v, p) => Invitation.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'invitations': [for (final e in invitations) e.toJson()],
+  };
+
+  final List<Invitation> invitations;
+}
+
+/// `InvitationCreated` of the openlog API contract.
+class InvitationCreated {
+  const InvitationCreated({
+    required this.invitation,
+    required this.token,
+    required this.emailSent,
+  });
+
+  factory InvitationCreated.fromJson(
+    Object? json, [
+    String path = 'InvitationCreated',
+  ]) {
+    final m = _obj(json, path);
+    return InvitationCreated(
+      invitation: _req(
+        m,
+        'invitation',
+        path,
+        (v, p) => Invitation.fromJson(v, p),
+      ),
+      token: _req(m, 'token', path, _str),
+      emailSent: _req(m, 'email_sent', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'invitation': invitation.toJson(),
+    'token': token,
+    'email_sent': emailSent,
+  };
+
+  final Invitation invitation;
+  final String token;
+  final bool emailSent;
+}
+
 /// `ServicePage` of the openlog API contract.
 class ServicePage {
   const ServicePage({required this.step, required this.services});
@@ -11336,6 +11421,95 @@ class ApmHostService {
   final String environment;
   final DateTime firstSeen;
   final DateTime lastSeen;
+}
+
+/// `Member` of the openlog API contract.
+class Member {
+  const Member({
+    required this.userId,
+    required this.email,
+    required this.name,
+    required this.role,
+    required this.joinedAt,
+  });
+
+  factory Member.fromJson(Object? json, [String path = 'Member']) {
+    final m = _obj(json, path);
+    return Member(
+      userId: _req(m, 'user_id', path, _str),
+      email: _req(m, 'email', path, _str),
+      name: _req(m, 'name', path, _str),
+      role: _req(m, 'role', path, Role.fromJson),
+      joinedAt: _req(m, 'joined_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'user_id': userId,
+    'email': email,
+    'name': name,
+    'role': role.wire,
+    'joined_at': joinedAt.toUtc().toIso8601String(),
+  };
+
+  final String userId;
+  final String email;
+  final String name;
+  final Role role;
+  final DateTime joinedAt;
+}
+
+/// `Invitation` of the openlog API contract.
+class Invitation {
+  const Invitation({
+    required this.id,
+    required this.email,
+    required this.role,
+    required this.invitedByEmail,
+    required this.createdAt,
+    required this.expiresAt,
+    required this.expired,
+    this.lastSentAt,
+    required this.sendCount,
+  });
+
+  factory Invitation.fromJson(Object? json, [String path = 'Invitation']) {
+    final m = _obj(json, path);
+    return Invitation(
+      id: _req(m, 'id', path, _str),
+      email: _req(m, 'email', path, _str),
+      role: _req(m, 'role', path, Role.fromJson),
+      invitedByEmail: _req(m, 'invited_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      expiresAt: _req(m, 'expires_at', path, _time),
+      expired: _req(m, 'expired', path, _bool),
+      lastSentAt: _opt(m, 'last_sent_at', path, _time),
+      sendCount: _req(m, 'send_count', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'email': email,
+    'role': role.wire,
+    'invited_by_email': invitedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'expires_at': expiresAt.toUtc().toIso8601String(),
+    'expired': expired,
+    if (lastSentAt != null)
+      'last_sent_at': lastSentAt!.toUtc().toIso8601String(),
+    'send_count': sendCount,
+  };
+
+  final String id;
+  final String email;
+  final Role role;
+  final String invitedByEmail;
+  final DateTime createdAt;
+  final DateTime expiresAt;
+  final bool expired;
+  final DateTime? lastSentAt;
+  final int sendCount;
 }
 
 /// `LogRecord` of the openlog API contract.

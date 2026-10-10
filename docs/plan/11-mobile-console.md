@@ -461,7 +461,10 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       (`PATCH auth/me`).
 - [x] Güvenlik: parola değiştirme (`auth/password`) ve açık oturumlar — ikisi bir arada, çünkü
       parola değişince diğer oturumlar kapanıyor.
-- [ ] Üyeler (`members`), davetler (`invitations`, `.../accept`, `.../lookup`)
+- [x] Üyeler (`members`) ve davetler (`invitations`, `.../resend`): Ayarlar'da tek sekme,
+      webdeki gibi; rol değiştirme, çıkarma/ayrılma (onaylı), davet gönderme, yenileme, iptal.
+      Tek seferlik davet kodu e-posta gidemediğinde ekranda duruyor. Daveti kabul etme
+      (`.../accept`, `.../lookup`) girişten önceki akış; mobilde oturum açmış kişi için yok.
 - [ ] API anahtarları (`api-keys`), lisans anahtarları (`license-keys`), tarayıcı anahtarları (`browser-keys`)
 - [ ] Denetim günlüğü (`audit-log`)
 - [ ] Organizasyon ayarları (`orgs/current`, `.../saas`, `.../support-access`, `.../deletion`)

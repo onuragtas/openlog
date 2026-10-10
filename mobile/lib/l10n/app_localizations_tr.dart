@@ -2266,4 +2266,96 @@ class LTr extends L {
   @override
   String get securityPasswordChanged =>
       'Parola değişti; diğer oturumlar kapatıldı.';
+
+  @override
+  String get settingsMembers => 'Üyeler';
+
+  @override
+  String get membersTitle => 'Üyeler';
+
+  @override
+  String get membersRole => 'Rol';
+
+  @override
+  String get membersYou => 'siz';
+
+  @override
+  String membersJoined(String when) {
+    return 'katıldı $when';
+  }
+
+  @override
+  String get membersRemove => 'Çıkar';
+
+  @override
+  String get membersRemoveTitle => 'Üye çıkarılsın mı?';
+
+  @override
+  String membersRemoveBody(String email) {
+    return '$email bu organizasyona erişemez olacak.';
+  }
+
+  @override
+  String get membersLeave => 'Ayrıl';
+
+  @override
+  String get membersLeaveTitle => 'Organizasyondan ayrılınsın mı?';
+
+  @override
+  String membersLeaveBody(String org) {
+    return '$org erişiminiz kalkar; geri dönmek için yeni bir davet gerekir.';
+  }
+
+  @override
+  String get membersForbidden => 'Rolünüz üyeleri yönetmeye yetmiyor.';
+
+  @override
+  String get invitationsTitle => 'Davetler';
+
+  @override
+  String get invitationsEmpty => 'Bekleyen davet yok.';
+
+  @override
+  String get invitationsNew => 'Yeni davet';
+
+  @override
+  String get invitationsEmail => 'E-posta';
+
+  @override
+  String get invitationsSend => 'Davet gönder';
+
+  @override
+  String get invitationsResend => 'Yenile';
+
+  @override
+  String get invitationsRevoke => 'Daveti iptal et';
+
+  @override
+  String get invitationsExpired => 'süresi doldu';
+
+  @override
+  String invitationsExpires(String when) {
+    return 'biter $when';
+  }
+
+  @override
+  String invitationsSentTo(String email) {
+    return '$email adresine davet e-postası gönderildi.';
+  }
+
+  @override
+  String invitationsNotSent(String email) {
+    return '$email için davet oluşturuldu ama e-posta gönderilemedi; bağlantıyı kendiniz iletin.';
+  }
+
+  @override
+  String get invitationsTokenOnce => 'Bu kod yalnızca bir kez gösterilir.';
+
+  @override
+  String get invitationsDone => 'Tamam';
+
+  @override
+  String invitationsExpiredAt(String when) {
+    return 'bitti $when';
+  }
 }

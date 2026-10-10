@@ -1215,6 +1215,60 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// Who is in the organization.
+  Future<MemberPage> members() async =>
+      MemberPage.fromJson(await _send('GET', '/api/v1/members'));
+
+  /// Changes somebody's role. The server refuses to leave an organization
+  /// without an owner, which is the 409 this can answer with.
+  Future<void> setMemberRole(String userId, String role) => _send(
+    'PATCH',
+    '/api/v1/members/${Uri.encodeComponent(userId)}',
+    body: {'role': role},
+  );
+
+  /// Removes a member. Any member may remove themselves, which is leaving.
+  Future<void> removeMember(String userId) =>
+      _send('DELETE', '/api/v1/members/${Uri.encodeComponent(userId)}');
+
+  /// The invitations nobody has accepted yet.
+  Future<InvitationPage> invitations({bool includeExpired = false}) async =>
+      InvitationPage.fromJson(
+        await _send(
+          'GET',
+          _listPath(
+            '/api/v1/invitations',
+            '',
+            extra: {if (includeExpired) 'include_expired': 'true'},
+          ),
+        ),
+      );
+
+  /// Invites somebody. The token comes back once and never again, so what
+  /// the screen does with it is the only chance to pass it on.
+  Future<InvitationCreated> createInvitation({
+    required String email,
+    required String role,
+  }) async => InvitationCreated.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/invitations',
+      body: {'email': email, 'role': role},
+    ),
+  );
+
+  /// A new token and a new expiry; the previous link stops working.
+  Future<InvitationCreated> resendInvitation(String id) async =>
+      InvitationCreated.fromJson(
+        await _send(
+          'POST',
+          '/api/v1/invitations/${Uri.encodeComponent(id)}/resend',
+        ),
+      );
+
+  Future<void> revokeInvitation(String id) =>
+      _send('DELETE', '/api/v1/invitations/${Uri.encodeComponent(id)}');
+
   /// Changes the password. The server revokes the person's other sessions,
   /// which is why this screen says so before asking.
   Future<void> changePassword({

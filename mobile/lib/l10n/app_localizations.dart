@@ -4062,6 +4062,162 @@ abstract class L {
   /// In en, this message translates to:
   /// **'The password changed; the other sessions were ended.'**
   String get securityPasswordChanged;
+
+  /// No description provided for @settingsMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get settingsMembers;
+
+  /// No description provided for @membersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get membersTitle;
+
+  /// No description provided for @membersRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get membersRole;
+
+  /// No description provided for @membersYou.
+  ///
+  /// In en, this message translates to:
+  /// **'you'**
+  String get membersYou;
+
+  /// No description provided for @membersJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'joined {when}'**
+  String membersJoined(String when);
+
+  /// No description provided for @membersRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get membersRemove;
+
+  /// No description provided for @membersRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the member?'**
+  String get membersRemoveTitle;
+
+  /// No description provided for @membersRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{email} loses access to this organization.'**
+  String membersRemoveBody(String email);
+
+  /// No description provided for @membersLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get membersLeave;
+
+  /// No description provided for @membersLeaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave the organization?'**
+  String get membersLeaveTitle;
+
+  /// No description provided for @membersLeaveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You lose access to {org}; getting back in takes a new invitation.'**
+  String membersLeaveBody(String org);
+
+  /// No description provided for @membersForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow managing members.'**
+  String get membersForbidden;
+
+  /// No description provided for @invitationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitations'**
+  String get invitationsTitle;
+
+  /// No description provided for @invitationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending invitations.'**
+  String get invitationsEmpty;
+
+  /// No description provided for @invitationsNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New invitation'**
+  String get invitationsNew;
+
+  /// No description provided for @invitationsEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'E-mail'**
+  String get invitationsEmail;
+
+  /// No description provided for @invitationsSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send invitation'**
+  String get invitationsSend;
+
+  /// No description provided for @invitationsResend.
+  ///
+  /// In en, this message translates to:
+  /// **'Renew'**
+  String get invitationsResend;
+
+  /// No description provided for @invitationsRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke the invitation'**
+  String get invitationsRevoke;
+
+  /// No description provided for @invitationsExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'expired'**
+  String get invitationsExpired;
+
+  /// No description provided for @invitationsExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'expires {when}'**
+  String invitationsExpires(String when);
+
+  /// No description provided for @invitationsSentTo.
+  ///
+  /// In en, this message translates to:
+  /// **'An invitation e-mail went to {email}.'**
+  String invitationsSentTo(String email);
+
+  /// No description provided for @invitationsNotSent.
+  ///
+  /// In en, this message translates to:
+  /// **'The invitation for {email} was created but no e-mail could be sent; pass the link on yourself.'**
+  String invitationsNotSent(String email);
+
+  /// No description provided for @invitationsTokenOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'This code is shown only once.'**
+  String get invitationsTokenOnce;
+
+  /// No description provided for @invitationsDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get invitationsDone;
+
+  /// No description provided for @invitationsExpiredAt.
+  ///
+  /// In en, this message translates to:
+  /// **'ended {when}'**
+  String invitationsExpiredAt(String when);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

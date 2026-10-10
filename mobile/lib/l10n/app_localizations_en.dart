@@ -2271,4 +2271,96 @@ class LEn extends L {
   @override
   String get securityPasswordChanged =>
       'The password changed; the other sessions were ended.';
+
+  @override
+  String get settingsMembers => 'Members';
+
+  @override
+  String get membersTitle => 'Members';
+
+  @override
+  String get membersRole => 'Role';
+
+  @override
+  String get membersYou => 'you';
+
+  @override
+  String membersJoined(String when) {
+    return 'joined $when';
+  }
+
+  @override
+  String get membersRemove => 'Remove';
+
+  @override
+  String get membersRemoveTitle => 'Remove the member?';
+
+  @override
+  String membersRemoveBody(String email) {
+    return '$email loses access to this organization.';
+  }
+
+  @override
+  String get membersLeave => 'Leave';
+
+  @override
+  String get membersLeaveTitle => 'Leave the organization?';
+
+  @override
+  String membersLeaveBody(String org) {
+    return 'You lose access to $org; getting back in takes a new invitation.';
+  }
+
+  @override
+  String get membersForbidden => 'Your role does not allow managing members.';
+
+  @override
+  String get invitationsTitle => 'Invitations';
+
+  @override
+  String get invitationsEmpty => 'No pending invitations.';
+
+  @override
+  String get invitationsNew => 'New invitation';
+
+  @override
+  String get invitationsEmail => 'E-mail';
+
+  @override
+  String get invitationsSend => 'Send invitation';
+
+  @override
+  String get invitationsResend => 'Renew';
+
+  @override
+  String get invitationsRevoke => 'Revoke the invitation';
+
+  @override
+  String get invitationsExpired => 'expired';
+
+  @override
+  String invitationsExpires(String when) {
+    return 'expires $when';
+  }
+
+  @override
+  String invitationsSentTo(String email) {
+    return 'An invitation e-mail went to $email.';
+  }
+
+  @override
+  String invitationsNotSent(String email) {
+    return 'The invitation for $email was created but no e-mail could be sent; pass the link on yourself.';
+  }
+
+  @override
+  String get invitationsTokenOnce => 'This code is shown only once.';
+
+  @override
+  String get invitationsDone => 'Done';
+
+  @override
+  String invitationsExpiredAt(String when) {
+    return 'ended $when';
+  }
 }

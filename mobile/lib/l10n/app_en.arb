@@ -1489,5 +1489,80 @@
     }
   },
   "securityChangePassword": "Change password",
-  "securityPasswordChanged": "The password changed; the other sessions were ended."
+  "securityPasswordChanged": "The password changed; the other sessions were ended.",
+  "settingsMembers": "Members",
+  "membersTitle": "Members",
+  "membersRole": "Role",
+  "membersYou": "you",
+  "membersJoined": "joined {when}",
+  "@membersJoined": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "membersRemove": "Remove",
+  "membersRemoveTitle": "Remove the member?",
+  "membersRemoveBody": "{email} loses access to this organization.",
+  "@membersRemoveBody": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "membersLeave": "Leave",
+  "membersLeaveTitle": "Leave the organization?",
+  "membersLeaveBody": "You lose access to {org}; getting back in takes a new invitation.",
+  "@membersLeaveBody": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      }
+    }
+  },
+  "membersForbidden": "Your role does not allow managing members.",
+  "invitationsTitle": "Invitations",
+  "invitationsEmpty": "No pending invitations.",
+  "invitationsNew": "New invitation",
+  "invitationsEmail": "E-mail",
+  "invitationsSend": "Send invitation",
+  "invitationsResend": "Renew",
+  "invitationsRevoke": "Revoke the invitation",
+  "invitationsExpired": "expired",
+  "invitationsExpires": "expires {when}",
+  "@invitationsExpires": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "invitationsSentTo": "An invitation e-mail went to {email}.",
+  "@invitationsSentTo": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "invitationsNotSent": "The invitation for {email} was created but no e-mail could be sent; pass the link on yourself.",
+  "@invitationsNotSent": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "invitationsTokenOnce": "This code is shown only once.",
+  "invitationsDone": "Done",
+  "invitationsExpiredAt": "ended {when}",
+  "@invitationsExpiredAt": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  }
 }

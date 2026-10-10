@@ -333,6 +333,7 @@ class _AppShellState extends State<AppShell> {
         session: session,
         sessions: s.sessions,
         account: s.account,
+        members: s.members,
         active: active,
       ),
     );

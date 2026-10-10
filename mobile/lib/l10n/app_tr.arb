@@ -1392,5 +1392,80 @@
     }
   },
   "securityChangePassword": "Parolayı değiştir",
-  "securityPasswordChanged": "Parola değişti; diğer oturumlar kapatıldı."
+  "securityPasswordChanged": "Parola değişti; diğer oturumlar kapatıldı.",
+  "settingsMembers": "Üyeler",
+  "membersTitle": "Üyeler",
+  "membersRole": "Rol",
+  "membersYou": "siz",
+  "membersJoined": "katıldı {when}",
+  "@membersJoined": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "membersRemove": "Çıkar",
+  "membersRemoveTitle": "Üye çıkarılsın mı?",
+  "membersRemoveBody": "{email} bu organizasyona erişemez olacak.",
+  "@membersRemoveBody": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "membersLeave": "Ayrıl",
+  "membersLeaveTitle": "Organizasyondan ayrılınsın mı?",
+  "membersLeaveBody": "{org} erişiminiz kalkar; geri dönmek için yeni bir davet gerekir.",
+  "@membersLeaveBody": {
+    "placeholders": {
+      "org": {
+        "type": "String"
+      }
+    }
+  },
+  "membersForbidden": "Rolünüz üyeleri yönetmeye yetmiyor.",
+  "invitationsTitle": "Davetler",
+  "invitationsEmpty": "Bekleyen davet yok.",
+  "invitationsNew": "Yeni davet",
+  "invitationsEmail": "E-posta",
+  "invitationsSend": "Davet gönder",
+  "invitationsResend": "Yenile",
+  "invitationsRevoke": "Daveti iptal et",
+  "invitationsExpired": "süresi doldu",
+  "invitationsExpires": "biter {when}",
+  "@invitationsExpires": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "invitationsSentTo": "{email} adresine davet e-postası gönderildi.",
+  "@invitationsSentTo": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "invitationsNotSent": "{email} için davet oluşturuldu ama e-posta gönderilemedi; bağlantıyı kendiniz iletin.",
+  "@invitationsNotSent": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "invitationsTokenOnce": "Bu kod yalnızca bir kez gösterilir.",
+  "invitationsDone": "Tamam",
+  "invitationsExpiredAt": "bitti {when}",
+  "@invitationsExpiredAt": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  }
 }
