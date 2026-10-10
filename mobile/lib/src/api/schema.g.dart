@@ -8432,6 +8432,36 @@ class AlertRuleTypePage {
   final List<AlertRuleTypeInfo> types;
 }
 
+/// `ApmErrorCommentPage` of the openlog API contract.
+class ApmErrorCommentPage {
+  const ApmErrorCommentPage({required this.comments});
+
+  factory ApmErrorCommentPage.fromJson(
+    Object? json, [
+    String path = 'ApmErrorCommentPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorCommentPage(
+      comments: _req(
+        m,
+        'comments',
+        path,
+        (v, p) => _list<ApmErrorComment>(
+          v,
+          p,
+          (v, p) => ApmErrorComment.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'comments': [for (final e in comments) e.toJson()],
+  };
+
+  final List<ApmErrorComment> comments;
+}
+
 /// `SessionPage` of the openlog API contract.
 class SessionPage {
   const SessionPage({required this.sessions});
@@ -9105,6 +9135,49 @@ class AlertRuleTypeInfo {
   final AlertRuleType type;
   final bool available;
   final String reason;
+}
+
+/// `ApmErrorComment` of the openlog API contract.
+class ApmErrorComment {
+  const ApmErrorComment({
+    required this.id,
+    required this.authorUserId,
+    required this.authorEmail,
+    required this.authorName,
+    required this.body,
+    required this.createdAt,
+  });
+
+  factory ApmErrorComment.fromJson(
+    Object? json, [
+    String path = 'ApmErrorComment',
+  ]) {
+    final m = _obj(json, path);
+    return ApmErrorComment(
+      id: _req(m, 'id', path, _str),
+      authorUserId: _req(m, 'author_user_id', path, _str),
+      authorEmail: _req(m, 'author_email', path, _str),
+      authorName: _req(m, 'author_name', path, _str),
+      body: _req(m, 'body', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'author_user_id': authorUserId,
+    'author_email': authorEmail,
+    'author_name': authorName,
+    'body': body,
+    'created_at': createdAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String authorUserId;
+  final String authorEmail;
+  final String authorName;
+  final String body;
+  final DateTime createdAt;
 }
 
 /// `LogRecord` of the openlog API contract.

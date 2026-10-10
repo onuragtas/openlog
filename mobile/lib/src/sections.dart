@@ -12,6 +12,7 @@ import 'api/schema.g.dart';
 import 'dashboards.dart';
 import 'detail.dart';
 import 'discovery.dart';
+import 'errors.dart';
 import 'list_controller.dart';
 import 'logs.dart';
 import 'session.dart';
@@ -61,6 +62,8 @@ class Sections {
     AlertRoutesController? routes,
     AlertCalendarsController? calendars,
     AlertDeliveriesController Function(String channelId)? deliveries,
+    ErrorInboxController? errors,
+    ErrorGroupController Function(ApmErrorGroup group)? errorGroup,
     TemplatesController? templates,
     TemplateSetupController Function(AlertTemplate template, String language)?
     templateSetup,
@@ -148,6 +151,9 @@ class Sections {
            deliveries ??
            ((channelId) =>
                AlertDeliveriesController(client, channelId: channelId)),
+       errors = errors ?? ErrorInboxController(client),
+       errorGroup =
+           errorGroup ?? ((group) => ErrorGroupController(client, group)),
        templates = templates ?? TemplatesController(client),
        templateSetup =
            templateSetup ??
@@ -199,6 +205,12 @@ class Sections {
   /// the screen opens.
   final AlertDeliveriesController Function(String channelId) deliveries;
 
+  /// The error inbox of every service, and one group's comments and
+  /// actions. The group controller is per screen: it holds the comments of
+  /// the group that was opened.
+  final ErrorInboxController errors;
+  final ErrorGroupController Function(ApmErrorGroup group) errorGroup;
+
   /// The template catalog, and one template being set up. The setup is a
   /// controller per screen: it holds a rendered rule and its preview, which
   /// belong to that one visit.
@@ -243,6 +255,7 @@ class Sections {
     pods,
     integrations,
     services,
+    errors,
     rum,
     profiles,
     databases,

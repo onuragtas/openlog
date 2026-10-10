@@ -621,7 +621,7 @@ class LEn extends L {
   String get serviceTabErrors => 'Errors';
 
   @override
-  String get errorsEmpty => 'Nothing has thrown in the window.';
+  String get errorsEmpty => 'No errors with this filter.';
 
   @override
   String errorsOccurrences(int count) {
@@ -649,7 +649,7 @@ class LEn extends L {
   String get errorsNoTrace => 'No trace was kept for this error.';
 
   @override
-  String get errorsTruncated => 'There are more; this is the top of the list.';
+  String get errorsTruncated => 'Not every matching group; narrow the filter.';
 
   @override
   String get traceTitle => 'Trace';
@@ -1686,4 +1686,106 @@ class LEn extends L {
   String templatesPercent(String value) {
     return '$value%';
   }
+
+  @override
+  String get navErrors => 'Errors';
+
+  @override
+  String get errorsSearch => 'Search errors';
+
+  @override
+  String get errorsSort => 'Sort';
+
+  @override
+  String get errorsSortCount => 'By count';
+
+  @override
+  String get errorsSortLastSeen => 'By last seen';
+
+  @override
+  String get errorsSortFirstSeen => 'By first seen';
+
+  @override
+  String get errorsAll => 'All';
+
+  @override
+  String get errorsUnresolved => 'Unresolved';
+
+  @override
+  String get errorsResolved => 'Resolved';
+
+  @override
+  String get errorsIgnored => 'Ignored';
+
+  @override
+  String get errorsRegressed => 'Regressed';
+
+  @override
+  String get errorsNoWorkflow =>
+      'This installation has no error workflow (it needs PostgreSQL); every group reads as unresolved.';
+
+  @override
+  String errorsCount(int count) {
+    return '$count times';
+  }
+
+  @override
+  String errorsCountOfTotal(int count, int total) {
+    return '$count in this range, $total within retention';
+  }
+
+  @override
+  String errorsFirstSeen(String when) {
+    return 'first $when';
+  }
+
+  @override
+  String errorsResolvedIn(String version) {
+    return 'resolved in $version';
+  }
+
+  @override
+  String errorsRegressions(int count) {
+    return 'came back $count times';
+  }
+
+  @override
+  String get errorsLastTrace => 'Open the last trace';
+
+  @override
+  String get errorsResolve => 'Resolve';
+
+  @override
+  String get errorsResolveInVersion => 'Resolve in version…';
+
+  @override
+  String get errorsVersion => 'Version';
+
+  @override
+  String get errorsVersionHint =>
+      'Seen again after this version and the group reopens by itself.';
+
+  @override
+  String get errorsIgnore => 'Ignore';
+
+  @override
+  String get errorsReopen => 'Reopen';
+
+  @override
+  String get errorsComments => 'Comments';
+
+  @override
+  String get errorsNoComments => 'No comments.';
+
+  @override
+  String get errorsComment => 'Comment';
+
+  @override
+  String get errorsCommentTooLong => 'The comment is too long.';
+
+  @override
+  String get errorsSend => 'Send';
+
+  @override
+  String get errorsDeleteComment => 'Delete the comment';
 }

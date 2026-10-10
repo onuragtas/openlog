@@ -1018,5 +1018,83 @@
         "type": "String"
       }
     }
-  }
+  },
+  "navErrors": "Hatalar",
+  "errorsSearch": "Hata ara",
+  "errorsSort": "Sırala",
+  "errorsSortCount": "Adede göre",
+  "errorsSortLastSeen": "Son görülmeye göre",
+  "errorsSortFirstSeen": "İlk görülmeye göre",
+  "errorsAll": "Hepsi",
+  "errorsUnresolved": "Açık",
+  "errorsResolved": "Çözüldü",
+  "errorsIgnored": "Yoksayıldı",
+  "errorsRegressed": "Geri geldi",
+  "errorsEmpty": "Bu süzgeçle hata yok.",
+  "errorsTruncated": "Eşleşen grupların tamamı değil; süzgeci daraltın.",
+  "errorsNoWorkflow": "Bu kurulumda hata iş akışı yok (PostgreSQL gerekir); her grup açık görünür.",
+  "errorsCount": "{count} kez",
+  "@errorsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsCountOfTotal": "Bu aralıkta {count}, saklama süresi boyunca {total} kez",
+  "@errorsCountOfTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsFirstSeen": "ilk {when}",
+  "@errorsFirstSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "errorsLastSeen": "son {when}",
+  "@errorsLastSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "errorsResolvedIn": "{version} sürümünde çözüldü",
+  "@errorsResolvedIn": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "errorsRegressions": "{count} kez geri geldi",
+  "@errorsRegressions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsLastTrace": "Son izi aç",
+  "errorsResolve": "Çözüldü",
+  "errorsResolveInVersion": "Sürümde çözüldü…",
+  "errorsVersion": "Sürüm",
+  "errorsVersionHint": "Bu sürümden sonra yeniden görülürse grup kendiliğinden açılır.",
+  "errorsIgnore": "Yoksay",
+  "errorsReopen": "Yeniden aç",
+  "errorsComments": "Yorumlar",
+  "errorsNoComments": "Yorum yok.",
+  "errorsComment": "Yorum",
+  "errorsCommentTooLong": "Yorum çok uzun.",
+  "errorsSend": "Gönder",
+  "errorsDeleteComment": "Yorumu sil"
 }

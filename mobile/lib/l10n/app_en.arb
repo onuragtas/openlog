@@ -1115,5 +1115,83 @@
         "type": "String"
       }
     }
-  }
+  },
+  "navErrors": "Errors",
+  "errorsSearch": "Search errors",
+  "errorsSort": "Sort",
+  "errorsSortCount": "By count",
+  "errorsSortLastSeen": "By last seen",
+  "errorsSortFirstSeen": "By first seen",
+  "errorsAll": "All",
+  "errorsUnresolved": "Unresolved",
+  "errorsResolved": "Resolved",
+  "errorsIgnored": "Ignored",
+  "errorsRegressed": "Regressed",
+  "errorsEmpty": "No errors with this filter.",
+  "errorsTruncated": "Not every matching group; narrow the filter.",
+  "errorsNoWorkflow": "This installation has no error workflow (it needs PostgreSQL); every group reads as unresolved.",
+  "errorsCount": "{count} times",
+  "@errorsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsCountOfTotal": "{count} in this range, {total} within retention",
+  "@errorsCountOfTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsFirstSeen": "first {when}",
+  "@errorsFirstSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "errorsLastSeen": "last {when}",
+  "@errorsLastSeen": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "errorsResolvedIn": "resolved in {version}",
+  "@errorsResolvedIn": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "errorsRegressions": "came back {count} times",
+  "@errorsRegressions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorsLastTrace": "Open the last trace",
+  "errorsResolve": "Resolve",
+  "errorsResolveInVersion": "Resolve in version…",
+  "errorsVersion": "Version",
+  "errorsVersionHint": "Seen again after this version and the group reopens by itself.",
+  "errorsIgnore": "Ignore",
+  "errorsReopen": "Reopen",
+  "errorsComments": "Comments",
+  "errorsNoComments": "No comments.",
+  "errorsComment": "Comment",
+  "errorsCommentTooLong": "The comment is too long.",
+  "errorsSend": "Send",
+  "errorsDeleteComment": "Delete the comment"
 }

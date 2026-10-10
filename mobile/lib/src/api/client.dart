@@ -564,6 +564,82 @@ class OpenlogClient {
         ),
       );
 
+  /// The error inbox of every service.
+  ///
+  /// The filters the web offers are all here now: a phone that could only
+  /// read the inbox left the person with a list they could not act on, which
+  /// is the one thing an inbox is for.
+  Future<ApmErrorInbox> apmErrors({
+    String service = '',
+    String status = 'unresolved',
+    String assignee = '',
+    String q = '',
+    String sort = 'count',
+    int limit = 50,
+  }) async => ApmErrorInbox.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/errors',
+        '',
+        extra: {
+          if (service.isNotEmpty) 'service': service,
+          // `all` is this app's word for "no status filter"; the server
+          // takes the parameter away, not a fourth value.
+          if (status.isNotEmpty && status != 'all') 'status': status,
+          if (assignee.isNotEmpty) 'assignee': assignee,
+          if (q.isNotEmpty) 'q': q,
+          'sort': sort,
+          'limit': '$limit',
+        },
+      ),
+    ),
+  );
+
+  /// Resolves, ignores, reopens or assigns groups.
+  ///
+  /// One call for several groups because that is the endpoint: the server
+  /// writes one audit event per changed group either way.
+  Future<void> patchApmErrorGroups(
+    List<String> groupIds, {
+    String? status,
+    String? assigneeUserId,
+    String? resolvedInVersion,
+  }) => _send(
+    'PATCH',
+    '/api/v1/apm/errors/groups',
+    body: {
+      'group_ids': groupIds,
+      // Omitted means unchanged, and an empty assignee means unassign --
+      // two different things, so null and '' cannot be merged here.
+      'status': ?status,
+      'assignee_user_id': ?assigneeUserId,
+      'resolved_in_version': ?resolvedInVersion,
+    },
+  );
+
+  /// What people said about one group, oldest first.
+  Future<ApmErrorCommentPage> apmErrorComments(String groupId) async =>
+      ApmErrorCommentPage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/apm/errors/groups/${Uri.encodeComponent(groupId)}/comments',
+        ),
+      );
+
+  Future<void> addApmErrorComment(String groupId, String body) => _send(
+    'POST',
+    '/api/v1/apm/errors/groups/${Uri.encodeComponent(groupId)}/comments',
+    body: {'body': body},
+  );
+
+  /// The author deletes their own; an admin or owner deletes any.
+  Future<void> deleteApmErrorComment(String groupId, String commentId) => _send(
+    'DELETE',
+    '/api/v1/apm/errors/groups/${Uri.encodeComponent(groupId)}'
+        '/comments/${Uri.encodeComponent(commentId)}',
+  );
+
   /// One request end to end, every span of it, ordered by start time.
   Future<Trace> trace(String traceId) async => Trace.fromJson(
     await _send('GET', '/api/v1/traces/${Uri.encodeComponent(traceId)}'),

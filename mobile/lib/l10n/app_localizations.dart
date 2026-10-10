@@ -1222,7 +1222,7 @@ abstract class L {
   /// No description provided for @errorsEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Nothing has thrown in the window.'**
+  /// **'No errors with this filter.'**
   String get errorsEmpty;
 
   /// No description provided for @errorsOccurrences.
@@ -1270,7 +1270,7 @@ abstract class L {
   /// No description provided for @errorsTruncated.
   ///
   /// In en, this message translates to:
-  /// **'There are more; this is the top of the list.'**
+  /// **'Not every matching group; narrow the filter.'**
   String get errorsTruncated;
 
   /// No description provided for @traceTitle.
@@ -3036,6 +3036,186 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{value}%'**
   String templatesPercent(String value);
+
+  /// No description provided for @navErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get navErrors;
+
+  /// No description provided for @errorsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search errors'**
+  String get errorsSearch;
+
+  /// No description provided for @errorsSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get errorsSort;
+
+  /// No description provided for @errorsSortCount.
+  ///
+  /// In en, this message translates to:
+  /// **'By count'**
+  String get errorsSortCount;
+
+  /// No description provided for @errorsSortLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'By last seen'**
+  String get errorsSortLastSeen;
+
+  /// No description provided for @errorsSortFirstSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'By first seen'**
+  String get errorsSortFirstSeen;
+
+  /// No description provided for @errorsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get errorsAll;
+
+  /// No description provided for @errorsUnresolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Unresolved'**
+  String get errorsUnresolved;
+
+  /// No description provided for @errorsResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get errorsResolved;
+
+  /// No description provided for @errorsIgnored.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignored'**
+  String get errorsIgnored;
+
+  /// No description provided for @errorsRegressed.
+  ///
+  /// In en, this message translates to:
+  /// **'Regressed'**
+  String get errorsRegressed;
+
+  /// No description provided for @errorsNoWorkflow.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation has no error workflow (it needs PostgreSQL); every group reads as unresolved.'**
+  String get errorsNoWorkflow;
+
+  /// No description provided for @errorsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} times'**
+  String errorsCount(int count);
+
+  /// No description provided for @errorsCountOfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} in this range, {total} within retention'**
+  String errorsCountOfTotal(int count, int total);
+
+  /// No description provided for @errorsFirstSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'first {when}'**
+  String errorsFirstSeen(String when);
+
+  /// No description provided for @errorsResolvedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'resolved in {version}'**
+  String errorsResolvedIn(String version);
+
+  /// No description provided for @errorsRegressions.
+  ///
+  /// In en, this message translates to:
+  /// **'came back {count} times'**
+  String errorsRegressions(int count);
+
+  /// No description provided for @errorsLastTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the last trace'**
+  String get errorsLastTrace;
+
+  /// No description provided for @errorsResolve.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve'**
+  String get errorsResolve;
+
+  /// No description provided for @errorsResolveInVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve in version…'**
+  String get errorsResolveInVersion;
+
+  /// No description provided for @errorsVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get errorsVersion;
+
+  /// No description provided for @errorsVersionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Seen again after this version and the group reopens by itself.'**
+  String get errorsVersionHint;
+
+  /// No description provided for @errorsIgnore.
+  ///
+  /// In en, this message translates to:
+  /// **'Ignore'**
+  String get errorsIgnore;
+
+  /// No description provided for @errorsReopen.
+  ///
+  /// In en, this message translates to:
+  /// **'Reopen'**
+  String get errorsReopen;
+
+  /// No description provided for @errorsComments.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments'**
+  String get errorsComments;
+
+  /// No description provided for @errorsNoComments.
+  ///
+  /// In en, this message translates to:
+  /// **'No comments.'**
+  String get errorsNoComments;
+
+  /// No description provided for @errorsComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get errorsComment;
+
+  /// No description provided for @errorsCommentTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The comment is too long.'**
+  String get errorsCommentTooLong;
+
+  /// No description provided for @errorsSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get errorsSend;
+
+  /// No description provided for @errorsDeleteComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the comment'**
+  String get errorsDeleteComment;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

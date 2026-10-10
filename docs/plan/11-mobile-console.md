@@ -398,7 +398,9 @@ Kalanlar, konu konu. Her satır bitince işaretlenir.
       ama hiçbir ekran çağırmıyor; web yalnızca olayın kendi teslimatlarını gösteriyor.)
 
 ### 9.2 APM
-- [ ] Hata gelen kutusu kendi bölümü olarak (`apm/errors`, `apm/errors/groups`)
+- [x] Hata gelen kutusu kendi bölümü olarak (`apm/errors`, `apm/errors/groups`,
+      `.../comments`): durum sekmeleri ve sayıları, arama, sıralama; grup ekranında çözüldü,
+      sürümde çözüldü, yoksay, yeniden aç ve yorumlar. Başkasına atama webde (üye listesi gerekir).
 - [ ] Servis haritası (`apm/map`, `apm/map/path`)
 - [ ] Ajanlar (`apm/agents`)
 - [ ] Örnekleme ayarları (`apm/sampling`, `.../preview`)

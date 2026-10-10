@@ -617,7 +617,7 @@ class LTr extends L {
   String get serviceTabErrors => 'Hatalar';
 
   @override
-  String get errorsEmpty => 'Bu aralıkta hiçbir şey hata vermedi.';
+  String get errorsEmpty => 'Bu süzgeçle hata yok.';
 
   @override
   String errorsOccurrences(int count) {
@@ -645,7 +645,8 @@ class LTr extends L {
   String get errorsNoTrace => 'Bu hata için iz saklanmamış.';
 
   @override
-  String get errorsTruncated => 'Daha fazlası var; bu listenin başı.';
+  String get errorsTruncated =>
+      'Eşleşen grupların tamamı değil; süzgeci daraltın.';
 
   @override
   String get traceTitle => 'İz';
@@ -1680,4 +1681,106 @@ class LTr extends L {
   String templatesPercent(String value) {
     return '%$value';
   }
+
+  @override
+  String get navErrors => 'Hatalar';
+
+  @override
+  String get errorsSearch => 'Hata ara';
+
+  @override
+  String get errorsSort => 'Sırala';
+
+  @override
+  String get errorsSortCount => 'Adede göre';
+
+  @override
+  String get errorsSortLastSeen => 'Son görülmeye göre';
+
+  @override
+  String get errorsSortFirstSeen => 'İlk görülmeye göre';
+
+  @override
+  String get errorsAll => 'Hepsi';
+
+  @override
+  String get errorsUnresolved => 'Açık';
+
+  @override
+  String get errorsResolved => 'Çözüldü';
+
+  @override
+  String get errorsIgnored => 'Yoksayıldı';
+
+  @override
+  String get errorsRegressed => 'Geri geldi';
+
+  @override
+  String get errorsNoWorkflow =>
+      'Bu kurulumda hata iş akışı yok (PostgreSQL gerekir); her grup açık görünür.';
+
+  @override
+  String errorsCount(int count) {
+    return '$count kez';
+  }
+
+  @override
+  String errorsCountOfTotal(int count, int total) {
+    return 'Bu aralıkta $count, saklama süresi boyunca $total kez';
+  }
+
+  @override
+  String errorsFirstSeen(String when) {
+    return 'ilk $when';
+  }
+
+  @override
+  String errorsResolvedIn(String version) {
+    return '$version sürümünde çözüldü';
+  }
+
+  @override
+  String errorsRegressions(int count) {
+    return '$count kez geri geldi';
+  }
+
+  @override
+  String get errorsLastTrace => 'Son izi aç';
+
+  @override
+  String get errorsResolve => 'Çözüldü';
+
+  @override
+  String get errorsResolveInVersion => 'Sürümde çözüldü…';
+
+  @override
+  String get errorsVersion => 'Sürüm';
+
+  @override
+  String get errorsVersionHint =>
+      'Bu sürümden sonra yeniden görülürse grup kendiliğinden açılır.';
+
+  @override
+  String get errorsIgnore => 'Yoksay';
+
+  @override
+  String get errorsReopen => 'Yeniden aç';
+
+  @override
+  String get errorsComments => 'Yorumlar';
+
+  @override
+  String get errorsNoComments => 'Yorum yok.';
+
+  @override
+  String get errorsComment => 'Yorum';
+
+  @override
+  String get errorsCommentTooLong => 'Yorum çok uzun.';
+
+  @override
+  String get errorsSend => 'Gönder';
+
+  @override
+  String get errorsDeleteComment => 'Yorumu sil';
 }
