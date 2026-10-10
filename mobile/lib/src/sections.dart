@@ -15,6 +15,7 @@ import 'dashboards.dart';
 import 'detail.dart';
 import 'agents.dart';
 import 'discovery.dart';
+import 'fields.dart';
 import 'errors.dart';
 import 'keys.dart';
 import 'list_controller.dart';
@@ -46,6 +47,7 @@ class Sections {
     JobsController? jobs,
     VulnerabilitiesController? vulnerabilities,
     LogsController? logs,
+    FieldsController Function(String signal)? fields,
     TracesController? traces,
     MetricsController? metrics,
     RumController? rum,
@@ -163,6 +165,8 @@ class Sections {
        jobs = jobs ?? JobsController(client),
        vulnerabilities = vulnerabilities ?? VulnerabilitiesController(client),
        logs = logs ?? LogsController(client),
+       fields =
+           fields ?? ((signal) => FieldsController(client, signal: signal)),
        traces = traces ?? TracesController(client),
        metrics = metrics ?? MetricsController(client),
        rum = rum ?? RumController(client),
@@ -230,6 +234,10 @@ class Sections {
   final JobsController jobs;
   final VulnerabilitiesController vulnerabilities;
   final LogsController logs;
+
+  /// The dictionary a filter is built from, one per signal. Made per
+  /// sheet, because it holds which key is being looked at.
+  final FieldsController Function(String signal) fields;
   final TracesController traces;
   final MetricsController metrics;
   final RumController rum;
@@ -495,14 +503,20 @@ class DatabasesController extends SectionController<DbInstance> {
 class TracesController extends SectionController<SpanQueryRow> {
   TracesController(super.client);
 
+  /// What the filter builder added, AND-ed with the search box.
+  List<Filter> filters = const [];
+
   /// Slowest instead of newest. The two questions a traces list answers are
   /// "what just happened" and "what is slow", and on a phone a switch between
   /// them beats the web's sort menu.
   bool slowest = false;
 
   @override
-  Future<List<SpanQueryRow>> fetch() async =>
-      (await client.traces(q: query.trim(), slowest: slowest)).rows;
+  Future<List<SpanQueryRow>> fetch() async => (await client.traces(
+    q: query.trim(),
+    slowest: slowest,
+    filters: [for (final f in filters) f.toJson()],
+  )).rows;
 }
 
 /// Metric names, for the metrics explorer.

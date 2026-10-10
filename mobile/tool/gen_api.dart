@@ -31,6 +31,8 @@ const schemaTargets = <String>[
   'UsageOverview', // what the organization used this period, against its plan
   'DiskSpace', // how full the ClickHouse disks are, and at what level
   'AccountPrivacy', // what this account may ask for: an export, a deletion
+  'FieldKeysResponse', // the keys a filter can be built from
+  'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads
   'SSOState', // the single sign-on connections and what the IdP has to be told
   'SSODomain', // which e-mail domains sign in through them

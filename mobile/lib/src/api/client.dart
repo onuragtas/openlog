@@ -1093,6 +1093,7 @@ class OpenlogClient {
   Future<TracesQueryResponse> traces({
     String q = '',
     bool slowest = false,
+    List<Map<String, Object?>> filters = const [],
     int limit = 50,
   }) async {
     final body = <String, Object?>{
@@ -1100,14 +1101,15 @@ class OpenlogClient {
       'limit': limit,
       if (slowest) 'sort': 'duration',
     };
-    if (q.trim().isNotEmpty) {
-      // One case-insensitive contains over the service name: a phone has no
-      // room for the web's filter builder, and the service is what a person
-      // types when they are looking for a request.
-      body['filters'] = [
+    // The search box is still a contains over the service name -- it is
+    // what somebody types when looking for a request -- and the builder's
+    // conditions are AND-ed with it.
+    final all = <Map<String, Object?>>[
+      if (q.trim().isNotEmpty)
         {'key': 'service_name', 'op': 'contains', 'value': q.trim()},
-      ];
-    }
+      ...filters,
+    ];
+    if (all.isNotEmpty) body['filters'] = all;
     return TracesQueryResponse.fromJson(
       await _send('POST', '/api/v1/traces/query', body: body),
     );
@@ -1121,9 +1123,13 @@ class OpenlogClient {
     String traceId = '',
     String podUid = '',
     String containerId = '',
+    String filters = '',
     int limit = 50,
   }) async {
     final query = <String, String>{'limit': '$limit'};
+    // The filter builder's conditions, already JSON: the parameter is a
+    // JSON array of QueryFilter and the server parses it.
+    if (filters.isNotEmpty) query['filters'] = filters;
     if (q.isNotEmpty) query['q'] = q;
     if (severityMin.isNotEmpty) query['severity_min'] = severityMin;
     if (service.isNotEmpty) query['service'] = service;
@@ -1214,6 +1220,51 @@ class OpenlogClient {
     if (q.trim().isNotEmpty) query['q'] = q.trim();
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
+
+  /// The attribute keys one signal has, most frequent first.
+  ///
+  /// The dictionary behind every filter builder: a key somebody can filter
+  /// on is one the data actually has, not one they remembered.
+  Future<FieldKeysResponse> fieldKeys({
+    required String signal,
+    String q = '',
+    String metric = '',
+  }) async => FieldKeysResponse.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/fields/keys',
+        '',
+        extra: {
+          'signal': signal,
+          if (q.isNotEmpty) 'q': q,
+          if (metric.isNotEmpty) 'metric': metric,
+        },
+      ),
+    ),
+  );
+
+  /// The values of one key, with how often each one occurs.
+  Future<FieldValuesResponse> fieldValues({
+    required String signal,
+    required String key,
+    String q = '',
+    String metric = '',
+  }) async => FieldValuesResponse.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/fields/values',
+        '',
+        extra: {
+          'signal': signal,
+          'key': key,
+          if (q.isNotEmpty) 'q': q,
+          if (metric.isNotEmpty) 'metric': metric,
+        },
+      ),
+    ),
+  );
 
   /// What this account may ask for: an export of its data, a deletion, and
   /// whether either needs a password or a recent SSO sign-in.

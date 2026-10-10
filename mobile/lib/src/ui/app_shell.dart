@@ -311,7 +311,7 @@ class _AppShellState extends State<AppShell> {
         card: vulnCard,
       ),
     );
-    add((_) => LogsBody(session: session, logs: s.logs));
+    add((_) => LogsBody(session: session, sections: s, logs: s.logs));
     add((active) => TracesBody(session: session, sections: s, active: active));
     add((active) => MetricsBody(session: session, sections: s, active: active));
     add((_) => QueryBody(session: session, query: s.query));

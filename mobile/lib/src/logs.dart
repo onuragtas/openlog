@@ -1,5 +1,6 @@
 // Recent log records, newest first.
 import 'api/client.dart';
+import 'fields.dart';
 import 'api/schema.g.dart';
 import 'list_controller.dart';
 
@@ -20,6 +21,10 @@ class LogsController extends ListController<LogRecord> {
   /// lines, and the ten most recent lines of an information-level stream are
   /// almost never the ten that matter.
   String severityMin = 'WARN';
+
+  /// What the filter builder added. Sent as the server's `filters`
+  /// parameter, which is a JSON array of conditions.
+  List<Filter> filters = const [];
 
   /// Narrow to one service. Typed, because the screen cannot know the names
   /// without asking for them and this is a filter, not a picker.
@@ -53,6 +58,7 @@ class LogsController extends ListController<LogRecord> {
       traceId: traceId,
       podUid: podUid,
       containerId: containerId,
+      filters: encodeFilters(filters),
     );
     return page.logs;
   }

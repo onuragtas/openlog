@@ -494,7 +494,9 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       tıklamak (`auth/verify-email`) e-postadaki akış, uygulamanın değil.
 
 ### 9.4 Keşif ekranlarının derinliği
-- [ ] Filtre kurucusunun sözlüğü (`fields/keys`, `fields/values`) — log, iz ve metrik filtrelerinin temeli
+- [x] Filtre kurucusunun sözlüğü (`fields/keys`, `fields/values`): iki adımlı seçici (alan,
+      sonra değer), her ikisinde sayımlarla; loglarda ve izlerde çip olarak duruyor. Seçerek,
+      yazarak değil — hatırlanması gereken bir alan adı yanlış yazılan alan adıdır.
 - [ ] Log gelişmiş sorgu ve desenler (`logs/query`, `logs/aggregate`, `logs/patterns`)
 - [ ] İz toplulaştırma (`traces/aggregate`)
 - [ ] Metrik adları, korelasyon, exemplar (`metrics/names`, `metrics/correlate`, `metrics/exemplars`)

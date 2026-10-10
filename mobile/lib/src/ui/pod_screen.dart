@@ -137,6 +137,7 @@ class _PodScreenState extends State<PodScreen> {
             MaterialPageRoute<void>(
               builder: (_) => LogsScreen(
                 session: widget.session,
+                sections: widget.sections,
                 logs: widget.sections.scopedLogs(podUid: widget.podUid),
                 title: l.logsOpenForTrace,
                 scopeLabel: l.logsScopedPod,

@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'filter_sheet.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
@@ -35,12 +36,36 @@ class TracesBody extends StatelessWidget {
       emptyTitle: (l) => l.tracesEmpty,
       header: ListenableBuilder(
         listenable: c,
-        builder: (context, _) => _SortToggle(
-          slowest: c.slowest,
-          onChanged: (v) {
-            c.slowest = v;
-            c.refresh();
-          },
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SortToggle(
+              slowest: c.slowest,
+              onChanged: (v) {
+                c.slowest = v;
+                c.refresh();
+              },
+            ),
+            // The same dictionary the logs use, for the span attributes a
+            // trace carries.
+            FilterChips(
+              filters: c.filters,
+              onRemove: (i) {
+                c.filters = [...c.filters]..removeAt(i);
+                c.refresh();
+              },
+              onAdd: () async {
+                final filter = await pickFilter(
+                  context,
+                  session: session,
+                  fields: sections.fields('traces'),
+                );
+                if (filter == null) return;
+                c.filters = [...c.filters, filter];
+                await c.refresh();
+              },
+            ),
+          ],
         ),
       ),
       card: (context, row) => _TraceCard(

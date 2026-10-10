@@ -312,6 +312,32 @@ enum QuotaLevel {
   }
 }
 
+/// FieldType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FieldType {
+  string('string'),
+  number('number'),
+  bool('bool'),
+  unknown('');
+
+  const FieldType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FieldType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SSODomainDnsRecordType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -923,6 +949,33 @@ enum OrgDeletionInitiator {
   final String wire;
 
   static OrgDeletionInitiator fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// FieldSource of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum FieldSource {
+  field('field'),
+  attribute('attribute'),
+  resource('resource'),
+  body('body'),
+  unknown('');
+
+  const FieldSource(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static FieldSource fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -1669,59 +1722,6 @@ enum SpanStatusCode {
   final String wire;
 
   static SpanStatusCode fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// FieldSource of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FieldSource {
-  field('field'),
-  attribute('attribute'),
-  resource('resource'),
-  body('body'),
-  unknown('');
-
-  const FieldSource(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FieldSource fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// FieldType of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum FieldType {
-  string('string'),
-  number('number'),
-  bool('bool'),
-  unknown('');
-
-  const FieldType(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static FieldType fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -3464,6 +3464,79 @@ class AccountPrivacy {
   final int orgDeletionGraceSeconds;
   final int reauthMaxAgeSeconds;
   final List<OrgDeletion> orgDeletions;
+}
+
+/// `FieldKeysResponse` of the openlog API contract.
+class FieldKeysResponse {
+  const FieldKeysResponse({required this.keys, required this.sampled});
+
+  factory FieldKeysResponse.fromJson(
+    Object? json, [
+    String path = 'FieldKeysResponse',
+  ]) {
+    final m = _obj(json, path);
+    return FieldKeysResponse(
+      keys: _req(
+        m,
+        'keys',
+        path,
+        (v, p) => _list<FieldKey>(v, p, (v, p) => FieldKey.fromJson(v, p)),
+      ),
+      sampled: _req(m, 'sampled', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'keys': [for (final e in keys) e.toJson()],
+    'sampled': sampled,
+  };
+
+  final List<FieldKey> keys;
+  final bool sampled;
+}
+
+/// `FieldValuesResponse` of the openlog API contract.
+class FieldValuesResponse {
+  const FieldValuesResponse({
+    required this.key,
+    required this.type,
+    required this.values,
+    required this.total,
+    required this.sampled,
+  });
+
+  factory FieldValuesResponse.fromJson(
+    Object? json, [
+    String path = 'FieldValuesResponse',
+  ]) {
+    final m = _obj(json, path);
+    return FieldValuesResponse(
+      key: _req(m, 'key', path, _str),
+      type: _req(m, 'type', path, FieldType.fromJson),
+      values: _req(
+        m,
+        'values',
+        path,
+        (v, p) => _list<FieldValue>(v, p, (v, p) => FieldValue.fromJson(v, p)),
+      ),
+      total: _req(m, 'total', path, _int),
+      sampled: _req(m, 'sampled', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'type': type.wire,
+    'values': [for (final e in values) e.toJson()],
+    'total': total,
+    'sampled': sampled,
+  };
+
+  final String key;
+  final FieldType type;
+  final List<FieldValue> values;
+  final int total;
+  final bool sampled;
 }
 
 /// `DataExportList` of the openlog API contract.
@@ -7794,6 +7867,64 @@ class OrgDeletion {
   final String? lastError;
 }
 
+/// `FieldKey` of the openlog API contract.
+class FieldKey {
+  const FieldKey({
+    required this.key,
+    required this.name,
+    required this.source,
+    required this.type,
+    this.count,
+    this.cardinality,
+  });
+
+  factory FieldKey.fromJson(Object? json, [String path = 'FieldKey']) {
+    final m = _obj(json, path);
+    return FieldKey(
+      key: _req(m, 'key', path, _str),
+      name: _req(m, 'name', path, _str),
+      source: _req(m, 'source', path, FieldSource.fromJson),
+      type: _req(m, 'type', path, FieldType.fromJson),
+      count: _opt(m, 'count', path, _int),
+      cardinality: _opt(m, 'cardinality', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'name': name,
+    'source': source.wire,
+    'type': type.wire,
+    'count': ?count,
+    'cardinality': ?cardinality,
+  };
+
+  final String key;
+  final String name;
+  final FieldSource source;
+  final FieldType type;
+  final int? count;
+  final int? cardinality;
+}
+
+/// `FieldValue` of the openlog API contract.
+class FieldValue {
+  const FieldValue({required this.value, required this.count});
+
+  factory FieldValue.fromJson(Object? json, [String path = 'FieldValue']) {
+    final m = _obj(json, path);
+    return FieldValue(
+      value: _req(m, 'value', path, _str),
+      count: _req(m, 'count', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'value': value, 'count': count};
+
+  final String value;
+  final int count;
+}
+
 /// `DataExport` of the openlog API contract.
 class DataExport {
   const DataExport({
@@ -10166,46 +10297,6 @@ class MetricInfo {
   final DateTime lastSeen;
   final int series;
   final List<String> services;
-}
-
-/// `FieldKey` of the openlog API contract.
-class FieldKey {
-  const FieldKey({
-    required this.key,
-    required this.name,
-    required this.source,
-    required this.type,
-    this.count,
-    this.cardinality,
-  });
-
-  factory FieldKey.fromJson(Object? json, [String path = 'FieldKey']) {
-    final m = _obj(json, path);
-    return FieldKey(
-      key: _req(m, 'key', path, _str),
-      name: _req(m, 'name', path, _str),
-      source: _req(m, 'source', path, FieldSource.fromJson),
-      type: _req(m, 'type', path, FieldType.fromJson),
-      count: _opt(m, 'count', path, _int),
-      cardinality: _opt(m, 'cardinality', path, _int),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'key': key,
-    'name': name,
-    'source': source.wire,
-    'type': type.wire,
-    'count': ?count,
-    'cardinality': ?cardinality,
-  };
-
-  final String key;
-  final String name;
-  final FieldSource source;
-  final FieldType type;
-  final int? count;
-  final int? cardinality;
 }
 
 /// `MetricSeries` of the openlog API contract.

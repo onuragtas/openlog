@@ -5,6 +5,8 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../logs.dart';
 import '../session.dart';
+import '../sections.dart';
+import 'filter_sheet.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
 
@@ -16,11 +18,16 @@ class LogsBody extends StatefulWidget {
   const LogsBody({
     super.key,
     required this.session,
+    required this.sections,
     required this.logs,
     this.scopeLabel,
   });
 
   final SessionController session;
+
+  /// Needed for the filter builder, which asks the server which keys the
+  /// logs in this range actually have.
+  final Sections sections;
   final LogsController logs;
 
   /// What this list is about, when it is about one thing. Set by the screen
@@ -99,6 +106,27 @@ class _LogsBodyState extends State<LogsBody> {
                 onSubmitted: (value) {
                   c.service = value;
                   c.refresh();
+                },
+              ),
+              const SizedBox(height: 8),
+              // Picked, not typed: a key somebody has to remember is a key
+              // they will get wrong, and the dictionary knows which ones
+              // the range actually has.
+              FilterChips(
+                filters: c.filters,
+                onRemove: (i) {
+                  c.filters = [...c.filters]..removeAt(i);
+                  c.refresh();
+                },
+                onAdd: () async {
+                  final filter = await pickFilter(
+                    context,
+                    session: widget.session,
+                    fields: widget.sections.fields('logs'),
+                  );
+                  if (filter == null) return;
+                  c.filters = [...c.filters, filter];
+                  await c.refresh();
                 },
               ),
               const SizedBox(height: 8),
@@ -206,12 +234,14 @@ class LogsScreen extends StatefulWidget {
   const LogsScreen({
     super.key,
     required this.session,
+    required this.sections,
     required this.logs,
     required this.title,
     required this.scopeLabel,
   });
 
   final SessionController session;
+  final Sections sections;
   final LogsController logs;
   final String title;
   final String scopeLabel;
@@ -232,6 +262,7 @@ class _LogsScreenState extends State<LogsScreen> {
     appBar: AppBar(title: Text(widget.title, overflow: TextOverflow.ellipsis)),
     body: LogsBody(
       session: widget.session,
+      sections: widget.sections,
       logs: widget.logs,
       scopeLabel: widget.scopeLabel,
     ),

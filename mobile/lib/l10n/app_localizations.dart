@@ -5034,6 +5034,72 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Prove it is you: the password was wrong, or the single sign-on is too old.'**
   String get reauthNeeded;
+
+  /// No description provided for @filterAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get filterAdd;
+
+  /// No description provided for @filterPickKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a field'**
+  String get filterPickKey;
+
+  /// No description provided for @filterSearchKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Search fields'**
+  String get filterSearchKey;
+
+  /// No description provided for @filterSearchValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Search values'**
+  String get filterSearchValue;
+
+  /// No description provided for @filterBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the fields'**
+  String get filterBack;
+
+  /// No description provided for @filterExists.
+  ///
+  /// In en, this message translates to:
+  /// **'Only where it exists'**
+  String get filterExists;
+
+  /// No description provided for @filterApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get filterApply;
+
+  /// No description provided for @filterRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} records'**
+  String filterRecords(int count);
+
+  /// No description provided for @filterDistinct.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} distinct values'**
+  String filterDistinct(int count);
+
+  /// No description provided for @filterEmptyValue.
+  ///
+  /// In en, this message translates to:
+  /// **'(empty)'**
+  String get filterEmptyValue;
+
+  /// No description provided for @filterSampled.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted from a sample; the most frequent are listed.'**
+  String get filterSampled;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

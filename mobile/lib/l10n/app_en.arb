@@ -1834,5 +1834,30 @@
   "privacyDeleteAccountTitle": "Delete the account",
   "privacyDeleteAccountBody": "Your account and your personal data are deleted. Type your e-mail address to confirm.",
   "alreadyVerified": "This address is already verified.",
-  "reauthNeeded": "Prove it is you: the password was wrong, or the single sign-on is too old."
+  "reauthNeeded": "Prove it is you: the password was wrong, or the single sign-on is too old.",
+  "filterAdd": "Filter",
+  "filterPickKey": "Pick a field",
+  "filterSearchKey": "Search fields",
+  "filterSearchValue": "Search values",
+  "filterBack": "Back to the fields",
+  "filterExists": "Only where it exists",
+  "filterApply": "Apply",
+  "filterRecords": "{count} records",
+  "@filterRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterDistinct": "{count} distinct values",
+  "@filterDistinct": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterEmptyValue": "(empty)",
+  "filterSampled": "Counted from a sample; the most frequent are listed."
 }

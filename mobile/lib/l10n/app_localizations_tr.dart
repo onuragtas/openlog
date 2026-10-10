@@ -2819,4 +2819,42 @@ class LTr extends L {
   @override
   String get reauthNeeded =>
       'Kimliğinizi doğrulayın: parola yanlış ya da SSO oturumu çok eski.';
+
+  @override
+  String get filterAdd => 'Süzgeç';
+
+  @override
+  String get filterPickKey => 'Alan seç';
+
+  @override
+  String get filterSearchKey => 'Alan ara';
+
+  @override
+  String get filterSearchValue => 'Değer ara';
+
+  @override
+  String get filterBack => 'Alanlara dön';
+
+  @override
+  String get filterExists => 'Yalnızca var olanlar';
+
+  @override
+  String get filterApply => 'Uygula';
+
+  @override
+  String filterRecords(int count) {
+    return '$count kayıt';
+  }
+
+  @override
+  String filterDistinct(int count) {
+    return '$count farklı değer';
+  }
+
+  @override
+  String get filterEmptyValue => '(boş)';
+
+  @override
+  String get filterSampled =>
+      'Örneklemden sayıldı; en sık görülenler listeleniyor.';
 }

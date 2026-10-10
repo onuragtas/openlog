@@ -1737,5 +1737,30 @@
   "privacyDeleteAccountTitle": "Hesabı sil",
   "privacyDeleteAccountBody": "Hesabınız ve kişisel verileriniz silinir. Onaylamak için e-posta adresinizi yazın.",
   "alreadyVerified": "Bu adres zaten doğrulanmış.",
-  "reauthNeeded": "Kimliğinizi doğrulayın: parola yanlış ya da SSO oturumu çok eski."
+  "reauthNeeded": "Kimliğinizi doğrulayın: parola yanlış ya da SSO oturumu çok eski.",
+  "filterAdd": "Süzgeç",
+  "filterPickKey": "Alan seç",
+  "filterSearchKey": "Alan ara",
+  "filterSearchValue": "Değer ara",
+  "filterBack": "Alanlara dön",
+  "filterExists": "Yalnızca var olanlar",
+  "filterApply": "Uygula",
+  "filterRecords": "{count} kayıt",
+  "@filterRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterDistinct": "{count} farklı değer",
+  "@filterDistinct": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterEmptyValue": "(boş)",
+  "filterSampled": "Örneklemden sayıldı; en sık görülenler listeleniyor."
 }

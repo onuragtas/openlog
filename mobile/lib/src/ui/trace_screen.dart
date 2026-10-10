@@ -77,6 +77,7 @@ class _TraceScreenState extends State<TraceScreen> {
                   MaterialPageRoute<void>(
                     builder: (_) => LogsScreen(
                       session: widget.session,
+                      sections: widget.sections,
                       logs: widget.sections.scopedLogs(traceId: widget.traceId),
                       title: l.logsOpenForTrace,
                       scopeLabel: l.logsScopedTrace,

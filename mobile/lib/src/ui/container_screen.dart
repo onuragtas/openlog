@@ -122,6 +122,7 @@ class _ContainerScreenState extends State<ContainerScreen> {
             MaterialPageRoute<void>(
               builder: (_) => LogsScreen(
                 session: widget.session,
+                sections: widget.sections,
                 logs: widget.sections.scopedLogs(
                   containerId: widget.containerId,
                 ),

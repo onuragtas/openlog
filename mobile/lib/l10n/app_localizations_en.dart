@@ -2827,4 +2827,42 @@ class LEn extends L {
   @override
   String get reauthNeeded =>
       'Prove it is you: the password was wrong, or the single sign-on is too old.';
+
+  @override
+  String get filterAdd => 'Filter';
+
+  @override
+  String get filterPickKey => 'Pick a field';
+
+  @override
+  String get filterSearchKey => 'Search fields';
+
+  @override
+  String get filterSearchValue => 'Search values';
+
+  @override
+  String get filterBack => 'Back to the fields';
+
+  @override
+  String get filterExists => 'Only where it exists';
+
+  @override
+  String get filterApply => 'Apply';
+
+  @override
+  String filterRecords(int count) {
+    return '$count records';
+  }
+
+  @override
+  String filterDistinct(int count) {
+    return '$count distinct values';
+  }
+
+  @override
+  String get filterEmptyValue => '(empty)';
+
+  @override
+  String get filterSampled =>
+      'Counted from a sample; the most frequent are listed.';
 }
