@@ -30,6 +30,8 @@ Future<void> openLogDetail(
   required Sections sections,
   required LogQueryRow record,
   required void Function(Filter filter) onFilter,
+  List<String> columns = const [],
+  void Function(String key)? onToggleColumn,
 }) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     builder: (_) => LogDetailScreen(
@@ -37,6 +39,8 @@ Future<void> openLogDetail(
       sections: sections,
       record: record,
       onFilter: onFilter,
+      columns: columns,
+      onToggleColumn: onToggleColumn,
     ),
   ),
 );
@@ -48,12 +52,20 @@ class LogDetailScreen extends StatefulWidget {
     required this.sections,
     required this.record,
     required this.onFilter,
+    this.columns = const [],
+    this.onToggleColumn,
   });
 
   final SessionController session;
   final Sections sections;
   final LogQueryRow record;
   final void Function(Filter filter) onFilter;
+
+  /// The table's columns, so a field can say whether it is one. Empty
+  /// where the list has no table of its own -- a scoped list, say -- and
+  /// then the action is not offered at all.
+  final List<String> columns;
+  final void Function(String key)? onToggleColumn;
 
   @override
   State<LogDetailScreen> createState() => _LogDetailScreenState();
@@ -115,6 +127,17 @@ class _LogDetailScreenState extends State<LogDetailScreen>
       ),
     );
   }
+
+  void _openTrace({String spanId = ''}) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => TraceScreen(
+        session: widget.session,
+        sections: widget.sections,
+        traceId: widget.record.traceId,
+        spanId: spanId,
+      ),
+    ),
+  );
 
   Future<void> _copy(String value, String said) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -237,17 +260,19 @@ class _LogDetailScreenState extends State<LogDetailScreen>
             if (r.traceId.isNotEmpty)
               OutlinedButton.icon(
                 key: const Key('log-open-trace'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => TraceScreen(
-                      session: widget.session,
-                      sections: widget.sections,
-                      traceId: r.traceId,
-                    ),
-                  ),
-                ),
+                onPressed: () => _openTrace(),
                 icon: const Icon(Icons.account_tree_outlined, size: 18),
                 label: Text(l.logOpenTrace),
+              ),
+            // The span, not only the request it was part of: the web's
+            // panel links to both, and a trace of eighty spans is a list
+            // to search by eye without it.
+            if (r.traceId.isNotEmpty && r.spanId.isNotEmpty)
+              OutlinedButton.icon(
+                key: const Key('log-open-span'),
+                onPressed: () => _openTrace(spanId: r.spanId),
+                icon: const Icon(Icons.linear_scale, size: 18),
+                label: Text(l.logOpenSpan),
               ),
           ],
         ),
@@ -285,20 +310,47 @@ class _LogDetailScreenState extends State<LogDetailScreen>
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-              for (final f in shown) _FieldRow(field: f, onAction: _onAction),
+              for (final f in shown)
+                _FieldRow(
+                  field: f,
+                  column: widget.columns.contains(f.key),
+                  // `timestamp` is pinned, and a field the table cannot
+                  // show is not offered as a column.
+                  canColumn:
+                      widget.onToggleColumn != null && f.key != 'timestamp',
+                  onAction: _onAction,
+                ),
             ],
           ),
         ],
       );
 
   void _onAction(RecordField f, _FieldAction action) {
+    final l = L.of(context);
     switch (action) {
       case _FieldAction.filterIn:
         _filter(f, exclude: false);
       case _FieldAction.filterOut:
         _filter(f, exclude: true);
+      case _FieldAction.column:
+        final had = widget.columns.contains(f.key);
+        widget.onToggleColumn?.call(f.key);
+        // The screen stays open: a column is about the list behind it,
+        // and somebody adding three of them should not have to reopen
+        // the record twice.
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            key: const Key('log-column-toggled'),
+            content: Text(
+              had
+                  ? l.logDetailColumnRemoved(f.key)
+                  : l.logDetailColumnAdded(f.key),
+            ),
+          ),
+        );
       case _FieldAction.copy:
-        _copy(f.value, L.of(context).logDetailCopied);
+        _copy(f.value, l.logDetailCopied);
     }
   }
 
@@ -327,16 +379,25 @@ class _LogDetailScreenState extends State<LogDetailScreen>
   }
 }
 
-enum _FieldAction { filterIn, filterOut, copy }
+enum _FieldAction { filterIn, filterOut, column, copy }
 
 /// One key and its value, with what can be done to it behind a menu.
 ///
 /// A menu rather than three buttons per row: a record has dozens of fields
 /// and sixty tap targets on one screen is how the wrong one gets tapped.
 class _FieldRow extends StatelessWidget {
-  const _FieldRow({required this.field, required this.onAction});
+  const _FieldRow({
+    required this.field,
+    required this.column,
+    required this.canColumn,
+    required this.onAction,
+  });
 
   final RecordField field;
+
+  /// Already a column of the list behind this screen.
+  final bool column;
+  final bool canColumn;
   final void Function(RecordField field, _FieldAction action) onAction;
 
   @override
@@ -352,11 +413,26 @@ class _FieldRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  field.key,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                Row(
+                  children: [
+                    if (column)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          Icons.view_column_outlined,
+                          size: 12,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    Flexible(
+                      child: Text(
+                        field.key,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 SelectableText(
                   field.value,
@@ -379,6 +455,13 @@ class _FieldRow extends StatelessWidget {
                 value: _FieldAction.filterOut,
                 child: Text(l.logDetailFilterOut),
               ),
+              if (canColumn)
+                PopupMenuItem(
+                  value: _FieldAction.column,
+                  child: Text(
+                    column ? l.logDetailRemoveColumn : l.logDetailAddColumn,
+                  ),
+                ),
               PopupMenuItem(
                 value: _FieldAction.copy,
                 child: Text(l.logDetailCopy),

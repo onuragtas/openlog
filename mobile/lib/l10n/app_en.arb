@@ -2628,5 +2628,24 @@
   "logColumnsReset": "Reset",
   "logColumnsApply": "Apply",
   "logOrderNewest": "Newest",
-  "logOrderOldest": "Oldest"
+  "logOrderOldest": "Oldest",
+  "logDetailAddColumn": "Add as a column",
+  "logDetailRemoveColumn": "Remove the column",
+  "logDetailColumnAdded": "Column added: {key}",
+  "logDetailColumnRemoved": "Column removed: {key}",
+  "@logDetailColumnAdded": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@logDetailColumnRemoved": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "traceSpanFromLog": "the log's span"
 }

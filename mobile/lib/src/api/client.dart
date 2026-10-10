@@ -1288,9 +1288,14 @@ class OpenlogClient {
       // back whether they are asked for or not.
       if (columns.isNotEmpty) 'columns': columns,
       if (oldestFirst) 'order': 'asc',
-      // No `include_record`: this list shows a severity, a service, a time
-      // and a body, and asking for every attribute map of every row would
-      // be a few hundred kilobytes a page that nothing reads.
+      // The attribute maps, as the browser asks for them. They are what
+      // the detail screen is made of: without them a record opens with
+      // its ten row fields and nothing the agent actually attached.
+      //
+      // Left out while the list had no detail screen, on the grounds that
+      // nothing read them -- and not put back when the detail screen
+      // arrived, so it showed half a record.
+      'include_record': true,
       if (q.isNotEmpty) 'q': q,
       if (filters.isNotEmpty) 'filters': filters,
     };

@@ -7170,6 +7170,36 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Oldest'**
   String get logOrderOldest;
+
+  /// No description provided for @logDetailAddColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Add as a column'**
+  String get logDetailAddColumn;
+
+  /// No description provided for @logDetailRemoveColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the column'**
+  String get logDetailRemoveColumn;
+
+  /// No description provided for @logDetailColumnAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Column added: {key}'**
+  String logDetailColumnAdded(String key);
+
+  /// No description provided for @logDetailColumnRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Column removed: {key}'**
+  String logDetailColumnRemoved(String key);
+
+  /// No description provided for @traceSpanFromLog.
+  ///
+  /// In en, this message translates to:
+  /// **'the log\'s span'**
+  String get traceSpanFromLog;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

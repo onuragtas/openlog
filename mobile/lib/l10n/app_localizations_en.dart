@@ -4030,4 +4030,23 @@ class LEn extends L {
 
   @override
   String get logOrderOldest => 'Oldest';
+
+  @override
+  String get logDetailAddColumn => 'Add as a column';
+
+  @override
+  String get logDetailRemoveColumn => 'Remove the column';
+
+  @override
+  String logDetailColumnAdded(String key) {
+    return 'Column added: $key';
+  }
+
+  @override
+  String logDetailColumnRemoved(String key) {
+    return 'Column removed: $key';
+  }
+
+  @override
+  String get traceSpanFromLog => 'the log\'s span';
 }

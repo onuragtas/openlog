@@ -293,12 +293,14 @@ void main() {
     expect(server.requests.last.path, '/api/v1/logs/query');
     expect(jsonDecode(server.requests.first.body), {
       'limit': 50,
+      'include_record': true,
       'filters': [
         {'key': 'severity_number', 'op': '>=', 'value': 13},
       ],
     });
     expect(jsonDecode(server.requests.last.body), {
       'limit': 50,
+      'include_record': true,
       'q': 'timeout',
       'filters': [
         {'key': 'service.name', 'op': '=', 'value': 'checkout'},

@@ -303,6 +303,9 @@ void main() {
       await LogsController(client).refresh();
 
       final body = jsonDecode(server.requests.single.body) as Map;
+      // The attribute maps always: a row without them opens as half a
+      // record on the detail screen, which is what it did for a while.
+      expect(body['include_record'], isTrue);
       expect(body, isNot(contains('columns')));
       // Newest first is the server's own default; saying it again is
       // noise on the wire.

@@ -12,6 +12,7 @@ import 'package:openlog_mobile/src/sections.dart';
 import 'package:openlog_mobile/src/session.dart';
 import 'package:openlog_mobile/src/storage/token_store.dart';
 import 'package:openlog_mobile/src/ui/log_detail_screen.dart';
+import 'package:openlog_mobile/src/ui/trace_screen.dart';
 
 LogQueryRow row({
   String body = 'connection refused',
@@ -20,6 +21,7 @@ LogQueryRow row({
   Map<String, String>? resource,
   Map<String, String> fields = const {},
   String traceId = '',
+  String spanId = '',
 }) => LogQueryRow(
   id: 'r1',
   timestamp: DateTime.utc(2026, 10, 10, 9),
@@ -31,7 +33,7 @@ LogQueryRow row({
   hostId: 'h1',
   hostName: 'web-1',
   traceId: traceId,
-  spanId: '',
+  spanId: spanId,
   fields: fields,
   attributes: attributes,
   resourceAttributes: resource,
@@ -236,11 +238,15 @@ void main() {
   });
 
   group('the detail screen', () {
+    final toggled = <String>[];
+
     Future<List<Filter>> pump(
       WidgetTester tester, {
       required LogQueryRow record,
+      List<String> columns = const [],
     }) async {
       final added = <Filter>[];
+      toggled.clear();
       final sections = Sections(
         client: OpenlogClient(baseUrl: 'http://127.0.0.1:1'),
       );
@@ -264,6 +270,8 @@ void main() {
                   sections: sections,
                   record: record,
                   onFilter: added.add,
+                  columns: columns,
+                  onToggleColumn: toggled.add,
                 ),
                 child: const Text('open'),
               ),
@@ -326,6 +334,66 @@ void main() {
       // Back to the list, which is where the answer to the condition is.
       expect(find.byKey(const Key('log-filter-added')), findsOneWidget);
       expect(find.byType(LogDetailScreen), findsNothing);
+    });
+
+    testWidgets('a field becomes a column from the record itself', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        record: row(resource: {'container.name': 'api-green'}),
+        columns: defaultLogColumns,
+      );
+
+      final menu = find.byKey(const Key('log-field-resource.container.name'));
+      await tester.ensureVisible(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sütun olarak ekle'));
+      await tester.pumpAndSettle();
+
+      expect(toggled, ['resource.container.name']);
+      // The record stays open: adding three columns should not mean
+      // opening the same record three times.
+      expect(find.byType(LogDetailScreen), findsOneWidget);
+      expect(find.byKey(const Key('log-column-toggled')), findsOneWidget);
+    });
+
+    testWidgets('the time cannot be dropped as a column', (tester) async {
+      await pump(tester, record: row(), columns: defaultLogColumns);
+
+      await tester.tap(find.byKey(const Key('log-field-timestamp')));
+      await tester.pumpAndSettle();
+
+      // It is pinned first in the table, so the action is not offered.
+      expect(find.text('Sütunu kaldır'), findsNothing);
+      expect(find.text('Bu değere göre filtrele'), findsOneWidget);
+    });
+
+    testWidgets('a record with a span opens the trace at that span', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        record: row(traceId: 'abc123', spanId: 'def456'),
+      );
+
+      // Both, as the web's panel offers both: the request, and the one
+      // span inside it this line came from.
+      expect(find.byKey(const Key('log-open-trace')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('log-open-span')));
+      await tester.pumpAndSettle();
+
+      final screen = tester.widget<TraceScreen>(find.byType(TraceScreen));
+      expect(screen.traceId, 'abc123');
+      expect(screen.spanId, 'def456');
+    });
+
+    testWidgets('a record with no trace offers neither', (tester) async {
+      await pump(tester, record: row());
+      expect(find.byKey(const Key('log-open-trace')), findsNothing);
+      expect(find.byKey(const Key('log-open-span')), findsNothing);
     });
 
     testWidgets('a value too long to filter by says so and changes nothing', (

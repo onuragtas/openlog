@@ -2531,5 +2531,24 @@
   "logColumnsReset": "Sıfırla",
   "logColumnsApply": "Uygula",
   "logOrderNewest": "En yeni",
-  "logOrderOldest": "En eski"
+  "logOrderOldest": "En eski",
+  "logDetailAddColumn": "Sütun olarak ekle",
+  "logDetailRemoveColumn": "Sütunu kaldır",
+  "logDetailColumnAdded": "Sütun eklendi: {key}",
+  "logDetailColumnRemoved": "Sütun kaldırıldı: {key}",
+  "@logDetailColumnAdded": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@logDetailColumnRemoved": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "traceSpanFromLog": "logun span'i"
 }

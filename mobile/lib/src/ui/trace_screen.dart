@@ -19,11 +19,18 @@ class TraceScreen extends StatefulWidget {
     required this.session,
     required this.sections,
     required this.traceId,
+    this.spanId = '',
   });
 
   final SessionController session;
   final Sections sections;
   final String traceId;
+
+  /// One span to open on, when the screen was reached from something that
+  /// named one -- a log record carries both ids, and the web's log panel
+  /// links to the span, not only to the trace. A trace of eighty spans is
+  /// otherwise a list to search by eye.
+  final String spanId;
 
   @override
   State<TraceScreen> createState() => _TraceScreenState();
@@ -31,6 +38,11 @@ class TraceScreen extends StatefulWidget {
 
 class _TraceScreenState extends State<TraceScreen> {
   late final TraceController _c;
+
+  /// The marked span's row, so the screen can scroll to it once the
+  /// trace has arrived.
+  final _marked = GlobalKey();
+  bool _scrolled = false;
 
   @override
   void initState() {
@@ -43,6 +55,21 @@ class _TraceScreenState extends State<TraceScreen> {
   void dispose() {
     _c.dispose();
     super.dispose();
+  }
+
+  /// Brings the marked span into view, once, after the list is laid out.
+  void _scrollToMarked() {
+    if (_scrolled || widget.spanId.isEmpty) return;
+    _scrolled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _marked.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.3,
+        duration: const Duration(milliseconds: 250),
+      );
+    });
   }
 
   @override
@@ -68,6 +95,7 @@ class _TraceScreenState extends State<TraceScreen> {
               ),
             ];
           }
+          _scrollToMarked();
           return [
             Align(
               alignment: Alignment.centerLeft,
@@ -97,7 +125,12 @@ class _TraceScreenState extends State<TraceScreen> {
             ),
             const SizedBox(height: 10),
             for (final r in rows)
-              _SpanTile(row: r, key: Key('span-${r.span.spanId}')),
+              _SpanTile(
+                row: r,
+                marked: r.span.spanId == widget.spanId,
+                markerKey: r.span.spanId == widget.spanId ? _marked : null,
+                key: Key('span-${r.span.spanId}'),
+              ),
           ];
         },
       ),
@@ -106,9 +139,19 @@ class _TraceScreenState extends State<TraceScreen> {
 }
 
 class _SpanTile extends StatelessWidget {
-  const _SpanTile({super.key, required this.row});
+  const _SpanTile({
+    super.key,
+    required this.row,
+    this.marked = false,
+    this.markerKey,
+  });
 
   final SpanRow row;
+
+  /// The span the screen was opened for: tinted and named, because
+  /// "which of these eighty is the one" is the whole question.
+  final bool marked;
+  final Key? markerKey;
 
   @override
   Widget build(BuildContext context) {
@@ -129,11 +172,30 @@ class _SpanTile extends StatelessWidget {
     // must not do.
     final indent = EdgeInsets.only(left: row.depth * 8.0);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    return Container(
+      key: markerKey,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: marked ? const EdgeInsets.fromLTRB(6, 6, 6, 8) : EdgeInsets.zero,
+      decoration: marked
+          ? BoxDecoration(
+              color: colors.accent,
+              borderRadius: BorderRadius.circular(8),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (marked)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                l.traceSpanFromLog,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           Padding(
             padding: indent,
             child: Row(

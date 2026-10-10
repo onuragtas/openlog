@@ -577,6 +577,17 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Bu sırada düzeltilen: `fontFamily: 'monospace'` iOS'ta diye bir aile olmadığı
       için sessizce varsayılan fonta düşüyordu; artık `mono()` ve `monoFamilies`
       (theme.dart) -- takvim listesinin daha önce düştüğü tuzağın aynısı.
+      Sahibin ikinci bakışı (2026-10-11): ekran webdeki kadarını göstermiyordu.
+      Üç eksik kapatıldı. (1) İstek `include_record` göndermiyordu, yani satırlarda
+      öznitelik haritaları hiç yoktu: ayrıntı, kaydın on satır alanını gösterip
+      ajanın eklediği hiçbir şeyi göstermiyordu. Detay ekranı yokken "kimse
+      okumuyor" diye çıkarılmıştı, ekran gelince geri konmamış. Web de `true`
+      gönderiyor. (2) Alan menüsüne webdeki "Sütun olarak ekle / Sütunu kaldır"
+      eklendi; sütun olan alanın yanında küçük bir sütun simgesi var ve ekran
+      kapanmıyor -- üç sütun eklemek için kaydı üç kez açmak gerekmesin.
+      (3) "Span'i aç": iz ekranı artık bir span'e açılabiliyor (`TraceScreen.spanId`),
+      o satır vurgulanıp görünür alana kaydırılıyor. Seksen span'lik bir izde
+      yalnız iz bağlantısı, gözle arama demekti.
 - [x] Dinamik sütunlar ve sıralama (webin tablo seçenekleri): "Sütunlar" düğmesi
       sözlükten anahtar seçtiriyor (`timestamp` sabit, en çok 50, "Sıfırla" webin
       dört varsayılanına döner) ve "Önce en yeni / en eski" sıralamayı çeviriyor.

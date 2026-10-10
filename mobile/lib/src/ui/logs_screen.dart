@@ -356,6 +356,16 @@ class _LogsBodyState extends State<LogsBody>
             session: widget.session,
             sections: widget.sections,
             record: c.items[i],
+            columns: c.columns,
+            // A field can become a column from the record itself, as it
+            // can in the browser -- it is the same gesture as filtering
+            // by it, one menu item down.
+            onToggleColumn: widget.scopeLabel != null
+                ? null
+                : (key) {
+                    c.columns = toggleColumn(c.columns, key);
+                    c.refresh();
+                  },
             onFilter: (filter) {
               c.filters = [...c.filters, filter];
               c.refresh();

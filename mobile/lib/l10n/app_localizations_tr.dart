@@ -4026,4 +4026,23 @@ class LTr extends L {
 
   @override
   String get logOrderOldest => 'En eski';
+
+  @override
+  String get logDetailAddColumn => 'Sütun olarak ekle';
+
+  @override
+  String get logDetailRemoveColumn => 'Sütunu kaldır';
+
+  @override
+  String logDetailColumnAdded(String key) {
+    return 'Sütun eklendi: $key';
+  }
+
+  @override
+  String logDetailColumnRemoved(String key) {
+    return 'Sütun kaldırıldı: $key';
+  }
+
+  @override
+  String get traceSpanFromLog => 'logun span\'i';
 }
