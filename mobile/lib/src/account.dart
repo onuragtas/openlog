@@ -75,3 +75,59 @@ class AccountController extends ChangeNotifier {
     }
   }
 }
+
+/// The organization itself: its name, its ids, and the language the server
+/// writes in for everyone in it.
+class OrgController extends ChangeNotifier {
+  OrgController(this.client);
+
+  final OpenlogClient client;
+
+  Organization? org;
+  bool loading = false;
+  bool busy = false;
+  SessionFailure? failure;
+
+  Future<void> load() async {
+    loading = true;
+    failure = null;
+    notifyListeners();
+    try {
+      org = await client.currentOrg();
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = _orgFailure(e);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Renames it, or changes the language. Only what is given is sent: the
+  /// endpoint takes both, and passing the other one back would overwrite a
+  /// change somebody else made in between.
+  Future<bool> update({String? name, String? language}) async {
+    busy = true;
+    failure = null;
+    notifyListeners();
+    try {
+      org = await client.updateCurrentOrg(name: name, language: language);
+      return true;
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+      return false;
+    } on ApiException catch (e) {
+      failure = _orgFailure(e);
+      return false;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+}
+
+SessionFailure _orgFailure(ApiException e) => switch (e.status) {
+  403 => const SessionFailure('orgForbidden', ''),
+  _ => SessionFailure('unexpected', e.message),
+};

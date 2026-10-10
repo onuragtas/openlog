@@ -21,6 +21,7 @@ import 'list_scaffold.dart';
 import 'audit_tab.dart';
 import 'keys_tabs.dart';
 import 'members_tab.dart';
+import 'org_tab.dart';
 import 'source_maps_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
@@ -31,6 +32,7 @@ class SettingsBody extends StatefulWidget {
     required this.session,
     required this.sessions,
     required this.account,
+    required this.org,
     required this.members,
     required this.licenseKeys,
     required this.apiKeys,
@@ -50,6 +52,9 @@ class SettingsBody extends StatefulWidget {
   /// The password and the language: the account behind the token, which is
   /// what the web's Profil and Güvenlik tabs change.
   final AccountController account;
+
+  /// The organization itself.
+  final OrgController org;
 
   /// Who is in the organization, and who has been asked to join.
   final MembersController members;
@@ -83,6 +88,12 @@ class _Tab {
 
 final _tabs = <_Tab>[
   _Tab('profile', (l) => l.settingsProfile, null, (s) => s._profileTab()),
+  _Tab(
+    'organization',
+    (l) => l.settingsOrganization,
+    null,
+    (s) => OrgTab(session: s.widget.session, controller: s.widget.org),
+  ),
   _Tab('security', (l) => l.settingsSecurity, null, (s) => s._securityTab()),
   _Tab('members', (l) => l.settingsMembers, null, (s) => s._membersTab()),
   _Tab(
@@ -190,6 +201,9 @@ class _SettingsBodyState extends State<SettingsBody>
     void later(void Function() load) =>
         WidgetsBinding.instance.addPostFrameCallback((_) => load());
     switch (key) {
+      case 'organization':
+        final c = widget.org;
+        if (!c.loading && c.org == null) later(c.load);
       case 'security':
         final c = widget.sessions;
         if (!c.loaded && !c.loadingFirst) later(c.refresh);

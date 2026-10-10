@@ -27,6 +27,7 @@ import 'package:yaml/yaml.dart';
 const schemaTargets = <String>[
   'AuthConfig', // the server handshake: is this an openlog server, and what does its sign-in screen look like
   'Me', // who am I, which organizations, which role
+  'Organization', // the organization itself: its name, its ids, its language
   'Session', // the person's sessions, including other phones
   'AlertIncident', // what the app exists to show: what is firing right now
   'AlertIncidentDetail', // one incident with its timeline and what was delivered

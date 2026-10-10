@@ -1662,5 +1662,15 @@
   "auditEnd": "End of the log.",
   "auditUnknownActor": "unknown",
   "auditWithKey": "with an API key",
-  "auditForbidden": "Your role does not allow reading the audit log."
+  "auditForbidden": "Your role does not allow reading the audit log.",
+  "settingsOrganization": "Organization",
+  "orgName": "Name",
+  "orgRename": "Rename",
+  "orgCreated": "Created",
+  "orgTenantId": "Tenant id",
+  "orgId": "Organization id",
+  "orgLanguage": "Organization language",
+  "orgLanguageHint": "The language the server writes in for people who have not chosen one.",
+  "orgLanguageNone": "Not chosen",
+  "orgForbidden": "Your role does not allow changing the organization."
 }

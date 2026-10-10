@@ -4512,6 +4512,66 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Your role does not allow reading the audit log.'**
   String get auditForbidden;
+
+  /// No description provided for @settingsOrganization.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get settingsOrganization;
+
+  /// No description provided for @orgName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get orgName;
+
+  /// No description provided for @orgRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get orgRename;
+
+  /// No description provided for @orgCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get orgCreated;
+
+  /// No description provided for @orgTenantId.
+  ///
+  /// In en, this message translates to:
+  /// **'Tenant id'**
+  String get orgTenantId;
+
+  /// No description provided for @orgId.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization id'**
+  String get orgId;
+
+  /// No description provided for @orgLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization language'**
+  String get orgLanguage;
+
+  /// No description provided for @orgLanguageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The language the server writes in for people who have not chosen one.'**
+  String get orgLanguageHint;
+
+  /// No description provided for @orgLanguageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not chosen'**
+  String get orgLanguageNone;
+
+  /// No description provided for @orgForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role does not allow changing the organization.'**
+  String get orgForbidden;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

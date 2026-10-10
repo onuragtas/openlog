@@ -55,6 +55,7 @@ class Sections {
     OnboardingController? onboarding,
     SessionsController? sessions,
     AccountController? account,
+    OrgController? org,
     MembersController? members,
     LicenseKeysController? licenseKeys,
     ApiKeysController? apiKeys,
@@ -167,6 +168,7 @@ class Sections {
        onboarding = onboarding ?? OnboardingController(client),
        sessions = sessions ?? SessionsController(client),
        account = account ?? AccountController(client),
+       org = org ?? OrgController(client),
        members = members ?? MembersController(client),
        licenseKeys = licenseKeys ?? LicenseKeysController(client),
        apiKeys = apiKeys ?? ApiKeysController(client),
@@ -231,6 +233,9 @@ class Sections {
 
   /// The account behind the token: its password and its language.
   final AccountController account;
+
+  /// The organization itself: its name, its ids, its language.
+  final OrgController org;
 
   /// Who is in the organization, and who has been asked to join.
   final MembersController members;
@@ -330,6 +335,7 @@ class Sections {
     onboarding,
     sessions,
     account,
+    org,
     members,
     licenseKeys,
     apiKeys,

@@ -2527,4 +2527,35 @@ class LTr extends L {
 
   @override
   String get auditForbidden => 'Rolünüz denetim kaydını okumaya yetmiyor.';
+
+  @override
+  String get settingsOrganization => 'Organizasyon';
+
+  @override
+  String get orgName => 'Ad';
+
+  @override
+  String get orgRename => 'Adı değiştir';
+
+  @override
+  String get orgCreated => 'Oluşturuldu';
+
+  @override
+  String get orgTenantId => 'Tenant kimliği';
+
+  @override
+  String get orgId => 'Organizasyon kimliği';
+
+  @override
+  String get orgLanguage => 'Organizasyon dili';
+
+  @override
+  String get orgLanguageHint =>
+      'Kendi dilini seçmemiş kişilere sunucunun yazdığı dil.';
+
+  @override
+  String get orgLanguageNone => 'Seçilmedi';
+
+  @override
+  String get orgForbidden => 'Rolünüz organizasyonu değiştirmeye yetmiyor.';
 }

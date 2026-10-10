@@ -333,6 +333,7 @@ class _AppShellState extends State<AppShell> {
         session: session,
         sessions: s.sessions,
         account: s.account,
+        org: s.org,
         members: s.members,
         licenseKeys: s.licenseKeys,
         apiKeys: s.apiKeys,

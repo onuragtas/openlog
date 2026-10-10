@@ -1565,5 +1565,15 @@
   "auditEnd": "Kaydın sonu.",
   "auditUnknownActor": "bilinmiyor",
   "auditWithKey": "API anahtarıyla",
-  "auditForbidden": "Rolünüz denetim kaydını okumaya yetmiyor."
+  "auditForbidden": "Rolünüz denetim kaydını okumaya yetmiyor.",
+  "settingsOrganization": "Organizasyon",
+  "orgName": "Ad",
+  "orgRename": "Adı değiştir",
+  "orgCreated": "Oluşturuldu",
+  "orgTenantId": "Tenant kimliği",
+  "orgId": "Organizasyon kimliği",
+  "orgLanguage": "Organizasyon dili",
+  "orgLanguageHint": "Kendi dilini seçmemiş kişilere sunucunun yazdığı dil.",
+  "orgLanguageNone": "Seçilmedi",
+  "orgForbidden": "Rolünüz organizasyonu değiştirmeye yetmiyor."
 }

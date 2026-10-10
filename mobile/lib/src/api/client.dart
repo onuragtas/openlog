@@ -1215,6 +1215,25 @@ class OpenlogClient {
     return query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
   }
 
+  /// The organization itself: its name, its ids and the language the
+  /// server writes in for everyone in it.
+  Future<Organization> currentOrg() async =>
+      Organization.fromJson(await _send('GET', '/api/v1/orgs/current'));
+
+  /// Renames it, or changes that language. Both go in one PATCH because
+  /// the endpoint takes both; sending only what changed keeps the other
+  /// one as it is.
+  Future<Organization> updateCurrentOrg({
+    String? name,
+    String? language,
+  }) async => Organization.fromJson(
+    await _send(
+      'PATCH',
+      '/api/v1/orgs/current',
+      body: {'name': ?name, 'language': ?language},
+    ),
+  );
+
   /// The stored source maps, newest first. The documents themselves are
   /// never served back -- they are read only to un-minify a stack.
   Future<SourceMapPage> sourceMaps() async =>

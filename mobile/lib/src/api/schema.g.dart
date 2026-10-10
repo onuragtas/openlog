@@ -260,6 +260,32 @@ enum Role {
   }
 }
 
+/// OrgLanguage of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum OrgLanguage {
+  empty(''),
+  en('en'),
+  tr('tr'),
+  unknown('');
+
+  const OrgLanguage(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static OrgLanguage fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SessionKind of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2679,6 +2705,46 @@ class MeApiKey {
   final String id;
   final String name;
   final MeApiKeyRole role;
+}
+
+/// `Organization` of the openlog API contract.
+class Organization {
+  const Organization({
+    required this.id,
+    required this.tenantId,
+    required this.name,
+    required this.role,
+    required this.createdAt,
+    required this.language,
+  });
+
+  factory Organization.fromJson(Object? json, [String path = 'Organization']) {
+    final m = _obj(json, path);
+    return Organization(
+      id: _req(m, 'id', path, _str),
+      tenantId: _req(m, 'tenant_id', path, _str),
+      name: _req(m, 'name', path, _str),
+      role: _req(m, 'role', path, Role.fromJson),
+      createdAt: _req(m, 'created_at', path, _time),
+      language: _req(m, 'language', path, OrgLanguage.fromJson),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'tenant_id': tenantId,
+    'name': name,
+    'role': role.wire,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'language': language.wire,
+  };
+
+  final String id;
+  final String tenantId;
+  final String name;
+  final Role role;
+  final DateTime createdAt;
+  final OrgLanguage language;
 }
 
 /// `Session` of the openlog API contract.

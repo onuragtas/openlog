@@ -2531,4 +2531,36 @@ class LEn extends L {
   @override
   String get auditForbidden =>
       'Your role does not allow reading the audit log.';
+
+  @override
+  String get settingsOrganization => 'Organization';
+
+  @override
+  String get orgName => 'Name';
+
+  @override
+  String get orgRename => 'Rename';
+
+  @override
+  String get orgCreated => 'Created';
+
+  @override
+  String get orgTenantId => 'Tenant id';
+
+  @override
+  String get orgId => 'Organization id';
+
+  @override
+  String get orgLanguage => 'Organization language';
+
+  @override
+  String get orgLanguageHint =>
+      'The language the server writes in for people who have not chosen one.';
+
+  @override
+  String get orgLanguageNone => 'Not chosen';
+
+  @override
+  String get orgForbidden =>
+      'Your role does not allow changing the organization.';
 }
