@@ -959,6 +959,58 @@ enum MetricAggregation {
   }
 }
 
+/// UsageTopBy of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UsageTopBy {
+  service('service'),
+  host('host'),
+  unknown('');
+
+  const UsageTopBy(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UsageTopBy fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// QueryLimitSource of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum QueryLimitSource {
+  defaultValue('default'),
+  plan('plan'),
+  organization('organization'),
+  environment('environment'),
+  unknown('');
+
+  const QueryLimitSource(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static QueryLimitSource fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// VersionInfoUpdateCheck of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -7848,6 +7900,366 @@ class MetricQueryResponseMetric {
   final bool monotonic;
 }
 
+/// `VulnCatalogStatus` of the openlog API contract.
+class VulnCatalogStatus {
+  const VulnCatalogStatus({
+    required this.vulnerabilities,
+    required this.affectedRanges,
+    required this.ecosystems,
+    this.lastSyncedAt,
+    required this.sources,
+  });
+
+  factory VulnCatalogStatus.fromJson(
+    Object? json, [
+    String path = 'VulnCatalogStatus',
+  ]) {
+    final m = _obj(json, path);
+    return VulnCatalogStatus(
+      vulnerabilities: _req(m, 'vulnerabilities', path, _int),
+      affectedRanges: _req(m, 'affected_ranges', path, _int),
+      ecosystems: _req(m, 'ecosystems', path, _int),
+      lastSyncedAt: _opt(m, 'last_synced_at', path, _time),
+      sources: _req(
+        m,
+        'sources',
+        path,
+        (v, p) => _list<VulnCatalogStatusSourcesItem>(
+          v,
+          p,
+          (v, p) => VulnCatalogStatusSourcesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'vulnerabilities': vulnerabilities,
+    'affected_ranges': affectedRanges,
+    'ecosystems': ecosystems,
+    if (lastSyncedAt != null)
+      'last_synced_at': lastSyncedAt!.toUtc().toIso8601String(),
+    'sources': [for (final e in sources) e.toJson()],
+  };
+
+  final int vulnerabilities;
+  final int affectedRanges;
+  final int ecosystems;
+  final DateTime? lastSyncedAt;
+  final List<VulnCatalogStatusSourcesItem> sources;
+}
+
+/// `VulnCatalogStatusSourcesItem` of the openlog API contract.
+class VulnCatalogStatusSourcesItem {
+  const VulnCatalogStatusSourcesItem({
+    required this.source,
+    required this.ecosystem,
+    required this.syncedAt,
+    required this.count,
+    required this.error,
+  });
+
+  factory VulnCatalogStatusSourcesItem.fromJson(
+    Object? json, [
+    String path = 'VulnCatalogStatusSourcesItem',
+  ]) {
+    final m = _obj(json, path);
+    return VulnCatalogStatusSourcesItem(
+      source: _req(m, 'source', path, _str),
+      ecosystem: _req(m, 'ecosystem', path, _str),
+      syncedAt: _req(m, 'synced_at', path, _time),
+      count: _req(m, 'count', path, _int),
+      error: _req(m, 'error', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'source': source,
+    'ecosystem': ecosystem,
+    'synced_at': syncedAt.toUtc().toIso8601String(),
+    'count': count,
+    'error': error,
+  };
+
+  final String source;
+  final String ecosystem;
+  final DateTime syncedAt;
+  final int count;
+  final String error;
+}
+
+/// `UsageDaily` of the openlog API contract.
+class UsageDaily {
+  const UsageDaily({required this.period, required this.days});
+
+  factory UsageDaily.fromJson(Object? json, [String path = 'UsageDaily']) {
+    final m = _obj(json, path);
+    return UsageDaily(
+      period: _req(m, 'period', path, (v, p) => UsagePeriod.fromJson(v, p)),
+      days: _req(
+        m,
+        'days',
+        path,
+        (v, p) => _list<UsageDay>(v, p, (v, p) => UsageDay.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'period': period.toJson(),
+    'days': [for (final e in days) e.toJson()],
+  };
+
+  final UsagePeriod period;
+  final List<UsageDay> days;
+}
+
+/// `UsageTop` of the openlog API contract.
+class UsageTop {
+  const UsageTop({
+    required this.period,
+    required this.by,
+    required this.entries,
+  });
+
+  factory UsageTop.fromJson(Object? json, [String path = 'UsageTop']) {
+    final m = _obj(json, path);
+    return UsageTop(
+      period: _req(m, 'period', path, (v, p) => UsagePeriod.fromJson(v, p)),
+      by: _req(m, 'by', path, UsageTopBy.fromJson),
+      entries: _req(
+        m,
+        'entries',
+        path,
+        (v, p) =>
+            _list<UsageTopEntry>(v, p, (v, p) => UsageTopEntry.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'period': period.toJson(),
+    'by': by.wire,
+    'entries': [for (final e in entries) e.toJson()],
+  };
+
+  final UsagePeriod period;
+  final UsageTopBy by;
+  final List<UsageTopEntry> entries;
+}
+
+/// `UsageStatus` of the openlog API contract.
+class UsageStatus {
+  const UsageStatus({
+    required this.level,
+    required this.ingestBlocked,
+    required this.metrics,
+    required this.saasMode,
+    this.planId,
+    this.evaluatedAt,
+    this.periodStart,
+  });
+
+  factory UsageStatus.fromJson(Object? json, [String path = 'UsageStatus']) {
+    final m = _obj(json, path);
+    return UsageStatus(
+      level: _req(m, 'level', path, QuotaLevel.fromJson),
+      ingestBlocked: _req(m, 'ingest_blocked', path, _bool),
+      metrics: _req(
+        m,
+        'metrics',
+        path,
+        (v, p) =>
+            _list<QuotaMetric>(v, p, (v, p) => QuotaMetric.fromJson(v, p)),
+      ),
+      saasMode: _req(m, 'saas_mode', path, _bool),
+      planId: _opt(m, 'plan_id', path, _str),
+      evaluatedAt: _opt(m, 'evaluated_at', path, _time),
+      periodStart: _opt(m, 'period_start', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'level': level.wire,
+    'ingest_blocked': ingestBlocked,
+    'metrics': [for (final e in metrics) e.toJson()],
+    'saas_mode': saasMode,
+    'plan_id': ?planId,
+    if (evaluatedAt != null)
+      'evaluated_at': evaluatedAt!.toUtc().toIso8601String(),
+    'period_start': ?periodStart,
+  };
+
+  final QuotaLevel level;
+  final bool ingestBlocked;
+  final List<QuotaMetric> metrics;
+  final bool saasMode;
+  final String? planId;
+  final DateTime? evaluatedAt;
+  final String? periodStart;
+}
+
+/// `OrgQueryLimits` of the openlog API contract.
+class OrgQueryLimits {
+  const OrgQueryLimits({
+    required this.defaults,
+    required this.plan,
+    this.organization,
+    this.environment,
+    required this.effective,
+    required this.sources,
+    required this.canManage,
+    required this.refreshSeconds,
+  });
+
+  factory OrgQueryLimits.fromJson(
+    Object? json, [
+    String path = 'OrgQueryLimits',
+  ]) {
+    final m = _obj(json, path);
+    return OrgQueryLimits(
+      defaults: _req(
+        m,
+        'defaults',
+        path,
+        (v, p) => QueryLimitValues.fromJson(v, p),
+      ),
+      plan: _req(m, 'plan', path, (v, p) => QueryLimitValues.fromJson(v, p)),
+      organization: _opt(
+        m,
+        'organization',
+        path,
+        (v, p) => OrgQueryLimitsOrganization.fromJson(v, p),
+      ),
+      environment: _opt(
+        m,
+        'environment',
+        path,
+        (v, p) => QueryLimitValues.fromJson(v, p),
+      ),
+      effective: _req(
+        m,
+        'effective',
+        path,
+        (v, p) => QueryLimitValues.fromJson(v, p),
+      ),
+      sources: _req(
+        m,
+        'sources',
+        path,
+        (v, p) => OrgQueryLimitsSources.fromJson(v, p),
+      ),
+      canManage: _req(m, 'can_manage', path, _bool),
+      refreshSeconds: _req(m, 'refresh_seconds', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'defaults': defaults.toJson(),
+    'plan': plan.toJson(),
+    if (organization != null) 'organization': organization!.toJson(),
+    if (environment != null) 'environment': environment!.toJson(),
+    'effective': effective.toJson(),
+    'sources': sources.toJson(),
+    'can_manage': canManage,
+    'refresh_seconds': refreshSeconds,
+  };
+
+  final QueryLimitValues defaults;
+  final QueryLimitValues plan;
+  final OrgQueryLimitsOrganization? organization;
+  final QueryLimitValues? environment;
+  final QueryLimitValues effective;
+  final OrgQueryLimitsSources sources;
+  final bool canManage;
+  final int refreshSeconds;
+}
+
+/// `OrgQueryLimitsOrganization` of the openlog API contract.
+class OrgQueryLimitsOrganization {
+  const OrgQueryLimitsOrganization({
+    this.maxMemoryUsage,
+    this.maxRowsToRead,
+    this.maxBytesToRead,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  factory OrgQueryLimitsOrganization.fromJson(
+    Object? json, [
+    String path = 'OrgQueryLimitsOrganization',
+  ]) {
+    final m = _obj(json, path);
+    return OrgQueryLimitsOrganization(
+      maxMemoryUsage: _opt(m, 'max_memory_usage', path, _int),
+      maxRowsToRead: _opt(m, 'max_rows_to_read', path, _int),
+      maxBytesToRead: _opt(m, 'max_bytes_to_read', path, _int),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      updatedBy: _req(m, 'updated_by', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'max_memory_usage': ?maxMemoryUsage,
+    'max_rows_to_read': ?maxRowsToRead,
+    'max_bytes_to_read': ?maxBytesToRead,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'updated_by': updatedBy,
+  };
+
+  final int? maxMemoryUsage;
+  final int? maxRowsToRead;
+  final int? maxBytesToRead;
+  final DateTime updatedAt;
+  final String updatedBy;
+}
+
+/// `OrgQueryLimitsSources` of the openlog API contract.
+class OrgQueryLimitsSources {
+  const OrgQueryLimitsSources({
+    required this.maxMemoryUsage,
+    required this.maxRowsToRead,
+    required this.maxBytesToRead,
+  });
+
+  factory OrgQueryLimitsSources.fromJson(
+    Object? json, [
+    String path = 'OrgQueryLimitsSources',
+  ]) {
+    final m = _obj(json, path);
+    return OrgQueryLimitsSources(
+      maxMemoryUsage: _req(
+        m,
+        'max_memory_usage',
+        path,
+        QueryLimitSource.fromJson,
+      ),
+      maxRowsToRead: _req(
+        m,
+        'max_rows_to_read',
+        path,
+        QueryLimitSource.fromJson,
+      ),
+      maxBytesToRead: _req(
+        m,
+        'max_bytes_to_read',
+        path,
+        QueryLimitSource.fromJson,
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'max_memory_usage': maxMemoryUsage.wire,
+    'max_rows_to_read': maxRowsToRead.wire,
+    'max_bytes_to_read': maxBytesToRead.wire,
+  };
+
+  final QueryLimitSource maxMemoryUsage;
+  final QueryLimitSource maxRowsToRead;
+  final QueryLimitSource maxBytesToRead;
+}
+
 /// `VersionInfo` of the openlog API contract.
 class VersionInfo {
   const VersionInfo({
@@ -13761,6 +14173,127 @@ class MetricSeries {
 
   final Map<String, String> attributes;
   final List<List<double>> points;
+}
+
+/// `UsageDay` of the openlog API contract.
+class UsageDay {
+  const UsageDay({
+    required this.day,
+    required this.signals,
+    required this.ingestBytes,
+    required this.hosts,
+    required this.containers,
+    required this.services,
+    required this.query,
+  });
+
+  factory UsageDay.fromJson(Object? json, [String path = 'UsageDay']) {
+    final m = _obj(json, path);
+    return UsageDay(
+      day: _req(m, 'day', path, _str),
+      signals: _req(
+        m,
+        'signals',
+        path,
+        (v, p) =>
+            _list<UsageSignal>(v, p, (v, p) => UsageSignal.fromJson(v, p)),
+      ),
+      ingestBytes: _req(m, 'ingest_bytes', path, _num),
+      hosts: _req(m, 'hosts', path, _num),
+      containers: _req(m, 'containers', path, _num),
+      services: _req(m, 'services', path, _num),
+      query: _req(m, 'query', path, (v, p) => UsageQuery.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'day': day,
+    'signals': [for (final e in signals) e.toJson()],
+    'ingest_bytes': ingestBytes,
+    'hosts': hosts,
+    'containers': containers,
+    'services': services,
+    'query': query.toJson(),
+  };
+
+  final String day;
+  final List<UsageSignal> signals;
+  final double ingestBytes;
+  final double hosts;
+  final double containers;
+  final double services;
+  final UsageQuery query;
+}
+
+/// `UsageTopEntry` of the openlog API contract.
+class UsageTopEntry {
+  const UsageTopEntry({
+    required this.key,
+    required this.items,
+    required this.bytes,
+    required this.bytesBySignal,
+  });
+
+  factory UsageTopEntry.fromJson(
+    Object? json, [
+    String path = 'UsageTopEntry',
+  ]) {
+    final m = _obj(json, path);
+    return UsageTopEntry(
+      key: _req(m, 'key', path, _str),
+      items: _req(m, 'items', path, _num),
+      bytes: _req(m, 'bytes', path, _num),
+      bytesBySignal: _req(
+        m,
+        'bytes_by_signal',
+        path,
+        (v, p) => _map<double>(v, p, _num),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'key': key,
+    'items': items,
+    'bytes': bytes,
+    'bytes_by_signal': {for (final e in bytesBySignal.entries) e.key: e.value},
+  };
+
+  final String key;
+  final double items;
+  final double bytes;
+  final Map<String, double> bytesBySignal;
+}
+
+/// 0 = not set by openlog (the ClickHouse read user's profile applies)
+class QueryLimitValues {
+  const QueryLimitValues({
+    required this.maxMemoryUsage,
+    required this.maxRowsToRead,
+    required this.maxBytesToRead,
+  });
+
+  factory QueryLimitValues.fromJson(
+    Object? json, [
+    String path = 'QueryLimitValues',
+  ]) {
+    final m = _obj(json, path);
+    return QueryLimitValues(
+      maxMemoryUsage: _req(m, 'max_memory_usage', path, _int),
+      maxRowsToRead: _req(m, 'max_rows_to_read', path, _int),
+      maxBytesToRead: _req(m, 'max_bytes_to_read', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'max_memory_usage': maxMemoryUsage,
+    'max_rows_to_read': maxRowsToRead,
+    'max_bytes_to_read': maxBytesToRead,
+  };
+
+  final int maxMemoryUsage;
+  final int maxRowsToRead;
+  final int maxBytesToRead;
 }
 
 /// `UpdateRequests` of the openlog API contract.

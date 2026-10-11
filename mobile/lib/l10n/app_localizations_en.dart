@@ -4515,4 +4515,93 @@ class LEn extends L {
 
   @override
   String get versionRequestExpired => 'Expired';
+
+  @override
+  String get rumSessionsNote =>
+      'A session is a visit, not a person: the id is random, per tab, and expires with it.';
+
+  @override
+  String get usageDailyTitle => 'Day by day';
+
+  @override
+  String get usageDailyEmpty => 'No usage recorded in this period yet.';
+
+  @override
+  String get usageDailyPeak => 'busiest day';
+
+  @override
+  String get usageDailyAverage => 'daily average';
+
+  @override
+  String get usageTopTitle => 'Storing the most';
+
+  @override
+  String get usageTopByService => 'Services';
+
+  @override
+  String get usageTopByHost => 'Hosts';
+
+  @override
+  String get usageTopEmpty => 'Nothing stored in this period.';
+
+  @override
+  String get usageQuotaTitle => 'Quota';
+
+  @override
+  String get usageQuotaBlocked => 'Ingest is blocked: the quota is full.';
+
+  @override
+  String usageQuotaEvaluated(String when) {
+    return 'evaluated $when';
+  }
+
+  @override
+  String get usageQuotaNotEvaluated => 'Not evaluated yet.';
+
+  @override
+  String get usageLimitsTitle => 'Query limits';
+
+  @override
+  String get usageLimitsMemory => 'Memory per query';
+
+  @override
+  String get usageLimitsRows => 'Rows read';
+
+  @override
+  String get usageLimitsBytes => 'Bytes read';
+
+  @override
+  String get usageLimitsSeconds => 'Seconds';
+
+  @override
+  String get usageLimitsResult => 'Result rows';
+
+  @override
+  String get usageLimitsConcurrent => 'Concurrent queries';
+
+  @override
+  String usageLimitsFrom(String layer) {
+    return 'from $layer';
+  }
+
+  @override
+  String get vulnCatalogTitle => 'Advisory catalog';
+
+  @override
+  String get vulnCatalogNever =>
+      'The advisory feed has never synced: an empty list here means nothing was checked, not that nothing was found.';
+
+  @override
+  String vulnCatalogSynced(String count, int ecosystems, String when) {
+    return '$count advisories, $ecosystems ecosystems · synced $when';
+  }
+
+  @override
+  String get vulnCatalogUnavailable =>
+      'This installation does not keep an advisory catalog.';
+
+  @override
+  String vulnCatalogSourceError(String source, String error) {
+    return '$source: $error';
+  }
 }

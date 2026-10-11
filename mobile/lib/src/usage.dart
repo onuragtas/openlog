@@ -40,6 +40,71 @@ class UsageController extends ChangeNotifier {
   }
 }
 
+/// The rest of the usage screen: the shape of the period, who is storing
+/// the most, where the organization stands against its quota, and the
+/// limits its queries run under.
+///
+/// One controller rather than four: they are four requests of one screen and
+/// four separate loading states on a phone would be four separate spinners
+/// in a column.
+class UsageDetailController extends ChangeNotifier {
+  UsageDetailController(this.client);
+
+  final OpenlogClient client;
+
+  UsageDaily? daily;
+  UsageTop? top;
+  UsageStatus? status;
+  OrgQueryLimits? limits;
+
+  /// `current`, `previous`, or a `YYYY-MM` month -- kept with the overview's.
+  String period = 'current';
+
+  /// `service` or `host`.
+  String by = 'service';
+
+  bool loading = false;
+  bool loaded = false;
+  SessionFailure? failure;
+
+  Future<void> load() async {
+    loading = true;
+    failure = null;
+    notifyListeners();
+    try {
+      // In parallel: four sequential requests on a phone network is four
+      // round trips for one screen.
+      final results = await Future.wait([
+        client.usageDaily(period: period),
+        client.usageTop(period: period, by: by),
+        client.usageStatus(),
+        // Only PostgreSQL auth mode has query limits; a 404 there is "this
+        // installation has none", not a failure of the screen.
+        client.queryLimits().then<Object?>((v) => v).catchError((Object e) {
+          if (e is ApiException && (e.status == 404 || e.status == 403)) {
+            return null;
+          }
+          throw e;
+        }),
+      ]);
+      daily = results[0] as UsageDaily;
+      top = results[1] as UsageTop;
+      status = results[2] as UsageStatus;
+      limits = results[3] as OrgQueryLimits?;
+      loaded = true;
+    } on ApiUnreachable {
+      failure = const SessionFailure('unreachable', '');
+    } on ApiException catch (e) {
+      failure = e.status == 403
+          ? const SessionFailure('usageForbidden', '')
+          : SessionFailure('unexpected', e.message);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+}
+
 /// Bytes as a person reads them.
 ///
 /// Binary multiples, like the web's formatBytes: a gigabyte of ingest is

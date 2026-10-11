@@ -2080,6 +2080,57 @@ class OpenlogClient {
   ///
   /// [period] is `current`, `previous` or a `YYYY-MM` month, as the server
   /// names them.
+  /// What the vulnerability catalog holds and when each feed last synced.
+  ///
+  /// 404 where the catalog is not enabled at all, which the screen reads as
+  /// "this installation does not scan" rather than as an outage.
+  Future<VulnCatalogStatus> vulnCatalogStatus() async =>
+      VulnCatalogStatus.fromJson(
+        await _send('GET', '/api/v1/vulnerabilities/catalog/status'),
+      );
+
+  /// One row per day of the period, so the overview's total has a shape.
+  Future<UsageDaily> usageDaily({String period = ''}) async =>
+      UsageDaily.fromJson(
+        await _send(
+          'GET',
+          _listPath(
+            '/api/v1/usage/daily',
+            '',
+            extra: {if (period.isNotEmpty) 'period': period},
+          ),
+        ),
+      );
+
+  /// The services or hosts storing the most. `by` is `service` or `host`.
+  Future<UsageTop> usageTop({
+    String period = '',
+    String by = 'service',
+    int limit = 10,
+  }) async => UsageTop.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/usage/top',
+        '',
+        extra: {
+          if (period.isNotEmpty) 'period': period,
+          'by': by,
+          'limit': '$limit',
+        },
+      ),
+    ),
+  );
+
+  /// Where the organization stands against its quota right now.
+  Future<UsageStatus> usageStatus() async =>
+      UsageStatus.fromJson(await _send('GET', '/api/v1/usage/status'));
+
+  /// The ClickHouse limits a query of this organization runs under, and
+  /// which layer each one comes from.
+  Future<OrgQueryLimits> queryLimits() async =>
+      OrgQueryLimits.fromJson(await _send('GET', '/api/v1/usage/query-limits'));
+
   Future<UsageOverview> usage({String period = ''}) async =>
       UsageOverview.fromJson(
         await _send(

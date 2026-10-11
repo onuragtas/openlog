@@ -4510,4 +4510,92 @@ class LTr extends L {
 
   @override
   String get versionRequestExpired => 'Süresi doldu';
+
+  @override
+  String get rumSessionsNote =>
+      'Bir oturum bir ziyaret, bir kişi değil: kimliği rastgele, sekmeye özel ve sekmeyle birlikte sona eriyor.';
+
+  @override
+  String get usageDailyTitle => 'Gün gün';
+
+  @override
+  String get usageDailyEmpty => 'Bu dönemde henüz kullanım kaydı yok.';
+
+  @override
+  String get usageDailyPeak => 'en yoğun gün';
+
+  @override
+  String get usageDailyAverage => 'günlük ortalama';
+
+  @override
+  String get usageTopTitle => 'En çok depolayan';
+
+  @override
+  String get usageTopByService => 'Servisler';
+
+  @override
+  String get usageTopByHost => 'Sunucular';
+
+  @override
+  String get usageTopEmpty => 'Bu dönemde depolanan bir şey yok.';
+
+  @override
+  String get usageQuotaTitle => 'Kota';
+
+  @override
+  String get usageQuotaBlocked => 'Veri alımı durduruldu: kota doldu.';
+
+  @override
+  String usageQuotaEvaluated(String when) {
+    return '$when değerlendirildi';
+  }
+
+  @override
+  String get usageQuotaNotEvaluated => 'Henüz değerlendirilmedi.';
+
+  @override
+  String get usageLimitsTitle => 'Sorgu limitleri';
+
+  @override
+  String get usageLimitsMemory => 'Sorgu başına bellek';
+
+  @override
+  String get usageLimitsRows => 'Okunan satır';
+
+  @override
+  String get usageLimitsBytes => 'Okunan bayt';
+
+  @override
+  String get usageLimitsSeconds => 'Saniye';
+
+  @override
+  String get usageLimitsResult => 'Sonuç satırı';
+
+  @override
+  String get usageLimitsConcurrent => 'Eşzamanlı sorgu';
+
+  @override
+  String usageLimitsFrom(String layer) {
+    return '$layer katmanından';
+  }
+
+  @override
+  String get vulnCatalogTitle => 'Zafiyet kataloğu';
+
+  @override
+  String get vulnCatalogNever =>
+      'Zafiyet beslemesi hiç eşitlenmedi: buradaki boş liste bir şey bulunmadığı değil, hiçbir şeyin kontrol edilmediği anlamına gelir.';
+
+  @override
+  String vulnCatalogSynced(String count, int ecosystems, String when) {
+    return '$count kayıt, $ecosystems ekosistem · $when eşitlendi';
+  }
+
+  @override
+  String get vulnCatalogUnavailable => 'Bu kurulum zafiyet kataloğu tutmuyor.';
+
+  @override
+  String vulnCatalogSourceError(String source, String error) {
+    return '$source: $error';
+  }
 }

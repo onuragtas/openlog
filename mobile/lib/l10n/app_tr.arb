@@ -2784,5 +2784,68 @@
   "updateStepCleanup": "Temizlik",
   "updateStepContractMigrate": "Contract migration",
   "versionRequestPending": "Sırada",
-  "versionRequestExpired": "Süresi doldu"
+  "versionRequestExpired": "Süresi doldu",
+  "rumSessionsNote": "Bir oturum bir ziyaret, bir kişi değil: kimliği rastgele, sekmeye özel ve sekmeyle birlikte sona eriyor.",
+  "usageDailyTitle": "Gün gün",
+  "usageDailyEmpty": "Bu dönemde henüz kullanım kaydı yok.",
+  "usageDailyPeak": "en yoğun gün",
+  "usageDailyAverage": "günlük ortalama",
+  "usageTopTitle": "En çok depolayan",
+  "usageTopByService": "Servisler",
+  "usageTopByHost": "Sunucular",
+  "usageTopEmpty": "Bu dönemde depolanan bir şey yok.",
+  "usageQuotaTitle": "Kota",
+  "usageQuotaBlocked": "Veri alımı durduruldu: kota doldu.",
+  "usageQuotaEvaluated": "{when} değerlendirildi",
+  "usageQuotaNotEvaluated": "Henüz değerlendirilmedi.",
+  "usageLimitsTitle": "Sorgu limitleri",
+  "usageLimitsMemory": "Sorgu başına bellek",
+  "usageLimitsRows": "Okunan satır",
+  "usageLimitsBytes": "Okunan bayt",
+  "usageLimitsSeconds": "Saniye",
+  "usageLimitsResult": "Sonuç satırı",
+  "usageLimitsConcurrent": "Eşzamanlı sorgu",
+  "usageLimitsFrom": "{layer} katmanından",
+  "@usageQuotaEvaluated": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "@usageLimitsFrom": {
+    "placeholders": {
+      "layer": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnCatalogTitle": "Zafiyet kataloğu",
+  "vulnCatalogNever": "Zafiyet beslemesi hiç eşitlenmedi: buradaki boş liste bir şey bulunmadığı değil, hiçbir şeyin kontrol edilmediği anlamına gelir.",
+  "vulnCatalogSynced": "{count} kayıt, {ecosystems} ekosistem · {when} eşitlendi",
+  "vulnCatalogUnavailable": "Bu kurulum zafiyet kataloğu tutmuyor.",
+  "vulnCatalogSourceError": "{source}: {error}",
+  "@vulnCatalogSynced": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "ecosystems": {
+        "type": "int"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "@vulnCatalogSourceError": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

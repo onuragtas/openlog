@@ -8028,6 +8028,162 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Expired'**
   String get versionRequestExpired;
+
+  /// No description provided for @rumSessionsNote.
+  ///
+  /// In en, this message translates to:
+  /// **'A session is a visit, not a person: the id is random, per tab, and expires with it.'**
+  String get rumSessionsNote;
+
+  /// No description provided for @usageDailyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Day by day'**
+  String get usageDailyTitle;
+
+  /// No description provided for @usageDailyEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No usage recorded in this period yet.'**
+  String get usageDailyEmpty;
+
+  /// No description provided for @usageDailyPeak.
+  ///
+  /// In en, this message translates to:
+  /// **'busiest day'**
+  String get usageDailyPeak;
+
+  /// No description provided for @usageDailyAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'daily average'**
+  String get usageDailyAverage;
+
+  /// No description provided for @usageTopTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Storing the most'**
+  String get usageTopTitle;
+
+  /// No description provided for @usageTopByService.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get usageTopByService;
+
+  /// No description provided for @usageTopByHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get usageTopByHost;
+
+  /// No description provided for @usageTopEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing stored in this period.'**
+  String get usageTopEmpty;
+
+  /// No description provided for @usageQuotaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quota'**
+  String get usageQuotaTitle;
+
+  /// No description provided for @usageQuotaBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Ingest is blocked: the quota is full.'**
+  String get usageQuotaBlocked;
+
+  /// No description provided for @usageQuotaEvaluated.
+  ///
+  /// In en, this message translates to:
+  /// **'evaluated {when}'**
+  String usageQuotaEvaluated(String when);
+
+  /// No description provided for @usageQuotaNotEvaluated.
+  ///
+  /// In en, this message translates to:
+  /// **'Not evaluated yet.'**
+  String get usageQuotaNotEvaluated;
+
+  /// No description provided for @usageLimitsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Query limits'**
+  String get usageLimitsTitle;
+
+  /// No description provided for @usageLimitsMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory per query'**
+  String get usageLimitsMemory;
+
+  /// No description provided for @usageLimitsRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows read'**
+  String get usageLimitsRows;
+
+  /// No description provided for @usageLimitsBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'Bytes read'**
+  String get usageLimitsBytes;
+
+  /// No description provided for @usageLimitsSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Seconds'**
+  String get usageLimitsSeconds;
+
+  /// No description provided for @usageLimitsResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Result rows'**
+  String get usageLimitsResult;
+
+  /// No description provided for @usageLimitsConcurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Concurrent queries'**
+  String get usageLimitsConcurrent;
+
+  /// No description provided for @usageLimitsFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'from {layer}'**
+  String usageLimitsFrom(String layer);
+
+  /// No description provided for @vulnCatalogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Advisory catalog'**
+  String get vulnCatalogTitle;
+
+  /// No description provided for @vulnCatalogNever.
+  ///
+  /// In en, this message translates to:
+  /// **'The advisory feed has never synced: an empty list here means nothing was checked, not that nothing was found.'**
+  String get vulnCatalogNever;
+
+  /// No description provided for @vulnCatalogSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} advisories, {ecosystems} ecosystems · synced {when}'**
+  String vulnCatalogSynced(String count, int ecosystems, String when);
+
+  /// No description provided for @vulnCatalogUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation does not keep an advisory catalog.'**
+  String get vulnCatalogUnavailable;
+
+  /// No description provided for @vulnCatalogSourceError.
+  ///
+  /// In en, this message translates to:
+  /// **'{source}: {error}'**
+  String vulnCatalogSourceError(String source, String error);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

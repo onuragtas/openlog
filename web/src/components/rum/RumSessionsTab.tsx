@@ -34,53 +34,58 @@ export function RumSessionsTab({
   };
 
   return (
-    <Table mobile="stack" data-testid="rum-sessions">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t("rum.sessions.columns.session")}</TableHead>
-          <TableHead className="hidden md:table-cell">{t("rum.sessions.columns.started")}</TableHead>
-          <TableHead className="text-right">{t("rum.sessions.columns.duration")}</TableHead>
-          <TableHead className="text-right">{t("rum.sessions.columns.pageViews")}</TableHead>
-          <TableHead className="text-right">{t("rum.sessions.columns.errors")}</TableHead>
-          <TableHead className="hidden lg:table-cell">{t("rum.sessions.columns.entry")}</TableHead>
-          <TableHead className="hidden sm:table-cell">{t("rum.sessions.columns.browser")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {sessions.data.map((s) => (
-          <TableRow key={s.session_id} data-testid="rum-session-row">
-            <TableCell>
-              <button
-                type="button"
-                className="font-mono text-xs text-primary hover:underline"
-                onClick={() => onOpen(s)}
-                aria-label={t("rum.sessions.open", { id: s.session_id })}
-              >
-                {s.session_id.slice(0, 12)}…
-              </button>
-            </TableCell>
-            <TableCell label={t("rum.sessions.columns.started")} className="hidden md:table-cell text-muted-foreground">
-              {started(s)}
-            </TableCell>
-            <TableCell label={t("rum.sessions.columns.duration")} className="text-right tabular-nums">
-              {formatMs(s.duration_ms, i18n.language)}
-            </TableCell>
-            <TableCell label={t("rum.sessions.columns.pageViews")} className="text-right tabular-nums">
-              {formatNumber(s.page_views, i18n.language)}
-            </TableCell>
-            <TableCell label={t("rum.sessions.columns.errors")} className="text-right tabular-nums">
-              {formatNumber(s.errors, i18n.language)}
-            </TableCell>
-            <TableCell label={t("rum.sessions.columns.entry")} className="hidden lg:table-cell font-mono text-xs break-all">
-              {s.entry_route || "–"}
-            </TableCell>
-            <TableCell label={t("rum.sessions.columns.browser")} className="hidden sm:table-cell text-muted-foreground">
-              {browserLabel(s.browser_name, s.browser_version)}
-              {s.device_type !== "" && <span className="text-xs"> · {s.device_type}</span>}
-            </TableCell>
+    <div className="flex flex-col gap-2">
+      {/* Said on the screen, not only in this file's header: the table looks like a list of people and is
+          not one -- the same person in two tabs is two rows. */}
+      <p className="text-xs text-muted-foreground">{t("rum.sessions.note")}</p>
+      <Table mobile="stack" data-testid="rum-sessions">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("rum.sessions.columns.session")}</TableHead>
+            <TableHead className="hidden md:table-cell">{t("rum.sessions.columns.started")}</TableHead>
+            <TableHead className="text-right">{t("rum.sessions.columns.duration")}</TableHead>
+            <TableHead className="text-right">{t("rum.sessions.columns.pageViews")}</TableHead>
+            <TableHead className="text-right">{t("rum.sessions.columns.errors")}</TableHead>
+            <TableHead className="hidden lg:table-cell">{t("rum.sessions.columns.entry")}</TableHead>
+            <TableHead className="hidden sm:table-cell">{t("rum.sessions.columns.browser")}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {sessions.data.map((s) => (
+            <TableRow key={s.session_id} data-testid="rum-session-row">
+              <TableCell>
+                <button
+                  type="button"
+                  className="font-mono text-xs text-primary hover:underline"
+                  onClick={() => onOpen(s)}
+                  aria-label={t("rum.sessions.open", { id: s.session_id })}
+                >
+                  {s.session_id.slice(0, 12)}…
+                </button>
+              </TableCell>
+              <TableCell label={t("rum.sessions.columns.started")} className="hidden md:table-cell text-muted-foreground">
+                {started(s)}
+              </TableCell>
+              <TableCell label={t("rum.sessions.columns.duration")} className="text-right tabular-nums">
+                {formatMs(s.duration_ms, i18n.language)}
+              </TableCell>
+              <TableCell label={t("rum.sessions.columns.pageViews")} className="text-right tabular-nums">
+                {formatNumber(s.page_views, i18n.language)}
+              </TableCell>
+              <TableCell label={t("rum.sessions.columns.errors")} className="text-right tabular-nums">
+                {formatNumber(s.errors, i18n.language)}
+              </TableCell>
+              <TableCell label={t("rum.sessions.columns.entry")} className="hidden lg:table-cell font-mono text-xs break-all">
+                {s.entry_route || "–"}
+              </TableCell>
+              <TableCell label={t("rum.sessions.columns.browser")} className="hidden sm:table-cell text-muted-foreground">
+                {browserLabel(s.browser_name, s.browser_version)}
+                {s.device_type !== "" && <span className="text-xs"> · {s.device_type}</span>}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

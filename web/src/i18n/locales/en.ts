@@ -3581,6 +3581,7 @@ export const en = {
       completion: "{{share}} of the {{n}} sessions that did the first step reached the last one within {{window}}.",
     },
     sessions: {
+      note: "A session is a visit, not a person: the id is random, per tab, and expires with it.",
       empty: "No sessions in this range.",
       open: "Open session {{id}}",
       columns: { session: "Session", started: "Started", duration: "Duration", pageViews: "Page views", errors: "Errors", entry: "Entry route", browser: "Browser" },

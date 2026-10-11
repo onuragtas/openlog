@@ -860,6 +860,15 @@ void main() {
           'vulnerabilities': <Object>[],
           'severity_counts': <String, int>{},
         },
+        // Read with the list, because an empty list of findings is
+        // unreadable without it.
+        '/api/v1/vulnerabilities/catalog/status' => {
+          'vulnerabilities': 0,
+          'affected_ranges': 0,
+          'ecosystems': 0,
+          'last_synced_at': null,
+          'sources': <Object>[],
+        },
         '/api/v1/db/instances' => {'instances': <Object>[]},
         _ => <String, Object?>{},
       };

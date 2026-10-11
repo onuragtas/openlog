@@ -27,6 +27,7 @@ import 'inventory_screen.dart';
 import 'metrics_screen.dart';
 import 'rum_screen.dart';
 import 'traces_screen.dart';
+import 'vuln_catalog.dart';
 import 'sections_screen.dart';
 import 'services_screen.dart';
 import 'settings_screen.dart';
@@ -382,6 +383,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         searchKey: 'vulnerabilities-search',
         active: active,
         emptyTitle: (l) => l.vulnerabilitiesEmpty,
+        // Under the search, above the findings: an empty list here means
+        // three different things and only the catalog says which.
+        header: VulnCatalogNote(controller: s.vulnerabilities),
         card: vulnCard,
       ),
     );
@@ -425,6 +429,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         audit: s.audit,
         sampling: s.sampling,
         usage: s.usage,
+        usageDetail: s.usageDetail,
         storage: s.storage,
         versionInfo: s.versionInfo,
         sso: s.sso,

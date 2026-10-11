@@ -59,6 +59,17 @@ class _RumSessionsTabState extends State<RumSessionsTab> {
         controller: _c,
         baseUrl: widget.session.baseUrl ?? '',
         emptyTitle: l.rumSessionsEmpty,
+        // Said on the screen: the list looks like a list of people and is
+        // not one -- the same person in two tabs is two rows here.
+        search: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            l.rumSessionsNote,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
         itemBuilder: (context, i) => _SessionCard(
           visit: _c.items[i],
           onOpen: () => Navigator.of(context).push(

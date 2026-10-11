@@ -81,6 +81,11 @@ const schemaTargets = <String>[
   'MetricListResponse', // the metrics explorer's list
   'MetricDetail', // one metric: what it is and how it can be aggregated
   'MetricQueryResponse', // and the series to draw
+  'VulnCatalogStatus', // what the catalog holds, so "no findings" can be told from "never synced"
+  'UsageDaily', // one row per day of the billing period
+  'UsageTop', // the services or hosts storing the most
+  'UsageStatus', // where the organization stands against its quota
+  'OrgQueryLimits', // the limits a query runs under, and where each comes from
   'VersionInfo', // what is running, what is available, and what the updater is doing
   'UpdateRequest', // a queued "check now" / "update now"
   'RumOverview', // what the browser saw: Core Web Vitals and page views

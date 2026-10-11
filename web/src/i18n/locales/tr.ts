@@ -3582,6 +3582,7 @@ export const tr: Messages = {
       completion: "İlk adımı yapan {{n}} oturumun {{share}} kadarı {{window}} içinde sonuncuya ulaştı.",
     },
     sessions: {
+      note: "Bir oturum bir ziyaret, bir kişi değil: kimliği rastgele, sekmeye özel ve sekmeyle birlikte sona eriyor.",
       empty: "Bu aralıkta oturum yok.",
       open: "{{id}} oturumunu aç",
       columns: { session: "Oturum", started: "Başlangıç", duration: "Süre", pageViews: "Sayfa görüntüleme", errors: "Hatalar", entry: "Giriş rotası", browser: "Tarayıcı" },

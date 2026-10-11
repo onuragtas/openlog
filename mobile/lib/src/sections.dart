@@ -102,6 +102,7 @@ class Sections {
     SourceMapsController? sourceMaps,
     AuditController? audit,
     UsageController? usage,
+    UsageDetailController? usageDetail,
     StorageController? storage,
     SsoController? sso,
     LogsController Function({
@@ -290,6 +291,7 @@ class Sections {
        sourceMaps = sourceMaps ?? SourceMapsController(client),
        audit = audit ?? AuditController(client),
        usage = usage ?? UsageController(client),
+       usageDetail = usageDetail ?? UsageDetailController(client),
        storage = storage ?? StorageController(client),
        sso = sso ?? SsoController(client),
        scopedLogs =
@@ -437,6 +439,9 @@ class Sections {
   /// What the organization used this period, against its plan.
   final UsageController usage;
 
+  /// The days, the top storers, the quota and the query limits.
+  final UsageDetailController usageDetail;
+
   /// How full the ClickHouse disks are.
   final StorageController storage;
 
@@ -560,6 +565,7 @@ class Sections {
     sourceMaps,
     audit,
     usage,
+    usageDetail,
     storage,
     sso,
     hosts,
@@ -816,9 +822,31 @@ class JobsController extends SectionController<JobMonitor> {
 class VulnerabilitiesController extends SectionController<VulnGroup> {
   VulnerabilitiesController(super.client);
 
+  /// What the advisory catalog holds, read with the list.
+  ///
+  /// Without it an empty list is unreadable: "nothing is vulnerable" and
+  /// "the feed never synced, so nothing was compared" look identical, and
+  /// only one of them is good news. Null where the installation keeps no
+  /// catalog at all (404), which is a third thing again.
+  VulnCatalogStatus? catalog;
+  bool catalogUnavailable = false;
+
   @override
-  Future<List<VulnGroup>> fetch() async =>
-      (await client.vulnerabilities(q: query)).vulnerabilities;
+  Future<List<VulnGroup>> fetch() async {
+    final groups = (await client.vulnerabilities(q: query)).vulnerabilities;
+    try {
+      catalog = await client.vulnCatalogStatus();
+      catalogUnavailable = false;
+    } on ApiException catch (e) {
+      // The catalog is a note under the list, not the list: its failure
+      // must not blank the findings.
+      if (e.status == 404) catalogUnavailable = true;
+      catalog = null;
+    } on ApiUnreachable {
+      catalog = null;
+    }
+    return groups;
+  }
 }
 
 class DatabasesController extends SectionController<DbInstance> {

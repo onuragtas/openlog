@@ -2881,5 +2881,68 @@
   "updateStepCleanup": "Cleanup",
   "updateStepContractMigrate": "Contract migration",
   "versionRequestPending": "Queued",
-  "versionRequestExpired": "Expired"
+  "versionRequestExpired": "Expired",
+  "rumSessionsNote": "A session is a visit, not a person: the id is random, per tab, and expires with it.",
+  "usageDailyTitle": "Day by day",
+  "usageDailyEmpty": "No usage recorded in this period yet.",
+  "usageDailyPeak": "busiest day",
+  "usageDailyAverage": "daily average",
+  "usageTopTitle": "Storing the most",
+  "usageTopByService": "Services",
+  "usageTopByHost": "Hosts",
+  "usageTopEmpty": "Nothing stored in this period.",
+  "usageQuotaTitle": "Quota",
+  "usageQuotaBlocked": "Ingest is blocked: the quota is full.",
+  "usageQuotaEvaluated": "evaluated {when}",
+  "usageQuotaNotEvaluated": "Not evaluated yet.",
+  "usageLimitsTitle": "Query limits",
+  "usageLimitsMemory": "Memory per query",
+  "usageLimitsRows": "Rows read",
+  "usageLimitsBytes": "Bytes read",
+  "usageLimitsSeconds": "Seconds",
+  "usageLimitsResult": "Result rows",
+  "usageLimitsConcurrent": "Concurrent queries",
+  "usageLimitsFrom": "from {layer}",
+  "@usageQuotaEvaluated": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "@usageLimitsFrom": {
+    "placeholders": {
+      "layer": {
+        "type": "String"
+      }
+    }
+  },
+  "vulnCatalogTitle": "Advisory catalog",
+  "vulnCatalogNever": "The advisory feed has never synced: an empty list here means nothing was checked, not that nothing was found.",
+  "vulnCatalogSynced": "{count} advisories, {ecosystems} ecosystems · synced {when}",
+  "vulnCatalogUnavailable": "This installation does not keep an advisory catalog.",
+  "vulnCatalogSourceError": "{source}: {error}",
+  "@vulnCatalogSynced": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "ecosystems": {
+        "type": "int"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "@vulnCatalogSourceError": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

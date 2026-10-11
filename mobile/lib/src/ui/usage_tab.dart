@@ -11,12 +11,22 @@ import '../session.dart';
 import '../usage.dart';
 import 'failure_text.dart';
 import 'severity.dart';
+import 'usage_detail.dart';
 
 class UsageTab extends StatelessWidget {
-  const UsageTab({super.key, required this.session, required this.controller});
+  const UsageTab({
+    super.key,
+    required this.session,
+    required this.controller,
+    required this.detail,
+  });
 
   final SessionController session;
   final UsageController controller;
+
+  /// The four requests under the overview: the days, who stores the most,
+  /// the quota and the query limits.
+  final UsageDetailController detail;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +60,11 @@ class UsageTab extends StatelessWidget {
                 onSelectionChanged: (s) {
                   c.period = s.first;
                   c.load();
+                  // The sections below are about the same period, so they
+                  // move with it rather than keeping the old month.
+                  detail
+                    ..period = s.first
+                    ..load();
                 },
               ),
               FailureBanner(failure: c.failure, baseUrl: session.baseUrl ?? ''),
@@ -198,6 +213,7 @@ class UsageTab extends StatelessWidget {
                   ),
                 ),
               ],
+              UsageDetailSections(session: session, controller: detail),
             ],
           ),
         );

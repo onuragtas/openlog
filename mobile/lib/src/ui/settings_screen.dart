@@ -52,6 +52,7 @@ class SettingsBody extends StatefulWidget {
     required this.audit,
     required this.sampling,
     required this.usage,
+    required this.usageDetail,
     required this.storage,
     required this.versionInfo,
     required this.sso,
@@ -92,6 +93,9 @@ class SettingsBody extends StatefulWidget {
 
   /// What the organization used this period, against its plan.
   final UsageController usage;
+
+  /// The sections under the usage overview.
+  final UsageDetailController usageDetail;
 
   /// How full the ClickHouse disks are.
   final StorageController storage;
@@ -187,7 +191,11 @@ final _tabs = <_Tab>[
     'usage',
     (l) => l.settingsUsage,
     null,
-    (s) => UsageTab(session: s.widget.session, controller: s.widget.usage),
+    (s) => UsageTab(
+      session: s.widget.session,
+      controller: s.widget.usage,
+      detail: s.widget.usageDetail,
+    ),
   ),
   // Any signed-in principal may read it; the two buttons inside are what
   // the role decides, and the screen says so rather than hiding the state.
@@ -315,6 +323,8 @@ class _SettingsBodyState extends State<SettingsBody>
       case 'usage':
         final c = widget.usage;
         if (!c.loading && c.overview == null) later(c.load);
+        final d = widget.usageDetail;
+        if (!d.loading && !d.loaded) later(d.load);
       case 'storage':
         final c = widget.storage;
         if (!c.loading && c.space == null) later(c.load);
