@@ -61,7 +61,8 @@ function Thresholds({ vital }: { vital: RumVital }) {
 /** p50/p75/p95: one number is a verdict, three are a shape. A long tail shows up here and nowhere else. */
 function Percentiles({ vital }: { vital: RumVital }) {
   const { t, i18n } = useTranslation();
-  const cells: [string, number | null][] = [
+  // The literal union, not string: t() takes a known key, and a widened `${string}` is not one.
+  const cells: ["p50" | "p75" | "p95", number | null][] = [
     ["p50", vital.p50],
     ["p75", vital.p75],
     ["p95", vital.p95],
