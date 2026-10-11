@@ -164,7 +164,9 @@ func TestVolumeTargetAndPublishedPort(t *testing.T) {
 // the config hash of a container that needs no change never changes.
 func TestPendingDefinitionClearedForTheShippedClickHouseService(t *testing.T) {
 	f := newComposeFixture(t)
-	dir := filepath.Dir(f.envFile)
+	// What the installation looks like from inside the updater: it reads the project directory through its own
+	// mount, while the container's mount sources are the host's paths. The two are never the same string.
+	const hostDir = "/opt/openlog-server"
 	writeCompose(t, f, `services:
   clickhouse:
     volumes:
@@ -181,13 +183,14 @@ func TestPendingDefinitionClearedForTheShippedClickHouseService(t *testing.T) {
       - 127.0.0.1:${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000
 `)
 	bind := func(name, dst string) Mount {
-		return Mount{Type: "bind", Source: filepath.Join(dir, "clickhouse", name), Destination: dst}
+		return Mount{Type: "bind", Source: filepath.Join(hostDir, "clickhouse", name), Destination: dst}
 	}
 	var ch Container
 	roundTrip(map[string]any{
 		"Id": "ch1", "Name": "/proj-clickhouse-1",
 		"Config": map[string]any{"Image": "clickhouse/clickhouse-server:25.8", "Labels": map[string]string{
 			labelProject: "proj", labelService: "clickhouse", "com.docker.compose.config-hash": "221c0f",
+			"com.docker.compose.project.working_dir": hostDir,
 		}},
 		"HostConfig": map[string]any{"PortBindings": map[string]any{
 			"8123/tcp": []any{map[string]string{"HostIp": "127.0.0.1", "HostPort": "8123"}},
@@ -214,6 +217,16 @@ func TestPendingDefinitionClearedForTheShippedClickHouseService(t *testing.T) {
 	if n := f.engine.Notices(context.Background(), "0.9.0", st); len(n) != 0 || st.ComposeChanges != nil {
 		t.Errorf("stuck notice: %+v %+v", n, st.ComposeChanges)
 	}
+
+	// A bind from somewhere else is not the same mount: the host path is compared, not only the mount point.
+	st.ComposeChanges = &ComposeChanges{Version: "0.1.113", Services: []PendingService{{Service: "clickhouse", Reason: "definition", ConfigHash: "221c0f"}}}
+	ch2 := f.docker.containers["ch1"]
+	was := ch2.c.Mounts[0]
+	ch2.c.Mounts[0] = Mount{Type: "bind", Source: "/tmp/elsewhere/openlog-cluster.xml", Destination: was.Destination}
+	if n := f.engine.Notices(context.Background(), "0.9.0", st); len(n) != 1 {
+		t.Errorf("mounted from elsewhere: %+v", n)
+	}
+	ch2.c.Mounts[0] = was
 
 	// And it is still reported when a mount really is missing.
 	f.docker.containers["ch1"].c.Mounts = f.docker.containers["ch1"].c.Mounts[1:]

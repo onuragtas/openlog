@@ -197,8 +197,12 @@ func (e *ComposeEngine) applied(ctx context.Context, p PendingService, installed
 			return false
 		}
 		if p.Reason == "definition" {
-			if ok, verified := e.satisfies(p.Service, full); verified {
-				if !ok {
+			if missing, verified := e.satisfies(p.Service, full); verified {
+				if missing != "" {
+					// Why it is still pending, by name: the operator who re-runs install-server.sh and
+					// sees the notice again has nowhere else to look.
+					e.Log.Debug("pending compose change still missing from the container",
+						"service", p.Service, "container", c.Name(), "missing", missing)
 					return false
 				}
 				continue
@@ -216,45 +220,55 @@ func (e *ComposeEngine) applied(ctx context.Context, p PendingService, installed
 	return n > 0
 }
 
-// satisfies reports whether the container has every volume and every published port of the service as the
-// compose file on disk spells them.
+// satisfies names what the compose file on disk asks for and the container does not have -- a mount point, a
+// bind source, a published port -- or "" when the container has all of it.
 //
 // verified is false when the answer cannot be trusted -- no compose file, no such service, or a line this does
 // not understand (a port range, an unexpanded variable, a long-syntax entry without a target) -- and the caller
 // then falls back to the config hash rather than guessing.
-func (e *ComposeEngine) satisfies(service string, c *Container) (ok, verified bool) {
+func (e *ComposeEngine) satisfies(service string, c *Container) (missing string, verified bool) {
 	svc, found := e.composeService(service)
 	if !found {
-		return false, false
+		return "", false
 	}
 	expand := e.interpolator()
 	vols, ok := anyList(svc["volumes"])
 	if !ok {
-		return false, false
+		return "", false
 	}
+	// Container mount sources are host paths, while Cfg.ComposeDir is this process's own view of the project
+	// directory (the stack mounts ./ at /compose). The container's own compose label carries the host path, so
+	// a bind can be compared at all; without it only the mount point is checked.
+	hostDir := composeWorkingDir(c)
 	for _, v := range vols {
 		dst, src, understood := volumeTarget(v, expand)
 		if !understood {
-			return false, false
+			return "", false
 		}
-		if !hasMount(c, dst, src, e.Cfg.ComposeDir) {
-			return false, true
+		if hostDir == "" {
+			src = ""
+		}
+		if !hasMount(c, dst, src, hostDir) {
+			if src == "" {
+				return "volume " + dst, true
+			}
+			return "volume " + src + ":" + dst, true
 		}
 	}
 	ports, ok := anyList(svc["ports"])
 	if !ok {
-		return false, false
+		return "", false
 	}
 	for _, p := range ports {
 		port, understood := publishedPort(p, expand)
 		if !understood {
-			return false, false
+			return "", false
 		}
 		if !hasPort(c, port) {
-			return false, true
+			return "port " + port, true
 		}
 	}
-	return true, true
+	return "", true
 }
 
 // composeService is one service of the compose file on disk.
@@ -391,6 +405,13 @@ func splitOutsideVars(s string) []string {
 		}
 	}
 	return append(out, s[start:])
+}
+
+// composeWorkingDir is the project directory as the host sees it, from the container's own compose label.
+func composeWorkingDir(c *Container) string {
+	labels, _ := c.Config["Labels"].(map[string]any)
+	dir, _ := labels["com.docker.compose.project.working_dir"].(string)
+	return dir
 }
 
 // hasMount: the container has something mounted at dst, from src when the file names one. A relative source is
